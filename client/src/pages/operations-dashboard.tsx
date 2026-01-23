@@ -234,7 +234,7 @@ export default function OperationsDashboardPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Calendar className="w-3.5 h-3.5" />
-                {new Date().toLocaleDateString('ar-SA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                {new Date().toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
               </div>
               <div className="flex items-center gap-4 text-xs">
                 <span className="text-muted-foreground">أوامر مكتملة: <span className="font-medium text-foreground">{stats?.completedOrders || 0}/{stats?.todayOrders || 0}</span></span>

@@ -528,7 +528,7 @@ export default function ConstructionReportsPage() {
     }));
 
     const filterInfo = [{
-      "تاريخ التقرير": new Date().toLocaleDateString("ar-SA"),
+      "تاريخ التقرير": new Date().toLocaleDateString("en-GB"),
       "الفرع": selectedBranch === "all" ? "جميع الفروع" : branchMap[selectedBranch] || selectedBranch,
       "الفئة": selectedCategory === "all" ? "جميع الفئات" : categoryMap[parseInt(selectedCategory)] || selectedCategory,
       "المقاول": selectedContractor === "all" ? "جميع المقاولين" : contractorMap[parseInt(selectedContractor)] || selectedContractor,
@@ -556,7 +556,7 @@ export default function ConstructionReportsPage() {
     const categoryWs = XLSX.utils.json_to_sheet(categorySummary);
     XLSX.utils.book_append_sheet(wb, categoryWs, "ملخص الفئات");
 
-    XLSX.writeFile(wb, `تقرير_المشاريع_${new Date().toLocaleDateString("ar-SA")}.xlsx`);
+    XLSX.writeFile(wb, `تقرير_المشاريع_${new Date().toLocaleDateString("en-GB")}.xlsx`);
   };
 
   return (
@@ -1360,7 +1360,7 @@ export default function ConstructionReportsPage() {
           </Tabs>
 
           <div className="hidden print:block">
-            <h2 className="text-xl font-bold mb-4">تقرير المشاريع الإنشائية - {new Date().toLocaleDateString("ar-SA")}</h2>
+            <h2 className="text-xl font-bold mb-4">تقرير المشاريع الإنشائية - {new Date().toLocaleDateString("en-GB")}</h2>
             <Table>
               <TableHeader>
                 <TableRow>

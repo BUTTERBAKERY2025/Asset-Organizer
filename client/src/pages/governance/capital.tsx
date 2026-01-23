@@ -293,7 +293,7 @@ export default function CapitalPage() {
                                 <span>تاريخ السريان</span>
                               </div>
                               <p className="font-semibold">
-                                {transaction.effectiveDate ? new Date(transaction.effectiveDate).toLocaleDateString('ar-SA') : '-'}
+                                {transaction.effectiveDate ? new Date(transaction.effectiveDate).toLocaleDateString('en-GB') : '-'}
                               </p>
                             </div>
                           </div>

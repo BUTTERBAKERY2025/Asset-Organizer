@@ -194,10 +194,10 @@ export default function WarehouseMovementLogsPage() {
                       <TableCell className="text-sm">
                         <div className="flex items-center gap-1">
                           <Calendar className="w-3 h-3 text-muted-foreground" />
-                          {new Date(log.createdAt).toLocaleDateString(isRTL ? 'ar-SA' : 'en-US')}
+                          {new Date(log.createdAt).toLocaleDateString(isRTL ? 'en-GB' : 'en-US')}
                         </div>
                         <span className="text-xs text-muted-foreground">
-                          {new Date(log.createdAt).toLocaleTimeString(isRTL ? 'ar-SA' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
+                          {new Date(log.createdAt).toLocaleTimeString(isRTL ? 'en-GB' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </TableCell>
                       <TableCell>

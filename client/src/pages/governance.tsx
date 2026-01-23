@@ -258,7 +258,7 @@ export default function GovernancePage() {
                           <p className="font-medium">{item.title}</p>
                           <p className="text-sm text-gray-500 flex items-center gap-1">
                             <Clock className="h-3 w-3" />
-                            {new Date(item.date).toLocaleDateString('ar-SA', {
+                            {new Date(item.date).toLocaleDateString('en-GB', {
                               year: 'numeric',
                               month: 'long',
                               day: 'numeric'

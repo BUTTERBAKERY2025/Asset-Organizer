@@ -240,7 +240,7 @@ export default function WarehouseReportsPage() {
       sourceName: source?.name || t.sourceBranchId || (isRTL ? "المستودع الرئيسي" : "Main Warehouse"),
       destName: dest?.name || t.destinationBranchId,
       statusText: t.status,
-      dateText: t.createdAt ? new Date(t.createdAt).toLocaleDateString("ar-SA") : "",
+      dateText: t.createdAt ? new Date(t.createdAt).toLocaleDateString("en-GB") : "",
     };
   });
 
@@ -293,7 +293,7 @@ export default function WarehouseReportsPage() {
     transferNumber: t.transferNumber,
     sourceBranchName: t.sourceBranchName || (isRTL ? "المستودع الرئيسي" : "Main Warehouse"),
     destinationBranchName: t.destinationBranchName,
-    deliveryDate: t.deliveryDate ? new Date(t.deliveryDate).toLocaleDateString(isRTL ? "ar-SA" : "en-US") : "-",
+    deliveryDate: t.deliveryDate ? new Date(t.deliveryDate).toLocaleDateString(isRTL ? "en-GB" : "en-US") : "-",
     itemCount: t.itemCount,
     totalQuantity: t.totalQuantity,
     statusText: t.hasDiscrepancy ? (isRTL ? "فرق" : "Discrepancy") : (isRTL ? "مكتمل" : "Complete"),
@@ -328,7 +328,7 @@ export default function WarehouseReportsPage() {
   });
 
   const getMonthName = (month: number) => {
-    return new Date(2024, month - 1).toLocaleDateString(isRTL ? 'ar-SA' : 'en-US', { month: 'long' });
+    return new Date(2024, month - 1).toLocaleDateString(isRTL ? 'en-GB' : 'en-US', { month: 'long' });
   };
 
   return (
@@ -553,7 +553,7 @@ export default function WarehouseReportsPage() {
                         <SelectContent>
                           {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => (
                             <SelectItem key={m} value={m.toString()}>
-                              {new Date(2024, m-1).toLocaleDateString(isRTL ? 'ar-SA' : 'en-US', { month: 'long' })}
+                              {new Date(2024, m-1).toLocaleDateString(isRTL ? 'en-GB' : 'en-US', { month: 'long' })}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -778,7 +778,7 @@ export default function WarehouseReportsPage() {
                           <TableCell>{t.sourceBranchName}</TableCell>
                           <TableCell>{t.destinationBranchName}</TableCell>
                           <TableCell className="text-center">
-                            {t.deliveryDate ? new Date(t.deliveryDate).toLocaleDateString(isRTL ? 'ar-SA' : 'en-US') : '-'}
+                            {t.deliveryDate ? new Date(t.deliveryDate).toLocaleDateString(isRTL ? 'en-GB' : 'en-US') : '-'}
                           </TableCell>
                           <TableCell className="text-center">{t.itemCount}</TableCell>
                           <TableCell className="text-center font-mono">{t.totalQuantity}</TableCell>
@@ -978,7 +978,7 @@ export default function WarehouseReportsPage() {
                               <TableBody>
                                 {itemStatement.movements.map((m: any, idx: number) => (
                                   <TableRow key={idx}>
-                                    <TableCell>{m.date ? new Date(m.date).toLocaleDateString(isRTL ? 'ar-SA' : 'en-US') : '-'}</TableCell>
+                                    <TableCell>{m.date ? new Date(m.date).toLocaleDateString(isRTL ? 'en-GB' : 'en-US') : '-'}</TableCell>
                                     <TableCell>
                                       <Badge variant={m.type === 'وارد' ? 'default' : 'secondary'} className={m.type === 'وارد' ? 'bg-green-500' : 'bg-red-500'}>
                                         {m.type}
@@ -1151,7 +1151,7 @@ export default function WarehouseReportsPage() {
                       <SelectContent>
                         {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => (
                           <SelectItem key={m} value={m.toString()}>
-                            {new Date(2024, m-1).toLocaleDateString(isRTL ? 'ar-SA' : 'en-US', { month: 'long' })}
+                            {new Date(2024, m-1).toLocaleDateString(isRTL ? 'en-GB' : 'en-US', { month: 'long' })}
                           </SelectItem>
                         ))}
                       </SelectContent>

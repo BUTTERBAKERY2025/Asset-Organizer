@@ -519,7 +519,7 @@ export default function SecurityManagementPage() {
                       <div className="grid gap-2 text-sm">
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">التاريخ:</span>
-                          <span data-testid="text-last-login-date">{new Date(securitySettings.lastLoginAt).toLocaleString("ar-SA")}</span>
+                          <span data-testid="text-last-login-date">{new Date(securitySettings.lastLoginAt).toLocaleString("en-GB")}</span>
                         </div>
                         {securitySettings.lastLoginIp && (
                           <div className="flex justify-between">
@@ -610,7 +610,7 @@ export default function SecurityManagementPage() {
                             })}
                           </TableCell>
                           <TableCell>
-                            {new Date(session.expiresAt).toLocaleString("ar-SA")}
+                            {new Date(session.expiresAt).toLocaleString("en-GB")}
                           </TableCell>
                           <TableCell>
                             <Button
@@ -678,7 +678,7 @@ export default function SecurityManagementPage() {
                             {alert.description}
                           </TableCell>
                           <TableCell>
-                            {new Date(alert.createdAt).toLocaleString("ar-SA")}
+                            {new Date(alert.createdAt).toLocaleString("en-GB")}
                           </TableCell>
                           <TableCell>
                             {alert.isResolved ? (

@@ -374,11 +374,11 @@ export default function PlatformHomePage() {
       month: 'long', 
       day: 'numeric' 
     };
-    return new Date().toLocaleDateString(currentLang === 'ar' ? 'ar-SA' : 'en-US', options);
+    return new Date().toLocaleDateString(currentLang === 'ar' ? 'en-GB' : 'en-US', options);
   };
 
   const formatTime = () => {
-    return new Date().toLocaleTimeString(currentLang === 'ar' ? 'ar-SA' : 'en-US', { 
+    return new Date().toLocaleTimeString(currentLang === 'ar' ? 'en-GB' : 'en-US', { 
       hour: '2-digit', 
       minute: '2-digit',
       hour12: true 

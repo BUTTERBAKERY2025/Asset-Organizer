@@ -499,7 +499,7 @@ export default function InventoryPage() {
               columns={exportColumns}
               fileName={`inventory_${isGlobalSearch ? 'all_branches' : activeBranch}_${new Date().toISOString().split('T')[0]}`}
               title={isGlobalSearch ? "جرد الأصول - جميع الفروع" : `جرد الأصول - ${currentBranchName}`}
-              subtitle={`تاريخ التقرير: ${new Date().toLocaleDateString('ar-SA')}`}
+              subtitle={`تاريخ التقرير: ${new Date().toLocaleDateString('en-GB')}`}
               sheetName="المخزون"
             />
             <Button className="gap-2 h-11 sm:h-9" onClick={handleExport} data-testid="button-export">

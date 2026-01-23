@@ -7,7 +7,7 @@ export function addBrandingSheet(workbook: XLSX.WorkBook, reportTitle: string) {
     return workbook;
   }
   
-  const currentDate = new Date().toLocaleDateString('ar-SA', {
+  const currentDate = new Date().toLocaleDateString('en-GB', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',

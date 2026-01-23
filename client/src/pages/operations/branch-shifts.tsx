@@ -647,7 +647,7 @@ export default function BranchShiftsPage() {
                 حالة الفروع اليوم
               </CardTitle>
               <Badge variant="outline" className="bg-white">
-                {new Date().toLocaleDateString("ar-SA", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+                {new Date().toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
               </Badge>
             </div>
           </CardHeader>
@@ -1137,7 +1137,7 @@ export default function BranchShiftsPage() {
                           <div className="text-center">
                             <p className="text-lg font-bold">{new Date(shift.shiftDate).getDate()}</p>
                             <p className="text-xs text-gray-500">
-                              {new Date(shift.shiftDate).toLocaleDateString("ar-SA", { month: "short" })}
+                              {new Date(shift.shiftDate).toLocaleDateString("en-GB", { month: "short" })}
                             </p>
                           </div>
                           <div>

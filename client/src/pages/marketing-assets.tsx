@@ -537,7 +537,7 @@ export default function MarketingAssetsPage() {
                     <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t">
                       <div className="flex items-center gap-1">
                         <Calendar className="w-3 h-3" />
-                        {new Date(asset.createdAt).toLocaleDateString('ar-SA')}
+                        {new Date(asset.createdAt).toLocaleDateString('en-GB')}
                       </div>
                       <span>{formatFileSize(asset.fileSize)}</span>
                     </div>

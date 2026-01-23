@@ -459,10 +459,10 @@ export default function MarketingAlertsPage() {
                         <div className="flex items-center justify-between flex-wrap gap-2">
                           <div className="flex items-center gap-2 text-xs text-muted-foreground">
                             <Calendar className="w-3 h-3" />
-                            {new Date(alert.createdAt).toLocaleString('ar-SA')}
+                            {new Date(alert.createdAt).toLocaleString('en-GB')}
                             {alert.expiresAt && (
                               <span className="text-amber-600">
-                                • ينتهي: {new Date(alert.expiresAt).toLocaleDateString('ar-SA')}
+                                • ينتهي: {new Date(alert.expiresAt).toLocaleDateString('en-GB')}
                               </span>
                             )}
                           </div>

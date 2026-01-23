@@ -306,11 +306,11 @@ export default function DividendsPage() {
                         <div className="flex flex-wrap gap-4 text-sm text-gray-600 mb-3">
                           <div className="flex items-center gap-1">
                             <Calendar className="h-4 w-4" />
-                            <span>تاريخ الأحقية: {distribution.recordDate ? new Date(distribution.recordDate).toLocaleDateString('ar-SA') : '-'}</span>
+                            <span>تاريخ الأحقية: {distribution.recordDate ? new Date(distribution.recordDate).toLocaleDateString('en-GB') : '-'}</span>
                           </div>
                           <div className="flex items-center gap-1">
                             <Calendar className="h-4 w-4" />
-                            <span>تاريخ الصرف: {distribution.paymentDate ? new Date(distribution.paymentDate).toLocaleDateString('ar-SA') : '-'}</span>
+                            <span>تاريخ الصرف: {distribution.paymentDate ? new Date(distribution.paymentDate).toLocaleDateString('en-GB') : '-'}</span>
                           </div>
                         </div>
                         {distribution.status === 'in_progress' && (

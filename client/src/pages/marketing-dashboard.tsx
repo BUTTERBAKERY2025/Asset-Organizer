@@ -249,7 +249,7 @@ export default function MarketingDashboardPage() {
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
-    return date.toLocaleDateString('ar-SA', { day: 'numeric', month: 'short' });
+    return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
   };
 
   const kpiCards = [

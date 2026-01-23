@@ -358,7 +358,7 @@ export default function BranchStockPage() {
                                 </Badge>
                               </TableCell>
                               <TableCell className="text-sm text-muted-foreground">
-                                {new Date(item.lastUpdated).toLocaleDateString(isRTL ? 'ar-SA' : 'en-US')}
+                                {new Date(item.lastUpdated).toLocaleDateString(isRTL ? 'en-GB' : 'en-US')}
                               </TableCell>
                               <TableCell>
                                 <Button 

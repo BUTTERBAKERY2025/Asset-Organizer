@@ -339,7 +339,7 @@ export default function ShareTransfersPage() {
                       <TableCell>
                         <div className="flex items-center gap-1 text-sm">
                           <Calendar className="h-3 w-3 text-gray-400" />
-                          {transfer.transferDate ? new Date(transfer.transferDate).toLocaleDateString('ar-SA') : '-'}
+                          {transfer.transferDate ? new Date(transfer.transferDate).toLocaleDateString('en-GB') : '-'}
                         </div>
                       </TableCell>
                       <TableCell>

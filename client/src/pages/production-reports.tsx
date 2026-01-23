@@ -658,7 +658,7 @@ export default function ProductionReportsPage() {
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR" }).format(amount);
+    return new Intl.NumberFormat("en-GB", { style: "currency", currency: "SAR" }).format(amount);
   };
   
   // Extract unique values for filters

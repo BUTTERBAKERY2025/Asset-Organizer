@@ -2025,7 +2025,7 @@ export async function registerRoutes(
     try {
       const { name, type } = req.body;
       const backup = await storage.createBackup({
-        name: name || `نسخة احتياطية - ${new Date().toLocaleDateString('ar-SA')}`,
+        name: name || `نسخة احتياطية - ${new Date().toLocaleDateString('en-GB')}`,
         type: type || 'manual',
         status: 'completed',
         createdBy: req.currentUser?.id,
@@ -9106,7 +9106,7 @@ export async function registerRoutes(
   </table>
   
   <div style="margin-top: 30px; text-align: center; color: #666; font-size: 9px; border-top: 1px solid #e5e7eb; padding-top: 15px;">
-    تم التوليد بواسطة BUTTER BAKERY SYSTEM - ${new Date().toLocaleString('ar-SA')}
+    تم التوليد بواسطة BUTTER BAKERY SYSTEM - ${new Date().toLocaleString('en-GB')}
   </div>
 </body>
 </html>`;
@@ -9548,7 +9548,7 @@ export async function registerRoutes(
         status: 'draft' as const,
         targetSalesValue: targetSalesNum,
         sourceSalesValue: sourceSalesValue,
-        notes: `${notes || ''}\n\nتوقعات مبنية على بيانات المبيعات السابقة\nملف المصدر: ${upload.fileName}\nالمبيعات المستهدفة: ${targetSalesNum.toLocaleString('ar-SA')} ريال\nإجمالي مبيعات الملف المصدر: ${sourceSalesValue.toLocaleString('ar-SA')} ريال`,
+        notes: `${notes || ''}\n\nتوقعات مبنية على بيانات المبيعات السابقة\nملف المصدر: ${upload.fileName}\nالمبيعات المستهدفة: ${targetSalesNum.toLocaleString('en-GB')} ريال\nإجمالي مبيعات الملف المصدر: ${sourceSalesValue.toLocaleString('en-GB')} ريال`,
         totalItems: forecastItems.length,
         completedItems: 0
       };
@@ -12599,7 +12599,7 @@ export async function registerRoutes(
           <div class="header">
             <div>
               <div class="title">تقرير المؤثرين والبلوجرز</div>
-              <div class="subtitle">تاريخ التقرير: ${new Date().toLocaleDateString('ar-SA')}</div>
+              <div class="subtitle">تاريخ التقرير: ${new Date().toLocaleDateString('en-GB')}</div>
             </div>
             <img src="${logoBase64}" class="logo" alt="Butter Logo">
           </div>
@@ -19844,7 +19844,7 @@ export async function registerRoutes(
         const notification = await storage.createSystemNotification({
           type: 'meeting',
           title: `تذكير: ${meeting.title}`,
-          message: `لديك اجتماع قادم في ${new Date(meeting.startAt).toLocaleTimeString('ar-SA')}`,
+          message: `لديك اجتماع قادم في ${new Date(meeting.startAt).toLocaleTimeString('en-GB')}`,
           priority: 'high',
           userId: user.id,
           createdBy: user.id,

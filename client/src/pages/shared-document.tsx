@@ -54,7 +54,7 @@ export default function SharedDocumentPage() {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("ar-SA", {
+    return new Date(dateString).toLocaleDateString("en-GB", {
       year: "numeric",
       month: "long",
       day: "numeric",

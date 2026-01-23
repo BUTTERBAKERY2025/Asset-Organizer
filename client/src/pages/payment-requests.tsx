@@ -384,7 +384,7 @@ export default function PaymentRequestsPage() {
 
   const formatDateArabic = (dateStr: string) => {
     const date = new Date(dateStr);
-    return date.toLocaleDateString('ar-SA', { 
+    return date.toLocaleDateString('en-GB', { 
       weekday: 'long', 
       year: 'numeric', 
       month: 'long', 

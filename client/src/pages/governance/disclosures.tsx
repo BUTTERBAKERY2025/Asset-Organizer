@@ -359,7 +359,7 @@ export default function DisclosuresPage() {
                           {disclosure.dueDate && (
                             <div className="flex items-center gap-1">
                               <Clock className="h-4 w-4" />
-                              <span>الاستحقاق: {new Date(disclosure.dueDate).toLocaleDateString('ar-SA')}</span>
+                              <span>الاستحقاق: {new Date(disclosure.dueDate).toLocaleDateString('en-GB')}</span>
                               {daysUntil !== null && daysUntil <= 7 && daysUntil > 0 && (
                                 <Badge className="bg-red-100 text-red-800 text-xs mr-1">
                                   {daysUntil} يوم

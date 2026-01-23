@@ -386,11 +386,11 @@ export function downloadAsPDF(
 
 export function formatCurrencyForExport(value: number | null | undefined): string {
   if (value == null) return "0";
-  return value.toLocaleString("ar-SA");
+  return value.toLocaleString("en-GB");
 }
 
 export function formatDateForExport(date: string | Date | null | undefined): string {
   if (!date) return "";
   const d = new Date(date);
-  return d.toLocaleDateString("ar-SA");
+  return d.toLocaleDateString("en-GB");
 }

@@ -224,7 +224,7 @@ export default function MarketingTasksPage() {
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "";
-    return new Date(dateStr).toLocaleDateString("ar-SA");
+    return new Date(dateStr).toLocaleDateString("en-GB");
   };
 
   const isOverdue = (dueDate: string) => {

@@ -9,7 +9,7 @@ export const SYSTEM_SUBTITLE = "CEO COMMAND";
 
 export function PrintHeader({ title, subtitle, showDate = true }: PrintHeaderProps) {
   const logoUrl = '/attached_assets/logo_-5_1765206843638.png';
-  const currentDate = new Date().toLocaleDateString('ar-SA', {
+  const currentDate = new Date().toLocaleDateString('en-GB', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',

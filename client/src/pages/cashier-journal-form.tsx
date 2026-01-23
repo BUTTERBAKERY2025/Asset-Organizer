@@ -882,7 +882,7 @@ export default function CashierJournalFormPage() {
     
     const formatDate = (dateStr: string) => {
       const date = new Date(dateStr);
-      return date.toLocaleDateString('ar-SA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+      return date.toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     };
 
     const categoryTotals = getCategoryTotals();
@@ -931,7 +931,7 @@ export default function CashierJournalFormPage() {
     const formatDateTime = (dateVal: string | Date | null | undefined) => {
       if (!dateVal) return '-';
       const date = typeof dateVal === 'string' ? new Date(dateVal) : dateVal;
-      return date.toLocaleDateString('ar-SA', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      return date.toLocaleDateString('en-GB', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
     };
 
     // Get signature from existing journal or from current canvas

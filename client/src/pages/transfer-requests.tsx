@@ -482,7 +482,7 @@ export default function TransferRequestsPage() {
 📊 *الحالة:* ${statusLabel}
 📍 *من:* ${srcName}
 📍 *إلى:* ${destName}
-📅 *التاريخ:* ${transfer.transferDate ? new Date(transfer.transferDate).toLocaleDateString('ar-SA') : '-'}
+📅 *التاريخ:* ${transfer.transferDate ? new Date(transfer.transferDate).toLocaleDateString('en-GB') : '-'}
 ${transfer.driverName ? `🚚 *السائق:* ${transfer.driverName}` : ''}
 ${transfer.vehicleNumber ? `🚗 *المركبة:* ${transfer.vehicleNumber}` : ''}
 
@@ -708,7 +708,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
         STATUS_OPTIONS.find(s => s.value === transfer.status)?.labelAr || transfer.status,
         transfer.driverName || "-",
         transfer.vehicleNumber || "-",
-        transfer.transferDate ? new Date(transfer.transferDate).toLocaleDateString('ar-SA') : "-",
+        transfer.transferDate ? new Date(transfer.transferDate).toLocaleDateString('en-GB') : "-",
         transfer.notes || "-",
         transfer.createdByName || "-",
       ]);
@@ -792,7 +792,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
       statusText: statusOption ? (isRTL ? statusOption.labelAr : statusOption.labelEn) : t.status,
       driverName: t.driverName || "",
       vehicleNumber: t.vehicleNumber || "",
-      dateText: t.transferDate ? new Date(t.transferDate).toLocaleDateString("ar-SA") : "",
+      dateText: t.transferDate ? new Date(t.transferDate).toLocaleDateString("en-GB") : "",
     };
   });
 
@@ -1307,7 +1307,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                           </div>
                         </TableCell>
                         <TableCell>{getStatusBadge(transfer.status, isRTL)}</TableCell>
-                        <TableCell className="text-sm">{new Date(transfer.transferDate).toLocaleDateString(isRTL ? 'ar-SA' : 'en-US')}</TableCell>
+                        <TableCell className="text-sm">{new Date(transfer.transferDate).toLocaleDateString(isRTL ? 'en-GB' : 'en-US')}</TableCell>
                         <TableCell>
                           {transfer.driverName ? (
                             <div className="text-sm space-y-1">
@@ -1477,7 +1477,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                   </div>
                   <div>
                     <p className="text-muted-foreground text-xs">{isRTL ? "تاريخ الطلب" : "Request Date"}</p>
-                    <p>{selectedTransfer.transferDate ? new Date(selectedTransfer.transferDate).toLocaleDateString(isRTL ? 'ar-SA' : 'en-US') : "-"}</p>
+                    <p>{selectedTransfer.transferDate ? new Date(selectedTransfer.transferDate).toLocaleDateString(isRTL ? 'en-GB' : 'en-US') : "-"}</p>
                   </div>
                   <div>
                     <p className="text-muted-foreground text-xs">{isRTL ? "أنشأه" : "Created By"}</p>

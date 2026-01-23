@@ -288,8 +288,8 @@ export default function ReportsPage() {
     finalizeBrandedWorkbook(wb, reportTitle);
     
     const fileName = type === "full" 
-      ? `تقرير_الأصول_الشامل_${new Date().toLocaleDateString("ar-SA")}.xlsx`
-      : `تقرير_${type}_${new Date().toLocaleDateString("ar-SA")}.xlsx`;
+      ? `تقرير_الأصول_الشامل_${new Date().toLocaleDateString("en-GB")}.xlsx`
+      : `تقرير_${type}_${new Date().toLocaleDateString("en-GB")}.xlsx`;
     XLSX.writeFile(wb, fileName);
   };
 

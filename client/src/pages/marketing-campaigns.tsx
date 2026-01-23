@@ -153,13 +153,13 @@ function CampaignTimeline({
   };
 
   const formatShortDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString("ar-SA", { day: "numeric", month: "short" });
+    return new Date(dateStr).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
   };
 
   const months: string[] = [];
   const tempDate = new Date(minDate);
   while (tempDate <= maxDate) {
-    months.push(tempDate.toLocaleDateString("ar-SA", { month: "short", year: "numeric" }));
+    months.push(tempDate.toLocaleDateString("en-GB", { month: "short", year: "numeric" }));
     tempDate.setMonth(tempDate.getMonth() + 1);
   }
 
@@ -449,7 +449,7 @@ export default function MarketingCampaignsPage() {
   const formatDateRange = (startDate: string, endDate: string) => {
     const start = new Date(startDate);
     const end = new Date(endDate);
-    const formatter = new Intl.DateTimeFormat("ar-SA", { year: "numeric", month: "short", day: "numeric" });
+    const formatter = new Intl.DateTimeFormat("en-GB", { year: "numeric", month: "short", day: "numeric" });
     return `${formatter.format(start)} - ${formatter.format(end)}`;
   };
 

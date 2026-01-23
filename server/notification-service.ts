@@ -322,7 +322,7 @@ export async function notifyMeetingReminder(
   startTime: Date,
   userId: string
 ) {
-  const timeStr = startTime.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
+  const timeStr = startTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
   
   return createNotification({
     type: "meeting",
@@ -343,7 +343,7 @@ export async function notifyTaskDue(
   dueDate: Date,
   userId: string
 ) {
-  const dateStr = dueDate.toLocaleDateString('ar-SA');
+  const dateStr = dueDate.toLocaleDateString('en-GB');
   
   return createNotification({
     type: "task",

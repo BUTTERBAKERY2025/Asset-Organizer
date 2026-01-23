@@ -690,7 +690,7 @@ export default function CashierShiftPerformance() {
                               <div className="text-center">
                                 <p className="text-muted-foreground">آخر تحديث</p>
                                 <p className="font-semibold text-xs">
-                                  {track.updatedAt ? new Date(track.updatedAt).toLocaleTimeString('ar-SA') : '-'}
+                                  {track.updatedAt ? new Date(track.updatedAt).toLocaleTimeString('en-GB') : '-'}
                                 </p>
                               </div>
                             </div>
@@ -745,7 +745,7 @@ export default function CashierShiftPerformance() {
                                   <span>•</span>
                                   <span>{alert.shiftType === 'morning' ? 'صباحي' : 'مسائي'}</span>
                                   <span>•</span>
-                                  <span>{alert.createdAt ? new Date(alert.createdAt).toLocaleTimeString('ar-SA') : '-'}</span>
+                                  <span>{alert.createdAt ? new Date(alert.createdAt).toLocaleTimeString('en-GB') : '-'}</span>
                                 </div>
                               </div>
                             </div>

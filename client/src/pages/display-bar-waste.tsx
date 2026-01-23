@@ -246,7 +246,7 @@ export default function DisplayBarWastePage() {
             <body>
               ${printContent.innerHTML}
               <div class="footer">
-                <p>تم الطباعة بتاريخ: ${new Date().toLocaleDateString('ar-SA')}</p>
+                <p>تم الطباعة بتاريخ: ${new Date().toLocaleDateString('en-GB')}</p>
               </div>
             </body>
           </html>
@@ -1920,7 +1920,7 @@ export default function DisplayBarWastePage() {
                 {viewingReport.status === "approved" && viewingReport.approvedAt && (
                   <div className="p-4 bg-green-50 rounded-lg border border-green-200">
                     <p className="text-green-700">
-                      تم الاعتماد بتاريخ: {new Date(viewingReport.approvedAt).toLocaleDateString('ar-SA')}
+                      تم الاعتماد بتاريخ: {new Date(viewingReport.approvedAt).toLocaleDateString('en-GB')}
                     </p>
                   </div>
                 )}

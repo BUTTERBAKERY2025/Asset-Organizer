@@ -221,7 +221,7 @@ export default function ProductionDashboardPage() {
   const prevDayStats = hubData?.yesterday;
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR", maximumFractionDigits: 0 }).format(amount || 0);
+    return new Intl.NumberFormat("en-GB", { style: "currency", currency: "SAR", maximumFractionDigits: 0 }).format(amount || 0);
   };
 
   const completionRate = stats ? 

@@ -1126,7 +1126,7 @@ export default function MarketingReportsPage() {
             <div ref={reportRef} className="p-4 space-y-6 bg-white" dir="rtl">
               <div className="text-center border-b pb-4">
                 <h2 className="text-2xl font-bold text-amber-600">تقرير أداء التسويق الشامل</h2>
-                <p className="text-sm text-muted-foreground">تاريخ التقرير: {new Date().toLocaleDateString('ar-SA')}</p>
+                <p className="text-sm text-muted-foreground">تاريخ التقرير: {new Date().toLocaleDateString('en-GB')}</p>
                 {hasActiveFilters() && (
                   <p className="text-xs text-muted-foreground mt-1">الفلاتر: {getActiveFiltersDescription()}</p>
                 )}

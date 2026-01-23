@@ -718,7 +718,7 @@ export default function ResolutionsPage() {
                                     <div class="resolution-meta">
                                       <div class="meta-right">
                                         <div class="resolution-number-box">رقم القرار: ${resolution.resolutionNumber}</div>
-                                        <div class="resolution-date">التاريخ: ${resolution.createdAt ? new Date(resolution.createdAt).toLocaleDateString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric' }) : new Date().toLocaleDateString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+                                        <div class="resolution-date">التاريخ: ${resolution.createdAt ? new Date(resolution.createdAt).toLocaleDateString('en-GB', { year: 'numeric', month: 'long', day: 'numeric' }) : new Date().toLocaleDateString('en-GB', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
                                       </div>
                                       <div class="meta-left">
                                         <span class="meta-badge badge-type">${resolutionType}</span>
@@ -774,7 +774,7 @@ export default function ResolutionsPage() {
 
                                     <div class="footer">
                                       <div class="footer-line">شركة الزبد الأفضل التجارية (شركة مساهمة) - سجل تجاري: 7026155296</div>
-                                      <div class="footer-line">تم الطباعة: ${new Date().toLocaleDateString('ar-SA')} | وثيقة رسمية</div>
+                                      <div class="footer-line">تم الطباعة: ${new Date().toLocaleDateString('en-GB')} | وثيقة رسمية</div>
                                     </div>
                                   </div>
                                 </body>

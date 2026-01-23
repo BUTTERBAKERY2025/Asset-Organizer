@@ -67,7 +67,7 @@ export function generatePaymentRequestsPDF(
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
-    return date.toLocaleDateString('ar-SA', { 
+    return date.toLocaleDateString('en-GB', { 
       year: 'numeric', 
       month: 'long', 
       day: 'numeric',

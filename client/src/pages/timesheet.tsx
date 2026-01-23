@@ -463,7 +463,7 @@ export default function TimesheetPage() {
               : '<div style="height: 60px; border-bottom: 1px dashed #ccc; margin: 20px 0;"></div>'}
             <div>${selectedReport.employeeAcknowledgment || "أقر بصحة بيانات الحضور والانصراف المذكورة أعلاه"}</div>
             ${selectedReport.employeeSignedAt 
-              ? `<div class="signature-date">تاريخ التوقيع: ${new Date(selectedReport.employeeSignedAt).toLocaleDateString('ar-SA')}</div>` 
+              ? `<div class="signature-date">تاريخ التوقيع: ${new Date(selectedReport.employeeSignedAt).toLocaleDateString('en-GB')}</div>` 
               : ""}
           </div>
           <div class="signature-box">
@@ -473,7 +473,7 @@ export default function TimesheetPage() {
               : '<div style="height: 60px; border-bottom: 1px dashed #ccc; margin: 20px 0;"></div>'}
             <div>${selectedReport.managerAcknowledgment || "أصادق على صحة بيانات حضور وانصراف الموظف"}</div>
             ${selectedReport.managerSignedAt 
-              ? `<div class="signature-date">تاريخ التوقيع: ${new Date(selectedReport.managerSignedAt).toLocaleDateString('ar-SA')}</div>` 
+              ? `<div class="signature-date">تاريخ التوقيع: ${new Date(selectedReport.managerSignedAt).toLocaleDateString('en-GB')}</div>` 
               : ""}
           </div>
         </div>
@@ -747,7 +747,7 @@ export default function TimesheetPage() {
                               <p className="text-sm text-muted-foreground">{selectedReport.employeeAcknowledgment}</p>
                               {selectedReport.employeeSignedAt && (
                                 <p className="text-xs text-muted-foreground">
-                                  {t("timesheet.signedAt")}: {new Date(selectedReport.employeeSignedAt).toLocaleDateString(isRTL ? 'ar-SA' : 'en-US')}
+                                  {t("timesheet.signedAt")}: {new Date(selectedReport.employeeSignedAt).toLocaleDateString(isRTL ? 'en-GB' : 'en-US')}
                                 </p>
                               )}
                             </div>
@@ -775,7 +775,7 @@ export default function TimesheetPage() {
                               <p className="text-sm text-muted-foreground">{selectedReport.managerAcknowledgment}</p>
                               {selectedReport.managerSignedAt && (
                                 <p className="text-xs text-muted-foreground">
-                                  {t("timesheet.signedAt")}: {new Date(selectedReport.managerSignedAt).toLocaleDateString(isRTL ? 'ar-SA' : 'en-US')}
+                                  {t("timesheet.signedAt")}: {new Date(selectedReport.managerSignedAt).toLocaleDateString(isRTL ? 'en-GB' : 'en-US')}
                                 </p>
                               )}
                             </div>
@@ -855,7 +855,7 @@ export default function TimesheetPage() {
                             {report.totalPresentDays} / {report.totalScheduledDays}
                           </TableCell>
                           <TableCell className="text-center text-sm">
-                            {new Date(report.createdAt).toLocaleDateString(isRTL ? 'ar-SA' : 'en-US')}
+                            {new Date(report.createdAt).toLocaleDateString(isRTL ? 'en-GB' : 'en-US')}
                           </TableCell>
                           <TableCell className="text-center">
                             <Button 

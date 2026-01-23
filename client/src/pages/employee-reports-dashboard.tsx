@@ -1203,7 +1203,7 @@ export default function EmployeeReportsDashboardPage() {
       const date = new Date(baseDate);
       date.setMonth(date.getMonth() - i);
       const monthKey = date.toISOString().slice(0, 7);
-      const monthName = date.toLocaleDateString('ar-SA', { month: 'short', year: 'numeric' });
+      const monthName = date.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
       
       const monthEmployees = employees?.filter(emp => {
         if (selectedBranch !== "all" && emp.branchId !== selectedBranch) return false;

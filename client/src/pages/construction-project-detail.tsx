@@ -504,7 +504,7 @@ export default function ConstructionProjectDetailPage() {
     const categoryWs = XLSX.utils.json_to_sheet(categorySummary);
     XLSX.utils.book_append_sheet(wb, categoryWs, "ملخص الفئات");
 
-    XLSX.writeFile(wb, `بنود_${project?.title || "المشروع"}_${new Date().toLocaleDateString("ar-SA")}.xlsx`);
+    XLSX.writeFile(wb, `بنود_${project?.title || "المشروع"}_${new Date().toLocaleDateString("en-GB")}.xlsx`);
   };
 
   const exportToCSV = () => {
@@ -820,7 +820,7 @@ export default function ConstructionProjectDetailPage() {
               <div ref={printRef} className="space-y-3 print:space-y-4" dir="rtl">
                 <div className="hidden print:block mb-4">
                   <h2 className="text-xl font-bold">{project.title}</h2>
-                  <p className="text-sm text-muted-foreground">{getBranchName(project.branchId)} - {new Date().toLocaleDateString("ar-SA")}</p>
+                  <p className="text-sm text-muted-foreground">{getBranchName(project.branchId)} - {new Date().toLocaleDateString("en-GB")}</p>
                 </div>
                 
                 {workItemsByCategory.map((group, groupIndex) => {

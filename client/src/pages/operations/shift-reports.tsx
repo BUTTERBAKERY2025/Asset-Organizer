@@ -378,7 +378,7 @@ export default function ShiftReportsPage() {
                   تصدير Excel
                 </Button>
                 <Badge variant="outline" className="bg-white text-amber-800 border-amber-300 px-4 py-2">
-                  {new Date().toLocaleDateString("ar-SA", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+                  {new Date().toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
                 </Badge>
               </div>
             </div>
@@ -988,10 +988,10 @@ export default function ShiftReportsPage() {
                   <span className="font-semibold mr-2">
                     {reportType === "opening"
                       ? selectedShift?.openingCompletedAt
-                        ? new Date(selectedShift.openingCompletedAt).toLocaleString("ar-SA")
+                        ? new Date(selectedShift.openingCompletedAt).toLocaleString("en-GB")
                         : "-"
                       : selectedShift?.closingCompletedAt
-                        ? new Date(selectedShift.closingCompletedAt).toLocaleString("ar-SA")
+                        ? new Date(selectedShift.closingCompletedAt).toLocaleString("en-GB")
                         : "-"}
                   </span>
                 </div>
@@ -1075,7 +1075,7 @@ export default function ShiftReportsPage() {
                             className="max-h-20 mx-auto"
                           />
                           <div className="text-xs text-center text-muted-foreground mt-2">
-                            {new Date(sig.signedAt).toLocaleString("ar-SA")}
+                            {new Date(sig.signedAt).toLocaleString("en-GB")}
                           </div>
                         </div>
                       ))}
@@ -1085,7 +1085,7 @@ export default function ShiftReportsPage() {
 
               <div className="mt-8 pt-4 border-t text-center text-sm text-muted-foreground print:mt-12">
                 <p>BUTTER BAKERY SYSTEM - CEO COMMAND</p>
-                <p>{new Date().toLocaleString("ar-SA")}</p>
+                <p>{new Date().toLocaleString("en-GB")}</p>
               </div>
             </div>
           </DialogContent>

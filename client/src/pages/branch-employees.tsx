@@ -743,7 +743,7 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
                 </div>
                 <div>
                   <p className="text-gray-500">{isRTL ? "تاريخ الطلب" : "Request Date"}</p>
-                  <p className="font-medium">{new Date(viewingTransfer.requestedAt).toLocaleDateString(isRTL ? "ar-SA" : "en-US")}</p>
+                  <p className="font-medium">{new Date(viewingTransfer.requestedAt).toLocaleDateString(isRTL ? "en-GB" : "en-US")}</p>
                 </div>
               </div>
               

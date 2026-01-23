@@ -35,7 +35,7 @@ export function formatPrintDate(): string {
     minute: '2-digit',
     timeZone: 'Asia/Riyadh'
   };
-  return now.toLocaleString('ar-SA', options);
+  return now.toLocaleString('en-GB', options);
 }
 
 export function getPdfHeaderHtml(title: string, subtitle?: string): string {

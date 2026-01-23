@@ -326,7 +326,7 @@ export default function PurchasingRequestsPage() {
       priorityText: priorityOption ? (isRTL ? priorityOption.labelAr : priorityOption.labelEn) : r.priority,
       vendorName: r.vendorName || "-",
       cost: r.totalEstimatedCost ? `${parseFloat(r.totalEstimatedCost).toLocaleString()} ر.س` : "-",
-      dateText: r.createdAt ? new Date(r.createdAt).toLocaleDateString("ar-SA") : "",
+      dateText: r.createdAt ? new Date(r.createdAt).toLocaleDateString("en-GB") : "",
     };
   });
 
@@ -478,10 +478,10 @@ export default function PurchasingRequestsPage() {
                           {request.totalEstimatedCost ? `${parseFloat(request.totalEstimatedCost).toLocaleString()} ر.س` : "-"}
                         </TableCell>
                         <TableCell>
-                          {request.expectedDeliveryDate ? new Date(request.expectedDeliveryDate).toLocaleDateString("ar-SA") : "-"}
+                          {request.expectedDeliveryDate ? new Date(request.expectedDeliveryDate).toLocaleDateString("en-GB") : "-"}
                         </TableCell>
                         <TableCell>
-                          {request.createdAt ? new Date(request.createdAt).toLocaleDateString("ar-SA") : "-"}
+                          {request.createdAt ? new Date(request.createdAt).toLocaleDateString("en-GB") : "-"}
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
@@ -621,7 +621,7 @@ export default function PurchasingRequestsPage() {
                     <div>
                       <p className="text-muted-foreground">{isRTL ? "تاريخ التسليم المتوقع" : "Expected Delivery"}</p>
                       <p className="font-medium">
-                        {selectedRequest.expectedDeliveryDate ? new Date(selectedRequest.expectedDeliveryDate).toLocaleDateString("ar-SA") : "-"}
+                        {selectedRequest.expectedDeliveryDate ? new Date(selectedRequest.expectedDeliveryDate).toLocaleDateString("en-GB") : "-"}
                       </p>
                     </div>
                     <div>
@@ -631,7 +631,7 @@ export default function PurchasingRequestsPage() {
                     <div>
                       <p className="text-muted-foreground">{isRTL ? "تاريخ الإنشاء" : "Created"}</p>
                       <p className="font-medium">
-                        {selectedRequest.createdAt ? new Date(selectedRequest.createdAt).toLocaleDateString("ar-SA") : "-"}
+                        {selectedRequest.createdAt ? new Date(selectedRequest.createdAt).toLocaleDateString("en-GB") : "-"}
                       </p>
                     </div>
                     {selectedRequest.approvedByName && (

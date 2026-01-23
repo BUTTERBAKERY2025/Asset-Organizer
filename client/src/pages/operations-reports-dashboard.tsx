@@ -294,7 +294,7 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
   const handleExportJournalPDF = () => {
     const formatDate = (dateStr: string) => {
       const date = new Date(dateStr);
-      return date.toLocaleDateString('ar-SA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+      return date.toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     };
 
     const SHIFT_LABELS: Record<string, string> = {
@@ -1357,7 +1357,7 @@ export default function OperationsReportsDashboardPage() {
     </div>
     <div class="info-item">
       <div class="label">تاريخ الطباعة</div>
-      <div class="value">${new Date().toLocaleDateString('ar-SA')}</div>
+      <div class="value">${new Date().toLocaleDateString('en-GB')}</div>
     </div>
   </div>
 
@@ -1471,7 +1471,7 @@ export default function OperationsReportsDashboardPage() {
 
   <div class="footer">
     <span>BUTTER BAKERY SYSTEM - CEO COMMAND</span>
-    <span>تم الإنشاء: ${new Date().toLocaleString('ar-SA')}</span>
+    <span>تم الإنشاء: ${new Date().toLocaleString('en-GB')}</span>
   </div>
 </body>
 </html>`;
@@ -3721,7 +3721,7 @@ export default function OperationsReportsDashboardPage() {
     @page { size: A4; margin: 10mm 10mm 20mm 10mm; }
     @media print {
       @page { margin-top: 10mm; margin-bottom: 20mm; }
-      body::after { content: "تقرير المرتجعات التحليلي - BUTTER BAKERY | ${new Date().toLocaleDateString('ar-SA')}"; position: fixed; bottom: 5mm; left: 0; right: 0; text-align: center; font-size: 8px; color: #666; }
+      body::after { content: "تقرير المرتجعات التحليلي - BUTTER BAKERY | ${new Date().toLocaleDateString('en-GB')}"; position: fixed; bottom: 5mm; left: 0; right: 0; text-align: center; font-size: 8px; color: #666; }
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Cairo', Arial, sans-serif; direction: rtl; padding: 15px; background: white; color: #333; font-size: 10px; }
@@ -3847,7 +3847,7 @@ export default function OperationsReportsDashboardPage() {
     ${journalsWithReturns.map(j => `<tr><td>${j.journalDate}</td><td>${branches?.find(b => b.id === j.branchId)?.name || j.branchId}</td><td>${j.cashierName || '-'}</td><td>${SHIFT_LABELS[j.shiftType || ''] || j.shiftType || '-'}</td><td class="amount-red">${formatCurrency(j.returnAmount || 0)}</td><td>${PAYMENT_METHOD_LABELS[j.returnPaymentMethod || ''] || j.returnPaymentMethod || '-'}</td><td>${j.returnReason || '-'}</td></tr>`).join('')}
     </tbody></table>
   </div>
-  <div class="footer"><span class="brand">BUTTER BAKERY SYSTEM - CEO COMMAND</span><span>تاريخ الطباعة: ${new Date().toLocaleDateString('ar-SA')}</span></div>
+  <div class="footer"><span class="brand">BUTTER BAKERY SYSTEM - CEO COMMAND</span><span>تاريخ الطباعة: ${new Date().toLocaleDateString('en-GB')}</span></div>
 </body>
 </html>`;
                             printHtmlContent(htmlContent);
@@ -4246,7 +4246,7 @@ export default function OperationsReportsDashboardPage() {
     @page { size: A4; margin: 10mm 10mm 20mm 10mm; }
     @media print {
       @page { margin-top: 10mm; margin-bottom: 20mm; }
-      body::after { content: "تقرير فروقات المدفوعات - BUTTER BAKERY | ${new Date().toLocaleDateString('ar-SA')}"; position: fixed; bottom: 5mm; left: 0; right: 0; text-align: center; font-size: 8px; color: #666; }
+      body::after { content: "تقرير فروقات المدفوعات - BUTTER BAKERY | ${new Date().toLocaleDateString('en-GB')}"; position: fixed; bottom: 5mm; left: 0; right: 0; text-align: center; font-size: 8px; color: #666; }
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Cairo', Arial, sans-serif; direction: rtl; padding: 15px; background: white; color: #333; font-size: 10px; }
@@ -4389,7 +4389,7 @@ export default function OperationsReportsDashboardPage() {
     ${journalsWithDiscrepancies.map(j => `<tr><td>${j.journalDate}</td><td>${branches?.find(b => b.id === j.branchId)?.name || j.branchId}</td><td>${j.cashierName || '-'}</td><td>${SHIFT_LABELS[j.shiftType || ''] || j.shiftType || '-'}</td><td>${formatCurrency(j.totalSales || 0)}</td><td class="${(j.discrepancyAmount || 0) < 0 ? 'shortage' : 'surplus'}">${formatCurrency(j.discrepancyAmount || 0)}</td><td>${j.discrepancyStatus === 'shortage' ? 'عجز' : j.discrepancyStatus === 'surplus' ? 'فائض' : 'متوازن'}</td></tr>`).join('')}
     </tbody></table>
   </div>
-  <div class="footer"><span class="brand">BUTTER BAKERY SYSTEM - CEO COMMAND</span><span>تاريخ الطباعة: ${new Date().toLocaleDateString('ar-SA')}</span></div>
+  <div class="footer"><span class="brand">BUTTER BAKERY SYSTEM - CEO COMMAND</span><span>تاريخ الطباعة: ${new Date().toLocaleDateString('en-GB')}</span></div>
 </body>
 </html>`;
                             printHtmlContent(htmlContent);
@@ -4707,7 +4707,7 @@ export default function OperationsReportsDashboardPage() {
     .page-footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; font-size: 8px; color: #666; padding: 5px; border-top: 1px solid #eee; background: white; }
     @media print { 
       .print-btn { display: none !important; }
-      body::after { content: "تقرير مطابقة طرق الدفع - BUTTER BAKERY | ${new Date().toLocaleDateString('ar-SA')}"; position: fixed; bottom: 5mm; left: 0; right: 0; text-align: center; font-size: 8px; color: #666; }
+      body::after { content: "تقرير مطابقة طرق الدفع - BUTTER BAKERY | ${new Date().toLocaleDateString('en-GB')}"; position: fixed; bottom: 5mm; left: 0; right: 0; text-align: center; font-size: 8px; color: #666; }
     }
   </style>
 </head>
@@ -4861,7 +4861,7 @@ export default function OperationsReportsDashboardPage() {
                               ` : ''}
                               <div style="margin-top: 30px; padding-top: 15px; border-top: 2px solid #D4A574; display: flex; justify-content: space-between; align-items: center; font-size: 10px;">
                                 <span style="color: #8B6914; font-weight: bold;">BUTTER BAKERY SYSTEM - CEO COMMAND</span>
-                                <span style="color: #666;">تم إنشاء التقرير: ${new Date().toLocaleString('ar-SA')}</span>
+                                <span style="color: #666;">تم إنشاء التقرير: ${new Date().toLocaleString('en-GB')}</span>
                               </div>
                               <div style="text-align: center; margin-top: 10px; font-size: 10px; color: #666;">
                                 <span style="color: #b91c1c;">● أحمر = فروقات/أخطاء</span> | 
@@ -5464,8 +5464,8 @@ export default function OperationsReportsDashboardPage() {
                               </div>
                               <div class="header-left">
                                 <div class="report-date">تاريخ الطباعة</div>
-                                <div style="font-weight: bold; color: #D97706;">${new Date().toLocaleDateString('ar-SA')}</div>
-                                <div style="font-size: 9px; color: #888;">${new Date().toLocaleTimeString('ar-SA')}</div>
+                                <div style="font-weight: bold; color: #D97706;">${new Date().toLocaleDateString('en-GB')}</div>
+                                <div style="font-size: 9px; color: #888;">${new Date().toLocaleTimeString('en-GB')}</div>
                               </div>
                             </div>
                             
@@ -5584,7 +5584,7 @@ export default function OperationsReportsDashboardPage() {
                           ` : ''}
                           
                           <div class="footer">
-                            BUTTER BAKERY SYSTEM - CEO COMMAND | ${new Date().toLocaleString('ar-SA')}
+                            BUTTER BAKERY SYSTEM - CEO COMMAND | ${new Date().toLocaleString('en-GB')}
                           </div>
                           
                           <script>
@@ -5836,7 +5836,7 @@ export default function OperationsReportsDashboardPage() {
                     
                     const summaryData = [
                       ['التقرير التنفيذي الشامل'],
-                      ['تاريخ التقرير:', new Date(executiveSummary.reportDate).toLocaleDateString('ar-SA')],
+                      ['تاريخ التقرير:', new Date(executiveSummary.reportDate).toLocaleDateString('en-GB')],
                       ['الفترة:', `${executiveSummary.period.startDate} إلى ${executiveSummary.period.endDate}`],
                       [],
                       ['ملخص المبيعات'],
@@ -5903,7 +5903,7 @@ export default function OperationsReportsDashboardPage() {
                       </head>
                       <body>
                         <h1>التقرير التنفيذي الشامل - BUTTER BAKERY</h1>
-                        <p>تاريخ التقرير: ${new Date(executiveSummary.reportDate).toLocaleDateString('ar-SA')}</p>
+                        <p>تاريخ التقرير: ${new Date(executiveSummary.reportDate).toLocaleDateString('en-GB')}</p>
                         <p>الفترة: ${executiveSummary.period.startDate} إلى ${executiveSummary.period.endDate}</p>
                         
                         <div class="section">
