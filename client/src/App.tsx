@@ -151,6 +151,16 @@ function PageLoadingFallback() {
   );
 }
 
+function ProtectedPage({ component: Component }: { component: React.ComponentType }) {
+  return (
+    <ProtectedRoute>
+      <Suspense fallback={<PageLoadingFallback />}>
+        <Component />
+      </Suspense>
+    </ProtectedRoute>
+  );
+}
+
 function ModulePage({ component: Component, module }: { component: React.ComponentType; module: SystemModule }) {
   return (
     <ModuleProtectedRoute module={module}>
@@ -183,7 +193,7 @@ function AdminPage({ component: Component, module }: { component: React.Componen
 function Router() {
   return (
     <Switch>
-      <Route path="/">{() => <ModulePage component={PlatformHomePage} module="platform_home" />}</Route>
+      <Route path="/">{() => <ProtectedPage component={PlatformHomePage} />}</Route>
       <Route path="/login">
         {() => (
           <PublicOnlyRoute>
