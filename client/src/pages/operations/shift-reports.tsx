@@ -722,7 +722,7 @@ export default function ShiftReportsPage() {
 
             <div ref={analyticsPrintRef} className="space-y-6 print:p-8" dir="rtl">
               <div className="hidden print:block text-center mb-8">
-                <h1 className="text-2xl font-bold mb-2">شركة الزبد الأفضل التجارية - مخبز باتر</h1>
+                <h1 className="text-2xl font-bold mb-2">شركة الزبد الأفضل التجارية - BUTTER BAKERY</h1>
                 <h2 className="text-xl">تقرير تحليلي للشفتات</h2>
                 <p className="text-sm text-muted-foreground mt-2">
                   من {dateRange.from} إلى {dateRange.to}
@@ -956,7 +956,7 @@ export default function ShiftReportsPage() {
             <div ref={printRef} className="p-4 print:p-8" dir="rtl">
               <div className="text-center mb-6 print:mb-8">
                 <h1 className="text-2xl font-bold mb-2">شركة الزبد الأفضل التجارية</h1>
-                <h2 className="text-xl font-semibold text-amber-600">مخبز باتر</h2>
+                <h2 className="text-xl font-semibold text-amber-600">BUTTER BAKERY</h2>
                 <h3 className="text-lg mt-4">
                   تقرير {reportType === "opening" ? "فتح" : "إغلاق"} الفرع
                 </h3>

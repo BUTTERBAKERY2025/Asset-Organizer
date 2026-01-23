@@ -249,7 +249,7 @@ export default function ProductsPage() {
               data={exportData}
               columns={exportColumns}
               fileName="قائمة_المنتجات"
-              title="قائمة منتجات بتر بيكري"
+              title="قائمة منتجات BUTTER BAKERY"
               subtitle={`إجمالي ${products.length} منتج`}
             />
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

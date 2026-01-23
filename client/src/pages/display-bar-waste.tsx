@@ -1833,7 +1833,7 @@ export default function DisplayBarWastePage() {
           
           <div ref={reportPrintRef}>
             <div className="header text-center mb-6">
-              <h1 className="text-2xl font-bold text-[#D4A574]">بتر بيكري</h1>
+              <h1 className="text-2xl font-bold text-[#D4A574]">BUTTER BAKERY</h1>
               <p className="text-lg font-medium">تقرير الهالك اليومي</p>
             </div>
 

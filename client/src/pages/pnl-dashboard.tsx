@@ -112,7 +112,7 @@ function generatePnLPdfReport(
           {
             width: "*",
             stack: [
-              { text: "بتر بيكري", style: "companyName", alignment: "right" },
+              { text: "BUTTER BAKERY SYSTEM", style: "companyName", alignment: "right" },
               { text: "Butter Bakery", style: "companyNameEn", alignment: "right" },
             ],
           },

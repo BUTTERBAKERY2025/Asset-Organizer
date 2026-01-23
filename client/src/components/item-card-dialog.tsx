@@ -157,7 +157,7 @@ export function ItemCardDialog({ item, branchName, open, onOpenChange }: ItemCar
         <div ref={printRef} className="p-6 print:p-4">
           <div className="print:block hidden mb-4 text-center border-b pb-4">
             <h1 className="text-2xl font-bold">كارت صنف</h1>
-            <p className="text-muted-foreground">نظام إدارة الأصول - باتر</p>
+            <p className="text-muted-foreground">BUTTER BAKERY SYSTEM - CEO COMMAND</p>
           </div>
 
           <div className="flex flex-col md:flex-row gap-6">

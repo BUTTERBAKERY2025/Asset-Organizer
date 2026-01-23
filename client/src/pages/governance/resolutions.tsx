@@ -710,7 +710,7 @@ export default function ResolutionsPage() {
                                   <div class="document">
                                     <div class="letterhead">
                                       <div class="company-name">شركة الزبد الأفضل التجارية</div>
-                                      <div class="company-subtitle">BUTTER BAKERY - مخبز باتر</div>
+                                      <div class="company-subtitle">BUTTER BAKERY SYSTEM - CEO COMMAND</div>
                                       <div class="company-info">شركة مساهمة | سجل تجاري: 7026155296 | المملكة العربية السعودية</div>
                                       <div class="document-type">قـــرار إداري</div>
                                     </div>

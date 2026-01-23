@@ -13327,7 +13327,7 @@ export async function registerRoutes(
               <div class="section-title">الشروط والأحكام</div>
               <ol class="terms-list">
                 <li>يلتزم الطرف الثاني (المؤثر) بتقديم المحتوى المتفق عليه وفق المعايير والجودة المطلوبة.</li>
-                <li>يجب أن يتضمن المحتوى ذكر العلامة التجارية "باتر" بشكل واضح.</li>
+                <li>يجب أن يتضمن المحتوى ذكر العلامة التجارية "BUTTER BAKERY" بشكل واضح.</li>
                 <li>لا يحق للمؤثر نقل حقوق هذا العقد لطرف آخر دون موافقة خطية.</li>
                 <li>يتم الدفع بعد تسليم المحتوى والموافقة عليه من قبل إدارة التسويق.</li>
                 ${contract.exclusivityClause ? "<li>يلتزم المؤثر بعدم الترويج لمنتجات منافسة خلال فترة العقد.</li>" : ""}
@@ -13349,7 +13349,7 @@ export async function registerRoutes(
             </div>
 
             <div class="footer">
-              <p>هذا العقد صادر من نظام منصة بتر بيكري الشاملة</p>
+              <p>BUTTER BAKERY SYSTEM - CEO COMMAND</p>
               <p>تاريخ الإصدار: ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</p>
             </div>
           </div>

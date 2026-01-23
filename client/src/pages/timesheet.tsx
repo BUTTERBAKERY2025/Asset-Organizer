@@ -403,7 +403,7 @@ export default function TimesheetPage() {
       </head>
       <body>
         <div class="header">
-          <h1>مخبز باتر</h1>
+          <h1>BUTTER BAKERY</h1>
           <h2>تقرير التايم شيت الشهري</h2>
         </div>
         

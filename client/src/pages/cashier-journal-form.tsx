@@ -1147,7 +1147,7 @@ export default function CashierJournalFormPage() {
   </div>
   
   <div class="footer">
-    <span>بتر بيكري - Butter Bakery</span>
+    <span>BUTTER BAKERY SYSTEM - CEO COMMAND</span>
     <span>${new Date().toLocaleDateString('en-GB')}</span>
   </div>
 </body>

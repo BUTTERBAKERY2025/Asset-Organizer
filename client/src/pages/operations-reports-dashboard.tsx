@@ -451,7 +451,7 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
     </div>
     
     <div class="footer">
-      <span>بتر بيكري - Butter Bakery</span>
+      <span>BUTTER BAKERY SYSTEM - CEO COMMAND</span>
       <span>تم الإنشاء: ${new Date().toLocaleDateString('en-GB')}</span>
     </div>
   </div>
@@ -1153,7 +1153,7 @@ export default function OperationsReportsDashboardPage() {
       <div class="title">تقرير التشغيل الشامل</div>
       <div class="info">${selectedBranch} | ${filters.startDate} إلى ${filters.endDate}</div>
     </div>
-    <div style="font-size:10px;font-weight:bold;color:#d4a853;">بتر بيكري</div>
+    <div style="font-size:10px;font-weight:bold;color:#d4a853;">BUTTER BAKERY</div>
   </div>
 
   <div class="summary-row">
@@ -1230,7 +1230,7 @@ export default function OperationsReportsDashboardPage() {
   </div>
 
   <div class="footer">
-    <span>بتر بيكري - Butter Bakery</span>
+    <span>BUTTER BAKERY SYSTEM - CEO COMMAND</span>
     <span>${new Date().toLocaleDateString('en-GB')}</span>
   </div>
 </body>
@@ -1339,7 +1339,7 @@ export default function OperationsReportsDashboardPage() {
       <div class="title">كشف حساب الكاشير</div>
       <div class="subtitle">${cashierName}</div>
     </div>
-    <div class="logo">بتر بيكري</div>
+    <div class="logo">BUTTER BAKERY</div>
   </div>
 
   <div class="info-bar">
@@ -1470,7 +1470,7 @@ export default function OperationsReportsDashboardPage() {
   </div>
 
   <div class="footer">
-    <span>بتر بيكري - Butter Bakery</span>
+    <span>BUTTER BAKERY SYSTEM - CEO COMMAND</span>
     <span>تم الإنشاء: ${new Date().toLocaleString('ar-SA')}</span>
   </div>
 </body>
@@ -3605,7 +3605,7 @@ export default function OperationsReportsDashboardPage() {
                   
                   // Summary sheet
                   const summaryData = [
-                    ["تقرير المرتجعات التحليلي - بتر بيكري"],
+                    ["تقرير المرتجعات التحليلي - BUTTER BAKERY"],
                     ["الفترة:", `${filters.startDate} إلى ${filters.endDate}`],
                     [],
                     ["الملخص"],
@@ -3714,7 +3714,7 @@ export default function OperationsReportsDashboardPage() {
     @page { size: A4; margin: 10mm 10mm 20mm 10mm; }
     @media print {
       @page { margin-top: 10mm; margin-bottom: 20mm; }
-      body::after { content: "تقرير المرتجعات التحليلي - بتر بيكري | ${new Date().toLocaleDateString('ar-SA')}"; position: fixed; bottom: 5mm; left: 0; right: 0; text-align: center; font-size: 8px; color: #666; }
+      body::after { content: "تقرير المرتجعات التحليلي - BUTTER BAKERY | ${new Date().toLocaleDateString('ar-SA')}"; position: fixed; bottom: 5mm; left: 0; right: 0; text-align: center; font-size: 8px; color: #666; }
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Cairo', Arial, sans-serif; direction: rtl; padding: 15px; background: white; color: #333; font-size: 10px; }
@@ -3840,7 +3840,7 @@ export default function OperationsReportsDashboardPage() {
     ${journalsWithReturns.map(j => `<tr><td>${j.journalDate}</td><td>${branches?.find(b => b.id === j.branchId)?.name || j.branchId}</td><td>${j.cashierName || '-'}</td><td>${SHIFT_LABELS[j.shiftType || ''] || j.shiftType || '-'}</td><td class="amount-red">${formatCurrency(j.returnAmount || 0)}</td><td>${PAYMENT_METHOD_LABELS[j.returnPaymentMethod || ''] || j.returnPaymentMethod || '-'}</td><td>${j.returnReason || '-'}</td></tr>`).join('')}
     </tbody></table>
   </div>
-  <div class="footer"><span class="brand">بتر بيكري - BUTTER BAKERY | CEO COMMAND CENTER</span><span>تاريخ الطباعة: ${new Date().toLocaleDateString('ar-SA')}</span></div>
+  <div class="footer"><span class="brand">BUTTER BAKERY SYSTEM - CEO COMMAND</span><span>تاريخ الطباعة: ${new Date().toLocaleDateString('ar-SA')}</span></div>
 </body>
 </html>`;
                             printHtmlContent(htmlContent);
@@ -4140,7 +4140,7 @@ export default function OperationsReportsDashboardPage() {
                   
                   // Summary sheet
                   const summaryData = [
-                    ["تقرير فروقات المدفوعات التحليلي - بتر بيكري"],
+                    ["تقرير فروقات المدفوعات التحليلي - BUTTER BAKERY"],
                     ["الفترة:", `${filters.startDate} إلى ${filters.endDate}`],
                     [],
                     ["الملخص"],
@@ -4239,7 +4239,7 @@ export default function OperationsReportsDashboardPage() {
     @page { size: A4; margin: 10mm 10mm 20mm 10mm; }
     @media print {
       @page { margin-top: 10mm; margin-bottom: 20mm; }
-      body::after { content: "تقرير فروقات المدفوعات - بتر بيكري | ${new Date().toLocaleDateString('ar-SA')}"; position: fixed; bottom: 5mm; left: 0; right: 0; text-align: center; font-size: 8px; color: #666; }
+      body::after { content: "تقرير فروقات المدفوعات - BUTTER BAKERY | ${new Date().toLocaleDateString('ar-SA')}"; position: fixed; bottom: 5mm; left: 0; right: 0; text-align: center; font-size: 8px; color: #666; }
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Cairo', Arial, sans-serif; direction: rtl; padding: 15px; background: white; color: #333; font-size: 10px; }
@@ -4382,7 +4382,7 @@ export default function OperationsReportsDashboardPage() {
     ${journalsWithDiscrepancies.map(j => `<tr><td>${j.journalDate}</td><td>${branches?.find(b => b.id === j.branchId)?.name || j.branchId}</td><td>${j.cashierName || '-'}</td><td>${SHIFT_LABELS[j.shiftType || ''] || j.shiftType || '-'}</td><td>${formatCurrency(j.totalSales || 0)}</td><td class="${(j.discrepancyAmount || 0) < 0 ? 'shortage' : 'surplus'}">${formatCurrency(j.discrepancyAmount || 0)}</td><td>${j.discrepancyStatus === 'shortage' ? 'عجز' : j.discrepancyStatus === 'surplus' ? 'فائض' : 'متوازن'}</td></tr>`).join('')}
     </tbody></table>
   </div>
-  <div class="footer"><span class="brand">بتر بيكري - BUTTER BAKERY | CEO COMMAND CENTER</span><span>تاريخ الطباعة: ${new Date().toLocaleDateString('ar-SA')}</span></div>
+  <div class="footer"><span class="brand">BUTTER BAKERY SYSTEM - CEO COMMAND</span><span>تاريخ الطباعة: ${new Date().toLocaleDateString('ar-SA')}</span></div>
 </body>
 </html>`;
                             printHtmlContent(htmlContent);
@@ -4700,7 +4700,7 @@ export default function OperationsReportsDashboardPage() {
     .page-footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; font-size: 8px; color: #666; padding: 5px; border-top: 1px solid #eee; background: white; }
     @media print { 
       .print-btn { display: none !important; }
-      body::after { content: "تقرير مطابقة طرق الدفع - بتر بيكري | ${new Date().toLocaleDateString('ar-SA')}"; position: fixed; bottom: 5mm; left: 0; right: 0; text-align: center; font-size: 8px; color: #666; }
+      body::after { content: "تقرير مطابقة طرق الدفع - BUTTER BAKERY | ${new Date().toLocaleDateString('ar-SA')}"; position: fixed; bottom: 5mm; left: 0; right: 0; text-align: center; font-size: 8px; color: #666; }
     }
   </style>
 </head>
@@ -4853,7 +4853,7 @@ export default function OperationsReportsDashboardPage() {
                               </table>
                               ` : ''}
                               <div style="margin-top: 30px; padding-top: 15px; border-top: 2px solid #D4A574; display: flex; justify-content: space-between; align-items: center; font-size: 10px;">
-                                <span style="color: #8B6914; font-weight: bold;">بتر بيكري - BUTTER BAKERY | CEO COMMAND CENTER</span>
+                                <span style="color: #8B6914; font-weight: bold;">BUTTER BAKERY SYSTEM - CEO COMMAND</span>
                                 <span style="color: #666;">تم إنشاء التقرير: ${new Date().toLocaleString('ar-SA')}</span>
                               </div>
                               <div style="text-align: center; margin-top: 10px; font-size: 10px; color: #666;">
@@ -4880,7 +4880,7 @@ export default function OperationsReportsDashboardPage() {
                           const wb = XLSX.utils.book_new();
                           
                           const summaryData = [
-                            ["تقرير مطابقة طرق الدفع - بتر بيكري"],
+                            ["تقرير مطابقة طرق الدفع - BUTTER BAKERY"],
                             ["الفترة:", `${filters.startDate} إلى ${filters.endDate}`],
                             ["حد الفرق المقبول:", "0.50 ريال"],
                             [],

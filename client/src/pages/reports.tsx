@@ -121,7 +121,7 @@ export default function ReportsPage() {
 
   const handlePrint = useReactToPrint({
     contentRef: printRef,
-    documentTitle: "تقرير الأصول والمعدات - مخبز باتر",
+    documentTitle: "تقرير الأصول والمعدات - BUTTER BAKERY",
   });
 
   const filteredInventory = inventory.filter((item: any) => {

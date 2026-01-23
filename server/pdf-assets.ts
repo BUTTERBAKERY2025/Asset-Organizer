@@ -190,7 +190,7 @@ export function getPdfFooterHtml(printedBy: string, printedAt: string): string {
       <span>طُبع بواسطة: ${printedBy}</span>
     </div>
     <div class="pdf-footer-center">
-      <span>مخبز باتر - نظام إدارة الإنتاج</span>
+      <span>BUTTER BAKERY SYSTEM - CEO COMMAND</span>
     </div>
     <div class="pdf-footer-left">
       <span>تاريخ الطباعة: ${printedAt}</span>

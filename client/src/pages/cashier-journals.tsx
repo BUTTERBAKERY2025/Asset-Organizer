@@ -270,7 +270,7 @@ export default function CashierJournalsPage() {
       <div class="title">قائمة يوميات الكاشير</div>
       <div class="info">${branchFilter !== 'all' ? getBranchName(branchFilter) : 'جميع الفروع'} | ${filteredJournals.length} يومية</div>
     </div>
-    <div style="font-size:10px;font-weight:bold;color:#d4a853;">بتر بيكري</div>
+    <div style="font-size:10px;font-weight:bold;color:#d4a853;">BUTTER BAKERY</div>
   </div>
 
   <div class="summary-row">
@@ -314,7 +314,7 @@ export default function CashierJournalsPage() {
   </table>
 
   <div class="footer">
-    <span>بتر بيكري - Butter Bakery</span>
+    <span>BUTTER BAKERY SYSTEM - CEO COMMAND</span>
     <span>تاريخ الطباعة: ${new Date().toLocaleDateString('en-GB')}</span>
   </div>
 </body>
