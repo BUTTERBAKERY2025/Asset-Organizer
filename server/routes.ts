@@ -2475,6 +2475,14 @@ export async function registerRoutes(
 
   app.post("/api/shifts", isAuthenticated, requirePermission("shifts", "create"), async (req, res) => {
     try {
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req) && req.body.branchId) {
+        const hasAccess = await canAccessBranch(req, req.body.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بإنشاء وردية لهذا الفرع" });
+        }
+      }
+      
       const validatedData = insertShiftSchema.parse({
         ...req.body,
         createdBy: req.user?.id,
@@ -2490,6 +2498,18 @@ export async function registerRoutes(
   app.patch("/api/shifts/:id", isAuthenticated, requirePermission("shifts", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const existingShift = await storage.getShift(id);
+        if (existingShift?.branchId) {
+          const hasAccess = await canAccessBranch(req, existingShift.branchId);
+          if (!hasAccess) {
+            return res.status(403).json({ error: "غير مصرح بتعديل هذه الوردية" });
+          }
+        }
+      }
+      
       const shift = await storage.updateShift(id, req.body);
       if (!shift) {
         return res.status(404).json({ error: "Shift not found" });
@@ -2504,6 +2524,18 @@ export async function registerRoutes(
   app.delete("/api/shifts/:id", isAuthenticated, requirePermission("shifts", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const existingShift = await storage.getShift(id);
+        if (existingShift?.branchId) {
+          const hasAccess = await canAccessBranch(req, existingShift.branchId);
+          if (!hasAccess) {
+            return res.status(403).json({ error: "غير مصرح بحذف هذه الوردية" });
+          }
+        }
+      }
+      
       const deleted = await storage.deleteShift(id);
       if (!deleted) {
         return res.status(404).json({ error: "Shift not found" });
@@ -2519,6 +2551,18 @@ export async function registerRoutes(
   app.get("/api/shifts/:shiftId/employees", isAuthenticated, requirePermission("shifts", "view"), async (req, res) => {
     try {
       const shiftId = parseInt(req.params.shiftId, 10);
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const shift = await storage.getShift(shiftId);
+        if (shift?.branchId) {
+          const hasAccess = await canAccessBranch(req, shift.branchId);
+          if (!hasAccess) {
+            return res.status(403).json({ error: "غير مصرح بالوصول لهذه الوردية" });
+          }
+        }
+      }
+      
       const employees = await storage.getShiftEmployees(shiftId);
       res.json(employees);
     } catch (error) {
@@ -2530,6 +2574,18 @@ export async function registerRoutes(
   app.post("/api/shifts/:shiftId/employees", isAuthenticated, requirePermission("shifts", "create"), async (req, res) => {
     try {
       const shiftId = parseInt(req.params.shiftId, 10);
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const shift = await storage.getShift(shiftId);
+        if (shift?.branchId) {
+          const hasAccess = await canAccessBranch(req, shift.branchId);
+          if (!hasAccess) {
+            return res.status(403).json({ error: "غير مصرح بإضافة موظفين لهذه الوردية" });
+          }
+        }
+      }
+      
       const validatedData = insertShiftEmployeeSchema.parse({
         ...req.body,
         shiftId,
@@ -2864,10 +2920,19 @@ export async function registerRoutes(
   // Get all operations employees (users with branchId or jobTitle)
   app.get("/api/operations-employees", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
+      // SECURITY: Enforce branch filtering for non-admin users
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      
       const users = await storage.getAllUsers();
-      const employees = users
+      let employees = users
         .filter(u => u.role === "employee" || u.branchId || u.jobTitle)
         .map(({ password, ...user }) => user);
+      
+      // Filter by branch for non-admins
+      if (!isUserAdmin(req) && mandatoryBranch) {
+        employees = employees.filter(e => e.branchId === mandatoryBranch);
+      }
+      
       res.json(employees);
     } catch (error) {
       console.error("Error fetching operations employees:", error);
@@ -2886,6 +2951,14 @@ export async function registerRoutes(
       
       if (!branchId) {
         return res.status(400).json({ error: "يرجى اختيار الفرع" });
+      }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بإضافة موظفين لهذا الفرع" });
+        }
       }
       
       const existingUser = await storage.getUserByUsername(username);
@@ -2925,6 +2998,24 @@ export async function registerRoutes(
       const { firstName, lastName, phone, email, branchId, jobTitle, isActive, password } = req.body;
       const updateData: any = {};
       
+      // SECURITY: Verify current employee's branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const existingUser = await storage.getUser(req.params.id);
+        if (existingUser?.branchId) {
+          const hasAccess = await canAccessBranch(req, existingUser.branchId);
+          if (!hasAccess) {
+            return res.status(403).json({ error: "غير مصرح بتعديل هذا الموظف" });
+          }
+        }
+        // Also check if trying to move to a different branch
+        if (branchId && branchId !== existingUser?.branchId) {
+          const hasNewAccess = await canAccessBranch(req, branchId);
+          if (!hasNewAccess) {
+            return res.status(403).json({ error: "غير مصرح بنقل الموظف لهذا الفرع" });
+          }
+        }
+      }
+      
       if (firstName !== undefined) updateData.firstName = firstName;
       if (lastName !== undefined) updateData.lastName = lastName;
       if (phone !== undefined) updateData.phone = phone;
@@ -2955,6 +3046,17 @@ export async function registerRoutes(
   // Delete operations employee
   app.delete("/api/operations-employees/:id", isAuthenticated, requirePermission("operations", "delete"), async (req, res) => {
     try {
+      // SECURITY: Verify employee's branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const existingUser = await storage.getUser(req.params.id);
+        if (existingUser?.branchId) {
+          const hasAccess = await canAccessBranch(req, existingUser.branchId);
+          if (!hasAccess) {
+            return res.status(403).json({ error: "غير مصرح بحذف هذا الموظف" });
+          }
+        }
+      }
+      
       const success = await storage.deleteUser(req.params.id);
       if (!success) {
         return res.status(404).json({ error: "Employee not found" });
@@ -3981,6 +4083,14 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Branch ID, date, and journal IDs are required" });
       }
       
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+        }
+      }
+      
       // Check if closure already exists
       const [existingClosure] = await db.select()
         .from(branchDailyClosures)
@@ -4115,6 +4225,14 @@ export async function registerRoutes(
       
       if (!closure) {
         return res.status(404).json({ error: "Closure not found" });
+      }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, closure.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+        }
       }
       
       if (closure.status === 'closed') {
