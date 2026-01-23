@@ -14879,11 +14879,17 @@ export async function registerRoutes(
       }
       
       // SECURITY: Verify branch access for non-admin users based on employee's branch
+      // Get today's attendance record to verify branch - always needed for security
+      const today = new Date().toISOString().split('T')[0];
+      const existingRecord = await storage.getAttendanceByEmployeeAndDate(employeeId, today);
+      
+      // If no record exists, reject early
+      if (!existingRecord) {
+        return res.status(404).json({ error: "لم يتم تسجيل حضور هذا الموظف اليوم" });
+      }
+      
       if (!isUserAdmin(req)) {
-        // Get today's attendance record to verify branch
-        const today = new Date().toISOString().split('T')[0];
-        const existingRecord = await storage.getAttendanceByEmployeeAndDate(employeeId, today);
-        if (existingRecord?.branchId) {
+        if (existingRecord.branchId) {
           const hasAccess = await canAccessBranch(req, existingRecord.branchId);
           if (!hasAccess) {
             return res.status(403).json({ error: "غير مصرح بتسجيل انصراف موظفي هذا الفرع" });
