@@ -3381,6 +3381,15 @@ export async function registerRoutes(
       if (!existing) {
         return res.status(404).json({ error: "Cashier journal not found" });
       }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req) && existing.branchId) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && existing.branchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا اليومية" });
+        }
+      }
+      
       if (existing.status !== 'draft') {
         return res.status(400).json({ error: "Journal already submitted" });
       }
@@ -3418,6 +3427,15 @@ export async function registerRoutes(
       if (!existing) {
         return res.status(404).json({ error: "Cashier journal not found" });
       }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req) && existing.branchId) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && existing.branchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا اليومية" });
+        }
+      }
+      
       if (existing.status !== 'draft') {
         return res.status(400).json({ error: "Journal already posted or submitted" });
       }
@@ -3459,6 +3477,15 @@ export async function registerRoutes(
       if (!existing) {
         return res.status(404).json({ error: "Cashier journal not found" });
       }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req) && existing.branchId) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && existing.branchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا اليومية" });
+        }
+      }
+      
       if (existing.status !== 'submitted') {
         return res.status(400).json({ error: "Can only approve submitted journals" });
       }
@@ -3647,6 +3674,19 @@ export async function registerRoutes(
   app.get("/api/cashier-journals/:id/attachments", isAuthenticated, requirePermission("cashier_journal", "view"), async (req, res) => {
     try {
       const journalId = parseInt(req.params.id, 10);
+      
+      // SECURITY: Verify branch access for non-admin users
+      const journal = await storage.getCashierJournal(journalId);
+      if (!journal) {
+        return res.status(404).json({ error: "Cashier journal not found" });
+      }
+      if (!isUserAdmin(req) && journal.branchId) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && journal.branchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا اليومية" });
+        }
+      }
+      
       const attachments = await storage.getJournalAttachments(journalId);
       res.json(attachments);
     } catch (error) {
@@ -3665,6 +3705,14 @@ export async function registerRoutes(
       const journal = await storage.getCashierJournal(journalId);
       if (!journal) {
         return res.status(404).json({ error: "Cashier journal not found" });
+      }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req) && journal.branchId) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && journal.branchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا اليومية" });
+        }
       }
       
       // Allow attachments on draft journals only
@@ -3701,6 +3749,15 @@ export async function registerRoutes(
       if (!journal) {
         return res.status(404).json({ error: "Cashier journal not found" });
       }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req) && journal.branchId) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && journal.branchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا اليومية" });
+        }
+      }
+      
       if (journal.status !== 'draft') {
         return res.status(400).json({ error: "لا يمكن حذف مرفقات من يومية مرحّلة أو معتمدة" });
       }
@@ -6606,11 +6663,25 @@ export async function registerRoutes(
     try {
       const { branchId, status, orderType } = req.query;
       console.log("Fetching advanced production orders with filters:", { branchId, status, orderType });
+      
+      // SECURITY: Enforce branch filtering for non-admin users
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      
+      // If non-admin has no branch, return empty array
+      if (!isUserAdmin(req) && !mandatoryBranch) {
+        return res.json([]);
+      }
+      
       let orders = await storage.getAllAdvancedProductionOrders();
       console.log("Found orders in DB:", orders.length);
       
-      if (branchId && typeof branchId === 'string') {
-        orders = orders.filter(o => o.sourceBranchId === branchId || o.targetBranchId === branchId);
+      // Apply mandatory branch filter for non-admins
+      const effectiveBranchId = isUserAdmin(req) 
+        ? (branchId as string | undefined) 
+        : mandatoryBranch;
+      
+      if (effectiveBranchId) {
+        orders = orders.filter(o => o.sourceBranchId === effectiveBranchId || o.targetBranchId === effectiveBranchId);
         console.log("After branchId filter:", orders.length);
       }
       if (status && typeof status === 'string') {
@@ -6633,7 +6704,15 @@ export async function registerRoutes(
   // Get production order stats
   app.get("/api/advanced-production-orders/stats", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
-      const stats = await storage.getAdvancedProductionOrderStats();
+      // SECURITY: Enforce branch filtering for non-admin users
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      
+      // If non-admin has no branch, return empty stats
+      if (!isUserAdmin(req) && !mandatoryBranch) {
+        return res.json({ pending: 0, approved: 0, in_production: 0, completed: 0, cancelled: 0 });
+      }
+      
+      const stats = await storage.getAdvancedProductionOrderStats(mandatoryBranch || undefined);
       res.json(stats);
     } catch (error) {
       console.error("Error fetching production order stats:", error);
@@ -6652,6 +6731,14 @@ export async function registerRoutes(
       const result = await storage.getAdvancedProductionOrderWithItems(id);
       if (!result) {
         return res.status(404).json({ error: "Order not found" });
+      }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const mandatoryBranch = getMandatoryBranchFilter(req);
+        if (mandatoryBranch && result.order.sourceBranchId !== mandatoryBranch && result.order.targetBranchId !== mandatoryBranch) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا الأمر" });
+        }
       }
       
       const schedules = await storage.getProductionOrderSchedules(id);

@@ -762,7 +762,7 @@ export interface IStorage {
   bulkCreateProductSalesAnalytics(analytics: InsertProductSalesAnalytics[]): Promise<ProductSalesAnalytics[]>;
 
   // Production Order Stats
-  getAdvancedProductionOrderStats(): Promise<{
+  getAdvancedProductionOrderStats(branchId?: string): Promise<{
     total: number;
     draft: number;
     pending: number;
@@ -4953,7 +4953,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Production Order Stats
-  async getAdvancedProductionOrderStats(): Promise<{
+  async getAdvancedProductionOrderStats(branchId?: string): Promise<{
     total: number;
     draft: number;
     pending: number;
@@ -4966,7 +4966,12 @@ export class DatabaseStorage implements IStorage {
     longTerm: number;
     totalEstimatedCost: number;
   }> {
-    const allOrders = await db.select().from(advancedProductionOrders);
+    let allOrders = await db.select().from(advancedProductionOrders);
+    
+    // Filter by branch if provided
+    if (branchId) {
+      allOrders = allOrders.filter(o => o.sourceBranchId === branchId || o.targetBranchId === branchId);
+    }
     
     // Calculate total estimated cost from all active orders
     const totalEstimatedCost = allOrders
