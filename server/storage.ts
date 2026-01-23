@@ -588,6 +588,11 @@ export interface IStorage {
     contractors: Contractor[];
     transfers: AssetTransfer[];
     users: User[];
+    employees: BranchEmployee[];
+    products: Product[];
+    warehouseItems: WarehouseItem[];
+    branches: Branch[];
+    campaigns: MarketingCampaign[];
   }>;
   
   // Operations Module - Products
@@ -2178,6 +2183,11 @@ export class DatabaseStorage implements IStorage {
     contractors: Contractor[];
     transfers: AssetTransfer[];
     users: User[];
+    employees: BranchEmployee[];
+    products: Product[];
+    warehouseItems: WarehouseItem[];
+    branches: Branch[];
+    campaigns: MarketingCampaign[];
   }> {
     const lowerQuery = query.toLowerCase();
     
@@ -2189,14 +2199,14 @@ export class DatabaseStorage implements IStorage {
       item.category.toLowerCase().includes(lowerQuery) ||
       item.serialNumber?.toLowerCase().includes(lowerQuery) ||
       item.notes?.toLowerCase().includes(lowerQuery)
-    ).slice(0, 20);
+    ).slice(0, 10);
 
     // Search projects
     const allProjects = await db.select().from(constructionProjects);
     const projects = allProjects.filter(project =>
       project.title.toLowerCase().includes(lowerQuery) ||
       project.description?.toLowerCase().includes(lowerQuery)
-    ).slice(0, 20);
+    ).slice(0, 10);
 
     // Search contractors
     const allContractors = await db.select().from(contractors);
@@ -2205,14 +2215,14 @@ export class DatabaseStorage implements IStorage {
       contractor.email?.toLowerCase().includes(lowerQuery) ||
       contractor.phone?.toLowerCase().includes(lowerQuery) ||
       contractor.specialization?.toLowerCase().includes(lowerQuery)
-    ).slice(0, 20);
+    ).slice(0, 10);
 
     // Search transfers
     const allTransfers = await db.select().from(assetTransfers);
     const transfers = allTransfers.filter(transfer =>
       transfer.transferNumber.toLowerCase().includes(lowerQuery) ||
       transfer.notes?.toLowerCase().includes(lowerQuery)
-    ).slice(0, 20);
+    ).slice(0, 10);
 
     // Search users
     const allUsers = await db.select().from(users);
@@ -2221,7 +2231,46 @@ export class DatabaseStorage implements IStorage {
       user.firstName?.toLowerCase().includes(lowerQuery) ||
       user.lastName?.toLowerCase().includes(lowerQuery) ||
       user.email?.toLowerCase().includes(lowerQuery)
-    ).slice(0, 20);
+    ).slice(0, 10);
+
+    // Search employees
+    const allEmployees = await db.select().from(branchEmployees);
+    const employeeResults = allEmployees.filter(emp =>
+      emp.employeeName?.toLowerCase().includes(lowerQuery) ||
+      emp.employeeNumber?.toLowerCase().includes(lowerQuery) ||
+      emp.phoneNumber?.toLowerCase().includes(lowerQuery) ||
+      emp.jobTitle?.toLowerCase().includes(lowerQuery)
+    ).slice(0, 10);
+
+    // Search products
+    const allProducts = await db.select().from(products);
+    const productResults = allProducts.filter(prod =>
+      prod.name.toLowerCase().includes(lowerQuery) ||
+      prod.sku?.toLowerCase().includes(lowerQuery) ||
+      prod.category?.toLowerCase().includes(lowerQuery)
+    ).slice(0, 10);
+
+    // Search warehouse items
+    const allWarehouseItems = await db.select().from(warehouseItems);
+    const warehouseItemResults = allWarehouseItems.filter(item =>
+      item.name.toLowerCase().includes(lowerQuery) ||
+      item.sku?.toLowerCase().includes(lowerQuery) ||
+      item.category?.toLowerCase().includes(lowerQuery) ||
+      item.notes?.toLowerCase().includes(lowerQuery)
+    ).slice(0, 10);
+
+    // Search branches
+    const allBranches = await db.select().from(branches);
+    const branchResults = allBranches.filter(branch =>
+      branch.name.toLowerCase().includes(lowerQuery)
+    ).slice(0, 10);
+
+    // Search marketing campaigns
+    const allCampaigns = await db.select().from(marketingCampaigns);
+    const campaignResults = allCampaigns.filter(camp =>
+      camp.name.toLowerCase().includes(lowerQuery) ||
+      camp.description?.toLowerCase().includes(lowerQuery)
+    ).slice(0, 10);
 
     return {
       inventory,
@@ -2229,6 +2278,11 @@ export class DatabaseStorage implements IStorage {
       contractors: contractorResults,
       transfers,
       users: userResults,
+      employees: employeeResults,
+      products: productResults,
+      warehouseItems: warehouseItemResults,
+      branches: branchResults,
+      campaigns: campaignResults,
     };
   }
 

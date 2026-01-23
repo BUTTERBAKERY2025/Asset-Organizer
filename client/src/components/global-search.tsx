@@ -11,8 +11,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search, Package, Building2, Users, ArrowLeftRight, Loader2, X } from "lucide-react";
-import type { InventoryItem, ConstructionProject, Contractor, AssetTransfer, User } from "@shared/schema";
+import { 
+  Search, Package, Building2, Users, ArrowLeftRight, Loader2, X,
+  UserCheck, ShoppingBag, Warehouse, MapPin, Megaphone
+} from "lucide-react";
+import type { 
+  InventoryItem, ConstructionProject, Contractor, AssetTransfer, User,
+  BranchEmployee, Product, WarehouseItem, Branch, MarketingCampaign
+} from "@shared/schema";
 
 interface SearchResults {
   inventory: InventoryItem[];
@@ -20,6 +26,11 @@ interface SearchResults {
   contractors: Contractor[];
   transfers: AssetTransfer[];
   users: User[];
+  employees: BranchEmployee[];
+  products: Product[];
+  warehouseItems: WarehouseItem[];
+  branches: Branch[];
+  campaigns: MarketingCampaign[];
 }
 
 export function GlobalSearch() {
@@ -53,10 +64,16 @@ export function GlobalSearch() {
     }
   }, [isOpen]);
 
+  const emptyResults: SearchResults = { 
+    inventory: [], projects: [], contractors: [], transfers: [], users: [],
+    employees: [], products: [], warehouseItems: [], 
+    branches: [], campaigns: []
+  };
+
   const { data: results, isLoading } = useQuery<SearchResults>({
     queryKey: ["/api/search", debouncedQuery],
     queryFn: async () => {
-      if (debouncedQuery.length < 2) return { inventory: [], projects: [], contractors: [], transfers: [], users: [] };
+      if (debouncedQuery.length < 2) return emptyResults;
       const res = await fetch(`/api/search?q=${encodeURIComponent(debouncedQuery)}`);
       if (!res.ok) throw new Error("Search failed");
       return res.json();
@@ -83,15 +100,35 @@ export function GlobalSearch() {
       case "users":
         navigate("/users");
         break;
+      case "employees":
+        navigate("/branch-employees");
+        break;
+      case "products":
+        navigate("/operations");
+        break;
+      case "warehouseItems":
+        navigate("/warehouse-inventory");
+        break;
+      case "branches":
+        navigate("/branches");
+        break;
+      case "campaigns":
+        navigate("/marketing-campaigns");
+        break;
     }
   };
 
   const totalResults = results
-    ? results.inventory.length +
-      results.projects.length +
-      results.contractors.length +
-      results.transfers.length +
-      results.users.length
+    ? (results.inventory?.length || 0) +
+      (results.projects?.length || 0) +
+      (results.contractors?.length || 0) +
+      (results.transfers?.length || 0) +
+      (results.users?.length || 0) +
+      (results.employees?.length || 0) +
+      (results.products?.length || 0) +
+      (results.warehouseItems?.length || 0) +
+      (results.branches?.length || 0) +
+      (results.campaigns?.length || 0)
     : 0;
 
   return (
@@ -119,7 +156,7 @@ export function GlobalSearch() {
                 ref={inputRef}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="ابحث في الأصول، المشاريع، المقاولين..."
+                placeholder="ابحث في الموظفين، المنتجات، الفروع، المخزون..."
                 className="border-0 focus-visible:ring-0 h-12"
                 data-testid="input-global-search"
               />
@@ -136,7 +173,7 @@ export function GlobalSearch() {
             </div>
           </DialogHeader>
 
-          <ScrollArea className="max-h-[400px] p-4 pt-2">
+          <ScrollArea className="max-h-[500px] p-4 pt-2">
             {isLoading && debouncedQuery.length >= 2 ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -145,18 +182,120 @@ export function GlobalSearch() {
               <div className="text-center py-8 text-muted-foreground">
                 <Search className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 <p>اكتب حرفين على الأقل للبحث</p>
+                <p className="text-xs mt-2">يمكنك البحث في: الموظفين، المنتجات، الفروع، المخزون، المشاريع، طلبات المواد، الحملات التسويقية</p>
               </div>
             ) : totalResults === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <p>لا توجد نتائج للبحث "{debouncedQuery}"</p>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-3">
+                {results?.employees && results.employees.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
+                      <UserCheck className="h-4 w-4 text-blue-500" />
+                      الموظفين ({results.employees.length})
+                    </div>
+                    {results.employees.map((emp) => (
+                      <button
+                        key={emp.id}
+                        onClick={() => handleSelect("employees", emp.id)}
+                        className="w-full text-right p-2 rounded hover:bg-accent flex items-center justify-between"
+                        data-testid={`search-result-employee-${emp.id}`}
+                      >
+                        <span className="font-medium">{emp.employeeName}</span>
+                        <Badge variant="outline">{emp.jobTitle || emp.employeeNumber}</Badge>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {results?.products && results.products.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
+                      <ShoppingBag className="h-4 w-4 text-amber-500" />
+                      المنتجات ({results.products.length})
+                    </div>
+                    {results.products.map((prod) => (
+                      <button
+                        key={prod.id}
+                        onClick={() => handleSelect("products", prod.id)}
+                        className="w-full text-right p-2 rounded hover:bg-accent flex items-center justify-between"
+                        data-testid={`search-result-product-${prod.id}`}
+                      >
+                        <span className="font-medium">{prod.name}</span>
+                        <Badge variant="outline">{prod.category}</Badge>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {results?.branches && results.branches.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
+                      <MapPin className="h-4 w-4 text-green-500" />
+                      الفروع ({results.branches.length})
+                    </div>
+                    {results.branches.map((branch) => (
+                      <button
+                        key={branch.id}
+                        onClick={() => handleSelect("branches", branch.id)}
+                        className="w-full text-right p-2 rounded hover:bg-accent flex items-center justify-between"
+                        data-testid={`search-result-branch-${branch.id}`}
+                      >
+                        <span className="font-medium">{branch.name}</span>
+                        <Badge variant="outline">{branch.id}</Badge>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {results?.warehouseItems && results.warehouseItems.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
+                      <Warehouse className="h-4 w-4 text-teal-500" />
+                      عناصر المستودع ({results.warehouseItems.length})
+                    </div>
+                    {results.warehouseItems.map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => handleSelect("warehouseItems", item.id)}
+                        className="w-full text-right p-2 rounded hover:bg-accent flex items-center justify-between"
+                        data-testid={`search-result-warehouse-${item.id}`}
+                      >
+                        <span className="font-medium">{item.name}</span>
+                        <Badge variant="outline">{item.category}</Badge>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+
+                {results?.campaigns && results.campaigns.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
+                      <Megaphone className="h-4 w-4 text-pink-500" />
+                      الحملات التسويقية ({results.campaigns.length})
+                    </div>
+                    {results.campaigns.map((camp) => (
+                      <button
+                        key={camp.id}
+                        onClick={() => handleSelect("campaigns", camp.id)}
+                        className="w-full text-right p-2 rounded hover:bg-accent flex items-center justify-between"
+                        data-testid={`search-result-campaign-${camp.id}`}
+                      >
+                        <span className="font-medium">{camp.name}</span>
+                        <Badge variant="outline">{camp.status}</Badge>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 {results?.inventory && results.inventory.length > 0 && (
                   <div>
                     <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
-                      <Package className="h-4 w-4" />
-                      المخزون ({results.inventory.length})
+                      <Package className="h-4 w-4 text-orange-500" />
+                      الأصول والمعدات ({results.inventory.length})
                     </div>
                     {results.inventory.map((item) => (
                       <button
@@ -175,7 +314,7 @@ export function GlobalSearch() {
                 {results?.projects && results.projects.length > 0 && (
                   <div>
                     <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
-                      <Building2 className="h-4 w-4" />
+                      <Building2 className="h-4 w-4 text-purple-500" />
                       المشاريع ({results.projects.length})
                     </div>
                     {results.projects.map((project) => (
@@ -195,7 +334,7 @@ export function GlobalSearch() {
                 {results?.contractors && results.contractors.length > 0 && (
                   <div>
                     <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
-                      <Users className="h-4 w-4" />
+                      <Users className="h-4 w-4 text-cyan-500" />
                       المقاولين ({results.contractors.length})
                     </div>
                     {results.contractors.map((contractor) => (
@@ -215,7 +354,7 @@ export function GlobalSearch() {
                 {results?.transfers && results.transfers.length > 0 && (
                   <div>
                     <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
-                      <ArrowLeftRight className="h-4 w-4" />
+                      <ArrowLeftRight className="h-4 w-4 text-red-500" />
                       التحويلات ({results.transfers.length})
                     </div>
                     {results.transfers.map((transfer) => (
@@ -227,6 +366,26 @@ export function GlobalSearch() {
                       >
                         <span className="font-medium">{transfer.transferNumber}</span>
                         <Badge variant="outline">{transfer.status}</Badge>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {results?.users && results.users.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
+                      <Users className="h-4 w-4 text-gray-500" />
+                      المستخدمين ({results.users.length})
+                    </div>
+                    {results.users.map((user) => (
+                      <button
+                        key={user.id}
+                        onClick={() => handleSelect("users", user.id)}
+                        className="w-full text-right p-2 rounded hover:bg-accent flex items-center justify-between"
+                        data-testid={`search-result-user-${user.id}`}
+                      >
+                        <span className="font-medium">{user.firstName} {user.lastName}</span>
+                        <Badge variant="outline">{user.role}</Badge>
                       </button>
                     ))}
                   </div>

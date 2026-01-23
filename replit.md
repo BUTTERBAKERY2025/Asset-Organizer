@@ -16,6 +16,7 @@ Preferred communication style: Simple, everyday language.
 - `migrations/003_marketing_tables_complete.sql` - جداول عقود ومدفوعات المؤثرين (influencer_contracts, influencer_payments)
 - `migrations/004_performance_indexes.sql` - فهارس الأداء للجداول الكبيرة (production, inventory, cashier, warehouse)
 - `migrations/006_documents_tables.sql` - جداول إدارة الوثائق والأرشفة (documents, document_categories, document_folders, document_versions, document_shares, document_access_logs)
+- `migrations/009_notifications_table.sql` - جدول الإشعارات الموحد للنظام (notifications) مع الفهارس اللازمة
 
 ## System Architecture
 The system uses a modern web architecture with a React-based frontend and a Node.js/Express backend.
