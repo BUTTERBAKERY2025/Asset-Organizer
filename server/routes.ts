@@ -18660,6 +18660,9 @@ export async function registerRoutes(
     try {
       const mandatoryBranch = getMandatoryBranchFilter(req);
       const folderId = req.query.folderId;
+      const page = parseInt(parseQueryString(req.query.page) || "1");
+      const pageSize = parseInt(parseQueryString(req.query.pageSize) || "20");
+      
       const docs = await storage.getDocuments({
         branchId: mandatoryBranch || parseQueryString(req.query.branchId),
         folderId: folderId === 'null' ? null : folderId ? parseInt(parseQueryString(folderId) || "0") : undefined,
@@ -18674,7 +18677,18 @@ export async function registerRoutes(
         isTemplate: req.query.isTemplate === 'true' ? true : req.query.isTemplate === 'false' ? false : undefined,
         limit: req.query.limit ? parseInt(parseQueryString(req.query.limit) || "100") : undefined,
       });
-      res.json(docs);
+      
+      const total = docs.length;
+      const startIndex = (page - 1) * pageSize;
+      const paginatedDocs = docs.slice(startIndex, startIndex + pageSize);
+      
+      res.json({
+        documents: paginatedDocs,
+        total,
+        page,
+        pageSize,
+        totalPages: Math.ceil(total / pageSize)
+      });
     } catch (error) {
       console.error("Error fetching documents:", error);
       res.status(500).json({ error: "فشل في جلب الوثائق" });

@@ -210,15 +210,20 @@ export default function DocumentsPage() {
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { data: stats } = useQuery<DocumentStats>({
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
+
+  const { data: stats, isLoading: isLoadingStats } = useQuery<DocumentStats>({
     queryKey: ["/api/documents/stats"],
+    staleTime: 5 * 60 * 1000,
   });
 
-  const { data: categories = [] } = useQuery<DocumentCategory[]>({
+  const { data: categories = [], isLoading: isLoadingCategories } = useQuery<DocumentCategory[]>({
     queryKey: ["/api/documents/categories"],
+    staleTime: 10 * 60 * 1000,
   });
 
-  const { data: folders = [] } = useQuery<DocumentFolder[]>({
+  const { data: folders = [], isLoading: isLoadingFolders } = useQuery<DocumentFolder[]>({
     queryKey: ["/api/documents/folders", currentFolderId],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -231,10 +236,11 @@ export default function DocumentsPage() {
       if (!response.ok) throw new Error("Failed to fetch folders");
       return response.json();
     },
+    staleTime: 5 * 60 * 1000,
   });
 
-  const { data: documents = [] } = useQuery<Document[]>({
-    queryKey: ["/api/documents", currentFolderId, statusFilter, searchTerm],
+  const { data: documentsData, isLoading: isLoadingDocuments } = useQuery<{ documents: Document[], total: number, page: number, pageSize: number }>({
+    queryKey: ["/api/documents", currentFolderId, statusFilter, searchTerm, page],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (currentFolderId === null) {
@@ -248,11 +254,23 @@ export default function DocumentsPage() {
       if (searchTerm) {
         params.set("search", searchTerm);
       }
+      params.set("page", page.toString());
+      params.set("pageSize", pageSize.toString());
       const response = await fetch(`/api/documents?${params}`);
       if (!response.ok) throw new Error("Failed to fetch documents");
-      return response.json();
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        return { documents: data, total: data.length, page: 1, pageSize: data.length };
+      }
+      return data;
     },
+    staleTime: 2 * 60 * 1000,
+    placeholderData: (prev) => prev,
   });
+
+  const documents = documentsData?.documents || [];
+  const totalDocuments = documentsData?.total || 0;
+  const totalPages = Math.ceil(totalDocuments / pageSize);
 
   const createFolderMutation = useMutation({
     mutationFn: async (data: { name: string; description?: string; parentId?: number | null }) => {
@@ -1012,8 +1030,27 @@ export default function DocumentsPage() {
 
             {/* Documents */}
             <div>
-              <h3 className="text-sm font-medium text-gray-500 mb-3">الوثائق</h3>
-              {documents.length === 0 ? (
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-medium text-gray-500">الوثائق</h3>
+                {isLoadingDocuments && (
+                  <div className="flex items-center gap-2 text-xs text-amber-600">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    جاري التحميل...
+                  </div>
+                )}
+              </div>
+              
+              {isLoadingDocuments && documents.length === 0 ? (
+                <div className={viewMode === "grid" ? "grid grid-cols-2 md:grid-cols-4 gap-3" : "space-y-2"}>
+                  {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                    <div key={i} className="p-4 border rounded-lg">
+                      <Skeleton className="h-8 w-8 mx-auto mb-2" />
+                      <Skeleton className="h-4 w-full mb-1" />
+                      <Skeleton className="h-3 w-2/3 mx-auto" />
+                    </div>
+                  ))}
+                </div>
+              ) : documents.length === 0 ? (
                 <div className="text-center py-12 text-gray-500">
                   <FileText className="h-12 w-12 mx-auto mb-3 text-gray-300" />
                   <p>لا توجد وثائق في هذا المجلد</p>
@@ -1171,6 +1208,52 @@ export default function DocumentsPage() {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between pt-4 border-t">
+                  <div className="text-sm text-gray-500">
+                    عرض {((page - 1) * pageSize) + 1} - {Math.min(page * pageSize, totalDocuments)} من {totalDocuments} وثيقة
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage(1)}
+                      disabled={page === 1 || isLoadingDocuments}
+                    >
+                      الأولى
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage(p => Math.max(1, p - 1))}
+                      disabled={page === 1 || isLoadingDocuments}
+                    >
+                      السابق
+                    </Button>
+                    <span className="px-3 py-1 bg-amber-100 text-amber-800 rounded text-sm font-medium">
+                      {page} / {totalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                      disabled={page === totalPages || isLoadingDocuments}
+                    >
+                      التالي
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPage(totalPages)}
+                      disabled={page === totalPages || isLoadingDocuments}
+                    >
+                      الأخيرة
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
