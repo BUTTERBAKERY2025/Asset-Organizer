@@ -1632,7 +1632,7 @@ export default function OperationsReportsDashboardPage() {
       case "apps":
         return ["apps"];
       default:
-        return ["overview", "sales", "targets", "production", "shifts", "cashier", "apps", "returns", "discrepancies", "payment-mismatch", "branches", "branch-overview", "executive"];
+        return ["overview", "sales", "targets", "production", "shifts", "cashier", "apps", "returns", "discrepancies", "payment-mismatch", "branches", "executive"];
     }
   };
 
@@ -2008,86 +2008,93 @@ export default function OperationsReportsDashboardPage() {
                 : []),
             ]} />
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className={`grid w-full max-w-4xl`} style={{ gridTemplateColumns: `repeat(${Math.min(visibleTabs.length, 6)}, 1fr)` }}>
-              {visibleTabs.includes("overview") && (
-                <TabsTrigger value="overview" data-testid="tab-overview" className="gap-1">
-                  <PieChartIcon className="w-4 h-4" />
-                  نظرة عامة
-                </TabsTrigger>
+            <div className="space-y-2">
+              {/* الصف الأول: التقارير الرئيسية */}
+              <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 h-auto gap-1 p-1 bg-muted/50">
+                {visibleTabs.includes("overview") && (
+                  <TabsTrigger value="overview" data-testid="tab-overview" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-amber-100 data-[state=active]:text-amber-800">
+                    <PieChartIcon className="w-4 h-4" />
+                    <span className="hidden sm:inline">نظرة عامة</span>
+                    <span className="sm:hidden">عام</span>
+                  </TabsTrigger>
+                )}
+                {visibleTabs.includes("sales") && (
+                  <TabsTrigger value="sales" data-testid="tab-sales" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-green-100 data-[state=active]:text-green-800">
+                    <DollarSign className="w-4 h-4" />
+                    المبيعات
+                  </TabsTrigger>
+                )}
+                {visibleTabs.includes("targets") && (
+                  <TabsTrigger value="targets" data-testid="tab-targets" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-blue-100 data-[state=active]:text-blue-800">
+                    <Target className="w-4 h-4" />
+                    الأهداف
+                  </TabsTrigger>
+                )}
+                {visibleTabs.includes("production") && (
+                  <TabsTrigger value="production" data-testid="tab-production" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-purple-100 data-[state=active]:text-purple-800">
+                    <Factory className="w-4 h-4" />
+                    الإنتاج
+                  </TabsTrigger>
+                )}
+                {visibleTabs.includes("shifts") && (
+                  <TabsTrigger value="shifts" data-testid="tab-shifts" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-orange-100 data-[state=active]:text-orange-800">
+                    <Clock className="w-4 h-4" />
+                    الورديات
+                  </TabsTrigger>
+                )}
+                {visibleTabs.includes("cashier") && (
+                  <TabsTrigger value="cashier" data-testid="tab-cashier" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-teal-100 data-[state=active]:text-teal-800">
+                    <Wallet className="w-4 h-4" />
+                    الكاشير
+                  </TabsTrigger>
+                )}
+              </TabsList>
+
+              {/* الصف الثاني: التقارير التفصيلية والتحليلية */}
+              {visibleTabs.length > 6 && (
+                <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 h-auto gap-1 p-1 bg-slate-100/50 border border-slate-200">
+                  {visibleTabs.includes("apps") && (
+                    <TabsTrigger value="apps" data-testid="tab-apps" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-indigo-100 data-[state=active]:text-indigo-800">
+                      <Truck className="w-4 h-4" />
+                      <span className="hidden sm:inline">التطبيقات</span>
+                      <span className="sm:hidden">توصيل</span>
+                    </TabsTrigger>
+                  )}
+                  {visibleTabs.includes("returns") && (
+                    <TabsTrigger value="returns" data-testid="tab-returns" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-red-100 data-[state=active]:text-red-800">
+                      <Receipt className="w-4 h-4" />
+                      المرتجعات
+                    </TabsTrigger>
+                  )}
+                  {visibleTabs.includes("discrepancies") && (
+                    <TabsTrigger value="discrepancies" data-testid="tab-discrepancies" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-yellow-100 data-[state=active]:text-yellow-800">
+                      <AlertTriangle className="w-4 h-4" />
+                      الفروقات
+                    </TabsTrigger>
+                  )}
+                  {visibleTabs.includes("payment-mismatch") && (
+                    <TabsTrigger value="payment-mismatch" data-testid="tab-payment-mismatch" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-pink-100 data-[state=active]:text-pink-800">
+                      <CreditCard className="w-4 h-4" />
+                      <span className="hidden sm:inline">مطابقة الدفع</span>
+                      <span className="sm:hidden">مطابقة</span>
+                    </TabsTrigger>
+                  )}
+                  {visibleTabs.includes("branches") && (
+                    <TabsTrigger value="branches" data-testid="tab-branches" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-cyan-100 data-[state=active]:text-cyan-800">
+                      <Building2 className="w-4 h-4" />
+                      الفروع
+                    </TabsTrigger>
+                  )}
+                  {visibleTabs.includes("executive") && (
+                    <TabsTrigger value="executive" data-testid="tab-executive" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-slate-700 data-[state=active]:text-white">
+                      <FileText className="w-4 h-4" />
+                      <span className="hidden sm:inline">تقرير تنفيذي</span>
+                      <span className="sm:hidden">تنفيذي</span>
+                    </TabsTrigger>
+                  )}
+                </TabsList>
               )}
-              {visibleTabs.includes("sales") && (
-                <TabsTrigger value="sales" data-testid="tab-sales" className="gap-1">
-                  <DollarSign className="w-4 h-4" />
-                  المبيعات
-                </TabsTrigger>
-              )}
-              {visibleTabs.includes("targets") && (
-                <TabsTrigger value="targets" data-testid="tab-targets" className="gap-1">
-                  <Target className="w-4 h-4" />
-                  الأهداف
-                </TabsTrigger>
-              )}
-              {visibleTabs.includes("production") && (
-                <TabsTrigger value="production" data-testid="tab-production" className="gap-1">
-                  <Factory className="w-4 h-4" />
-                  الإنتاج
-                </TabsTrigger>
-              )}
-              {visibleTabs.includes("shifts") && (
-                <TabsTrigger value="shifts" data-testid="tab-shifts" className="gap-1">
-                  <Clock className="w-4 h-4" />
-                  الورديات
-                </TabsTrigger>
-              )}
-              {visibleTabs.includes("cashier") && (
-                <TabsTrigger value="cashier" data-testid="tab-cashier" className="gap-1">
-                  <Wallet className="w-4 h-4" />
-                  الكاشير
-                </TabsTrigger>
-              )}
-              {visibleTabs.includes("apps") && (
-                <TabsTrigger value="apps" data-testid="tab-apps" className="gap-1">
-                  <Truck className="w-4 h-4" />
-                  التطبيقات
-                </TabsTrigger>
-              )}
-              {visibleTabs.includes("branches") && (
-                <TabsTrigger value="branches" data-testid="tab-branches" className="gap-1">
-                  <Building2 className="w-4 h-4" />
-                  الفروع
-                </TabsTrigger>
-              )}
-              {visibleTabs.includes("branch-overview") && (
-                <TabsTrigger value="branch-overview" data-testid="tab-branch-overview" className="gap-1">
-                  <Package className="w-4 h-4" />
-                  نظرة عامة
-                </TabsTrigger>
-              )}
-              {visibleTabs.includes("returns") && (
-                <TabsTrigger value="returns" data-testid="tab-returns" className="gap-1">
-                  <Truck className="w-4 h-4" />
-                  المرتجعات
-                </TabsTrigger>
-              )}
-              {visibleTabs.includes("discrepancies") && (
-                <TabsTrigger value="discrepancies" data-testid="tab-discrepancies" className="gap-1">
-                  <AlertTriangle className="w-4 h-4" />
-                  الفروقات
-                </TabsTrigger>
-              )}
-              {visibleTabs.includes("payment-mismatch") && (
-                <TabsTrigger value="payment-mismatch" data-testid="tab-payment-mismatch" className="gap-1">
-                  <CreditCard className="w-4 h-4" />
-                  مطابقة الدفع
-                </TabsTrigger>
-              )}
-              {visibleTabs.includes("executive") && (
-                <TabsTrigger value="executive" data-testid="tab-executive" className="gap-1">
-                  <FileText className="w-4 h-4" />
-                  تنفيذي
-                </TabsTrigger>
-              )}
-            </TabsList>
+            </div>
 
             <TabsContent value="overview" className="space-y-6">
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
