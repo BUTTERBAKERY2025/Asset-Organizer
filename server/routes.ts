@@ -5264,9 +5264,17 @@ export async function registerRoutes(
       const { branchId, cashierId, status } = req.query;
       let awards = await storage.getAllIncentiveAwards();
       
-      if (branchId) {
+      // SECURITY: Apply mandatory branch filter for non-admins
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      if (!isUserAdmin(req)) {
+        if (!mandatoryBranch) {
+          return res.json([]);
+        }
+        awards = awards.filter(a => a.branchId === mandatoryBranch);
+      } else if (branchId) {
         awards = awards.filter(a => a.branchId === branchId);
       }
+      
       if (cashierId) {
         awards = awards.filter(a => a.cashierId === cashierId);
       }
@@ -5284,6 +5292,14 @@ export async function registerRoutes(
   app.post("/api/incentives/awards", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
     try {
       const { awardType, branchId, cashierId, periodStart, periodEnd, targetAmount, achievedAmount, achievementPercent, tierId, calculatedReward, finalReward, notes } = req.body;
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req) && branchId) {
+        const hasAccess = await canAccessBranch(req, branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بإنشاء حوافز لهذا الفرع" });
+        }
+      }
       
       // Validate required fields
       if (!awardType || !['monthly', 'quarterly', 'annual', 'special'].includes(awardType)) {
@@ -5360,6 +5376,18 @@ export async function registerRoutes(
   app.patch("/api/incentives/awards/:id", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const existingAward = await storage.getIncentiveAward(id);
+        if (existingAward && existingAward.branchId) {
+          const hasAccess = await canAccessBranch(req, existingAward.branchId);
+          if (!hasAccess) {
+            return res.status(403).json({ error: "غير مصرح بتعديل حوافز هذا الفرع" });
+          }
+        }
+      }
+      
       const award = await storage.updateIncentiveAward(id, req.body);
       if (!award) {
         return res.status(404).json({ error: "Award not found" });
@@ -5374,6 +5402,18 @@ export async function registerRoutes(
   app.post("/api/incentives/awards/:id/approve", isAuthenticated, requirePermission("operations", "approve"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const existingAward = await storage.getIncentiveAward(id);
+        if (existingAward && existingAward.branchId) {
+          const hasAccess = await canAccessBranch(req, existingAward.branchId);
+          if (!hasAccess) {
+            return res.status(403).json({ error: "غير مصرح باعتماد حوافز هذا الفرع" });
+          }
+        }
+      }
+      
       const award = await storage.approveIncentiveAward(id, getCurrentUser(req).id);
       if (!award) {
         return res.status(404).json({ error: "Award not found" });
@@ -17738,7 +17778,7 @@ export async function registerRoutes(
       const mandatoryBranch = getMandatoryBranchFilter(req);
       const effectiveBranchId = isUserAdmin(req) ? queryBranchId : mandatoryBranch;
       
-      const stats = await storage.getWarehouseDashboardStats(effectiveBranchId);
+      const stats = await storage.getWarehouseDashboardStats(effectiveBranchId || undefined);
       res.json(stats);
     } catch (error) {
       console.error("Error fetching warehouse dashboard stats:", error);
@@ -20845,7 +20885,18 @@ export async function registerRoutes(
     try {
       const { branchId, date, status } = req.query;
       let conditions = [];
-      if (branchId) conditions.push(eq(branchShifts.branchId, branchId as string));
+      
+      // SECURITY: Enforce branch filtering for non-admin users
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      if (!isUserAdmin(req)) {
+        if (!mandatoryBranch) {
+          return res.json([]);
+        }
+        conditions.push(eq(branchShifts.branchId, mandatoryBranch));
+      } else if (branchId) {
+        conditions.push(eq(branchShifts.branchId, branchId as string));
+      }
+      
       if (date) conditions.push(eq(branchShifts.shiftDate, date as string));
       if (status) conditions.push(eq(branchShifts.status, status as string));
       
@@ -20869,6 +20920,14 @@ export async function registerRoutes(
         return res.status(404).json({ error: "الشفت غير موجود" });
       }
       
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req) && shift.branchId) {
+        const hasAccess = await canAccessBranch(req, shift.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا الشفت" });
+        }
+      }
+      
       const responses = await db.select().from(shiftChecklistResponses).where(eq(shiftChecklistResponses.shiftId, shiftId));
       const photos = await db.select().from(shiftPhotos).where(eq(shiftPhotos.shiftId, shiftId));
       const signatures = await db.select().from(shiftSignatures).where(eq(shiftSignatures.shiftId, shiftId));
@@ -20885,6 +20944,15 @@ export async function registerRoutes(
   app.post("/api/branch-shifts", isAuthenticated, async (req, res) => {
     try {
       const user = getCurrentUser(req);
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req) && req.body.branchId) {
+        const hasAccess = await canAccessBranch(req, req.body.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بإنشاء شفت لهذا الفرع" });
+        }
+      }
+      
       const { shiftDate, openingTime, closingTime, ...rest } = req.body;
       const shiftData = {
         ...rest,
@@ -20922,6 +20990,18 @@ export async function registerRoutes(
   app.patch("/api/branch-shifts/:id", isAuthenticated, async (req, res) => {
     try {
       const shiftId = parseInt(req.params.id);
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const [existingShift] = await db.select().from(branchShifts).where(eq(branchShifts.id, shiftId));
+        if (existingShift && existingShift.branchId) {
+          const hasAccess = await canAccessBranch(req, existingShift.branchId);
+          if (!hasAccess) {
+            return res.status(403).json({ error: "غير مصرح بتعديل شفت هذا الفرع" });
+          }
+        }
+      }
+      
       const updateData: any = { updatedAt: new Date() };
       
       // Convert date strings to Date objects
@@ -20952,6 +21032,18 @@ export async function registerRoutes(
   app.get("/api/branch-shifts/:id/responses", isAuthenticated, async (req, res) => {
     try {
       const shiftId = parseInt(req.params.id);
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const [shift] = await db.select().from(branchShifts).where(eq(branchShifts.id, shiftId));
+        if (shift && shift.branchId) {
+          const hasAccess = await canAccessBranch(req, shift.branchId);
+          if (!hasAccess) {
+            return res.status(403).json({ error: "غير مصرح بالوصول لبيانات هذا الشفت" });
+          }
+        }
+      }
+      
       const responses = await db.select().from(shiftChecklistResponses).where(eq(shiftChecklistResponses.shiftId, shiftId));
       res.json(responses);
     } catch (error) {
@@ -20964,6 +21056,18 @@ export async function registerRoutes(
   app.get("/api/branch-shifts/:id/signatures", isAuthenticated, async (req, res) => {
     try {
       const shiftId = parseInt(req.params.id);
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const [shift] = await db.select().from(branchShifts).where(eq(branchShifts.id, shiftId));
+        if (shift && shift.branchId) {
+          const hasAccess = await canAccessBranch(req, shift.branchId);
+          if (!hasAccess) {
+            return res.status(403).json({ error: "غير مصرح بالوصول لتوقيعات هذا الشفت" });
+          }
+        }
+      }
+      
       const signatures = await db.select().from(shiftSignatures).where(eq(shiftSignatures.shiftId, shiftId));
       res.json(signatures);
     } catch (error) {
@@ -20976,6 +21080,18 @@ export async function registerRoutes(
   app.post("/api/branch-shifts/:id/responses", isAuthenticated, async (req, res) => {
     try {
       const shiftId = parseInt(req.params.id);
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const [shift] = await db.select().from(branchShifts).where(eq(branchShifts.id, shiftId));
+        if (shift && shift.branchId) {
+          const hasAccess = await canAccessBranch(req, shift.branchId);
+          if (!hasAccess) {
+            return res.status(403).json({ error: "غير مصرح بإضافة استجابات لهذا الشفت" });
+          }
+        }
+      }
+      
       const checklistType = req.body.checklistType || 'opening';
       const responses = req.body.responses || [{ ...req.body, shiftId }];
       const processedResponses = responses.map((r: any) => ({
@@ -21017,6 +21133,18 @@ export async function registerRoutes(
   app.post("/api/branch-shifts/:id/photos", isAuthenticated, async (req, res) => {
     try {
       const shiftId = parseInt(req.params.id);
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const [shift] = await db.select().from(branchShifts).where(eq(branchShifts.id, shiftId));
+        if (shift && shift.branchId) {
+          const hasAccess = await canAccessBranch(req, shift.branchId);
+          if (!hasAccess) {
+            return res.status(403).json({ error: "غير مصرح برفع صور لهذا الشفت" });
+          }
+        }
+      }
+      
       const [photo] = await db.insert(shiftPhotos)
         .values({ ...req.body, shiftId })
         .returning();
@@ -21031,6 +21159,18 @@ export async function registerRoutes(
   app.post("/api/branch-shifts/:id/signatures", isAuthenticated, async (req, res) => {
     try {
       const shiftId = parseInt(req.params.id);
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const [shift] = await db.select().from(branchShifts).where(eq(branchShifts.id, shiftId));
+        if (shift && shift.branchId) {
+          const hasAccess = await canAccessBranch(req, shift.branchId);
+          if (!hasAccess) {
+            return res.status(403).json({ error: "غير مصرح بحفظ توقيعات لهذا الشفت" });
+          }
+        }
+      }
+      
       const [signature] = await db.insert(shiftSignatures)
         .values({ ...req.body, shiftId })
         .returning();
@@ -21045,6 +21185,18 @@ export async function registerRoutes(
   app.post("/api/branch-shifts/:id/waste", isAuthenticated, async (req, res) => {
     try {
       const shiftId = parseInt(req.params.id);
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req)) {
+        const [shift] = await db.select().from(branchShifts).where(eq(branchShifts.id, shiftId));
+        if (shift && shift.branchId) {
+          const hasAccess = await canAccessBranch(req, shift.branchId);
+          if (!hasAccess) {
+            return res.status(403).json({ error: "غير مصرح بإضافة سجل هدر لهذا الشفت" });
+          }
+        }
+      }
+      
       const [waste] = await db.insert(dailyWasteLog)
         .values({ ...req.body, shiftId })
         .returning();
@@ -21061,7 +21213,13 @@ export async function registerRoutes(
       const dateParam = req.query.date as string | undefined;
       const targetDate = dateParam || new Date().toISOString().split('T')[0];
       const shifts = await db.select().from(branchShifts).where(eq(branchShifts.shiftDate, targetDate));
-      const branchList = await db.select().from(branches);
+      let branchList = await db.select().from(branches);
+      
+      // SECURITY: Filter branches for non-admin users
+      const mandatoryBranch = getMandatoryBranchFilter(req);
+      if (!isUserAdmin(req) && mandatoryBranch) {
+        branchList = branchList.filter(b => b.id === mandatoryBranch);
+      }
       
       const dashboard = branchList.map(branch => {
         const branchShiftsToday = shifts.filter(s => s.branchId === branch.id);
