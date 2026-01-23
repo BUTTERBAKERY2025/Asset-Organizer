@@ -59,7 +59,15 @@ export const queryClient = new QueryClient({
       refetchOnReconnect: false,
       staleTime: CACHE_TIMES.MEDIUM,
       gcTime: 1000 * 60 * 60, // 1 hour garbage collection
-      retry: false,
+      retry: (failureCount, error) => {
+        // Don't retry on auth errors
+        if (error instanceof Error && error.message.startsWith("401")) {
+          return false;
+        }
+        // Retry up to 2 times for other errors
+        return failureCount < 2;
+      },
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
     },
     mutations: {
       retry: false,
@@ -111,7 +119,7 @@ export function prefetchQuery(queryKey: string[]) {
   }
   
   const state = queryClient.getQueryState(queryKey);
-  if (state?.status === "pending" || (state?.data !== undefined && !state?.isStale)) {
+  if (state?.status === "pending" || state?.data !== undefined) {
     return;
   }
   
