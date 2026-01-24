@@ -217,14 +217,11 @@ export async function setupAuth(app: Express) {
 
       const { password: _, ...safeUser } = user;
       
-      // Get user's branches
-      const userBranches = await storage.getUserBranchAccess(user.id);
-      
-      // Get active branch details
-      let activeBranch = null;
-      if (req.session.activeBranchId) {
-        activeBranch = await storage.getBranch(req.session.activeBranchId);
-      }
+      // Parallel fetch for better performance
+      const [userBranches, activeBranch] = await Promise.all([
+        storage.getUserBranchAccess(user.id),
+        req.session.activeBranchId ? storage.getBranch(req.session.activeBranchId) : Promise.resolve(null)
+      ]);
       
       res.json({
         ...safeUser,

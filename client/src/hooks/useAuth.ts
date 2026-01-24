@@ -25,11 +25,12 @@ export function useAuth() {
     queryFn: async () => {
       const res = await fetch("/api/auth/me", { credentials: "include" });
       if (!res.ok) return null;
-      const data = await res.json();
-      return data;
+      return res.json();
     },
-    retry: false,
-    staleTime: 1000 * 60 * 10,
+    retry: 1,
+    retryDelay: 500,
+    staleTime: 1000 * 60 * 5, // 5 minutes - balance between performance and session freshness
+    gcTime: 1000 * 60 * 30, // 30 minutes
     refetchOnWindowFocus: false,
     refetchOnMount: false,
     refetchOnReconnect: false,

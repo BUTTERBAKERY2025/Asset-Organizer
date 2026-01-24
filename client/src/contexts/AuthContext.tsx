@@ -25,36 +25,62 @@ export function AuthGate({ children }: AuthGateProps) {
   
   // Sticky ready flag - once true, never goes back to false
   const [hasResolved, setHasResolved] = useState(false);
+  const [showSlowWarning, setShowSlowWarning] = useState(false);
 
   // Check if auth has resolved (either authenticated or not)
   const authResolved = !authLoading;
 
-  // Set sticky flag when first ready
+  // Set sticky flag when auth completes
   useEffect(() => {
     if (authResolved && !hasResolved) {
       setHasResolved(true);
     }
   }, [authResolved, hasResolved]);
 
-  // Only show loading on first boot - never again (max 3 seconds timeout)
+  // Show slow loading warning after 2 seconds (but don't force resolve)
   useEffect(() => {
+    if (hasResolved) return;
     const timeout = setTimeout(() => {
       if (!hasResolved) {
-        setHasResolved(true);
+        setShowSlowWarning(true);
       }
-    }, 3000);
+    }, 2000);
     return () => clearTimeout(timeout);
   }, [hasResolved]);
 
   if (!hasResolved) {
     return (
       <div 
-        className="min-h-screen flex flex-col items-center justify-center bg-[#F5F0E6]" 
+        className="min-h-screen bg-[#F5F0E6]" 
         dir="rtl"
         style={{ fontFamily: "'Cairo', sans-serif" }}
       >
-        <Loader2 className="w-10 h-10 text-[#e67e22] animate-spin" />
-        <p className="mt-4 text-[#1a3a2f] text-sm">جاري تحميل النظام...</p>
+        {/* Skeleton Sidebar */}
+        <div className="fixed right-0 top-0 h-full w-64 bg-[#1a3a2f] p-4">
+          <div className="h-12 w-32 bg-[#2a4a3f] rounded animate-pulse mb-8" />
+          <div className="space-y-3">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="h-10 bg-[#2a4a3f] rounded animate-pulse" />
+            ))}
+          </div>
+        </div>
+        {/* Skeleton Content */}
+        <div className="mr-64 p-6">
+          <div className="h-8 w-48 bg-gray-300 rounded animate-pulse mb-6" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="h-32 bg-white rounded-lg shadow animate-pulse" />
+            ))}
+          </div>
+          <div className="h-64 bg-white rounded-lg shadow animate-pulse" />
+          {/* Slow loading indicator */}
+          {showSlowWarning && (
+            <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-amber-100 text-amber-800 px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span className="text-sm">جاري الاتصال بالخادم...</span>
+            </div>
+          )}
+        </div>
       </div>
     );
   }
