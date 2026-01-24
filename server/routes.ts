@@ -135,7 +135,7 @@ export async function registerRoutes(
 
   app.post("/api/users", isAuthenticated, requirePermission("users", "create"), async (req, res) => {
     try {
-      const { username, password, firstName, lastName, role } = req.body;
+      const { username, password, firstName, lastName, role, branchId } = req.body;
       
       if (!username || !password) {
         return res.status(400).json({ error: "اسم المستخدم وكلمة المرور مطلوبان" });
@@ -146,12 +146,21 @@ export async function registerRoutes(
         return res.status(400).json({ error: "اسم المستخدم مسجل مسبقاً" });
       }
       
+      // Handle branch assignment including "all_branches" special value
+      let assignedBranchId = null;
+      if (branchId === "all_branches") {
+        assignedBranchId = "all_branches";
+      } else if (branchId && branchId !== "none") {
+        assignedBranchId = branchId;
+      }
+      
       const user = await storage.createUser({
         username,
         password,
         firstName,
         lastName,
         role: role || "viewer",
+        branchId: assignedBranchId,
       });
       
       const { password: _, ...safeUser } = user;
@@ -187,7 +196,14 @@ export async function registerRoutes(
         updateData.role = role;
       }
       if (password) updateData.password = password;
-      if (branchId !== undefined) updateData.branchId = branchId || null;
+      if (branchId !== undefined) {
+        // Handle "all_branches" special value - store as "all" to indicate access to all branches
+        if (branchId === "all_branches") {
+          updateData.branchId = "all_branches";
+        } else {
+          updateData.branchId = branchId || null;
+        }
+      }
       
       // Handle isActive status change with security checks
       if (isActive !== undefined) {
@@ -338,6 +354,9 @@ export async function registerRoutes(
           const allowedBranchIds = userBranchAccess.map(ba => ba.branchId);
           const filteredBranches = branches.filter((b: any) => allowedBranchIds.includes(b.id));
           res.json(filteredBranches);
+        } else if (user.branchId === "all_branches") {
+          // User has access to all branches
+          res.json(branches);
         } else if (user.branchId) {
           // Fallback to user's default branch from users table
           const filteredBranches = branches.filter((b: any) => b.id === user.branchId);

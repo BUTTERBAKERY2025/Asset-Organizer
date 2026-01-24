@@ -656,6 +656,7 @@ export default function UsersPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">بدون فرع</SelectItem>
+                      <SelectItem value="all_branches" className="text-green-600 font-medium">🌐 جميع الفروع</SelectItem>
                       {branches.map((branch) => (
                         <SelectItem key={branch.id} value={branch.id}>
                           {branch.name}
@@ -914,7 +915,7 @@ export default function UsersPage() {
                         </TableCell>
                         <TableCell className="text-muted-foreground font-mono" dir="ltr">{user.username || "-"}</TableCell>
                         <TableCell className="text-muted-foreground">
-                          {user.branchId ? branches.find(b => b.id === user.branchId)?.name || user.branchId : "-"}
+                          {user.branchId === "all_branches" ? "🌐 جميع الفروع" : user.branchId ? branches.find(b => b.id === user.branchId)?.name || user.branchId : "-"}
                         </TableCell>
                         <TableCell className="text-muted-foreground">{formatDate(user.createdAt)}</TableCell>
                         <TableCell>
@@ -1326,6 +1327,7 @@ export default function UsersPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">بدون فرع</SelectItem>
+                  <SelectItem value="all_branches" className="text-green-600 font-medium">🌐 جميع الفروع</SelectItem>
                   {branches.map((branch) => (
                     <SelectItem key={branch.id} value={branch.id}>
                       {branch.name}
