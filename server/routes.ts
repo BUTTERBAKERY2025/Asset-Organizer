@@ -11166,6 +11166,8 @@ export async function registerRoutes(
       const userId = req.params.userId;
       const { roleId, branchId, departmentId, scopeType, isPrimary, startDate, endDate } = req.body;
       
+      console.log("Creating assignment:", { userId, roleId, branchId, departmentId, scopeType });
+      
       if (!roleId) {
         return res.status(400).json({ error: "معرف الدور مطلوب" });
       }
@@ -11173,10 +11175,12 @@ export async function registerRoutes(
       // Handle "all_branches" - grant access to all branches via user_branch_access
       let actualBranchId = branchId;
       if (branchId === "all_branches") {
+        console.log("All branches selected, granting access to all branches for user:", userId);
         actualBranchId = null; // No specific branch in assignment
         
         // Get all branches and grant access
         const allBranches = await getCachedBranches();
+        console.log("Found branches:", allBranches.length);
         
         // Clear existing branch access first
         await db.delete(userBranchAccess).where(eq(userBranchAccess.userId, userId));
@@ -11190,6 +11194,7 @@ export async function registerRoutes(
             isDefault: false,
           }).onConflictDoNothing();
         }
+        console.log("Branch access granted successfully");
       }
       
       const assignment = await storage.createUserAssignment({
@@ -11204,6 +11209,7 @@ export async function registerRoutes(
         endDate: endDate ? new Date(endDate) : null,
       });
       
+      console.log("Assignment created:", assignment);
       res.status(201).json(assignment);
     } catch (error) {
       console.error("Error creating user assignment:", error);
