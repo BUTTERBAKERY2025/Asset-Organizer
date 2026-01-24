@@ -421,9 +421,11 @@ export default function RBACManagementPage() {
     mutationFn: async (data: { userId: string; roleId: number; branchId?: string; departmentId?: number }) => {
       // Handle "all_branches" - send it as-is to let the server grant access to all branches
       const isAllBranches = data.branchId === "all_branches";
+      console.log("Sending assignment request:", { userId: data.userId, roleId: data.roleId, branchId: data.branchId, isAllBranches });
       const res = await fetch(`/api/rbac/users/${data.userId}/assignments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           roleId: data.roleId,
           branchId: isAllBranches ? "all_branches" : (data.branchId || null),
@@ -433,7 +435,12 @@ export default function RBACManagementPage() {
           isActive: true,
         }),
       });
-      if (!res.ok) throw new Error("Failed to add assignment");
+      console.log("Assignment response status:", res.status);
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error("Assignment error:", errorText);
+        throw new Error("Failed to add assignment");
+      }
       return res.json();
     },
     onSuccess: () => {
