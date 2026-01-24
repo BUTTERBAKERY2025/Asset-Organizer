@@ -18845,7 +18845,7 @@ export async function registerRoutes(
   // ==========================================
 
   // Dashboard Stats
-  app.get("/api/executive/dashboard", isAuthenticated, async (req, res) => {
+  app.get("/api/executive/dashboard", isAuthenticated, requirePermission("executive_dashboard", "view"), async (req, res) => {
     try {
       const mandatoryBranch = getMandatoryBranchFilter(req);
       const stats = await storage.getExecDashboardStats(mandatoryBranch || undefined);
@@ -18858,7 +18858,7 @@ export async function registerRoutes(
 
   // ========== Executive Meetings API - الاجتماعات ==========
 
-  app.get("/api/executive/meetings", isAuthenticated, async (req, res) => {
+  app.get("/api/executive/meetings", isAuthenticated, requirePermission("executive_meetings", "view"), async (req, res) => {
     try {
       const mandatoryBranch = getMandatoryBranchFilter(req);
       const { status, startDate, endDate, organizerId, limit } = req.query;
@@ -18879,7 +18879,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/executive/meetings/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/executive/meetings/:id", isAuthenticated, requirePermission("executive_meetings", "view"), async (req, res) => {
     try {
       const meeting = await storage.getExecMeeting(parseInt(req.params.id));
       if (!meeting) {
@@ -18902,7 +18902,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/executive/meetings", isAuthenticated, async (req, res) => {
+  app.post("/api/executive/meetings", isAuthenticated, requirePermission("executive_meetings", "create"), async (req, res) => {
     try {
       const meetingSchema = z.object({
         title: z.string().min(1, "العنوان مطلوب"),
@@ -18955,7 +18955,7 @@ export async function registerRoutes(
     }
   });
 
-  app.put("/api/executive/meetings/:id", isAuthenticated, async (req, res) => {
+  app.put("/api/executive/meetings/:id", isAuthenticated, requirePermission("executive_meetings", "edit"), async (req, res) => {
     try {
       const updateSchema = z.object({
         title: z.string().min(1).optional(),
@@ -18993,7 +18993,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/executive/meetings/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/executive/meetings/:id", isAuthenticated, requirePermission("executive_meetings", "delete"), async (req, res) => {
     try {
       await storage.deleteExecMeeting(parseInt(req.params.id));
       res.status(204).send();
@@ -19004,7 +19004,7 @@ export async function registerRoutes(
   });
 
   // Meeting Attendees
-  app.post("/api/executive/meetings/:id/attendees", isAuthenticated, async (req, res) => {
+  app.post("/api/executive/meetings/:id/attendees", isAuthenticated, requirePermission("executive_meetings", "edit"), async (req, res) => {
     try {
       const attendee = await storage.addExecMeetingAttendee({
         meetingId: parseInt(req.params.id),
@@ -19017,7 +19017,7 @@ export async function registerRoutes(
     }
   });
 
-  app.put("/api/executive/meetings/:meetingId/attendees/:id", isAuthenticated, async (req, res) => {
+  app.put("/api/executive/meetings/:meetingId/attendees/:id", isAuthenticated, requirePermission("executive_meetings", "edit"), async (req, res) => {
     try {
       const attendee = await storage.updateExecMeetingAttendee(parseInt(req.params.id), req.body);
       if (!attendee) {
@@ -19030,7 +19030,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/executive/meetings/:meetingId/attendees/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/executive/meetings/:meetingId/attendees/:id", isAuthenticated, requirePermission("executive_meetings", "delete"), async (req, res) => {
     try {
       await storage.removeExecMeetingAttendee(parseInt(req.params.id));
       res.status(204).send();
@@ -19042,7 +19042,7 @@ export async function registerRoutes(
 
   // ========== Executive Tasks API - المهام التنفيذية ==========
 
-  app.get("/api/executive/tasks", isAuthenticated, async (req, res) => {
+  app.get("/api/executive/tasks", isAuthenticated, requirePermission("executive_tasks", "view"), async (req, res) => {
     try {
       const mandatoryBranch = getMandatoryBranchFilter(req);
       const user = getCurrentUser(req);
@@ -19067,7 +19067,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/executive/tasks/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/executive/tasks/:id", isAuthenticated, requirePermission("executive_tasks", "view"), async (req, res) => {
     try {
       const task = await storage.getExecTask(parseInt(req.params.id));
       if (!task) {
@@ -19090,7 +19090,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/executive/tasks", isAuthenticated, async (req, res) => {
+  app.post("/api/executive/tasks", isAuthenticated, requirePermission("executive_tasks", "create"), async (req, res) => {
     try {
       const taskSchema = z.object({
         title: z.string().min(1, "العنوان مطلوب"),
@@ -19146,7 +19146,7 @@ export async function registerRoutes(
     }
   });
 
-  app.put("/api/executive/tasks/:id", isAuthenticated, async (req, res) => {
+  app.put("/api/executive/tasks/:id", isAuthenticated, requirePermission("executive_tasks", "edit"), async (req, res) => {
     try {
       const updateSchema = z.object({
         title: z.string().min(1).optional(),
@@ -19181,7 +19181,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/executive/tasks/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/executive/tasks/:id", isAuthenticated, requirePermission("executive_tasks", "delete"), async (req, res) => {
     try {
       await storage.deleteExecTask(parseInt(req.params.id));
       res.status(204).send();
@@ -19192,7 +19192,7 @@ export async function registerRoutes(
   });
 
   // Task Comments
-  app.post("/api/executive/tasks/:id/comments", isAuthenticated, async (req, res) => {
+  app.post("/api/executive/tasks/:id/comments", isAuthenticated, requirePermission("executive_tasks", "edit"), async (req, res) => {
     try {
       const user = getCurrentUser(req);
       const comment = await storage.addExecTaskComment({
@@ -19208,7 +19208,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/executive/tasks/:taskId/comments/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/executive/tasks/:taskId/comments/:id", isAuthenticated, requirePermission("executive_tasks", "delete"), async (req, res) => {
     try {
       await storage.deleteExecTaskComment(parseInt(req.params.id));
       res.status(204).send();
@@ -19220,7 +19220,7 @@ export async function registerRoutes(
 
   // ========== Executive Correspondence API - المراسلات ==========
 
-  app.get("/api/executive/correspondence", isAuthenticated, async (req, res) => {
+  app.get("/api/executive/correspondence", isAuthenticated, requirePermission("executive_correspondence", "view"), async (req, res) => {
     try {
       const mandatoryBranch = getMandatoryBranchFilter(req);
       const { type, status, category, ownerId, assignedTo, isConfidential, startDate, endDate, limit } = req.query;
@@ -19245,7 +19245,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/executive/correspondence/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/executive/correspondence/:id", isAuthenticated, requirePermission("executive_correspondence", "view"), async (req, res) => {
     try {
       const corr = await storage.getExecCorrespondenceById(parseInt(req.params.id));
       if (!corr) {
@@ -19267,7 +19267,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/executive/correspondence", isAuthenticated, async (req, res) => {
+  app.post("/api/executive/correspondence", isAuthenticated, requirePermission("executive_correspondence", "create"), async (req, res) => {
     try {
       const corrSchema = z.object({
         type: z.enum(["incoming", "outgoing"]).default("incoming"),
@@ -19340,7 +19340,7 @@ export async function registerRoutes(
     }
   });
 
-  app.put("/api/executive/correspondence/:id", isAuthenticated, async (req, res) => {
+  app.put("/api/executive/correspondence/:id", isAuthenticated, requirePermission("executive_correspondence", "edit"), async (req, res) => {
     try {
       const updateSchema = z.object({
         subject: z.string().min(1).optional(),
@@ -19378,7 +19378,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/executive/correspondence/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/executive/correspondence/:id", isAuthenticated, requirePermission("executive_correspondence", "delete"), async (req, res) => {
     try {
       await storage.deleteExecCorrespondence(parseInt(req.params.id));
       res.status(204).send();
@@ -19390,7 +19390,7 @@ export async function registerRoutes(
 
   // ========== Executive Notifications API - الإشعارات ==========
 
-  app.get("/api/executive/notifications", isAuthenticated, async (req, res) => {
+  app.get("/api/executive/notifications", isAuthenticated, requirePermission("executive_notifications", "view"), async (req, res) => {
     try {
       const user = getCurrentUser(req);
       const { type, isRead, limit } = req.query;
@@ -19409,7 +19409,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/executive/notifications/unread-count", isAuthenticated, async (req, res) => {
+  app.get("/api/executive/notifications/unread-count", isAuthenticated, requirePermission("executive_notifications", "view"), async (req, res) => {
     try {
       const user = getCurrentUser(req);
       const count = await storage.getExecUnreadNotificationCount(user.id);
@@ -19420,7 +19420,7 @@ export async function registerRoutes(
     }
   });
 
-  app.put("/api/executive/notifications/:id/read", isAuthenticated, async (req, res) => {
+  app.put("/api/executive/notifications/:id/read", isAuthenticated, requirePermission("executive_notifications", "edit"), async (req, res) => {
     try {
       const notification = await storage.markExecNotificationAsRead(parseInt(req.params.id));
       if (!notification) {
@@ -19436,7 +19436,7 @@ export async function registerRoutes(
   // ========== Document Management API - إدارة الوثائق ==========
 
   // Document Stats Dashboard
-  app.get("/api/documents/stats", isAuthenticated, async (req, res) => {
+  app.get("/api/documents/stats", isAuthenticated, requirePermission("documents", "view"), async (req, res) => {
     try {
       const mandatoryBranch = getMandatoryBranchFilter(req);
       const stats = await storage.getDocumentStats(mandatoryBranch || parseQueryString(req.query.branchId));
@@ -19448,7 +19448,7 @@ export async function registerRoutes(
   });
 
   // Document Categories
-  app.get("/api/documents/categories", isAuthenticated, async (req, res) => {
+  app.get("/api/documents/categories", isAuthenticated, requirePermission("documents", "view"), async (req, res) => {
     try {
       const mandatoryBranch = getMandatoryBranchFilter(req);
       const categories = await storage.getDocumentCategories({
@@ -19462,7 +19462,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/documents/categories/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/documents/categories/:id", isAuthenticated, requirePermission("documents", "view"), async (req, res) => {
     try {
       const category = await storage.getDocumentCategory(parseInt(req.params.id));
       if (!category) {
@@ -19475,7 +19475,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/documents/categories", isAuthenticated, async (req, res) => {
+  app.post("/api/documents/categories", isAuthenticated, requirePermission("documents", "create"), async (req, res) => {
     try {
       const categorySchema = z.object({
         name: z.string().min(1, "الاسم مطلوب"),
@@ -19508,7 +19508,7 @@ export async function registerRoutes(
     }
   });
 
-  app.put("/api/documents/categories/:id", isAuthenticated, async (req, res) => {
+  app.put("/api/documents/categories/:id", isAuthenticated, requirePermission("documents", "edit"), async (req, res) => {
     try {
       const updateSchema = z.object({
         name: z.string().min(1).optional(),
@@ -19537,7 +19537,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/documents/categories/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/documents/categories/:id", isAuthenticated, requirePermission("documents", "delete"), async (req, res) => {
     try {
       await storage.deleteDocumentCategory(parseInt(req.params.id));
       res.status(204).send();
@@ -19548,7 +19548,7 @@ export async function registerRoutes(
   });
 
   // Document Folders
-  app.get("/api/documents/folders", isAuthenticated, async (req, res) => {
+  app.get("/api/documents/folders", isAuthenticated, requirePermission("documents", "view"), async (req, res) => {
     try {
       const mandatoryBranch = getMandatoryBranchFilter(req);
       const parentId = req.query.parentId;
@@ -19564,7 +19564,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/documents/folders/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/documents/folders/:id", isAuthenticated, requirePermission("documents", "view"), async (req, res) => {
     try {
       const folder = await storage.getDocumentFolder(parseInt(req.params.id));
       if (!folder) {
@@ -19577,7 +19577,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/documents/folders", isAuthenticated, async (req, res) => {
+  app.post("/api/documents/folders", isAuthenticated, requirePermission("documents", "create"), async (req, res) => {
     try {
       const folderSchema = z.object({
         name: z.string().min(1, "الاسم مطلوب"),
@@ -19614,7 +19614,7 @@ export async function registerRoutes(
     }
   });
 
-  app.put("/api/documents/folders/:id", isAuthenticated, async (req, res) => {
+  app.put("/api/documents/folders/:id", isAuthenticated, requirePermission("documents", "edit"), async (req, res) => {
     try {
       const updateSchema = z.object({
         name: z.string().min(1).optional(),
@@ -19645,7 +19645,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/documents/folders/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/documents/folders/:id", isAuthenticated, requirePermission("documents", "delete"), async (req, res) => {
     try {
       await storage.deleteDocumentFolder(parseInt(req.params.id));
       res.status(204).send();
@@ -19656,7 +19656,7 @@ export async function registerRoutes(
   });
 
   // Documents
-  app.get("/api/documents", isAuthenticated, async (req, res) => {
+  app.get("/api/documents", isAuthenticated, requirePermission("documents", "view"), async (req, res) => {
     try {
       const mandatoryBranch = getMandatoryBranchFilter(req);
       const folderId = req.query.folderId;
@@ -19695,7 +19695,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/documents/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/documents/:id", isAuthenticated, requirePermission("documents", "view"), async (req, res) => {
     try {
       const user = getCurrentUser(req);
       const doc = await storage.getDocument(parseInt(req.params.id));
@@ -19729,7 +19729,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/documents", isAuthenticated, async (req, res) => {
+  app.post("/api/documents", isAuthenticated, requirePermission("documents", "create"), async (req, res) => {
     try {
       const docSchema = z.object({
         title: z.string().min(1, "العنوان مطلوب"),
@@ -19794,7 +19794,7 @@ export async function registerRoutes(
     }
   });
 
-  app.put("/api/documents/:id", isAuthenticated, async (req, res) => {
+  app.put("/api/documents/:id", isAuthenticated, requirePermission("documents", "edit"), async (req, res) => {
     try {
       const updateSchema = z.object({
         title: z.string().min(1).optional(),
@@ -19837,7 +19837,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/documents/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/documents/:id", isAuthenticated, requirePermission("documents", "delete"), async (req, res) => {
     try {
       const user = getCurrentUser(req);
       await storage.deleteDocument(parseInt(req.params.id));
@@ -19855,7 +19855,7 @@ export async function registerRoutes(
   });
 
   // Archive/Restore Document
-  app.post("/api/documents/:id/archive", isAuthenticated, async (req, res) => {
+  app.post("/api/documents/:id/archive", isAuthenticated, requirePermission("documents", "edit"), async (req, res) => {
     try {
       const user = getCurrentUser(req);
       const doc = await storage.archiveDocument(parseInt(req.params.id), user.id);
@@ -19875,7 +19875,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/documents/:id/restore", isAuthenticated, async (req, res) => {
+  app.post("/api/documents/:id/restore", isAuthenticated, requirePermission("documents", "edit"), async (req, res) => {
     try {
       const user = getCurrentUser(req);
       const doc = await storage.restoreDocument(parseInt(req.params.id));
@@ -19896,7 +19896,7 @@ export async function registerRoutes(
   });
 
   // Document Versions
-  app.get("/api/documents/:id/versions", isAuthenticated, async (req, res) => {
+  app.get("/api/documents/:id/versions", isAuthenticated, requirePermission("documents", "view"), async (req, res) => {
     try {
       const versions = await storage.getDocumentVersions(parseInt(req.params.id));
       res.json(versions);
@@ -19906,7 +19906,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/documents/:id/versions", isAuthenticated, async (req, res) => {
+  app.post("/api/documents/:id/versions", isAuthenticated, requirePermission("documents", "edit"), async (req, res) => {
     try {
       const versionSchema = z.object({
         fileName: z.string().min(1),
@@ -19952,7 +19952,7 @@ export async function registerRoutes(
   });
 
   // Document Shares
-  app.get("/api/documents/:id/shares", isAuthenticated, async (req, res) => {
+  app.get("/api/documents/:id/shares", isAuthenticated, requirePermission("documents", "view"), async (req, res) => {
     try {
       const shares = await storage.getDocumentShares({ documentId: parseInt(req.params.id) });
       res.json(shares);
@@ -19962,7 +19962,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/documents/:id/shares", isAuthenticated, async (req, res) => {
+  app.post("/api/documents/:id/shares", isAuthenticated, requirePermission("documents", "edit"), async (req, res) => {
     try {
       const shareSchema = z.object({
         sharedWithUserId: z.string().optional(),
@@ -19997,7 +19997,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/documents/shares/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/documents/shares/:id", isAuthenticated, requirePermission("documents", "delete"), async (req, res) => {
     try {
       await storage.deleteDocumentShare(parseInt(req.params.id));
       res.status(204).send();
@@ -20008,7 +20008,7 @@ export async function registerRoutes(
   });
 
   // Document Access Logs
-  app.get("/api/documents/:id/access-logs", isAuthenticated, async (req, res) => {
+  app.get("/api/documents/:id/access-logs", isAuthenticated, requirePermission("documents", "view"), async (req, res) => {
     try {
       const logs = await storage.getDocumentAccessLogs(
         parseInt(req.params.id),
@@ -20022,7 +20022,7 @@ export async function registerRoutes(
   });
 
   // Download Document (increment download count)
-  app.post("/api/documents/:id/download", isAuthenticated, async (req, res) => {
+  app.post("/api/documents/:id/download", isAuthenticated, requirePermission("documents", "view"), async (req, res) => {
     try {
       const user = getCurrentUser(req);
       const doc = await storage.getDocument(parseInt(req.params.id));
@@ -20046,7 +20046,7 @@ export async function registerRoutes(
   });
 
   // Upload Document File - Uses Object Storage for permanent storage
-  app.post("/api/documents/upload", isAuthenticated, async (req, res) => {
+  app.post("/api/documents/upload", isAuthenticated, requirePermission("documents", "create"), async (req, res) => {
     try {
       const multer = (await import("multer")).default;
       const path = await import("path");
@@ -20148,7 +20148,7 @@ export async function registerRoutes(
   });
 
   // Serve uploaded files (authenticated) - From Object Storage
-  app.get("/api/documents/file/:filename", isAuthenticated, async (req, res) => {
+  app.get("/api/documents/file/:filename", isAuthenticated, requirePermission("documents", "view"), async (req, res) => {
     try {
       const { ObjectStorageService, ObjectNotFoundError } = await import("./replit_integrations/object_storage");
       const { objectStorageClient } = await import("./replit_integrations/object_storage/objectStorage");
@@ -20334,7 +20334,7 @@ export async function registerRoutes(
   });
 
   // Generate public share link
-  app.post("/api/documents/:id/generate-share-link", isAuthenticated, async (req, res) => {
+  app.post("/api/documents/:id/generate-share-link", isAuthenticated, requirePermission("documents", "edit"), async (req, res) => {
     try {
       const crypto = await import("crypto");
       const user = getCurrentUser(req);
@@ -20373,7 +20373,7 @@ export async function registerRoutes(
   // =====================================================
 
   // Get visitors
-  app.get("/api/visitors", isAuthenticated, async (req, res) => {
+  app.get("/api/visitors", isAuthenticated, requirePermission("executive_visitors", "view"), async (req, res) => {
     try {
       let branchId = parseQueryString(req.query.branchId);
       
@@ -20392,7 +20392,7 @@ export async function registerRoutes(
   });
 
   // Search visitors
-  app.get("/api/visitors/search", isAuthenticated, async (req, res) => {
+  app.get("/api/visitors/search", isAuthenticated, requirePermission("executive_visitors", "view"), async (req, res) => {
     try {
       const query = parseQueryString(req.query.q) || "";
       let branchId = parseQueryString(req.query.branchId);
@@ -20412,7 +20412,7 @@ export async function registerRoutes(
   });
 
   // Get blacklisted visitors
-  app.get("/api/visitors/blacklist", isAuthenticated, async (req, res) => {
+  app.get("/api/visitors/blacklist", isAuthenticated, requirePermission("executive_visitors", "view"), async (req, res) => {
     try {
       let branchId = parseQueryString(req.query.branchId);
       
@@ -20431,7 +20431,7 @@ export async function registerRoutes(
   });
 
   // Get visitor by ID
-  app.get("/api/visitors/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/visitors/:id", isAuthenticated, requirePermission("executive_visitors", "view"), async (req, res) => {
     try {
       const visitor = await storage.getVisitor(parseInt(req.params.id));
       if (!visitor) {
@@ -20454,7 +20454,7 @@ export async function registerRoutes(
   });
 
   // Get visitor by national ID
-  app.get("/api/visitors/national-id/:nationalId", isAuthenticated, async (req, res) => {
+  app.get("/api/visitors/national-id/:nationalId", isAuthenticated, requirePermission("executive_visitors", "view"), async (req, res) => {
     try {
       const visitor = await storage.getVisitorByNationalId(req.params.nationalId);
       
@@ -20474,7 +20474,7 @@ export async function registerRoutes(
   });
 
   // Create visitor
-  app.post("/api/visitors", isAuthenticated, async (req, res) => {
+  app.post("/api/visitors", isAuthenticated, requirePermission("executive_visitors", "create"), async (req, res) => {
     try {
       const user = getCurrentUser(req);
       
@@ -20523,7 +20523,7 @@ export async function registerRoutes(
   });
 
   // Delete visitor
-  app.delete("/api/visitors/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/visitors/:id", isAuthenticated, requirePermission("executive_visitors", "delete"), async (req, res) => {
     try {
       // SECURITY: Verify branch access for non-admin users
       if (!isUserAdmin(req)) {
@@ -20629,7 +20629,7 @@ export async function registerRoutes(
   });
 
   // Get visitor's history
-  app.get("/api/visitors/:id/logs", isAuthenticated, async (req, res) => {
+  app.get("/api/visitors/:id/logs", isAuthenticated, requirePermission("executive_visitors", "view"), async (req, res) => {
     try {
       // SECURITY: Verify branch access for non-admin users
       if (!isUserAdmin(req)) {
@@ -20747,7 +20747,7 @@ export async function registerRoutes(
   // =====================================================
 
   // Get travel requests
-  app.get("/api/travel-requests", isAuthenticated, async (req, res) => {
+  app.get("/api/travel-requests", isAuthenticated, requirePermission("executive_travel", "view"), async (req, res) => {
     try {
       const branchId = parseQueryString(req.query.branchId);
       const status = parseQueryString(req.query.status);
@@ -20760,7 +20760,7 @@ export async function registerRoutes(
   });
 
   // Get my travel requests
-  app.get("/api/travel-requests/my", isAuthenticated, async (req, res) => {
+  app.get("/api/travel-requests/my", isAuthenticated, requirePermission("executive_travel", "view"), async (req, res) => {
     try {
       const user = getCurrentUser(req);
       const requests = await storage.getTravelRequestsByRequester(user.id);
@@ -20772,7 +20772,7 @@ export async function registerRoutes(
   });
 
   // Get travel stats
-  app.get("/api/travel-stats", isAuthenticated, async (req, res) => {
+  app.get("/api/travel-stats", isAuthenticated, requirePermission("executive_travel", "view"), async (req, res) => {
     try {
       const branchId = parseQueryString(req.query.branchId);
       const stats = await storage.getTravelStats(branchId);
@@ -20784,7 +20784,7 @@ export async function registerRoutes(
   });
 
   // Get travel request by ID
-  app.get("/api/travel-requests/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/travel-requests/:id", isAuthenticated, requirePermission("executive_travel", "view"), async (req, res) => {
     try {
       const request = await storage.getTravelRequest(parseInt(req.params.id));
       if (!request) {
@@ -20807,7 +20807,7 @@ export async function registerRoutes(
   });
 
   // Create travel request
-  app.post("/api/travel-requests", isAuthenticated, async (req, res) => {
+  app.post("/api/travel-requests", isAuthenticated, requirePermission("executive_travel", "create"), async (req, res) => {
     try {
       const user = getCurrentUser(req);
       const request = await storage.createTravelRequest({
@@ -20847,7 +20847,7 @@ export async function registerRoutes(
   });
 
   // Delete travel request
-  app.delete("/api/travel-requests/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/travel-requests/:id", isAuthenticated, requirePermission("executive_travel", "delete"), async (req, res) => {
     try {
       // SECURITY: Verify branch access for non-admin users
       const existingRequest = await storage.getTravelRequest(parseInt(req.params.id));
@@ -20870,7 +20870,7 @@ export async function registerRoutes(
   });
 
   // Submit travel request for approval
-  app.post("/api/travel-requests/:id/submit", isAuthenticated, async (req, res) => {
+  app.post("/api/travel-requests/:id/submit", isAuthenticated, requirePermission("executive_travel", "submit"), async (req, res) => {
     try {
       const request = await storage.submitTravelRequest(parseInt(req.params.id));
       if (!request) {
@@ -20884,7 +20884,7 @@ export async function registerRoutes(
   });
 
   // Approve/reject travel request (manager)
-  app.post("/api/travel-requests/:id/manager-approval", isAuthenticated, async (req, res) => {
+  app.post("/api/travel-requests/:id/manager-approval", isAuthenticated, requirePermission("executive_travel", "approve"), async (req, res) => {
     try {
       const user = getCurrentUser(req);
       const { approved, notes } = req.body;
@@ -20906,7 +20906,7 @@ export async function registerRoutes(
   });
 
   // Approve/reject travel request (finance)
-  app.post("/api/travel-requests/:id/finance-approval", isAuthenticated, async (req, res) => {
+  app.post("/api/travel-requests/:id/finance-approval", isAuthenticated, requirePermission("executive_travel", "approve"), async (req, res) => {
     try {
       const user = getCurrentUser(req);
       const { approved, notes } = req.body;
@@ -20928,7 +20928,7 @@ export async function registerRoutes(
   });
 
   // Complete travel request with report
-  app.post("/api/travel-requests/:id/complete", isAuthenticated, async (req, res) => {
+  app.post("/api/travel-requests/:id/complete", isAuthenticated, requirePermission("executive_travel", "edit"), async (req, res) => {
     try {
       const { tripReport } = req.body;
       const request = await storage.completeTravelRequest(parseInt(req.params.id), tripReport);
@@ -20945,7 +20945,7 @@ export async function registerRoutes(
   // Travel Expenses
 
   // Get travel expenses
-  app.get("/api/travel-requests/:requestId/expenses", isAuthenticated, async (req, res) => {
+  app.get("/api/travel-requests/:requestId/expenses", isAuthenticated, requirePermission("executive_travel", "view"), async (req, res) => {
     try {
       const expenses = await storage.getTravelExpenses(parseInt(req.params.requestId));
       res.json(expenses);
@@ -20956,7 +20956,7 @@ export async function registerRoutes(
   });
 
   // Create travel expense
-  app.post("/api/travel-expenses", isAuthenticated, async (req, res) => {
+  app.post("/api/travel-expenses", isAuthenticated, requirePermission("executive_travel", "create"), async (req, res) => {
     try {
       const user = getCurrentUser(req);
       const expense = await storage.createTravelExpense({
@@ -20985,7 +20985,7 @@ export async function registerRoutes(
   });
 
   // Delete travel expense
-  app.delete("/api/travel-expenses/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/travel-expenses/:id", isAuthenticated, requirePermission("executive_travel", "delete"), async (req, res) => {
     try {
       await storage.deleteTravelExpense(parseInt(req.params.id));
       res.json({ success: true });
@@ -20996,7 +20996,7 @@ export async function registerRoutes(
   });
 
   // Approve/reject travel expense
-  app.post("/api/travel-expenses/:id/approve", isAuthenticated, async (req, res) => {
+  app.post("/api/travel-expenses/:id/approve", isAuthenticated, requirePermission("executive_travel", "approve"), async (req, res) => {
     try {
       const user = getCurrentUser(req);
       const { approved, reason } = req.body;
@@ -21194,7 +21194,7 @@ export async function registerRoutes(
   });
 
   // Export tasks to JSON
-  app.get("/api/executive/tasks/export", isAuthenticated, async (req, res) => {
+  app.get("/api/executive/tasks/export", isAuthenticated, requirePermission("executive_tasks", "export"), async (req, res) => {
     try {
       const tasks = await storage.getExecTasks();
       res.json(tasks);
@@ -21205,7 +21205,7 @@ export async function registerRoutes(
   });
 
   // Export visitors to JSON
-  app.get("/api/visitors/export", isAuthenticated, async (req, res) => {
+  app.get("/api/visitors/export", isAuthenticated, requirePermission("executive_visitors", "export"), async (req, res) => {
     try {
       // SECURITY: Enforce branch filtering for non-admin users
       let branchId: string | undefined;
@@ -21223,7 +21223,7 @@ export async function registerRoutes(
   });
 
   // Export travel requests to JSON
-  app.get("/api/travel-requests/export", isAuthenticated, async (req, res) => {
+  app.get("/api/travel-requests/export", isAuthenticated, requirePermission("executive_travel", "export"), async (req, res) => {
     try {
       const travelRequests = await storage.getTravelRequests();
       res.json(travelRequests);
