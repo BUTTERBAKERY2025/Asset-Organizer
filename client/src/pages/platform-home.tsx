@@ -482,19 +482,24 @@ export default function PlatformHomePage() {
                 <div
                   key={index}
                   onClick={() => navigate(module.href)}
-                  className="bg-white rounded-xl p-5 flex flex-col items-center justify-center gap-3 cursor-pointer transition-all duration-200 hover:shadow-lg hover:-translate-y-1 border border-gray-100"
+                  className="bg-white rounded-xl p-5 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all duration-200 hover:shadow-lg hover:-translate-y-1 border border-gray-100"
                   style={{ 
                     boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-                    minHeight: '110px'
+                    minHeight: '120px'
                   }}
                   data-testid={`module-card-simple-${index}`}
                 >
                   <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${module.color}`}>
                     <IconComponent className="w-5 h-5 text-white" />
                   </div>
-                  <span className="text-sm font-medium text-gray-600 text-center leading-tight">
-                    {module.title}
-                  </span>
+                  <div className="text-center">
+                    <span className="text-sm font-medium text-gray-700 block leading-tight">
+                      {currentLang === 'ar' ? module.title : module.title}
+                    </span>
+                    <span className="text-[10px] text-gray-400 block mt-0.5">
+                      {module.href.replace('/', '').replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                    </span>
+                  </div>
                 </div>
               );
             })}
