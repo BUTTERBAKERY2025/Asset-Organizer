@@ -419,14 +419,16 @@ export default function RBACManagementPage() {
 
   const addUserAssignmentMutation = useMutation({
     mutationFn: async (data: { userId: string; roleId: number; branchId?: string; departmentId?: number }) => {
+      // Handle "all_branches" - send it as-is to let the server grant access to all branches
+      const isAllBranches = data.branchId === "all_branches";
       const res = await fetch(`/api/rbac/users/${data.userId}/assignments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           roleId: data.roleId,
-          branchId: data.branchId || null,
+          branchId: isAllBranches ? "all_branches" : (data.branchId || null),
           departmentId: data.departmentId || null,
-          scopeType: data.branchId ? "branch" : "global",
+          scopeType: isAllBranches ? "global" : (data.branchId ? "branch" : "global"),
           isPrimary: true,
           isActive: true,
         }),
