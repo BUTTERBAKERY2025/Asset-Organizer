@@ -255,7 +255,7 @@ export default function RBACManagementPage() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [isUserAssignmentDialogOpen, setIsUserAssignmentDialogOpen] = useState(false);
   const [assignmentRoleId, setAssignmentRoleId] = useState<string>("");
-  const [assignmentBranchId, setAssignmentBranchId] = useState<string>("");
+  const [assignmentBranchId, setAssignmentBranchId] = useState<string>("all_branches");
   const [assignmentDepartmentId, setAssignmentDepartmentId] = useState<string>("");
 
   const hasUsersViewPermission = isAdmin || canView("users");
@@ -441,7 +441,7 @@ export default function RBACManagementPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       toast({ title: "تم تعيين الدور بنجاح" });
       setAssignmentRoleId("");
-      setAssignmentBranchId("");
+      setAssignmentBranchId("all_branches");
       setAssignmentDepartmentId("");
     },
     onError: () => {
