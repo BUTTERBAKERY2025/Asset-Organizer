@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { db } from "./db";
 import { eq, and, desc, asc, sql, gte, lte, or, isNull } from "drizzle-orm";
-import { isAuthenticated } from "./auth";
+import { isAuthenticated, requirePermission } from "./auth";
 import {
   boardMembers,
   shareholders,
@@ -42,7 +42,7 @@ export function registerGovernanceRoutes(app: Express) {
   // Board Members - أعضاء مجلس الإدارة
   // =====================================================
   
-  app.get("/api/governance/board-members", isAuthenticated, async (req, res) => {
+  app.get("/api/governance/board-members", isAuthenticated, requirePermission("governance_board", "view"), async (req, res) => {
     try {
       const status = req.query.status as string | undefined;
       const position = req.query.position as string | undefined;
@@ -65,7 +65,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.get("/api/governance/board-members/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/governance/board-members/:id", isAuthenticated, requirePermission("governance_board", "view"), async (req, res) => {
     try {
       const [member] = await db.select().from(boardMembers).where(eq(boardMembers.id, parseInt(req.params.id)));
       if (!member) {
@@ -78,7 +78,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.post("/api/governance/board-members", isAuthenticated, async (req, res) => {
+  app.post("/api/governance/board-members", isAuthenticated, requirePermission("governance_board", "create"), async (req, res) => {
     try {
       const data = insertBoardMemberSchema.parse({
         ...req.body,
@@ -92,7 +92,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.patch("/api/governance/board-members/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/governance/board-members/:id", isAuthenticated, requirePermission("governance_board", "edit"), async (req, res) => {
     try {
       const [member] = await db.update(boardMembers)
         .set({ ...req.body, updatedAt: new Date() })
@@ -105,7 +105,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/governance/board-members/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/governance/board-members/:id", isAuthenticated, requirePermission("governance_board", "delete"), async (req, res) => {
     try {
       await db.delete(boardMembers).where(eq(boardMembers.id, parseInt(req.params.id)));
       res.json({ success: true });
@@ -119,7 +119,7 @@ export function registerGovernanceRoutes(app: Express) {
   // Shareholders - المساهمون
   // =====================================================
   
-  app.get("/api/governance/shareholders", isAuthenticated, async (req, res) => {
+  app.get("/api/governance/shareholders", isAuthenticated, requirePermission("governance_shareholders", "view"), async (req, res) => {
     try {
       const status = req.query.status as string | undefined;
       const type = req.query.type as string | undefined;
@@ -142,7 +142,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.get("/api/governance/shareholders/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/governance/shareholders/:id", isAuthenticated, requirePermission("governance_shareholders", "view"), async (req, res) => {
     try {
       const [shareholder] = await db.select().from(shareholders).where(eq(shareholders.id, parseInt(req.params.id)));
       if (!shareholder) {
@@ -155,7 +155,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.post("/api/governance/shareholders", isAuthenticated, async (req, res) => {
+  app.post("/api/governance/shareholders", isAuthenticated, requirePermission("governance_shareholders", "create"), async (req, res) => {
     try {
       const data = insertShareholderSchema.parse({
         ...req.body,
@@ -169,7 +169,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.patch("/api/governance/shareholders/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/governance/shareholders/:id", isAuthenticated, requirePermission("governance_shareholders", "edit"), async (req, res) => {
     try {
       const [shareholder] = await db.update(shareholders)
         .set({ ...req.body, updatedAt: new Date() })
@@ -186,7 +186,7 @@ export function registerGovernanceRoutes(app: Express) {
   // Share Transfers - تحويلات الأسهم
   // =====================================================
   
-  app.get("/api/governance/share-transfers", isAuthenticated, async (req, res) => {
+  app.get("/api/governance/share-transfers", isAuthenticated, requirePermission("governance_transfers", "view"), async (req, res) => {
     try {
       const result = await db.select().from(shareTransfers).orderBy(desc(shareTransfers.transferDate));
       res.json(result);
@@ -196,7 +196,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.post("/api/governance/share-transfers", isAuthenticated, async (req, res) => {
+  app.post("/api/governance/share-transfers", isAuthenticated, requirePermission("governance_transfers", "create"), async (req, res) => {
     try {
       const transferNumber = `ST-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
       const data = insertShareTransferSchema.parse({
@@ -212,7 +212,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.patch("/api/governance/share-transfers/:id/approve", isAuthenticated, async (req, res) => {
+  app.patch("/api/governance/share-transfers/:id/approve", isAuthenticated, requirePermission("governance_transfers", "approve"), async (req, res) => {
     try {
       const [transfer] = await db.update(shareTransfers)
         .set({ 
@@ -233,7 +233,7 @@ export function registerGovernanceRoutes(app: Express) {
   // Governance Meetings - اجتماعات الحوكمة
   // =====================================================
   
-  app.get("/api/governance/meetings", isAuthenticated, async (req, res) => {
+  app.get("/api/governance/meetings", isAuthenticated, requirePermission("governance_meetings", "view"), async (req, res) => {
     try {
       const type = req.query.type as string | undefined;
       const status = req.query.status as string | undefined;
@@ -256,7 +256,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.get("/api/governance/meetings/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/governance/meetings/:id", isAuthenticated, requirePermission("governance_meetings", "view"), async (req, res) => {
     try {
       const [meeting] = await db.select().from(governanceMeetings).where(eq(governanceMeetings.id, parseInt(req.params.id)));
       if (!meeting) {
@@ -269,7 +269,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.post("/api/governance/meetings", isAuthenticated, async (req, res) => {
+  app.post("/api/governance/meetings", isAuthenticated, requirePermission("governance_meetings", "create"), async (req, res) => {
     try {
       const year = new Date().getFullYear();
       const count = await db.select({ count: sql<number>`count(*)` }).from(governanceMeetings);
@@ -288,7 +288,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.patch("/api/governance/meetings/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/governance/meetings/:id", isAuthenticated, requirePermission("governance_meetings", "edit"), async (req, res) => {
     try {
       const [meeting] = await db.update(governanceMeetings)
         .set({ ...req.body, updatedAt: new Date() })
@@ -305,7 +305,7 @@ export function registerGovernanceRoutes(app: Express) {
   // Meeting Attendance - حضور الاجتماعات
   // =====================================================
   
-  app.get("/api/governance/meetings/:meetingId/attendance", isAuthenticated, async (req, res) => {
+  app.get("/api/governance/meetings/:meetingId/attendance", isAuthenticated, requirePermission("governance_meetings", "view"), async (req, res) => {
     try {
       const result = await db.select().from(meetingAttendance)
         .where(eq(meetingAttendance.meetingId, parseInt(req.params.meetingId)));
@@ -316,7 +316,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.post("/api/governance/meetings/:meetingId/attendance", isAuthenticated, async (req, res) => {
+  app.post("/api/governance/meetings/:meetingId/attendance", isAuthenticated, requirePermission("governance_meetings", "create"), async (req, res) => {
     try {
       const data = insertMeetingAttendanceSchema.parse({
         ...req.body,
@@ -330,7 +330,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.patch("/api/governance/attendance/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/governance/attendance/:id", isAuthenticated, requirePermission("governance_meetings", "edit"), async (req, res) => {
     try {
       const [attendance] = await db.update(meetingAttendance)
         .set(req.body)
@@ -347,7 +347,7 @@ export function registerGovernanceRoutes(app: Express) {
   // Meeting Minutes - محاضر الاجتماعات
   // =====================================================
   
-  app.get("/api/governance/minutes", isAuthenticated, async (req, res) => {
+  app.get("/api/governance/minutes", isAuthenticated, requirePermission("governance_meetings", "view"), async (req, res) => {
     try {
       const result = await db.select().from(meetingMinutes).orderBy(desc(meetingMinutes.createdAt));
       res.json(result);
@@ -357,7 +357,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.get("/api/governance/meetings/:meetingId/minutes", isAuthenticated, async (req, res) => {
+  app.get("/api/governance/meetings/:meetingId/minutes", isAuthenticated, requirePermission("governance_meetings", "view"), async (req, res) => {
     try {
       const [minutes] = await db.select().from(meetingMinutes)
         .where(eq(meetingMinutes.meetingId, parseInt(req.params.meetingId)));
@@ -368,7 +368,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.post("/api/governance/minutes", isAuthenticated, async (req, res) => {
+  app.post("/api/governance/minutes", isAuthenticated, requirePermission("governance_meetings", "create"), async (req, res) => {
     try {
       const year = new Date().getFullYear();
       const count = await db.select({ count: sql<number>`count(*)` }).from(meetingMinutes);
@@ -389,7 +389,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.patch("/api/governance/minutes/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/governance/minutes/:id", isAuthenticated, requirePermission("governance_meetings", "edit"), async (req, res) => {
     try {
       const [minutes] = await db.update(meetingMinutes)
         .set({ ...req.body, updatedAt: new Date() })
@@ -406,7 +406,7 @@ export function registerGovernanceRoutes(app: Express) {
   // Board Resolutions - قرارات مجلس الإدارة
   // =====================================================
   
-  app.get("/api/governance/resolutions", isAuthenticated, async (req, res) => {
+  app.get("/api/governance/resolutions", isAuthenticated, requirePermission("governance_resolutions", "view"), async (req, res) => {
     try {
       const status = req.query.status as string | undefined;
       const type = req.query.type as string | undefined;
@@ -429,7 +429,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.get("/api/governance/resolutions/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/governance/resolutions/:id", isAuthenticated, requirePermission("governance_resolutions", "view"), async (req, res) => {
     try {
       const [resolution] = await db.select().from(boardResolutions).where(eq(boardResolutions.id, parseInt(req.params.id)));
       if (!resolution) {
@@ -442,7 +442,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.post("/api/governance/resolutions", isAuthenticated, async (req, res) => {
+  app.post("/api/governance/resolutions", isAuthenticated, requirePermission("governance_resolutions", "create"), async (req, res) => {
     try {
       const year = new Date().getFullYear();
       const count = await db.select({ count: sql<number>`count(*)` }).from(boardResolutions);
@@ -463,7 +463,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.patch("/api/governance/resolutions/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/governance/resolutions/:id", isAuthenticated, requirePermission("governance_resolutions", "edit"), async (req, res) => {
     try {
       const [resolution] = await db.update(boardResolutions)
         .set({ ...req.body, updatedAt: new Date() })
@@ -480,7 +480,7 @@ export function registerGovernanceRoutes(app: Express) {
   // Resolution Votes - التصويت على القرارات
   // =====================================================
   
-  app.get("/api/governance/resolutions/:resolutionId/votes", isAuthenticated, async (req, res) => {
+  app.get("/api/governance/resolutions/:resolutionId/votes", isAuthenticated, requirePermission("governance_voting", "view"), async (req, res) => {
     try {
       const result = await db.select().from(resolutionVotes)
         .where(eq(resolutionVotes.resolutionId, parseInt(req.params.resolutionId)));
@@ -491,7 +491,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.post("/api/governance/resolutions/:resolutionId/votes", isAuthenticated, async (req, res) => {
+  app.post("/api/governance/resolutions/:resolutionId/votes", isAuthenticated, requirePermission("governance_voting", "create"), async (req, res) => {
     try {
       const resolutionId = parseInt(req.params.resolutionId);
       const data = insertResolutionVoteSchema.parse({
@@ -521,7 +521,7 @@ export function registerGovernanceRoutes(app: Express) {
   // Capital Transactions - معاملات رأس المال
   // =====================================================
   
-  app.get("/api/governance/capital-transactions", isAuthenticated, async (req, res) => {
+  app.get("/api/governance/capital-transactions", isAuthenticated, requirePermission("governance_capital", "view"), async (req, res) => {
     try {
       const result = await db.select().from(capitalTransactions).orderBy(desc(capitalTransactions.effectiveDate));
       res.json(result);
@@ -531,7 +531,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.post("/api/governance/capital-transactions", isAuthenticated, async (req, res) => {
+  app.post("/api/governance/capital-transactions", isAuthenticated, requirePermission("governance_capital", "create"), async (req, res) => {
     try {
       const year = new Date().getFullYear();
       const count = await db.select({ count: sql<number>`count(*)` }).from(capitalTransactions);
@@ -554,7 +554,7 @@ export function registerGovernanceRoutes(app: Express) {
   // Dividend Distributions - توزيعات الأرباح
   // =====================================================
   
-  app.get("/api/governance/dividends", isAuthenticated, async (req, res) => {
+  app.get("/api/governance/dividends", isAuthenticated, requirePermission("governance_dividends", "view"), async (req, res) => {
     try {
       const result = await db.select().from(dividendDistributions).orderBy(desc(dividendDistributions.paymentDate));
       res.json(result);
@@ -564,7 +564,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.post("/api/governance/dividends", isAuthenticated, async (req, res) => {
+  app.post("/api/governance/dividends", isAuthenticated, requirePermission("governance_dividends", "create"), async (req, res) => {
     try {
       const year = new Date().getFullYear();
       const count = await db.select({ count: sql<number>`count(*)` }).from(dividendDistributions);
@@ -583,7 +583,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.get("/api/governance/dividends/:distributionId/payments", isAuthenticated, async (req, res) => {
+  app.get("/api/governance/dividends/:distributionId/payments", isAuthenticated, requirePermission("governance_dividends", "view"), async (req, res) => {
     try {
       const result = await db.select().from(shareholderDividends)
         .where(eq(shareholderDividends.distributionId, parseInt(req.params.distributionId)));
@@ -598,7 +598,7 @@ export function registerGovernanceRoutes(app: Express) {
   // Disclosures - الإفصاحات
   // =====================================================
   
-  app.get("/api/governance/disclosures", isAuthenticated, async (req, res) => {
+  app.get("/api/governance/disclosures", isAuthenticated, requirePermission("governance_disclosures", "view"), async (req, res) => {
     try {
       const type = req.query.type as string | undefined;
       const status = req.query.status as string | undefined;
@@ -621,7 +621,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.post("/api/governance/disclosures", isAuthenticated, async (req, res) => {
+  app.post("/api/governance/disclosures", isAuthenticated, requirePermission("governance_disclosures", "create"), async (req, res) => {
     try {
       const year = new Date().getFullYear();
       const count = await db.select({ count: sql<number>`count(*)` }).from(disclosures);
@@ -640,7 +640,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.patch("/api/governance/disclosures/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/governance/disclosures/:id", isAuthenticated, requirePermission("governance_disclosures", "edit"), async (req, res) => {
     try {
       const [disclosure] = await db.update(disclosures)
         .set({ ...req.body, updatedAt: new Date() })
@@ -657,7 +657,7 @@ export function registerGovernanceRoutes(app: Express) {
   // Compliance Requirements - متطلبات الامتثال
   // =====================================================
   
-  app.get("/api/governance/compliance", isAuthenticated, async (req, res) => {
+  app.get("/api/governance/compliance", isAuthenticated, requirePermission("governance_compliance", "view"), async (req, res) => {
     try {
       const status = req.query.status as string | undefined;
       const category = req.query.category as string | undefined;
@@ -680,7 +680,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.get("/api/governance/compliance/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/governance/compliance/:id", isAuthenticated, requirePermission("governance_compliance", "view"), async (req, res) => {
     try {
       const [requirement] = await db.select().from(complianceRequirements).where(eq(complianceRequirements.id, parseInt(req.params.id)));
       if (!requirement) {
@@ -693,7 +693,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.post("/api/governance/compliance", isAuthenticated, async (req, res) => {
+  app.post("/api/governance/compliance", isAuthenticated, requirePermission("governance_compliance", "create"), async (req, res) => {
     try {
       const count = await db.select({ count: sql<number>`count(*)` }).from(complianceRequirements);
       const requirementCode = `COMP-${String((count[0]?.count || 0) + 1).padStart(4, '0')}`;
@@ -711,7 +711,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.patch("/api/governance/compliance/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/governance/compliance/:id", isAuthenticated, requirePermission("governance_compliance", "edit"), async (req, res) => {
     try {
       const [requirement] = await db.update(complianceRequirements)
         .set({ ...req.body, updatedAt: new Date() })
@@ -724,7 +724,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.get("/api/governance/compliance/:id/history", isAuthenticated, async (req, res) => {
+  app.get("/api/governance/compliance/:id/history", isAuthenticated, requirePermission("governance_compliance", "view"), async (req, res) => {
     try {
       const result = await db.select().from(complianceHistory)
         .where(eq(complianceHistory.requirementId, parseInt(req.params.id)))
@@ -736,7 +736,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.post("/api/governance/compliance/:id/history", isAuthenticated, async (req, res) => {
+  app.post("/api/governance/compliance/:id/history", isAuthenticated, requirePermission("governance_compliance", "create"), async (req, res) => {
     try {
       const data = insertComplianceHistorySchema.parse({
         ...req.body,
@@ -756,7 +756,7 @@ export function registerGovernanceRoutes(app: Express) {
   // Share Transfers - تحويلات الأسهم
   // =====================================================
   
-  app.get("/api/governance/share-transfers", isAuthenticated, async (req, res) => {
+  app.get("/api/governance/share-transfers", isAuthenticated, requirePermission("governance_transfers", "view"), async (req, res) => {
     try {
       const result = await db.select().from(shareTransfers).orderBy(desc(shareTransfers.createdAt));
       res.json(result);
@@ -766,7 +766,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.post("/api/governance/share-transfers", isAuthenticated, async (req, res) => {
+  app.post("/api/governance/share-transfers", isAuthenticated, requirePermission("governance_transfers", "create"), async (req, res) => {
     try {
       const year = new Date().getFullYear();
       const count = await db.select({ count: sql<number>`count(*)` }).from(shareTransfers);
@@ -786,7 +786,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.patch("/api/governance/share-transfers/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/governance/share-transfers/:id", isAuthenticated, requirePermission("governance_transfers", "edit"), async (req, res) => {
     try {
       const updateData: any = { ...req.body };
       if (req.body.approvalStatus === 'approved') {
@@ -808,7 +808,7 @@ export function registerGovernanceRoutes(app: Express) {
   // Disclosures - الإفصاحات
   // =====================================================
   
-  app.get("/api/governance/disclosures", isAuthenticated, async (req, res) => {
+  app.get("/api/governance/disclosures", isAuthenticated, requirePermission("governance_disclosures", "view"), async (req, res) => {
     try {
       const result = await db.select().from(disclosures).orderBy(desc(disclosures.createdAt));
       res.json(result);
@@ -818,7 +818,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.post("/api/governance/disclosures", isAuthenticated, async (req, res) => {
+  app.post("/api/governance/disclosures", isAuthenticated, requirePermission("governance_disclosures", "create"), async (req, res) => {
     try {
       const year = new Date().getFullYear();
       const count = await db.select({ count: sql<number>`count(*)` }).from(disclosures);
@@ -838,7 +838,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.patch("/api/governance/disclosures/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/governance/disclosures/:id", isAuthenticated, requirePermission("governance_disclosures", "edit"), async (req, res) => {
     try {
       const [disclosure] = await db.update(disclosures)
         .set({ ...req.body, updatedAt: new Date() })
@@ -855,7 +855,7 @@ export function registerGovernanceRoutes(app: Express) {
   // Dividends - توزيعات الأرباح
   // =====================================================
   
-  app.get("/api/governance/dividends", isAuthenticated, async (req, res) => {
+  app.get("/api/governance/dividends", isAuthenticated, requirePermission("governance_dividends", "view"), async (req, res) => {
     try {
       const result = await db.select().from(dividendDistributions).orderBy(desc(dividendDistributions.createdAt));
       res.json(result);
@@ -865,7 +865,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.post("/api/governance/dividends", isAuthenticated, async (req, res) => {
+  app.post("/api/governance/dividends", isAuthenticated, requirePermission("governance_dividends", "create"), async (req, res) => {
     try {
       const year = new Date().getFullYear();
       const count = await db.select({ count: sql<number>`count(*)` }).from(dividendDistributions);
@@ -885,7 +885,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.patch("/api/governance/dividends/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/governance/dividends/:id", isAuthenticated, requirePermission("governance_dividends", "edit"), async (req, res) => {
     try {
       const [distribution] = await db.update(dividendDistributions)
         .set({ ...req.body, updatedAt: new Date() })
@@ -902,7 +902,7 @@ export function registerGovernanceRoutes(app: Express) {
   // Capital Transactions - معاملات رأس المال
   // =====================================================
   
-  app.get("/api/governance/capital", isAuthenticated, async (req, res) => {
+  app.get("/api/governance/capital", isAuthenticated, requirePermission("governance_capital", "view"), async (req, res) => {
     try {
       const result = await db.select().from(capitalTransactions).orderBy(desc(capitalTransactions.effectiveDate));
       res.json(result);
@@ -912,7 +912,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.post("/api/governance/capital", isAuthenticated, async (req, res) => {
+  app.post("/api/governance/capital", isAuthenticated, requirePermission("governance_capital", "create"), async (req, res) => {
     try {
       const year = new Date().getFullYear();
       const count = await db.select({ count: sql<number>`count(*)` }).from(capitalTransactions);
@@ -932,7 +932,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.patch("/api/governance/capital/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/governance/capital/:id", isAuthenticated, requirePermission("governance_capital", "edit"), async (req, res) => {
     try {
       const [transaction] = await db.update(capitalTransactions)
         .set({ ...req.body, updatedAt: new Date() })
@@ -949,7 +949,7 @@ export function registerGovernanceRoutes(app: Express) {
   // Votes - الأصوات
   // =====================================================
   
-  app.get("/api/governance/votes", isAuthenticated, async (req, res) => {
+  app.get("/api/governance/votes", isAuthenticated, requirePermission("governance_voting", "view"), async (req, res) => {
     try {
       const resolutionId = req.query.resolutionId ? parseInt(req.query.resolutionId as string) : undefined;
       let query = db.select().from(resolutionVotes);
@@ -964,7 +964,7 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  app.post("/api/governance/votes", isAuthenticated, async (req, res) => {
+  app.post("/api/governance/votes", isAuthenticated, requirePermission("governance_voting", "create"), async (req, res) => {
     try {
       const data = insertResolutionVoteSchema.parse({
         ...req.body,
@@ -1000,7 +1000,7 @@ export function registerGovernanceRoutes(app: Express) {
   // Dashboard Stats - إحصائيات اللوحة
   // =====================================================
   
-  app.get("/api/governance/stats", isAuthenticated, async (req, res) => {
+  app.get("/api/governance/stats", isAuthenticated, requirePermission("governance", "view"), async (req, res) => {
     try {
       const [boardMembersCount] = await db.select({ count: sql<number>`count(*)` })
         .from(boardMembers).where(eq(boardMembers.status, 'active'));
