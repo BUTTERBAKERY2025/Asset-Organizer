@@ -2749,7 +2749,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getCashierJournalsFiltered(filters: { 
-    branchId?: string; 
+    branchId?: string;
+    branchIds?: string[];
     startDate?: string; 
     endDate?: string; 
     status?: string;
@@ -2759,7 +2760,11 @@ export class DatabaseStorage implements IStorage {
     offset?: number;
   }): Promise<{ journals: CashierSalesJournal[]; totalCount: number }> {
     const conditions: any[] = [];
-    if (filters.branchId) conditions.push(eq(cashierSalesJournals.branchId, filters.branchId));
+    if (filters.branchId) {
+      conditions.push(eq(cashierSalesJournals.branchId, filters.branchId));
+    } else if (filters.branchIds && filters.branchIds.length > 0) {
+      conditions.push(inArray(cashierSalesJournals.branchId, filters.branchIds));
+    }
     if (filters.startDate) conditions.push(gte(cashierSalesJournals.journalDate, filters.startDate));
     if (filters.endDate) conditions.push(lte(cashierSalesJournals.journalDate, filters.endDate));
     if (filters.status) conditions.push(eq(cashierSalesJournals.status, filters.status));
