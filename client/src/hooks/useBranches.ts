@@ -19,15 +19,20 @@ export function useBranches() {
     refetchOnMount: false,
   });
 
-  const userBranchId = isAdmin ? null : (user?.branchId || null);
+  // For non-admins with single branch access, use that branch
+  // For non-admins with multiple branches, userBranchId should be null to allow selection
+  const userBranchId = isAdmin ? null : (branches.length === 1 ? branches[0]?.id : null);
 
-  const canSelectBranch = isAdmin;
+  // User can select branch if:
+  // 1. They are admin, OR
+  // 2. They have access to more than one branch
+  const canSelectBranch = isAdmin || branches.length > 1;
 
-  // defaultBranchId: For non-admins, use their assigned branch; for admins, use null (allow "all")
-  const defaultBranchId = userBranchId || (branches[0]?.id ?? null);
+  // defaultBranchId: For single-branch users, use their branch; otherwise null (allow "all")
+  const defaultBranchId = branches.length === 1 ? branches[0]?.id : null;
 
   return {
-    branches, // Server-filtered: all for admins, only user's branch for non-admins
+    branches, // Server-filtered: all for admins, allowed branches for non-admins
     isLoading,
     userBranchId,
     canSelectBranch,
