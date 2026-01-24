@@ -32,6 +32,19 @@ import {
   insertComplianceRequirementSchema,
   insertComplianceHistorySchema,
 } from "@shared/schema";
+import { z } from "zod";
+
+const updateBoardMemberSchema = insertBoardMemberSchema.partial().omit({ createdBy: true });
+const updateShareholderSchema = insertShareholderSchema.partial().omit({ createdBy: true });
+const updateShareTransferSchema = insertShareTransferSchema.partial().omit({ createdBy: true, transferNumber: true });
+const updateGovernanceMeetingSchema = insertGovernanceMeetingSchema.partial().omit({ createdBy: true, meetingNumber: true });
+const updateMeetingAttendanceSchema = insertMeetingAttendanceSchema.partial();
+const updateMeetingMinutesSchema = insertMeetingMinutesSchema.partial().omit({ createdBy: true, minutesNumber: true });
+const updateBoardResolutionSchema = insertBoardResolutionSchema.partial().omit({ createdBy: true, resolutionNumber: true });
+const updateDisclosureSchema = insertDisclosureSchema.partial().omit({ createdBy: true, disclosureNumber: true });
+const updateComplianceRequirementSchema = insertComplianceRequirementSchema.partial().omit({ createdBy: true, requirementCode: true });
+const updateDividendDistributionSchema = insertDividendDistributionSchema.partial().omit({ createdBy: true, distributionNumber: true });
+const updateCapitalTransactionSchema = insertCapitalTransactionSchema.partial().omit({ createdBy: true, transactionNumber: true });
 
 function getCurrentUserId(req: Request): string {
   return (req as any).currentUser?.id || "system";
@@ -94,12 +107,16 @@ export function registerGovernanceRoutes(app: Express) {
 
   app.patch("/api/governance/board-members/:id", isAuthenticated, requirePermission("governance_board", "edit"), async (req, res) => {
     try {
+      const validatedData = updateBoardMemberSchema.parse(req.body);
       const [member] = await db.update(boardMembers)
-        .set({ ...req.body, updatedAt: new Date() })
+        .set({ ...validatedData, updatedAt: new Date() })
         .where(eq(boardMembers.id, parseInt(req.params.id)))
         .returning();
       res.json(member);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
       console.error("Error updating board member:", error);
       res.status(500).json({ error: "فشل في تحديث بيانات عضو المجلس" });
     }
@@ -171,12 +188,16 @@ export function registerGovernanceRoutes(app: Express) {
 
   app.patch("/api/governance/shareholders/:id", isAuthenticated, requirePermission("governance_shareholders", "edit"), async (req, res) => {
     try {
+      const validatedData = updateShareholderSchema.parse(req.body);
       const [shareholder] = await db.update(shareholders)
-        .set({ ...req.body, updatedAt: new Date() })
+        .set({ ...validatedData, updatedAt: new Date() })
         .where(eq(shareholders.id, parseInt(req.params.id)))
         .returning();
       res.json(shareholder);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
       console.error("Error updating shareholder:", error);
       res.status(500).json({ error: "فشل في تحديث بيانات المساهم" });
     }
@@ -290,12 +311,16 @@ export function registerGovernanceRoutes(app: Express) {
 
   app.patch("/api/governance/meetings/:id", isAuthenticated, requirePermission("governance_meetings", "edit"), async (req, res) => {
     try {
+      const validatedData = updateGovernanceMeetingSchema.parse(req.body);
       const [meeting] = await db.update(governanceMeetings)
-        .set({ ...req.body, updatedAt: new Date() })
+        .set({ ...validatedData, updatedAt: new Date() })
         .where(eq(governanceMeetings.id, parseInt(req.params.id)))
         .returning();
       res.json(meeting);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
       console.error("Error updating meeting:", error);
       res.status(500).json({ error: "فشل في تحديث الاجتماع" });
     }
@@ -332,12 +357,16 @@ export function registerGovernanceRoutes(app: Express) {
 
   app.patch("/api/governance/attendance/:id", isAuthenticated, requirePermission("governance_meetings", "edit"), async (req, res) => {
     try {
+      const validatedData = updateMeetingAttendanceSchema.parse(req.body);
       const [attendance] = await db.update(meetingAttendance)
-        .set(req.body)
+        .set(validatedData)
         .where(eq(meetingAttendance.id, parseInt(req.params.id)))
         .returning();
       res.json(attendance);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
       console.error("Error updating attendance:", error);
       res.status(500).json({ error: "فشل في تحديث سجل الحضور" });
     }
@@ -391,12 +420,16 @@ export function registerGovernanceRoutes(app: Express) {
 
   app.patch("/api/governance/minutes/:id", isAuthenticated, requirePermission("governance_meetings", "edit"), async (req, res) => {
     try {
+      const validatedData = updateMeetingMinutesSchema.parse(req.body);
       const [minutes] = await db.update(meetingMinutes)
-        .set({ ...req.body, updatedAt: new Date() })
+        .set({ ...validatedData, updatedAt: new Date() })
         .where(eq(meetingMinutes.id, parseInt(req.params.id)))
         .returning();
       res.json(minutes);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
       console.error("Error updating minutes:", error);
       res.status(500).json({ error: "فشل في تحديث المحضر" });
     }
@@ -465,12 +498,16 @@ export function registerGovernanceRoutes(app: Express) {
 
   app.patch("/api/governance/resolutions/:id", isAuthenticated, requirePermission("governance_resolutions", "edit"), async (req, res) => {
     try {
+      const validatedData = updateBoardResolutionSchema.parse(req.body);
       const [resolution] = await db.update(boardResolutions)
-        .set({ ...req.body, updatedAt: new Date() })
+        .set({ ...validatedData, updatedAt: new Date() })
         .where(eq(boardResolutions.id, parseInt(req.params.id)))
         .returning();
       res.json(resolution);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
       console.error("Error updating resolution:", error);
       res.status(500).json({ error: "فشل في تحديث القرار" });
     }
@@ -642,12 +679,16 @@ export function registerGovernanceRoutes(app: Express) {
 
   app.patch("/api/governance/disclosures/:id", isAuthenticated, requirePermission("governance_disclosures", "edit"), async (req, res) => {
     try {
+      const validatedData = updateDisclosureSchema.parse(req.body);
       const [disclosure] = await db.update(disclosures)
-        .set({ ...req.body, updatedAt: new Date() })
+        .set({ ...validatedData, updatedAt: new Date() })
         .where(eq(disclosures.id, parseInt(req.params.id)))
         .returning();
       res.json(disclosure);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
       console.error("Error updating disclosure:", error);
       res.status(500).json({ error: "فشل في تحديث الإفصاح" });
     }
@@ -713,12 +754,16 @@ export function registerGovernanceRoutes(app: Express) {
 
   app.patch("/api/governance/compliance/:id", isAuthenticated, requirePermission("governance_compliance", "edit"), async (req, res) => {
     try {
+      const validatedData = updateComplianceRequirementSchema.parse(req.body);
       const [requirement] = await db.update(complianceRequirements)
-        .set({ ...req.body, updatedAt: new Date() })
+        .set({ ...validatedData, updatedAt: new Date() })
         .where(eq(complianceRequirements.id, parseInt(req.params.id)))
         .returning();
       res.json(requirement);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
       console.error("Error updating compliance requirement:", error);
       res.status(500).json({ error: "فشل في تحديث المتطلب" });
     }
@@ -788,8 +833,9 @@ export function registerGovernanceRoutes(app: Express) {
 
   app.patch("/api/governance/share-transfers/:id", isAuthenticated, requirePermission("governance_transfers", "edit"), async (req, res) => {
     try {
-      const updateData: any = { ...req.body };
-      if (req.body.approvalStatus === 'approved') {
+      const validatedData = updateShareTransferSchema.parse(req.body);
+      const updateData: any = { ...validatedData };
+      if (validatedData.approvalStatus === 'approved') {
         updateData.approvedBy = getCurrentUserId(req);
         updateData.approvedAt = new Date();
       }
@@ -799,6 +845,9 @@ export function registerGovernanceRoutes(app: Express) {
         .returning();
       res.json(transfer);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
       console.error("Error updating share transfer:", error);
       res.status(500).json({ error: "فشل في تحديث تحويل الأسهم" });
     }
@@ -840,12 +889,16 @@ export function registerGovernanceRoutes(app: Express) {
 
   app.patch("/api/governance/disclosures/:id", isAuthenticated, requirePermission("governance_disclosures", "edit"), async (req, res) => {
     try {
+      const validatedData = updateDisclosureSchema.parse(req.body);
       const [disclosure] = await db.update(disclosures)
-        .set({ ...req.body, updatedAt: new Date() })
+        .set({ ...validatedData, updatedAt: new Date() })
         .where(eq(disclosures.id, parseInt(req.params.id)))
         .returning();
       res.json(disclosure);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
       console.error("Error updating disclosure:", error);
       res.status(500).json({ error: "فشل في تحديث الإفصاح" });
     }
@@ -887,12 +940,16 @@ export function registerGovernanceRoutes(app: Express) {
 
   app.patch("/api/governance/dividends/:id", isAuthenticated, requirePermission("governance_dividends", "edit"), async (req, res) => {
     try {
+      const validatedData = updateDividendDistributionSchema.parse(req.body);
       const [distribution] = await db.update(dividendDistributions)
-        .set({ ...req.body, updatedAt: new Date() })
+        .set({ ...validatedData, updatedAt: new Date() })
         .where(eq(dividendDistributions.id, parseInt(req.params.id)))
         .returning();
       res.json(distribution);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
       console.error("Error updating dividend distribution:", error);
       res.status(500).json({ error: "فشل في تحديث توزيع الأرباح" });
     }
@@ -934,12 +991,16 @@ export function registerGovernanceRoutes(app: Express) {
 
   app.patch("/api/governance/capital/:id", isAuthenticated, requirePermission("governance_capital", "edit"), async (req, res) => {
     try {
+      const validatedData = updateCapitalTransactionSchema.parse(req.body);
       const [transaction] = await db.update(capitalTransactions)
-        .set({ ...req.body, updatedAt: new Date() })
+        .set({ ...validatedData, updatedAt: new Date() })
         .where(eq(capitalTransactions.id, parseInt(req.params.id)))
         .returning();
       res.json(transaction);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
       console.error("Error updating capital transaction:", error);
       res.status(500).json({ error: "فشل في تحديث معاملة رأس المال" });
     }
