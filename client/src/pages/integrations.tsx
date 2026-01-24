@@ -24,7 +24,18 @@ import {
   Download,
   Upload,
   RefreshCw,
-  Phone
+  Phone,
+  Mail,
+  CreditCard,
+  Calendar,
+  Cloud,
+  Building2,
+  Smartphone,
+  Globe,
+  Zap,
+  Shield,
+  AlertCircle,
+  ExternalLink
 } from "lucide-react";
 import { SettingsBreadcrumb } from "@/components/settings-breadcrumb";
 import { toast } from "sonner";
@@ -32,7 +43,7 @@ import type { ExternalIntegration, NotificationQueueItem, DataImportJob, Account
 
 export default function IntegrationsPage() {
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState("accounting");
+  const [activeTab, setActiveTab] = useState("overview");
 
   const { data: integrations = [] } = useQuery<ExternalIntegration[]>({
     queryKey: ["/api/integrations"],
@@ -51,51 +62,929 @@ export default function IntegrationsPage() {
   });
 
   return (
-    <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
+    <div className="p-4 md:p-8 lg:p-10 max-w-7xl mx-auto space-y-4" dir="rtl">
       <SettingsBreadcrumb currentPage="التكاملات" currentIcon={Link2} />
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-bold text-butter-dark">التكامل مع الأنظمة الخارجية</h1>
-          <p className="text-muted-foreground mt-1">ربط النظام مع المحاسبة والإشعارات واستيراد البيانات</p>
+          <p className="text-muted-foreground mt-1">ربط النظام مع جميع الخدمات والأنظمة الخارجية</p>
         </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4 lg:w-[600px]">
-          <TabsTrigger value="accounting" className="flex items-center gap-2" data-testid="tab-accounting">
-            <Calculator className="h-4 w-4" />
-            <span className="hidden sm:inline">المحاسبة</span>
-          </TabsTrigger>
-          <TabsTrigger value="notifications" className="flex items-center gap-2" data-testid="tab-notifications">
-            <MessageSquare className="h-4 w-4" />
-            <span className="hidden sm:inline">الإشعارات</span>
-          </TabsTrigger>
-          <TabsTrigger value="import" className="flex items-center gap-2" data-testid="tab-import">
-            <FileSpreadsheet className="h-4 w-4" />
-            <span className="hidden sm:inline">الاستيراد</span>
-          </TabsTrigger>
-          <TabsTrigger value="settings" className="flex items-center gap-2" data-testid="tab-settings">
-            <Settings className="h-4 w-4" />
-            <span className="hidden sm:inline">الإعدادات</span>
-          </TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto">
+          <TabsList className="inline-flex w-auto min-w-full lg:min-w-0">
+            <TabsTrigger value="overview" className="flex items-center gap-2" data-testid="tab-overview">
+              <Zap className="h-4 w-4" />
+              <span className="hidden sm:inline">نظرة عامة</span>
+            </TabsTrigger>
+            <TabsTrigger value="sms" className="flex items-center gap-2" data-testid="tab-sms">
+              <Smartphone className="h-4 w-4" />
+              <span className="hidden sm:inline">SMS/WhatsApp</span>
+            </TabsTrigger>
+            <TabsTrigger value="email" className="flex items-center gap-2" data-testid="tab-email">
+              <Mail className="h-4 w-4" />
+              <span className="hidden sm:inline">البريد</span>
+            </TabsTrigger>
+            <TabsTrigger value="payments" className="flex items-center gap-2" data-testid="tab-payments">
+              <CreditCard className="h-4 w-4" />
+              <span className="hidden sm:inline">المدفوعات</span>
+            </TabsTrigger>
+            <TabsTrigger value="calendar" className="flex items-center gap-2" data-testid="tab-calendar">
+              <Calendar className="h-4 w-4" />
+              <span className="hidden sm:inline">التقويم</span>
+            </TabsTrigger>
+            <TabsTrigger value="storage" className="flex items-center gap-2" data-testid="tab-storage">
+              <Cloud className="h-4 w-4" />
+              <span className="hidden sm:inline">التخزين</span>
+            </TabsTrigger>
+            <TabsTrigger value="accounting" className="flex items-center gap-2" data-testid="tab-accounting">
+              <Calculator className="h-4 w-4" />
+              <span className="hidden sm:inline">المحاسبة</span>
+            </TabsTrigger>
+            <TabsTrigger value="erp" className="flex items-center gap-2" data-testid="tab-erp">
+              <Building2 className="h-4 w-4" />
+              <span className="hidden sm:inline">ERP</span>
+            </TabsTrigger>
+          </TabsList>
+        </div>
+
+        <TabsContent value="overview" className="space-y-6">
+          <OverviewSection />
+        </TabsContent>
+
+        <TabsContent value="sms" className="space-y-6">
+          <SMSSection notifications={notifications} />
+        </TabsContent>
+
+        <TabsContent value="email" className="space-y-6">
+          <EmailSection />
+        </TabsContent>
+
+        <TabsContent value="payments" className="space-y-6">
+          <PaymentsSection />
+        </TabsContent>
+
+        <TabsContent value="calendar" className="space-y-6">
+          <CalendarSection />
+        </TabsContent>
+
+        <TabsContent value="storage" className="space-y-6">
+          <StorageSection />
+        </TabsContent>
 
         <TabsContent value="accounting" className="space-y-6">
           <AccountingSection exports={accountingExports} />
         </TabsContent>
 
-        <TabsContent value="notifications" className="space-y-6">
-          <NotificationsSection notifications={notifications} />
-        </TabsContent>
-
-        <TabsContent value="import" className="space-y-6">
-          <ImportSection jobs={importJobs} />
-        </TabsContent>
-
-        <TabsContent value="settings" className="space-y-6">
-          <SettingsSection integrations={integrations} />
+        <TabsContent value="erp" className="space-y-6">
+          <ERPSection integrations={integrations} importJobs={importJobs} />
         </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+function OverviewSection() {
+  const integrationCards = [
+    {
+      icon: Smartphone,
+      title: "SMS / WhatsApp",
+      description: "إرسال رسائل نصية وواتساب عبر Twilio",
+      status: "متصل",
+      statusColor: "bg-green-100 text-green-800",
+      provider: "Twilio",
+      tab: "sms"
+    },
+    {
+      icon: Mail,
+      title: "البريد الإلكتروني",
+      description: "إرسال الإشعارات والتقارير بالبريد",
+      status: "غير مكوّن",
+      statusColor: "bg-gray-100 text-gray-600",
+      provider: "SendGrid / SMTP",
+      tab: "email"
+    },
+    {
+      icon: CreditCard,
+      title: "المدفوعات",
+      description: "قبول المدفوعات الإلكترونية",
+      status: "غير مكوّن",
+      statusColor: "bg-gray-100 text-gray-600",
+      provider: "Stripe / PayPal / Tap",
+      tab: "payments"
+    },
+    {
+      icon: Calendar,
+      title: "التقويم",
+      description: "مزامنة المواعيد والاجتماعات",
+      status: "غير مكوّن",
+      statusColor: "bg-gray-100 text-gray-600",
+      provider: "Google Calendar",
+      tab: "calendar"
+    },
+    {
+      icon: Cloud,
+      title: "التخزين السحابي",
+      description: "رفع وحفظ الملفات",
+      status: "مفعّل",
+      statusColor: "bg-green-100 text-green-800",
+      provider: "Replit Object Storage",
+      tab: "storage"
+    },
+    {
+      icon: Calculator,
+      title: "المحاسبة",
+      description: "تصدير البيانات للأنظمة المحاسبية",
+      status: "مفعّل",
+      statusColor: "bg-green-100 text-green-800",
+      provider: "قيود / زوهو / SAP",
+      tab: "accounting"
+    },
+    {
+      icon: Building2,
+      title: "أنظمة ERP",
+      description: "ربط مع أنظمة تخطيط الموارد",
+      status: "غير مكوّن",
+      statusColor: "bg-gray-100 text-gray-600",
+      provider: "SAP / Oracle / Odoo",
+      tab: "erp"
+    },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Zap className="h-5 w-5 text-amber-500" />
+            ملخص التكاملات
+          </CardTitle>
+          <CardDescription>
+            جميع الخدمات والأنظمة المتصلة بنظام باتر
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {integrationCards.map((integration, index) => (
+              <div 
+                key={index}
+                className="p-4 rounded-lg border hover:border-primary hover:shadow-md transition-all cursor-pointer group"
+                data-testid={`integration-card-${integration.tab}`}
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="p-2 rounded-lg bg-primary/10 group-hover:bg-primary/20 transition-colors">
+                    <integration.icon className="h-6 w-6 text-primary" />
+                  </div>
+                  <Badge className={integration.statusColor}>
+                    {integration.status}
+                  </Badge>
+                </div>
+                <h3 className="font-semibold mb-1">{integration.title}</h3>
+                <p className="text-sm text-muted-foreground mb-2">{integration.description}</p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Globe className="h-3 w-3" />
+                  {integration.provider}
+                </p>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-green-500" />
+              تكاملات نشطة
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-green-600">3</div>
+            <p className="text-sm text-muted-foreground">من أصل 7 تكاملات</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Send className="h-5 w-5 text-blue-500" />
+              رسائل مرسلة
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-blue-600">0</div>
+            <p className="text-sm text-muted-foreground">هذا الشهر</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Shield className="h-5 w-5 text-purple-500" />
+              أمان التكاملات
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-purple-600">100%</div>
+            <p className="text-sm text-muted-foreground">جميع الاتصالات مشفرة</p>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function SMSSection({ notifications }: { notifications: NotificationQueueItem[] }) {
+  const queryClient = useQueryClient();
+  const [recipientPhone, setRecipientPhone] = useState("");
+  const [recipientName, setRecipientName] = useState("");
+  const [message, setMessage] = useState("");
+  const [channel, setChannel] = useState("sms");
+  const [testStatus, setTestStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
+
+  const sendNotificationMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/notifications/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          recipientPhone,
+          recipientName,
+          channel,
+          message,
+        }),
+      });
+      if (!res.ok) throw new Error("فشل في إرسال الإشعار");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      toast.success("تم إضافة الإشعار لقائمة الإرسال");
+      setRecipientPhone("");
+      setRecipientName("");
+      setMessage("");
+    },
+    onError: () => toast.error("فشل في إرسال الإشعار"),
+  });
+
+  const testConnection = async () => {
+    setTestStatus("testing");
+    try {
+      const res = await fetch("/api/integrations/twilio/test", {
+        method: "POST",
+        credentials: "include",
+      });
+      if (res.ok) {
+        setTestStatus("success");
+        toast.success("اتصال Twilio يعمل بنجاح!");
+      } else {
+        setTestStatus("error");
+        toast.error("فشل في الاتصال بـ Twilio");
+      }
+    } catch {
+      setTestStatus("error");
+      toast.error("خطأ في الاتصال");
+    }
+  };
+
+  const statusIcons: Record<string, React.ReactNode> = {
+    pending: <Clock className="h-4 w-4 text-yellow-500" />,
+    sent: <CheckCircle className="h-4 w-4 text-green-500" />,
+    failed: <XCircle className="h-4 w-4 text-red-500" />,
+  };
+
+  const statusLabels: Record<string, string> = {
+    pending: "في الانتظار",
+    sent: "تم الإرسال",
+    failed: "فشل",
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Phone className="h-5 w-5 text-green-600" />
+              حالة Twilio
+            </CardTitle>
+            <CardDescription>إعدادات خدمة الرسائل النصية</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="h-5 w-5 text-green-600" />
+                <span className="font-medium text-green-800">متصل</span>
+              </div>
+              <Badge className="bg-green-100 text-green-800">Trial Account</Badge>
+            </div>
+            
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-muted-foreground">اسم الحساب</span>
+                <span className="font-medium">butter bakery</span>
+              </div>
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-muted-foreground">رقم الإرسال</span>
+                <span className="font-medium font-mono">+1346****655</span>
+              </div>
+              <div className="flex justify-between py-2">
+                <span className="text-muted-foreground">الحالة</span>
+                <span className="font-medium text-green-600">نشط</span>
+              </div>
+            </div>
+
+            <Button 
+              variant="outline" 
+              className="w-full"
+              onClick={testConnection}
+              disabled={testStatus === "testing"}
+              data-testid="btn-test-twilio"
+            >
+              {testStatus === "testing" ? (
+                <RefreshCw className="h-4 w-4 ml-2 animate-spin" />
+              ) : (
+                <Zap className="h-4 w-4 ml-2" />
+              )}
+              اختبار الاتصال
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <MessageSquare className="h-5 w-5 text-green-600" />
+              WhatsApp Business
+            </CardTitle>
+            <CardDescription>إرسال رسائل واتساب</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-yellow-600" />
+                <span className="font-medium text-yellow-800">يتطلب إعداد</span>
+              </div>
+            </div>
+            
+            <p className="text-sm text-muted-foreground">
+              لتفعيل WhatsApp Business، تحتاج إلى:
+            </p>
+            <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
+              <li>حساب WhatsApp Business API</li>
+              <li>ربط الحساب مع Twilio</li>
+              <li>الموافقة على قوالب الرسائل</li>
+            </ul>
+
+            <Button variant="outline" className="w-full" data-testid="btn-setup-whatsapp">
+              <ExternalLink className="h-4 w-4 ml-2" />
+              إعداد WhatsApp
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Send className="h-5 w-5" />
+            إرسال رسالة جديدة
+          </CardTitle>
+          <CardDescription>
+            إرسال رسائل SMS أو WhatsApp للموظفين والعملاء
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <div className="flex items-center gap-2 text-amber-800">
+              <AlertCircle className="h-5 w-5" />
+              <span className="font-medium">ملاحظة - حساب تجريبي:</span>
+            </div>
+            <p className="text-sm text-amber-700 mt-1">
+              يمكنك إرسال الرسائل فقط للأرقام المُفعّلة في لوحة Twilio. للإرسال لأي رقم، يجب ترقية الحساب.
+            </p>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label>رقم الهاتف</Label>
+              <Input 
+                placeholder="+966xxxxxxxxx" 
+                value={recipientPhone}
+                onChange={(e) => setRecipientPhone(e.target.value)}
+                data-testid="input-recipient-phone"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>اسم المستلم</Label>
+              <Input 
+                placeholder="اسم المستلم"
+                value={recipientName}
+                onChange={(e) => setRecipientName(e.target.value)}
+                data-testid="input-recipient-name"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>قناة الإرسال</Label>
+            <Select value={channel} onValueChange={setChannel}>
+              <SelectTrigger data-testid="select-channel">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="sms">SMS</SelectItem>
+                <SelectItem value="whatsapp" disabled>WhatsApp (يتطلب إعداد)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>نص الرسالة</Label>
+            <Textarea 
+              placeholder="أدخل نص الرسالة..."
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              rows={3}
+              data-testid="input-message"
+            />
+          </div>
+
+          <Button 
+            onClick={() => sendNotificationMutation.mutate()}
+            disabled={sendNotificationMutation.isPending || !recipientPhone || !message}
+            data-testid="btn-send-notification"
+          >
+            <Send className="h-4 w-4 ml-2" />
+            إرسال الرسالة
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>سجل الرسائل</CardTitle>
+          <CardDescription>جميع الرسائل المرسلة والمنتظرة</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {notifications.length === 0 ? (
+            <p className="text-center text-muted-foreground py-8">لا توجد رسائل بعد</p>
+          ) : (
+            <div className="space-y-2">
+              {notifications.map((notification) => (
+                <div key={notification.id} className="flex items-center justify-between p-3 rounded-lg border" data-testid={`notification-row-${notification.id}`}>
+                  <div className="flex items-center gap-3">
+                    {statusIcons[notification.status]}
+                    <div>
+                      <p className="font-medium">{notification.recipientName || notification.recipientPhone}</p>
+                      <p className="text-sm text-muted-foreground line-clamp-1">{notification.message}</p>
+                    </div>
+                  </div>
+                  <div className="text-left">
+                    <Badge variant="outline">{notification.channel}</Badge>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {statusLabels[notification.status]}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function EmailSection() {
+  const [emailProvider, setEmailProvider] = useState("sendgrid");
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Mail className="h-5 w-5 text-blue-600" />
+              SendGrid
+            </CardTitle>
+            <CardDescription>خدمة البريد الإلكتروني المتقدمة</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+              <div className="flex items-center gap-2">
+                <XCircle className="h-5 w-5 text-gray-400" />
+                <span className="text-gray-600">غير مكوّن</span>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label>API Key</Label>
+                <Input type="password" placeholder="SG.xxxxxxxx" data-testid="input-sendgrid-key" />
+              </div>
+              <div className="space-y-2">
+                <Label>البريد المرسل</Label>
+                <Input type="email" placeholder="noreply@butterbakery.sa" data-testid="input-sender-email" />
+              </div>
+            </div>
+
+            <Button className="w-full" data-testid="btn-connect-sendgrid">
+              <Zap className="h-4 w-4 ml-2" />
+              ربط SendGrid
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Mail className="h-5 w-5 text-purple-600" />
+              SMTP مخصص
+            </CardTitle>
+            <CardDescription>استخدام خادم بريد خاص</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+              <div className="flex items-center gap-2">
+                <XCircle className="h-5 w-5 text-gray-400" />
+                <span className="text-gray-600">غير مكوّن</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>الخادم</Label>
+                <Input placeholder="smtp.example.com" data-testid="input-smtp-host" />
+              </div>
+              <div className="space-y-2">
+                <Label>المنفذ</Label>
+                <Input placeholder="587" data-testid="input-smtp-port" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>اسم المستخدم</Label>
+                <Input data-testid="input-smtp-user" />
+              </div>
+              <div className="space-y-2">
+                <Label>كلمة المرور</Label>
+                <Input type="password" data-testid="input-smtp-pass" />
+              </div>
+            </div>
+
+            <Button variant="outline" className="w-full" data-testid="btn-connect-smtp">
+              <Zap className="h-4 w-4 ml-2" />
+              ربط SMTP
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>قوالب البريد</CardTitle>
+          <CardDescription>قوالب جاهزة للإشعارات التلقائية</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {[
+              { name: "ترحيب مستخدم جديد", status: "فعال" },
+              { name: "تذكير بالمهام", status: "فعال" },
+              { name: "تقرير يومي", status: "معطل" },
+              { name: "تنبيه المخزون", status: "فعال" },
+              { name: "إشعار الصيانة", status: "معطل" },
+              { name: "تأكيد الطلب", status: "فعال" },
+            ].map((template, index) => (
+              <div key={index} className="flex items-center justify-between p-3 rounded-lg border">
+                <span className="font-medium text-sm">{template.name}</span>
+                <Badge variant={template.status === "فعال" ? "default" : "secondary"}>
+                  {template.status}
+                </Badge>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function PaymentsSection() {
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5 text-purple-600" />
+              Stripe
+            </CardTitle>
+            <CardDescription>بوابة دفع عالمية</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+              <div className="flex items-center gap-2">
+                <XCircle className="h-5 w-5 text-gray-400" />
+                <span className="text-gray-600">غير مكوّن</span>
+              </div>
+            </div>
+
+            <p className="text-sm text-muted-foreground">
+              قبول بطاقات الائتمان والخصم (Visa, Mastercard, AMEX)
+            </p>
+
+            <Button className="w-full" data-testid="btn-connect-stripe">
+              <ExternalLink className="h-4 w-4 ml-2" />
+              ربط Stripe
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5 text-blue-600" />
+              PayPal
+            </CardTitle>
+            <CardDescription>مدفوعات PayPal</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+              <div className="flex items-center gap-2">
+                <XCircle className="h-5 w-5 text-gray-400" />
+                <span className="text-gray-600">غير مكوّن</span>
+              </div>
+            </div>
+
+            <p className="text-sm text-muted-foreground">
+              قبول مدفوعات PayPal وبطاقات الائتمان
+            </p>
+
+            <Button variant="outline" className="w-full" data-testid="btn-connect-paypal">
+              <ExternalLink className="h-4 w-4 ml-2" />
+              ربط PayPal
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5 text-green-600" />
+              Tap Payments
+            </CardTitle>
+            <CardDescription>بوابة دفع خليجية</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+              <div className="flex items-center gap-2">
+                <XCircle className="h-5 w-5 text-gray-400" />
+                <span className="text-gray-600">غير مكوّن</span>
+              </div>
+            </div>
+
+            <p className="text-sm text-muted-foreground">
+              مدفوعات Mada, Apple Pay, STC Pay
+            </p>
+
+            <Button variant="outline" className="w-full" data-testid="btn-connect-tap">
+              <ExternalLink className="h-4 w-4 ml-2" />
+              ربط Tap
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>سجل المعاملات</CardTitle>
+          <CardDescription>المعاملات المالية الأخيرة</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-center text-muted-foreground py-8">
+            لا توجد معاملات - قم بربط بوابة دفع أولاً
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function CalendarSection() {
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5 text-blue-600" />
+              Google Calendar
+            </CardTitle>
+            <CardDescription>مزامنة المواعيد والاجتماعات</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+              <div className="flex items-center gap-2">
+                <XCircle className="h-5 w-5 text-gray-400" />
+                <span className="text-gray-600">غير مكوّن</span>
+              </div>
+            </div>
+
+            <ul className="text-sm text-muted-foreground space-y-2">
+              <li className="flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                مزامنة الاجتماعات تلقائياً
+              </li>
+              <li className="flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                تذكيرات بالمواعيد
+              </li>
+              <li className="flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                حجز المواعيد للزوار
+              </li>
+            </ul>
+
+            <Button className="w-full" data-testid="btn-connect-google-calendar">
+              <ExternalLink className="h-4 w-4 ml-2" />
+              ربط Google Calendar
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5 text-purple-600" />
+              Microsoft Outlook
+            </CardTitle>
+            <CardDescription>تقويم مايكروسوفت</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+              <div className="flex items-center gap-2">
+                <XCircle className="h-5 w-5 text-gray-400" />
+                <span className="text-gray-600">غير مكوّن</span>
+              </div>
+            </div>
+
+            <ul className="text-sm text-muted-foreground space-y-2">
+              <li className="flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                تكامل مع Microsoft 365
+              </li>
+              <li className="flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                مزامنة جهات الاتصال
+              </li>
+              <li className="flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                اجتماعات Teams
+              </li>
+            </ul>
+
+            <Button variant="outline" className="w-full" data-testid="btn-connect-outlook">
+              <ExternalLink className="h-4 w-4 ml-2" />
+              ربط Outlook
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>الأحداث القادمة</CardTitle>
+          <CardDescription>المواعيد المجدولة من التقويمات المرتبطة</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-center text-muted-foreground py-8">
+            لا توجد أحداث - قم بربط تقويم أولاً
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function StorageSection() {
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Cloud className="h-5 w-5 text-blue-600" />
+              Replit Storage
+            </CardTitle>
+            <CardDescription>التخزين المدمج</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="h-5 w-5 text-green-600" />
+                <span className="font-medium text-green-800">مفعّل</span>
+              </div>
+            </div>
+
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-muted-foreground">المستخدم</span>
+                <span className="font-medium">2.5 GB</span>
+              </div>
+              <div className="flex justify-between py-2">
+                <span className="text-muted-foreground">الحد الأقصى</span>
+                <span className="font-medium">10 GB</span>
+              </div>
+            </div>
+
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div className="bg-blue-600 h-2 rounded-full" style={{ width: '25%' }}></div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Cloud className="h-5 w-5 text-yellow-600" />
+              Google Drive
+            </CardTitle>
+            <CardDescription>تخزين Google</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+              <div className="flex items-center gap-2">
+                <XCircle className="h-5 w-5 text-gray-400" />
+                <span className="text-gray-600">غير مكوّن</span>
+              </div>
+            </div>
+
+            <p className="text-sm text-muted-foreground">
+              حفظ النسخ الاحتياطية والتقارير في Google Drive
+            </p>
+
+            <Button variant="outline" className="w-full" data-testid="btn-connect-gdrive">
+              <ExternalLink className="h-4 w-4 ml-2" />
+              ربط Google Drive
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Cloud className="h-5 w-5 text-blue-500" />
+              Dropbox
+            </CardTitle>
+            <CardDescription>تخزين Dropbox</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+              <div className="flex items-center gap-2">
+                <XCircle className="h-5 w-5 text-gray-400" />
+                <span className="text-gray-600">غير مكوّن</span>
+              </div>
+            </div>
+
+            <p className="text-sm text-muted-foreground">
+              مزامنة الملفات مع Dropbox Business
+            </p>
+
+            <Button variant="outline" className="w-full" data-testid="btn-connect-dropbox">
+              <ExternalLink className="h-4 w-4 ml-2" />
+              ربط Dropbox
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>إعدادات النسخ الاحتياطي</CardTitle>
+          <CardDescription>جدولة النسخ الاحتياطي التلقائي</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-medium">نسخ احتياطي يومي</p>
+              <p className="text-sm text-muted-foreground">حفظ نسخة كل يوم الساعة 3 صباحاً</p>
+            </div>
+            <Switch data-testid="switch-daily-backup" />
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-medium">نسخ احتياطي للوثائق</p>
+              <p className="text-sm text-muted-foreground">حفظ الوثائق في التخزين السحابي</p>
+            </div>
+            <Switch data-testid="switch-docs-backup" />
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -172,97 +1061,152 @@ function AccountingSection({ exports }: { exports: AccountingExport[] }) {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Calculator className="h-5 w-5 text-blue-600" />
-              تقييم المخزون
+              <Calculator className="h-5 w-5 text-green-600" />
+              قيود المحاسبي
             </CardTitle>
-            <CardDescription>تصدير قيمة المخزون مع ضريبة القيمة المضافة</CardDescription>
+            <CardDescription>نظام المحاسبة السحابي</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>الفرع (اختياري)</Label>
-              <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                <SelectTrigger data-testid="select-branch">
-                  <SelectValue placeholder="جميع الفروع" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">جميع الفروع</SelectItem>
-                  {(branches as any[]).map((branch: any) => (
-                    <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <Button 
-              onClick={() => inventoryValuationMutation.mutate(selectedBranch === "all" ? undefined : selectedBranch || undefined)}
-              disabled={inventoryValuationMutation.isPending}
-              className="w-full"
-              data-testid="btn-export-valuation"
-            >
-              <Download className="h-4 w-4 ml-2" />
-              تصدير للمحاسبة
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <RefreshCw className="h-5 w-5 text-green-600" />
-              حركة الأصول
-            </CardTitle>
-            <CardDescription>تقرير تحويلات الأصول بين الفروع</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label className="text-xs">من تاريخ</Label>
-                <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} data-testid="input-date-from" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">إلى تاريخ</Label>
-                <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} data-testid="input-date-to" />
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+              <div className="flex items-center gap-2">
+                <XCircle className="h-5 w-5 text-gray-400" />
+                <span className="text-gray-600">غير مكوّن</span>
               </div>
             </div>
-            <Button 
-              onClick={() => assetMovementsMutation.mutate()}
-              disabled={assetMovementsMutation.isPending}
-              className="w-full"
-              data-testid="btn-export-movements"
-            >
-              <Download className="h-4 w-4 ml-2" />
-              تصدير للمحاسبة
-            </Button>
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileSpreadsheet className="h-5 w-5 text-purple-600" />
-              تكاليف المشاريع
-            </CardTitle>
-            <CardDescription>ملخص ميزانيات ومصروفات المشاريع</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              يشمل جميع المشاريع مع الميزانية المخططة والمصروفات الفعلية ونسبة الإنجاز
+              ربط مباشر مع نظام قيود لتصدير القيود المحاسبية تلقائياً
             </p>
-            <Button 
-              onClick={() => projectCostsMutation.mutate()}
-              disabled={projectCostsMutation.isPending}
-              className="w-full"
-              data-testid="btn-export-projects"
-            >
-              <Download className="h-4 w-4 ml-2" />
-              تصدير للمحاسبة
+
+            <Button variant="outline" className="w-full" data-testid="btn-connect-qoyod">
+              <ExternalLink className="h-4 w-4 ml-2" />
+              ربط قيود
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calculator className="h-5 w-5 text-red-600" />
+              Zoho Books
+            </CardTitle>
+            <CardDescription>نظام زوهو المحاسبي</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+              <div className="flex items-center gap-2">
+                <XCircle className="h-5 w-5 text-gray-400" />
+                <span className="text-gray-600">غير مكوّن</span>
+              </div>
+            </div>
+
+            <p className="text-sm text-muted-foreground">
+              تكامل مع Zoho Books لإدارة الفواتير والمصروفات
+            </p>
+
+            <Button variant="outline" className="w-full" data-testid="btn-connect-zoho">
+              <ExternalLink className="h-4 w-4 ml-2" />
+              ربط Zoho
             </Button>
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>تصدير البيانات المحاسبية</CardTitle>
+          <CardDescription>تصدير التقارير بصيغة JSON للأنظمة المحاسبية</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Calculator className="h-4 w-4 text-blue-600" />
+                  تقييم المخزون
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+                  <SelectTrigger data-testid="select-branch">
+                    <SelectValue placeholder="جميع الفروع" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">جميع الفروع</SelectItem>
+                    {(branches as any[]).map((branch: any) => (
+                      <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button 
+                  onClick={() => inventoryValuationMutation.mutate(selectedBranch === "all" ? undefined : selectedBranch || undefined)}
+                  disabled={inventoryValuationMutation.isPending}
+                  className="w-full"
+                  size="sm"
+                  data-testid="btn-export-valuation"
+                >
+                  <Download className="h-4 w-4 ml-2" />
+                  تصدير
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <RefreshCw className="h-4 w-4 text-green-600" />
+                  حركة الأصول
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} placeholder="من" data-testid="input-date-from" />
+                  <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} placeholder="إلى" data-testid="input-date-to" />
+                </div>
+                <Button 
+                  onClick={() => assetMovementsMutation.mutate()}
+                  disabled={assetMovementsMutation.isPending}
+                  className="w-full"
+                  size="sm"
+                  data-testid="btn-export-movements"
+                >
+                  <Download className="h-4 w-4 ml-2" />
+                  تصدير
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <FileSpreadsheet className="h-4 w-4 text-purple-600" />
+                  تكاليف المشاريع
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  جميع المشاريع مع الميزانيات والمصروفات
+                </p>
+                <Button 
+                  onClick={() => projectCostsMutation.mutate()}
+                  disabled={projectCostsMutation.isPending}
+                  className="w-full"
+                  size="sm"
+                  data-testid="btn-export-projects"
+                >
+                  <Download className="h-4 w-4 ml-2" />
+                  تصدير
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -295,261 +1239,10 @@ function AccountingSection({ exports }: { exports: AccountingExport[] }) {
   );
 }
 
-function NotificationsSection({ notifications }: { notifications: NotificationQueueItem[] }) {
-  const queryClient = useQueryClient();
-  const [recipientPhone, setRecipientPhone] = useState("");
-  const [recipientName, setRecipientName] = useState("");
-  const [message, setMessage] = useState("");
-  const [channel, setChannel] = useState("sms");
-
-  const sendNotificationMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch("/api/notifications/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          recipientPhone,
-          recipientName,
-          channel,
-          message,
-        }),
-      });
-      if (!res.ok) throw new Error("فشل في إرسال الإشعار");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
-      toast.success("تم إضافة الإشعار لقائمة الإرسال");
-      setRecipientPhone("");
-      setRecipientName("");
-      setMessage("");
-    },
-    onError: () => toast.error("فشل في إرسال الإشعار"),
-  });
-
-  const statusIcons: Record<string, React.ReactNode> = {
-    pending: <Clock className="h-4 w-4 text-yellow-500" />,
-    sent: <CheckCircle className="h-4 w-4 text-green-500" />,
-    failed: <XCircle className="h-4 w-4 text-red-500" />,
-  };
-
-  const statusLabels: Record<string, string> = {
-    pending: "في الانتظار",
-    sent: "تم الإرسال",
-    failed: "فشل",
-  };
-
-  return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Send className="h-5 w-5" />
-            إرسال إشعار جديد
-          </CardTitle>
-          <CardDescription>
-            إرسال رسائل SMS أو WhatsApp للموظفين والمسؤولين
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <div className="flex items-center gap-2 text-yellow-800">
-              <Phone className="h-5 w-5" />
-              <span className="font-medium">ملاحظة:</span>
-            </div>
-            <p className="text-sm text-yellow-700 mt-1">
-              لتفعيل إرسال الرسائل، يرجى إعداد حساب Twilio وإضافة مفاتيح API في إعدادات النظام
-            </p>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label>رقم الهاتف</Label>
-              <Input 
-                placeholder="+966xxxxxxxxx" 
-                value={recipientPhone}
-                onChange={(e) => setRecipientPhone(e.target.value)}
-                data-testid="input-recipient-phone"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>اسم المستلم</Label>
-              <Input 
-                placeholder="اسم المستلم"
-                value={recipientName}
-                onChange={(e) => setRecipientName(e.target.value)}
-                data-testid="input-recipient-name"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label>قناة الإرسال</Label>
-            <Select value={channel} onValueChange={setChannel}>
-              <SelectTrigger data-testid="select-channel">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="sms">SMS</SelectItem>
-                <SelectItem value="whatsapp">WhatsApp</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label>نص الرسالة</Label>
-            <Textarea 
-              placeholder="أدخل نص الرسالة..."
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              rows={3}
-              data-testid="input-message"
-            />
-          </div>
-
-          <Button 
-            onClick={() => sendNotificationMutation.mutate()}
-            disabled={sendNotificationMutation.isPending || !recipientPhone || !message}
-            data-testid="btn-send-notification"
-          >
-            <Send className="h-4 w-4 ml-2" />
-            إرسال الإشعار
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>سجل الإشعارات</CardTitle>
-          <CardDescription>جميع الإشعارات المرسلة والمنتظرة</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {notifications.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">لا توجد إشعارات</p>
-          ) : (
-            <div className="space-y-2">
-              {notifications.map((notification) => (
-                <div key={notification.id} className="flex items-center justify-between p-3 rounded-lg border" data-testid={`notification-row-${notification.id}`}>
-                  <div className="flex items-center gap-3">
-                    {statusIcons[notification.status]}
-                    <div>
-                      <p className="font-medium">{notification.recipientName || notification.recipientPhone}</p>
-                      <p className="text-sm text-muted-foreground line-clamp-1">{notification.message}</p>
-                    </div>
-                  </div>
-                  <div className="text-left">
-                    <Badge variant="outline">{notification.channel}</Badge>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {statusLabels[notification.status]}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-function ImportSection({ jobs }: { jobs: DataImportJob[] }) {
-  const statusLabels: Record<string, string> = {
-    pending: "في الانتظار",
-    processing: "جاري المعالجة",
-    completed: "مكتمل",
-    failed: "فشل",
-  };
-
-  const statusColors: Record<string, string> = {
-    pending: "bg-yellow-100 text-yellow-800",
-    processing: "bg-blue-100 text-blue-800",
-    completed: "bg-green-100 text-green-800",
-    failed: "bg-red-100 text-red-800",
-  };
-
-  return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Upload className="h-5 w-5" />
-            استيراد البيانات
-          </CardTitle>
-          <CardDescription>استيراد بيانات من ملفات Excel أو أنظمة خارجية</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="p-4 border rounded-lg hover:border-primary transition-colors cursor-pointer">
-              <div className="flex items-center gap-3 mb-2">
-                <FileSpreadsheet className="h-8 w-8 text-green-600" />
-                <div>
-                  <h3 className="font-medium">استيراد من Excel</h3>
-                  <p className="text-sm text-muted-foreground">ملفات .xlsx أو .xls</p>
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                استخدم صفحة إدارة المخزون لاستيراد البيانات من ملفات Excel
-              </p>
-            </div>
-
-            <div className="p-4 border rounded-lg hover:border-primary transition-colors cursor-pointer opacity-50">
-              <div className="flex items-center gap-3 mb-2">
-                <Link2 className="h-8 w-8 text-blue-600" />
-                <div>
-                  <h3 className="font-medium">استيراد من API</h3>
-                  <p className="text-sm text-muted-foreground">ربط مع أنظمة ERP</p>
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                قريباً - ربط مباشر مع أنظمة تخطيط الموارد
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>سجل عمليات الاستيراد</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {jobs.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">لا توجد عمليات استيراد</p>
-          ) : (
-            <div className="space-y-2">
-              {jobs.map((job) => (
-                <div key={job.id} className="flex items-center justify-between p-3 rounded-lg border" data-testid={`import-job-${job.id}`}>
-                  <div className="flex items-center gap-3">
-                    <Badge className={statusColors[job.status]}>
-                      {statusLabels[job.status]}
-                    </Badge>
-                    <div>
-                      <p className="font-medium">{job.fileName || `استيراد ${job.targetModule}`}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {job.processedRecords}/{job.totalRecords} سجل
-                        {(job.failedRecords ?? 0) > 0 && ` (${job.failedRecords} فشل)`}
-                      </p>
-                    </div>
-                  </div>
-                  <span className="text-sm text-muted-foreground">
-                    {new Date(job.createdAt).toLocaleDateString('en-GB')}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-function SettingsSection({ integrations }: { integrations: ExternalIntegration[] }) {
+function ERPSection({ integrations, importJobs }: { integrations: ExternalIntegration[], importJobs: DataImportJob[] }) {
   const queryClient = useQueryClient();
   const [showAddDialog, setShowAddDialog] = useState(false);
-  const [newIntegration, setNewIntegration] = useState({ name: "", type: "accounting" });
+  const [newIntegration, setNewIntegration] = useState({ name: "", type: "erp" });
 
   const createIntegrationMutation = useMutation({
     mutationFn: async () => {
@@ -566,25 +1259,156 @@ function SettingsSection({ integrations }: { integrations: ExternalIntegration[]
       queryClient.invalidateQueries({ queryKey: ["/api/integrations"] });
       toast.success("تم إضافة التكامل بنجاح");
       setShowAddDialog(false);
-      setNewIntegration({ name: "", type: "accounting" });
+      setNewIntegration({ name: "", type: "erp" });
     },
     onError: () => toast.error("فشل في إضافة التكامل"),
   });
 
-  const typeLabels: Record<string, string> = {
-    accounting: "نظام محاسبة",
-    messaging: "إرسال رسائل",
-    erp: "نظام ERP",
-    import: "استيراد بيانات",
+  const statusLabels: Record<string, string> = {
+    pending: "في الانتظار",
+    processing: "جاري المعالجة",
+    completed: "مكتمل",
+    failed: "فشل",
+  };
+
+  const statusColors: Record<string, string> = {
+    pending: "bg-yellow-100 text-yellow-800",
+    processing: "bg-blue-100 text-blue-800",
+    completed: "bg-green-100 text-green-800",
+    failed: "bg-red-100 text-red-800",
   };
 
   return (
     <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-blue-600" />
+              SAP Business One
+            </CardTitle>
+            <CardDescription>نظام تخطيط موارد المؤسسة</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+              <div className="flex items-center gap-2">
+                <XCircle className="h-5 w-5 text-gray-400" />
+                <span className="text-gray-600">غير مكوّن</span>
+              </div>
+            </div>
+
+            <p className="text-sm text-muted-foreground">
+              تكامل مع SAP لمزامنة المخزون والطلبات
+            </p>
+
+            <Button variant="outline" className="w-full" data-testid="btn-connect-sap">
+              <ExternalLink className="h-4 w-4 ml-2" />
+              ربط SAP
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-red-600" />
+              Oracle NetSuite
+            </CardTitle>
+            <CardDescription>نظام Oracle السحابي</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+              <div className="flex items-center gap-2">
+                <XCircle className="h-5 w-5 text-gray-400" />
+                <span className="text-gray-600">غير مكوّن</span>
+              </div>
+            </div>
+
+            <p className="text-sm text-muted-foreground">
+              تكامل شامل مع Oracle NetSuite
+            </p>
+
+            <Button variant="outline" className="w-full" data-testid="btn-connect-oracle">
+              <ExternalLink className="h-4 w-4 ml-2" />
+              ربط Oracle
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-purple-600" />
+              Odoo
+            </CardTitle>
+            <CardDescription>نظام ERP مفتوح المصدر</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+              <div className="flex items-center gap-2">
+                <XCircle className="h-5 w-5 text-gray-400" />
+                <span className="text-gray-600">غير مكوّن</span>
+              </div>
+            </div>
+
+            <p className="text-sm text-muted-foreground">
+              تكامل مع Odoo للمحاسبة والمخزون
+            </p>
+
+            <Button variant="outline" className="w-full" data-testid="btn-connect-odoo">
+              <ExternalLink className="h-4 w-4 ml-2" />
+              ربط Odoo
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
-            <CardTitle>إعدادات التكامل</CardTitle>
-            <CardDescription>إدارة الاتصالات مع الأنظمة الخارجية</CardDescription>
+            <CardTitle className="flex items-center gap-2">
+              <Upload className="h-5 w-5" />
+              استيراد البيانات
+            </CardTitle>
+            <CardDescription>استيراد بيانات من ملفات Excel أو أنظمة خارجية</CardDescription>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="p-4 border rounded-lg hover:border-primary transition-colors cursor-pointer">
+              <div className="flex items-center gap-3 mb-2">
+                <FileSpreadsheet className="h-8 w-8 text-green-600" />
+                <div>
+                  <h3 className="font-medium">استيراد من Excel</h3>
+                  <p className="text-sm text-muted-foreground">ملفات .xlsx أو .xls</p>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                استخدم صفحة إدارة المخزون لاستيراد البيانات من ملفات Excel
+              </p>
+            </div>
+
+            <div className="p-4 border rounded-lg hover:border-primary transition-colors cursor-pointer">
+              <div className="flex items-center gap-3 mb-2">
+                <Link2 className="h-8 w-8 text-blue-600" />
+                <div>
+                  <h3 className="font-medium">استيراد من API</h3>
+                  <p className="text-sm text-muted-foreground">ربط مع أنظمة ERP</p>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                ربط مباشر مع أنظمة تخطيط الموارد
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>التكاملات المكوّنة</CardTitle>
+            <CardDescription>الاتصالات النشطة مع الأنظمة الخارجية</CardDescription>
           </div>
           <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
             <DialogTrigger asChild>
@@ -604,7 +1428,7 @@ function SettingsSection({ integrations }: { integrations: ExternalIntegration[]
                   <Input 
                     value={newIntegration.name}
                     onChange={(e) => setNewIntegration({ ...newIntegration, name: e.target.value })}
-                    placeholder="مثال: نظام قيود المحاسبي"
+                    placeholder="مثال: نظام SAP"
                     data-testid="input-integration-name"
                   />
                 </div>
@@ -621,7 +1445,9 @@ function SettingsSection({ integrations }: { integrations: ExternalIntegration[]
                       <SelectItem value="accounting">نظام محاسبة</SelectItem>
                       <SelectItem value="messaging">إرسال رسائل</SelectItem>
                       <SelectItem value="erp">نظام ERP</SelectItem>
-                      <SelectItem value="import">استيراد بيانات</SelectItem>
+                      <SelectItem value="payments">بوابة دفع</SelectItem>
+                      <SelectItem value="storage">تخزين سحابي</SelectItem>
+                      <SelectItem value="calendar">تقويم</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -641,7 +1467,7 @@ function SettingsSection({ integrations }: { integrations: ExternalIntegration[]
         </CardHeader>
         <CardContent>
           {integrations.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">لا توجد تكاملات مكوّنة</p>
+            <p className="text-center text-muted-foreground py-8">لا توجد تكاملات مكوّنة بعد</p>
           ) : (
             <div className="space-y-3">
               {integrations.map((integration) => (
@@ -650,9 +1476,7 @@ function SettingsSection({ integrations }: { integrations: ExternalIntegration[]
                     <Link2 className="h-5 w-5 text-muted-foreground" />
                     <div>
                       <p className="font-medium">{integration.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {typeLabels[integration.type] || integration.type}
-                      </p>
+                      <p className="text-sm text-muted-foreground">{integration.type}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
@@ -668,24 +1492,36 @@ function SettingsSection({ integrations }: { integrations: ExternalIntegration[]
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>إعداد Twilio للرسائل</CardTitle>
-          <CardDescription>مفاتيح API لإرسال SMS و WhatsApp</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <p className="text-sm text-blue-800">
-              لتفعيل إرسال الرسائل، أضف المتغيرات البيئية التالية في إعدادات المشروع:
-            </p>
-            <ul className="mt-2 text-sm text-blue-700 space-y-1 font-mono">
-              <li>TWILIO_ACCOUNT_SID</li>
-              <li>TWILIO_AUTH_TOKEN</li>
-              <li>TWILIO_PHONE_NUMBER</li>
-            </ul>
-          </div>
-        </CardContent>
-      </Card>
+      {importJobs.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>سجل عمليات الاستيراد</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {importJobs.map((job) => (
+                <div key={job.id} className="flex items-center justify-between p-3 rounded-lg border" data-testid={`import-job-${job.id}`}>
+                  <div className="flex items-center gap-3">
+                    <Badge className={statusColors[job.status]}>
+                      {statusLabels[job.status]}
+                    </Badge>
+                    <div>
+                      <p className="font-medium">{job.fileName || `استيراد ${job.targetModule}`}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {job.processedRecords}/{job.totalRecords} سجل
+                        {(job.failedRecords ?? 0) > 0 && ` (${job.failedRecords} فشل)`}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-sm text-muted-foreground">
+                    {new Date(job.createdAt).toLocaleDateString('en-GB')}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

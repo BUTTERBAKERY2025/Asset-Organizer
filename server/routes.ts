@@ -2368,6 +2368,42 @@ export async function registerRoutes(
     }
   });
 
+  // Test Twilio Connection
+  app.post("/api/integrations/twilio/test", isAuthenticated, async (req, res) => {
+    try {
+      const twilioSid = process.env.TWILIO_ACCOUNT_SID;
+      const twilioToken = process.env.TWILIO_AUTH_TOKEN;
+      const twilioPhone = process.env.TWILIO_PHONE_NUMBER;
+
+      if (!twilioSid || !twilioToken || !twilioPhone) {
+        return res.status(400).json({ 
+          success: false, 
+          error: "Twilio credentials not configured" 
+        });
+      }
+
+      // Dynamic import for Twilio
+      const Twilio = (await import('twilio')).default;
+      const client = Twilio(twilioSid, twilioToken);
+      
+      // Fetch account info to verify connection
+      const account = await client.api.accounts(twilioSid).fetch();
+      
+      res.json({
+        success: true,
+        accountName: account.friendlyName,
+        status: account.status,
+        type: account.type,
+      });
+    } catch (error: any) {
+      console.error("Error testing Twilio connection:", error);
+      res.status(500).json({ 
+        success: false, 
+        error: error.message || "Failed to connect to Twilio" 
+      });
+    }
+  });
+
   // Data Import Jobs
   app.get("/api/import-jobs", isAuthenticated, requirePermission("inventory", "view"), async (req, res) => {
     try {
