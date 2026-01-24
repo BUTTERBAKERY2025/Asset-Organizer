@@ -577,3 +577,46 @@ export function hasMultiBranchAccess(req: any): boolean {
   const allowedBranches = getAllowedBranchIds(req);
   return allowedBranches === null || allowedBranches.length > 1;
 }
+
+// Get effective branch filter for queries - handles multi-branch users correctly
+// Returns: { branchIds: string[] | null, queryBranchId: string | null }
+// branchIds = null means all branches (admin only)
+// branchIds = [] means no access
+// branchIds = [...] means filter by these branches
+export function getEffectiveBranchFilter(req: any, queryBranchId?: string): {
+  branchIds: string[] | null;
+  singleBranchId: string | null;
+  hasAccess: boolean;
+} {
+  const allowedBranches = getAllowedBranchIds(req);
+  
+  // Admin with no filter
+  if (allowedBranches === null) {
+    if (queryBranchId && queryBranchId !== "all") {
+      return { branchIds: [queryBranchId], singleBranchId: queryBranchId, hasAccess: true };
+    }
+    return { branchIds: null, singleBranchId: null, hasAccess: true };
+  }
+  
+  // No access at all
+  if (allowedBranches.length === 0) {
+    return { branchIds: [], singleBranchId: null, hasAccess: false };
+  }
+  
+  // User has specific branches
+  if (queryBranchId && queryBranchId !== "all") {
+    // Verify user has access to requested branch
+    if (allowedBranches.includes(queryBranchId)) {
+      return { branchIds: [queryBranchId], singleBranchId: queryBranchId, hasAccess: true };
+    }
+    // User doesn't have access to requested branch
+    return { branchIds: [], singleBranchId: null, hasAccess: false };
+  }
+  
+  // Return all allowed branches
+  if (allowedBranches.length === 1) {
+    return { branchIds: allowedBranches, singleBranchId: allowedBranches[0], hasAccess: true };
+  }
+  
+  return { branchIds: allowedBranches, singleBranchId: null, hasAccess: true };
+}

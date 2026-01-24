@@ -69,7 +69,7 @@ import {
 } from "./pdf-generator";
 import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertInfluencerContractSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema, isMadeToOrderCategory, suggestCategoryFromProductName, userBranchAccess } from "@shared/schema";
 import { z } from "zod";
-import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, getMandatoryBranchFilter, isUserAdmin, getAllowedBranchIds } from "./auth";
+import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, getMandatoryBranchFilter, isUserAdmin, getAllowedBranchIds, getEffectiveBranchFilter } from "./auth";
 import { registerGovernanceRoutes } from "./governance-routes";
 
 // Normalize date to YYYY-MM-DD format
@@ -468,28 +468,29 @@ export async function registerRoutes(
   // Inventory Items
   app.get("/api/inventory", isAuthenticated, requirePermission("inventory", "view"), async (req, res) => {
     try {
-      // SECURITY: Enforce branch filtering for non-admin users
+      // SECURITY: Enforce branch filtering based on user's allowed branches
       const queryBranchId = req.query.branchId as string | undefined;
-      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const { branchIds, singleBranchId, hasAccess } = getEffectiveBranchFilter(req, queryBranchId);
       
-      // For admins: "all" means no filter, specific ID means filter by that branch
-      // For non-admins: always use mandatory branch filter
-      let effectiveBranchId: string | null;
-      if (isUserAdmin(req)) {
-        // Admin can request all items with branchId=all or get all if no session branch
-        effectiveBranchId = queryBranchId === "all" ? null : (queryBranchId || mandatoryBranch);
-      } else {
-        effectiveBranchId = mandatoryBranch;
-      }
-      
-      // If non-admin has no branch assigned, return empty array
-      if (!isUserAdmin(req) && !effectiveBranchId) {
+      // No access at all
+      if (!hasAccess) {
         return res.json([]);
       }
       
-      const items = effectiveBranchId 
-        ? await storage.getInventoryItemsByBranch(effectiveBranchId)
-        : await storage.getAllInventoryItems();
+      // Fetch items based on branch filter
+      let items: any[] = [];
+      if (branchIds === null) {
+        // Admin with no filter - get all
+        items = await storage.getAllInventoryItems();
+      } else if (singleBranchId) {
+        // Single branch filter
+        items = await storage.getInventoryItemsByBranch(singleBranchId);
+      } else if (branchIds.length > 0) {
+        // Multi-branch user - get items from all their allowed branches
+        const allItems = await storage.getAllInventoryItems();
+        items = allItems.filter(item => branchIds.includes(item.branchId));
+      }
+      
       res.json(items);
     } catch (error) {
       console.error("Error fetching inventory items:", error);
@@ -499,19 +500,19 @@ export async function registerRoutes(
 
   app.get("/api/inventory/needs-inspection", isAuthenticated, requirePermission("inventory", "view"), async (req, res) => {
     try {
-      // SECURITY: Enforce branch filtering for non-admin users
-      const mandatoryBranch = getMandatoryBranchFilter(req);
+      // SECURITY: Enforce branch filtering based on user's allowed branches
+      const queryBranchId = req.query.branchId as string | undefined;
+      const { branchIds, hasAccess } = getEffectiveBranchFilter(req, queryBranchId);
       
-      // If non-admin has no branch, return empty array
-      if (!isUserAdmin(req) && !mandatoryBranch) {
+      if (!hasAccess) {
         return res.json([]);
       }
       
       let items = await storage.getItemsNeedingInspection();
       
-      // Filter by branch for non-admin users (mandatory) or admin with selected branch
-      if (mandatoryBranch) {
-        items = items.filter(item => item.branchId === mandatoryBranch);
+      // Filter by allowed branches (null means all for admin)
+      if (branchIds !== null) {
+        items = items.filter(item => branchIds.includes(item.branchId));
       }
       
       res.json(items);
@@ -523,17 +524,23 @@ export async function registerRoutes(
 
   app.get("/api/inventory/low-quantity", isAuthenticated, requirePermission("inventory", "view"), async (req, res) => {
     try {
-      // SECURITY: Enforce branch filtering for non-admin users
-      const mandatoryBranch = getMandatoryBranchFilter(req);
+      // SECURITY: Enforce branch filtering based on user's allowed branches
+      const queryBranchId = req.query.branchId as string | undefined;
+      const { branchIds, singleBranchId, hasAccess } = getEffectiveBranchFilter(req, queryBranchId);
       
-      // If non-admin has no branch, return empty array
-      if (!isUserAdmin(req) && !mandatoryBranch) {
+      if (!hasAccess) {
         return res.json([]);
       }
       
-      let items = mandatoryBranch 
-        ? await storage.getInventoryItemsByBranch(mandatoryBranch)
-        : await storage.getAllInventoryItems();
+      let items: any[] = [];
+      if (branchIds === null) {
+        items = await storage.getAllInventoryItems();
+      } else if (singleBranchId) {
+        items = await storage.getInventoryItemsByBranch(singleBranchId);
+      } else if (branchIds.length > 0) {
+        const allItems = await storage.getAllInventoryItems();
+        items = allItems.filter(item => branchIds.includes(item.branchId));
+      }
       
       const lowQuantityItems = items.filter(item => item.quantity <= 5);
       res.json(lowQuantityItems);
@@ -545,17 +552,23 @@ export async function registerRoutes(
 
   app.get("/api/inventory/maintenance-needed", isAuthenticated, requirePermission("inventory", "view"), async (req, res) => {
     try {
-      // SECURITY: Enforce branch filtering for non-admin users
-      const mandatoryBranch = getMandatoryBranchFilter(req);
+      // SECURITY: Enforce branch filtering based on user's allowed branches
+      const queryBranchId = req.query.branchId as string | undefined;
+      const { branchIds, singleBranchId, hasAccess } = getEffectiveBranchFilter(req, queryBranchId);
       
-      // If non-admin has no branch, return empty array
-      if (!isUserAdmin(req) && !mandatoryBranch) {
+      if (!hasAccess) {
         return res.json([]);
       }
       
-      let items = mandatoryBranch 
-        ? await storage.getInventoryItemsByBranch(mandatoryBranch)
-        : await storage.getAllInventoryItems();
+      let items: any[] = [];
+      if (branchIds === null) {
+        items = await storage.getAllInventoryItems();
+      } else if (singleBranchId) {
+        items = await storage.getInventoryItemsByBranch(singleBranchId);
+      } else if (branchIds.length > 0) {
+        const allItems = await storage.getAllInventoryItems();
+        items = allItems.filter(item => branchIds.includes(item.branchId));
+      }
       
       const maintenanceItems = items.filter(item => 
         item.status === 'maintenance' || item.status === 'damaged'
