@@ -2,14 +2,31 @@ import { useMemo } from "react";
 import { Layout } from "@/components/layout";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Package, Building2, AlertTriangle, DollarSign } from "lucide-react";
+import { Loader2, Package, Building2, AlertTriangle, DollarSign, Factory, Warehouse, CreditCard, Users, Shield, ClipboardList, BarChart3, Settings, FileText, Truck, Calendar, TrendingUp } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 import { useBranches } from "@/hooks/useBranches";
+import { useLocation } from "wouter";
 import type { InventoryItem } from "@shared/schema";
+
+const systemModules = [
+  { id: "production", name: "الإنتاج", icon: Factory, color: "#f59e0b", path: "/production-orders" },
+  { id: "inventory", name: "المخزون", icon: Package, color: "#3b82f6", path: "/inventory" },
+  { id: "cashier", name: "الكاشير", icon: CreditCard, color: "#22c55e", path: "/cashier-journals" },
+  { id: "warehouse", name: "المخازن", icon: Warehouse, color: "#f97316", path: "/warehouse" },
+  { id: "employees", name: "الموظفين", icon: Users, color: "#8b5cf6", path: "/branch-employees" },
+  { id: "governance", name: "الحوكمة", icon: Shield, color: "#1e40af", path: "/governance" },
+  { id: "executive", name: "السكرتارية", icon: ClipboardList, color: "#ec4899", path: "/executive" },
+  { id: "reports", name: "التقارير", icon: BarChart3, color: "#ef4444", path: "/reports" },
+  { id: "documents", name: "الوثائق", icon: FileText, color: "#06b6d4", path: "/documents" },
+  { id: "transfers", name: "التحويلات", icon: Truck, color: "#84cc16", path: "/asset-transfers" },
+  { id: "attendance", name: "الحضور", icon: Calendar, color: "#a855f7", path: "/attendance" },
+  { id: "analytics", name: "التحليلات", icon: TrendingUp, color: "#14b8a6", path: "/command-center" },
+];
 
 const COLORS = ["#f59e0b", "#22c55e", "#3b82f6", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899", "#84cc16"];
 
 export default function DashboardPage() {
+  const [, setLocation] = useLocation();
   const { branches, isLoading: branchesLoading } = useBranches();
 
   const { data: inventoryItems = [], isLoading: inventoryLoading } = useQuery<InventoryItem[]>({
@@ -94,12 +111,47 @@ export default function DashboardPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
+      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-6" dir="rtl">
         <div>
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground" data-testid="text-dashboard-title">لوحة الأصول</h1>
-          <p className="text-muted-foreground mt-1 text-sm sm:text-base">ملخص شامل لأصول جميع الفروع</p>
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground" data-testid="text-dashboard-title">لوحة التحكم الرئيسية</h1>
+          <p className="text-muted-foreground mt-1 text-sm sm:text-base">نظام إدارة مخبز باتر - CEO Command</p>
         </div>
 
+        {/* أقسام النظام - بنفس نمط الصورة */}
+        <div className="bg-gray-50 rounded-2xl p-6">
+          <h2 className="text-lg font-semibold text-gray-700 mb-4">أقسام النظام</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            {systemModules.map((module) => {
+              const IconComponent = module.icon;
+              return (
+                <div
+                  key={module.id}
+                  onClick={() => setLocation(module.path)}
+                  className="bg-white rounded-xl p-6 flex flex-col items-center justify-center gap-3 cursor-pointer transition-all duration-200 hover:shadow-lg hover:-translate-y-1"
+                  style={{ 
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                    minHeight: '120px'
+                  }}
+                  data-testid={`module-card-${module.id}`}
+                >
+                  <IconComponent 
+                    className="w-8 h-8" 
+                    style={{ color: module.color }}
+                    strokeWidth={1.5}
+                  />
+                  <span className="text-sm font-medium text-gray-600 text-center">
+                    {module.name}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* إحصائيات سريعة */}
+        <div>
+          <h2 className="text-lg font-semibold text-gray-700 mb-4">إحصائيات الأصول</h2>
+        </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <Card data-testid="card-total-items">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-4 md:p-6 pb-2">
