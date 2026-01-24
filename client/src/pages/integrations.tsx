@@ -110,7 +110,7 @@ export default function IntegrationsPage() {
         </div>
 
         <TabsContent value="overview" className="space-y-6">
-          <OverviewSection />
+          <OverviewSection onNavigate={setActiveTab} />
         </TabsContent>
 
         <TabsContent value="sms" className="space-y-6">
@@ -145,7 +145,7 @@ export default function IntegrationsPage() {
   );
 }
 
-function OverviewSection() {
+function OverviewSection({ onNavigate }: { onNavigate: (tab: string) => void }) {
   const integrationCards = [
     {
       icon: Smartphone,
@@ -231,6 +231,7 @@ function OverviewSection() {
                 key={index}
                 className="p-4 rounded-lg border hover:border-primary hover:shadow-md transition-all cursor-pointer group"
                 data-testid={`integration-card-${integration.tab}`}
+                onClick={() => onNavigate(integration.tab)}
               >
                 <div className="flex items-start justify-between mb-3">
                   <div className="p-2 rounded-lg bg-primary/10 group-hover:bg-primary/20 transition-colors">
@@ -303,6 +304,41 @@ function SMSSection({ notifications }: { notifications: NotificationQueueItem[] 
   const [message, setMessage] = useState("");
   const [channel, setChannel] = useState("sms");
   const [testStatus, setTestStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
+  const [twilioInfo, setTwilioInfo] = useState<{
+    connected: boolean;
+    accountName?: string;
+    status?: string;
+    type?: string;
+  }>({ connected: false });
+
+  // Check Twilio status on mount
+  const { isLoading: isTwilioLoading } = useQuery({
+    queryKey: ["/api/integrations/twilio/status"],
+    queryFn: async () => {
+      try {
+        const res = await fetch("/api/integrations/twilio/test", {
+          method: "POST",
+          credentials: "include",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setTwilioInfo({
+            connected: true,
+            accountName: data.accountName,
+            status: data.status,
+            type: data.type,
+          });
+          return data;
+        }
+        setTwilioInfo({ connected: false });
+        return null;
+      } catch {
+        setTwilioInfo({ connected: false });
+        return null;
+      }
+    },
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+  });
 
   const sendNotificationMutation = useMutation({
     mutationFn: async () => {
@@ -374,28 +410,44 @@ function SMSSection({ notifications }: { notifications: NotificationQueueItem[] 
             <CardDescription>إعدادات خدمة الرسائل النصية</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
-              <div className="flex items-center gap-2">
-                <CheckCircle className="h-5 w-5 text-green-600" />
-                <span className="font-medium text-green-800">متصل</span>
+            {isTwilioLoading ? (
+              <div className="flex items-center justify-center p-3 bg-gray-50 rounded-lg border">
+                <RefreshCw className="h-5 w-5 animate-spin text-gray-400 ml-2" />
+                <span className="text-gray-600">جاري التحقق...</span>
               </div>
-              <Badge className="bg-green-100 text-green-800">Trial Account</Badge>
-            </div>
-            
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between py-2 border-b">
-                <span className="text-muted-foreground">اسم الحساب</span>
-                <span className="font-medium">butter bakery</span>
+            ) : twilioInfo.connected ? (
+              <>
+                <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="h-5 w-5 text-green-600" />
+                    <span className="font-medium text-green-800">متصل</span>
+                  </div>
+                  <Badge className="bg-green-100 text-green-800">
+                    {twilioInfo.type === 'Trial' ? 'حساب تجريبي' : 'حساب مدفوع'}
+                  </Badge>
+                </div>
+                
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between py-2 border-b">
+                    <span className="text-muted-foreground">اسم الحساب</span>
+                    <span className="font-medium">{twilioInfo.accountName || '-'}</span>
+                  </div>
+                  <div className="flex justify-between py-2">
+                    <span className="text-muted-foreground">الحالة</span>
+                    <span className="font-medium text-green-600">
+                      {twilioInfo.status === 'active' ? 'نشط' : twilioInfo.status}
+                    </span>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="h-5 w-5 text-yellow-600" />
+                  <span className="font-medium text-yellow-800">غير متصل</span>
+                </div>
               </div>
-              <div className="flex justify-between py-2 border-b">
-                <span className="text-muted-foreground">رقم الإرسال</span>
-                <span className="font-medium font-mono">+1346****655</span>
-              </div>
-              <div className="flex justify-between py-2">
-                <span className="text-muted-foreground">الحالة</span>
-                <span className="font-medium text-green-600">نشط</span>
-              </div>
-            </div>
+            )}
 
             <Button 
               variant="outline" 
