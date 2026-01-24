@@ -1069,7 +1069,7 @@ export default function RBACManagementPage() {
                           <SelectValue placeholder="جميع الفروع" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="all">جميع الفروع</SelectItem>
+                          <SelectItem value="all_branches" className="text-green-600 font-medium">🌐 جميع الفروع</SelectItem>
                           {branches.map((branch) => (
                             <SelectItem key={branch.id} value={branch.id}>
                               {branch.name}
@@ -1102,7 +1102,7 @@ export default function RBACManagementPage() {
                         addUserAssignmentMutation.mutate({
                           userId: selectedUser.id,
                           roleId: parseInt(assignmentRoleId),
-                          branchId: assignmentBranchId && assignmentBranchId !== "all" ? assignmentBranchId : undefined,
+                          branchId: assignmentBranchId === "all_branches" ? "all_branches" : (assignmentBranchId || undefined),
                           departmentId: assignmentDepartmentId && assignmentDepartmentId !== "all" ? parseInt(assignmentDepartmentId) : undefined,
                         });
                       }

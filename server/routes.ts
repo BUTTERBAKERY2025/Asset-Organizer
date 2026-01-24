@@ -11170,10 +11170,33 @@ export async function registerRoutes(
         return res.status(400).json({ error: "معرف الدور مطلوب" });
       }
       
+      // Handle "all_branches" - grant access to all branches via user_branch_access
+      let actualBranchId = branchId;
+      if (branchId === "all_branches") {
+        actualBranchId = null; // No specific branch in assignment
+        
+        // Get all branches and grant access
+        const allBranches = await getCachedBranches();
+        
+        // Clear existing branch access first
+        await db.delete(userBranchAccess).where(eq(userBranchAccess.userId, userId));
+        
+        // Add access to all branches
+        for (const branch of allBranches) {
+          await db.insert(userBranchAccess).values({
+            userId,
+            branchId: branch.id,
+            accessLevel: 'full',
+            grantedBy: (req.user as any)?.id || 'system',
+            grantedAt: new Date(),
+          }).onConflictDoNothing();
+        }
+      }
+      
       const assignment = await storage.createUserAssignment({
         userId,
         roleId,
-        branchId,
+        branchId: actualBranchId,
         departmentId,
         scopeType: scopeType || 'branch',
         isPrimary: isPrimary ?? true,
