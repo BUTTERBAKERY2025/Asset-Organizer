@@ -2,6 +2,7 @@ import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { Link } from "wouter";
 import { useState, useMemo } from "react";
@@ -52,8 +53,8 @@ import {
   Video,
   CheckSquare,
   AlertTriangle,
-  Truck,
-  ClipboardCheck,
+  ChevronDown,
+  ExternalLink,
 } from "lucide-react";
 
 interface SettingItem {
@@ -74,16 +75,57 @@ interface SettingSection {
   description: string;
   icon: React.ComponentType<{ className?: string }>;
   color: string;
+  bgColor: string;
   items: SettingItem[];
 }
+
+const criticalSettings: SettingItem[] = [
+  {
+    id: "security-management",
+    title: "إدارة الأمان",
+    description: "المصادقة الثنائية وقيود IP وإدارة الجلسات",
+    icon: Shield,
+    path: "/security-management",
+    badge: "مهم",
+    badgeVariant: "destructive",
+    adminOnly: true,
+  },
+  {
+    id: "users",
+    title: "المستخدمين والأدوار",
+    description: "إدارة حسابات المستخدمين والصلاحيات",
+    icon: Users,
+    path: "/users",
+    adminOnly: true,
+  },
+  {
+    id: "backups",
+    title: "النسخ الاحتياطي",
+    description: "حماية البيانات والاستعادة",
+    icon: HardDrive,
+    path: "/backups",
+    badge: "مهم",
+    badgeVariant: "destructive",
+    adminOnly: true,
+  },
+  {
+    id: "integrations",
+    title: "التكاملات الخارجية",
+    description: "ربط الأنظمة والخدمات",
+    icon: LinkIcon,
+    path: "/integrations",
+    adminOnly: true,
+  },
+];
 
 const settingsSections: SettingSection[] = [
   {
     id: "security-governance",
     title: "الأمان والحوكمة",
-    description: "إدارة الأمان والمستخدمين والصلاحيات",
+    description: "إدارة الأمان والمستخدمين والصلاحيات وسجلات التدقيق",
     icon: Shield,
-    color: "bg-red-500",
+    color: "text-red-600",
+    bgColor: "bg-red-50",
     items: [
       {
         id: "security-management",
@@ -130,9 +172,10 @@ const settingsSections: SettingSection[] = [
   {
     id: "hr",
     title: "الموارد البشرية",
-    description: "إدارة الموظفين والهيكل التنظيمي والحضور",
+    description: "إدارة الموظفين والهيكل التنظيمي والحضور والدوام",
     icon: UserCheck,
-    color: "bg-teal-500",
+    color: "text-teal-600",
+    bgColor: "bg-teal-50",
     items: [
       {
         id: "branch-employees",
@@ -181,7 +224,8 @@ const settingsSections: SettingSection[] = [
     title: "الفروع والتشغيل",
     description: "إدارة الفروع والورديات والمنتجات",
     icon: Building2,
-    color: "bg-amber-500",
+    color: "text-amber-600",
+    bgColor: "bg-amber-50",
     items: [
       {
         id: "branches",
@@ -212,9 +256,10 @@ const settingsSections: SettingSection[] = [
   {
     id: "finance",
     title: "المالية والمبيعات",
-    description: "الأرباح والخسائر ويوميات الكاشير والتحليلات",
+    description: "الأرباح والخسائر ويوميات الكاشير والتحليلات المالية",
     icon: Wallet,
-    color: "bg-emerald-500",
+    color: "text-emerald-600",
+    bgColor: "bg-emerald-50",
     items: [
       {
         id: "pnl-dashboard",
@@ -263,9 +308,10 @@ const settingsSections: SettingSection[] = [
   {
     id: "targets-incentives",
     title: "الأهداف والحوافز",
-    description: "تخطيط الأهداف ومتابعة الإنجاز والمكافآت",
+    description: "تخطيط الأهداف ومتابعة الإنجاز ونظام المكافآت",
     icon: Target,
-    color: "bg-green-500",
+    color: "text-green-600",
+    bgColor: "bg-green-50",
     items: [
       {
         id: "targets-planning",
@@ -296,9 +342,10 @@ const settingsSections: SettingSection[] = [
   {
     id: "construction",
     title: "المشاريع والإنشاءات",
-    description: "إدارة المشاريع والمقاولين والميزانيات",
+    description: "إدارة المشاريع والمقاولين والميزانيات والعقود",
     icon: Hammer,
-    color: "bg-orange-500",
+    color: "text-orange-600",
+    bgColor: "bg-orange-50",
     items: [
       {
         id: "construction-dashboard",
@@ -345,9 +392,10 @@ const settingsSections: SettingSection[] = [
   {
     id: "marketing",
     title: "التسويق",
-    description: "الحملات التسويقية والمؤثرين والفريق",
+    description: "الحملات التسويقية والمؤثرين وإدارة فريق التسويق",
     icon: Megaphone,
-    color: "bg-pink-500",
+    color: "text-pink-600",
+    bgColor: "bg-pink-50",
     items: [
       {
         id: "marketing-dashboard",
@@ -386,9 +434,10 @@ const settingsSections: SettingSection[] = [
   {
     id: "warehouse-inventory",
     title: "المستودعات والمخزون",
-    description: "إدارة المخازن والمواد والتحويلات",
+    description: "إدارة المخازن والمواد والتحويلات بين الفروع",
     icon: Warehouse,
-    color: "bg-cyan-500",
+    color: "text-cyan-600",
+    bgColor: "bg-cyan-50",
     items: [
       {
         id: "warehouse-dashboard",
@@ -427,9 +476,10 @@ const settingsSections: SettingSection[] = [
   {
     id: "production-operations",
     title: "الإنتاج والتشغيل",
-    description: "إدارة الإنتاج والعمليات والجودة",
+    description: "إدارة الإنتاج والعمليات ومراقبة الجودة",
     icon: Factory,
-    color: "bg-indigo-500",
+    color: "text-indigo-600",
+    bgColor: "bg-indigo-50",
     items: [
       {
         id: "production-dashboard",
@@ -443,7 +493,7 @@ const settingsSections: SettingSection[] = [
         id: "operations",
         title: "التشغيل",
         description: "إدارة العمليات اليومية",
-        icon: ClipboardCheck,
+        icon: CheckSquare,
         path: "/operations",
         keywords: ["تشغيل", "عمليات", "operations", "daily"],
       },
@@ -478,9 +528,10 @@ const settingsSections: SettingSection[] = [
   {
     id: "executive-secretariat",
     title: "السكرتارية التنفيذية",
-    description: "إدارة الاجتماعات والمهام والمراسلات",
+    description: "إدارة الاجتماعات والمهام والمراسلات والزوار",
     icon: Crown,
-    color: "bg-violet-500",
+    color: "text-violet-600",
+    bgColor: "bg-violet-50",
     items: [
       {
         id: "executive",
@@ -537,9 +588,10 @@ const settingsSections: SettingSection[] = [
   {
     id: "governance",
     title: "الحوكمة المؤسسية",
-    description: "مجلس الإدارة والمساهمين والامتثال",
+    description: "مجلس الإدارة والمساهمين والامتثال التنظيمي",
     icon: Scale,
-    color: "bg-rose-500",
+    color: "text-rose-600",
+    bgColor: "bg-rose-50",
     items: [
       {
         id: "governance-dashboard",
@@ -588,9 +640,10 @@ const settingsSections: SettingSection[] = [
   {
     id: "documents",
     title: "الوثائق والأرشفة",
-    description: "إدارة الوثائق والملفات والأرشيف",
+    description: "إدارة الوثائق والملفات والأرشيف الإلكتروني",
     icon: FolderOpen,
-    color: "bg-sky-500",
+    color: "text-sky-600",
+    bgColor: "bg-sky-50",
     items: [
       {
         id: "documents",
@@ -603,28 +656,12 @@ const settingsSections: SettingSection[] = [
     ],
   },
   {
-    id: "reports",
-    title: "التقارير",
-    description: "التقارير العامة والإحصائيات",
-    icon: FileText,
-    color: "bg-purple-500",
-    items: [
-      {
-        id: "reports",
-        title: "التقارير العامة",
-        description: "تقارير شاملة لجميع أقسام النظام",
-        icon: FileText,
-        path: "/reports",
-        keywords: ["تقرير", "report", "إحصائيات", "statistics"],
-      },
-    ],
-  },
-  {
     id: "system",
     title: "إعدادات النظام",
-    description: "النسخ الاحتياطي والتكاملات الخارجية",
+    description: "النسخ الاحتياطي والتكاملات الخارجية والتقارير",
     icon: Settings,
-    color: "bg-slate-500",
+    color: "text-slate-600",
+    bgColor: "bg-slate-50",
     items: [
       {
         id: "backups",
@@ -646,53 +683,34 @@ const settingsSections: SettingSection[] = [
         adminOnly: true,
         keywords: ["تكامل", "ربط", "API", "integration"],
       },
+      {
+        id: "reports",
+        title: "التقارير العامة",
+        description: "تقارير شاملة لجميع أقسام النظام",
+        icon: FileText,
+        path: "/reports",
+        keywords: ["تقرير", "report", "إحصائيات", "statistics"],
+      },
     ],
-  },
-];
-
-const quickActions: SettingItem[] = [
-  {
-    id: "quick-security",
-    title: "الأمان",
-    description: "إعدادات الحماية",
-    icon: Shield,
-    path: "/security-management",
-    adminOnly: true,
-  },
-  {
-    id: "quick-branches",
-    title: "الفروع",
-    description: "إدارة الفروع",
-    icon: Store,
-    path: "/branches",
-  },
-  {
-    id: "quick-employees",
-    title: "الموظفين",
-    description: "بيانات الموظفين",
-    icon: UserCog,
-    path: "/branch-employees",
-  },
-  {
-    id: "quick-pnl",
-    title: "P&L",
-    description: "الأرباح والخسائر",
-    icon: TrendingUp,
-    path: "/pnl-dashboard",
-  },
-  {
-    id: "quick-backup",
-    title: "النسخ الاحتياطي",
-    description: "حفظ البيانات",
-    icon: HardDrive,
-    path: "/backups",
-    adminOnly: true,
   },
 ];
 
 export default function SettingsDashboardPage() {
   const { isAdmin } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+
+  const toggleSection = (sectionId: string) => {
+    setExpandedSections(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(sectionId)) {
+        newSet.delete(sectionId);
+      } else {
+        newSet.add(sectionId);
+      }
+      return newSet;
+    });
+  };
 
   const filteredSections = useMemo(() => {
     if (!searchQuery.trim()) return settingsSections;
@@ -713,144 +731,179 @@ export default function SettingsDashboardPage() {
       .filter((section) => section.items.length > 0);
   }, [searchQuery, isAdmin]);
 
-  const visibleQuickActions = quickActions.filter(
-    (action) => !action.adminOnly || isAdmin
+  const visibleCriticalSettings = criticalSettings.filter(
+    (item) => !item.adminOnly || isAdmin
   );
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
-        <div className="mb-6 sm:mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-2">
-            <div className="p-2 sm:p-3 bg-primary/10 rounded-xl w-fit">
-              <Settings className="w-6 h-6 sm:w-7 sm:h-7 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold" data-testid="text-page-title">
-                إعدادات النظام
-              </h1>
-              <p className="text-sm sm:text-base text-muted-foreground">
-                إدارة جميع إعدادات ومحتويات النظام من مكان واحد
-              </p>
-            </div>
+      <div className="p-4 md:p-8 lg:p-10 max-w-7xl mx-auto space-y-6" dir="rtl">
+      <div className="mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
+          <div className="p-3 bg-gradient-to-br from-primary/20 to-primary/5 rounded-2xl w-fit">
+            <Settings className="w-8 h-8 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-foreground" data-testid="text-page-title">
+              مركز الإعدادات
+            </h1>
+            <p className="text-muted-foreground mt-1">
+              إدارة جميع إعدادات ومحتويات النظام من مكان واحد
+            </p>
           </div>
         </div>
+      </div>
 
-        <div className="relative mb-6 sm:mb-8">
-          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-          <Input
-            placeholder="ابحث في الإعدادات..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pr-10 h-11 min-h-[44px] sm:h-12 sm:min-h-0 text-base sm:text-lg"
-            data-testid="input-search-settings"
-          />
-        </div>
+      <div className="relative mb-8">
+        <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+        <Input
+          placeholder="ابحث في الإعدادات... (مثال: أمان، فروع، موظفين)"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pr-12 h-12 text-base rounded-xl border-2 focus:border-primary"
+          data-testid="input-search-settings"
+        />
+      </div>
 
-        {visibleQuickActions.length > 0 && !searchQuery && (
-          <div className="mb-6 sm:mb-8">
-            <h2 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 flex items-center gap-2" data-testid="text-quick-actions-title">
-              <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-amber-500" />
-              إجراءات سريعة
-            </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
-              {visibleQuickActions.map((action) => (
-                <Link key={action.id} href={action.path}>
-                  <Card
-                    className="cursor-pointer hover:border-primary hover:shadow-md transition-all group h-full min-h-[80px]"
-                    data-testid={`card-quick-${action.id}`}
+      {visibleCriticalSettings.length > 0 && !searchQuery && (
+        <Card className="border-2 border-red-200 bg-gradient-to-br from-red-50 to-white" data-testid="section-critical">
+          <CardHeader className="pb-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-red-100 rounded-xl">
+                <AlertTriangle className="w-6 h-6 text-red-600" />
+              </div>
+              <div>
+                <CardTitle className="text-xl font-bold text-red-900">الإعدادات الحرجة</CardTitle>
+                <CardDescription className="text-red-700">
+                  إعدادات أساسية للأمان وحماية النظام
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {visibleCriticalSettings.map((item) => (
+                <Link key={item.id} href={item.path}>
+                  <div
+                    className="p-4 rounded-xl border-2 border-red-100 bg-white hover:border-red-300 hover:shadow-lg cursor-pointer transition-all group"
+                    data-testid={`critical-link-${item.id}`}
                   >
-                    <CardContent className="p-2 sm:p-3 flex flex-col items-center text-center gap-1 sm:gap-2">
-                      <div className="p-2 bg-primary/10 rounded-lg group-hover:bg-primary/20 transition-colors">
-                        <action.icon className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="p-2 bg-red-100 rounded-lg group-hover:bg-red-200 transition-colors">
+                        <item.icon className="w-5 h-5 text-red-600" />
                       </div>
-                      <div>
-                        <p className="font-medium text-xs sm:text-sm">{action.title}</p>
-                        <p className="text-[10px] sm:text-xs text-muted-foreground hidden sm:block">
-                          {action.description}
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
+                      {item.badge && (
+                        <Badge variant={item.badgeVariant} className="text-xs">
+                          {item.badge}
+                        </Badge>
+                      )}
+                    </div>
+                    <h3 className="font-semibold text-foreground mb-1">{item.title}</h3>
+                    <p className="text-sm text-muted-foreground">{item.description}</p>
+                  </div>
                 </Link>
               ))}
             </div>
-          </div>
-        )}
+          </CardContent>
+        </Card>
+      )}
 
-        <div className="space-y-6">
-          {filteredSections.map((section) => {
-            const visibleItems = section.items.filter(
-              (item) => !item.adminOnly || isAdmin
-            );
-            if (visibleItems.length === 0) return null;
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {filteredSections.map((section) => {
+          const visibleItems = section.items.filter(
+            (item) => !item.adminOnly || isAdmin
+          );
+          if (visibleItems.length === 0) return null;
 
-            return (
-              <Card key={section.id} data-testid={`section-${section.id}`}>
-                <CardHeader className="pb-3 sm:pb-4 p-3 sm:p-4 md:p-6">
-                  <div className="flex items-center gap-2 sm:gap-3">
-                    <div className={`p-1.5 sm:p-2 ${section.color} rounded-lg`}>
-                      <section.icon className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+          const isExpanded = expandedSections.has(section.id);
+          const displayItems = isExpanded ? visibleItems : visibleItems.slice(0, 4);
+          const hasMore = visibleItems.length > 4;
+
+          return (
+            <Card 
+              key={section.id} 
+              className={`border-2 hover:shadow-lg transition-all ${section.bgColor} border-transparent hover:border-gray-200`}
+              data-testid={`section-${section.id}`}
+            >
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2.5 rounded-xl bg-white shadow-sm`}>
+                      <section.icon className={`w-6 h-6 ${section.color}`} />
                     </div>
                     <div>
-                      <CardTitle className="text-base sm:text-lg">{section.title}</CardTitle>
-                      <CardDescription className="text-xs sm:text-sm">{section.description}</CardDescription>
+                      <CardTitle className="text-lg font-bold">{section.title}</CardTitle>
+                      <CardDescription className="text-sm mt-0.5">{section.description}</CardDescription>
                     </div>
                   </div>
-                </CardHeader>
-                <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 md:gap-4">
-                    {visibleItems.map((item) => (
-                      <Link key={item.id} href={item.path}>
-                        <div
-                          className="p-3 sm:p-4 rounded-lg border bg-card hover:bg-accent hover:border-primary cursor-pointer transition-all group min-h-[64px]"
-                          data-testid={`link-${item.id}`}
-                        >
-                          <div className="flex items-start gap-2 sm:gap-3">
-                            <div className="p-1.5 sm:p-2 bg-muted rounded-lg group-hover:bg-primary/10 transition-colors">
-                              <item.icon className="w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="space-y-2">
+                  {displayItems.map((item) => (
+                    <Link key={item.id} href={item.path}>
+                      <div
+                        className="flex items-center justify-between p-3 rounded-lg bg-white/80 hover:bg-white hover:shadow-md cursor-pointer transition-all group border border-transparent hover:border-gray-200"
+                        data-testid={`link-${item.id}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`p-1.5 rounded-lg bg-gray-100 group-hover:bg-gray-200 transition-colors`}>
+                            <item.icon className="w-4 h-4 text-gray-600 group-hover:text-gray-800" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-sm">{item.title}</span>
+                              {item.badge && (
+                                <Badge variant={item.badgeVariant || "secondary"} className="text-[10px] px-1.5 py-0">
+                                  {item.badge}
+                                </Badge>
+                              )}
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-1 sm:gap-2 mb-0.5 sm:mb-1 flex-wrap">
-                                <span className="font-medium text-sm sm:text-base">{item.title}</span>
-                                {item.badge && (
-                                  <Badge variant={item.badgeVariant || "secondary"} className="text-[10px] sm:text-xs">
-                                    {item.badge}
-                                  </Badge>
-                                )}
-                                {item.adminOnly && (
-                                  <Badge variant="outline" className="text-[10px] sm:text-xs">
-                                    مدير
-                                  </Badge>
-                                )}
-                              </div>
-                              <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2">
-                                {item.description}
-                              </p>
-                            </div>
-                            <ChevronLeft className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors mt-1 flex-shrink-0" />
+                            <p className="text-xs text-muted-foreground">{item.description}</p>
                           </div>
                         </div>
-                      </Link>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
+                        <ChevronLeft className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                      </div>
+                    </Link>
+                  ))}
+                </div>
 
-        {filteredSections.length === 0 && searchQuery && (
-          <div className="text-center py-12" data-testid="container-no-results">
-            <Search className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-            <p className="text-lg text-muted-foreground">
-              لا توجد نتائج لـ "{searchQuery}"
-            </p>
-            <p className="text-sm text-muted-foreground mt-2">
-              جرب كلمات بحث مختلفة
-            </p>
+                {hasMore && (
+                  <Button
+                    variant="ghost"
+                    className="w-full mt-3 text-sm hover:bg-white/50"
+                    onClick={() => toggleSection(section.id)}
+                    data-testid={`btn-toggle-${section.id}`}
+                  >
+                    {isExpanded ? (
+                      <>عرض أقل</>
+                    ) : (
+                      <>
+                        عرض الكل ({visibleItems.length})
+                        <ChevronDown className="w-4 h-4 mr-1" />
+                      </>
+                    )}
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {filteredSections.length === 0 && searchQuery && (
+        <div className="text-center py-16" data-testid="container-no-results">
+          <div className="p-4 bg-muted rounded-full w-fit mx-auto mb-4">
+            <Search className="w-8 h-8 text-muted-foreground" />
           </div>
-        )}
+          <p className="text-xl font-medium text-muted-foreground">
+            لا توجد نتائج لـ "{searchQuery}"
+          </p>
+          <p className="text-sm text-muted-foreground mt-2">
+            جرب كلمات بحث مختلفة مثل: أمان، موظفين، فروع
+          </p>
+        </div>
+      )}
       </div>
     </Layout>
   );
