@@ -724,8 +724,10 @@ export default function OperationsReportsDashboardPage() {
 
   const [activeTab, setActiveTab] = useState("overview");
   const [cashierPage, setCashierPage] = useState(1);
+  const [mismatchPage, setMismatchPage] = useState(1);
   const [filtersOpen, setFiltersOpen] = useState(true);
   const cashierPageSize = 15;
+  const mismatchPageSize = 10;
 
   const { branches, userBranchId, canSelectBranch } = useBranches();
 
@@ -5222,14 +5224,17 @@ export default function OperationsReportsDashboardPage() {
                     </Card>
                   )}
 
-                  {/* Detailed Mismatches Table */}
+                  {/* Detailed Mismatches Table with Pagination */}
                   {paymentMismatchData.detailedMismatches.length > 0 && (
                     <Card>
-                      <CardHeader>
+                      <CardHeader className="flex flex-row items-center justify-between">
                         <CardTitle className="text-base flex items-center gap-2">
                           <FileText className="w-5 h-5 text-red-600" />
                           تفاصيل الفروقات ({paymentMismatchData.detailedMismatches.length})
                         </CardTitle>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <span>عرض {mismatchPageSize} سطر لكل صفحة</span>
+                        </div>
                       </CardHeader>
                       <CardContent>
                         <div className="overflow-x-auto">
@@ -5245,7 +5250,9 @@ export default function OperationsReportsDashboardPage() {
                               </tr>
                             </thead>
                             <tbody>
-                              {paymentMismatchData.detailedMismatches.map((mismatch) => (
+                              {paymentMismatchData.detailedMismatches
+                                .slice((mismatchPage - 1) * mismatchPageSize, mismatchPage * mismatchPageSize)
+                                .map((mismatch) => (
                                 <tr key={mismatch.journalId} className="border-b hover:bg-muted/50">
                                   <td className="py-3 px-4">{mismatch.journalDate}</td>
                                   <td className="py-3 px-4">{mismatch.branchName}</td>
@@ -5271,6 +5278,79 @@ export default function OperationsReportsDashboardPage() {
                             </tbody>
                           </table>
                         </div>
+                        
+                        {/* Pagination Controls */}
+                        {paymentMismatchData.detailedMismatches.length > mismatchPageSize && (
+                          <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                            <div className="text-sm text-muted-foreground">
+                              عرض {((mismatchPage - 1) * mismatchPageSize) + 1} - {Math.min(mismatchPage * mismatchPageSize, paymentMismatchData.detailedMismatches.length)} من {paymentMismatchData.detailedMismatches.length}
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setMismatchPage(1)}
+                                disabled={mismatchPage === 1}
+                                className="h-8 px-2"
+                              >
+                                الأولى
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setMismatchPage(p => Math.max(1, p - 1))}
+                                disabled={mismatchPage === 1}
+                                className="h-8 px-3"
+                              >
+                                السابق
+                              </Button>
+                              <div className="flex items-center gap-1 mx-2">
+                                {Array.from({ length: Math.min(5, Math.ceil(paymentMismatchData.detailedMismatches.length / mismatchPageSize)) }, (_, i) => {
+                                  const totalPages = Math.ceil(paymentMismatchData.detailedMismatches.length / mismatchPageSize);
+                                  let pageNum;
+                                  if (totalPages <= 5) {
+                                    pageNum = i + 1;
+                                  } else if (mismatchPage <= 3) {
+                                    pageNum = i + 1;
+                                  } else if (mismatchPage >= totalPages - 2) {
+                                    pageNum = totalPages - 4 + i;
+                                  } else {
+                                    pageNum = mismatchPage - 2 + i;
+                                  }
+                                  return (
+                                    <Button
+                                      key={pageNum}
+                                      variant={mismatchPage === pageNum ? "default" : "outline"}
+                                      size="sm"
+                                      onClick={() => setMismatchPage(pageNum)}
+                                      className="h-8 w-8 p-0"
+                                    >
+                                      {pageNum}
+                                    </Button>
+                                  );
+                                })}
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setMismatchPage(p => Math.min(Math.ceil(paymentMismatchData.detailedMismatches.length / mismatchPageSize), p + 1))}
+                                disabled={mismatchPage >= Math.ceil(paymentMismatchData.detailedMismatches.length / mismatchPageSize)}
+                                className="h-8 px-3"
+                              >
+                                التالي
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setMismatchPage(Math.ceil(paymentMismatchData.detailedMismatches.length / mismatchPageSize))}
+                                disabled={mismatchPage >= Math.ceil(paymentMismatchData.detailedMismatches.length / mismatchPageSize)}
+                                className="h-8 px-2"
+                              >
+                                الأخيرة
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
                   )}
