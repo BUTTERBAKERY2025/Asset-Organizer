@@ -469,37 +469,63 @@ export default function PlatformHomePage() {
           </div>
         )}
 
-        {/* أقسام النظام - تصميم بطاقات بسيط مثل الصورة */}
+        {/* أقسام النظام - تصميم بطاقات مع وصف */}
         <div className="bg-gray-50/80 rounded-2xl p-6">
           <h2 className="text-lg font-semibold text-gray-700 mb-5 flex items-center gap-2">
             <LayoutDashboard className="w-5 h-5 text-primary" />
             {t('systemModules')}
           </h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {accessibleModules.map((module, index) => {
               const IconComponent = module.icon;
               return (
                 <div
                   key={index}
                   onClick={() => navigate(module.href)}
-                  className="bg-white rounded-xl p-5 flex flex-col items-center justify-center gap-2 cursor-pointer transition-all duration-200 hover:shadow-lg hover:-translate-y-1 border border-gray-100"
+                  className="bg-white rounded-xl p-4 cursor-pointer transition-all duration-200 hover:shadow-lg hover:-translate-y-1 border border-gray-100"
                   style={{ 
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-                    minHeight: '120px'
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
                   }}
                   data-testid={`module-card-simple-${index}`}
                 >
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${module.color}`}>
-                    <IconComponent className="w-5 h-5 text-white" />
+                  {/* Header with icon and title */}
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${module.color}`}>
+                      <IconComponent className="w-4 h-4 text-white" />
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-sm font-bold text-gray-800 block leading-tight truncate">
+                        {module.title}
+                      </span>
+                      <span className="text-[10px] text-gray-400 block">
+                        {module.href.replace('/', '').replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                      </span>
+                    </div>
                   </div>
-                  <div className="text-center">
-                    <span className="text-sm font-medium text-gray-700 block leading-tight">
-                      {currentLang === 'ar' ? module.title : module.title}
-                    </span>
-                    <span className="text-[10px] text-gray-400 block mt-0.5">
-                      {module.href.replace('/', '').replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                    </span>
-                  </div>
+                  {/* Description */}
+                  <p className="text-[11px] text-gray-500 leading-relaxed mb-3 line-clamp-2">
+                    {module.description}
+                  </p>
+                  {/* Quick links badges */}
+                  {module.items && module.items.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {module.items.slice(0, 3).map((item, idx) => (
+                        <span
+                          key={idx}
+                          onClick={(e) => { e.stopPropagation(); navigate(item.href); }}
+                          className="inline-flex items-center gap-1 text-[9px] px-2 py-1 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+                        >
+                          <item.icon className="w-2.5 h-2.5" />
+                          {item.label}
+                        </span>
+                      ))}
+                      {module.items.length > 3 && (
+                        <span className="text-[9px] px-2 py-1 rounded-full bg-gray-100 text-gray-400">
+                          +{module.items.length - 3}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
