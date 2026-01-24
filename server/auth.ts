@@ -340,7 +340,11 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     return res.status(403).json({ message: "حسابك معطّل. يرجى التواصل مع المسؤول." });
   }
 
+  // Load user's branch access permissions
+  const branchAccess = await storage.getUserBranchAccess(user.id);
   (req as any).currentUser = user;
+  (req as any).userBranchAccess = branchAccess;
+  (req as any).hasAllBranchesAccess = branchAccess.length > 0; // User has explicit branch access
   next();
 };
 
@@ -452,13 +456,16 @@ export async function canAccessBranch(req: any, branchId: string): Promise<boole
   // Admin can access all branches
   if (user.role === "admin") return true;
   
-  // Check user's branch access
-  const userBranches = await storage.getUserBranchAccess(user.id);
+  // Use pre-loaded branch access from middleware (more efficient)
+  const userBranches = req.userBranchAccess || await storage.getUserBranchAccess(user.id);
   
-  // If no branch restrictions defined, allow access
-  if (userBranches.length === 0) return true;
+  // If user has explicit branch access, check if this branch is in the list
+  if (userBranches.length > 0) {
+    return userBranches.some((b: any) => b.branchId === branchId);
+  }
   
-  return userBranches.some(b => b.branchId === branchId);
+  // No explicit access defined - fall back to user's assigned branchId
+  return user.branchId === branchId;
 }
 
 // Middleware to ensure user has branch access before write operations
@@ -500,7 +507,8 @@ export const requireBranchAccess: RequestHandler = async (req, res, next) => {
 // CRITICAL: Get mandatory branch filter for non-admin users
 // This function returns:
 // - For admins: null (can see all) OR activeBranchId if they selected one
-// - For non-admins: their activeBranchId or default branchId (NEVER null)
+// - For non-admins with all_branches access: null (can see all) OR activeBranchId if selected
+// - For non-admins without all_branches: their activeBranchId or default branchId (NEVER null)
 // Use this for ALL data retrieval to enforce branch isolation
 export function getMandatoryBranchFilter(req: any): string | null {
   const user = req.currentUser;
@@ -511,7 +519,15 @@ export function getMandatoryBranchFilter(req: any): string | null {
     return req.session?.activeBranchId || null;
   }
   
-  // Non-admins MUST have a branch filter - never return null
+  // Check if user has explicit branch access (all_branches was selected)
+  const userBranchAccess = req.userBranchAccess || [];
+  if (userBranchAccess.length > 0) {
+    // User has explicit branch access - they can see all their assigned branches
+    // If they have an active branch selected, use it; otherwise null means all their branches
+    return req.session?.activeBranchId || null;
+  }
+  
+  // Non-admins without explicit access MUST have a branch filter - never return null
   const branchFilter = req.session?.activeBranchId || user.branchId;
   
   // If somehow no branch is assigned, this is a security issue - log it
