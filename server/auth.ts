@@ -543,3 +543,37 @@ export function isUserAdmin(req: any): boolean {
   const user = req.currentUser;
   return user?.role === "admin";
 }
+
+// Get list of branch IDs that user has access to
+// Returns null if user can access ALL branches (admin or has all_branches access)
+// Returns array of branch IDs if user has limited access
+export function getAllowedBranchIds(req: any): string[] | null {
+  const user = req.currentUser;
+  if (!user) return [];
+  
+  // Admin can see all branches
+  if (user.role === "admin") {
+    return null; // null means all branches
+  }
+  
+  // Check if user has explicit branch access
+  const userBranchAccess = req.userBranchAccess || [];
+  if (userBranchAccess.length > 0) {
+    // Return the list of branch IDs user has access to
+    return userBranchAccess.map((access: any) => access.branchId);
+  }
+  
+  // Non-admins without explicit access - use their default branchId
+  if (user.branchId) {
+    return [user.branchId];
+  }
+  
+  // No access
+  return [];
+}
+
+// Check if user has access to multiple branches (not just one)
+export function hasMultiBranchAccess(req: any): boolean {
+  const allowedBranches = getAllowedBranchIds(req);
+  return allowedBranches === null || allowedBranches.length > 1;
+}

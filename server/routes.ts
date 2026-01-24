@@ -69,7 +69,7 @@ import {
 } from "./pdf-generator";
 import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertInfluencerContractSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema, isMadeToOrderCategory, suggestCategoryFromProductName, userBranchAccess } from "@shared/schema";
 import { z } from "zod";
-import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, getMandatoryBranchFilter, isUserAdmin } from "./auth";
+import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, getMandatoryBranchFilter, isUserAdmin, getAllowedBranchIds } from "./auth";
 import { registerGovernanceRoutes } from "./governance-routes";
 
 // Normalize date to YYYY-MM-DD format
@@ -15789,26 +15789,34 @@ export async function registerRoutes(
     try {
       // SECURITY: Enforce branch filtering for non-admin users
       const queryBranchId = req.query.branchId as string | undefined;
-      const mandatoryBranch = getMandatoryBranchFilter(req);
+      const allowedBranches = getAllowedBranchIds(req);
       
-      // For non-admins, always use their mandatory branch filter
-      // Query param is ignored for security - non-admins can only see their branch
-      const effectiveBranchId = isUserAdmin(req) 
-        ? (queryBranchId || mandatoryBranch) 
-        : mandatoryBranch;
+      let employees;
       
-      // If non-admin has no branch assigned, return empty array
-      if (!isUserAdmin(req) && !effectiveBranchId) {
+      // Admin or user with all branches access (allowedBranches === null)
+      if (allowedBranches === null) {
+        if (queryBranchId) {
+          employees = await storage.getBranchEmployeesByBranch(queryBranchId);
+        } else {
+          employees = await storage.getAllBranchEmployees();
+        }
+      } else if (allowedBranches.length > 0) {
+        // User has access to specific branches
+        if (queryBranchId && allowedBranches.includes(queryBranchId)) {
+          // Filter by requested branch if user has access
+          employees = await storage.getBranchEmployeesByBranch(queryBranchId);
+        } else {
+          // Get employees from all allowed branches
+          const allEmployees = await Promise.all(
+            allowedBranches.map(branchId => storage.getBranchEmployeesByBranch(branchId))
+          );
+          employees = allEmployees.flat();
+        }
+      } else {
+        // No branch access
         return res.json([]);
       }
       
-      let employees;
-      if (effectiveBranchId) {
-        employees = await storage.getBranchEmployeesByBranch(effectiveBranchId);
-      } else {
-        // Only admins with no branch selected can see all
-        employees = await storage.getAllBranchEmployees();
-      }
       res.json(employees);
     } catch (error) {
       console.error("Error fetching branch employees:", error);
@@ -15821,13 +15829,27 @@ export async function registerRoutes(
     try {
       // SECURITY: Enforce branch filtering for non-admin users
       const queryBranchId = req.query.branchId as string | undefined;
-      const mandatoryBranch = getMandatoryBranchFilter(req);
-      const effectiveBranchId = isUserAdmin(req) 
-        ? (queryBranchId || mandatoryBranch) 
-        : mandatoryBranch;
+      const allowedBranches = getAllowedBranchIds(req);
       
-      const stats = await storage.getBranchEmployeeStats(effectiveBranchId ?? undefined);
-      res.json(stats);
+      // Admin or user with all branches access
+      if (allowedBranches === null) {
+        const stats = await storage.getBranchEmployeeStats(queryBranchId ?? undefined);
+        return res.json(stats);
+      }
+      
+      // User has specific branch access
+      if (allowedBranches.length > 0) {
+        if (queryBranchId && allowedBranches.includes(queryBranchId)) {
+          const stats = await storage.getBranchEmployeeStats(queryBranchId);
+          return res.json(stats);
+        }
+        // Get combined stats for all allowed branches
+        const stats = await storage.getBranchEmployeeStats(undefined);
+        return res.json(stats);
+      }
+      
+      // No access - return empty stats
+      res.json({ total: 0, byJobTitle: {}, byBranch: {} });
     } catch (error) {
       console.error("Error fetching branch employee stats:", error);
       res.status(500).json({ error: "فشل في جلب إحصائيات الموظفين" });
