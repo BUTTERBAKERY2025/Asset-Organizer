@@ -126,7 +126,23 @@ export async function registerRoutes(
   app.get("/api/users", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
     try {
       const safeUsers = await getCachedUsers();
-      res.json(safeUsers);
+      
+      // Enrich users with branch access information
+      const allBranches = await getCachedBranches();
+      const enrichedUsers = await Promise.all(safeUsers.map(async (user: any) => {
+        const branchAccess = await storage.getUserBranchAccess(user.id);
+        
+        // If user has access to all branches (or most branches), mark as "all_branches"
+        if (branchAccess.length >= allBranches.length && branchAccess.length > 0) {
+          return { ...user, branchId: "all_branches", branchAccessCount: branchAccess.length };
+        } else if (branchAccess.length > 1) {
+          // User has access to multiple (but not all) branches
+          return { ...user, branchAccessCount: branchAccess.length };
+        }
+        return user;
+      }));
+      
+      res.json(enrichedUsers);
     } catch (error) {
       console.error("Error fetching users:", error);
       res.status(500).json({ error: "Failed to fetch users" });
