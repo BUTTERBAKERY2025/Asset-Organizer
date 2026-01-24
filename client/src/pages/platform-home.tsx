@@ -469,15 +469,35 @@ export default function PlatformHomePage() {
           </div>
         )}
 
-        <div>
-          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+        {/* أقسام النظام - تصميم بطاقات بسيط مثل الصورة */}
+        <div className="bg-gray-50/80 rounded-2xl p-6">
+          <h2 className="text-lg font-semibold text-gray-700 mb-5 flex items-center gap-2">
             <LayoutDashboard className="w-5 h-5 text-primary" />
             {t('systemModules')}
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {accessibleModules.map((module, index) => (
-              <ModuleCard key={index} {...module} />
-            ))}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            {accessibleModules.map((module, index) => {
+              const IconComponent = module.icon;
+              return (
+                <div
+                  key={index}
+                  onClick={() => navigate(module.href)}
+                  className="bg-white rounded-xl p-5 flex flex-col items-center justify-center gap-3 cursor-pointer transition-all duration-200 hover:shadow-lg hover:-translate-y-1 border border-gray-100"
+                  style={{ 
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                    minHeight: '110px'
+                  }}
+                  data-testid={`module-card-simple-${index}`}
+                >
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${module.color}`}>
+                    <IconComponent className="w-5 h-5 text-white" />
+                  </div>
+                  <span className="text-sm font-medium text-gray-600 text-center leading-tight">
+                    {module.title}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
 
