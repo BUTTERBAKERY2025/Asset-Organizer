@@ -482,50 +482,58 @@ export default function PlatformHomePage() {
                 <div
                   key={index}
                   onClick={() => navigate(module.href)}
-                  className="bg-white rounded-xl p-4 cursor-pointer transition-all duration-200 hover:shadow-lg hover:-translate-y-1 border border-gray-100"
+                  className="group bg-white rounded-xl p-4 cursor-pointer border border-gray-100 transition-all duration-300 ease-out hover:shadow-xl hover:-translate-y-2 hover:border-primary/20 relative overflow-hidden"
                   style={{ 
                     boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
                   }}
                   data-testid={`module-card-simple-${index}`}
                 >
+                  {/* Gradient overlay on hover */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  
                   {/* Header with icon and title */}
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${module.color}`}>
-                      <IconComponent className="w-4 h-4 text-white" />
+                  <div className="relative flex items-center gap-3 mb-2">
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${module.color} transition-all duration-300 group-hover:scale-110 group-hover:rotate-3 group-hover:shadow-lg`}>
+                      <IconComponent className="w-4 h-4 text-white transition-transform duration-300 group-hover:scale-110" />
                     </div>
                     <div className="min-w-0">
-                      <span className="text-sm font-bold text-gray-800 block leading-tight truncate">
+                      <span className="text-sm font-bold text-gray-800 block leading-tight truncate transition-colors duration-300 group-hover:text-primary">
                         {module.title}
                       </span>
-                      <span className="text-[10px] text-gray-400 block">
+                      <span className="text-[10px] text-gray-400 block transition-colors duration-300 group-hover:text-gray-500">
                         {module.href.replace('/', '').replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
                       </span>
                     </div>
                   </div>
                   {/* Description */}
-                  <p className="text-[11px] text-gray-500 leading-relaxed mb-3 line-clamp-2">
+                  <p className="relative text-[11px] text-gray-500 leading-relaxed mb-3 line-clamp-2 transition-colors duration-300 group-hover:text-gray-600">
                     {module.description}
                   </p>
                   {/* Quick links badges */}
                   {module.items && module.items.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
+                    <div className="relative flex flex-wrap gap-1.5">
                       {module.items.slice(0, 3).map((item, idx) => (
                         <span
                           key={idx}
                           onClick={(e) => { e.stopPropagation(); navigate(item.href); }}
-                          className="inline-flex items-center gap-1 text-[9px] px-2 py-1 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+                          className="inline-flex items-center gap-1 text-[9px] px-2 py-1 rounded-full bg-gray-100 text-gray-600 transition-all duration-200 hover:bg-primary hover:text-white hover:scale-105 hover:shadow-md"
                         >
                           <item.icon className="w-2.5 h-2.5" />
                           {item.label}
                         </span>
                       ))}
                       {module.items.length > 3 && (
-                        <span className="text-[9px] px-2 py-1 rounded-full bg-gray-100 text-gray-400">
+                        <span className="text-[9px] px-2 py-1 rounded-full bg-gray-100 text-gray-400 transition-all duration-200 group-hover:bg-gray-200">
                           +{module.items.length - 3}
                         </span>
                       )}
                     </div>
                   )}
+                  
+                  {/* Arrow indicator on hover */}
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 group-hover:left-2 transition-all duration-300">
+                    <ChevronLeft className="w-4 h-4 text-primary" />
+                  </div>
                 </div>
               );
             })}
