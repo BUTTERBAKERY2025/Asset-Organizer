@@ -11187,8 +11187,7 @@ export async function registerRoutes(
             userId,
             branchId: branch.id,
             accessLevel: 'full',
-            grantedBy: (req as any).currentUser?.id || 'system',
-            grantedAt: new Date(),
+            isDefault: false,
           }).onConflictDoNothing();
         }
       }
