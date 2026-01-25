@@ -17,8 +17,9 @@ import {
   Building2, Heart, Ticket, Plus, Pencil, Trash2, Search, 
   Users, Calendar, DollarSign, Target, TrendingUp, Award,
   Handshake, Gift, Megaphone, RefreshCw, Share2, MessageCircle,
-  Eye, Copy, Check, QrCode, CreditCard
+  Eye, Copy, Check, QrCode, CreditCard, ArrowRight
 } from "lucide-react";
+import { Link } from "wouter";
 import { QRCodeSVG } from "qrcode.react";
 import type { BeneficiaryOrganization, SocialInitiative, CommunityDiscount } from "@shared/schema";
 
@@ -343,6 +344,12 @@ ${discount.minimumOrder ? `🛒 الحد الأدنى للطلب: ${Number(disco
       <div className="p-4 md:p-8 lg:p-10 space-y-6 max-w-6xl mx-auto">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
+            <Link href="/marketing-dashboard">
+              <Button variant="ghost" size="sm" className="mb-2 text-muted-foreground hover:text-foreground" data-testid="btn-back-marketing">
+                <ArrowRight className="h-4 w-4 ml-1" />
+                عودة إلى لوحة التسويق
+              </Button>
+            </Link>
             <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2" data-testid="text-page-title">
               <Handshake className="h-8 w-8 text-amber-600" />
               المشاركات الاجتماعية والمسؤولية المجتمعية
