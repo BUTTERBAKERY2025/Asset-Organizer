@@ -340,7 +340,7 @@ ${discount.minimumOrder ? `🛒 الحد الأدنى للطلب: ${Number(disco
 
   return (
     <Layout>
-      <div className="p-4 md:p-6 space-y-6">
+      <div className="p-4 md:p-8 lg:p-10 space-y-6 max-w-6xl mx-auto">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2" data-testid="text-page-title">
