@@ -207,20 +207,85 @@ export function registerSocialResponsibilityRoutes(app: Express) {
   // Community Discounts - الخصومات المجتمعية
   // =====================================================
 
+  // Simple in-memory rate limiter for public endpoints
+  const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+  const RATE_LIMIT_WINDOW = 60000; // 1 minute
+  const RATE_LIMIT_MAX = 30; // 30 requests per minute per IP
+  
+  function checkRateLimit(ip: string): boolean {
+    const now = Date.now();
+    const record = rateLimitMap.get(ip);
+    
+    if (!record || now > record.resetTime) {
+      rateLimitMap.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
+      return true;
+    }
+    
+    if (record.count >= RATE_LIMIT_MAX) {
+      return false;
+    }
+    
+    record.count++;
+    return true;
+  }
+  
+  // Clean up old rate limit entries periodically
+  setInterval(() => {
+    const now = Date.now();
+    for (const [ip, record] of rateLimitMap.entries()) {
+      if (now > record.resetTime) {
+        rateLimitMap.delete(ip);
+      }
+    }
+  }, 60000);
+
   // Public endpoint - get discount by code (for QR scan)
+  // Security: Rate limited, validates input, returns minimal public fields only
   app.get("/api/social-responsibility/discounts/code/:code", async (req, res) => {
     try {
-      const code = req.params.code;
-      const [discount] = await db.select().from(communityDiscounts).where(eq(communityDiscounts.code, code));
-      
-      if (!discount) {
-        return res.status(404).json({ error: "الخصم غير موجود" });
+      // Rate limiting
+      const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+      if (!checkRateLimit(clientIp)) {
+        return res.status(429).json({ error: "عدد الطلبات كثير جداً، الرجاء المحاولة لاحقاً" });
       }
       
-      // Check if discount is expired
+      const code = req.params.code;
+      
+      // Input validation - only allow alphanumeric codes with limited length
+      if (!code || !/^[A-Za-z0-9\-_]{3,50}$/.test(code)) {
+        return res.status(400).json({ error: "رمز غير صالح" });
+      }
+      
+      const [discount] = await db.select({
+        // Only return minimal public-safe fields (no id, no internal data)
+        code: communityDiscounts.code,
+        name: communityDiscounts.name,
+        discountType: communityDiscounts.discountType,
+        discountValue: communityDiscounts.discountValue,
+        minimumOrder: communityDiscounts.minimumOrder,
+        validFrom: communityDiscounts.validFrom,
+        validTo: communityDiscounts.validTo,
+        terms: communityDiscounts.terms,
+      }).from(communityDiscounts).where(
+        and(
+          eq(communityDiscounts.code, code),
+          eq(communityDiscounts.status, 'active')
+        )
+      );
+      
+      if (!discount) {
+        // Generic error message to prevent code enumeration
+        return res.status(404).json({ error: "الخصم غير موجود أو غير فعال" });
+      }
+      
+      // Check validity dates
       const today = new Date().toISOString().split('T')[0];
       if (discount.validTo && discount.validTo < today) {
-        return res.status(410).json({ error: "الخصم منتهي الصلاحية", discount });
+        return res.status(410).json({ error: "الخصم منتهي الصلاحية" });
+      }
+      
+      if (discount.validFrom && discount.validFrom > today) {
+        return res.status(410).json({ error: "الخصم لم يبدأ بعد" });
       }
       
       res.json(discount);
