@@ -344,7 +344,7 @@ ${discount.minimumOrder ? `🛒 الحد الأدنى للطلب: ${Number(disco
       <div className="p-4 md:p-8 lg:p-10 space-y-6 max-w-6xl mx-auto">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <Link href="/marketing-dashboard">
+            <Link href="/marketing">
               <Button variant="ghost" size="sm" className="mb-2 text-muted-foreground hover:text-foreground" data-testid="btn-back-marketing">
                 <ArrowRight className="h-4 w-4 ml-1" />
                 عودة إلى لوحة التسويق
