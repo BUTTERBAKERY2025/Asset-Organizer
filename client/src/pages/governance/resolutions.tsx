@@ -9,12 +9,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import {
   Scale,
   Plus,
@@ -44,6 +46,7 @@ import {
   Link as LinkIcon,
   Loader2,
   Share2,
+  Trash2,
 } from "lucide-react";
 import type { BoardResolution, BoardMember } from "@shared/schema";
 import { exportToExcel, exportToCSV, printAsPDF } from "@/lib/export-utils";
@@ -100,8 +103,12 @@ export default function ResolutionsPage() {
   const [showDetails, setShowDetails] = useState(false);
   const [showWorkflow, setShowWorkflow] = useState(false);
   const [showSignatures, setShowSignatures] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editingResolution, setEditingResolution] = useState<BoardResolution | null>(null);
+  const [deleteResolutionId, setDeleteResolutionId] = useState<number | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { isAdmin } = useAuth();
 
   const { data: resolutions = [], isLoading } = useQuery<BoardResolution[]>({
     queryKey: ["/api/governance/resolutions"],
@@ -188,6 +195,62 @@ export default function ResolutionsPage() {
       toast({ title: "فشل في إنشاء القرار", variant: "destructive" });
     },
   });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Partial<BoardResolution> }) => {
+      const res = await fetch(`/api/governance/resolutions/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to update resolution");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/governance/resolutions"] });
+      setShowEditDialog(false);
+      setEditingResolution(null);
+      toast({ title: "تم تحديث القرار بنجاح" });
+    },
+    onError: () => {
+      toast({ title: "فشل في تحديث القرار", variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/governance/resolutions/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete resolution");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/governance/resolutions"] });
+      setDeleteResolutionId(null);
+      toast({ title: "تم حذف القرار بنجاح" });
+    },
+    onError: () => {
+      toast({ title: "فشل في حذف القرار", variant: "destructive" });
+    },
+  });
+
+  const handleEditSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!editingResolution) return;
+    const formData = new FormData(e.currentTarget);
+    const deadlineStr = formData.get("implementationDeadline") as string;
+    const data = {
+      resolutionType: formData.get("resolutionType") as string,
+      title: formData.get("title") as string,
+      description: formData.get("description") as string,
+      category: formData.get("category") as string,
+      priority: formData.get("priority") as string,
+      status: formData.get("status") as string,
+      implementationDeadline: deadlineStr || undefined,
+    };
+    updateMutation.mutate({ id: editingResolution.id, data });
+  };
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -1194,6 +1257,57 @@ export default function ResolutionsPage() {
                             <PenLine className="h-4 w-4" />
                             التوقيعات
                           </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1"
+                            onClick={() => {
+                              setEditingResolution(resolution);
+                              setShowEditDialog(true);
+                            }}
+                          >
+                            <Edit className="h-4 w-4" />
+                            تعديل
+                          </Button>
+                          {isAdmin && (
+                            <AlertDialog open={deleteResolutionId === resolution.id} onOpenChange={(open) => !open && setDeleteResolutionId(null)}>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="gap-1 text-red-600 border-red-200 hover:bg-red-50"
+                                  onClick={() => setDeleteResolutionId(resolution.id)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                  حذف
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle className="text-right">تأكيد حذف القرار</AlertDialogTitle>
+                                  <AlertDialogDescription className="text-right">
+                                    هل أنت متأكد من حذف القرار رقم <strong>{resolution.resolutionNumber}</strong>؟
+                                    <br />
+                                    <span className="text-red-600">هذا الإجراء لا يمكن التراجع عنه وسيتم حذف جميع البيانات المرتبطة بالقرار.</span>
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter className="flex gap-2">
+                                  <AlertDialogCancel>إلغاء</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    className="bg-red-600 hover:bg-red-700"
+                                    onClick={() => deleteMutation.mutate(resolution.id)}
+                                    disabled={deleteMutation.isPending}
+                                  >
+                                    {deleteMutation.isPending ? (
+                                      <><Loader2 className="h-4 w-4 animate-spin ml-2" /> جاري الحذف...</>
+                                    ) : (
+                                      "نعم، احذف القرار"
+                                    )}
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
                         </div>
                       </div>
                     </CardContent>
@@ -1515,6 +1629,120 @@ export default function ResolutionsPage() {
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowSignatures(false)}>إغلاق</Button>
             </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Dialog للتعديل */}
+        <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Edit className="h-5 w-5 text-emerald-600" />
+                تعديل القرار - {editingResolution?.resolutionNumber}
+              </DialogTitle>
+            </DialogHeader>
+            {editingResolution && (
+              <form onSubmit={handleEditSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-resolutionType">نوع القرار</Label>
+                  <Select name="resolutionType" defaultValue={editingResolution.resolutionType || ""}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="اختر نوع القرار" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {resolutionTypes.map(type => (
+                        <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="edit-title">عنوان القرار</Label>
+                  <Input id="edit-title" name="title" defaultValue={editingResolution.title} required />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="edit-description">وصف القرار</Label>
+                  <Textarea 
+                    id="edit-description" 
+                    name="description" 
+                    defaultValue={editingResolution.description || ""} 
+                    rows={5}
+                  />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-category">التصنيف</Label>
+                    <Select name="category" defaultValue={editingResolution.category || ""}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="اختر التصنيف" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categories.map(cat => (
+                          <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-priority">الأولوية</Label>
+                    <Select name="priority" defaultValue={editingResolution.priority || ""}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="اختر الأولوية" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {priorities.map(p => (
+                          <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-status">حالة القرار</Label>
+                    <Select name="status" defaultValue={editingResolution.status || "draft"}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="اختر الحالة" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {resolutionStatuses.map(s => (
+                          <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-deadline">موعد التنفيذ</Label>
+                    <Input 
+                      id="edit-deadline" 
+                      name="implementationDeadline" 
+                      type="date"
+                      defaultValue={editingResolution.implementationDeadline ? 
+                        new Date(editingResolution.implementationDeadline).toISOString().split('T')[0] : ""}
+                    />
+                  </div>
+                </div>
+                
+                <DialogFooter className="gap-2">
+                  <Button type="button" variant="outline" onClick={() => setShowEditDialog(false)}>
+                    إلغاء
+                  </Button>
+                  <Button type="submit" disabled={updateMutation.isPending}>
+                    {updateMutation.isPending ? (
+                      <><Loader2 className="h-4 w-4 animate-spin ml-2" /> جاري الحفظ...</>
+                    ) : (
+                      "حفظ التعديلات"
+                    )}
+                  </Button>
+                </DialogFooter>
+              </form>
+            )}
           </DialogContent>
         </Dialog>
       </div>

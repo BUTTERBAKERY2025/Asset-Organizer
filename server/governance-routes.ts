@@ -623,6 +623,33 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
+  app.delete("/api/governance/resolutions/:id", isAuthenticated, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ error: "فقط المسؤول يمكنه حذف القرارات" });
+      }
+      
+      const resolutionId = parseInt(req.params.id);
+      
+      await db.delete(resolutionSignatures).where(eq(resolutionSignatures.resolutionId, resolutionId));
+      await db.delete(resolutionVotes).where(eq(resolutionVotes.resolutionId, resolutionId));
+      
+      const [deleted] = await db.delete(boardResolutions)
+        .where(eq(boardResolutions.id, resolutionId))
+        .returning();
+      
+      if (!deleted) {
+        return res.status(404).json({ error: "القرار غير موجود" });
+      }
+      
+      res.json({ success: true, message: "تم حذف القرار بنجاح" });
+    } catch (error) {
+      console.error("Error deleting resolution:", error);
+      res.status(500).json({ error: "فشل في حذف القرار" });
+    }
+  });
+
   // =====================================================
   // Resolution Votes - التصويت على القرارات
   // =====================================================
