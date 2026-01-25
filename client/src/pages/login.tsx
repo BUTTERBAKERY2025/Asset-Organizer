@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
-import { useWelcomeSound, useLoginSound } from "@/hooks/use-notification-sounds";
+import { useWelcomeSound } from "@/hooks/use-notification-sounds";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -18,8 +18,7 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
   
-  const { setupInteractionListener } = useWelcomeSound("loginPageWelcome");
-  const { triggerLoginSound } = useLoginSound();
+  const { setupInteractionListener } = useWelcomeSound("systemWelcomeSound");
 
   useEffect(() => {
     const cleanup = setupInteractionListener();
@@ -37,7 +36,6 @@ export default function LoginPage() {
     
     try {
       await login({ username, password, rememberMe });
-      await triggerLoginSound();
       setLocation("/");
     } catch (err: any) {
       setError(err.message || "فشل تسجيل الدخول");
