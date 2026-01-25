@@ -404,13 +404,23 @@ export default function DocumentsPage() {
       const uploadPromise = new Promise<any>((resolve, reject) => {
         xhr.onload = () => {
           if (xhr.status >= 200 && xhr.status < 300) {
-            resolve(JSON.parse(xhr.responseText));
+            try {
+              resolve(JSON.parse(xhr.responseText));
+            } catch (e) {
+              reject(new Error("استجابة غير صالحة من الخادم"));
+            }
           } else {
-            reject(new Error(xhr.responseText));
+            try {
+              const errorData = JSON.parse(xhr.responseText);
+              reject(new Error(errorData.error || "فشل في رفع الملف"));
+            } catch {
+              reject(new Error(`خطأ ${xhr.status}: فشل في رفع الملف`));
+            }
           }
         };
-        xhr.onerror = () => reject(new Error("فشل في رفع الملف"));
+        xhr.onerror = () => reject(new Error("فشل في الاتصال بالخادم"));
         xhr.open("POST", "/api/documents/upload");
+        xhr.withCredentials = true;
         xhr.send(formData);
       });
 
