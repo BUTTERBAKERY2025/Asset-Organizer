@@ -203,6 +203,20 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
+  app.delete("/api/governance/shareholders/:id", isAuthenticated, requirePermission("governance_shareholders", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const [deleted] = await db.delete(shareholders).where(eq(shareholders.id, id)).returning();
+      if (!deleted) {
+        return res.status(404).json({ error: "المساهم غير موجود" });
+      }
+      res.json({ success: true, message: "تم حذف المساهم بنجاح" });
+    } catch (error) {
+      console.error("Error deleting shareholder:", error);
+      res.status(500).json({ error: "فشل في حذف المساهم" });
+    }
+  });
+
   // =====================================================
   // Share Transfers - تحويلات الأسهم
   // =====================================================

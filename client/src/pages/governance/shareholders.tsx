@@ -36,7 +36,11 @@ import {
   Filter,
   History,
   Wallet,
+  Trash2,
+  AlertTriangle,
+  CheckCircle2,
 } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import type { Shareholder } from "@shared/schema";
 import { exportToExcel, exportToCSV, printAsPDF } from "@/lib/export-utils";
 
@@ -68,6 +72,8 @@ export default function ShareholdersPage() {
   const [activeTab, setActiveTab] = useState("list");
   const [selectedShareholder, setSelectedShareholder] = useState<Shareholder | null>(null);
   const [showDetails, setShowDetails] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [shareholderToDelete, setShareholderToDelete] = useState<Shareholder | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -116,6 +122,25 @@ export default function ShareholdersPage() {
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/governance/shareholders/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete shareholder");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/governance/shareholders"] });
+      setDeleteDialogOpen(false);
+      setShareholderToDelete(null);
+      toast({ title: "تم حذف المساهم بنجاح" });
+    },
+    onError: () => {
+      toast({ title: "فشل في حذف المساهم", variant: "destructive" });
+    },
+  });
+
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
@@ -150,8 +175,10 @@ export default function ShareholdersPage() {
   });
 
   const totalShares = shareholders.reduce((sum, s) => sum + (s.numberOfShares || 0), 0);
+  const totalPercentage = shareholders.reduce((sum, s) => sum + Number(s.sharePercentage || 0), 0);
   const majorShareholders = shareholders.filter(s => Number(s.sharePercentage) >= 5);
   const votingShares = shareholders.filter(s => s.votingRights).reduce((sum, s) => sum + (s.numberOfShares || 0), 0);
+  const isPercentageValid = Math.abs(totalPercentage - 100) < 0.01;
 
   const getTypeIcon = (type: string) => {
     const typeInfo = shareholderTypes.find(t => t.value === type);
@@ -252,18 +279,43 @@ export default function ShareholdersPage() {
                   CSV تصدير
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => {
+                  const exportData = filteredShareholders.map((s, idx) => ({
+                    ...s,
+                    rowNumber: idx + 1,
+                    shareholderTypeName: shareholderTypes.find(t => t.value === s.shareholderType)?.label || s.shareholderType,
+                    shareClassName: shareClasses.find(c => c.value === s.shareClass)?.label || s.shareClass,
+                    formattedShares: (s.numberOfShares || 0).toLocaleString(),
+                    formattedPercentage: `${Number(s.sharePercentage || 0).toFixed(2)}%`,
+                    votingStatus: s.votingRights ? 'نعم' : 'لا',
+                    formattedDate: s.acquisitionDate || '-',
+                  }));
                   const exportColumns = [
-                    { key: "shareholderNumber", header: "رقم المساهم", width: 15 },
-                    { key: "fullName", header: "الاسم", width: 30 },
-                    { key: "shareholderType", header: "النوع", width: 12 },
-                    { key: "totalShares", header: "عدد الأسهم", width: 15 },
-                    { key: "sharePercentage", header: "النسبة %", width: 10 },
-                    { key: "votingPower", header: "قوة التصويت", width: 12 },
-                    { key: "status", header: "الحالة", width: 10 },
+                    { key: "rowNumber", header: "م", width: 5 },
+                    { key: "fullName", header: "اسم المساهم", width: 25 },
+                    { key: "nationalId", header: "رقم الهوية/السجل", width: 18 },
+                    { key: "shareholderTypeName", header: "نوع المساهم", width: 12 },
+                    { key: "shareClassName", header: "فئة الأسهم", width: 12 },
+                    { key: "formattedShares", header: "عدد الأسهم", width: 15 },
+                    { key: "formattedPercentage", header: "نسبة الملكية", width: 12 },
+                    { key: "votingStatus", header: "حق التصويت", width: 10 },
+                    { key: "formattedDate", header: "تاريخ الاستحواذ", width: 14 },
+                    { key: "nationality", header: "الجنسية", width: 10 },
                   ];
-                  printAsPDF(filteredShareholders, exportColumns, "بيانات المساهمين", "سجل المساهمين وحقوق الملكية");
+                  const headerInfo = [
+                    { label: "إجمالي المساهمين", value: shareholders.length.toString() },
+                    { label: "إجمالي الأسهم", value: totalShares.toLocaleString() },
+                    { label: "إجمالي نسب الملكية", value: `${totalPercentage.toFixed(2)}%` },
+                    { label: "حالة التوازن", value: isPercentageValid ? "متوازن ✓" : `غير متوازن (${totalPercentage > 100 ? 'زيادة' : 'نقص'})` },
+                  ];
+                  printAsPDF(
+                    exportData, 
+                    exportColumns, 
+                    "شركة الزبد الأفضل التجارية", 
+                    "سجل المساهمين وهيكل الملكية",
+                    headerInfo
+                  );
                 }}>
-                  طباعة
+                  طباعة PDF
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -424,6 +476,37 @@ export default function ShareholdersPage() {
           </Card>
         </div>
 
+        <Card className={`border-2 ${isPercentageValid ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-300'}`}>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                {isPercentageValid ? (
+                  <CheckCircle2 className="h-8 w-8 text-green-600" />
+                ) : (
+                  <AlertTriangle className="h-8 w-8 text-red-600" />
+                )}
+                <div>
+                  <p className={`text-sm font-medium ${isPercentageValid ? 'text-green-700' : 'text-red-700'}`}>
+                    إجمالي نسب الملكية
+                  </p>
+                  <p className={`text-xl font-bold ${isPercentageValid ? 'text-green-800' : 'text-red-800'}`}>
+                    {totalPercentage.toFixed(2)}%
+                  </p>
+                </div>
+              </div>
+              <div className="text-left">
+                {isPercentageValid ? (
+                  <Badge className="bg-green-600 text-white">متوازن (100%)</Badge>
+                ) : (
+                  <Badge variant="destructive">
+                    {totalPercentage > 100 ? `زيادة ${(totalPercentage - 100).toFixed(2)}%` : `نقص ${(100 - totalPercentage).toFixed(2)}%`}
+                  </Badge>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full max-w-xl grid-cols-4">
             <TabsTrigger value="list" className="gap-2">
@@ -567,6 +650,18 @@ export default function ShareholdersPage() {
                                   data-testid={`edit-shareholder-${shareholder.id}`}
                                 >
                                   <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                                  onClick={() => {
+                                    setShareholderToDelete(shareholder);
+                                    setDeleteDialogOpen(true);
+                                  }}
+                                  data-testid={`delete-shareholder-${shareholder.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
                                 </Button>
                               </div>
                             </TableCell>
@@ -794,6 +889,33 @@ export default function ShareholdersPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <AlertDialogContent dir="rtl">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2 text-red-600">
+                <AlertTriangle className="h-5 w-5" />
+                تأكيد حذف المساهم
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-right">
+                هل أنت متأكد من حذف المساهم <strong>{shareholderToDelete?.fullName}</strong>؟
+                <br />
+                نسبة الملكية: <strong>{shareholderToDelete?.sharePercentage}%</strong>
+                <br />
+                <span className="text-red-500 font-medium">هذا الإجراء لا يمكن التراجع عنه.</span>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="flex-row-reverse gap-2">
+              <AlertDialogCancel>إلغاء</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-red-600 hover:bg-red-700"
+                onClick={() => shareholderToDelete && deleteMutation.mutate(shareholderToDelete.id)}
+              >
+                {deleteMutation.isPending ? "جاري الحذف..." : "حذف المساهم"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </Layout>
   );
