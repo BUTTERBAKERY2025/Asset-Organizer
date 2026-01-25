@@ -2,9 +2,11 @@ import type { Express, Request, Response } from "express";
 import { db } from "./db";
 import { eq, and, desc, asc, sql, gte, lte, or, isNull } from "drizzle-orm";
 import { isAuthenticated, requirePermission } from "./auth";
+import { ObjectStorageService, ObjectNotFoundError } from "./replit_integrations/object_storage/objectStorage";
 import {
   boardMembers,
   shareholders,
+  shareholderDocuments,
   shareTransfers,
   governanceMeetings,
   meetingAttendance,
@@ -19,6 +21,7 @@ import {
   complianceHistory,
   insertBoardMemberSchema,
   insertShareholderSchema,
+  insertShareholderDocumentSchema,
   insertShareTransferSchema,
   insertGovernanceMeetingSchema,
   insertMeetingAttendanceSchema,
@@ -214,6 +217,96 @@ export function registerGovernanceRoutes(app: Express) {
     } catch (error) {
       console.error("Error deleting shareholder:", error);
       res.status(500).json({ error: "فشل في حذف المساهم" });
+    }
+  });
+
+  // =====================================================
+  // Shareholder Documents - وثائق المساهمين
+  // =====================================================
+
+  app.get("/api/governance/shareholders/:shareholderId/documents", isAuthenticated, requirePermission("governance_shareholders", "view"), async (req, res) => {
+    try {
+      const shareholderId = parseInt(req.params.shareholderId);
+      const result = await db.select().from(shareholderDocuments)
+        .where(eq(shareholderDocuments.shareholderId, shareholderId))
+        .orderBy(desc(shareholderDocuments.createdAt));
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching shareholder documents:", error);
+      res.status(500).json({ error: "فشل في جلب وثائق المساهم" });
+    }
+  });
+
+  app.post("/api/governance/shareholders/:shareholderId/documents", isAuthenticated, requirePermission("governance_shareholders", "edit"), async (req, res) => {
+    try {
+      const shareholderId = parseInt(req.params.shareholderId);
+      const userId = (req as any).user?.id;
+      const validatedData = insertShareholderDocumentSchema.parse({
+        ...req.body,
+        shareholderId,
+        uploadedBy: userId,
+      });
+      const [doc] = await db.insert(shareholderDocuments).values(validatedData).returning();
+      res.json(doc);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
+      }
+      console.error("Error creating shareholder document:", error);
+      res.status(500).json({ error: "فشل في إضافة الوثيقة" });
+    }
+  });
+
+  app.delete("/api/governance/shareholders/:shareholderId/documents/:docId", isAuthenticated, requirePermission("governance_shareholders", "delete"), async (req, res) => {
+    try {
+      const docId = parseInt(req.params.docId);
+      const [deleted] = await db.delete(shareholderDocuments).where(eq(shareholderDocuments.id, docId)).returning();
+      if (!deleted) {
+        return res.status(404).json({ error: "الوثيقة غير موجودة" });
+      }
+      res.json({ success: true, message: "تم حذف الوثيقة بنجاح" });
+    } catch (error) {
+      console.error("Error deleting shareholder document:", error);
+      res.status(500).json({ error: "فشل في حذف الوثيقة" });
+    }
+  });
+
+  // Secure document download with full authorization
+  app.get("/api/governance/shareholders/:shareholderId/documents/:docId/download", isAuthenticated, requirePermission("governance_shareholders", "view"), async (req, res) => {
+    try {
+      const shareholderId = parseInt(req.params.shareholderId);
+      const docId = parseInt(req.params.docId);
+      
+      // Verify document belongs to the specified shareholder
+      const [doc] = await db.select().from(shareholderDocuments)
+        .where(and(
+          eq(shareholderDocuments.id, docId),
+          eq(shareholderDocuments.shareholderId, shareholderId)
+        ));
+      
+      if (!doc) {
+        return res.status(404).json({ error: "الوثيقة غير موجودة" });
+      }
+      
+      // Serve file directly instead of redirecting to public endpoint
+      const objectStorageService = new ObjectStorageService();
+      const objectPath = doc.fileUrl.replace('/api/protected-files', '');
+      
+      const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
+      
+      // Set content disposition to force download with original filename
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(doc.originalFileName)}"`);
+      if (doc.mimeType) {
+        res.setHeader('Content-Type', doc.mimeType);
+      }
+      
+      await objectStorageService.downloadObject(objectFile, res);
+    } catch (error) {
+      console.error("Error downloading shareholder document:", error);
+      if (error instanceof ObjectNotFoundError) {
+        return res.status(404).json({ error: "الملف غير موجود في التخزين" });
+      }
+      res.status(500).json({ error: "فشل في تحميل الوثيقة" });
     }
   });
 

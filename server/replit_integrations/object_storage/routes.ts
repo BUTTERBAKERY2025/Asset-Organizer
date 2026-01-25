@@ -1,47 +1,53 @@
 import type { Express } from "express";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
+import { isAuthenticated } from "../../auth";
+
+const ALLOWED_MIME_TYPES = [
+  'application/pdf',
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+];
+
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
 /**
  * Register object storage routes for file uploads.
  *
- * This provides example routes for the presigned URL upload flow:
- * 1. POST /api/uploads/request-url - Get a presigned URL for uploading
+ * This provides secure routes for the presigned URL upload flow:
+ * 1. POST /api/uploads/request-url - Get a presigned URL for uploading (authenticated)
  * 2. The client then uploads directly to the presigned URL
- *
- * IMPORTANT: These are example routes. Customize based on your use case:
- * - Add authentication middleware for protected uploads
- * - Add file metadata storage (save to database after upload)
- * - Add ACL policies for access control
  */
 export function registerObjectStorageRoutes(app: Express): void {
   const objectStorageService = new ObjectStorageService();
 
   /**
    * Request a presigned URL for file upload.
-   *
-   * Request body (JSON):
-   * {
-   *   "name": "filename.jpg",
-   *   "size": 12345,
-   *   "contentType": "image/jpeg"
-   * }
-   *
-   * Response:
-   * {
-   *   "uploadURL": "https://storage.googleapis.com/...",
-   *   "objectPath": "/objects/uploads/uuid"
-   * }
-   *
-   * IMPORTANT: The client should NOT send the file to this endpoint.
-   * Send JSON metadata only, then upload the file directly to uploadURL.
+   * Protected endpoint - requires authentication.
    */
-  app.post("/api/uploads/request-url", async (req, res) => {
+  app.post("/api/uploads/request-url", isAuthenticated, async (req, res) => {
     try {
       const { name, size, contentType } = req.body;
 
       if (!name) {
         return res.status(400).json({
           error: "Missing required field: name",
+        });
+      }
+
+      // Validate file size
+      if (size && size > MAX_FILE_SIZE) {
+        return res.status(400).json({
+          error: `حجم الملف كبير جداً. الحد الأقصى ${MAX_FILE_SIZE / 1024 / 1024}MB`,
+        });
+      }
+
+      // Validate content type
+      if (contentType && !ALLOWED_MIME_TYPES.includes(contentType)) {
+        return res.status(400).json({
+          error: "نوع الملف غير مدعوم. الأنواع المسموحة: PDF, JPEG, PNG, DOC, DOCX",
         });
       }
 
@@ -63,12 +69,27 @@ export function registerObjectStorageRoutes(app: Express): void {
   });
 
   /**
-   * Serve uploaded objects.
-   *
-   * GET /objects/:objectPath(*)
-   *
-   * This serves files from object storage. For public files, no auth needed.
-   * For protected files, add authentication middleware and ACL checks.
+   * Serve uploaded objects - protected endpoint for sensitive files.
+   * Requires authentication for access control.
+   */
+  app.get("/api/protected-files/*", isAuthenticated, async (req, res) => {
+    try {
+      // Extract the object path from the URL (everything after /api/protected-files)
+      const objectPath = req.path.replace('/api/protected-files', '');
+      const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
+      await objectStorageService.downloadObject(objectFile, res);
+    } catch (error) {
+      console.error("Error serving protected object:", error);
+      if (error instanceof ObjectNotFoundError) {
+        return res.status(404).json({ error: "Object not found" });
+      }
+      return res.status(500).json({ error: "Failed to serve object" });
+    }
+  });
+
+  /**
+   * Serve public uploaded objects.
+   * Use this only for truly public files (e.g., public images).
    */
   app.get("/objects/:objectPath(*)", async (req, res) => {
     try {

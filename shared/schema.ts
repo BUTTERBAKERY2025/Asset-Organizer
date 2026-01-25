@@ -6830,6 +6830,35 @@ export const insertShareholderSchema = createInsertSchema(shareholders).omit({
 export type Shareholder = typeof shareholders.$inferSelect;
 export type InsertShareholder = z.infer<typeof insertShareholderSchema>;
 
+// وثائق المساهمين - Shareholder Documents
+export const shareholderDocuments = pgTable("shareholder_documents", {
+  id: serial("id").primaryKey(),
+  shareholderId: integer("shareholder_id").notNull().references(() => shareholders.id, { onDelete: 'cascade' }),
+  documentType: text("document_type").notNull(), // national_id, share_certificate, commercial_register, contract, bank_statement, other
+  documentName: text("document_name").notNull(),
+  originalFileName: text("original_file_name").notNull(),
+  fileUrl: text("file_url").notNull(),
+  fileSize: integer("file_size"),
+  mimeType: text("mime_type"),
+  expiryDate: date("expiry_date"),
+  notes: text("notes"),
+  uploadedBy: varchar("uploaded_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_shareholder_docs_shareholder").on(table.shareholderId),
+  index("idx_shareholder_docs_type").on(table.documentType),
+]);
+
+export const insertShareholderDocumentSchema = createInsertSchema(shareholderDocuments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ShareholderDocument = typeof shareholderDocuments.$inferSelect;
+export type InsertShareholderDocument = z.infer<typeof insertShareholderDocumentSchema>;
+
 // تحويلات الأسهم - Share Transfers
 export const shareTransfers = pgTable("share_transfers", {
   id: serial("id").primaryKey(),

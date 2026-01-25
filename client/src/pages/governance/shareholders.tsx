@@ -39,10 +39,29 @@ import {
   Trash2,
   AlertTriangle,
   CheckCircle2,
+  FileText,
+  Upload,
+  File,
+  X,
+  Printer,
+  CreditCard,
+  FileCheck,
+  Building,
+  Receipt,
+  FolderOpen,
 } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import type { Shareholder } from "@shared/schema";
+import type { Shareholder, ShareholderDocument } from "@shared/schema";
 import { exportToExcel, exportToCSV, printAsPDF, type PrintOptions } from "@/lib/export-utils";
+
+const documentTypes = [
+  { value: "national_id", label: "الهوية الوطنية", icon: CreditCard },
+  { value: "share_certificate", label: "شهادة الأسهم", icon: FileCheck },
+  { value: "commercial_register", label: "السجل التجاري", icon: Building },
+  { value: "contract", label: "عقد المساهمة", icon: FileText },
+  { value: "bank_statement", label: "كشف حساب بنكي", icon: Receipt },
+  { value: "other", label: "أخرى", icon: FolderOpen },
+];
 
 const shareholderTypes = [
   { value: "individual", label: "فرد", icon: User, color: "#22c55e" },
@@ -74,11 +93,24 @@ export default function ShareholdersPage() {
   const [showDetails, setShowDetails] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [shareholderToDelete, setShareholderToDelete] = useState<Shareholder | null>(null);
+  const [detailsTab, setDetailsTab] = useState("info");
+  const [uploadingDoc, setUploadingDoc] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const { data: shareholders = [], isLoading } = useQuery<Shareholder[]>({
     queryKey: ["/api/governance/shareholders"],
+  });
+
+  const { data: shareholderDocs = [] } = useQuery<ShareholderDocument[]>({
+    queryKey: ["/api/governance/shareholders", selectedShareholder?.id, "documents"],
+    queryFn: async () => {
+      if (!selectedShareholder?.id) return [];
+      const res = await fetch(`/api/governance/shareholders/${selectedShareholder.id}/documents`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!selectedShareholder?.id && showDetails,
   });
 
   const createMutation = useMutation({
@@ -140,6 +172,123 @@ export default function ShareholdersPage() {
       toast({ title: "فشل في حذف المساهم", variant: "destructive" });
     },
   });
+
+  const deleteDocMutation = useMutation({
+    mutationFn: async ({ shareholderId, docId }: { shareholderId: number; docId: number }) => {
+      const res = await fetch(`/api/governance/shareholders/${shareholderId}/documents/${docId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete document");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/governance/shareholders", selectedShareholder?.id, "documents"] });
+      toast({ title: "تم حذف الوثيقة بنجاح" });
+    },
+    onError: () => {
+      toast({ title: "فشل في حذف الوثيقة", variant: "destructive" });
+    },
+  });
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, docType: string) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedShareholder) return;
+    
+    setUploadingDoc(true);
+    try {
+      // Step 1: Get presigned upload URL
+      const presignedRes = await fetch('/api/uploads/request-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: file.name,
+          size: file.size,
+          contentType: file.type,
+        }),
+      });
+      
+      if (!presignedRes.ok) throw new Error('Failed to get upload URL');
+      const { uploadURL, objectPath } = await presignedRes.json();
+      
+      // Step 2: Upload file directly to presigned URL
+      const uploadRes = await fetch(uploadURL, {
+        method: 'PUT',
+        body: file,
+        headers: {
+          'Content-Type': file.type,
+        },
+      });
+      
+      if (!uploadRes.ok) throw new Error('Upload failed');
+      
+      // Step 3: Save document metadata with protected path
+      const fileUrl = `/api/protected-files${objectPath}`;
+      
+      const docRes = await fetch(`/api/governance/shareholders/${selectedShareholder.id}/documents`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          documentType: docType,
+          documentName: documentTypes.find(d => d.value === docType)?.label || docType,
+          originalFileName: file.name,
+          fileUrl: fileUrl,
+          fileSize: file.size,
+          mimeType: file.type,
+        }),
+      });
+      
+      if (!docRes.ok) throw new Error('Failed to save document');
+      
+      queryClient.invalidateQueries({ queryKey: ["/api/governance/shareholders", selectedShareholder.id, "documents"] });
+      toast({ title: "تم رفع الوثيقة بنجاح" });
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast({ title: "فشل في رفع الوثيقة", variant: "destructive" });
+    } finally {
+      setUploadingDoc(false);
+      e.target.value = '';
+    }
+  };
+
+  const exportShareholderPDF = (shareholder: Shareholder) => {
+    const data = [{
+      ...shareholder,
+      shareholderTypeName: shareholderTypes.find(t => t.value === shareholder.shareholderType)?.label,
+      shareClassName: shareClasses.find(c => c.value === shareholder.shareClass)?.label,
+      formattedShares: (shareholder.numberOfShares || 0).toLocaleString(),
+      formattedPercentage: `${Number(shareholder.sharePercentage || 0).toFixed(2)}%`,
+      votingStatus: shareholder.votingRights ? 'نعم' : 'لا',
+    }];
+    
+    const columns = [
+      { key: "fullName", header: "الاسم الكامل", width: 25 },
+      { key: "nationalId", header: "رقم الهوية/السجل", width: 20 },
+      { key: "shareholderTypeName", header: "نوع المساهم", width: 15 },
+      { key: "nationality", header: "الجنسية", width: 12 },
+      { key: "email", header: "البريد الإلكتروني", width: 25 },
+      { key: "phone", header: "رقم الهاتف", width: 15 },
+    ];
+    
+    const headerInfo = [
+      { label: "عدد الأسهم", value: (shareholder.numberOfShares || 0).toLocaleString() },
+      { label: "نسبة الملكية", value: `${Number(shareholder.sharePercentage || 0).toFixed(2)}%` },
+      { label: "فئة الأسهم", value: shareClasses.find(c => c.value === shareholder.shareClass)?.label || '-' },
+      { label: "تاريخ الاستحواذ", value: shareholder.acquisitionDate || '-' },
+      { label: "حق التصويت", value: shareholder.votingRights ? 'نعم' : 'لا' },
+      { label: "البنك", value: shareholder.bankName || '-' },
+      { label: "رقم الآيبان", value: shareholder.iban || '-' },
+      { label: "العنوان", value: shareholder.address || '-' },
+    ];
+    
+    printAsPDF(
+      data,
+      columns,
+      `ملف المساهم: ${shareholder.fullName}`,
+      "بيانات تفصيلية للمساهم",
+      headerInfo,
+      { landscape: true, companyName: "شركة الزبد الأفضل التجارية", showLogo: true }
+    );
+  };
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -813,10 +962,26 @@ export default function ShareholdersPage() {
           </TabsContent>
         </Tabs>
 
-        <Dialog open={showDetails} onOpenChange={setShowDetails}>
-          <DialogContent className="max-w-2xl">
+        <Dialog open={showDetails} onOpenChange={(open) => {
+          setShowDetails(open);
+          if (!open) setDetailsTab("info");
+        }}>
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>تفاصيل المساهم</DialogTitle>
+              <div className="flex items-center justify-between">
+                <DialogTitle>تفاصيل المساهم</DialogTitle>
+                {selectedShareholder && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => exportShareholderPDF(selectedShareholder)}
+                  >
+                    <Printer className="h-4 w-4" />
+                    تصدير PDF
+                  </Button>
+                )}
+              </div>
             </DialogHeader>
             {selectedShareholder && (
               <div className="space-y-4">
@@ -828,7 +993,7 @@ export default function ShareholdersPage() {
                   }`}>
                     {getTypeIcon(selectedShareholder.shareholderType)}
                   </div>
-                  <div>
+                  <div className="flex-1">
                     <h3 className="text-xl font-bold">{selectedShareholder.fullName}</h3>
                     <div className="flex items-center gap-2 mt-1">
                       <Badge variant="outline">
@@ -839,50 +1004,184 @@ export default function ShareholdersPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-gray-50 p-3 rounded-lg">
-                    <p className="text-sm text-gray-500">عدد الأسهم</p>
-                    <p className="text-xl font-bold">{selectedShareholder.numberOfShares?.toLocaleString()}</p>
-                  </div>
-                  <div className="bg-gray-50 p-3 rounded-lg">
-                    <p className="text-sm text-gray-500">نسبة الملكية</p>
-                    <p className="text-xl font-bold">{Number(selectedShareholder.sharePercentage).toFixed(2)}%</p>
-                  </div>
-                  <div className="bg-gray-50 p-3 rounded-lg">
-                    <p className="text-sm text-gray-500">فئة الأسهم</p>
-                    <p className="font-medium">{shareClasses.find(c => c.value === selectedShareholder.shareClass)?.label}</p>
-                  </div>
-                  <div className="bg-gray-50 p-3 rounded-lg">
-                    <p className="text-sm text-gray-500">تاريخ الاستحواذ</p>
-                    <p className="font-medium">{selectedShareholder.acquisitionDate}</p>
-                  </div>
-                </div>
+                <Tabs value={detailsTab} onValueChange={setDetailsTab}>
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="info" className="gap-2">
+                      <User className="h-4 w-4" />
+                      البيانات الأساسية
+                    </TabsTrigger>
+                    <TabsTrigger value="documents" className="gap-2">
+                      <FileText className="h-4 w-4" />
+                      الوثائق ({shareholderDocs.length})
+                    </TabsTrigger>
+                  </TabsList>
 
-                <div className="grid grid-cols-3 gap-4">
-                  <Card className="bg-green-50 border-green-200">
-                    <CardContent className="p-4 text-center">
-                      <Vote className="h-8 w-8 mx-auto text-green-500 mb-2" />
-                      <p className="text-sm text-green-600">قوة التصويت</p>
-                      <p className="text-xl font-bold text-green-800">
-                        {selectedShareholder.votingRights ? `${Number(selectedShareholder.sharePercentage).toFixed(2)}%` : "0%"}
-                      </p>
-                    </CardContent>
-                  </Card>
-                  <Card className="bg-blue-50 border-blue-200">
-                    <CardContent className="p-4 text-center">
-                      <DollarSign className="h-8 w-8 mx-auto text-blue-500 mb-2" />
-                      <p className="text-sm text-blue-600">أرباح مستحقة</p>
-                      <p className="text-xl font-bold text-blue-800">0 ر.س</p>
-                    </CardContent>
-                  </Card>
-                  <Card className="bg-purple-50 border-purple-200">
-                    <CardContent className="p-4 text-center">
-                      <ArrowRightLeft className="h-8 w-8 mx-auto text-purple-500 mb-2" />
-                      <p className="text-sm text-purple-600">التحويلات</p>
-                      <p className="text-xl font-bold text-purple-800">0</p>
-                    </CardContent>
-                  </Card>
-                </div>
+                  <TabsContent value="info" className="mt-4 space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <p className="text-sm text-gray-500">عدد الأسهم</p>
+                        <p className="text-xl font-bold">{selectedShareholder.numberOfShares?.toLocaleString()}</p>
+                      </div>
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <p className="text-sm text-gray-500">نسبة الملكية</p>
+                        <p className="text-xl font-bold">{Number(selectedShareholder.sharePercentage).toFixed(2)}%</p>
+                      </div>
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <p className="text-sm text-gray-500">فئة الأسهم</p>
+                        <p className="font-medium">{shareClasses.find(c => c.value === selectedShareholder.shareClass)?.label}</p>
+                      </div>
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <p className="text-sm text-gray-500">تاريخ الاستحواذ</p>
+                        <p className="font-medium">{selectedShareholder.acquisitionDate || '-'}</p>
+                      </div>
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <p className="text-sm text-gray-500">رقم الهوية/السجل</p>
+                        <p className="font-medium">{selectedShareholder.nationalId || '-'}</p>
+                      </div>
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <p className="text-sm text-gray-500">الجنسية</p>
+                        <p className="font-medium">{selectedShareholder.nationality || '-'}</p>
+                      </div>
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <p className="text-sm text-gray-500">البريد الإلكتروني</p>
+                        <p className="font-medium">{selectedShareholder.email || '-'}</p>
+                      </div>
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <p className="text-sm text-gray-500">رقم الهاتف</p>
+                        <p className="font-medium">{selectedShareholder.phone || '-'}</p>
+                      </div>
+                      <div className="bg-gray-50 p-3 rounded-lg col-span-2">
+                        <p className="text-sm text-gray-500">العنوان</p>
+                        <p className="font-medium">{selectedShareholder.address || '-'}</p>
+                      </div>
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <p className="text-sm text-gray-500">البنك</p>
+                        <p className="font-medium">{selectedShareholder.bankName || '-'}</p>
+                      </div>
+                      <div className="bg-gray-50 p-3 rounded-lg">
+                        <p className="text-sm text-gray-500">رقم الآيبان</p>
+                        <p className="font-medium text-xs">{selectedShareholder.iban || '-'}</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-4">
+                      <Card className="bg-green-50 border-green-200">
+                        <CardContent className="p-4 text-center">
+                          <Vote className="h-8 w-8 mx-auto text-green-500 mb-2" />
+                          <p className="text-sm text-green-600">قوة التصويت</p>
+                          <p className="text-xl font-bold text-green-800">
+                            {selectedShareholder.votingRights ? `${Number(selectedShareholder.sharePercentage).toFixed(2)}%` : "0%"}
+                          </p>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-blue-50 border-blue-200">
+                        <CardContent className="p-4 text-center">
+                          <DollarSign className="h-8 w-8 mx-auto text-blue-500 mb-2" />
+                          <p className="text-sm text-blue-600">أرباح مستحقة</p>
+                          <p className="text-xl font-bold text-blue-800">0 ر.س</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-purple-50 border-purple-200">
+                        <CardContent className="p-4 text-center">
+                          <ArrowRightLeft className="h-8 w-8 mx-auto text-purple-500 mb-2" />
+                          <p className="text-sm text-purple-600">التحويلات</p>
+                          <p className="text-xl font-bold text-purple-800">0</p>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="documents" className="mt-4 space-y-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {documentTypes.map((docType) => {
+                        const existingDoc = shareholderDocs.find(d => d.documentType === docType.value);
+                        const DocIcon = docType.icon;
+                        return (
+                          <div key={docType.value} className={`p-4 rounded-lg border-2 ${existingDoc ? 'bg-green-50 border-green-300' : 'bg-gray-50 border-dashed border-gray-300'}`}>
+                            <div className="flex items-center justify-between mb-2">
+                              <DocIcon className={`h-5 w-5 ${existingDoc ? 'text-green-600' : 'text-gray-400'}`} />
+                              {existingDoc && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 text-red-500 hover:text-red-700"
+                                  onClick={() => deleteDocMutation.mutate({ shareholderId: selectedShareholder.id, docId: existingDoc.id })}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </div>
+                            <p className={`text-sm font-medium mb-2 ${existingDoc ? 'text-green-800' : 'text-gray-600'}`}>
+                              {docType.label}
+                            </p>
+                            {existingDoc ? (
+                              <a
+                                href={`/api/governance/shareholders/${selectedShareholder.id}/documents/${existingDoc.id}/download`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+                              >
+                                <Download className="h-3 w-3" />
+                                تحميل
+                              </a>
+                            ) : (
+                              <label className="cursor-pointer">
+                                <input
+                                  type="file"
+                                  className="hidden"
+                                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                                  onChange={(e) => handleFileUpload(e, docType.value)}
+                                  disabled={uploadingDoc}
+                                />
+                                <span className="text-xs text-amber-600 hover:text-amber-700 flex items-center gap-1">
+                                  <Upload className="h-3 w-3" />
+                                  {uploadingDoc ? "جاري الرفع..." : "رفع"}
+                                </span>
+                              </label>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {shareholderDocs.length > 0 && (
+                      <div className="mt-4">
+                        <h4 className="font-medium text-gray-700 mb-2">جميع الوثائق المرفوعة</h4>
+                        <div className="space-y-2">
+                          {shareholderDocs.map((doc) => (
+                            <div key={doc.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                              <div className="flex items-center gap-3">
+                                <File className="h-5 w-5 text-gray-500" />
+                                <div>
+                                  <p className="font-medium text-sm">{doc.documentName}</p>
+                                  <p className="text-xs text-gray-500">{doc.originalFileName}</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <a
+                                  href={`/api/governance/shareholders/${selectedShareholder.id}/documents/${doc.id}/download`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 hover:text-blue-800"
+                                >
+                                  <Download className="h-4 w-4" />
+                                </a>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-red-500"
+                                  onClick={() => deleteDocMutation.mutate({ shareholderId: selectedShareholder.id, docId: doc.id })}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </TabsContent>
+                </Tabs>
               </div>
             )}
             <DialogFooter>
