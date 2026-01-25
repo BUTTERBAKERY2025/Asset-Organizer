@@ -1444,6 +1444,22 @@ export function registerGovernanceRoutes(app: Express) {
         return res.status(400).json({ error: "التوقيع مطلوب" });
       }
       
+      // Validate signature data format and size (prevent oversized payloads)
+      if (typeof signatureData !== 'string') {
+        return res.status(400).json({ error: "صيغة التوقيع غير صالحة" });
+      }
+      
+      // Max size ~500KB for signature data (base64 image)
+      const MAX_SIGNATURE_SIZE = 500 * 1024;
+      if (signatureData.length > MAX_SIGNATURE_SIZE) {
+        return res.status(400).json({ error: "حجم التوقيع كبير جداً" });
+      }
+      
+      // Validate base64 data URL format
+      if (!signatureData.startsWith('data:image/')) {
+        return res.status(400).json({ error: "صيغة صورة التوقيع غير صالحة" });
+      }
+      
       // Get signature record
       const [signature] = await db.select().from(resolutionSignatures)
         .where(eq(resolutionSignatures.signatureToken, token));
