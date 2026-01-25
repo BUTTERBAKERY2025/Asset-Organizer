@@ -1169,10 +1169,7 @@ export default function DocumentsPage() {
                           {fileTypeIcons[doc.fileType.toLowerCase()] || "📄"}
                         </div>
                         <p className="font-medium text-sm truncate">{doc.title}</p>
-                        <p className="text-xs text-gray-500">{doc.fileName}</p>
-                        <p className="text-xs text-gray-400 mt-1">
-                          {formatFileSize(doc.fileSize)}
-                        </p>
+                        <p className="text-xs text-gray-500">{doc.fileType.toUpperCase()} • {formatFileSize(doc.fileSize)}</p>
                         <Badge className={`mt-2 ${statusColors[doc.status]}`}>
                           {statusLabels[doc.status]}
                         </Badge>
@@ -1248,7 +1245,7 @@ export default function DocumentsPage() {
                         <div>
                           <p className="font-medium">{doc.title}</p>
                           <div className="flex items-center gap-2 text-xs text-gray-500">
-                            <span>{doc.fileName}</span>
+                            <span>{doc.fileType.toUpperCase()}</span>
                             <span>•</span>
                             <span>{formatFileSize(doc.fileSize)}</span>
                             <span>•</span>

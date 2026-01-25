@@ -20505,7 +20505,26 @@ export async function registerRoutes(
         const [exists] = await blob.exists();
         
         if (exists) {
-          await objectStorageService.downloadObject(blob, res);
+          const [metadata] = await blob.getMetadata();
+          
+          // Set headers for inline display (PDF preview in iframe)
+          res.set({
+            "Content-Type": metadata.contentType || "application/octet-stream",
+            "Content-Length": metadata.size,
+            "Content-Disposition": "inline",
+            "X-Frame-Options": "SAMEORIGIN",
+            "Cache-Control": "private, max-age=3600",
+          });
+          
+          // Stream the file
+          const stream = blob.createReadStream();
+          stream.on("error", (err) => {
+            console.error("Stream error:", err);
+            if (!res.headersSent) {
+              res.status(500).json({ error: "Error streaming file" });
+            }
+          });
+          stream.pipe(res);
           return;
         }
       } catch (storageError) {
