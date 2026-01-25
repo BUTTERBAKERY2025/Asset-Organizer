@@ -209,6 +209,8 @@ export default function DocumentsPage() {
   const [uploadCategoryId, setUploadCategoryId] = useState<string>("");
   const [shareLink, setShareLink] = useState("");
   const [isDragging, setIsDragging] = useState(false);
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [page, setPage] = useState(1);
@@ -460,9 +462,37 @@ export default function DocumentsPage() {
     }
   };
 
-  const handlePreviewDocument = (doc: Document) => {
+  const handlePreviewDocument = async (doc: Document) => {
     setSelectedDocument(doc);
+    setPreviewBlobUrl(null);
     setIsPreviewDialogOpen(true);
+    
+    if (canPreview(doc.fileType)) {
+      setIsLoadingPreview(true);
+      try {
+        const filename = doc.filePath.split("/").pop();
+        const response = await fetch(`/api/documents/file/${filename}`, {
+          credentials: 'include'
+        });
+        if (response.ok) {
+          const blob = await response.blob();
+          const url = URL.createObjectURL(blob);
+          setPreviewBlobUrl(url);
+        }
+      } catch (error) {
+        console.error("Error loading preview:", error);
+      } finally {
+        setIsLoadingPreview(false);
+      }
+    }
+  };
+  
+  const handleClosePreview = () => {
+    if (previewBlobUrl) {
+      URL.revokeObjectURL(previewBlobUrl);
+      setPreviewBlobUrl(null);
+    }
+    setIsPreviewDialogOpen(false);
   };
 
   const handleDownloadDocument = async (doc: Document) => {
@@ -759,26 +789,51 @@ export default function DocumentsPage() {
       </div>
 
       {/* Preview Dialog */}
-      <Dialog open={isPreviewDialogOpen} onOpenChange={setIsPreviewDialogOpen}>
+      <Dialog open={isPreviewDialogOpen} onOpenChange={handleClosePreview}>
         <DialogContent dir="rtl" className="max-w-4xl max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>{selectedDocument?.title}</DialogTitle>
           </DialogHeader>
           <div className="py-4">
             {selectedDocument && canPreview(selectedDocument.fileType) ? (
-              <div className="w-full h-[60vh] border rounded-lg overflow-hidden">
-                {selectedDocument.fileType === "pdf" ? (
-                  <iframe
-                    src={getPreviewUrl(selectedDocument)}
-                    className="w-full h-full"
-                    title={selectedDocument.title}
-                  />
+              <div className="w-full h-[60vh] border rounded-lg overflow-hidden bg-gray-100">
+                {isLoadingPreview ? (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <Loader2 className="h-8 w-8 animate-spin text-amber-600" />
+                    <span className="mr-2 text-gray-600">جاري تحميل المعاينة...</span>
+                  </div>
+                ) : previewBlobUrl ? (
+                  selectedDocument.fileType.toLowerCase() === "pdf" ? (
+                    <object
+                      data={previewBlobUrl}
+                      type="application/pdf"
+                      className="w-full h-full"
+                    >
+                      <div className="w-full h-full flex flex-col items-center justify-center">
+                        <File className="h-16 w-16 text-gray-400 mb-4" />
+                        <p className="text-gray-600 mb-4">تعذر عرض PDF في المتصفح</p>
+                        <Button onClick={() => selectedDocument && handleDownloadDocument(selectedDocument)}>
+                          <Download className="h-4 w-4 ml-2" />
+                          تحميل الملف
+                        </Button>
+                      </div>
+                    </object>
+                  ) : (
+                    <img
+                      src={previewBlobUrl}
+                      alt={selectedDocument.title}
+                      className="w-full h-full object-contain"
+                    />
+                  )
                 ) : (
-                  <img
-                    src={getPreviewUrl(selectedDocument)}
-                    alt={selectedDocument.title}
-                    className="w-full h-full object-contain"
-                  />
+                  <div className="w-full h-full flex flex-col items-center justify-center">
+                    <File className="h-16 w-16 text-gray-400 mb-4" />
+                    <p className="text-gray-600 mb-4">تعذر تحميل المعاينة</p>
+                    <Button onClick={() => selectedDocument && handleDownloadDocument(selectedDocument)}>
+                      <Download className="h-4 w-4 ml-2" />
+                      تحميل الملف
+                    </Button>
+                  </div>
                 )}
               </div>
             ) : (
