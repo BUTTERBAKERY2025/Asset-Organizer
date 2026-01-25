@@ -361,29 +361,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-background flex">
       <aside className="w-72 bg-gradient-to-b from-card via-card to-card/95 border-l border-border/50 hidden md:flex flex-col sticky top-0 h-screen shadow-lg">
-        <div className="p-4 flex flex-col items-center bg-gradient-to-b from-primary/5 to-transparent border-b border-border/30">
-          <div className="w-full px-2 mb-3 flex items-center justify-center relative">
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/5 to-transparent rounded-xl" />
-            <img src={logo} alt="Butter Bakery" className="w-full h-auto object-contain max-h-16 relative z-10" />
-          </div>
-          <div className="flex items-center gap-3 w-full justify-center mb-2">
-            <div className="flex flex-col items-center gap-0.5">
-              <div className="flex items-center gap-1.5">
-                <Crown className="w-3 h-3 text-amber-500" />
-                <p className="text-[11px] font-bold text-foreground text-center leading-tight">{t("platformName")}</p>
-              </div>
-              <p className="text-[9px] text-primary font-medium tracking-wider flex items-center gap-1">
-                <Sparkles className="w-2.5 h-2.5" />
-                {t("systemSubtitle")}
-              </p>
+        <div className="p-4 border-b border-border/30">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex-1">
+              <h1 className="text-base font-bold text-amber-700 leading-tight">{t("platformName")}</h1>
+              <p className="text-[10px] text-amber-600/70 font-medium">{t("systemSubtitle")}</p>
             </div>
             {isAuthenticated && <NotificationsDropdown />}
           </div>
-          {isAuthenticated && (
-            <div className="w-full">
-              <GlobalSearch />
-            </div>
-          )}
+          {isAuthenticated && <GlobalSearch />}
         </div>
 
         <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent">
@@ -513,11 +499,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </SheetTrigger>
             <SheetContent side="right" className="w-72 p-0 overflow-y-auto">
               <div className="p-4 border-b border-border/50">
-                <img src={logo} alt="Butter Bakery" className="w-full h-auto object-contain max-h-16" />
-                <div className="text-center mt-2">
-                  <p className="text-[10px] font-bold text-foreground">{t("platformName")}</p>
-                  <p className="text-[9px] text-primary font-medium tracking-wider">{t("systemSubtitle")}</p>
-                </div>
+                <h1 className="text-base font-bold text-amber-700">{t("platformName")}</h1>
+                <p className="text-[10px] text-amber-600/70 font-medium">{t("systemSubtitle")}</p>
               </div>
               
               <nav className="p-3 space-y-1">
