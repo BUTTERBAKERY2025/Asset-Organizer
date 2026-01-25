@@ -19,7 +19,7 @@ export function registerSocialResponsibilityRoutes(app: Express) {
   // Beneficiary Organizations - الجهات المستفيدة
   // =====================================================
 
-  app.get("/api/social-responsibility/organizations", isAuthenticated, requirePermission("marketing_campaigns", "view"), async (req, res) => {
+  app.get("/api/social-responsibility/organizations", isAuthenticated, requirePermission("social_responsibility", "view"), async (req, res) => {
     try {
       const { type, status, partnership } = req.query;
       
@@ -42,7 +42,7 @@ export function registerSocialResponsibilityRoutes(app: Express) {
     }
   });
 
-  app.get("/api/social-responsibility/organizations/:id", isAuthenticated, requirePermission("marketing_campaigns", "view"), async (req, res) => {
+  app.get("/api/social-responsibility/organizations/:id", isAuthenticated, requirePermission("social_responsibility", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const [org] = await db.select().from(beneficiaryOrganizations).where(eq(beneficiaryOrganizations.id, id));
@@ -56,7 +56,7 @@ export function registerSocialResponsibilityRoutes(app: Express) {
     }
   });
 
-  app.post("/api/social-responsibility/organizations", isAuthenticated, requirePermission("marketing_campaigns", "create"), async (req, res) => {
+  app.post("/api/social-responsibility/organizations", isAuthenticated, requirePermission("social_responsibility", "create"), async (req, res) => {
     try {
       const userId = (req as any).user?.id;
       const validatedData = insertBeneficiaryOrganizationSchema.parse({
@@ -74,7 +74,7 @@ export function registerSocialResponsibilityRoutes(app: Express) {
     }
   });
 
-  app.put("/api/social-responsibility/organizations/:id", isAuthenticated, requirePermission("marketing_campaigns", "edit"), async (req, res) => {
+  app.put("/api/social-responsibility/organizations/:id", isAuthenticated, requirePermission("social_responsibility", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const validatedData = insertBeneficiaryOrganizationSchema.partial().parse(req.body);
@@ -95,7 +95,7 @@ export function registerSocialResponsibilityRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/social-responsibility/organizations/:id", isAuthenticated, requirePermission("marketing_campaigns", "delete"), async (req, res) => {
+  app.delete("/api/social-responsibility/organizations/:id", isAuthenticated, requirePermission("social_responsibility", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const [deleted] = await db.delete(beneficiaryOrganizations).where(eq(beneficiaryOrganizations.id, id)).returning();
@@ -113,7 +113,7 @@ export function registerSocialResponsibilityRoutes(app: Express) {
   // Social Initiatives - المبادرات الاجتماعية
   // =====================================================
 
-  app.get("/api/social-responsibility/initiatives", isAuthenticated, requirePermission("marketing_campaigns", "view"), async (req, res) => {
+  app.get("/api/social-responsibility/initiatives", isAuthenticated, requirePermission("social_responsibility", "view"), async (req, res) => {
     try {
       const { type, status, organizationId } = req.query;
       
@@ -136,7 +136,7 @@ export function registerSocialResponsibilityRoutes(app: Express) {
     }
   });
 
-  app.get("/api/social-responsibility/initiatives/:id", isAuthenticated, requirePermission("marketing_campaigns", "view"), async (req, res) => {
+  app.get("/api/social-responsibility/initiatives/:id", isAuthenticated, requirePermission("social_responsibility", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const [initiative] = await db.select().from(socialInitiatives).where(eq(socialInitiatives.id, id));
@@ -150,7 +150,7 @@ export function registerSocialResponsibilityRoutes(app: Express) {
     }
   });
 
-  app.post("/api/social-responsibility/initiatives", isAuthenticated, requirePermission("marketing_campaigns", "create"), async (req, res) => {
+  app.post("/api/social-responsibility/initiatives", isAuthenticated, requirePermission("social_responsibility", "create"), async (req, res) => {
     try {
       const userId = (req as any).user?.id;
       const validatedData = insertSocialInitiativeSchema.parse({
@@ -168,7 +168,7 @@ export function registerSocialResponsibilityRoutes(app: Express) {
     }
   });
 
-  app.put("/api/social-responsibility/initiatives/:id", isAuthenticated, requirePermission("marketing_campaigns", "edit"), async (req, res) => {
+  app.put("/api/social-responsibility/initiatives/:id", isAuthenticated, requirePermission("social_responsibility", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const validatedData = insertSocialInitiativeSchema.partial().parse(req.body);
@@ -189,7 +189,7 @@ export function registerSocialResponsibilityRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/social-responsibility/initiatives/:id", isAuthenticated, requirePermission("marketing_campaigns", "delete"), async (req, res) => {
+  app.delete("/api/social-responsibility/initiatives/:id", isAuthenticated, requirePermission("social_responsibility", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const [deleted] = await db.delete(socialInitiatives).where(eq(socialInitiatives.id, id)).returning();
@@ -207,7 +207,7 @@ export function registerSocialResponsibilityRoutes(app: Express) {
   // Community Discounts - الخصومات المجتمعية
   // =====================================================
 
-  app.get("/api/social-responsibility/discounts", isAuthenticated, requirePermission("marketing_campaigns", "view"), async (req, res) => {
+  app.get("/api/social-responsibility/discounts", isAuthenticated, requirePermission("social_responsibility", "view"), async (req, res) => {
     try {
       const { status, organizationId, initiativeId } = req.query;
       
@@ -230,7 +230,7 @@ export function registerSocialResponsibilityRoutes(app: Express) {
     }
   });
 
-  app.get("/api/social-responsibility/discounts/:id", isAuthenticated, requirePermission("marketing_campaigns", "view"), async (req, res) => {
+  app.get("/api/social-responsibility/discounts/:id", isAuthenticated, requirePermission("social_responsibility", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const [discount] = await db.select().from(communityDiscounts).where(eq(communityDiscounts.id, id));
@@ -244,7 +244,7 @@ export function registerSocialResponsibilityRoutes(app: Express) {
     }
   });
 
-  app.post("/api/social-responsibility/discounts", isAuthenticated, requirePermission("marketing_campaigns", "create"), async (req, res) => {
+  app.post("/api/social-responsibility/discounts", isAuthenticated, requirePermission("social_responsibility", "create"), async (req, res) => {
     try {
       const userId = (req as any).user?.id;
       const validatedData = insertCommunityDiscountSchema.parse({
@@ -262,7 +262,7 @@ export function registerSocialResponsibilityRoutes(app: Express) {
     }
   });
 
-  app.put("/api/social-responsibility/discounts/:id", isAuthenticated, requirePermission("marketing_campaigns", "edit"), async (req, res) => {
+  app.put("/api/social-responsibility/discounts/:id", isAuthenticated, requirePermission("social_responsibility", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const validatedData = insertCommunityDiscountSchema.partial().parse(req.body);
@@ -283,7 +283,7 @@ export function registerSocialResponsibilityRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/social-responsibility/discounts/:id", isAuthenticated, requirePermission("marketing_campaigns", "delete"), async (req, res) => {
+  app.delete("/api/social-responsibility/discounts/:id", isAuthenticated, requirePermission("social_responsibility", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const [deleted] = await db.delete(communityDiscounts).where(eq(communityDiscounts.id, id)).returning();
@@ -384,7 +384,7 @@ export function registerSocialResponsibilityRoutes(app: Express) {
   });
 
   // Get discount usage logs
-  app.get("/api/social-responsibility/discounts/:id/usage", isAuthenticated, requirePermission("marketing_campaigns", "view"), async (req, res) => {
+  app.get("/api/social-responsibility/discounts/:id/usage", isAuthenticated, requirePermission("social_responsibility", "view"), async (req, res) => {
     try {
       const discountId = parseInt(req.params.id);
       const logs = await db.select().from(discountUsageLogs)
@@ -398,7 +398,7 @@ export function registerSocialResponsibilityRoutes(app: Express) {
   });
 
   // Dashboard stats
-  app.get("/api/social-responsibility/stats", isAuthenticated, requirePermission("marketing_campaigns", "view"), async (req, res) => {
+  app.get("/api/social-responsibility/stats", isAuthenticated, requirePermission("social_responsibility", "view"), async (req, res) => {
     try {
       const [orgsCount] = await db.select({ count: sql<number>`count(*)` }).from(beneficiaryOrganizations);
       const [activeOrgsCount] = await db.select({ count: sql<number>`count(*)` }).from(beneficiaryOrganizations).where(eq(beneficiaryOrganizations.status, "active"));

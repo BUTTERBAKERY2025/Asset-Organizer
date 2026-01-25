@@ -277,7 +277,7 @@ function Router() {
       <Route path="/marketing">{() => <ModulePage component={MarketingDashboardPage} module="marketing" />}</Route>
       <Route path="/marketing-campaigns">{() => <ModulePage component={MarketingCampaignsPage} module="marketing_campaigns" />}</Route>
       <Route path="/marketing-social">{() => <ModulePage component={MarketingSocialPage} module="marketing" />}</Route>
-      <Route path="/social-responsibility">{() => <ModulePage component={SocialResponsibilityPage} module="marketing_campaigns" />}</Route>
+      <Route path="/social-responsibility">{() => <ModulePage component={SocialResponsibilityPage} module="social_responsibility" />}</Route>
       <Route path="/marketing-influencers">{() => <ModulePage component={MarketingInfluencersPage} module="marketing_influencers" />}</Route>
       <Route path="/influencer-contracts">{() => <ModulePage component={InfluencerContractsPage} module="marketing_influencers" />}</Route>
       <Route path="/marketing-calendar">{() => <ModulePage component={MarketingCalendarPage} module="marketing" />}</Route>

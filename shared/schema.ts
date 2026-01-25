@@ -558,6 +558,7 @@ export const SYSTEM_MODULES = [
   "marketing_expenses",
   "marketing_reports",
   "marketing_team",
+  "social_responsibility",
   
   // إدارة النظام
   "rbac_management",
@@ -720,6 +721,7 @@ export const MODULE_LABELS: Record<SystemModule, string> = {
   marketing_expenses: "مصروفات التسويق",
   marketing_reports: "تقارير التسويق",
   marketing_team: "فريق التسويق",
+  social_responsibility: "المسؤولية الاجتماعية",
   
   // إدارة النظام
   rbac_management: "إدارة الصلاحيات",
@@ -864,6 +866,7 @@ export const MODULE_GROUPS: { label: string; modules: SystemModule[] }[] = [
       "marketing_expenses",
       "marketing_reports",
       "marketing_team",
+      "social_responsibility",
     ],
   },
   {
