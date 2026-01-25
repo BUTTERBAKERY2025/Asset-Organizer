@@ -1308,9 +1308,47 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
+  // Rate limiting for public signature endpoints
+  const signatureRateLimitMap = new Map<string, { count: number; resetTime: number }>();
+  const SIGNATURE_RATE_LIMIT_WINDOW = 60000; // 1 minute
+  const SIGNATURE_RATE_LIMIT_MAX = 10; // 10 requests per minute per IP (stricter for signatures)
+  
+  function checkSignatureRateLimit(ip: string): boolean {
+    const now = Date.now();
+    const record = signatureRateLimitMap.get(ip);
+    
+    if (!record || now > record.resetTime) {
+      signatureRateLimitMap.set(ip, { count: 1, resetTime: now + SIGNATURE_RATE_LIMIT_WINDOW });
+      return true;
+    }
+    
+    if (record.count >= SIGNATURE_RATE_LIMIT_MAX) {
+      return false;
+    }
+    
+    record.count++;
+    return true;
+  }
+  
+  // Cleanup expired rate limit entries every minute
+  setInterval(() => {
+    const now = Date.now();
+    for (const [ip, record] of signatureRateLimitMap.entries()) {
+      if (now > record.resetTime) {
+        signatureRateLimitMap.delete(ip);
+      }
+    }
+  }, 60000);
+
   // Public endpoint - Get resolution for signing (no auth required)
   app.get("/api/public/sign/:token", async (req, res) => {
     try {
+      // Rate limiting
+      const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+      if (!checkSignatureRateLimit(clientIp)) {
+        return res.status(429).json({ error: "تم تجاوز الحد الأقصى للطلبات. حاول لاحقاً." });
+      }
+      
       const { token } = req.params;
       
       // Validate token format
@@ -1361,6 +1399,12 @@ export function registerGovernanceRoutes(app: Express) {
   // Public endpoint - Submit signature (no auth required)
   app.post("/api/public/sign/:token", async (req, res) => {
     try {
+      // Rate limiting
+      const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+      if (!checkSignatureRateLimit(clientIp)) {
+        return res.status(429).json({ error: "تم تجاوز الحد الأقصى للطلبات. حاول لاحقاً." });
+      }
+      
       const { token } = req.params;
       const { signatureData, signatureType = "draw" } = req.body;
       
@@ -1415,8 +1459,19 @@ export function registerGovernanceRoutes(app: Express) {
   // Public endpoint - Decline signature
   app.post("/api/public/sign/:token/decline", async (req, res) => {
     try {
+      // Rate limiting
+      const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+      if (!checkSignatureRateLimit(clientIp)) {
+        return res.status(429).json({ error: "تم تجاوز الحد الأقصى للطلبات. حاول لاحقاً." });
+      }
+      
       const { token } = req.params;
       const { reason } = req.body;
+      
+      // Validate token format
+      if (!token || !/^[a-f0-9]{64}$/.test(token)) {
+        return res.status(400).json({ error: "رابط غير صالح" });
+      }
       
       const [signature] = await db.select().from(resolutionSignatures)
         .where(eq(resolutionSignatures.signatureToken, token));

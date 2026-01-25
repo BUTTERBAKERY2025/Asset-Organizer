@@ -9,6 +9,7 @@ import {
   serial,
   index,
   uniqueIndex,
+  unique,
   jsonb,
   boolean,
   doublePrecision,
@@ -7132,6 +7133,7 @@ export const resolutionSignatures = pgTable("resolution_signatures", {
   index("idx_resolution_signatures_member").on(table.boardMemberId),
   index("idx_resolution_signatures_token").on(table.signatureToken),
   index("idx_resolution_signatures_status").on(table.status),
+  unique("idx_resolution_signatures_unique").on(table.resolutionId, table.boardMemberId),
 ]);
 
 export const insertResolutionSignatureSchema = createInsertSchema(resolutionSignatures).omit({
