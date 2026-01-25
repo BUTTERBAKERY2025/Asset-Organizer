@@ -16,8 +16,10 @@ import { apiRequest } from "@/lib/queryClient";
 import { 
   Building2, Heart, Ticket, Plus, Pencil, Trash2, Search, 
   Users, Calendar, DollarSign, Target, TrendingUp, Award,
-  Handshake, Gift, Megaphone, RefreshCw
+  Handshake, Gift, Megaphone, RefreshCw, Share2, MessageCircle,
+  Eye, Copy, Check, QrCode
 } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import type { BeneficiaryOrganization, SocialInitiative, CommunityDiscount } from "@shared/schema";
 
 interface SocialResponsibilityStats {
@@ -81,6 +83,9 @@ export default function SocialResponsibilityPage() {
   const [selectedOrg, setSelectedOrg] = useState<BeneficiaryOrganization | null>(null);
   const [selectedInitiative, setSelectedInitiative] = useState<SocialInitiative | null>(null);
   const [selectedDiscount, setSelectedDiscount] = useState<CommunityDiscount | null>(null);
+  const [showDiscountCard, setShowDiscountCard] = useState(false);
+  const [viewingDiscount, setViewingDiscount] = useState<CommunityDiscount | null>(null);
+  const [copiedCode, setCopiedCode] = useState<number | null>(null);
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -258,6 +263,40 @@ export default function SocialResponsibilityPage() {
     disc.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     disc.code.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Copy discount code
+  const copyDiscountCode = async (discount: CommunityDiscount) => {
+    try {
+      await navigator.clipboard.writeText(discount.code);
+      setCopiedCode(discount.id);
+      toast({ title: "تم نسخ رمز الخصم" });
+      setTimeout(() => setCopiedCode(null), 2000);
+    } catch {
+      toast({ title: "فشل في نسخ الرمز", variant: "destructive" });
+    }
+  };
+
+  // Share via WhatsApp
+  const shareViaWhatsApp = (discount: CommunityDiscount) => {
+    const message = `🎁 عرض خاص من مخبز الزبد!
+
+📌 ${discount.name}
+🏷️ رمز الخصم: ${discount.code}
+💰 قيمة الخصم: ${discount.discountType === "percentage" ? `${discount.discountValue}%` : `${Number(discount.discountValue).toLocaleString()} ر.س`}
+📅 صالح حتى: ${discount.validTo}
+${discount.minimumOrder ? `🛒 الحد الأدنى للطلب: ${Number(discount.minimumOrder).toLocaleString()} ر.س` : ''}
+
+استخدم الرمز عند الدفع للحصول على الخصم! 🎉`;
+    
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+  };
+
+  // Share via SMS
+  const shareViaSMS = (discount: CommunityDiscount) => {
+    const message = `عرض خاص! رمز الخصم: ${discount.code} - ${discount.discountType === "percentage" ? `${discount.discountValue}%` : `${Number(discount.discountValue).toLocaleString()} ر.س`} خصم. صالح حتى ${discount.validTo}`;
+    window.open(`sms:?body=${encodeURIComponent(message)}`, '_blank');
+  };
 
   return (
     <Layout>
@@ -559,88 +598,235 @@ export default function SocialResponsibilityPage() {
                 </Button>
               </CardHeader>
               <CardContent>
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>اسم الخصم</TableHead>
-                        <TableHead>الرمز</TableHead>
-                        <TableHead>القيمة</TableHead>
-                        <TableHead>الصلاحية</TableHead>
-                        <TableHead>الاستخدام</TableHead>
-                        <TableHead>الحالة</TableHead>
-                        <TableHead>الإجراءات</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {loadingDiscounts ? (
-                        <TableRow>
-                          <TableCell colSpan={7} className="text-center py-8">
-                            <RefreshCw className="h-6 w-6 animate-spin mx-auto text-gray-400" />
-                          </TableCell>
-                        </TableRow>
-                      ) : filteredDiscounts.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={7} className="text-center py-8 text-gray-500">
-                            لا توجد خصومات مسجلة
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        filteredDiscounts.map((disc) => (
-                          <TableRow key={disc.id}>
-                            <TableCell className="font-medium">{disc.name}</TableCell>
-                            <TableCell>
-                              <code className="bg-gray-100 px-2 py-1 rounded text-sm">{disc.code}</code>
-                            </TableCell>
-                            <TableCell>
-                              {disc.discountType === "percentage" 
-                                ? `${disc.discountValue}%` 
-                                : `${Number(disc.discountValue).toLocaleString()} ر.س`}
-                            </TableCell>
-                            <TableCell>
-                              <div className="text-sm">
-                                <p>من: {disc.validFrom}</p>
-                                <p>إلى: {disc.validTo}</p>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              {disc.usageCount || 0} / {disc.usageLimit || "∞"}
-                            </TableCell>
-                            <TableCell>
-                              <Badge className={statusColors[disc.status || "active"]}>
-                                {disc.status === "active" ? "فعال" : 
-                                 disc.status === "expired" ? "منتهي" : "غير فعال"}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => { setSelectedDiscount(disc); setShowDiscountDialog(true); }}
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="text-red-500"
-                                  onClick={() => deleteDiscountMutation.mutate(disc.id)}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
+                {loadingDiscounts ? (
+                  <div className="flex justify-center py-8">
+                    <RefreshCw className="h-6 w-6 animate-spin text-gray-400" />
+                  </div>
+                ) : filteredDiscounts.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    لا توجد خصومات مسجلة
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredDiscounts.map((disc) => (
+                      <div 
+                        key={disc.id} 
+                        className="relative bg-gradient-to-br from-amber-50 via-white to-amber-50 border-2 border-amber-200 rounded-2xl p-4 shadow-lg hover:shadow-xl transition-shadow"
+                        data-testid={`discount-card-${disc.id}`}
+                      >
+                        {/* Header */}
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex-1">
+                            <h3 className="font-bold text-lg text-amber-900">{disc.name}</h3>
+                            <Badge className={`${statusColors[disc.status || "active"]} mt-1`}>
+                              {disc.status === "active" ? "فعال" : disc.status === "expired" ? "منتهي" : "غير فعال"}
+                            </Badge>
+                          </div>
+                          <div className="bg-amber-600 text-white px-3 py-1 rounded-full text-lg font-bold">
+                            {disc.discountType === "percentage" 
+                              ? `${disc.discountValue}%` 
+                              : `${Number(disc.discountValue).toLocaleString()} ر.س`}
+                          </div>
+                        </div>
+
+                        {/* QR Code & Code */}
+                        <div className="flex items-center gap-4 my-4 p-3 bg-white rounded-xl border border-amber-100">
+                          <div className="bg-white p-2 rounded-lg border">
+                            <QRCodeSVG 
+                              value={disc.code} 
+                              size={80}
+                              level="M"
+                              includeMargin={false}
+                            />
+                          </div>
+                          <div className="flex-1 text-center">
+                            <p className="text-xs text-gray-500 mb-1">رمز الخصم</p>
+                            <div className="flex items-center justify-center gap-2">
+                              <code className="bg-amber-100 text-amber-800 px-4 py-2 rounded-lg text-xl font-bold tracking-wider">
+                                {disc.code}
+                              </code>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => copyDiscountCode(disc)}
+                                data-testid={`button-copy-${disc.id}`}
+                              >
+                                {copiedCode === disc.id ? (
+                                  <Check className="h-4 w-4 text-green-600" />
+                                ) : (
+                                  <Copy className="h-4 w-4 text-gray-500" />
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Details */}
+                        <div className="grid grid-cols-2 gap-2 text-sm mb-3">
+                          <div className="bg-gray-50 rounded-lg p-2 text-center">
+                            <p className="text-gray-500 text-xs">صالح حتى</p>
+                            <p className="font-semibold text-gray-700">{disc.validTo}</p>
+                          </div>
+                          <div className="bg-gray-50 rounded-lg p-2 text-center">
+                            <p className="text-gray-500 text-xs">الاستخدام</p>
+                            <p className="font-semibold text-gray-700">{disc.usageCount || 0} / {disc.usageLimit || "∞"}</p>
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center justify-between pt-3 border-t border-amber-100">
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-1 text-green-600 border-green-200 hover:bg-green-50"
+                              onClick={() => shareViaWhatsApp(disc)}
+                              data-testid={`button-whatsapp-${disc.id}`}
+                            >
+                              <MessageCircle className="h-4 w-4" />
+                              واتساب
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-1"
+                              onClick={() => shareViaSMS(disc)}
+                              data-testid={`button-sms-${disc.id}`}
+                            >
+                              <Share2 className="h-4 w-4" />
+                              رسالة
+                            </Button>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => { setViewingDiscount(disc); setShowDiscountCard(true); }}
+                              data-testid={`button-view-${disc.id}`}
+                            >
+                              <Eye className="h-4 w-4 text-blue-500" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => { setSelectedDiscount(disc); setShowDiscountDialog(true); }}
+                              data-testid={`button-edit-${disc.id}`}
+                            >
+                              <Pencil className="h-4 w-4 text-gray-500" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => deleteDiscountMutation.mutate(disc.id)}
+                              data-testid={`button-delete-${disc.id}`}
+                            >
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* Discount Card Preview Dialog */}
+        <Dialog open={showDiscountCard} onOpenChange={setShowDiscountCard}>
+          <DialogContent className="max-w-md">
+            {viewingDiscount && (
+              <div className="bg-gradient-to-br from-amber-500 via-amber-400 to-yellow-500 rounded-2xl p-6 text-white shadow-2xl" id="discount-card-print">
+                {/* Decorative Elements */}
+                <div className="absolute top-0 left-0 w-full h-full opacity-10">
+                  <div className="absolute top-4 left-4 w-20 h-20 border-4 border-white rounded-full" />
+                  <div className="absolute bottom-4 right-4 w-16 h-16 border-4 border-white rounded-full" />
+                </div>
+                
+                <div className="relative z-10">
+                  {/* Logo & Title */}
+                  <div className="text-center mb-4">
+                    <div className="inline-block bg-white/20 backdrop-blur rounded-full px-4 py-1 mb-2">
+                      <span className="text-sm font-medium">مخبز الزبد الأفضل</span>
+                    </div>
+                    <h2 className="text-2xl font-bold">{viewingDiscount.name}</h2>
+                  </div>
+
+                  {/* Discount Value */}
+                  <div className="text-center my-6">
+                    <div className="inline-block bg-white text-amber-600 rounded-2xl px-8 py-4 shadow-lg">
+                      <p className="text-sm text-amber-500 mb-1">خصم</p>
+                      <p className="text-4xl font-black">
+                        {viewingDiscount.discountType === "percentage" 
+                          ? `${viewingDiscount.discountValue}%` 
+                          : `${Number(viewingDiscount.discountValue).toLocaleString()} ر.س`}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* QR Code */}
+                  <div className="flex justify-center my-4">
+                    <div className="bg-white p-3 rounded-xl shadow-lg">
+                      <QRCodeSVG 
+                        value={viewingDiscount.code} 
+                        size={120}
+                        level="H"
+                        includeMargin={false}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Code */}
+                  <div className="text-center my-4">
+                    <p className="text-white/80 text-sm mb-1">رمز الخصم</p>
+                    <div className="inline-block bg-white/20 backdrop-blur rounded-xl px-6 py-3">
+                      <code className="text-2xl font-bold tracking-widest">{viewingDiscount.code}</code>
+                    </div>
+                  </div>
+
+                  {/* Validity */}
+                  <div className="text-center text-white/80 text-sm mt-4">
+                    <p>صالح حتى: {viewingDiscount.validTo}</p>
+                    {viewingDiscount.minimumOrder && (
+                      <p>الحد الأدنى للطلب: {Number(viewingDiscount.minimumOrder).toLocaleString()} ر.س</p>
+                    )}
+                  </div>
+
+                  {/* Terms */}
+                  {viewingDiscount.terms && (
+                    <div className="mt-4 text-center text-xs text-white/60">
+                      {viewingDiscount.terms}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            <DialogFooter className="mt-4">
+              <div className="flex gap-2 w-full">
+                <Button 
+                  className="flex-1 gap-2 bg-green-600 hover:bg-green-700"
+                  onClick={() => viewingDiscount && shareViaWhatsApp(viewingDiscount)}
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  مشاركة واتساب
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="flex-1 gap-2"
+                  onClick={() => viewingDiscount && shareViaSMS(viewingDiscount)}
+                >
+                  <Share2 className="h-4 w-4" />
+                  إرسال رسالة
+                </Button>
+              </div>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Organization Dialog */}
         <Dialog open={showOrgDialog} onOpenChange={setShowOrgDialog}>
