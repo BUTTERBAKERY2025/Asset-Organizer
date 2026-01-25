@@ -41,7 +41,7 @@ import {
   ArrowRight,
   CheckCheck,
   Copy,
-  Link,
+  Link as LinkIcon,
   Loader2,
   Share2,
 } from "lucide-react";
@@ -1143,7 +1143,7 @@ export default function ResolutionsPage() {
                                     onClick={() => window.open(getSigningUrl(sig.signatureToken), '_blank')}
                                     title="فتح صفحة التوقيع"
                                   >
-                                    <Link className="h-4 w-4" />
+                                    <LinkIcon className="h-4 w-4" />
                                   </Button>
                                   <Button
                                     variant="ghost"
