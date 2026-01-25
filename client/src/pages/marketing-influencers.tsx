@@ -190,6 +190,10 @@ export default function MarketingInfluencersPage() {
   const [coverageSearchQuery, setCoverageSearchQuery] = useState("");
   const [coverageRegionFilter, setCoverageRegionFilter] = useState<string>("all");
   const [coverageCampaignFilter, setCoverageCampaignFilter] = useState<string>("all");
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -459,6 +463,17 @@ export default function MarketingInfluencersPage() {
   });
 
   const uniqueRegions = Array.from(new Set(influencers.map(i => i.region).filter((r): r is string => Boolean(r))));
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredInfluencers.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const paginatedInfluencers = filteredInfluencers.slice(startIndex, endIndex);
+  
+  // Reset to page 1 when filters change
+  const handleFilterChange = () => {
+    setCurrentPage(1);
+  };
 
   const kpiStats = {
     totalInfluencers: filteredInfluencers.length,
@@ -1250,7 +1265,7 @@ export default function MarketingInfluencersPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredInfluencers.map((influencer) => (
+                  {paginatedInfluencers.map((influencer) => (
                     <TableRow key={influencer.id} data-testid={`row-influencer-${influencer.id}`}>
                       <TableCell>
                         <div className="flex items-center gap-3">
@@ -1404,6 +1419,56 @@ export default function MarketingInfluencersPage() {
                 </TableBody>
               </Table>
             </CardContent>
+            
+            {/* Pagination Controls */}
+            {filteredInfluencers.length > ITEMS_PER_PAGE && (
+              <div className="flex items-center justify-between p-4 border-t">
+                <div className="text-sm text-muted-foreground">
+                  عرض {startIndex + 1} - {Math.min(endIndex, filteredInfluencers.length)} من {filteredInfluencers.length} مؤثر
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(1)}
+                    disabled={currentPage === 1}
+                    data-testid="btn-first-page"
+                  >
+                    الأولى
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                    data-testid="btn-prev-page"
+                  >
+                    السابق
+                  </Button>
+                  <span className="text-sm px-3">
+                    صفحة {currentPage} من {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages}
+                    data-testid="btn-next-page"
+                  >
+                    التالي
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(totalPages)}
+                    disabled={currentPage === totalPages}
+                    data-testid="btn-last-page"
+                  >
+                    الأخيرة
+                  </Button>
+                </div>
+              </div>
+            )}
           </Card>
         )}
 
