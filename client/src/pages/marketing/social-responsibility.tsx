@@ -74,6 +74,14 @@ const statusColors: Record<string, string> = {
   expired: "bg-orange-100 text-orange-800",
 };
 
+// Get the production site URL for QR codes
+const getSiteUrl = () => {
+  // Use PUBLIC_SITE_URL environment variable if set, otherwise fallback to current origin
+  const envUrl = import.meta.env.VITE_PUBLIC_SITE_URL;
+  if (envUrl) return envUrl;
+  return window.location.origin;
+};
+
 export default function SocialResponsibilityPage() {
   const [activeTab, setActiveTab] = useState("organizations");
   const [searchTerm, setSearchTerm] = useState("");
@@ -87,6 +95,7 @@ export default function SocialResponsibilityPage() {
   const [viewingDiscount, setViewingDiscount] = useState<CommunityDiscount | null>(null);
   const [copiedCode, setCopiedCode] = useState<number | null>(null);
   
+  const siteUrl = getSiteUrl();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -819,7 +828,7 @@ ${discount.minimumOrder ? `🛒 الحد الأدنى للطلب: ${Number(disco
                     <div className="flex justify-center my-4">
                       <div className="bg-white p-3 rounded-xl shadow-lg">
                         <QRCodeSVG 
-                          value={`${window.location.origin}/discount/${viewingDiscount.code}`}
+                          value={`${siteUrl}/discount/${viewingDiscount.code}`}
                           size={100}
                           level="H"
                           includeMargin={false}
@@ -861,7 +870,7 @@ ${discount.minimumOrder ? `🛒 الحد الأدنى للطلب: ${Number(disco
                   className="w-full gap-2 bg-green-600 hover:bg-green-700 py-5 text-base"
                   onClick={() => {
                     if (viewingDiscount) {
-                      const cardUrl = `${window.location.origin}/discount/${viewingDiscount.code}`;
+                      const cardUrl = `${siteUrl}/discount/${viewingDiscount.code}`;
                       const message = `🎁 *كارد خصم من BUTTER BAKERY*\n\n` +
                         `📍 ${viewingDiscount.name}\n` +
                         `💰 خصم: ${viewingDiscount.discountType === "percentage" ? `${viewingDiscount.discountValue}%` : `${viewingDiscount.discountValue} ر.س`}\n` +
@@ -895,7 +904,7 @@ ${discount.minimumOrder ? `🛒 الحد الأدنى للطلب: ${Number(disco
                   className="w-full gap-2"
                   onClick={() => {
                     if (viewingDiscount) {
-                      const cardUrl = `${window.location.origin}/discount/${viewingDiscount.code}`;
+                      const cardUrl = `${siteUrl}/discount/${viewingDiscount.code}`;
                       navigator.clipboard.writeText(cardUrl);
                       toast({
                         title: "تم النسخ",

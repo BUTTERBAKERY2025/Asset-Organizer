@@ -5,6 +5,13 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Wallet, Download, Share2, Calendar, MessageCircle } from "lucide-react";
 
+// Get the production site URL
+const getSiteUrl = () => {
+  const envUrl = import.meta.env.VITE_PUBLIC_SITE_URL;
+  if (envUrl) return envUrl;
+  return window.location.origin;
+};
+
 interface DiscountData {
   id: number;
   code: string;
