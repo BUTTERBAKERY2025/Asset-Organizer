@@ -770,67 +770,57 @@ ${discount.minimumOrder ? `🛒 الحد الأدنى للطلب: ${Number(disco
 
         {/* Discount Card Preview Dialog */}
         <Dialog open={showDiscountCard} onOpenChange={setShowDiscountCard}>
-          <DialogContent className="max-w-md p-0 overflow-hidden">
+          <DialogContent className="max-w-sm p-0 overflow-hidden max-h-[90vh] overflow-y-auto">
             {viewingDiscount && (
               <div className="relative" id="discount-card-print">
                 {/* Card Background */}
-                <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6 relative overflow-hidden">
-                  {/* Decorative Pattern */}
-                  <div className="absolute inset-0 opacity-5">
-                    <div className="absolute top-0 left-0 w-full h-full" style={{
-                      backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-                    }} />
-                  </div>
-                  
+                <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4 relative overflow-hidden">
                   {/* Orange accent line */}
-                  <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-orange-500 via-orange-400 to-orange-500" />
+                  <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 via-orange-400 to-orange-500" />
                   
                   <div className="relative z-10">
                     {/* Logo Section */}
-                    <div className="text-center mb-6 pt-2">
-                      <div className="inline-block bg-white rounded-2xl p-4 shadow-xl">
+                    <div className="text-center mb-4 pt-1">
+                      <div className="inline-block bg-white rounded-xl p-3 shadow-lg">
                         <img 
                           src="/butter-logo.png" 
                           alt="BUTTER BAKERY" 
-                          className="h-16 mx-auto"
+                          className="h-12 mx-auto"
                           onError={(e) => {
                             e.currentTarget.style.display = 'none';
                             const textEl = e.currentTarget.nextElementSibling as HTMLElement;
                             if (textEl) textEl.classList.remove('hidden');
                           }}
                         />
-                        <div className="hidden text-2xl font-black text-orange-500 tracking-wider">
+                        <div className="hidden text-lg font-black text-orange-500 tracking-wider">
                           BUTTER BAKERY
                         </div>
                       </div>
                     </div>
 
                     {/* Discount Name */}
-                    <div className="text-center mb-4">
-                      <h2 className="text-xl font-bold text-white">{viewingDiscount.name}</h2>
+                    <div className="text-center mb-3">
+                      <h2 className="text-base font-bold text-white">{viewingDiscount.name}</h2>
                     </div>
 
-                    {/* Discount Value - Premium Badge */}
-                    <div className="text-center my-6">
-                      <div className="inline-block relative">
-                        <div className="absolute inset-0 bg-orange-500 rounded-2xl blur-xl opacity-40" />
-                        <div className="relative bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl px-12 py-6 shadow-2xl border border-orange-400/30">
-                          <p className="text-orange-100 text-sm mb-1 font-medium">خصم حصري</p>
-                          <p className="text-5xl font-black text-white drop-shadow-lg">
-                            {viewingDiscount.discountType === "percentage" 
-                              ? `${viewingDiscount.discountValue}%` 
-                              : `${Number(viewingDiscount.discountValue).toLocaleString()} ر.س`}
-                          </p>
-                        </div>
+                    {/* Discount Value */}
+                    <div className="text-center my-4">
+                      <div className="inline-block bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl px-8 py-4 shadow-lg">
+                        <p className="text-orange-100 text-xs mb-1">خصم حصري</p>
+                        <p className="text-3xl font-black text-white">
+                          {viewingDiscount.discountType === "percentage" 
+                            ? `${viewingDiscount.discountValue}%` 
+                            : `${Number(viewingDiscount.discountValue).toLocaleString()} ر.س`}
+                        </p>
                       </div>
                     </div>
 
                     {/* QR Code */}
-                    <div className="flex justify-center my-6">
-                      <div className="bg-white p-4 rounded-2xl shadow-xl">
+                    <div className="flex justify-center my-4">
+                      <div className="bg-white p-3 rounded-xl shadow-lg">
                         <QRCodeSVG 
                           value={`${window.location.origin}/discount/${viewingDiscount.code}`}
-                          size={120}
+                          size={100}
                           level="H"
                           includeMargin={false}
                           fgColor="#1e293b"
@@ -839,34 +829,28 @@ ${discount.minimumOrder ? `🛒 الحد الأدنى للطلب: ${Number(disco
                     </div>
 
                     {/* Code */}
-                    <div className="text-center my-4">
-                      <p className="text-slate-400 text-sm mb-2">رمز الخصم</p>
-                      <div className="inline-block bg-slate-700/50 backdrop-blur-sm rounded-xl px-8 py-4 border border-slate-600">
-                        <code className="text-2xl font-black tracking-widest text-white">{viewingDiscount.code}</code>
+                    <div className="text-center my-3">
+                      <p className="text-slate-400 text-xs mb-1">رمز الخصم</p>
+                      <div className="inline-block bg-slate-700/50 rounded-lg px-5 py-2 border border-slate-600">
+                        <code className="text-lg font-bold tracking-widest text-white">{viewingDiscount.code}</code>
                       </div>
                     </div>
 
                     {/* Validity */}
-                    <div className="text-center text-slate-300 text-sm mt-6 space-y-1">
-                      <p className="flex items-center justify-center gap-2">
-                        <Calendar className="h-4 w-4 text-orange-400" />
+                    <div className="text-center text-slate-300 text-xs mt-3">
+                      <p className="flex items-center justify-center gap-1">
+                        <Calendar className="h-3 w-3 text-orange-400" />
                         <span>صالح حتى: <strong className="text-white">{viewingDiscount.validTo}</strong></span>
                       </p>
-                      {viewingDiscount.minimumOrder && (
-                        <p className="text-slate-400">الحد الأدنى للطلب: {Number(viewingDiscount.minimumOrder).toLocaleString()} ر.س</p>
-                      )}
                     </div>
 
                     {/* Terms */}
                     {viewingDiscount.terms && (
-                      <div className="mt-4 text-center text-xs text-slate-400 bg-slate-700/30 rounded-lg p-3 border border-slate-700">
+                      <div className="mt-3 text-center text-xs text-slate-400 bg-slate-700/30 rounded-lg p-2">
                         {viewingDiscount.terms}
                       </div>
                     )}
                   </div>
-                  
-                  {/* Bottom accent */}
-                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-orange-500/50 to-transparent" />
                 </div>
               </div>
             )}
