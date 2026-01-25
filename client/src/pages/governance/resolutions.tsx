@@ -539,11 +539,87 @@ export default function ResolutionsPage() {
                             variant="outline"
                             size="sm"
                             className="gap-1"
-                            onClick={() => {
+                            onClick={async () => {
                               const resolutionType = resolutionTypes.find(t => t.value === resolution.resolutionType)?.label || resolution.resolutionType;
                               const status = resolutionStatuses.find(s => s.value === resolution.status)?.label || resolution.status;
                               const priority = priorities.find(p => p.value === resolution.priority)?.label || resolution.priority;
                               const category = categories.find(c => c.value === resolution.category)?.label || resolution.category;
+                              
+                              // جلب التوقيعات الإلكترونية
+                              let signaturesData: ResolutionSignature[] = [];
+                              try {
+                                const res = await fetch(`/api/governance/resolutions/${resolution.id}/signatures`);
+                                if (res.ok) {
+                                  signaturesData = await res.json();
+                                }
+                              } catch (e) {
+                                console.error('Failed to fetch signatures:', e);
+                              }
+                              
+                              const translatePosition = (pos: string) => {
+                                const positions: Record<string, string> = {
+                                  'chairman': 'رئيس مجلس الإدارة',
+                                  'vice_chairman': 'نائب رئيس مجلس الإدارة',
+                                  'member': 'عضو مجلس الإدارة',
+                                  'secretary': 'أمين السر',
+                                  'رئيس مجلس الإدارة': 'رئيس مجلس الإدارة',
+                                  'نائب رئيس مجلس الإدارة': 'نائب رئيس مجلس الإدارة',
+                                  'عضو مجلس الإدارة': 'عضو مجلس الإدارة',
+                                };
+                                return positions[pos] || pos;
+                              };
+                              
+                              const signaturesHtml = signaturesData.length > 0 
+                                ? signaturesData.map(sig => `
+                                    <div class="signature-card ${sig.status === 'signed' ? 'signed' : 'pending'}">
+                                      <div class="sig-header">
+                                        <div class="sig-name">${sig.memberName}</div>
+                                        <div class="sig-position">${translatePosition(sig.memberPosition)}</div>
+                                      </div>
+                                      <div class="sig-content">
+                                        ${sig.status === 'signed' && sig.signatureData 
+                                          ? `<img src="${sig.signatureData}" alt="توقيع ${sig.memberName}" class="sig-image" />`
+                                          : sig.status === 'declined'
+                                            ? '<div class="sig-declined">رفض التوقيع</div>'
+                                            : '<div class="sig-pending">في انتظار التوقيع</div>'
+                                        }
+                                      </div>
+                                      <div class="sig-footer">
+                                        ${sig.status === 'signed' && sig.signedAt 
+                                          ? `<span class="sig-date">تاريخ التوقيع: ${new Date(sig.signedAt).toLocaleDateString('ar-SA')}</span>`
+                                          : ''
+                                        }
+                                        <span class="sig-status ${sig.status}">${sig.status === 'signed' ? '✓ موقّع' : sig.status === 'declined' ? '✗ مرفوض' : '⏳ معلّق'}</span>
+                                      </div>
+                                    </div>
+                                  `).join('')
+                                : `
+                                    <div class="signature-card pending">
+                                      <div class="sig-header">
+                                        <div class="sig-name">رئيس مجلس الإدارة</div>
+                                      </div>
+                                      <div class="sig-content">
+                                        <div class="sig-line">________________________</div>
+                                      </div>
+                                    </div>
+                                    <div class="signature-card pending">
+                                      <div class="sig-header">
+                                        <div class="sig-name">نائب رئيس مجلس الإدارة</div>
+                                      </div>
+                                      <div class="sig-content">
+                                        <div class="sig-line">________________________</div>
+                                      </div>
+                                    </div>
+                                    <div class="signature-card pending">
+                                      <div class="sig-header">
+                                        <div class="sig-name">أمين سر المجلس</div>
+                                      </div>
+                                      <div class="sig-content">
+                                        <div class="sig-line">________________________</div>
+                                      </div>
+                                    </div>
+                                  `;
+                              
                               const html = `
                                 <!DOCTYPE html>
                                 <html dir="rtl" lang="ar">
@@ -552,215 +628,279 @@ export default function ResolutionsPage() {
                                   <title>قرار رقم ${resolution.resolutionNumber}</title>
                                   <style>
                                     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
-                                    @page { size: A4 portrait; margin: 12mm 12mm; }
+                                    @page { size: A4 landscape; margin: 10mm; }
                                     * { box-sizing: border-box; margin: 0; padding: 0; }
                                     body { 
                                       font-family: 'Cairo', sans-serif; 
-                                      padding: 0; 
                                       direction: rtl; 
                                       background: white;
                                       color: #1a1a1a;
-                                      line-height: 1.4;
-                                      font-size: 13px;
+                                      line-height: 1.5;
+                                      font-size: 12px;
                                     }
                                     .document {
-                                      max-width: 210mm;
+                                      max-width: 297mm;
                                       margin: 0 auto;
-                                      padding: 25px;
+                                      padding: 15px 20px;
                                       background: white;
                                     }
-                                    .letterhead {
-                                      text-align: center;
-                                      padding-bottom: 12px;
-                                      margin-bottom: 15px;
-                                      border-bottom: 2px double #1a5f3c;
-                                    }
-                                    .company-name {
-                                      font-size: 22px;
-                                      font-weight: 800;
-                                      color: #1a5f3c;
-                                      margin-bottom: 2px;
-                                    }
-                                    .company-subtitle {
-                                      font-size: 11px;
-                                      color: #666;
-                                      margin-bottom: 3px;
-                                    }
-                                    .company-info {
-                                      font-size: 10px;
-                                      color: #888;
-                                      margin-bottom: 8px;
-                                    }
-                                    .document-type {
-                                      display: inline-block;
-                                      background: linear-gradient(135deg, #1a5f3c 0%, #2d8f5e 100%);
-                                      color: white;
-                                      padding: 6px 30px;
-                                      font-size: 16px;
-                                      font-weight: 700;
-                                      border-radius: 4px;
-                                      margin-top: 5px;
-                                    }
-                                    .resolution-meta {
+                                    /* Header Section */
+                                    .header {
                                       display: flex;
                                       justify-content: space-between;
                                       align-items: center;
-                                      background: #f8f9fa;
-                                      border: 1px solid #e9ecef;
-                                      border-radius: 6px;
-                                      padding: 12px 15px;
-                                      margin-bottom: 15px;
+                                      padding-bottom: 12px;
+                                      margin-bottom: 12px;
+                                      border-bottom: 3px solid #1a5f3c;
                                     }
-                                    .meta-right { text-align: right; }
-                                    .meta-left { text-align: left; }
-                                    .resolution-number-box {
+                                    .logo-section {
+                                      display: flex;
+                                      align-items: center;
+                                      gap: 12px;
+                                    }
+                                    .logo-circle {
+                                      width: 55px;
+                                      height: 55px;
+                                      background: linear-gradient(135deg, #d4a853, #b8962f);
+                                      border-radius: 50%;
+                                      display: flex;
+                                      align-items: center;
+                                      justify-content: center;
+                                      color: white;
+                                      font-weight: 800;
+                                      font-size: 22px;
+                                    }
+                                    .company-info {
+                                      text-align: right;
+                                    }
+                                    .company-name-ar {
+                                      font-size: 20px;
+                                      font-weight: 800;
+                                      color: #1a5f3c;
+                                    }
+                                    .company-name-en {
+                                      font-size: 11px;
+                                      color: #666;
+                                      font-weight: 600;
+                                    }
+                                    .company-details {
+                                      font-size: 9px;
+                                      color: #888;
+                                      margin-top: 2px;
+                                    }
+                                    .doc-title-section {
+                                      text-align: center;
+                                    }
+                                    .doc-type-badge {
+                                      background: linear-gradient(135deg, #1a5f3c 0%, #2d8f5e 100%);
+                                      color: white;
+                                      padding: 8px 35px;
+                                      font-size: 18px;
+                                      font-weight: 700;
+                                      border-radius: 5px;
+                                      display: inline-block;
+                                    }
+                                    .resolution-number {
+                                      font-size: 13px;
+                                      color: #1a5f3c;
+                                      font-weight: 700;
+                                      margin-top: 5px;
+                                    }
+                                    .meta-section {
+                                      text-align: left;
+                                      font-size: 11px;
+                                      color: #555;
+                                    }
+                                    .meta-item {
+                                      margin-bottom: 3px;
+                                    }
+                                    .meta-label {
+                                      color: #888;
+                                    }
+                                    /* Main Content - Two Column Layout */
+                                    .main-content {
+                                      display: grid;
+                                      grid-template-columns: 1fr 280px;
+                                      gap: 20px;
+                                      margin-top: 15px;
+                                    }
+                                    .content-section {
+                                      background: #fafafa;
+                                      border: 1px solid #e5e5e5;
+                                      border-radius: 8px;
+                                      padding: 15px;
+                                    }
+                                    .section-title {
+                                      display: flex;
+                                      align-items: center;
+                                      gap: 8px;
                                       font-size: 14px;
                                       font-weight: 700;
                                       color: #1a5f3c;
-                                    }
-                                    .resolution-date {
-                                      font-size: 11px;
-                                      color: #666;
-                                      margin-top: 2px;
-                                    }
-                                    .meta-badge {
-                                      display: inline-block;
-                                      padding: 4px 10px;
-                                      border-radius: 15px;
-                                      font-size: 11px;
-                                      font-weight: 600;
-                                    }
-                                    .badge-type { background: #e8f5e9; color: #2e7d32; margin-left: 5px; }
-                                    .badge-priority { background: #fff3e0; color: #e65100; }
-                                    .main-title {
-                                      text-align: center;
-                                      margin: 15px 0;
-                                      padding: 12px;
-                                      background: linear-gradient(to left, #f8f9fa, white, #f8f9fa);
-                                      border-right: 3px solid #1a5f3c;
-                                      border-left: 3px solid #1a5f3c;
-                                    }
-                                    .main-title h2 {
-                                      font-size: 16px;
-                                      font-weight: 700;
-                                      color: #1a1a1a;
-                                      line-height: 1.4;
-                                    }
-                                    .section {
-                                      margin-bottom: 12px;
-                                    }
-                                    .section-header {
-                                      display: flex;
-                                      align-items: center;
-                                      margin-bottom: 8px;
-                                      padding-bottom: 5px;
-                                      border-bottom: 1px solid #1a5f3c;
+                                      margin-bottom: 10px;
+                                      padding-bottom: 8px;
+                                      border-bottom: 2px solid #1a5f3c;
                                     }
                                     .section-icon {
-                                      width: 22px;
-                                      height: 22px;
+                                      width: 24px;
+                                      height: 24px;
                                       background: #1a5f3c;
                                       color: white;
                                       border-radius: 50%;
                                       display: flex;
                                       align-items: center;
                                       justify-content: center;
-                                      margin-left: 8px;
-                                      font-size: 11px;
+                                      font-size: 12px;
                                       font-weight: bold;
                                     }
-                                    .section-title {
-                                      font-size: 13px;
-                                      font-weight: 700;
-                                      color: #1a5f3c;
+                                    .resolution-title-box {
+                                      background: linear-gradient(to left, #e8f5e9, white, #e8f5e9);
+                                      padding: 12px 15px;
+                                      border-radius: 6px;
+                                      text-align: center;
+                                      margin-bottom: 12px;
+                                      border: 1px solid #c8e6c9;
                                     }
-                                    .section-content {
-                                      padding: 12px;
-                                      background: #fafafa;
-                                      border: 1px solid #eee;
-                                      border-radius: 5px;
-                                      line-height: 1.7;
+                                    .resolution-title-box h2 {
+                                      font-size: 15px;
+                                      font-weight: 700;
+                                      color: #1a1a1a;
+                                    }
+                                    .resolution-text {
+                                      line-height: 1.8;
                                       text-align: justify;
                                       white-space: pre-wrap;
                                       font-size: 12px;
+                                      color: #333;
                                     }
-                                    .voting-section {
-                                      margin: 15px 0;
-                                      padding: 12px;
-                                      background: #f8f9fa;
-                                      border-radius: 6px;
-                                      border: 1px solid #e9ecef;
-                                    }
-                                    .voting-title {
-                                      text-align: center;
-                                      font-size: 13px;
-                                      font-weight: 700;
-                                      color: #1a5f3c;
-                                      margin-bottom: 10px;
-                                    }
-                                    .votes-grid {
+                                    /* Voting Section */
+                                    .voting-box {
                                       display: flex;
-                                      justify-content: center;
-                                      gap: 20px;
+                                      justify-content: space-around;
+                                      background: #f0f7f4;
+                                      padding: 10px;
+                                      border-radius: 6px;
+                                      margin-top: 12px;
                                     }
                                     .vote-item {
                                       text-align: center;
-                                      min-width: 70px;
                                     }
                                     .vote-count {
-                                      font-size: 24px;
+                                      font-size: 22px;
                                       font-weight: 800;
-                                      display: block;
                                     }
                                     .vote-count.for { color: #2e7d32; }
                                     .vote-count.against { color: #c62828; }
                                     .vote-count.abstain { color: #757575; }
-                                    .vote-type {
-                                      font-size: 11px;
+                                    .vote-label {
+                                      font-size: 10px;
                                       color: #666;
-                                      font-weight: 600;
                                     }
-                                    .result-box {
+                                    .result-badge {
                                       text-align: center;
                                       margin-top: 10px;
                                       padding: 8px;
                                       background: ${resolution.status === 'approved' || resolution.status === 'implemented' ? '#e8f5e9' : resolution.status === 'rejected' ? '#ffebee' : '#fff3e0'};
                                       border-radius: 5px;
-                                      font-size: 14px;
+                                      font-size: 13px;
                                       font-weight: 700;
                                       color: ${resolution.status === 'approved' || resolution.status === 'implemented' ? '#2e7d32' : resolution.status === 'rejected' ? '#c62828' : '#e65100'};
                                     }
-                                    .signatures {
-                                      margin-top: 25px;
-                                      display: grid;
-                                      grid-template-columns: 1fr 1fr;
-                                      gap: 25px;
+                                    /* Signatures Section */
+                                    .signatures-section {
+                                      background: #fff;
+                                      border: 1px solid #e5e5e5;
+                                      border-radius: 8px;
+                                      padding: 12px;
                                     }
-                                    .signature-box {
+                                    .signatures-grid {
+                                      display: flex;
+                                      flex-direction: column;
+                                      gap: 10px;
+                                    }
+                                    .signature-card {
+                                      background: #fafafa;
+                                      border: 1px solid #e0e0e0;
+                                      border-radius: 6px;
+                                      padding: 10px;
                                       text-align: center;
-                                      padding-top: 35px;
-                                      border-top: 1px solid #333;
                                     }
-                                    .signature-title {
+                                    .signature-card.signed {
+                                      background: #f1f8e9;
+                                      border-color: #c5e1a5;
+                                    }
+                                    .sig-header {
+                                      margin-bottom: 6px;
+                                    }
+                                    .sig-name {
                                       font-size: 12px;
-                                      font-weight: 600;
-                                      color: #333;
+                                      font-weight: 700;
+                                      color: #1a1a1a;
                                     }
-                                    .signature-name {
+                                    .sig-position {
                                       font-size: 10px;
                                       color: #666;
-                                      margin-top: 3px;
                                     }
+                                    .sig-content {
+                                      min-height: 50px;
+                                      display: flex;
+                                      align-items: center;
+                                      justify-content: center;
+                                    }
+                                    .sig-image {
+                                      max-width: 120px;
+                                      max-height: 45px;
+                                      object-fit: contain;
+                                    }
+                                    .sig-line {
+                                      color: #ccc;
+                                      font-size: 14px;
+                                    }
+                                    .sig-pending {
+                                      color: #ff9800;
+                                      font-size: 10px;
+                                      font-style: italic;
+                                    }
+                                    .sig-declined {
+                                      color: #f44336;
+                                      font-size: 10px;
+                                    }
+                                    .sig-footer {
+                                      display: flex;
+                                      justify-content: space-between;
+                                      align-items: center;
+                                      margin-top: 6px;
+                                      font-size: 9px;
+                                    }
+                                    .sig-date {
+                                      color: #888;
+                                    }
+                                    .sig-status {
+                                      padding: 2px 8px;
+                                      border-radius: 10px;
+                                      font-weight: 600;
+                                    }
+                                    .sig-status.signed {
+                                      background: #e8f5e9;
+                                      color: #2e7d32;
+                                    }
+                                    .sig-status.pending {
+                                      background: #fff3e0;
+                                      color: #e65100;
+                                    }
+                                    .sig-status.declined {
+                                      background: #ffebee;
+                                      color: #c62828;
+                                    }
+                                    /* Footer */
                                     .footer {
-                                      margin-top: 20px;
+                                      margin-top: 15px;
                                       padding-top: 10px;
-                                      border-top: 1px solid #ddd;
-                                      text-align: center;
-                                      font-size: 11px;
-                                      color: #999;
-                                    }
-                                    .footer-line {
-                                      margin: 3px 0;
+                                      border-top: 2px solid #1a5f3c;
+                                      display: flex;
+                                      justify-content: space-between;
+                                      font-size: 9px;
+                                      color: #888;
                                     }
                                     @media print {
                                       body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
@@ -770,73 +910,77 @@ export default function ResolutionsPage() {
                                 </head>
                                 <body>
                                   <div class="document">
-                                    <div class="letterhead">
-                                      <div class="company-name">شركة الزبد الأفضل التجارية</div>
-                                      <div class="company-subtitle">BUTTER BAKERY SYSTEM - CEO COMMAND</div>
-                                      <div class="company-info">شركة مساهمة | سجل تجاري: 7026155296 | المملكة العربية السعودية</div>
-                                      <div class="document-type">قـــرار إداري</div>
+                                    <div class="header">
+                                      <div class="logo-section">
+                                        <div class="logo-circle">B</div>
+                                        <div class="company-info">
+                                          <div class="company-name-ar">شركة الزبد الأفضل التجارية</div>
+                                          <div class="company-name-en">THE BUTTER BEST TRADING COMPANY</div>
+                                          <div class="company-details">شركة مساهمة مقفلة | سجل تجاري: 7026155296 | المملكة العربية السعودية</div>
+                                        </div>
+                                      </div>
+                                      <div class="doc-title-section">
+                                        <div class="doc-type-badge">قـــرار مجلس الإدارة</div>
+                                        <div class="resolution-number">رقم: ${resolution.resolutionNumber}</div>
+                                      </div>
+                                      <div class="meta-section">
+                                        <div class="meta-item"><span class="meta-label">التاريخ:</span> ${resolution.createdAt ? new Date(resolution.createdAt).toLocaleDateString('ar-SA') : new Date().toLocaleDateString('ar-SA')}</div>
+                                        <div class="meta-item"><span class="meta-label">النوع:</span> ${resolutionType}</div>
+                                        <div class="meta-item"><span class="meta-label">التصنيف:</span> ${category}</div>
+                                        ${priority ? `<div class="meta-item"><span class="meta-label">الأولوية:</span> ${priority}</div>` : ''}
+                                      </div>
                                     </div>
                                     
-                                    <div class="resolution-meta">
-                                      <div class="meta-right">
-                                        <div class="resolution-number-box">رقم القرار: ${resolution.resolutionNumber}</div>
-                                        <div class="resolution-date">التاريخ: ${resolution.createdAt ? new Date(resolution.createdAt).toLocaleDateString('en-GB', { year: 'numeric', month: 'long', day: 'numeric' }) : new Date().toLocaleDateString('en-GB', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
-                                      </div>
-                                      <div class="meta-left">
-                                        <span class="meta-badge badge-type">${resolutionType}</span>
-                                        ${priority ? `<span class="meta-badge badge-priority">${priority}</span>` : ''}
-                                      </div>
-                                    </div>
-
-                                    <div class="main-title">
-                                      <h2>${resolution.title}</h2>
-                                    </div>
-
-                                    <div class="section">
-                                      <div class="section-header">
-                                        <div class="section-icon">١</div>
-                                        <span class="section-title">نص القرار</span>
-                                      </div>
-                                      <div class="section-content">
-                                        ${resolution.description || 'بناءً على الصلاحيات المخولة لمجلس الإدارة، وبعد الاطلاع على الموضوع المعروض، تقرر ما يلي:\n\n' + resolution.title}
-                                      </div>
-                                    </div>
-
-                                    <div class="voting-section">
-                                      <div class="voting-title">نتيجة التصويت</div>
-                                      <div class="votes-grid">
-                                        <div class="vote-item">
-                                          <span class="vote-count for">${resolution.forVotes || 0}</span>
-                                          <span class="vote-type">موافق</span>
+                                    <div class="main-content">
+                                      <div class="content-section">
+                                        <div class="section-title">
+                                          <div class="section-icon">١</div>
+                                          <span>نص القرار</span>
                                         </div>
-                                        <div class="vote-item">
-                                          <span class="vote-count against">${resolution.againstVotes || 0}</span>
-                                          <span class="vote-type">معارض</span>
+                                        <div class="resolution-title-box">
+                                          <h2>${resolution.title}</h2>
                                         </div>
-                                        <div class="vote-item">
-                                          <span class="vote-count abstain">${resolution.abstainVotes || 0}</span>
-                                          <span class="vote-type">ممتنع</span>
+                                        <div class="resolution-text">
+                                          ${resolution.description || 'بناءً على الصلاحيات المخولة لمجلس الإدارة، وبعد الاطلاع على الموضوع المعروض، تقرر ما يلي:\n\n' + resolution.title}
+                                        </div>
+                                        
+                                        <div class="section-title" style="margin-top: 15px;">
+                                          <div class="section-icon">٢</div>
+                                          <span>نتيجة التصويت</span>
+                                        </div>
+                                        <div class="voting-box">
+                                          <div class="vote-item">
+                                            <div class="vote-count for">${resolution.forVotes || 0}</div>
+                                            <div class="vote-label">موافق</div>
+                                          </div>
+                                          <div class="vote-item">
+                                            <div class="vote-count against">${resolution.againstVotes || 0}</div>
+                                            <div class="vote-label">معارض</div>
+                                          </div>
+                                          <div class="vote-item">
+                                            <div class="vote-count abstain">${resolution.abstainVotes || 0}</div>
+                                            <div class="vote-label">ممتنع</div>
+                                          </div>
+                                        </div>
+                                        <div class="result-badge">
+                                          ${resolution.status === 'approved' || resolution.status === 'implemented' ? '✓ تم اعتماد القرار بالأغلبية' : resolution.status === 'rejected' ? '✗ تم رفض القرار' : '⏳ ' + status}
                                         </div>
                                       </div>
-                                      <div class="result-box">
-                                        ${resolution.status === 'approved' || resolution.status === 'implemented' ? '✓ تم اعتماد القرار بالأغلبية' : resolution.status === 'rejected' ? '✗ تم رفض القرار' : '⏳ ' + status}
+                                      
+                                      <div class="signatures-section">
+                                        <div class="section-title">
+                                          <div class="section-icon">✍</div>
+                                          <span>التوقيعات</span>
+                                        </div>
+                                        <div class="signatures-grid">
+                                          ${signaturesHtml}
+                                        </div>
                                       </div>
                                     </div>
-
-                                    <div class="signatures">
-                                      <div class="signature-box">
-                                        <div class="signature-title">رئيس مجلس الإدارة</div>
-                                        <div class="signature-name">________________________</div>
-                                      </div>
-                                      <div class="signature-box">
-                                        <div class="signature-title">أمين سر المجلس</div>
-                                        <div class="signature-name">________________________</div>
-                                      </div>
-                                    </div>
-
+                                    
                                     <div class="footer">
-                                      <div class="footer-line">شركة الزبد الأفضل التجارية (شركة مساهمة) - سجل تجاري: 7026155296</div>
-                                      <div class="footer-line">تم الطباعة: ${new Date().toLocaleDateString('en-GB')} | وثيقة رسمية</div>
+                                      <div>شركة الزبد الأفضل التجارية (شركة مساهمة مقفلة) | سجل تجاري: 7026155296</div>
+                                      <div>تم الطباعة: ${new Date().toLocaleDateString('ar-SA')} | وثيقة رسمية</div>
                                     </div>
                                   </div>
                                 </body>
