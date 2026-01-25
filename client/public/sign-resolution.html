@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>التوقيع على القرار - BUTTER BAKERY</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: 'Cairo', sans-serif;
+      background: linear-gradient(135deg, #fef9e7 0%, #fef3c7 50%, #fde68a 100%);
+      min-height: 100vh;
+      padding: 20px;
+      direction: rtl;
+    }
+    .container {
+      max-width: 700px;
+      margin: 0 auto;
+    }
+    .card {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+      padding: 30px;
+      margin-bottom: 20px;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .logo {
+      width: 80px;
+      height: 80px;
+      background: linear-gradient(135deg, #d4a853, #b8962f);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 15px;
+      color: white;
+      font-weight: bold;
+      font-size: 24px;
+    }
+    .header h1 {
+      color: #b8962f;
+      font-size: 1.8rem;
+      margin-bottom: 5px;
+    }
+    .header p {
+      color: #666;
+    }
+    .resolution-info {
+      background: #f8f9fa;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 25px;
+    }
+    .resolution-info h3 {
+      color: #333;
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid #eee;
+    }
+    .info-row:last-child {
+      border-bottom: none;
+    }
+    .info-label {
+      color: #666;
+      font-weight: 500;
+    }
+    .info-value {
+      color: #333;
+      font-weight: 600;
+    }
+    .member-info {
+      background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 25px;
+      text-align: center;
+    }
+    .member-info h4 {
+      color: #2e7d32;
+      margin-bottom: 5px;
+      font-size: 1.2rem;
+    }
+    .member-info p {
+      color: #558b2f;
+    }
+    .signature-section h3 {
+      color: #333;
+      margin-bottom: 15px;
+    }
+    .signature-canvas-wrapper {
+      border: 2px dashed #d4a853;
+      border-radius: 12px;
+      padding: 10px;
+      background: #fffef5;
+      margin-bottom: 15px;
+    }
+    #signatureCanvas {
+      width: 100%;
+      height: 200px;
+      border-radius: 8px;
+      cursor: crosshair;
+      background: white;
+      touch-action: none;
+    }
+    .btn-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .btn {
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-family: 'Cairo', sans-serif;
+      font-size: 1rem;
+      cursor: pointer;
+      border: none;
+      transition: all 0.3s;
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .btn-clear {
+      background: #f5f5f5;
+      color: #666;
+    }
+    .btn-clear:hover {
+      background: #eeeeee;
+    }
+    .btn-submit {
+      background: linear-gradient(135deg, #d4a853, #b8962f);
+      color: white;
+      font-weight: 600;
+    }
+    .btn-submit:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 20px rgba(184,150,47,0.4);
+    }
+    .btn-submit:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+    .btn-decline {
+      background: #f5f5f5;
+      color: #d32f2f;
+      border: 1px solid #d32f2f;
+    }
+    .btn-decline:hover {
+      background: #ffebee;
+    }
+    .decline-form {
+      display: none;
+      margin-top: 20px;
+      padding: 20px;
+      background: #fff5f5;
+      border-radius: 12px;
+    }
+    .decline-form.show {
+      display: block;
+    }
+    .decline-form textarea {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-family: 'Cairo', sans-serif;
+      resize: vertical;
+      min-height: 80px;
+      margin-bottom: 15px;
+    }
+    .loading {
+      display: none;
+      text-align: center;
+      padding: 40px;
+    }
+    .loading.show {
+      display: block;
+    }
+    .spinner {
+      width: 50px;
+      height: 50px;
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #d4a853;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .error-card, .success-card {
+      text-align: center;
+      padding: 40px;
+    }
+    .error-icon, .success-icon {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+      font-size: 40px;
+    }
+    .error-icon {
+      background: #ffebee;
+      color: #d32f2f;
+    }
+    .success-icon {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+    .content { display: none; }
+    .content.show { display: block; }
+    @media (max-width: 600px) {
+      .card { padding: 20px; }
+      .btn-row { flex-direction: column; }
+      .header h1 { font-size: 1.4rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="header">
+        <div class="logo">B</div>
+        <h1>BUTTER BAKERY</h1>
+        <p>التوقيع الإلكتروني على قرار مجلس الإدارة</p>
+      </div>
+
+      <div id="loading" class="loading show">
+        <div class="spinner"></div>
+        <p>جاري تحميل بيانات القرار...</p>
+      </div>
+
+      <div id="error" class="content error-card">
+        <div class="error-icon">✕</div>
+        <h2 id="errorTitle">خطأ</h2>
+        <p id="errorMessage">حدث خطأ أثناء تحميل البيانات</p>
+      </div>
+
+      <div id="success" class="content success-card">
+        <div class="success-icon">✓</div>
+        <h2>تم التوقيع بنجاح</h2>
+        <p>شكراً لك، تم تسجيل توقيعك على القرار</p>
+      </div>
+
+      <div id="main" class="content">
+        <div class="resolution-info">
+          <h3>📋 بيانات القرار</h3>
+          <div class="info-row">
+            <span class="info-label">رقم القرار:</span>
+            <span class="info-value" id="resolutionNumber">-</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">عنوان القرار:</span>
+            <span class="info-value" id="resolutionTitle">-</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">نوع القرار:</span>
+            <span class="info-value" id="resolutionType">-</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">الوصف:</span>
+            <span class="info-value" id="resolutionDescription">-</span>
+          </div>
+        </div>
+
+        <div class="member-info">
+          <h4 id="memberName">اسم العضو</h4>
+          <p id="memberPosition">المنصب</p>
+        </div>
+
+        <div class="signature-section">
+          <h3>✍️ التوقيع</h3>
+          <div class="signature-canvas-wrapper">
+            <canvas id="signatureCanvas"></canvas>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-clear" onclick="clearSignature()">مسح التوقيع</button>
+            <button class="btn btn-submit" id="submitBtn" onclick="submitSignature()" disabled>تأكيد التوقيع</button>
+          </div>
+          <button class="btn btn-decline" onclick="showDeclineForm()">رفض التوقيع</button>
+        </div>
+
+        <div id="declineForm" class="decline-form">
+          <h4>سبب الرفض (اختياري)</h4>
+          <textarea id="declineReason" placeholder="اكتب سبب رفض التوقيع..."></textarea>
+          <div class="btn-row">
+            <button class="btn btn-clear" onclick="hideDeclineForm()">إلغاء</button>
+            <button class="btn btn-decline" onclick="submitDecline()">تأكيد الرفض</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let canvas, ctx, isDrawing = false, hasSignature = false;
+    let token = '';
+
+    document.addEventListener('DOMContentLoaded', function() {
+      const params = new URLSearchParams(window.location.search);
+      token = params.get('token');
+      
+      if (!token) {
+        showError('رابط غير صالح', 'الرجاء التأكد من صحة رابط التوقيع');
+        return;
+      }
+      
+      initCanvas();
+      loadResolution();
+    });
+
+    function initCanvas() {
+      canvas = document.getElementById('signatureCanvas');
+      ctx = canvas.getContext('2d');
+      
+      function resizeCanvas() {
+        const wrapper = canvas.parentElement;
+        canvas.width = wrapper.clientWidth - 20;
+        canvas.height = 200;
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+      }
+      
+      resizeCanvas();
+      window.addEventListener('resize', resizeCanvas);
+
+      function getPos(e) {
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        return {
+          x: clientX - rect.left,
+          y: clientY - rect.top
+        };
+      }
+
+      function startDrawing(e) {
+        e.preventDefault();
+        isDrawing = true;
+        const pos = getPos(e);
+        ctx.beginPath();
+        ctx.moveTo(pos.x, pos.y);
+      }
+
+      function draw(e) {
+        if (!isDrawing) return;
+        e.preventDefault();
+        const pos = getPos(e);
+        ctx.lineTo(pos.x, pos.y);
+        ctx.stroke();
+        hasSignature = true;
+        document.getElementById('submitBtn').disabled = false;
+      }
+
+      function stopDrawing() {
+        isDrawing = false;
+      }
+
+      canvas.addEventListener('mousedown', startDrawing);
+      canvas.addEventListener('mousemove', draw);
+      canvas.addEventListener('mouseup', stopDrawing);
+      canvas.addEventListener('mouseout', stopDrawing);
+      canvas.addEventListener('touchstart', startDrawing);
+      canvas.addEventListener('touchmove', draw);
+      canvas.addEventListener('touchend', stopDrawing);
+    }
+
+    function clearSignature() {
+      ctx.fillStyle = 'white';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      hasSignature = false;
+      document.getElementById('submitBtn').disabled = true;
+    }
+
+    async function loadResolution() {
+      try {
+        const res = await fetch('/api/public/sign/' + token);
+        const data = await res.json();
+        
+        if (!res.ok) {
+          showError('خطأ', data.error || 'فشل في تحميل البيانات');
+          return;
+        }
+        
+        document.getElementById('resolutionNumber').textContent = data.resolutionNumber;
+        document.getElementById('resolutionTitle').textContent = data.resolutionTitle;
+        document.getElementById('resolutionType').textContent = translateType(data.resolutionType);
+        document.getElementById('resolutionDescription').textContent = data.resolutionDescription || '-';
+        document.getElementById('memberName').textContent = data.memberName;
+        document.getElementById('memberPosition').textContent = translatePosition(data.memberPosition);
+        
+        showContent('main');
+      } catch (err) {
+        showError('خطأ في الاتصال', 'فشل في الاتصال بالخادم');
+      }
+    }
+
+    function translateType(type) {
+      const types = {
+        'ordinary': 'قرار عادي',
+        'special': 'قرار خاص',
+        'written': 'قرار كتابي',
+        'emergency': 'قرار طوارئ'
+      };
+      return types[type] || type;
+    }
+
+    function translatePosition(pos) {
+      const positions = {
+        'chairman': 'رئيس مجلس الإدارة',
+        'vice_chairman': 'نائب رئيس مجلس الإدارة',
+        'member': 'عضو مجلس الإدارة',
+        'secretary': 'أمين السر'
+      };
+      return positions[pos] || pos;
+    }
+
+    async function submitSignature() {
+      if (!hasSignature) {
+        alert('الرجاء التوقيع أولاً');
+        return;
+      }
+      
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      btn.textContent = 'جاري الإرسال...';
+      
+      try {
+        const signatureData = canvas.toDataURL('image/png');
+        const res = await fetch('/api/public/sign/' + token, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ signatureData, signatureType: 'draw' })
+        });
+        
+        const data = await res.json();
+        
+        if (!res.ok) {
+          alert(data.error || 'فشل في حفظ التوقيع');
+          btn.disabled = false;
+          btn.textContent = 'تأكيد التوقيع';
+          return;
+        }
+        
+        showContent('success');
+      } catch (err) {
+        alert('فشل في الاتصال بالخادم');
+        btn.disabled = false;
+        btn.textContent = 'تأكيد التوقيع';
+      }
+    }
+
+    function showDeclineForm() {
+      document.getElementById('declineForm').classList.add('show');
+    }
+
+    function hideDeclineForm() {
+      document.getElementById('declineForm').classList.remove('show');
+    }
+
+    async function submitDecline() {
+      const reason = document.getElementById('declineReason').value;
+      
+      try {
+        const res = await fetch('/api/public/sign/' + token + '/decline', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason })
+        });
+        
+        if (res.ok) {
+          showError('تم الرفض', 'تم تسجيل رفض التوقيع');
+        } else {
+          const data = await res.json();
+          alert(data.error || 'فشل في تسجيل الرفض');
+        }
+      } catch (err) {
+        alert('فشل في الاتصال بالخادم');
+      }
+    }
+
+    function showContent(id) {
+      document.getElementById('loading').classList.remove('show');
+      document.getElementById('error').classList.remove('show');
+      document.getElementById('success').classList.remove('show');
+      document.getElementById('main').classList.remove('show');
+      document.getElementById(id).classList.add('show');
+    }
+
+    function showError(title, message) {
+      document.getElementById('errorTitle').textContent = title;
+      document.getElementById('errorMessage').textContent = message;
+      showContent('error');
+    }
+  </script>
+</body>
+</html>

@@ -40,6 +40,10 @@ import {
   History,
   ArrowRight,
   CheckCheck,
+  Copy,
+  Link,
+  Loader2,
+  Share2,
 } from "lucide-react";
 import type { BoardResolution, BoardMember } from "@shared/schema";
 import { exportToExcel, exportToCSV, printAsPDF } from "@/lib/export-utils";
@@ -106,6 +110,64 @@ export default function ResolutionsPage() {
   const { data: members = [] } = useQuery<BoardMember[]>({
     queryKey: ["/api/governance/board-members"],
   });
+
+  interface ResolutionSignature {
+    id: number;
+    resolutionId: number;
+    boardMemberId: number;
+    signatureToken: string;
+    signatureData: string | null;
+    signatureType: string;
+    status: string;
+    signedAt: string | null;
+    declinedAt: string | null;
+    declineReason: string | null;
+    expiresAt: string | null;
+    createdAt: string;
+    memberName: string;
+    memberPosition: string;
+    memberEmail: string;
+  }
+
+  const { data: signatures = [], refetch: refetchSignatures } = useQuery<ResolutionSignature[]>({
+    queryKey: ["/api/governance/resolutions", selectedResolution?.id, "signatures"],
+    queryFn: async () => {
+      if (!selectedResolution?.id) return [];
+      const res = await fetch(`/api/governance/resolutions/${selectedResolution.id}/signatures`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!selectedResolution?.id && showSignatures,
+  });
+
+  const createSignatureRequestsMutation = useMutation({
+    mutationFn: async (resolutionId: number) => {
+      const res = await fetch(`/api/governance/resolutions/${resolutionId}/signatures/create-requests`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expiresInDays: 7 }),
+      });
+      if (!res.ok) throw new Error("Failed to create signature requests");
+      return res.json();
+    },
+    onSuccess: (data) => {
+      refetchSignatures();
+      toast({ title: `تم إنشاء ${data.created} طلب توقيع جديد` });
+    },
+    onError: () => {
+      toast({ title: "فشل في إنشاء طلبات التوقيع", variant: "destructive" });
+    },
+  });
+
+  const getSigningUrl = (token: string) => {
+    return `${window.location.origin}/sign-resolution.html?token=${token}`;
+  };
+
+  const copySigningUrl = async (token: string) => {
+    const url = getSigningUrl(token);
+    await navigator.clipboard.writeText(url);
+    toast({ title: "تم نسخ رابط التوقيع" });
+  };
 
   const createMutation = useMutation({
     mutationFn: async (data: Partial<BoardResolution>) => {
@@ -984,11 +1046,11 @@ export default function ResolutionsPage() {
         </Dialog>
 
         <Dialog open={showSignatures} onOpenChange={setShowSignatures}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-3xl">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <PenLine className="h-5 w-5 text-emerald-600" />
-                التوقيعات الإلكترونية
+                التوقيعات الإلكترونية - {selectedResolution?.resolutionNumber}
               </DialogTitle>
             </DialogHeader>
             {selectedResolution && (
@@ -996,50 +1058,141 @@ export default function ResolutionsPage() {
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start gap-2">
                   <AlertTriangle className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
                   <p className="text-sm text-blue-800">
-                    التوقيع الإلكتروني معتمد قانونياً ويحمل صفة الإلزام
+                    التوقيع الإلكتروني معتمد قانونياً ويحمل صفة الإلزام. يمكنك إرسال روابط التوقيع لأعضاء المجلس عبر البريد أو واتساب.
                   </p>
                 </div>
 
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-right">العضو</TableHead>
-                      <TableHead className="text-right">المنصب</TableHead>
-                      <TableHead className="text-right">الحالة</TableHead>
-                      <TableHead className="text-right">التاريخ</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {members.filter(m => m.status === "active").length > 0 ? (
-                      members.filter(m => m.status === "active").map((member) => (
-                        <TableRow key={member.id}>
-                          <TableCell className="font-medium">{member.fullName}</TableCell>
-                          <TableCell>{member.position}</TableCell>
-                          <TableCell>
-                            <Badge className="bg-gray-100 text-gray-600">في الانتظار</Badge>
-                          </TableCell>
-                          <TableCell className="text-gray-400">-</TableCell>
+                {signatures.length === 0 ? (
+                  <div className="text-center py-8 space-y-4">
+                    <div className="text-gray-500 mb-4">
+                      لم يتم إنشاء طلبات توقيع بعد
+                    </div>
+                    <Button
+                      className="bg-emerald-600 hover:bg-emerald-700 gap-2"
+                      onClick={() => createSignatureRequestsMutation.mutate(selectedResolution.id)}
+                      disabled={createSignatureRequestsMutation.isPending}
+                    >
+                      {createSignatureRequestsMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Send className="h-4 w-4" />
+                      )}
+                      إنشاء طلبات التوقيع لجميع أعضاء المجلس
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-right">العضو</TableHead>
+                          <TableHead className="text-right">المنصب</TableHead>
+                          <TableHead className="text-right">الحالة</TableHead>
+                          <TableHead className="text-right">التاريخ</TableHead>
+                          <TableHead className="text-right">الإجراء</TableHead>
                         </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell colSpan={4} className="text-center text-gray-500 py-8">
-                          لا يوجد أعضاء مجلس مسجلين
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {signatures.map((sig) => (
+                          <TableRow key={sig.id}>
+                            <TableCell className="font-medium">{sig.memberName}</TableCell>
+                            <TableCell>{sig.memberPosition}</TableCell>
+                            <TableCell>
+                              {sig.status === "signed" && (
+                                <Badge className="bg-green-100 text-green-800 gap-1">
+                                  <CheckCircle className="h-3 w-3" />
+                                  تم التوقيع
+                                </Badge>
+                              )}
+                              {sig.status === "pending" && (
+                                <Badge className="bg-yellow-100 text-yellow-800 gap-1">
+                                  <Clock className="h-3 w-3" />
+                                  في الانتظار
+                                </Badge>
+                              )}
+                              {sig.status === "declined" && (
+                                <Badge className="bg-red-100 text-red-800 gap-1">
+                                  <XCircle className="h-3 w-3" />
+                                  مرفوض
+                                </Badge>
+                              )}
+                              {sig.status === "expired" && (
+                                <Badge className="bg-gray-100 text-gray-800 gap-1">
+                                  <Clock className="h-3 w-3" />
+                                  منتهي الصلاحية
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-gray-600">
+                              {sig.signedAt ? new Date(sig.signedAt).toLocaleDateString('ar-SA') : '-'}
+                            </TableCell>
+                            <TableCell>
+                              {sig.status === "pending" && (
+                                <div className="flex gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => copySigningUrl(sig.signatureToken)}
+                                    title="نسخ رابط التوقيع"
+                                  >
+                                    <Copy className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => window.open(getSigningUrl(sig.signatureToken), '_blank')}
+                                    title="فتح صفحة التوقيع"
+                                  >
+                                    <Link className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      const url = getSigningUrl(sig.signatureToken);
+                                      const text = `مطلوب توقيعك على القرار رقم ${selectedResolution.resolutionNumber}\n\nالرابط: ${url}`;
+                                      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+                                    }}
+                                    title="إرسال عبر واتساب"
+                                  >
+                                    <Share2 className="h-4 w-4 text-green-600" />
+                                  </Button>
+                                </div>
+                              )}
+                              {sig.status === "signed" && sig.signatureData && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    const win = window.open('', '_blank');
+                                    if (win) {
+                                      win.document.write(`<img src="${sig.signatureData}" style="max-width:400px;"/>`);
+                                    }
+                                  }}
+                                  title="عرض التوقيع"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
 
-                <div className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
-                  <span className="font-medium">التوقيعات المكتملة</span>
-                  <span className="font-bold">0 / {members.filter(m => m.status === "active").length}</span>
-                </div>
+                    <div className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
+                      <span className="font-medium">التوقيعات المكتملة</span>
+                      <span className="font-bold">
+                        {signatures.filter(s => s.status === "signed").length} / {signatures.length}
+                      </span>
+                    </div>
 
-                <Button className="w-full bg-emerald-600 hover:bg-emerald-700 gap-2">
-                  <PenLine className="h-4 w-4" />
-                  التوقيع على القرار
-                </Button>
+                    <Progress 
+                      value={(signatures.filter(s => s.status === "signed").length / signatures.length) * 100} 
+                      className="h-2"
+                    />
+                  </>
+                )}
               </div>
             )}
             <DialogFooter>
