@@ -429,7 +429,7 @@ export default function PlatformHomePage() {
         </div>
 
         {isAuthenticated && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
             {canView("branches") && (
               <QuickStat
                 title={t('stats.branches')}
@@ -470,12 +470,12 @@ export default function PlatformHomePage() {
         )}
 
         {/* أقسام النظام - تصميم بطاقات مع وصف */}
-        <div className="bg-gray-50/80 rounded-2xl p-6">
-          <h2 className="text-lg font-semibold text-gray-700 mb-5 flex items-center gap-2">
-            <LayoutDashboard className="w-5 h-5 text-primary" />
+        <div className="bg-gray-50/80 rounded-2xl p-4 sm:p-6">
+          <h2 className="text-base sm:text-lg font-semibold text-gray-700 mb-4 sm:mb-5 flex items-center gap-2">
+            <LayoutDashboard className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
             {t('systemModules')}
           </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
             {accessibleModules.map((module, index) => {
               const IconComponent = module.icon;
               return (

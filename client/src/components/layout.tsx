@@ -490,7 +490,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="md:hidden h-14 border-b border-border bg-card flex items-center px-2 sm:px-3 justify-between sticky top-0 z-50 safe-area-inset-top">
+        <header className="md:hidden min-h-14 border-b border-border bg-card/95 backdrop-blur-sm flex items-center px-3 sm:px-4 justify-between sticky top-0 z-50 safe-area-inset-top shadow-sm">
           <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-9 sm:w-9">
@@ -613,7 +613,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 overflow-auto scroll-smooth safe-area-inset-bottom">
           {children}
         </div>
       </main>

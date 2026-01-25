@@ -56,6 +56,65 @@
   body {
     @apply font-sans antialiased bg-background text-foreground;
   }
+  
+  /* Touch-friendly targets for mobile */
+  @media (max-width: 768px) {
+    button, a, [role="button"] {
+      min-height: 44px;
+      min-width: 44px;
+    }
+    
+    input, select, textarea {
+      font-size: 16px !important; /* Prevents zoom on iOS */
+    }
+  }
+}
+
+/* Responsive utilities */
+@layer utilities {
+  /* Safe area for notched devices */
+  .safe-area-inset-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  .safe-area-inset-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  
+  /* Smooth scrolling */
+  .scroll-smooth {
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  
+  /* Responsive text */
+  .text-responsive {
+    font-size: clamp(0.875rem, 2vw, 1rem);
+  }
+  
+  /* Card hover effects - disabled on touch */
+  @media (hover: hover) {
+    .card-hover:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+    }
+  }
+  
+  /* Touch feedback */
+  @media (hover: none) {
+    .touch-active:active {
+      transform: scale(0.98);
+      opacity: 0.9;
+    }
+  }
 }
 
 @media print {
