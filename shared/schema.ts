@@ -7870,3 +7870,158 @@ export const insertShiftReminderSchema = createInsertSchema(shiftReminders).omit
 
 export type ShiftReminder = typeof shiftReminders.$inferSelect;
 export type InsertShiftReminder = z.infer<typeof insertShiftReminderSchema>;
+
+// =====================================================
+// Social Responsibility - المسؤولية الاجتماعية
+// =====================================================
+
+// الجهات المستفيدة - Beneficiary Organizations
+export const beneficiaryOrganizations = pgTable("beneficiary_organizations", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  nameEn: text("name_en"),
+  organizationType: text("organization_type").notNull(), // government, charity, ngo, club, educational, healthcare, other
+  category: text("category"), // social, environmental, health, education, sports, cultural
+  contactPerson: text("contact_person"),
+  email: text("email"),
+  phone: text("phone"),
+  address: text("address"),
+  city: text("city"),
+  registrationNumber: text("registration_number"),
+  taxNumber: text("tax_number"),
+  website: text("website"),
+  logoUrl: text("logo_url"),
+  description: text("description"),
+  partnershipType: text("partnership_type"), // discount, donation, sponsorship, collaboration
+  discountPercentage: numeric("discount_percentage", { precision: 5, scale: 2 }),
+  status: text("status").default("active"), // active, inactive, suspended
+  validFrom: date("valid_from"),
+  validTo: date("valid_to"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_beneficiary_org_type").on(table.organizationType),
+  index("idx_beneficiary_org_status").on(table.status),
+  index("idx_beneficiary_org_partnership").on(table.partnershipType),
+]);
+
+export const insertBeneficiaryOrganizationSchema = createInsertSchema(beneficiaryOrganizations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type BeneficiaryOrganization = typeof beneficiaryOrganizations.$inferSelect;
+export type InsertBeneficiaryOrganization = z.infer<typeof insertBeneficiaryOrganizationSchema>;
+
+// المبادرات الاجتماعية - Social Initiatives
+export const socialInitiatives = pgTable("social_initiatives", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  titleEn: text("title_en"),
+  initiativeType: text("initiative_type").notNull(), // campaign, event, donation, sponsorship, awareness, volunteering
+  category: text("category"), // social, environmental, health, education, sports, cultural
+  description: text("description"),
+  objectives: text("objectives"),
+  targetAudience: text("target_audience"),
+  startDate: date("start_date"),
+  endDate: date("end_date"),
+  budget: numeric("budget", { precision: 12, scale: 2 }),
+  actualCost: numeric("actual_cost", { precision: 12, scale: 2 }),
+  beneficiaryOrganizationId: integer("beneficiary_organization_id").references(() => beneficiaryOrganizations.id),
+  partnersNames: text("partners_names"),
+  channels: text("channels").array(), // social_media, website, print, tv, radio, outdoor
+  status: text("status").default("planned"), // planned, active, completed, cancelled
+  impactMetrics: text("impact_metrics"),
+  beneficiariesCount: integer("beneficiaries_count"),
+  mediaLinks: text("media_links").array(),
+  attachments: text("attachments").array(),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_social_init_type").on(table.initiativeType),
+  index("idx_social_init_status").on(table.status),
+  index("idx_social_init_dates").on(table.startDate, table.endDate),
+  index("idx_social_init_beneficiary").on(table.beneficiaryOrganizationId),
+]);
+
+export const insertSocialInitiativeSchema = createInsertSchema(socialInitiatives).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type SocialInitiative = typeof socialInitiatives.$inferSelect;
+export type InsertSocialInitiative = z.infer<typeof insertSocialInitiativeSchema>;
+
+// رموز الخصم المجتمعية - Community Discount Codes
+export const communityDiscounts = pgTable("community_discounts", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull().unique(),
+  name: text("name").notNull(),
+  description: text("description"),
+  discountType: text("discount_type").notNull(), // percentage, fixed_amount
+  discountValue: numeric("discount_value", { precision: 10, scale: 2 }).notNull(),
+  minimumOrder: numeric("minimum_order", { precision: 10, scale: 2 }),
+  maximumDiscount: numeric("maximum_discount", { precision: 10, scale: 2 }),
+  beneficiaryOrganizationId: integer("beneficiary_organization_id").references(() => beneficiaryOrganizations.id),
+  initiativeId: integer("initiative_id").references(() => socialInitiatives.id),
+  validFrom: date("valid_from").notNull(),
+  validTo: date("valid_to").notNull(),
+  usageLimit: integer("usage_limit"),
+  usageCount: integer("usage_count").default(0),
+  usageLimitPerUser: integer("usage_limit_per_user"),
+  applicableBranches: text("applicable_branches").array(),
+  applicableProducts: text("applicable_products").array(),
+  status: text("status").default("active"), // active, inactive, expired
+  terms: text("terms"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_community_discount_code").on(table.code),
+  index("idx_community_discount_status").on(table.status),
+  index("idx_community_discount_validity").on(table.validFrom, table.validTo),
+  index("idx_community_discount_org").on(table.beneficiaryOrganizationId),
+]);
+
+export const insertCommunityDiscountSchema = createInsertSchema(communityDiscounts).omit({
+  id: true,
+  usageCount: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type CommunityDiscount = typeof communityDiscounts.$inferSelect;
+export type InsertCommunityDiscount = z.infer<typeof insertCommunityDiscountSchema>;
+
+// سجل استخدام الخصومات - Discount Usage Log
+export const discountUsageLogs = pgTable("discount_usage_logs", {
+  id: serial("id").primaryKey(),
+  discountId: integer("discount_id").notNull().references(() => communityDiscounts.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").references(() => branches.id),
+  orderId: text("order_id"),
+  orderAmount: numeric("order_amount", { precision: 12, scale: 2 }),
+  discountAmount: numeric("discount_amount", { precision: 10, scale: 2 }),
+  customerName: text("customer_name"),
+  customerPhone: text("customer_phone"),
+  usedBy: varchar("used_by").references(() => users.id),
+  usedAt: timestamp("used_at").defaultNow().notNull(),
+  notes: text("notes"),
+}, (table) => [
+  index("idx_discount_usage_discount").on(table.discountId),
+  index("idx_discount_usage_branch").on(table.branchId),
+  index("idx_discount_usage_date").on(table.usedAt),
+]);
+
+export const insertDiscountUsageLogSchema = createInsertSchema(discountUsageLogs).omit({
+  id: true,
+  usedAt: true,
+});
+
+export type DiscountUsageLog = typeof discountUsageLogs.$inferSelect;
+export type InsertDiscountUsageLog = z.infer<typeof insertDiscountUsageLogSchema>;

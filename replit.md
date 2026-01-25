@@ -1,7 +1,7 @@
 # نظام إدارة المشروعات والأصول والصيانة - باتر
 
 ## Overview
-This project is a comprehensive management system for Butter Bakery, designed to streamline project, asset, and maintenance operations across multiple branches in Saudi Arabia. It includes multi-location inventory, asset status tracking, construction project oversight, maintenance scheduling, and detailed reporting. Key features also encompass Saudi VAT calculations, production management, and cashier sales journals, all within an Arabic RTL interface. The system aims to enhance operational efficiency and provide a unified view of the business.
+This project is a comprehensive management system for Butter Bakery, designed to streamline project, asset, and maintenance operations across multiple branches in Saudi Arabia. It includes multi-location inventory, asset status tracking, construction project oversight, maintenance scheduling, and detailed reporting. Key features also encompass Saudi VAT calculations, production management, and cashier sales journals, all within an Arabic RTL interface. The system aims to enhance operational efficiency and provide a unified view of the business. The project also focuses on business vision, market potential, and project ambitions to provide a competitive edge in the bakery industry through optimized operations and enhanced customer satisfaction.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
@@ -10,14 +10,6 @@ Preferred communication style: Simple, everyday language.
 - Always notify the user when any update requires database schema changes (new tables, columns, migrations)
 - Deployment workflow: Manual deploy on Render (not auto-deploy)
 - Database updates require manual SQL execution in Supabase SQL Editor before code deployment
-
-**Required Migrations:**
-- `migrations/001_finished_goods_unique_index.sql` - Functional unique index for Finished Goods Inventory system (required for atomic UPSERT operations)
-- `migrations/003_marketing_tables_complete.sql` - جداول عقود ومدفوعات المؤثرين (influencer_contracts, influencer_payments)
-- `migrations/004_performance_indexes.sql` - فهارس الأداء للجداول الكبيرة (production, inventory, cashier, warehouse)
-- `migrations/006_documents_tables.sql` - جداول إدارة الوثائق والأرشفة (documents, document_categories, document_folders, document_versions, document_shares, document_access_logs)
-- `migrations/009_notifications_table.sql` - جدول الإشعارات الموحد للنظام (notifications) مع الفهارس اللازمة
-- `migrations/010_audit_logs_columns.sql` - أعمدة target_id و description في جدول system_audit_logs مع فهارس الأداء
 
 ## System Architecture
 The system uses a modern web architecture with a React-based frontend and a Node.js/Express backend.
@@ -42,79 +34,28 @@ The system uses a modern web architecture with a React-based frontend and a Node
 - **Pagination System**: Comprehensive pagination implemented across data-heavy pages.
 - **Sales Analytics**: Advanced filters, CSV/Excel export, seasonal factors, and auto-refresh for sales reports.
 - **Unified Command Center**: A dashboard aggregating KPIs from production, inventory, cashier, and waste modules.
-- **RBAC System (Role-Based Access Control)**: Comprehensive permission system with departments, hierarchical roles, granular permissions (200+), user assignments with branch/department scope, and permission overrides. This includes enhanced security features like 2FA, IP whitelisting, session management, password policies, and audit trails.
+- **RBAC System (Role-Based Access Control)**: Comprehensive permission system with departments, hierarchical roles, granular permissions, user assignments with branch/department scope, and permission overrides. This includes enhanced security features like 2FA, IP whitelisting, session management, password policies, and audit trails.
 - **P&L Dashboard Enhancements**: Includes advanced financial KPIs such as EBITDA, contribution margin, labor productivity, and operating profit.
 - **Marketing Influencers Enhancement**: Management of influencer data including social media metrics and bank details.
 - **Branch Employee Integration**: Features for linking employees to user accounts, tracking attendance, schedules, and timesheets.
-- **Influencer Contracts Management**: Contract generation with PDF export, auto-generated contract numbers (BTR-INF-YYYY-####), deliverables tracking, exclusivity clauses, dual signatures, and financial approval workflow.
-- **Finished Goods Inventory (مخزون الإنتاج النهائي)**: Automatic transfer of completed production batches to finished goods inventory with full audit trail. Supports transfers to branches or sales display bar (بار العرض). Features atomic transactions for data integrity, balance tracking, and movement logs. Tables: `finished_goods_inventory`, `finished_goods_transfers`, `production_inventory_logs`.
-  - **Design Decision**: Products are identified by normalized name (lowercase, trimmed) rather than strict SKU. This allows aggregation of production by product name and supports manual entries without product IDs. The unique constraint is (branch_id, product_name_normalized, production_date).
-  - **Atomic Operations**: Batch creation/update with finished goods transfer happens in a single database transaction, ensuring consistency.
-- **Warehouse & Materials Management (المخازن والتحويلات)**: Comprehensive system for managing material requests and transfers between branches and main warehouse.
-  - **Material Categories**: Raw materials (مواد خام), Consumables (مستهلكات), Packaging (مواد تغليف), Primary Production (مواد إنتاج أولية).
-  - **Request Workflow**: draft → pending → approved/rejected/forwarded_to_purchasing → fulfilled.
-  - **Transfer Tracking**: pending → in_transit → delivered, with driver name, vehicle number, departure/arrival times.
-  - **Electronic Signatures**: Receipt confirmation with digital signatures.
-  - **Stock Level Monitoring**: Low stock alerts and reorder point tracking.
-  - **Tables**: `warehouse_items`, `branch_stock`, `material_requests`, `material_request_items`, `material_transfers`, `material_transfer_items`, `warehouse_movement_logs`.
-  - **Request Numbers**: Auto-generated format MR-YYYYMM-XXXX.
-  - **Transfer Numbers**: Auto-generated format MT-YYYYMM-XXXX.
-- **Document Management & Archiving (إدارة الوثائق والأرشفة)**: Comprehensive document management system for storing, organizing, and sharing company documents.
-  - **File Upload**: Drag-and-drop and click-to-select upload with XHR progress tracking. Supports PDF, Word, Excel, PowerPoint, images, text, CSV, and archives (15+ types). Maximum file size 50MB.
-  - **Document Organization**: Folder hierarchy with path calculation, category classification (7 default categories: Contracts, Policies, Reports, Correspondence, Financial, HR, Others), tags, and access levels (public/internal/confidential/restricted).
-  - **Version Control**: Automatic version tracking with change notes and previous version history.
-  - **Document Preview**: In-dialog preview for PDF (iframe) and images (jpg/png/gif/webp), fallback download for unsupported types.
-  - **Share Links**: Public share links with crypto-random tokens (32 hex chars), access control (expiry date, max access count, password protection), and access logging.
-  - **Access Logging**: Complete audit trail of document views, downloads, and share link access with timestamps and user information.
-  - **Security**: MD5 checksum calculation for file integrity, file type validation on upload, server-side access control enforcement.
-  - **Tables**: `documents`, `document_categories`, `document_folders`, `document_versions`, `document_shares`, `document_access_logs`.
-  - **Migration**: `migrations/006_documents_tables.sql` - Complete schema with indexes, foreign keys, and default categories.
-- **Executive Secretariat System (السكرتارية التنفيذية)**: Comprehensive CEO command center with integrated modules.
-  - **Dashboard**: Unified view of meetings, tasks, correspondence, visitors, and travel with quick access links.
-  - **Meetings Management**: Schedule, track, and manage meetings with support for in-person, virtual, hybrid, and phone meetings.
-  - **Tasks Management**: Track CEO tasks with priority levels (urgent, high, normal, low) and status tracking.
-  - **Correspondence**: Manage incoming and outgoing correspondence with reference numbers.
-  - **Visitor Management**: Track visitor check-ins with badge numbers, host assignments, and access logging.
-  - **Travel Requests**: Manage travel requests with budget tracking and approval workflow.
-  - **Unified PDF Reports**: Generate printable reports (weekly, monthly, by category) using react-to-print.
-  - **System Notifications**: Real-time notification system with priorities and read status.
-  - **RBAC Integration**: 9 Executive Secretariat modules (exec_dashboard, exec_meetings, exec_tasks, exec_correspondence, exec_documents, exec_visitors, exec_travel, exec_reports, exec_notifications) with granular permissions.
-  - **Tables**: `executive_meetings`, `executive_meeting_attendees`, `executive_tasks`, `executive_task_assignments`, `executive_correspondence`, `visitors`, `travel_requests`, `notifications`.
-  - **Migrations**: `migrations/007_visitors_travel_tables.sql`, `migrations/008_notifications_table.sql`.
+- **Influencer Contracts Management**: Contract generation with PDF export, auto-generated contract numbers, deliverables tracking, exclusivity clauses, dual signatures, and financial approval workflow.
+- **Finished Goods Inventory**: Automatic transfer of completed production batches to finished goods inventory with full audit trail, supporting transfers to branches or sales display bar. Features atomic transactions for data integrity, balance tracking, and movement logs. Products are identified by normalized name.
+- **Warehouse & Materials Management**: Comprehensive system for managing material requests and transfers between branches and main warehouse, including material categorization, request workflows, transfer tracking, electronic signatures, and stock level monitoring.
+- **Document Management & Archiving**: Comprehensive document management system for storing, organizing, and sharing company documents, with file upload, folder hierarchy, category classification, version control, document preview, share links, and access logging.
+- **Executive Secretariat System**: Comprehensive CEO command center with integrated modules for meetings, tasks, correspondence, visitors, and travel management, along with unified PDF reports and real-time notification system.
+- **Social Responsibility Module**: Comprehensive social responsibility and community engagement management system, including beneficiary organizations, social initiatives, community discounts, and usage analytics.
 
 ### Performance Optimization
-- **Tiered Caching Strategy**: Five-tier cache system based on data volatility:
-  - STATIC (1 hour): Branches - rarely changing reference data
-  - LONG (30 minutes): Users, products, warehouse items - slowly changing catalog data
-  - MEDIUM (5 minutes): Permissions, marketing campaigns, inventory - moderately changing data
-  - SHORT (2 minutes): Material requests, transfers - frequently changing operational data
-  - DYNAMIC (30 seconds): Dashboard stats, production data - real-time data
-- **Server-side Caching**: Memoized data fetchers for frequently accessed data:
-  - Branches cached for 1 minute
-  - Users cached for 30 seconds
-  - Per-user permissions cached for 30 seconds
-- **Prefetch on Hover**: Navigation links prefetch API data on mouse hover to reduce perceived load time
-- **Smart Prefetch Guards**: 
-  - Prefetching checks query state to avoid redundant requests for in-flight or fresh data
-  - Large dataset endpoints (audit logs, inventory, production) excluded from hover prefetch
-- **Database Indexes**: Composite indexes for common query patterns (see `migrations/004_performance_indexes.sql`):
-  - Branch + Date indexes for production and cashier queries
-  - Status indexes for filtering workflows
-  - Category indexes for inventory and warehouse items
+- **Tiered Caching Strategy**: Five-tier cache system based on data volatility (STATIC, LONG, MEDIUM, SHORT, DYNAMIC).
+- **Server-side Caching**: Memoized data fetchers for frequently accessed data (Branches, Users, Permissions).
+- **Prefetch on Hover**: Navigation links prefetch API data on mouse hover to reduce perceived load time, with smart prefetch guards.
+- **Database Indexes**: Composite indexes for common query patterns to improve performance.
 
 ### System Design Choices
 - **Shared Schema**: `shared/` directory for database schema ensures type consistency between frontend and backend.
 - **Modular Design**: Distinct modules for construction, operations, and cashier functions.
 - **Scalability**: Designed to handle multi-branch operations and large datasets with pagination.
-- **Branch-Level Security**: Strict branch-level data isolation for non-admin users enforced via backend filters and frontend component logic.
-  - **Security Pattern**: All GET/PUT/DELETE by ID endpoints use `canAccessBranch()` function instead of `getMandatoryBranchFilter()` to ensure proper access control even when user has no active branch set.
-  - **Security Statistics** (as of Jan 2026):
-    - Total API endpoints: 707
-    - Authenticated endpoints: 706 (1 public for file sharing)
-    - canAccessBranch usage: 173
-    - isUserAdmin checks: 237
-  - **Secured Modules**: Inventory, Production, Cashier Journals, Warehouse, Documents, Executive Secretariat, Construction Projects, Branch Employees, Attendance, Financial Periods, Asset Transfers, Performance Alerts, Shift Tracking, Schedule Templates, Schedule Periods, Purchasing Requests, Travel Requests, Advanced Production Orders.
-  - **Central Data (No Branch Isolation)**: Users, Products, Contractors, Branches, Filters, Backups, Integrations, Notification Templates, Accounting Exports, Contracts, Work Items, Budget Allocations, Contract Items, Payment Requests, Org Job Roles, Employee Settings, Target Profiles, Target Monthly, Incentive Tiers, Seasons/Holidays, Commission Rates, Security Alerts, RBAC Role Templates, Marketing Campaigns/Goals/Expenses.
+- **Branch-Level Security**: Strict branch-level data isolation for non-admin users enforced via backend filters and frontend component logic, with comprehensive security checks across API endpoints.
 
 ## External Dependencies
 
@@ -134,6 +75,6 @@ The system uses a modern web architecture with a React-based frontend and a Node
 - **Google Fonts**: Cairo (Arabic) and Plus Jakarta Sans (Latin).
 
 ### External System Integrations
-- **Accounting Integration**: API endpoints for exporting inventory valuation, asset movements, and project cost reports in JSON format.
+- **Accounting Integration**: API endpoints for exporting inventory valuation, asset movements, and project cost reports.
 - **SMS/WhatsApp Notifications**: Notification queue system ready for Twilio integration.
 - **Data Import**: Excel import functionality via API endpoint (`/api/import-jobs`).
