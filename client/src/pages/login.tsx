@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
+import { useWelcomeSound, useLoginSound } from "@/hooks/use-notification-sounds";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -9,41 +10,6 @@ import { Loader2, Settings, BarChart3, Building2, Briefcase } from "lucide-react
 import logo from "@assets/logo_butter_bakery__1768502624540.png";
 import welcomeGraphic from "@assets/generated_images/man_beard_imac_facing_left.png";
 
-const playWelcomeSound = async (): Promise<boolean> => {
-  try {
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-    
-    if (audioContext.state === "suspended") {
-      await audioContext.resume();
-    }
-    
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-    
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-    
-    oscillator.frequency.setValueAtTime(523.25, audioContext.currentTime);
-    oscillator.frequency.setValueAtTime(659.25, audioContext.currentTime + 0.1);
-    oscillator.frequency.setValueAtTime(783.99, audioContext.currentTime + 0.2);
-    
-    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.4);
-    
-    oscillator.start(audioContext.currentTime);
-    oscillator.stop(audioContext.currentTime + 0.4);
-    
-    oscillator.onended = () => {
-      audioContext.close();
-    };
-    
-    return true;
-  } catch (error) {
-    console.error("Error playing welcome sound:", error);
-    return false;
-  }
-};
-
 export default function LoginPage() {
   const [, setLocation] = useLocation();
   const { login, isLoggingIn, isAuthenticated } = useAuth();
@@ -51,32 +17,14 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
+  
+  const { setupInteractionListener } = useWelcomeSound("loginPageWelcome");
+  const { triggerLoginSound } = useLoginSound();
 
   useEffect(() => {
-    const hasPlayedSound = sessionStorage.getItem('loginSoundPlayed');
-    if (!hasPlayedSound) {
-      const handleFirstInteraction = async () => {
-        document.removeEventListener('click', handleFirstInteraction);
-        document.removeEventListener('touchstart', handleFirstInteraction);
-        document.removeEventListener('keydown', handleFirstInteraction);
-        
-        const success = await playWelcomeSound();
-        if (success) {
-          sessionStorage.setItem('loginSoundPlayed', 'true');
-        }
-      };
-      
-      document.addEventListener('click', handleFirstInteraction);
-      document.addEventListener('touchstart', handleFirstInteraction);
-      document.addEventListener('keydown', handleFirstInteraction);
-      
-      return () => {
-        document.removeEventListener('click', handleFirstInteraction);
-        document.removeEventListener('touchstart', handleFirstInteraction);
-        document.removeEventListener('keydown', handleFirstInteraction);
-      };
-    }
-  }, []);
+    const cleanup = setupInteractionListener();
+    return cleanup;
+  }, [setupInteractionListener]);
 
   if (isAuthenticated) {
     setLocation("/");
@@ -89,6 +37,7 @@ export default function LoginPage() {
     
     try {
       await login({ username, password, rememberMe });
+      await triggerLoginSound();
       setLocation("/");
     } catch (err: any) {
       setError(err.message || "فشل تسجيل الدخول");

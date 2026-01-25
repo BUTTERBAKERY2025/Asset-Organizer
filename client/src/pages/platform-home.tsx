@@ -1,9 +1,11 @@
+import { useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useWelcomeSound } from "@/hooks/use-notification-sounds";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { useTranslation } from "react-i18next";
@@ -146,6 +148,12 @@ export default function PlatformHomePage() {
   const { canView } = usePermissions();
   const { t, i18n } = useTranslation('platformHome');
   const currentLang = i18n.language as 'ar' | 'en';
+  const { setupInteractionListener } = useWelcomeSound("homePageWelcome");
+
+  useEffect(() => {
+    const cleanup = setupInteractionListener();
+    return cleanup;
+  }, [setupInteractionListener]);
 
   const toggleLanguage = () => {
     const newLang = currentLang === 'ar' ? 'en' : 'ar';
