@@ -13,6 +13,7 @@ import {
   meetingMinutes,
   boardResolutions,
   resolutionVotes,
+  resolutionSignatures,
   capitalTransactions,
   dividendDistributions,
   shareholderDividends,
@@ -28,6 +29,7 @@ import {
   insertMeetingMinutesSchema,
   insertBoardResolutionSchema,
   insertResolutionVoteSchema,
+  insertResolutionSignatureSchema,
   insertCapitalTransactionSchema,
   insertDividendDistributionSchema,
   insertShareholderDividendSchema,
@@ -35,6 +37,7 @@ import {
   insertComplianceRequirementSchema,
   insertComplianceHistorySchema,
 } from "@shared/schema";
+import crypto from "crypto";
 import { z } from "zod";
 
 const updateBoardMemberSchema = insertBoardMemberSchema.partial().omit({ createdBy: true });
@@ -1200,6 +1203,245 @@ export function registerGovernanceRoutes(app: Express) {
     } catch (error) {
       console.error("Error fetching governance stats:", error);
       res.status(500).json({ error: "فشل في جلب الإحصائيات" });
+    }
+  });
+
+  // ============================================
+  // Resolution Signatures - التوقيعات الإلكترونية
+  // ============================================
+
+  // Get signatures for a resolution
+  app.get("/api/governance/resolutions/:resolutionId/signatures", isAuthenticated, async (req, res) => {
+    try {
+      const resolutionId = parseInt(req.params.resolutionId);
+      const signatures = await db
+        .select({
+          id: resolutionSignatures.id,
+          resolutionId: resolutionSignatures.resolutionId,
+          boardMemberId: resolutionSignatures.boardMemberId,
+          signatureToken: resolutionSignatures.signatureToken,
+          signatureData: resolutionSignatures.signatureData,
+          signatureType: resolutionSignatures.signatureType,
+          status: resolutionSignatures.status,
+          signedAt: resolutionSignatures.signedAt,
+          declinedAt: resolutionSignatures.declinedAt,
+          declineReason: resolutionSignatures.declineReason,
+          expiresAt: resolutionSignatures.expiresAt,
+          createdAt: resolutionSignatures.createdAt,
+          memberName: boardMembers.fullName,
+          memberPosition: boardMembers.position,
+          memberEmail: boardMembers.email,
+        })
+        .from(resolutionSignatures)
+        .innerJoin(boardMembers, eq(resolutionSignatures.boardMemberId, boardMembers.id))
+        .where(eq(resolutionSignatures.resolutionId, resolutionId))
+        .orderBy(desc(resolutionSignatures.createdAt));
+      
+      res.json(signatures);
+    } catch (error) {
+      console.error("Error fetching signatures:", error);
+      res.status(500).json({ error: "فشل في جلب التوقيعات" });
+    }
+  });
+
+  // Create signature requests for all active board members
+  app.post("/api/governance/resolutions/:resolutionId/signatures/create-requests", isAuthenticated, requirePermission("governance", "edit"), async (req, res) => {
+    try {
+      const resolutionId = parseInt(req.params.resolutionId);
+      const { expiresInDays = 7 } = req.body;
+      
+      // Get active board members
+      const members = await db.select().from(boardMembers).where(eq(boardMembers.status, "active"));
+      
+      if (members.length === 0) {
+        return res.status(400).json({ error: "لا يوجد أعضاء مجلس نشطين" });
+      }
+      
+      // Check for existing pending signatures
+      const existingSignatures = await db.select()
+        .from(resolutionSignatures)
+        .where(eq(resolutionSignatures.resolutionId, resolutionId));
+      
+      const existingMemberIds = new Set(existingSignatures.map(s => s.boardMemberId));
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + expiresInDays);
+      
+      const newSignatures = [];
+      for (const member of members) {
+        if (!existingMemberIds.has(member.id)) {
+          const signatureToken = crypto.randomBytes(32).toString('hex');
+          newSignatures.push({
+            resolutionId,
+            boardMemberId: member.id,
+            signatureToken,
+            status: "pending" as const,
+            expiresAt,
+          });
+        }
+      }
+      
+      if (newSignatures.length > 0) {
+        await db.insert(resolutionSignatures).values(newSignatures);
+      }
+      
+      // Return all signatures with member info
+      const allSignatures = await db
+        .select({
+          id: resolutionSignatures.id,
+          signatureToken: resolutionSignatures.signatureToken,
+          status: resolutionSignatures.status,
+          memberName: boardMembers.fullName,
+          memberEmail: boardMembers.email,
+        })
+        .from(resolutionSignatures)
+        .innerJoin(boardMembers, eq(resolutionSignatures.boardMemberId, boardMembers.id))
+        .where(eq(resolutionSignatures.resolutionId, resolutionId));
+      
+      res.json({ 
+        created: newSignatures.length, 
+        total: allSignatures.length,
+        signatures: allSignatures 
+      });
+    } catch (error) {
+      console.error("Error creating signature requests:", error);
+      res.status(500).json({ error: "فشل في إنشاء طلبات التوقيع" });
+    }
+  });
+
+  // Public endpoint - Get resolution for signing (no auth required)
+  app.get("/api/public/sign/:token", async (req, res) => {
+    try {
+      const { token } = req.params;
+      
+      // Validate token format
+      if (!token || !/^[a-f0-9]{64}$/.test(token)) {
+        return res.status(400).json({ error: "رابط غير صالح" });
+      }
+      
+      const [signature] = await db
+        .select({
+          id: resolutionSignatures.id,
+          status: resolutionSignatures.status,
+          expiresAt: resolutionSignatures.expiresAt,
+          signedAt: resolutionSignatures.signedAt,
+          memberName: boardMembers.fullName,
+          memberPosition: boardMembers.position,
+          resolutionId: boardResolutions.id,
+          resolutionNumber: boardResolutions.resolutionNumber,
+          resolutionTitle: boardResolutions.title,
+          resolutionDescription: boardResolutions.description,
+          resolutionType: boardResolutions.resolutionType,
+          resolutionStatus: boardResolutions.status,
+          resolutionCreatedAt: boardResolutions.createdAt,
+        })
+        .from(resolutionSignatures)
+        .innerJoin(boardMembers, eq(resolutionSignatures.boardMemberId, boardMembers.id))
+        .innerJoin(boardResolutions, eq(resolutionSignatures.resolutionId, boardResolutions.id))
+        .where(eq(resolutionSignatures.signatureToken, token));
+      
+      if (!signature) {
+        return res.status(404).json({ error: "رابط التوقيع غير موجود" });
+      }
+      
+      if (signature.status === "signed") {
+        return res.status(400).json({ error: "تم التوقيع على هذا القرار مسبقاً", signedAt: signature.signedAt });
+      }
+      
+      if (signature.expiresAt && new Date(signature.expiresAt) < new Date()) {
+        return res.status(410).json({ error: "انتهت صلاحية رابط التوقيع" });
+      }
+      
+      res.json(signature);
+    } catch (error) {
+      console.error("Error fetching signature:", error);
+      res.status(500).json({ error: "فشل في جلب بيانات التوقيع" });
+    }
+  });
+
+  // Public endpoint - Submit signature (no auth required)
+  app.post("/api/public/sign/:token", async (req, res) => {
+    try {
+      const { token } = req.params;
+      const { signatureData, signatureType = "draw" } = req.body;
+      
+      // Validate token
+      if (!token || !/^[a-f0-9]{64}$/.test(token)) {
+        return res.status(400).json({ error: "رابط غير صالح" });
+      }
+      
+      if (!signatureData) {
+        return res.status(400).json({ error: "التوقيع مطلوب" });
+      }
+      
+      // Get signature record
+      const [signature] = await db.select().from(resolutionSignatures)
+        .where(eq(resolutionSignatures.signatureToken, token));
+      
+      if (!signature) {
+        return res.status(404).json({ error: "رابط التوقيع غير موجود" });
+      }
+      
+      if (signature.status === "signed") {
+        return res.status(400).json({ error: "تم التوقيع مسبقاً" });
+      }
+      
+      if (signature.expiresAt && new Date(signature.expiresAt) < new Date()) {
+        return res.status(410).json({ error: "انتهت صلاحية رابط التوقيع" });
+      }
+      
+      // Update signature
+      const ipAddress = req.ip || req.socket.remoteAddress;
+      const userAgent = req.get('User-Agent');
+      
+      await db.update(resolutionSignatures)
+        .set({
+          signatureData,
+          signatureType,
+          status: "signed",
+          signedAt: new Date(),
+          ipAddress,
+          userAgent,
+          updatedAt: new Date(),
+        })
+        .where(eq(resolutionSignatures.id, signature.id));
+      
+      res.json({ success: true, message: "تم التوقيع بنجاح" });
+    } catch (error) {
+      console.error("Error submitting signature:", error);
+      res.status(500).json({ error: "فشل في حفظ التوقيع" });
+    }
+  });
+
+  // Public endpoint - Decline signature
+  app.post("/api/public/sign/:token/decline", async (req, res) => {
+    try {
+      const { token } = req.params;
+      const { reason } = req.body;
+      
+      const [signature] = await db.select().from(resolutionSignatures)
+        .where(eq(resolutionSignatures.signatureToken, token));
+      
+      if (!signature) {
+        return res.status(404).json({ error: "رابط التوقيع غير موجود" });
+      }
+      
+      if (signature.status !== "pending") {
+        return res.status(400).json({ error: "لا يمكن رفض هذا التوقيع" });
+      }
+      
+      await db.update(resolutionSignatures)
+        .set({
+          status: "declined",
+          declinedAt: new Date(),
+          declineReason: reason,
+          updatedAt: new Date(),
+        })
+        .where(eq(resolutionSignatures.id, signature.id));
+      
+      res.json({ success: true, message: "تم رفض التوقيع" });
+    } catch (error) {
+      console.error("Error declining signature:", error);
+      res.status(500).json({ error: "فشل في رفض التوقيع" });
     }
   });
 }

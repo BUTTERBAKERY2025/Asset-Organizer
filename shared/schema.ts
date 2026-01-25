@@ -7108,6 +7108,41 @@ export const insertResolutionVoteSchema = createInsertSchema(resolutionVotes).om
 export type ResolutionVote = typeof resolutionVotes.$inferSelect;
 export type InsertResolutionVote = z.infer<typeof insertResolutionVoteSchema>;
 
+// التوقيعات الإلكترونية على القرارات - Resolution Electronic Signatures
+export const resolutionSignatures = pgTable("resolution_signatures", {
+  id: serial("id").primaryKey(),
+  resolutionId: integer("resolution_id").notNull().references(() => boardResolutions.id, { onDelete: "cascade" }),
+  boardMemberId: integer("board_member_id").notNull().references(() => boardMembers.id, { onDelete: "cascade" }),
+  signatureToken: text("signature_token").notNull().unique(), // رمز فريد للتوقيع عبر الرابط
+  signatureData: text("signature_data"), // بيانات التوقيع (base64 encoded)
+  signatureType: text("signature_type").default("draw"), // draw, type, upload
+  status: text("status").default("pending").notNull(), // pending, signed, declined, expired
+  signedAt: timestamp("signed_at"),
+  declinedAt: timestamp("declined_at"),
+  declineReason: text("decline_reason"),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  expiresAt: timestamp("expires_at"),
+  reminderSentAt: timestamp("reminder_sent_at"),
+  reminderCount: integer("reminder_count").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_resolution_signatures_resolution").on(table.resolutionId),
+  index("idx_resolution_signatures_member").on(table.boardMemberId),
+  index("idx_resolution_signatures_token").on(table.signatureToken),
+  index("idx_resolution_signatures_status").on(table.status),
+]);
+
+export const insertResolutionSignatureSchema = createInsertSchema(resolutionSignatures).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ResolutionSignature = typeof resolutionSignatures.$inferSelect;
+export type InsertResolutionSignature = z.infer<typeof insertResolutionSignatureSchema>;
+
 // رأس المال والأسهم - Capital & Shares Management
 export const capitalTransactions = pgTable("capital_transactions", {
   id: serial("id").primaryKey(),
