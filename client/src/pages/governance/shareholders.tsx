@@ -42,7 +42,7 @@ import {
 } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import type { Shareholder } from "@shared/schema";
-import { exportToExcel, exportToCSV, printAsPDF } from "@/lib/export-utils";
+import { exportToExcel, exportToCSV, printAsPDF, type PrintOptions } from "@/lib/export-utils";
 
 const shareholderTypes = [
   { value: "individual", label: "فرد", icon: User, color: "#22c55e" },
@@ -310,9 +310,10 @@ export default function ShareholdersPage() {
                   printAsPDF(
                     exportData, 
                     exportColumns, 
-                    "شركة الزبد الأفضل التجارية", 
-                    "سجل المساهمين وهيكل الملكية",
-                    headerInfo
+                    "سجل المساهمين وهيكل الملكية", 
+                    `تقرير رسمي صادر بتاريخ ${new Date().toLocaleDateString("ar-SA")}`,
+                    headerInfo,
+                    { landscape: true, companyName: "شركة الزبد الأفضل التجارية", showLogo: true }
                   );
                 }}>
                   طباعة PDF
