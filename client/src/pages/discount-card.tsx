@@ -3,7 +3,7 @@ import { useRoute } from "wouter";
 import { QRCodeSVG } from "qrcode.react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Wallet, Download, Share2 } from "lucide-react";
+import { Wallet, Download, Share2, Calendar, MessageCircle } from "lucide-react";
 
 interface DiscountData {
   id: number;
@@ -59,97 +59,128 @@ export default function DiscountCardPage() {
     }
   };
 
+  const shareViaWhatsApp = () => {
+    if (discount) {
+      const cardUrl = window.location.href;
+      const message = `🎁 *كارد خصم من BUTTER BAKERY*\n\n` +
+        `📍 ${discount.name}\n` +
+        `💰 خصم: ${discount.discountType === "percentage" ? `${discount.discountValue}%` : `${discount.discountValue} ر.س`}\n` +
+        `🔖 الرمز: ${discount.code}\n` +
+        `📅 صالح حتى: ${discount.validTo}\n\n` +
+        `👆 اضغط على الرابط لعرض الكارد:\n${cardUrl}`;
+      window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+    }
+  };
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-amber-100 to-amber-50 flex items-center justify-center">
-        <div className="animate-spin w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full" />
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center">
+        <div className="animate-spin w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full" />
       </div>
     );
   }
 
   if (error || !discount) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-amber-100 to-amber-50 flex items-center justify-center p-4">
-        <Card className="p-8 text-center">
-          <h1 className="text-2xl font-bold text-gray-800 mb-2">الخصم غير موجود</h1>
-          <p className="text-gray-600">رمز الخصم غير صالح أو منتهي الصلاحية</p>
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4">
+        <Card className="p-8 text-center bg-slate-800 border-slate-700">
+          <h1 className="text-2xl font-bold text-white mb-2">الخصم غير موجود</h1>
+          <p className="text-slate-400">رمز الخصم غير صالح أو منتهي الصلاحية</p>
         </Card>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-100 to-amber-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Discount Card */}
-        <div className="bg-gradient-to-br from-amber-500 via-amber-400 to-yellow-500 rounded-3xl p-6 text-white shadow-2xl relative overflow-hidden">
-          {/* Decorative circles */}
-          <div className="absolute top-4 left-4 w-24 h-24 border-4 border-white/20 rounded-full" />
-          <div className="absolute bottom-4 right-4 w-20 h-20 border-4 border-white/20 rounded-full" />
+        <div className="bg-gradient-to-br from-slate-800 via-slate-700 to-slate-800 rounded-3xl shadow-2xl relative overflow-hidden border border-slate-600/50">
+          {/* Top accent line */}
+          <div className="h-2 bg-gradient-to-r from-orange-500 via-orange-400 to-orange-500" />
           
-          <div className="relative z-10">
+          {/* Decorative Pattern */}
+          <div className="absolute inset-0 opacity-5">
+            <div className="absolute top-0 left-0 w-full h-full" style={{
+              backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+            }} />
+          </div>
+          
+          <div className="relative z-10 p-6">
             {/* Logo */}
-            <div className="text-center mb-4">
-              <div className="inline-block">
+            <div className="text-center mb-6">
+              <div className="inline-block bg-white rounded-2xl p-4 shadow-xl">
                 <img 
                   src="/butter-logo.png" 
                   alt="BUTTER BAKERY" 
-                  className="h-16 mx-auto mb-2"
+                  className="h-16 mx-auto"
                   onError={(e) => {
                     e.currentTarget.style.display = 'none';
-                    e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                    const next = e.currentTarget.nextElementSibling as HTMLElement;
+                    if (next) next.classList.remove('hidden');
                   }}
                 />
-                <div className="hidden text-2xl font-black tracking-wider">
+                <div className="hidden text-2xl font-black text-orange-500 tracking-wider">
                   BUTTER BAKERY
                 </div>
               </div>
-              <h2 className="text-xl font-bold mt-2">{discount.name}</h2>
+            </div>
+
+            {/* Discount Name */}
+            <div className="text-center mb-4">
+              <h2 className="text-xl font-bold text-white">{discount.name}</h2>
             </div>
 
             {/* Discount Value */}
             <div className="text-center my-6">
-              <div className="inline-block bg-white text-amber-600 rounded-2xl px-10 py-5 shadow-lg">
-                <p className="text-sm text-amber-500 mb-1">خصم</p>
-                <p className="text-5xl font-black">
-                  {discount.discountType === "percentage" 
-                    ? `${discount.discountValue}%` 
-                    : `${Number(discount.discountValue).toLocaleString()} ر.س`}
-                </p>
+              <div className="inline-block relative">
+                <div className="absolute inset-0 bg-orange-500 rounded-2xl blur-xl opacity-40" />
+                <div className="relative bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl px-12 py-6 shadow-2xl border border-orange-400/30">
+                  <p className="text-orange-100 text-sm mb-1 font-medium">خصم حصري</p>
+                  <p className="text-5xl font-black text-white drop-shadow-lg">
+                    {discount.discountType === "percentage" 
+                      ? `${discount.discountValue}%` 
+                      : `${Number(discount.discountValue).toLocaleString()} ر.س`}
+                  </p>
+                </div>
               </div>
             </div>
 
             {/* QR Code */}
             <div className="flex justify-center my-6">
-              <div className="bg-white p-4 rounded-2xl shadow-lg">
+              <div className="bg-white p-4 rounded-2xl shadow-xl">
                 <QRCodeSVG 
-                  value={`${window.location.origin}/discount/${discount.code}`}
-                  size={140}
+                  value={window.location.href}
+                  size={130}
                   level="H"
                   includeMargin={false}
+                  fgColor="#1e293b"
                 />
               </div>
             </div>
 
             {/* Code */}
             <div className="text-center my-4">
-              <p className="text-white/80 text-sm mb-2">رمز الخصم</p>
-              <div className="inline-block bg-white/20 backdrop-blur-sm rounded-xl px-8 py-4 border border-white/30">
-                <code className="text-3xl font-black tracking-widest">{discount.code}</code>
+              <p className="text-slate-400 text-sm mb-2">رمز الخصم</p>
+              <div className="inline-block bg-slate-700/50 backdrop-blur-sm rounded-xl px-8 py-4 border border-slate-600">
+                <code className="text-2xl font-black tracking-widest text-white">{discount.code}</code>
               </div>
             </div>
 
             {/* Validity */}
-            <div className="text-center text-white/90 text-sm mt-6 space-y-1">
-              <p className="font-medium">صالح حتى: {discount.validTo}</p>
+            <div className="text-center text-slate-300 text-sm mt-6 space-y-1">
+              <p className="flex items-center justify-center gap-2">
+                <Calendar className="h-4 w-4 text-orange-400" />
+                <span>صالح حتى: <strong className="text-white">{discount.validTo}</strong></span>
+              </p>
               {discount.minimumOrder && (
-                <p>الحد الأدنى للطلب: {Number(discount.minimumOrder).toLocaleString()} ر.س</p>
+                <p className="text-slate-400">الحد الأدنى للطلب: {Number(discount.minimumOrder).toLocaleString()} ر.س</p>
               )}
             </div>
 
             {/* Terms */}
             {discount.terms && (
-              <div className="mt-4 text-center text-xs text-white/70 bg-white/10 rounded-lg p-3">
+              <div className="mt-4 text-center text-xs text-slate-400 bg-slate-700/30 rounded-lg p-3 border border-slate-700">
                 {discount.terms}
               </div>
             )}
@@ -159,7 +190,15 @@ export default function DiscountCardPage() {
         {/* Action Buttons */}
         <div className="mt-6 space-y-3">
           <Button 
-            className="w-full gap-2 bg-black hover:bg-gray-800 text-white py-6 text-lg rounded-xl"
+            className="w-full gap-2 bg-green-600 hover:bg-green-700 text-white py-6 text-lg rounded-xl"
+            onClick={shareViaWhatsApp}
+          >
+            <MessageCircle className="h-5 w-5" />
+            مشاركة عبر واتساب
+          </Button>
+          
+          <Button 
+            className="w-full gap-2 bg-slate-700 hover:bg-slate-600 text-white py-5 rounded-xl border border-slate-600"
             onClick={handleAddToWallet}
           >
             <Wallet className="h-5 w-5" />
@@ -169,7 +208,7 @@ export default function DiscountCardPage() {
           <div className="grid grid-cols-2 gap-3">
             <Button 
               variant="outline"
-              className="gap-2 py-5 rounded-xl"
+              className="gap-2 py-5 rounded-xl bg-slate-800 border-slate-600 text-white hover:bg-slate-700"
               onClick={handleShare}
             >
               <Share2 className="h-5 w-5" />
@@ -177,7 +216,7 @@ export default function DiscountCardPage() {
             </Button>
             <Button 
               variant="outline"
-              className="gap-2 py-5 rounded-xl"
+              className="gap-2 py-5 rounded-xl bg-slate-800 border-slate-600 text-white hover:bg-slate-700"
               onClick={() => window.print()}
             >
               <Download className="h-5 w-5" />
@@ -187,9 +226,9 @@ export default function DiscountCardPage() {
         </div>
 
         {/* Footer */}
-        <div className="text-center mt-8 text-amber-700 text-sm">
-          <p>BUTTER BAKERY</p>
-          <p className="text-xs text-amber-600/70 mt-1">شركة الزبد الأفضل التجارية</p>
+        <div className="text-center mt-8 text-slate-500 text-sm">
+          <p className="text-orange-400 font-medium">BUTTER BAKERY</p>
+          <p className="text-xs mt-1">شركة الزبد الأفضل التجارية</p>
         </div>
       </div>
     </div>
