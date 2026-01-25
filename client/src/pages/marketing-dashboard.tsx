@@ -5,7 +5,7 @@ import { Link } from "wouter";
 import { 
   Megaphone, Users, Target, Calendar, TrendingUp, FileBarChart, Clock, DollarSign,
   ChevronLeft, CheckCircle2, AlertCircle, BarChart3, Award, FolderOpen, Bell,
-  ArrowUpRight, ArrowDownRight, Percent, Eye, Star, UserCheck, Activity, Share2, FileText
+  ArrowUpRight, ArrowDownRight, Percent, Eye, Star, UserCheck, Activity, Share2, FileText, Handshake
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -296,6 +296,7 @@ export default function MarketingDashboardPage() {
     { title: "الأصول", href: "/marketing-assets", icon: FolderOpen, bgColor: "bg-gradient-to-br from-cyan-400 to-cyan-600", iconBg: "bg-cyan-100", iconColor: "text-cyan-600", count: null },
     { title: "التنبيهات", href: "/marketing-alerts", icon: Bell, bgColor: "bg-gradient-to-br from-red-400 to-red-600", iconBg: "bg-red-100", iconColor: "text-red-600", count: null },
     { title: "السوشيال ميديا", href: "/marketing-social", icon: Share2, bgColor: "bg-gradient-to-br from-violet-400 to-violet-600", iconBg: "bg-violet-100", iconColor: "text-violet-600", count: null },
+    { title: "المسؤولية الاجتماعية", href: "/social-responsibility", icon: Handshake, bgColor: "bg-gradient-to-br from-amber-400 to-amber-600", iconBg: "bg-amber-100", iconColor: "text-amber-600", count: null },
   ];
 
   return (
