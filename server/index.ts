@@ -1,5 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
+import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import path from "path";
@@ -153,6 +154,9 @@ process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
 (async () => {
   await registerRoutes(httpServer, app);
+  
+  // Register object storage routes for file uploads (after session middleware)
+  registerObjectStorageRoutes(app);
 
   // Improved error handling - log but don't rethrow
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
