@@ -1738,15 +1738,38 @@ export class DatabaseStorage implements IStorage {
     return newPayment;
   }
 
-  // User Permissions
+  // User Permissions - with caching
+  private permissionsCache = new Map<string, { data: UserPermission[], timestamp: number }>();
+  private PERMISSIONS_CACHE_TTL = 30000; // 30 seconds cache
+
   async getUserPermissions(userId: string): Promise<UserPermission[]> {
-    return await db
+    const cached = this.permissionsCache.get(userId);
+    const now = Date.now();
+    if (cached && (now - cached.timestamp) < this.PERMISSIONS_CACHE_TTL) {
+      return cached.data;
+    }
+    
+    const perms = await db
       .select()
       .from(userPermissions)
       .where(eq(userPermissions.userId, userId));
+    
+    this.permissionsCache.set(userId, { data: perms, timestamp: now });
+    return perms;
+  }
+
+  invalidatePermissionsCache(userId?: string) {
+    if (userId) {
+      this.permissionsCache.delete(userId);
+    } else {
+      this.permissionsCache.clear();
+    }
   }
 
   async setUserPermission(permission: InsertUserPermission): Promise<UserPermission> {
+    // Invalidate cache immediately for security
+    this.invalidatePermissionsCache(permission.userId);
+    
     // Check if permission for this user+module exists
     const [existing] = await db
       .select()
@@ -1777,6 +1800,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteUserPermissions(userId: string): Promise<boolean> {
+    // Invalidate cache immediately for security
+    this.invalidatePermissionsCache(userId);
+    
     const result = await db
       .delete(userPermissions)
       .where(eq(userPermissions.userId, userId))
@@ -1833,6 +1859,9 @@ export class DatabaseStorage implements IStorage {
     changedByUserId: string,
     templateApplied: string | null
   ): Promise<UserPermission[]> {
+    // Invalidate cache immediately for security
+    this.invalidatePermissionsCache(userId);
+    
     return await db.transaction(async (tx) => {
       // Get old permissions for audit logging
       const oldPermissions = await tx
@@ -2129,8 +2158,29 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createSystemAuditLog(log: InsertSystemAuditLog): Promise<SystemAuditLog> {
-    const [created] = await db.insert(systemAuditLogs).values(log).returning();
-    return created;
+    // Remove optional fields that may not exist in database yet
+    const { targetId, description, ...safeLog } = log as any;
+    try {
+      const [created] = await db.insert(systemAuditLogs).values(safeLog).returning();
+      return created;
+    } catch (error: any) {
+      // If column doesn't exist, try inserting without problematic fields
+      if (error?.code === '42703') {
+        const [created] = await db.insert(systemAuditLogs).values({
+          module: log.module,
+          entityId: log.entityId,
+          entityName: log.entityName,
+          action: log.action,
+          details: log.details,
+          userId: log.userId,
+          userName: log.userName,
+          ipAddress: log.ipAddress,
+          userAgent: log.userAgent,
+        }).returning();
+        return created;
+      }
+      throw error;
+    }
   }
 
   async searchSystemAuditLogs(query: string): Promise<SystemAuditLog[]> {
@@ -10923,11 +10973,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   // =====================================================
-  // التنبيهات الموحدة - System Notifications
+  // التنبيهات الموحدة - System Notifications (with caching)
   // =====================================================
+
+  private notificationsCache = new Map<string, { data: Notification[], timestamp: number }>();
+  private NOTIFICATIONS_CACHE_TTL = 15000; // 15 seconds cache
 
   async getSystemNotifications(userId?: string, branchId?: string): Promise<Notification[]> {
     try {
+      const cacheKey = `${userId || 'all'}-${branchId || 'all'}`;
+      const cached = this.notificationsCache.get(cacheKey);
+      const now = Date.now();
+      if (cached && (now - cached.timestamp) < this.NOTIFICATIONS_CACHE_TTL) {
+        return cached.data;
+      }
+
       const conditions = [];
       if (userId) {
         conditions.push(or(eq(notifications.userId, userId), isNull(notifications.userId)));
@@ -10937,14 +10997,22 @@ export class DatabaseStorage implements IStorage {
       }
       conditions.push(eq(notifications.isDismissed, false));
 
-      return db.select()
+      const result = await db.select()
         .from(notifications)
         .where(conditions.length > 0 ? and(...conditions) : undefined)
-        .orderBy(desc(notifications.createdAt));
+        .orderBy(desc(notifications.createdAt))
+        .limit(50);
+      
+      this.notificationsCache.set(cacheKey, { data: result, timestamp: now });
+      return result;
     } catch (error: any) {
       if (error?.code === '42P01') return [];
       throw error;
     }
+  }
+
+  invalidateNotificationsCache() {
+    this.notificationsCache.clear();
   }
 
   async getUnreadSystemNotifications(userId: string): Promise<Notification[]> {
@@ -10976,6 +11044,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createSystemNotification(data: InsertNotification): Promise<Notification> {
+    this.invalidateNotificationsCache();
     const [notification] = await db.insert(notifications)
       .values(data)
       .returning();
@@ -10983,6 +11052,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async markSystemNotificationAsRead(id: number): Promise<Notification | undefined> {
+    this.invalidateNotificationsCache();
     try {
       const [notification] = await db.update(notifications)
         .set({
@@ -11017,6 +11087,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async dismissSystemNotification(id: number): Promise<boolean> {
+    this.invalidateNotificationsCache();
     try {
       await db.update(notifications)
         .set({
