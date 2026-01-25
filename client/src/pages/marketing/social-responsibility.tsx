@@ -17,7 +17,7 @@ import {
   Building2, Heart, Ticket, Plus, Pencil, Trash2, Search, 
   Users, Calendar, DollarSign, Target, TrendingUp, Award,
   Handshake, Gift, Megaphone, RefreshCw, Share2, MessageCircle,
-  Eye, Copy, Check, QrCode
+  Eye, Copy, Check, QrCode, CreditCard
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import type { BeneficiaryOrganization, SocialInitiative, CommunityDiscount } from "@shared/schema";
@@ -772,27 +772,37 @@ ${discount.minimumOrder ? `🛒 الحد الأدنى للطلب: ${Number(disco
         <Dialog open={showDiscountCard} onOpenChange={setShowDiscountCard}>
           <DialogContent className="max-w-md">
             {viewingDiscount && (
-              <div className="bg-gradient-to-br from-amber-500 via-amber-400 to-yellow-500 rounded-2xl p-6 text-white shadow-2xl" id="discount-card-print">
+              <div className="bg-gradient-to-br from-amber-500 via-amber-400 to-yellow-500 rounded-2xl p-6 text-white shadow-2xl relative overflow-hidden" id="discount-card-print">
                 {/* Decorative Elements */}
-                <div className="absolute top-0 left-0 w-full h-full opacity-10">
-                  <div className="absolute top-4 left-4 w-20 h-20 border-4 border-white rounded-full" />
-                  <div className="absolute bottom-4 right-4 w-16 h-16 border-4 border-white rounded-full" />
-                </div>
+                <div className="absolute top-4 left-4 w-24 h-24 border-4 border-white/20 rounded-full" />
+                <div className="absolute bottom-4 right-4 w-20 h-20 border-4 border-white/20 rounded-full" />
                 
                 <div className="relative z-10">
-                  {/* Logo & Title */}
+                  {/* Logo */}
                   <div className="text-center mb-4">
-                    <div className="inline-block bg-white/20 backdrop-blur rounded-full px-4 py-1 mb-2">
-                      <span className="text-sm font-medium">مخبز الزبد الأفضل</span>
+                    <div className="inline-block">
+                      <img 
+                        src="/butter-logo.png" 
+                        alt="BUTTER BAKERY" 
+                        className="h-14 mx-auto mb-1"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                          const textEl = e.currentTarget.nextElementSibling as HTMLElement;
+                          if (textEl) textEl.classList.remove('hidden');
+                        }}
+                      />
+                      <div className="hidden text-2xl font-black tracking-wider">
+                        BUTTER BAKERY
+                      </div>
                     </div>
-                    <h2 className="text-2xl font-bold">{viewingDiscount.name}</h2>
+                    <h2 className="text-xl font-bold mt-2">{viewingDiscount.name}</h2>
                   </div>
 
                   {/* Discount Value */}
-                  <div className="text-center my-6">
-                    <div className="inline-block bg-white text-amber-600 rounded-2xl px-8 py-4 shadow-lg">
+                  <div className="text-center my-5">
+                    <div className="inline-block bg-white text-amber-600 rounded-2xl px-10 py-5 shadow-lg">
                       <p className="text-sm text-amber-500 mb-1">خصم</p>
-                      <p className="text-4xl font-black">
+                      <p className="text-5xl font-black">
                         {viewingDiscount.discountType === "percentage" 
                           ? `${viewingDiscount.discountValue}%` 
                           : `${Number(viewingDiscount.discountValue).toLocaleString()} ر.س`}
@@ -800,12 +810,12 @@ ${discount.minimumOrder ? `🛒 الحد الأدنى للطلب: ${Number(disco
                     </div>
                   </div>
 
-                  {/* QR Code */}
+                  {/* QR Code - links to card page */}
                   <div className="flex justify-center my-4">
-                    <div className="bg-white p-3 rounded-xl shadow-lg">
+                    <div className="bg-white p-4 rounded-2xl shadow-lg">
                       <QRCodeSVG 
-                        value={viewingDiscount.code} 
-                        size={120}
+                        value={`${window.location.origin}/discount/${viewingDiscount.code}`}
+                        size={130}
                         level="H"
                         includeMargin={false}
                       />
@@ -814,15 +824,15 @@ ${discount.minimumOrder ? `🛒 الحد الأدنى للطلب: ${Number(disco
 
                   {/* Code */}
                   <div className="text-center my-4">
-                    <p className="text-white/80 text-sm mb-1">رمز الخصم</p>
-                    <div className="inline-block bg-white/20 backdrop-blur rounded-xl px-6 py-3">
-                      <code className="text-2xl font-bold tracking-widest">{viewingDiscount.code}</code>
+                    <p className="text-white/80 text-sm mb-2">رمز الخصم</p>
+                    <div className="inline-block bg-white/20 backdrop-blur-sm rounded-xl px-6 py-3 border border-white/30">
+                      <code className="text-2xl font-black tracking-widest">{viewingDiscount.code}</code>
                     </div>
                   </div>
 
                   {/* Validity */}
-                  <div className="text-center text-white/80 text-sm mt-4">
-                    <p>صالح حتى: {viewingDiscount.validTo}</p>
+                  <div className="text-center text-white/90 text-sm mt-4">
+                    <p className="font-medium">صالح حتى: {viewingDiscount.validTo}</p>
                     {viewingDiscount.minimumOrder && (
                       <p>الحد الأدنى للطلب: {Number(viewingDiscount.minimumOrder).toLocaleString()} ر.س</p>
                     )}
@@ -830,7 +840,7 @@ ${discount.minimumOrder ? `🛒 الحد الأدنى للطلب: ${Number(disco
 
                   {/* Terms */}
                   {viewingDiscount.terms && (
-                    <div className="mt-4 text-center text-xs text-white/60">
+                    <div className="mt-4 text-center text-xs text-white/70 bg-white/10 rounded-lg p-2">
                       {viewingDiscount.terms}
                     </div>
                   )}
@@ -838,21 +848,58 @@ ${discount.minimumOrder ? `🛒 الحد الأدنى للطلب: ${Number(disco
               </div>
             )}
             <DialogFooter className="mt-4">
-              <div className="flex gap-2 w-full">
+              <div className="flex flex-col gap-3 w-full">
+                {/* Share as Card via WhatsApp */}
                 <Button 
-                  className="flex-1 gap-2 bg-green-600 hover:bg-green-700"
-                  onClick={() => viewingDiscount && shareViaWhatsApp(viewingDiscount)}
+                  className="w-full gap-2 bg-green-600 hover:bg-green-700 py-5 text-base"
+                  onClick={() => {
+                    if (viewingDiscount) {
+                      const cardUrl = `${window.location.origin}/discount/${viewingDiscount.code}`;
+                      const message = `🎁 *كارد خصم من BUTTER BAKERY*\n\n` +
+                        `📍 ${viewingDiscount.name}\n` +
+                        `💰 خصم: ${viewingDiscount.discountType === "percentage" ? `${viewingDiscount.discountValue}%` : `${viewingDiscount.discountValue} ر.س`}\n` +
+                        `🔖 الرمز: ${viewingDiscount.code}\n` +
+                        `📅 صالح حتى: ${viewingDiscount.validTo}\n\n` +
+                        `👆 اضغط على الرابط لعرض الكارد:\n${cardUrl}`;
+                      window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+                    }
+                  }}
+                  data-testid="button-share-card-whatsapp"
                 >
-                  <MessageCircle className="h-4 w-4" />
-                  مشاركة واتساب
+                  <MessageCircle className="h-5 w-5" />
+                  مشاركة الكارد عبر واتساب
                 </Button>
+                
+                {/* Add to Wallet */}
+                <Button 
+                  className="w-full gap-2 bg-black hover:bg-gray-800 py-5 text-base"
+                  onClick={() => {
+                    alert("ميزة إضافة المحفظة قيد التطوير - ستتوفر قريباً");
+                  }}
+                  data-testid="button-add-wallet"
+                >
+                  <CreditCard className="h-5 w-5" />
+                  إضافة إلى المحفظة
+                </Button>
+                
+                {/* Copy link */}
                 <Button 
                   variant="outline" 
-                  className="flex-1 gap-2"
-                  onClick={() => viewingDiscount && shareViaSMS(viewingDiscount)}
+                  className="w-full gap-2"
+                  onClick={() => {
+                    if (viewingDiscount) {
+                      const cardUrl = `${window.location.origin}/discount/${viewingDiscount.code}`;
+                      navigator.clipboard.writeText(cardUrl);
+                      toast({
+                        title: "تم النسخ",
+                        description: "تم نسخ رابط الكارد",
+                      });
+                    }
+                  }}
+                  data-testid="button-copy-link"
                 >
-                  <Share2 className="h-4 w-4" />
-                  إرسال رسالة
+                  <Copy className="h-4 w-4" />
+                  نسخ رابط الكارد
                 </Button>
               </div>
             </DialogFooter>

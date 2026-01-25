@@ -207,6 +207,29 @@ export function registerSocialResponsibilityRoutes(app: Express) {
   // Community Discounts - الخصومات المجتمعية
   // =====================================================
 
+  // Public endpoint - get discount by code (for QR scan)
+  app.get("/api/social-responsibility/discounts/code/:code", async (req, res) => {
+    try {
+      const code = req.params.code;
+      const [discount] = await db.select().from(communityDiscounts).where(eq(communityDiscounts.code, code));
+      
+      if (!discount) {
+        return res.status(404).json({ error: "الخصم غير موجود" });
+      }
+      
+      // Check if discount is expired
+      const today = new Date().toISOString().split('T')[0];
+      if (discount.validTo && discount.validTo < today) {
+        return res.status(410).json({ error: "الخصم منتهي الصلاحية", discount });
+      }
+      
+      res.json(discount);
+    } catch (error) {
+      console.error("Error fetching discount by code:", error);
+      res.status(500).json({ error: "فشل في جلب الخصم" });
+    }
+  });
+
   app.get("/api/social-responsibility/discounts", isAuthenticated, requirePermission("social_responsibility", "view"), async (req, res) => {
     try {
       const { status, organizationId, initiativeId } = req.query;
