@@ -240,7 +240,38 @@ export default function SocialResponsibilityPage() {
   const handleDiscountSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const data = Object.fromEntries(formData.entries());
+    const rawData = Object.fromEntries(formData.entries());
+    
+    // Clean and format data
+    const data: Record<string, any> = {
+      name: rawData.name,
+      code: rawData.code,
+      discountType: rawData.discountType,
+      discountValue: rawData.discountValue,
+      validFrom: rawData.validFrom,
+      validTo: rawData.validTo,
+      status: rawData.status || "active",
+    };
+    
+    // Add optional fields only if they have values
+    if (rawData.minimumOrder && rawData.minimumOrder !== "") {
+      data.minimumOrder = rawData.minimumOrder;
+    }
+    if (rawData.maximumDiscount && rawData.maximumDiscount !== "") {
+      data.maximumDiscount = rawData.maximumDiscount;
+    }
+    if (rawData.usageLimit && rawData.usageLimit !== "") {
+      data.usageLimit = parseInt(rawData.usageLimit as string);
+    }
+    if (rawData.beneficiaryOrganizationId && rawData.beneficiaryOrganizationId !== "") {
+      data.beneficiaryOrganizationId = parseInt(rawData.beneficiaryOrganizationId as string);
+    }
+    if (rawData.description && rawData.description !== "") {
+      data.description = rawData.description;
+    }
+    if (rawData.terms && rawData.terms !== "") {
+      data.terms = rawData.terms;
+    }
     
     if (selectedDiscount) {
       updateDiscountMutation.mutate({ id: selectedDiscount.id, data });
