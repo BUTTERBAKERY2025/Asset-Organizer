@@ -62,29 +62,28 @@ export async function uploadToSupabase(
   filename: string,
   mimeType: string
 ): Promise<{ path: string; storedPath: string } | null> {
-  if (!supabase) return null;
+  if (!supabase) {
+    console.error('Supabase client not initialized - check SUPABASE_URL and SUPABASE_ANON_KEY');
+    return null;
+  }
   
   try {
-    const bucketReady = await ensureBucketExists();
-    if (!bucketReady) {
-      console.error('Supabase bucket not ready');
-      return null;
-    }
+    console.log('Uploading to Supabase:', { filename, mimeType, bufferSize: buffer.length });
     
-    // Store files in documents folder
-    const storedPath = `documents/${filename}`;
-    
+    // Upload directly to bucket root (no subfolder)
     const { data, error } = await supabase.storage
       .from(DOCUMENTS_BUCKET)
-      .upload(storedPath, buffer, {
+      .upload(filename, buffer, {
         contentType: mimeType,
-        upsert: false,
+        upsert: true,
       });
     
     if (error) {
-      console.error('Supabase upload error:', error);
+      console.error('Supabase upload error:', error.message, error);
       return null;
     }
+    
+    console.log('Supabase upload success:', data.path);
     
     return {
       path: filename,
@@ -102,16 +101,15 @@ export async function downloadFromSupabase(
   if (!supabase) return null;
   
   try {
-    // Files are stored in documents folder
-    const storedPath = `documents/${filename}`;
+    console.log('Downloading from Supabase:', filename);
     
     const { data, error } = await supabase.storage
       .from(DOCUMENTS_BUCKET)
-      .download(storedPath);
+      .download(filename);
     
     if (error) {
       if (error.message?.includes('not found') || error.message?.includes('Object not found')) {
-        console.log('File not found in Supabase:', storedPath);
+        console.log('File not found in Supabase:', filename);
         return null;
       }
       console.error('Supabase download error:', error);
@@ -132,12 +130,11 @@ export async function deleteFromSupabase(filename: string): Promise<boolean> {
   if (!supabase) return false;
   
   try {
-    // Files are stored in documents folder
-    const storedPath = `documents/${filename}`;
+    console.log('Deleting from Supabase:', filename);
     
     const { error } = await supabase.storage
       .from(DOCUMENTS_BUCKET)
-      .remove([storedPath]);
+      .remove([filename]);
     
     if (error) {
       console.error('Supabase delete error:', error);
