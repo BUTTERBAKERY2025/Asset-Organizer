@@ -20389,10 +20389,23 @@ export async function registerRoutes(
       const multer = (await import("multer")).default;
       const path = await import("path");
       const crypto = await import("crypto");
-      const { ObjectStorageService } = await import("./replit_integrations/object_storage");
-      const { objectStorageClient } = await import("./replit_integrations/object_storage/objectStorage");
-
-      const objectStorageService = new ObjectStorageService();
+      const { uploadToSupabase, isSupabaseAvailable } = await import("./supabase-storage");
+      
+      // Fallback to Replit Object Storage if Supabase not available
+      let objectStorageService: any = null;
+      let objectStorageClient: any = null;
+      const useSupabase = isSupabaseAvailable();
+      
+      if (!useSupabase) {
+        try {
+          const { ObjectStorageService } = await import("./replit_integrations/object_storage");
+          const objStorage = await import("./replit_integrations/object_storage/objectStorage");
+          objectStorageService = new ObjectStorageService();
+          objectStorageClient = objStorage.objectStorageClient;
+        } catch (e) {
+          console.log("Replit Object Storage not available");
+        }
+      }
 
       // Allowed file types with magic bytes validation
       const allowedTypes = [
@@ -20464,36 +20477,53 @@ export async function registerRoutes(
           
           // Generate unique filename
           const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-          const objectName = `documents/doc-${uniqueSuffix}.${ext}`;
+          const objectName = `doc-${uniqueSuffix}.${ext}`;
           
-          // Upload to Object Storage
-          const privateDir = objectStorageService.getPrivateObjectDir();
-          const fullPath = `${privateDir}/${objectName}`;
-          const pathParts = fullPath.split("/").filter(p => p);
-          const bucketName = pathParts[0];
-          const objectPath = pathParts.slice(1).join("/");
+          let filePath = "";
           
-          const bucket = objectStorageClient.bucket(bucketName);
-          const blob = bucket.file(objectPath);
-          
-          await blob.save(file.buffer, {
-            contentType: file.mimetype,
-            metadata: {
-              originalName: file.originalname,
-              checksum: checksum,
-            },
-          });
+          // Try Supabase Storage first
+          if (useSupabase) {
+            const supabaseResult = await uploadToSupabase(file.buffer, objectName, file.mimetype);
+            if (supabaseResult) {
+              filePath = objectName;
+              console.log("File uploaded to Supabase Storage:", objectName);
+            } else {
+              throw new Error("Supabase upload failed");
+            }
+          } else if (objectStorageService && objectStorageClient) {
+            // Fallback to Replit Object Storage
+            const privateDir = objectStorageService.getPrivateObjectDir();
+            const fullPath = `${privateDir}/documents/${objectName}`;
+            const pathParts = fullPath.split("/").filter((p: string) => p);
+            const bucketName = pathParts[0];
+            const objectPath = pathParts.slice(1).join("/");
+            
+            const bucket = objectStorageClient.bucket(bucketName);
+            const blob = bucket.file(objectPath);
+            
+            await blob.save(file.buffer, {
+              contentType: file.mimetype,
+              metadata: {
+                originalName: file.originalname,
+                checksum: checksum,
+              },
+            });
+            filePath = objectName;
+            console.log("File uploaded to Replit Object Storage:", objectName);
+          } else {
+            throw new Error("No storage backend available");
+          }
 
           res.json({
             fileName: file.originalname,
             fileType: ext,
             fileSize: file.size,
-            filePath: `/objects/${objectName}`,
+            filePath: filePath,
             mimeType: file.mimetype,
             checksum: checksum,
           });
         } catch (uploadError) {
-          console.error("Object Storage upload error:", uploadError);
+          console.error("Storage upload error:", uploadError);
           res.status(500).json({ error: "فشل في رفع الملف إلى التخزين السحابي" });
         }
       });
@@ -20506,17 +20536,38 @@ export async function registerRoutes(
   // Serve uploaded files (authenticated) - From Object Storage
   app.get("/api/documents/file/:filename", isAuthenticated, requirePermission("documents", "view"), async (req, res) => {
     try {
-      const { ObjectStorageService, ObjectNotFoundError } = await import("./replit_integrations/object_storage");
-      const { objectStorageClient } = await import("./replit_integrations/object_storage/objectStorage");
-      
-      const objectStorageService = new ObjectStorageService();
+      const { downloadFromSupabase, isSupabaseAvailable } = await import("./supabase-storage");
       const filename = req.params.filename;
       
-      // Try Object Storage first
+      // Try Supabase Storage first
+      if (isSupabaseAvailable()) {
+        const result = await downloadFromSupabase(filename);
+        if (result) {
+          const arrayBuffer = await result.data.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+          
+          res.set({
+            "Content-Type": result.mimeType || "application/octet-stream",
+            "Content-Length": buffer.length.toString(),
+            "Content-Disposition": "inline",
+            "X-Frame-Options": "SAMEORIGIN",
+            "Cache-Control": "private, max-age=3600",
+          });
+          
+          res.send(buffer);
+          return;
+        }
+      }
+      
+      // Fallback to Replit Object Storage
       try {
+        const { ObjectStorageService } = await import("./replit_integrations/object_storage");
+        const { objectStorageClient } = await import("./replit_integrations/object_storage/objectStorage");
+        
+        const objectStorageService = new ObjectStorageService();
         const privateDir = objectStorageService.getPrivateObjectDir();
         const fullPath = `${privateDir}/documents/${filename}`;
-        const pathParts = fullPath.split("/").filter(p => p);
+        const pathParts = fullPath.split("/").filter((p: string) => p);
         const bucketName = pathParts[0];
         const objectPath = pathParts.slice(1).join("/");
         
@@ -20527,7 +20578,6 @@ export async function registerRoutes(
         if (exists) {
           const [metadata] = await blob.getMetadata();
           
-          // Set headers for inline display (PDF preview in iframe)
           res.set({
             "Content-Type": metadata.contentType || "application/octet-stream",
             "Content-Length": metadata.size,
@@ -20536,9 +20586,8 @@ export async function registerRoutes(
             "Cache-Control": "private, max-age=3600",
           });
           
-          // Stream the file
           const stream = blob.createReadStream();
-          stream.on("error", (err) => {
+          stream.on("error", (err: Error) => {
             console.error("Stream error:", err);
             if (!res.headersSent) {
               res.status(500).json({ error: "Error streaming file" });
@@ -20548,7 +20597,7 @@ export async function registerRoutes(
           return;
         }
       } catch (storageError) {
-        console.log("Object Storage lookup failed, trying local fallback:", storageError);
+        console.log("Object Storage lookup failed:", storageError);
       }
       
       // Fallback to local storage for old files

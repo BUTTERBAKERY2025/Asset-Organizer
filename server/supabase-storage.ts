@@ -1,0 +1,156 @@
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  console.warn('Supabase credentials not found. File storage will use fallback.');
+}
+
+export const supabase = supabaseUrl && supabaseKey 
+  ? createClient(supabaseUrl, supabaseKey)
+  : null;
+
+export const DOCUMENTS_BUCKET = 'documents';
+
+export async function ensureBucketExists(): Promise<boolean> {
+  if (!supabase) return false;
+  
+  try {
+    const { data: buckets } = await supabase.storage.listBuckets();
+    const bucketExists = buckets?.some(b => b.name === DOCUMENTS_BUCKET);
+    
+    if (!bucketExists) {
+      const { error } = await supabase.storage.createBucket(DOCUMENTS_BUCKET, {
+        public: false,
+        fileSizeLimit: 52428800, // 50MB
+        allowedMimeTypes: [
+          'application/pdf',
+          'application/msword',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'application/vnd.ms-excel',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'application/vnd.ms-powerpoint',
+          'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+          'image/jpeg',
+          'image/png',
+          'image/gif',
+          'image/webp',
+          'text/plain',
+          'text/csv',
+          'application/zip',
+          'application/x-rar-compressed',
+        ],
+      });
+      
+      if (error) {
+        console.error('Error creating bucket:', error);
+        return false;
+      }
+      console.log('Documents bucket created successfully');
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error ensuring bucket exists:', error);
+    return false;
+  }
+}
+
+export async function uploadToSupabase(
+  buffer: Buffer,
+  filename: string,
+  mimeType: string
+): Promise<{ path: string; storedPath: string } | null> {
+  if (!supabase) return null;
+  
+  try {
+    const bucketReady = await ensureBucketExists();
+    if (!bucketReady) {
+      console.error('Supabase bucket not ready');
+      return null;
+    }
+    
+    // Store files in documents folder
+    const storedPath = `documents/${filename}`;
+    
+    const { data, error } = await supabase.storage
+      .from(DOCUMENTS_BUCKET)
+      .upload(storedPath, buffer, {
+        contentType: mimeType,
+        upsert: false,
+      });
+    
+    if (error) {
+      console.error('Supabase upload error:', error);
+      return null;
+    }
+    
+    return {
+      path: filename,
+      storedPath: data.path,
+    };
+  } catch (error) {
+    console.error('Error uploading to Supabase:', error);
+    return null;
+  }
+}
+
+export async function downloadFromSupabase(
+  filename: string
+): Promise<{ data: Blob; mimeType: string } | null> {
+  if (!supabase) return null;
+  
+  try {
+    // Files are stored in documents folder
+    const storedPath = `documents/${filename}`;
+    
+    const { data, error } = await supabase.storage
+      .from(DOCUMENTS_BUCKET)
+      .download(storedPath);
+    
+    if (error) {
+      if (error.message?.includes('not found') || error.message?.includes('Object not found')) {
+        console.log('File not found in Supabase:', storedPath);
+        return null;
+      }
+      console.error('Supabase download error:', error);
+      return null;
+    }
+    
+    return {
+      data,
+      mimeType: data.type,
+    };
+  } catch (error) {
+    console.error('Error downloading from Supabase:', error);
+    return null;
+  }
+}
+
+export async function deleteFromSupabase(filename: string): Promise<boolean> {
+  if (!supabase) return false;
+  
+  try {
+    // Files are stored in documents folder
+    const storedPath = `documents/${filename}`;
+    
+    const { error } = await supabase.storage
+      .from(DOCUMENTS_BUCKET)
+      .remove([storedPath]);
+    
+    if (error) {
+      console.error('Supabase delete error:', error);
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error deleting from Supabase:', error);
+    return false;
+  }
+}
+
+export function isSupabaseAvailable(): boolean {
+  return supabase !== null;
+}
