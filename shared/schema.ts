@@ -7083,8 +7083,8 @@ export const resolutionVotes = pgTable("resolution_votes", {
   shareholderId: integer("shareholder_id").references(() => shareholders.id),
   voterName: text("voter_name").notNull(),
   vote: text("vote").notNull(), // for, against, abstain
-  votingPower: numeric("voting_power", { precision: 8, scale: 4 }).default("1.00"),
-  weightedVote: numeric("weighted_vote", { precision: 8, scale: 4 }),
+  votingPower: numeric("voting_power", { precision: 18, scale: 4 }).default("1.00"),
+  weightedVote: numeric("weighted_vote", { precision: 18, scale: 4 }),
   votedAt: timestamp("voted_at").defaultNow().notNull(),
   voteMethod: text("vote_method").default("in_meeting"), // in_meeting, electronic, written
   ipAddress: text("ip_address"),
