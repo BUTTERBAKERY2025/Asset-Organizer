@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>التصويت على القرار - BUTTER BAKERY</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: 'Cairo', sans-serif;
+      background: linear-gradient(135deg, #fef9e7 0%, #fef3c7 50%, #fde68a 100%);
+      min-height: 100vh;
+      padding: 20px;
+      direction: rtl;
+    }
+    .container {
+      max-width: 700px;
+      margin: 0 auto;
+    }
+    .card {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+      padding: 30px;
+      margin-bottom: 20px;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .logo {
+      width: 80px;
+      height: 80px;
+      background: linear-gradient(135deg, #d4a853, #b8962f);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 15px;
+      color: white;
+      font-weight: bold;
+      font-size: 24px;
+    }
+    .header h1 {
+      color: #b8962f;
+      font-size: 1.8rem;
+      margin-bottom: 5px;
+    }
+    .header p {
+      color: #666;
+    }
+    .resolution-info {
+      background: #f8f9fa;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 25px;
+    }
+    .resolution-info h3 {
+      color: #333;
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid #eee;
+    }
+    .info-row:last-child {
+      border-bottom: none;
+    }
+    .info-label {
+      color: #666;
+      font-weight: 500;
+    }
+    .info-value {
+      color: #333;
+      font-weight: 600;
+    }
+    .shareholder-info {
+      background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 25px;
+      text-align: center;
+    }
+    .shareholder-info h4 {
+      color: #1565c0;
+      margin-bottom: 5px;
+      font-size: 1.2rem;
+    }
+    .shareholder-info p {
+      color: #1976d2;
+    }
+    .vote-weight-badge {
+      display: inline-block;
+      background: linear-gradient(135deg, #d4a853, #b8962f);
+      color: white;
+      padding: 5px 15px;
+      border-radius: 20px;
+      margin-top: 10px;
+      font-weight: 600;
+    }
+    .voting-section h3 {
+      color: #333;
+      margin-bottom: 20px;
+    }
+    .vote-options {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 25px;
+    }
+    .vote-option {
+      display: flex;
+      align-items: center;
+      padding: 15px 20px;
+      border: 2px solid #e0e0e0;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .vote-option:hover {
+      border-color: #d4a853;
+      background: #fffef5;
+    }
+    .vote-option.selected {
+      border-color: #d4a853;
+      background: linear-gradient(135deg, #fef9e7, #fef3c7);
+    }
+    .vote-option.selected.for {
+      border-color: #4caf50;
+      background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
+    }
+    .vote-option.selected.against {
+      border-color: #f44336;
+      background: linear-gradient(135deg, #ffebee, #ffcdd2);
+    }
+    .vote-option.selected.abstain {
+      border-color: #9e9e9e;
+      background: linear-gradient(135deg, #fafafa, #eeeeee);
+    }
+    .vote-option input[type="radio"] {
+      display: none;
+    }
+    .vote-option .vote-icon {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-left: 15px;
+      font-size: 24px;
+    }
+    .vote-option.for .vote-icon {
+      background: #e8f5e9;
+      color: #4caf50;
+    }
+    .vote-option.against .vote-icon {
+      background: #ffebee;
+      color: #f44336;
+    }
+    .vote-option.abstain .vote-icon {
+      background: #fafafa;
+      color: #9e9e9e;
+    }
+    .vote-option .vote-label {
+      flex: 1;
+    }
+    .vote-option .vote-label h4 {
+      margin: 0;
+      color: #333;
+      font-size: 1.1rem;
+    }
+    .vote-option .vote-label p {
+      margin: 5px 0 0;
+      color: #666;
+      font-size: 0.9rem;
+    }
+    .vote-option .vote-check {
+      width: 24px;
+      height: 24px;
+      border: 2px solid #e0e0e0;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: transparent;
+      transition: all 0.3s;
+    }
+    .vote-option.selected .vote-check {
+      background: #d4a853;
+      border-color: #d4a853;
+      color: white;
+    }
+    .comments-section {
+      margin-bottom: 25px;
+    }
+    .comments-section label {
+      display: block;
+      color: #333;
+      margin-bottom: 10px;
+      font-weight: 500;
+    }
+    .comments-section textarea {
+      width: 100%;
+      padding: 15px;
+      border: 2px solid #e0e0e0;
+      border-radius: 12px;
+      font-family: 'Cairo', sans-serif;
+      font-size: 1rem;
+      resize: vertical;
+      min-height: 100px;
+      transition: border-color 0.3s;
+    }
+    .comments-section textarea:focus {
+      outline: none;
+      border-color: #d4a853;
+    }
+    .btn {
+      width: 100%;
+      padding: 15px 20px;
+      border-radius: 12px;
+      font-family: 'Cairo', sans-serif;
+      font-size: 1.1rem;
+      cursor: pointer;
+      border: none;
+      transition: all 0.3s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .btn-submit {
+      background: linear-gradient(135deg, #d4a853, #b8962f);
+      color: white;
+      font-weight: 600;
+    }
+    .btn-submit:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 20px rgba(184,150,47,0.4);
+    }
+    .btn-submit:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+    .loading {
+      display: none;
+      text-align: center;
+      padding: 40px;
+    }
+    .loading.show {
+      display: block;
+    }
+    .spinner {
+      width: 50px;
+      height: 50px;
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #d4a853;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .error-card, .success-card {
+      text-align: center;
+      padding: 40px;
+    }
+    .error-icon, .success-icon {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+      font-size: 40px;
+    }
+    .error-icon {
+      background: #ffebee;
+      color: #d32f2f;
+    }
+    .success-icon {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+    .content { display: none; }
+    .content.show { display: block; }
+    @media (max-width: 600px) {
+      .card { padding: 20px; }
+      .header h1 { font-size: 1.4rem; }
+      .vote-option { padding: 12px 15px; }
+      .vote-option .vote-icon { width: 40px; height: 40px; font-size: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="header">
+        <div class="logo">B</div>
+        <h1>BUTTER BAKERY</h1>
+        <p>التصويت الإلكتروني على قرار مجلس الإدارة</p>
+      </div>
+
+      <div id="loading" class="loading show">
+        <div class="spinner"></div>
+        <p>جاري تحميل بيانات القرار...</p>
+      </div>
+
+      <div id="error" class="content error-card">
+        <div class="error-icon">✕</div>
+        <h2 id="errorTitle">خطأ</h2>
+        <p id="errorMessage">حدث خطأ أثناء تحميل البيانات</p>
+      </div>
+
+      <div id="success" class="content success-card">
+        <div class="success-icon">✓</div>
+        <h2>تم التصويت بنجاح</h2>
+        <p>شكراً لك، تم تسجيل تصويتك على القرار</p>
+      </div>
+
+      <div id="main" class="content">
+        <div class="resolution-info">
+          <h3>📋 بيانات القرار</h3>
+          <div class="info-row">
+            <span class="info-label">رقم القرار:</span>
+            <span class="info-value" id="resolutionNumber">-</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">عنوان القرار:</span>
+            <span class="info-value" id="resolutionTitle">-</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">نوع القرار:</span>
+            <span class="info-value" id="resolutionType">-</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">الوصف:</span>
+            <span class="info-value" id="resolutionDescription">-</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">الأغلبية المطلوبة:</span>
+            <span class="info-value" id="requiredMajority">-</span>
+          </div>
+        </div>
+
+        <div class="shareholder-info">
+          <h4 id="shareholderName">اسم المساهم</h4>
+          <p>مساهم في شركة الزبد الأفضل التجارية</p>
+          <div class="vote-weight-badge" id="voteWeight">قوة التصويت: 1 سهم</div>
+        </div>
+
+        <div class="voting-section">
+          <h3>🗳️ اختر تصويتك</h3>
+          <div class="vote-options" id="voteOptions">
+            <label class="vote-option for" data-vote="for">
+              <input type="radio" name="vote" value="for">
+              <div class="vote-icon">👍</div>
+              <div class="vote-label">
+                <h4>موافق</h4>
+                <p>أوافق على اتخاذ هذا القرار</p>
+              </div>
+              <div class="vote-check">✓</div>
+            </label>
+            <label class="vote-option against" data-vote="against">
+              <input type="radio" name="vote" value="against">
+              <div class="vote-icon">👎</div>
+              <div class="vote-label">
+                <h4>رافض</h4>
+                <p>أرفض اتخاذ هذا القرار</p>
+              </div>
+              <div class="vote-check">✓</div>
+            </label>
+            <label class="vote-option abstain" data-vote="abstain">
+              <input type="radio" name="vote" value="abstain">
+              <div class="vote-icon">✋</div>
+              <div class="vote-label">
+                <h4>ممتنع</h4>
+                <p>أمتنع عن التصويت على هذا القرار</p>
+              </div>
+              <div class="vote-check">✓</div>
+            </label>
+          </div>
+
+          <div class="comments-section">
+            <label for="comments">ملاحظات إضافية (اختياري):</label>
+            <textarea id="comments" placeholder="أضف أي ملاحظات أو تعليقات على تصويتك..."></textarea>
+          </div>
+
+          <button class="btn btn-submit" id="submitBtn" disabled onclick="submitVote()">
+            <span>إرسال التصويت</span>
+            <span>🗳️</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div style="text-align: center; color: #888; font-size: 0.85rem; padding: 20px;">
+      <p>© 2024 شركة الزبد الأفضل التجارية - جميع الحقوق محفوظة</p>
+      <p>نظام التصويت الإلكتروني الآمن</p>
+    </div>
+  </div>
+
+  <script>
+    let voteToken = '';
+    let selectedVote = '';
+    let voteData = null;
+
+    function getToken() {
+      const path = window.location.pathname;
+      const match = path.match(/\/vote\/([a-f0-9]{64})/);
+      if (match) return match[1];
+      const hash = window.location.hash;
+      const hashMatch = hash.match(/#token=([a-f0-9]{64})/);
+      if (hashMatch) return hashMatch[1];
+      const params = new URLSearchParams(window.location.search);
+      return params.get('token');
+    }
+
+    function showLoading() {
+      document.getElementById('loading').classList.add('show');
+      document.getElementById('main').classList.remove('show');
+      document.getElementById('error').classList.remove('show');
+      document.getElementById('success').classList.remove('show');
+    }
+
+    function showMain() {
+      document.getElementById('loading').classList.remove('show');
+      document.getElementById('main').classList.add('show');
+      document.getElementById('error').classList.remove('show');
+      document.getElementById('success').classList.remove('show');
+    }
+
+    function showError(title, message) {
+      document.getElementById('loading').classList.remove('show');
+      document.getElementById('main').classList.remove('show');
+      document.getElementById('error').classList.add('show');
+      document.getElementById('success').classList.remove('show');
+      document.getElementById('errorTitle').textContent = title;
+      document.getElementById('errorMessage').textContent = message;
+    }
+
+    function showSuccess() {
+      document.getElementById('loading').classList.remove('show');
+      document.getElementById('main').classList.remove('show');
+      document.getElementById('error').classList.remove('show');
+      document.getElementById('success').classList.add('show');
+    }
+
+    function getResolutionTypeLabel(type) {
+      const types = {
+        'ordinary': 'عادي',
+        'extraordinary': 'غير عادي',
+        'urgent': 'عاجل',
+        'written': 'كتابي'
+      };
+      return types[type] || type;
+    }
+
+    async function loadVoteData() {
+      showLoading();
+      voteToken = getToken();
+
+      if (!voteToken) {
+        showError('رابط غير صالح', 'رابط التصويت غير موجود أو غير صحيح');
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/public/vote/${voteToken}`);
+        const data = await response.json();
+
+        if (!response.ok) {
+          if (response.status === 400 && data.votedAt) {
+            const votedDate = new Date(data.votedAt).toLocaleDateString('ar-SA');
+            showError('تم التصويت مسبقاً', `لقد قمت بالتصويت على هذا القرار بتاريخ ${votedDate}`);
+          } else if (response.status === 410) {
+            showError('انتهت الصلاحية', 'انتهت صلاحية رابط التصويت');
+          } else if (response.status === 404) {
+            showError('رابط غير موجود', 'رابط التصويت غير صالح أو منتهي الصلاحية');
+          } else if (response.status === 429) {
+            showError('الحد الأقصى للطلبات', 'تم تجاوز الحد الأقصى للطلبات. حاول لاحقاً.');
+          } else {
+            showError('خطأ', data.error || 'فشل في تحميل بيانات التصويت');
+          }
+          return;
+        }
+
+        voteData = data;
+        document.getElementById('resolutionNumber').textContent = data.resolutionNumber || '-';
+        document.getElementById('resolutionTitle').textContent = data.resolutionTitle || '-';
+        document.getElementById('resolutionType').textContent = getResolutionTypeLabel(data.resolutionType);
+        document.getElementById('resolutionDescription').textContent = data.resolutionDescription || '-';
+        document.getElementById('requiredMajority').textContent = (data.requiredMajority || 50) + '%';
+        document.getElementById('shareholderName').textContent = data.shareholderName || 'مساهم';
+        document.getElementById('voteWeight').textContent = `قوة التصويت: ${data.voteWeight || 1} سهم`;
+
+        showMain();
+      } catch (error) {
+        console.error('Error loading vote data:', error);
+        showError('خطأ في الاتصال', 'فشل في الاتصال بالخادم. تحقق من اتصالك بالإنترنت.');
+      }
+    }
+
+    function selectVote(voteValue) {
+      selectedVote = voteValue;
+      document.querySelectorAll('.vote-option').forEach(option => {
+        option.classList.remove('selected');
+        if (option.dataset.vote === voteValue) {
+          option.classList.add('selected');
+          option.querySelector('input').checked = true;
+        }
+      });
+      document.getElementById('submitBtn').disabled = false;
+    }
+
+    async function submitVote() {
+      if (!selectedVote || !voteToken) return;
+
+      const submitBtn = document.getElementById('submitBtn');
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span>جاري الإرسال...</span>';
+
+      const comments = document.getElementById('comments').value.trim();
+
+      try {
+        const response = await fetch(`/api/public/vote/${voteToken}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ vote: selectedVote, comments })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          if (response.status === 429) {
+            showError('الحد الأقصى للطلبات', 'تم تجاوز الحد الأقصى للطلبات. حاول لاحقاً.');
+          } else {
+            showError('فشل التصويت', data.error || 'فشل في تسجيل التصويت');
+          }
+          return;
+        }
+
+        showSuccess();
+      } catch (error) {
+        console.error('Error submitting vote:', error);
+        showError('خطأ في الاتصال', 'فشل في الاتصال بالخادم');
+      }
+    }
+
+    document.querySelectorAll('.vote-option').forEach(option => {
+      option.addEventListener('click', () => {
+        selectVote(option.dataset.vote);
+      });
+    });
+
+    window.onload = loadVoteData;
+  </script>
+</body>
+</html>

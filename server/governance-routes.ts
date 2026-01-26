@@ -1362,11 +1362,11 @@ export function registerGovernanceRoutes(app: Express) {
   // Cleanup expired rate limit entries every minute
   setInterval(() => {
     const now = Date.now();
-    for (const [ip, record] of signatureRateLimitMap.entries()) {
+    Array.from(signatureRateLimitMap.entries()).forEach(([ip, record]) => {
       if (now > record.resetTime) {
         signatureRateLimitMap.delete(ip);
       }
-    }
+    });
   }, 60000);
 
   // Public endpoint - Get resolution for signing (no auth required)
@@ -1574,11 +1574,11 @@ export function registerGovernanceRoutes(app: Express) {
   // Cleanup voting rate limit map
   setInterval(() => {
     const now = Date.now();
-    for (const [ip, record] of votingRateLimitMap.entries()) {
+    Array.from(votingRateLimitMap.entries()).forEach(([ip, record]) => {
       if (record.resetTime < now) {
         votingRateLimitMap.delete(ip);
       }
-    }
+    });
   }, 60000);
 
   // Get voting tokens for a resolution
@@ -1598,7 +1598,7 @@ export function registerGovernanceRoutes(app: Express) {
           votedAt: votingTokens.votedAt,
           expiresAt: votingTokens.expiresAt,
           createdAt: votingTokens.createdAt,
-          shareholderName: shareholders.name,
+          shareholderName: shareholders.fullName,
           numberOfShares: shareholders.numberOfShares,
         })
         .from(votingTokens)
@@ -1661,7 +1661,7 @@ export function registerGovernanceRoutes(app: Express) {
           id: votingTokens.id,
           voteToken: votingTokens.voteToken,
           shareholderId: votingTokens.shareholderId,
-          shareholderName: shareholders.name,
+          shareholderName: shareholders.fullName,
           shareholderEmail: shareholders.email,
           shareholderPhone: shareholders.phone,
           numberOfShares: shareholders.numberOfShares,
@@ -1707,7 +1707,7 @@ export function registerGovernanceRoutes(app: Express) {
           vote: votingTokens.vote,
           votedAt: votingTokens.votedAt,
           expiresAt: votingTokens.expiresAt,
-          shareholderName: shareholders.name,
+          shareholderName: shareholders.fullName,
           resolutionNumber: boardResolutions.resolutionNumber,
           resolutionTitle: boardResolutions.title,
           resolutionDescription: boardResolutions.description,
@@ -1808,7 +1808,7 @@ export function registerGovernanceRoutes(app: Express) {
         voterName: "مساهم (تصويت إلكتروني)",
         vote,
         comments: comments || null,
-        voteWeight,
+        votingPower: String(voteWeight),
         voteMethod: "electronic",
         ipAddress,
       });
