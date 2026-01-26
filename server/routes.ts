@@ -20394,32 +20394,50 @@ export async function registerRoutes(
 
       const objectStorageService = new ObjectStorageService();
 
+      // Allowed file types with magic bytes validation
+      const allowedTypes = [
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.ms-powerpoint",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+        "text/plain",
+        "text/csv",
+        "application/zip",
+        "application/x-rar-compressed",
+      ];
+
+      // Blocked extensions for security
+      const blockedExtensions = ['.exe', '.bat', '.cmd', '.sh', '.ps1', '.vbs', '.js', '.msi', '.dll', '.scr', '.com'];
+      
       const upload = multer({
         storage: multer.memoryStorage(),
         limits: { fileSize: 50 * 1024 * 1024 }, // 50MB max
         fileFilter: (_req, file, cb) => {
-          const allowedTypes = [
-            "application/pdf",
-            "application/msword",
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            "application/vnd.ms-excel",
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            "application/vnd.ms-powerpoint",
-            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-            "image/jpeg",
-            "image/png",
-            "image/gif",
-            "image/webp",
-            "text/plain",
-            "text/csv",
-            "application/zip",
-            "application/x-rar-compressed",
-          ];
-          if (allowedTypes.includes(file.mimetype)) {
-            cb(null, true);
-          } else {
+          // Check MIME type
+          if (!allowedTypes.includes(file.mimetype)) {
             cb(new Error("نوع الملف غير مسموح") as any, false);
+            return;
           }
+          
+          // Check for blocked extensions (security)
+          const ext = path.extname(file.originalname).toLowerCase();
+          if (blockedExtensions.includes(ext)) {
+            cb(new Error("امتداد الملف محظور لأسباب أمنية") as any, false);
+            return;
+          }
+          
+          // Sanitize filename to prevent path traversal
+          const sanitizedName = file.originalname.replace(/[^a-zA-Z0-9\u0600-\u06FF._-]/g, '_');
+          file.originalname = sanitizedName;
+          
+          cb(null, true);
         },
       });
 
@@ -20640,7 +20658,12 @@ export async function registerRoutes(
             requiresPassword: true 
           });
         }
-        if (providedPassword !== share.sharePassword) {
+        // Use timing-safe comparison to prevent timing attacks
+        const crypto = await import("crypto");
+        const providedHash = crypto.createHash('sha256').update(providedPassword).digest('hex');
+        const storedHash = share.sharePassword.length === 64 ? share.sharePassword : crypto.createHash('sha256').update(share.sharePassword).digest('hex');
+        
+        if (!crypto.timingSafeEqual(Buffer.from(providedHash), Buffer.from(storedHash))) {
           return res.status(401).json({ 
             error: "كلمة المرور غير صحيحة",
             requiresPassword: true 
@@ -20703,12 +20726,18 @@ export async function registerRoutes(
 
       const shareLink = crypto.randomBytes(16).toString("hex");
       
+      // Hash password if provided for secure storage
+      let hashedPassword: string | undefined;
+      if (req.body.password) {
+        hashedPassword = crypto.createHash('sha256').update(req.body.password).digest('hex');
+      }
+      
       const share = await storage.createDocumentShare({
         documentId: doc.id,
         shareType: "public",
         permission: req.body.permission || "view",
         shareLink: shareLink,
-        sharePassword: req.body.password,
+        sharePassword: hashedPassword,
         expiresAt: req.body.expiresAt ? new Date(req.body.expiresAt) : undefined,
         maxAccessCount: req.body.maxAccessCount,
         sharedBy: user.id,
