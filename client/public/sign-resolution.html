@@ -351,13 +351,19 @@
       resizeCanvas();
       window.addEventListener('resize', resizeCanvas);
 
+      let lastX = 0, lastY = 0;
+
       function getPos(e) {
         const rect = canvas.getBoundingClientRect();
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        if (e.touches && e.touches.length > 0) {
+          return {
+            x: e.touches[0].clientX - rect.left,
+            y: e.touches[0].clientY - rect.top
+          };
+        }
         return {
-          x: clientX - rect.left,
-          y: clientY - rect.top
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top
         };
       }
 
@@ -365,6 +371,8 @@
         e.preventDefault();
         isDrawing = true;
         const pos = getPos(e);
+        lastX = pos.x;
+        lastY = pos.y;
         ctx.beginPath();
         ctx.moveTo(pos.x, pos.y);
       }
@@ -373,8 +381,12 @@
         if (!isDrawing) return;
         e.preventDefault();
         const pos = getPos(e);
+        ctx.beginPath();
+        ctx.moveTo(lastX, lastY);
         ctx.lineTo(pos.x, pos.y);
         ctx.stroke();
+        lastX = pos.x;
+        lastY = pos.y;
         hasSignature = true;
         document.getElementById('submitBtn').disabled = false;
       }
@@ -383,13 +395,40 @@
         isDrawing = false;
       }
 
+      function handleTouchStart(e) {
+        e.preventDefault();
+        if (e.touches.length === 1) {
+          isDrawing = true;
+          const pos = getPos(e);
+          lastX = pos.x;
+          lastY = pos.y;
+          ctx.beginPath();
+          ctx.moveTo(pos.x, pos.y);
+        }
+      }
+
+      function handleTouchMove(e) {
+        e.preventDefault();
+        if (!isDrawing || e.touches.length !== 1) return;
+        const pos = getPos(e);
+        ctx.beginPath();
+        ctx.moveTo(lastX, lastY);
+        ctx.lineTo(pos.x, pos.y);
+        ctx.stroke();
+        lastX = pos.x;
+        lastY = pos.y;
+        hasSignature = true;
+        document.getElementById('submitBtn').disabled = false;
+      }
+
       canvas.addEventListener('mousedown', startDrawing);
       canvas.addEventListener('mousemove', draw);
       canvas.addEventListener('mouseup', stopDrawing);
       canvas.addEventListener('mouseout', stopDrawing);
-      canvas.addEventListener('touchstart', startDrawing);
-      canvas.addEventListener('touchmove', draw);
+      canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+      canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
       canvas.addEventListener('touchend', stopDrawing);
+      canvas.addEventListener('touchcancel', stopDrawing);
     }
 
     function clearSignature() {
