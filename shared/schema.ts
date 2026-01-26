@@ -7145,6 +7145,41 @@ export const insertResolutionSignatureSchema = createInsertSchema(resolutionSign
 export type ResolutionSignature = typeof resolutionSignatures.$inferSelect;
 export type InsertResolutionSignature = z.infer<typeof insertResolutionSignatureSchema>;
 
+// Voting Tokens - روابط التصويت العام للمساهمين
+export const votingTokens = pgTable("voting_tokens", {
+  id: serial("id").primaryKey(),
+  resolutionId: integer("resolution_id").notNull().references(() => boardResolutions.id, { onDelete: "cascade" }),
+  shareholderId: integer("shareholder_id").notNull().references(() => shareholders.id, { onDelete: "cascade" }),
+  voteToken: text("vote_token").notNull().unique(),
+  vote: text("vote"), // for, against, abstain
+  voteWeight: integer("vote_weight").default(1), // وزن التصويت (عدد الأسهم)
+  comments: text("comments"),
+  status: text("status").default("pending").notNull(), // pending, voted, expired
+  votedAt: timestamp("voted_at"),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  expiresAt: timestamp("expires_at"),
+  reminderSentAt: timestamp("reminder_sent_at"),
+  reminderCount: integer("reminder_count").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_voting_tokens_resolution").on(table.resolutionId),
+  index("idx_voting_tokens_shareholder").on(table.shareholderId),
+  index("idx_voting_tokens_token").on(table.voteToken),
+  index("idx_voting_tokens_status").on(table.status),
+  unique("idx_voting_tokens_unique").on(table.resolutionId, table.shareholderId),
+]);
+
+export const insertVotingTokenSchema = createInsertSchema(votingTokens).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type VotingToken = typeof votingTokens.$inferSelect;
+export type InsertVotingToken = z.infer<typeof insertVotingTokenSchema>;
+
 // رأس المال والأسهم - Capital & Shares Management
 export const capitalTransactions = pgTable("capital_transactions", {
   id: serial("id").primaryKey(),
