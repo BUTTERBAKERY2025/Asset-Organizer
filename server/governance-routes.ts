@@ -1628,13 +1628,10 @@ export function registerGovernanceRoutes(app: Express) {
         return res.status(400).json({ error: "لا يوجد مساهمين لهم حق التصويت" });
       }
 
-      // Check for existing pending tokens
+      // Check for existing tokens (any status)
       const existingTokens = await db.select()
         .from(votingTokens)
-        .where(and(
-          eq(votingTokens.resolutionId, resolutionId),
-          eq(votingTokens.status, "pending")
-        ));
+        .where(eq(votingTokens.resolutionId, resolutionId));
 
       const existingShareholderIds = new Set(existingTokens.map(t => t.shareholderId));
       const expiresAt = new Date();
@@ -1758,6 +1755,7 @@ export function registerGovernanceRoutes(app: Express) {
       const votePayloadSchema = z.object({
         vote: z.enum(["for", "against", "abstain"]),
         comments: z.string().max(1000).optional(),
+        signatureData: z.string().max(500 * 1024).optional(),
       });
       
       const parseResult = votePayloadSchema.safeParse(req.body);
@@ -1765,7 +1763,12 @@ export function registerGovernanceRoutes(app: Express) {
         return res.status(400).json({ error: "بيانات التصويت غير صالحة" });
       }
       
-      const { vote, comments } = parseResult.data;
+      const { vote, comments, signatureData } = parseResult.data;
+      
+      // Validate signature data format if provided
+      if (signatureData && !signatureData.startsWith('data:image/')) {
+        return res.status(400).json({ error: "صيغة التوقيع غير صالحة" });
+      }
 
       // Get voting token record
       const [voteRecord] = await db.select().from(votingTokens)
@@ -1792,6 +1795,7 @@ export function registerGovernanceRoutes(app: Express) {
         .set({
           vote,
           comments: comments || null,
+          signatureData: signatureData || null,
           status: "voted",
           votedAt: new Date(),
           ipAddress,
@@ -1812,10 +1816,12 @@ export function registerGovernanceRoutes(app: Express) {
       await db.insert(resolutionVotes).values({
         resolutionId: voteRecord.resolutionId,
         voterType: "shareholder",
+        shareholderId: voteRecord.shareholderId,
         voterName: "مساهم (تصويت إلكتروني)",
         vote,
         comments: comments || null,
-        votingPower: String(voteWeight),
+        votingPower: "1.00",
+        weightedVote: String(voteWeight),
         voteMethod: "electronic",
         ipAddress,
       });

@@ -7154,6 +7154,7 @@ export const votingTokens = pgTable("voting_tokens", {
   vote: text("vote"), // for, against, abstain
   voteWeight: integer("vote_weight").default(1), // وزن التصويت (عدد الأسهم)
   comments: text("comments"),
+  signatureData: text("signature_data"), // توقيع المساهم (base64 encoded)
   status: text("status").default("pending").notNull(), // pending, voted, expired
   votedAt: timestamp("voted_at"),
   ipAddress: text("ip_address"),

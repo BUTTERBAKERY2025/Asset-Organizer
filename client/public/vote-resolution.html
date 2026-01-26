@@ -225,6 +225,46 @@
       outline: none;
       border-color: #d4a853;
     }
+    .signature-section {
+      margin-bottom: 25px;
+    }
+    .signature-section h3 {
+      color: #333;
+      margin-bottom: 15px;
+    }
+    .signature-canvas-wrapper {
+      border: 2px dashed #d4a853;
+      border-radius: 12px;
+      padding: 10px;
+      background: #fffef5;
+      margin-bottom: 15px;
+    }
+    #signatureCanvas {
+      width: 100%;
+      height: 150px;
+      border-radius: 8px;
+      cursor: crosshair;
+      background: white;
+      touch-action: none;
+    }
+    .btn-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .btn-clear {
+      flex: 1;
+      background: #f5f5f5;
+      color: #666;
+      padding: 10px;
+      border-radius: 8px;
+      font-family: 'Cairo', sans-serif;
+      cursor: pointer;
+      border: none;
+    }
+    .btn-clear:hover {
+      background: #eeeeee;
+    }
     .btn {
       width: 100%;
       padding: 15px 20px;
@@ -401,6 +441,16 @@
             <textarea id="comments" placeholder="أضف أي ملاحظات أو تعليقات على تصويتك..."></textarea>
           </div>
 
+          <div class="signature-section">
+            <h3>✍️ التوقيع (مطلوب)</h3>
+            <div class="signature-canvas-wrapper">
+              <canvas id="signatureCanvas"></canvas>
+            </div>
+            <div class="btn-row">
+              <button type="button" class="btn btn-clear" onclick="clearSignature()">مسح التوقيع</button>
+            </div>
+          </div>
+
           <button class="btn btn-submit" id="submitBtn" disabled onclick="submitVote()">
             <span>إرسال التصويت</span>
             <span>🗳️</span>
@@ -516,6 +566,86 @@
       }
     }
 
+    // Signature canvas variables
+    let signatureCanvas, signatureCtx;
+    let isDrawing = false;
+    let hasSignature = false;
+
+    function initSignatureCanvas() {
+      signatureCanvas = document.getElementById('signatureCanvas');
+      signatureCtx = signatureCanvas.getContext('2d');
+      
+      const rect = signatureCanvas.getBoundingClientRect();
+      signatureCanvas.width = rect.width;
+      signatureCanvas.height = rect.height;
+      
+      signatureCtx.strokeStyle = '#000';
+      signatureCtx.lineWidth = 2;
+      signatureCtx.lineCap = 'round';
+      signatureCtx.lineJoin = 'round';
+      
+      signatureCanvas.addEventListener('mousedown', startDrawing);
+      signatureCanvas.addEventListener('mousemove', draw);
+      signatureCanvas.addEventListener('mouseup', stopDrawing);
+      signatureCanvas.addEventListener('mouseout', stopDrawing);
+      
+      signatureCanvas.addEventListener('touchstart', handleTouch);
+      signatureCanvas.addEventListener('touchmove', handleTouch);
+      signatureCanvas.addEventListener('touchend', stopDrawing);
+    }
+
+    function getPos(e) {
+      const rect = signatureCanvas.getBoundingClientRect();
+      if (e.touches) {
+        return {
+          x: e.touches[0].clientX - rect.left,
+          y: e.touches[0].clientY - rect.top
+        };
+      }
+      return { x: e.offsetX, y: e.offsetY };
+    }
+
+    function startDrawing(e) {
+      isDrawing = true;
+      const pos = getPos(e);
+      signatureCtx.beginPath();
+      signatureCtx.moveTo(pos.x, pos.y);
+    }
+
+    function draw(e) {
+      if (!isDrawing) return;
+      const pos = getPos(e);
+      signatureCtx.lineTo(pos.x, pos.y);
+      signatureCtx.stroke();
+      hasSignature = true;
+      updateSubmitButton();
+    }
+
+    function stopDrawing() {
+      isDrawing = false;
+    }
+
+    function handleTouch(e) {
+      e.preventDefault();
+      if (e.type === 'touchstart') startDrawing(e);
+      else if (e.type === 'touchmove') draw(e);
+    }
+
+    function clearSignature() {
+      signatureCtx.clearRect(0, 0, signatureCanvas.width, signatureCanvas.height);
+      hasSignature = false;
+      updateSubmitButton();
+    }
+
+    function getSignatureData() {
+      if (!hasSignature) return null;
+      return signatureCanvas.toDataURL('image/png');
+    }
+
+    function updateSubmitButton() {
+      document.getElementById('submitBtn').disabled = !selectedVote || !hasSignature;
+    }
+
     function selectVote(voteValue) {
       selectedVote = voteValue;
       document.querySelectorAll('.vote-option').forEach(option => {
@@ -525,23 +655,24 @@
           option.querySelector('input').checked = true;
         }
       });
-      document.getElementById('submitBtn').disabled = false;
+      updateSubmitButton();
     }
 
     async function submitVote() {
-      if (!selectedVote || !voteToken) return;
+      if (!selectedVote || !voteToken || !hasSignature) return;
 
       const submitBtn = document.getElementById('submitBtn');
       submitBtn.disabled = true;
       submitBtn.innerHTML = '<span>جاري الإرسال...</span>';
 
       const comments = document.getElementById('comments').value.trim();
+      const signatureData = getSignatureData();
 
       try {
         const response = await fetch(`/api/public/vote/${voteToken}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ vote: selectedVote, comments })
+          body: JSON.stringify({ vote: selectedVote, comments, signatureData })
         });
 
         const data = await response.json();
@@ -568,7 +699,10 @@
       });
     });
 
-    window.onload = loadVoteData;
+    window.onload = function() {
+      loadVoteData();
+      initSignatureCanvas();
+    };
   </script>
 </body>
 </html>
