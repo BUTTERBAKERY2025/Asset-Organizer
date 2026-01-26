@@ -46,7 +46,6 @@ import {
   ChevronDown,
   ChevronUp,
   Share2,
-  Link,
   Copy,
   MessageCircle,
   Mail,
