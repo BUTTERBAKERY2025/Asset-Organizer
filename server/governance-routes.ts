@@ -14,6 +14,7 @@ import {
   boardResolutions,
   resolutionVotes,
   resolutionSignatures,
+  votingTokens,
   capitalTransactions,
   dividendDistributions,
   shareholderDividends,
@@ -30,6 +31,7 @@ import {
   insertBoardResolutionSchema,
   insertResolutionVoteSchema,
   insertResolutionSignatureSchema,
+  insertVotingTokenSchema,
   insertCapitalTransactionSchema,
   insertDividendDistributionSchema,
   insertShareholderDividendSchema,
@@ -1540,6 +1542,281 @@ export function registerGovernanceRoutes(app: Express) {
     } catch (error) {
       console.error("Error declining signature:", error);
       res.status(500).json({ error: "فشل في رفض التوقيع" });
+    }
+  });
+
+  // =============================================
+  // Voting Tokens - روابط التصويت العام للمساهمين
+  // =============================================
+
+  // Rate limiting for public voting endpoints
+  const votingRateLimitMap = new Map<string, { count: number; resetTime: number }>();
+  const VOTING_RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
+  const VOTING_RATE_LIMIT_MAX = 10;
+
+  const checkVotingRateLimit = (ip: string): boolean => {
+    const now = Date.now();
+    const record = votingRateLimitMap.get(ip);
+    
+    if (!record || record.resetTime < now) {
+      votingRateLimitMap.set(ip, { count: 1, resetTime: now + VOTING_RATE_LIMIT_WINDOW });
+      return true;
+    }
+    
+    if (record.count >= VOTING_RATE_LIMIT_MAX) {
+      return false;
+    }
+    
+    record.count++;
+    return true;
+  };
+
+  // Cleanup voting rate limit map
+  setInterval(() => {
+    const now = Date.now();
+    for (const [ip, record] of votingRateLimitMap.entries()) {
+      if (record.resetTime < now) {
+        votingRateLimitMap.delete(ip);
+      }
+    }
+  }, 60000);
+
+  // Get voting tokens for a resolution
+  app.get("/api/governance/resolutions/:resolutionId/voting-tokens", isAuthenticated, async (req, res) => {
+    try {
+      const resolutionId = parseInt(req.params.resolutionId);
+      const tokens = await db
+        .select({
+          id: votingTokens.id,
+          resolutionId: votingTokens.resolutionId,
+          shareholderId: votingTokens.shareholderId,
+          voteToken: votingTokens.voteToken,
+          vote: votingTokens.vote,
+          voteWeight: votingTokens.voteWeight,
+          comments: votingTokens.comments,
+          status: votingTokens.status,
+          votedAt: votingTokens.votedAt,
+          expiresAt: votingTokens.expiresAt,
+          createdAt: votingTokens.createdAt,
+          shareholderName: shareholders.name,
+          numberOfShares: shareholders.numberOfShares,
+        })
+        .from(votingTokens)
+        .innerJoin(shareholders, eq(votingTokens.shareholderId, shareholders.id))
+        .where(eq(votingTokens.resolutionId, resolutionId))
+        .orderBy(desc(votingTokens.createdAt));
+      
+      res.json(tokens);
+    } catch (error) {
+      console.error("Error fetching voting tokens:", error);
+      res.status(500).json({ error: "فشل في جلب روابط التصويت" });
+    }
+  });
+
+  // Create voting token requests for all shareholders with voting rights
+  app.post("/api/governance/resolutions/:resolutionId/voting-tokens/create-requests", isAuthenticated, requirePermission("governance", "edit"), async (req, res) => {
+    try {
+      const resolutionId = parseInt(req.params.resolutionId);
+      const { expiresInDays = 7 } = req.body;
+
+      // Get all shareholders with voting rights
+      const eligibleShareholders = await db.select()
+        .from(shareholders)
+        .where(eq(shareholders.votingRights, true));
+
+      if (eligibleShareholders.length === 0) {
+        return res.status(400).json({ error: "لا يوجد مساهمين لهم حق التصويت" });
+      }
+
+      // Check for existing pending tokens
+      const existingTokens = await db.select()
+        .from(votingTokens)
+        .where(and(
+          eq(votingTokens.resolutionId, resolutionId),
+          eq(votingTokens.status, "pending")
+        ));
+
+      const existingShareholderIds = new Set(existingTokens.map(t => t.shareholderId));
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + expiresInDays);
+
+      // Create tokens for shareholders that don't have pending tokens
+      for (const shareholder of eligibleShareholders) {
+        if (!existingShareholderIds.has(shareholder.id)) {
+          const voteToken = crypto.randomBytes(32).toString('hex');
+          await db.insert(votingTokens).values({
+            resolutionId,
+            shareholderId: shareholder.id,
+            voteToken,
+            voteWeight: shareholder.numberOfShares || 1,
+            status: "pending",
+            expiresAt,
+          });
+        }
+      }
+
+      // Return all tokens with shareholder info
+      const allTokens = await db
+        .select({
+          id: votingTokens.id,
+          voteToken: votingTokens.voteToken,
+          shareholderId: votingTokens.shareholderId,
+          shareholderName: shareholders.name,
+          shareholderEmail: shareholders.email,
+          shareholderPhone: shareholders.phone,
+          numberOfShares: shareholders.numberOfShares,
+          status: votingTokens.status,
+          expiresAt: votingTokens.expiresAt,
+        })
+        .from(votingTokens)
+        .innerJoin(shareholders, eq(votingTokens.shareholderId, shareholders.id))
+        .where(eq(votingTokens.resolutionId, resolutionId));
+
+      res.json({
+        message: `تم إنشاء ${eligibleShareholders.length - existingShareholderIds.size} رابط تصويت جديد`,
+        tokens: allTokens
+      });
+    } catch (error) {
+      console.error("Error creating voting token requests:", error);
+      res.status(500).json({ error: "فشل في إنشاء روابط التصويت" });
+    }
+  });
+
+  // Public endpoint - Get voting token info (no auth required)
+  app.get("/api/public/vote/:token", async (req, res) => {
+    try {
+      const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+      if (!checkVotingRateLimit(clientIp)) {
+        return res.status(429).json({ error: "تم تجاوز الحد الأقصى للطلبات. حاول لاحقاً." });
+      }
+
+      const { token } = req.params;
+
+      // Validate token format
+      if (!token || !/^[a-f0-9]{64}$/.test(token)) {
+        return res.status(400).json({ error: "رابط غير صالح" });
+      }
+
+      const [voteRecord] = await db
+        .select({
+          id: votingTokens.id,
+          resolutionId: votingTokens.resolutionId,
+          shareholderId: votingTokens.shareholderId,
+          voteWeight: votingTokens.voteWeight,
+          status: votingTokens.status,
+          vote: votingTokens.vote,
+          votedAt: votingTokens.votedAt,
+          expiresAt: votingTokens.expiresAt,
+          shareholderName: shareholders.name,
+          resolutionNumber: boardResolutions.resolutionNumber,
+          resolutionTitle: boardResolutions.title,
+          resolutionDescription: boardResolutions.description,
+          resolutionType: boardResolutions.resolutionType,
+          requiredMajority: boardResolutions.requiredMajority,
+          resolutionCreatedAt: boardResolutions.createdAt,
+        })
+        .from(votingTokens)
+        .innerJoin(shareholders, eq(votingTokens.shareholderId, shareholders.id))
+        .innerJoin(boardResolutions, eq(votingTokens.resolutionId, boardResolutions.id))
+        .where(eq(votingTokens.voteToken, token));
+
+      if (!voteRecord) {
+        return res.status(404).json({ error: "رابط التصويت غير موجود" });
+      }
+
+      if (voteRecord.status === "voted") {
+        return res.status(400).json({ error: "تم التصويت على هذا القرار مسبقاً", votedAt: voteRecord.votedAt });
+      }
+
+      if (voteRecord.expiresAt && new Date(voteRecord.expiresAt) < new Date()) {
+        return res.status(410).json({ error: "انتهت صلاحية رابط التصويت" });
+      }
+
+      res.json(voteRecord);
+    } catch (error) {
+      console.error("Error fetching vote record:", error);
+      res.status(500).json({ error: "فشل في جلب بيانات التصويت" });
+    }
+  });
+
+  // Public endpoint - Submit vote (no auth required)
+  app.post("/api/public/vote/:token", async (req, res) => {
+    try {
+      const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+      if (!checkVotingRateLimit(clientIp)) {
+        return res.status(429).json({ error: "تم تجاوز الحد الأقصى للطلبات. حاول لاحقاً." });
+      }
+
+      const { token } = req.params;
+      const { vote, comments } = req.body;
+
+      // Validate token format
+      if (!token || !/^[a-f0-9]{64}$/.test(token)) {
+        return res.status(400).json({ error: "رابط غير صالح" });
+      }
+
+      // Validate vote value
+      if (!vote || !["for", "against", "abstain"].includes(vote)) {
+        return res.status(400).json({ error: "قيمة التصويت غير صالحة" });
+      }
+
+      // Get voting token record
+      const [voteRecord] = await db.select().from(votingTokens)
+        .where(eq(votingTokens.voteToken, token));
+
+      if (!voteRecord) {
+        return res.status(404).json({ error: "رابط التصويت غير موجود" });
+      }
+
+      if (voteRecord.status === "voted") {
+        return res.status(400).json({ error: "تم التصويت مسبقاً" });
+      }
+
+      if (voteRecord.expiresAt && new Date(voteRecord.expiresAt) < new Date()) {
+        return res.status(410).json({ error: "انتهت صلاحية رابط التصويت" });
+      }
+
+      const ipAddress = req.ip || req.socket.remoteAddress;
+      const userAgent = req.get('User-Agent');
+      const voteWeight = voteRecord.voteWeight || 1;
+
+      // Update voting token
+      await db.update(votingTokens)
+        .set({
+          vote,
+          comments: comments || null,
+          status: "voted",
+          votedAt: new Date(),
+          ipAddress,
+          userAgent,
+          updatedAt: new Date(),
+        })
+        .where(eq(votingTokens.id, voteRecord.id));
+
+      // Update resolution vote counts
+      const voteField = vote === "for" ? "forVotes" : vote === "against" ? "againstVotes" : "abstainVotes";
+      await db.update(boardResolutions)
+        .set({
+          [voteField]: sql`COALESCE(${boardResolutions[voteField as keyof typeof boardResolutions]}, 0) + ${voteWeight}`,
+        })
+        .where(eq(boardResolutions.id, voteRecord.resolutionId));
+
+      // Also create a resolution vote record for audit trail
+      await db.insert(resolutionVotes).values({
+        resolutionId: voteRecord.resolutionId,
+        voterType: "shareholder",
+        voterName: "مساهم (تصويت إلكتروني)",
+        vote,
+        comments: comments || null,
+        voteWeight,
+        voteMethod: "electronic",
+        ipAddress,
+      });
+
+      res.json({ success: true, message: "تم تسجيل تصويتك بنجاح" });
+    } catch (error) {
+      console.error("Error submitting vote:", error);
+      res.status(500).json({ error: "فشل في حفظ التصويت" });
     }
   });
 }
