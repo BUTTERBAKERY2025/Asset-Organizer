@@ -6770,7 +6770,7 @@ export const boardMembers = pgTable("board_members", {
   photoUrl: text("photo_url"),
   signatureUrl: text("signature_url"),
   committees: text("committees").array(), // لجان المجلس
-  votingPower: numeric("voting_power", { precision: 5, scale: 2 }).default("1.00"),
+  votingPower: numeric("voting_power", { precision: 8, scale: 4 }).default("1.0000"),
   notes: text("notes"),
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),

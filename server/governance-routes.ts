@@ -1648,7 +1648,7 @@ export function registerGovernanceRoutes(app: Express) {
             voteWeight: shareholder.numberOfShares || 1,
             status: "pending",
             expiresAt,
-          });
+          }).onConflictDoNothing();
         }
       }
 
