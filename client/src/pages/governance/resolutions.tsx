@@ -723,28 +723,56 @@ export default function ResolutionsPage() {
                                       background: white;
                                     }
                                     
-                                    /* Prevent Page Breaks Inside Elements */
+                                    /* Prevent Page Breaks Inside Critical Elements */
                                     .header, .resolution-title-box, .voting-box, .result-badge, 
-                                    .signature-card, .section-title {
+                                    .signature-card, .section-title, .meta-section {
                                       page-break-inside: avoid;
                                       break-inside: avoid;
                                     }
                                     
-                                    /* Keep Section Headers with Content */
+                                    /* Keep Section Headers with Their Content */
                                     .section-title {
                                       page-break-after: avoid;
                                       break-after: avoid;
+                                      margin-top: 15px;
                                     }
                                     
-                                    /* Allow Page Breaks Between Major Sections */
-                                    .content-section, .signatures-section {
+                                    /* Content sections can break between paragraphs */
+                                    .content-section {
                                       page-break-inside: auto;
                                     }
                                     
-                                    /* Force Signatures to Stay Together */
+                                    /* Force Signatures Section to Stay Together or Start New Page */
                                     .signatures-section {
                                       page-break-inside: avoid;
                                       break-inside: avoid;
+                                      page-break-before: auto;
+                                    }
+                                    
+                                    /* Resolution text paragraphs */
+                                    .resolution-text {
+                                      page-break-inside: auto;
+                                      orphans: 4;
+                                      widows: 4;
+                                    }
+                                    
+                                    /* Multi-page layout: Stack vertically for long content */
+                                    @media print {
+                                      .main-content {
+                                        display: block !important;
+                                      }
+                                      .content-section {
+                                        margin-bottom: 20px;
+                                      }
+                                      .signatures-section {
+                                        margin-top: 20px;
+                                      }
+                                      .signature-card {
+                                        display: inline-block;
+                                        width: 30%;
+                                        vertical-align: top;
+                                        margin: 5px;
+                                      }
                                     }
                                     
                                     /* Header Section */
@@ -1448,23 +1476,86 @@ export default function ResolutionsPage() {
                   </CardContent>
                 </Card>
 
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   {selectedResolution.status === "draft" && (
-                    <Button className="bg-blue-600 hover:bg-blue-700 gap-2">
+                    <Button 
+                      className="bg-blue-600 hover:bg-blue-700 gap-2"
+                      onClick={() => {
+                        updateMutation.mutate({ 
+                          id: selectedResolution.id, 
+                          data: { status: "proposed" } 
+                        });
+                        setShowWorkflow(false);
+                      }}
+                      disabled={updateMutation.isPending}
+                    >
                       <Send className="h-4 w-4" />
                       رفع للمراجعة
                     </Button>
                   )}
                   {selectedResolution.status === "proposed" && (
-                    <Button className="bg-yellow-600 hover:bg-yellow-700 gap-2">
+                    <Button 
+                      className="bg-yellow-600 hover:bg-yellow-700 gap-2"
+                      onClick={() => {
+                        updateMutation.mutate({ 
+                          id: selectedResolution.id, 
+                          data: { status: "voting" } 
+                        });
+                        setShowWorkflow(false);
+                      }}
+                      disabled={updateMutation.isPending}
+                    >
                       <Vote className="h-4 w-4" />
                       فتح التصويت
                     </Button>
                   )}
+                  {selectedResolution.status === "voting" && (
+                    <Button 
+                      className="bg-green-600 hover:bg-green-700 gap-2"
+                      onClick={() => {
+                        updateMutation.mutate({ 
+                          id: selectedResolution.id, 
+                          data: { status: "approved" } 
+                        });
+                        setShowWorkflow(false);
+                      }}
+                      disabled={updateMutation.isPending}
+                    >
+                      <CheckCircle className="h-4 w-4" />
+                      اعتماد القرار
+                    </Button>
+                  )}
                   {selectedResolution.status === "approved" && (
-                    <Button className="bg-emerald-600 hover:bg-emerald-700 gap-2">
+                    <Button 
+                      className="bg-emerald-600 hover:bg-emerald-700 gap-2"
+                      onClick={() => {
+                        updateMutation.mutate({ 
+                          id: selectedResolution.id, 
+                          data: { status: "implemented" } 
+                        });
+                        setShowWorkflow(false);
+                      }}
+                      disabled={updateMutation.isPending}
+                    >
                       <CheckCheck className="h-4 w-4" />
                       تأكيد التنفيذ
+                    </Button>
+                  )}
+                  {selectedResolution.status === "voting" && (
+                    <Button 
+                      variant="destructive"
+                      className="gap-2"
+                      onClick={() => {
+                        updateMutation.mutate({ 
+                          id: selectedResolution.id, 
+                          data: { status: "rejected" } 
+                        });
+                        setShowWorkflow(false);
+                      }}
+                      disabled={updateMutation.isPending}
+                    >
+                      <XCircle className="h-4 w-4" />
+                      رفض القرار
                     </Button>
                   )}
                 </div>
