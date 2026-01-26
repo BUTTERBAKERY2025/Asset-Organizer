@@ -45,6 +45,12 @@ import {
   RefreshCw,
   ChevronDown,
   ChevronUp,
+  Share2,
+  Link,
+  Copy,
+  MessageCircle,
+  Mail,
+  ExternalLink,
 } from "lucide-react";
 import type { BoardResolution, ResolutionVote, Shareholder } from "@shared/schema";
 import { exportToExcel, exportToCSV, printAsPDF } from "@/lib/export-utils";
@@ -76,12 +82,27 @@ interface AuditLogEntry {
   votingPower: number;
 }
 
+interface VotingTokenData {
+  id: number;
+  voteToken: string;
+  shareholderId: number;
+  shareholderName: string;
+  shareholderEmail?: string;
+  shareholderPhone?: string;
+  numberOfShares: number;
+  status: string;
+  expiresAt?: string;
+}
+
 export default function VotingPage() {
   const [selectedResolution, setSelectedResolution] = useState<BoardResolution | null>(null);
   const [selectedVote, setSelectedVote] = useState<string>("");
   const [voteComment, setVoteComment] = useState("");
   const [showAuditLog, setShowAuditLog] = useState(false);
   const [showQuorumDetails, setShowQuorumDetails] = useState(false);
+  const [showVotingLinks, setShowVotingLinks] = useState(false);
+  const [votingTokens, setVotingTokens] = useState<VotingTokenData[]>([]);
+  const [selectedResolutionForLinks, setSelectedResolutionForLinks] = useState<BoardResolution | null>(null);
   const [isProxyVote, setIsProxyVote] = useState(false);
   const [proxyHolderName, setProxyHolderName] = useState("");
   const [activeTab, setActiveTab] = useState("active");
@@ -153,6 +174,57 @@ export default function VotingPage() {
       toast({ title: "فشل في تسجيل التصويت", variant: "destructive" });
     },
   });
+
+  const createVotingTokensMutation = useMutation({
+    mutationFn: async (resolutionId: number) => {
+      const res = await fetch(`/api/governance/resolutions/${resolutionId}/voting-tokens/create-requests`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expiresInDays: 7 }),
+      });
+      if (!res.ok) throw new Error("Failed to create voting tokens");
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setVotingTokens(data.tokens || []);
+      toast({ title: "تم إنشاء روابط التصويت", description: data.message });
+    },
+    onError: () => {
+      toast({ title: "فشل في إنشاء روابط التصويت", variant: "destructive" });
+    },
+  });
+
+  const openVotingLinksDialog = (resolution: BoardResolution) => {
+    setSelectedResolutionForLinks(resolution);
+    setShowVotingLinks(true);
+    createVotingTokensMutation.mutate(resolution.id);
+  };
+
+  const getVotingLink = (token: string) => {
+    return `${window.location.origin}/vote-resolution.html#token=${token}`;
+  };
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({ title: "تم نسخ الرابط" });
+    } catch {
+      toast({ title: "فشل في نسخ الرابط", variant: "destructive" });
+    }
+  };
+
+  const shareViaWhatsApp = (token: VotingTokenData, resolutionTitle: string) => {
+    const link = getVotingLink(token.voteToken);
+    const message = `مرحباً ${token.shareholderName}،\n\nأنت مدعو للتصويت على قرار مجلس الإدارة:\n${resolutionTitle}\n\nرابط التصويت:\n${link}\n\nشكراً لك.`;
+    window.open(`https://wa.me/${token.shareholderPhone?.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`);
+  };
+
+  const shareViaEmail = (token: VotingTokenData, resolutionTitle: string) => {
+    const link = getVotingLink(token.voteToken);
+    const subject = `دعوة للتصويت على قرار مجلس الإدارة - ${resolutionTitle}`;
+    const body = `مرحباً ${token.shareholderName}،\n\nأنت مدعو للتصويت على قرار مجلس الإدارة:\n${resolutionTitle}\n\nرابط التصويت:\n${link}\n\nشكراً لك.\n\nشركة الزبد الأفضل التجارية`;
+    window.open(`mailto:${token.shareholderEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+  };
 
   const handleSubmitVote = () => {
     if (!selectedResolution || !selectedVote) return;
@@ -444,6 +516,16 @@ export default function VotingPage() {
                               >
                                 {isExpanded ? <ChevronUp className="h-4 w-4 ml-1" /> : <ChevronDown className="h-4 w-4 ml-1" />}
                                 {isExpanded ? "إخفاء التفاصيل" : "عرض التفاصيل"}
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="border-blue-300 text-blue-700 hover:bg-blue-50"
+                                onClick={() => openVotingLinksDialog(resolution)}
+                                data-testid={`share-voting-links-${resolution.id}`}
+                              >
+                                <Share2 className="h-4 w-4 ml-1" />
+                                مشاركة روابط التصويت
                               </Button>
                             </div>
                           </div>
@@ -850,6 +932,120 @@ export default function VotingPage() {
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowAuditLog(false)}>إغلاق</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showVotingLinks} onOpenChange={setShowVotingLinks}>
+          <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Share2 className="h-5 w-5 text-blue-600" />
+                مشاركة روابط التصويت
+              </DialogTitle>
+            </DialogHeader>
+            
+            {selectedResolutionForLinks && (
+              <div className="space-y-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <h4 className="font-semibold text-blue-800 mb-2">
+                    {selectedResolutionForLinks.resolutionNumber} - {selectedResolutionForLinks.title}
+                  </h4>
+                  <p className="text-sm text-blue-600">
+                    يمكنك مشاركة روابط التصويت مع المساهمين عبر الواتساب أو البريد الإلكتروني
+                  </p>
+                </div>
+
+                {createVotingTokensMutation.isPending ? (
+                  <div className="flex items-center justify-center py-8">
+                    <RefreshCw className="h-6 w-6 animate-spin text-blue-500" />
+                    <span className="mr-2">جاري إنشاء روابط التصويت...</span>
+                  </div>
+                ) : votingTokens.length > 0 ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>المساهم</TableHead>
+                        <TableHead>الأسهم</TableHead>
+                        <TableHead>الحالة</TableHead>
+                        <TableHead>الرابط</TableHead>
+                        <TableHead>الإجراءات</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {votingTokens.map((token) => (
+                        <TableRow key={token.id}>
+                          <TableCell className="font-medium">{token.shareholderName}</TableCell>
+                          <TableCell>{token.numberOfShares?.toLocaleString()}</TableCell>
+                          <TableCell>
+                            <Badge className={token.status === 'voted' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}>
+                              {token.status === 'voted' ? 'تم التصويت' : 'في انتظار التصويت'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Input
+                                value={getVotingLink(token.voteToken)}
+                                readOnly
+                                className="text-xs w-48"
+                              />
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => copyToClipboard(getVotingLink(token.voteToken))}
+                              >
+                                <Copy className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-2">
+                              {token.shareholderPhone && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-1 text-green-600 border-green-300 hover:bg-green-50"
+                                  onClick={() => shareViaWhatsApp(token, selectedResolutionForLinks.title || '')}
+                                >
+                                  <MessageCircle className="h-4 w-4" />
+                                  واتساب
+                                </Button>
+                              )}
+                              {token.shareholderEmail && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-1 text-blue-600 border-blue-300 hover:bg-blue-50"
+                                  onClick={() => shareViaEmail(token, selectedResolutionForLinks.title || '')}
+                                >
+                                  <Mail className="h-4 w-4" />
+                                  بريد
+                                </Button>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => window.open(getVotingLink(token.voteToken), '_blank')}
+                              >
+                                <ExternalLink className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>لا يوجد مساهمين لهم حق التصويت</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowVotingLinks(false)}>إغلاق</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

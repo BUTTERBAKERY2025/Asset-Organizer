@@ -1748,17 +1748,24 @@ export function registerGovernanceRoutes(app: Express) {
       }
 
       const { token } = req.params;
-      const { vote, comments } = req.body;
-
+      
       // Validate token format
       if (!token || !/^[a-f0-9]{64}$/.test(token)) {
         return res.status(400).json({ error: "رابط غير صالح" });
       }
 
-      // Validate vote value
-      if (!vote || !["for", "against", "abstain"].includes(vote)) {
-        return res.status(400).json({ error: "قيمة التصويت غير صالحة" });
+      // Validate request body with Zod
+      const votePayloadSchema = z.object({
+        vote: z.enum(["for", "against", "abstain"]),
+        comments: z.string().max(1000).optional(),
+      });
+      
+      const parseResult = votePayloadSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ error: "بيانات التصويت غير صالحة" });
       }
+      
+      const { vote, comments } = parseResult.data;
 
       // Get voting token record
       const [voteRecord] = await db.select().from(votingTokens)
