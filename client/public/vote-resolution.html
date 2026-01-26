@@ -575,19 +575,30 @@
 
     function initSignatureCanvas() {
       signatureCanvas = document.getElementById('signatureCanvas');
+      if (!signatureCanvas) return;
+      
       signatureCtx = signatureCanvas.getContext('2d');
       
-      // Set canvas size based on device pixel ratio for better quality
-      const rect = signatureCanvas.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
-      signatureCanvas.width = rect.width * dpr;
-      signatureCanvas.height = rect.height * dpr;
-      signatureCtx.scale(dpr, dpr);
+      function setupCanvas() {
+        const wrapper = signatureCanvas.parentElement;
+        const width = wrapper ? wrapper.clientWidth - 20 : 300;
+        const height = 150;
+        
+        signatureCanvas.width = width;
+        signatureCanvas.height = height;
+        signatureCanvas.style.width = width + 'px';
+        signatureCanvas.style.height = height + 'px';
+        
+        signatureCtx.fillStyle = 'white';
+        signatureCtx.fillRect(0, 0, width, height);
+        signatureCtx.strokeStyle = '#000';
+        signatureCtx.lineWidth = 2;
+        signatureCtx.lineCap = 'round';
+        signatureCtx.lineJoin = 'round';
+      }
       
-      signatureCtx.strokeStyle = '#000';
-      signatureCtx.lineWidth = 2;
-      signatureCtx.lineCap = 'round';
-      signatureCtx.lineJoin = 'round';
+      setupCanvas();
+      window.addEventListener('resize', setupCanvas);
       
       // Mouse events
       signatureCanvas.addEventListener('mousedown', startDrawing);
