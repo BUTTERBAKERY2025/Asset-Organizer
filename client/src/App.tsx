@@ -18,15 +18,9 @@ import type { SystemModule } from "@shared/schema";
 import NotFound from "@/pages/not-found";
 import LoginPage from "@/pages/login";
 
-// Preload critical pages after initial render for faster navigation
+// Preload disabled to prevent Vite optimization issues
 const preloadCriticalPages = () => {
-  setTimeout(() => {
-    import("@/pages/warehouse-dashboard");
-    import("@/pages/production-dashboard");
-    import("@/pages/inventory");
-    import("@/pages/transfer-requests");
-    import("@/pages/marketing-campaigns");
-  }, 1000); // Delay to not block initial render
+  // Disabled preloading to fix Vite cache issues
 };
 
 // All other pages loaded lazily for better performance
