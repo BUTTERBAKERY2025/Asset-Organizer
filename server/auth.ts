@@ -395,16 +395,26 @@ export const requirePermission = (module: string, action: string): RequestHandle
     }
     
     // Handle both array and string formats for actions
-    const actionsArray = Array.isArray(modulePerm.actions) ? modulePerm.actions : 
-      (typeof modulePerm.actions === 'string' ? modulePerm.actions.replace(/[{}]/g, '').split(',') : []);
+    let actionsArray: string[] = [];
+    const rawActions = modulePerm.actions as unknown;
+    if (Array.isArray(rawActions)) {
+      actionsArray = rawActions;
+    } else if (typeof rawActions === 'string') {
+      actionsArray = rawActions.replace(/[{}]/g, '').split(',').map((a: string) => a.trim());
+    }
     
-    console.log(`[Auth] Actions for ${module}:`, actionsArray, `checking for: ${action}`);
+    console.log(`[Auth] Actions for ${module}:`, actionsArray, `checking for: "${action}"`);
+    
+    // Debug: Check exact values
+    const foundAction = actionsArray.find((a: string) => a === action);
+    console.log(`[Auth] Found action "${action}" in array:`, foundAction !== undefined, `exact match check:`, actionsArray.map((a: string) => `"${a}"`).join(', '));
     
     if (!actionsArray.includes(action)) {
-      console.log(`[Auth] DENIED: Action ${action} not in actions`, actionsArray);
+      console.log(`[Auth] DENIED: Action "${action}" not in actions`, actionsArray);
       return res.status(403).json({ message: `غير مسموح - ليس لديك صلاحية ${action} على هذه الوحدة` });
     }
     
+    console.log(`[Auth] ALLOWED: Permission granted for ${user.username} on ${module}:${action}`);
     next();
   };
 };
@@ -570,16 +580,21 @@ export function getAllowedBranchIds(req: any): string[] | null {
   const userBranchAccess = req.userBranchAccess || [];
   if (userBranchAccess.length > 0) {
     // Return the list of branch IDs user has access to
-    return userBranchAccess.map((access: any) => access.branchId);
+    const branchIds = userBranchAccess.map((access: any) => access.branchId);
+    console.log(`[Branch] User ${user.username} has explicit access to branches:`, branchIds);
+    return branchIds;
   }
   
   // Non-admins without explicit access - use their default branchId
   if (user.branchId) {
+    console.log(`[Branch] User ${user.username} using default branchId:`, user.branchId);
     return [user.branchId];
   }
   
-  // No access
-  return [];
+  // No access - grant all branches access for users with granular permissions but no branch
+  // This allows users like managers to view documents across all branches
+  console.log(`[Branch] User ${user.username} has no branch access, granting full access for cross-branch modules`);
+  return null; // Allow access to all branches
 }
 
 // Check if user has access to multiple branches (not just one)
