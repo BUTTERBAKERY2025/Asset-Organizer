@@ -188,9 +188,10 @@ export default function MarketingAssetsPage() {
       }
 
       const result = await response.json();
+      const fileUrl = result.filePath ? `/api/documents/file/${result.filePath}` : (result.url || result.fileUrl);
       setFormData(prev => ({
         ...prev,
-        fileUrl: result.url || result.fileUrl,
+        fileUrl: fileUrl,
         fileSize: file.size,
       }));
       toast({ title: "تم رفع الملف بنجاح" });
