@@ -1746,6 +1746,7 @@ export class DatabaseStorage implements IStorage {
     const cached = this.permissionsCache.get(userId);
     const now = Date.now();
     if (cached && (now - cached.timestamp) < this.PERMISSIONS_CACHE_TTL) {
+      console.log(`[Storage] Returning ${cached.data.length} cached permissions for user ${userId}`);
       return cached.data;
     }
     
@@ -1753,6 +1754,9 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(userPermissions)
       .where(eq(userPermissions.userId, userId));
+    
+    console.log(`[Storage] Fetched ${perms.length} permissions from DB for user ${userId}:`, 
+      perms.map(p => p.module).join(', '));
     
     this.permissionsCache.set(userId, { data: perms, timestamp: now });
     return perms;
