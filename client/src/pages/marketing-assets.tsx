@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Layout } from "@/components/layout";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { 
   ArrowRight, Plus, Image, Video, FileText, Download, 
   Trash2, Eye, FolderOpen, Search, Filter, Tag, Calendar,
-  MoreVertical, Edit, Link as LinkIcon
+  MoreVertical, Edit, Link as LinkIcon, Upload, Loader2
 } from "lucide-react";
 import { Link } from "wouter";
 import {
@@ -69,6 +69,9 @@ export default function MarketingAssetsPage() {
     tags: [] as string[],
   });
   const [tagsInput, setTagsInput] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadedFileName, setUploadedFileName] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -158,6 +161,46 @@ export default function MarketingAssetsPage() {
       tags: [],
     });
     setTagsInput("");
+    setUploadedFileName("");
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    setUploadedFileName(file.name);
+
+    try {
+      const formDataUpload = new FormData();
+      formDataUpload.append("file", file);
+
+      const response = await fetch("/api/documents/upload", {
+        method: "POST",
+        body: formDataUpload,
+      });
+
+      if (!response.ok) {
+        throw new Error("فشل في رفع الملف");
+      }
+
+      const result = await response.json();
+      setFormData(prev => ({
+        ...prev,
+        fileUrl: result.url || result.fileUrl,
+        fileSize: file.size,
+      }));
+      toast({ title: "تم رفع الملف بنجاح" });
+    } catch (error) {
+      console.error("Upload error:", error);
+      toast({ title: "فشل في رفع الملف", variant: "destructive" });
+      setUploadedFileName("");
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleTagsChange = (value: string) => {
@@ -224,16 +267,17 @@ export default function MarketingAssetsPage() {
         <Input
           className="h-11 sm:h-10"
           value={formData.name}
-          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+          onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
           placeholder="مثال: بانر رمضان"
           data-testid="input-asset-name"
+          autoFocus
         />
       </div>
       <div>
         <Label>نوع الأصل</Label>
         <Select
           value={formData.assetType}
-          onValueChange={(value) => setFormData({ ...formData, assetType: value })}
+          onValueChange={(value) => setFormData(prev => ({ ...prev, assetType: value }))}
         >
           <SelectTrigger className="h-11 sm:h-10" data-testid="select-asset-type">
             <SelectValue />
@@ -254,7 +298,7 @@ export default function MarketingAssetsPage() {
         <Label>الحملة (اختياري)</Label>
         <Select
           value={formData.campaignId?.toString() || "none"}
-          onValueChange={(value) => setFormData({ ...formData, campaignId: value === "none" ? null : parseInt(value) })}
+          onValueChange={(value) => setFormData(prev => ({ ...prev, campaignId: value === "none" ? null : parseInt(value) }))}
         >
           <SelectTrigger className="h-11 sm:h-10" data-testid="select-campaign">
             <SelectValue placeholder="اختر الحملة" />
@@ -270,11 +314,47 @@ export default function MarketingAssetsPage() {
         </Select>
       </div>
       <div>
-        <Label>رابط الملف</Label>
+        <Label>رفع ملف</Label>
+        <div className="flex flex-col gap-2">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileUpload}
+            accept="image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx"
+            className="hidden"
+            data-testid="input-file-upload"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading}
+            className="h-11 sm:h-10 w-full"
+            data-testid="button-upload-file"
+          >
+            {isUploading ? (
+              <>
+                <Loader2 className="w-4 h-4 ml-2 animate-spin" />
+                جاري الرفع...
+              </>
+            ) : (
+              <>
+                <Upload className="w-4 h-4 ml-2" />
+                اختر ملف للرفع
+              </>
+            )}
+          </Button>
+          {uploadedFileName && (
+            <p className="text-sm text-green-600">تم رفع: {uploadedFileName}</p>
+          )}
+        </div>
+      </div>
+      <div>
+        <Label>أو أدخل رابط الملف</Label>
         <Input
           className="h-11 sm:h-10"
           value={formData.fileUrl || ""}
-          onChange={(e) => setFormData({ ...formData, fileUrl: e.target.value })}
+          onChange={(e) => setFormData(prev => ({ ...prev, fileUrl: e.target.value }))}
           placeholder="https://..."
           data-testid="input-file-url"
         />
@@ -283,7 +363,7 @@ export default function MarketingAssetsPage() {
         <Label>الوصف</Label>
         <Textarea
           value={formData.description || ""}
-          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+          onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
           placeholder="وصف الأصل التسويقي..."
           data-testid="input-description"
         />
