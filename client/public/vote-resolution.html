@@ -691,10 +691,13 @@
     }
 
     function updateSubmitButton() {
-      document.getElementById('submitBtn').disabled = !selectedVote || !hasSignature || !voteToken;
+      const isDisabled = !selectedVote || !hasSignature || !voteToken;
+      console.log('updateSubmitButton - selectedVote:', selectedVote, 'hasSignature:', hasSignature, 'voteToken:', !!voteToken, '=> disabled:', isDisabled);
+      document.getElementById('submitBtn').disabled = isDisabled;
     }
 
     function selectVote(voteValue) {
+      console.log('selectVote called with:', voteValue);
       selectedVote = voteValue;
       document.querySelectorAll('.vote-option').forEach(option => {
         option.classList.remove('selected');
