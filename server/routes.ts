@@ -386,6 +386,8 @@ export async function registerRoutes(
       
       // Use cached permissions for better performance
       const permissions = await getCachedPermissions(currentUser.id);
+      console.log(`[Permissions] User ${currentUser.username} (${currentUser.id}) has ${permissions.length} permissions:`, 
+        permissions.map(p => p.module).join(', '));
       res.json(permissions);
     } catch (error) {
       console.error("Error fetching my permissions:", error);
