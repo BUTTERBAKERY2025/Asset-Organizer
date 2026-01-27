@@ -1,15 +1,35 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseKey) {
-  console.warn('Supabase credentials not found. File storage will use fallback.');
+function isValidUrl(url: string | undefined): boolean {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
 }
 
-export const supabase = supabaseUrl && supabaseKey 
-  ? createClient(supabaseUrl, supabaseKey)
-  : null;
+const hasValidCredentials = isValidUrl(supabaseUrl) && !!supabaseKey;
+
+if (!hasValidCredentials) {
+  console.warn('Supabase credentials not found or invalid. File storage will use Replit Object Storage fallback.');
+}
+
+let supabase: SupabaseClient | null = null;
+if (hasValidCredentials) {
+  try {
+    supabase = createClient(supabaseUrl!, supabaseKey!);
+  } catch (error) {
+    console.error('Failed to create Supabase client:', error);
+    supabase = null;
+  }
+}
+
+export { supabase };
 
 export const DOCUMENTS_BUCKET = 'documents';
 
