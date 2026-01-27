@@ -706,9 +706,13 @@
     }
 
     async function submitVote() {
-      if (!selectedVote || !voteToken || !hasSignature) return;
+      if (!selectedVote || !voteToken || !hasSignature) {
+        console.log('Submit blocked - selectedVote:', selectedVote, 'voteToken:', !!voteToken, 'hasSignature:', hasSignature);
+        return;
+      }
 
       const submitBtn = document.getElementById('submitBtn');
+      const originalContent = submitBtn.innerHTML;
       submitBtn.disabled = true;
       submitBtn.innerHTML = '<span>جاري الإرسال...</span>';
 
@@ -725,6 +729,10 @@
         const data = await response.json();
 
         if (!response.ok) {
+          // Reset button on error
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = originalContent;
+          
           if (response.status === 429) {
             showError('الحد الأقصى للطلبات', 'تم تجاوز الحد الأقصى للطلبات. حاول لاحقاً.');
           } else {
@@ -736,6 +744,9 @@
         showSuccess();
       } catch (error) {
         console.error('Error submitting vote:', error);
+        // Reset button on error
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalContent;
         showError('خطأ في الاتصال', 'فشل في الاتصال بالخادم');
       }
     }
