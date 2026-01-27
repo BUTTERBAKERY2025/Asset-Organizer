@@ -387,11 +387,21 @@ export const requirePermission = (module: string, action: string): RequestHandle
     const permissions = await storage.getUserPermissions(user.id);
     const modulePerm = permissions.find((p: any) => p.module === module);
     
+    console.log(`[Auth] Checking permission for ${user.username}: module=${module}, action=${action}, found=`, modulePerm);
+    
     if (!modulePerm) {
+      console.log(`[Auth] DENIED: No permission found for module ${module}`);
       return res.status(403).json({ message: "غير مسموح - ليس لديك صلاحية على هذه الوحدة" });
     }
     
-    if (!modulePerm.actions.includes(action)) {
+    // Handle both array and string formats for actions
+    const actionsArray = Array.isArray(modulePerm.actions) ? modulePerm.actions : 
+      (typeof modulePerm.actions === 'string' ? modulePerm.actions.replace(/[{}]/g, '').split(',') : []);
+    
+    console.log(`[Auth] Actions for ${module}:`, actionsArray, `checking for: ${action}`);
+    
+    if (!actionsArray.includes(action)) {
+      console.log(`[Auth] DENIED: Action ${action} not in actions`, actionsArray);
       return res.status(403).json({ message: `غير مسموح - ليس لديك صلاحية ${action} على هذه الوحدة` });
     }
     
