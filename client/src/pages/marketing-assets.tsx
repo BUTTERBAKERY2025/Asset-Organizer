@@ -2,7 +2,7 @@ import { useState, useRef } from "react";
 import { Layout } from "@/components/layout";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,11 +10,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { 
   ArrowRight, Plus, Image, Video, FileText, Download, 
   Trash2, Eye, FolderOpen, Search, Filter, Tag, Calendar,
-  MoreVertical, Edit, Link as LinkIcon, Upload, Loader2
+  MoreVertical, Edit, Link as LinkIcon, Upload, Loader2, MapPin, Building2
 } from "lucide-react";
 import { Link } from "wouter";
 import {
@@ -23,6 +24,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+
+interface Branch {
+  id: string;
+  name: string;
+  nameAr?: string;
+}
 
 interface Campaign {
   id: number;
@@ -33,11 +40,14 @@ interface Campaign {
 interface MarketingAsset {
   id: number;
   campaignId: number | null;
+  branchId: string | null;
   name: string;
   assetType: string;
   fileUrl: string | null;
   fileSize: number | null;
   description: string | null;
+  location: string | null;
+  quantity: number;
   tags: string[];
   createdBy: number | null;
   createdAt: string;
@@ -58,14 +68,18 @@ export default function MarketingAssetsPage() {
   const [editingAsset, setEditingAsset] = useState<MarketingAsset | null>(null);
   const [filterType, setFilterType] = useState<string>("all");
   const [filterCampaignId, setFilterCampaignId] = useState<string>("all");
+  const [filterBranchId, setFilterBranchId] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [formData, setFormData] = useState({
     campaignId: null as number | null,
+    branchId: null as string | null,
     name: "",
     assetType: "image",
     fileUrl: "",
     fileSize: null as number | null,
     description: "",
+    location: "",
+    quantity: 1,
     tags: [] as string[],
   });
   const [tagsInput, setTagsInput] = useState("");
@@ -74,6 +88,15 @@ export default function MarketingAssetsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const { data: branches = [] } = useQuery<Branch[]>({
+    queryKey: ["/api/branches"],
+    queryFn: async () => {
+      const res = await fetch("/api/branches");
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
 
   const { data: campaigns = [] } = useQuery<Campaign[]>({
     queryKey: ["/api/marketing/campaigns"],
@@ -153,11 +176,14 @@ export default function MarketingAssetsPage() {
   const resetForm = () => {
     setFormData({
       campaignId: null,
+      branchId: null as string | null,
       name: "",
       assetType: "image",
       fileUrl: "",
       fileSize: null,
       description: "",
+      location: "",
+      quantity: 1,
       tags: [],
     });
     setTagsInput("");
@@ -207,17 +233,20 @@ export default function MarketingAssetsPage() {
   const handleTagsChange = (value: string) => {
     setTagsInput(value);
     const tags = value.split(",").map(tag => tag.trim()).filter(Boolean);
-    setFormData({ ...formData, tags });
+    setFormData(prev => ({ ...prev, tags }));
   };
 
   const openEditDialog = (asset: MarketingAsset) => {
     setFormData({
       campaignId: asset.campaignId,
+      branchId: asset.branchId,
       name: asset.name,
       assetType: asset.assetType,
       fileUrl: asset.fileUrl || "",
       fileSize: asset.fileSize,
       description: asset.description || "",
+      location: asset.location || "",
+      quantity: asset.quantity || 1,
       tags: asset.tags || [],
     });
     setTagsInput((asset.tags || []).join(", "));
@@ -225,8 +254,14 @@ export default function MarketingAssetsPage() {
     setIsEditDialogOpen(true);
   };
 
+  const getBranchName = (branchId: string | null) => {
+    if (!branchId) return "المركز الرئيسي";
+    const branch = branches.find(b => b.id === branchId);
+    return branch?.nameAr || branch?.name || "غير محدد";
+  };
+
   const getCampaignName = (campaignId: number | null) => {
-    if (!campaignId) return "عام";
+    if (!campaignId) return "-";
     const campaign = campaigns.find(c => c.id === campaignId);
     return campaign?.nameAr || campaign?.name || "غير محدد";
   };
@@ -242,16 +277,28 @@ export default function MarketingAssetsPage() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  const formatDate = (dateStr: string) => {
+    return new Date(dateStr).toLocaleDateString("ar-SA", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  };
+
   const filteredAssets = assets.filter(asset => {
     const matchesType = filterType === "all" || asset.assetType === filterType;
     const matchesCampaign = filterCampaignId === "all" || 
       (filterCampaignId === "none" && !asset.campaignId) ||
       asset.campaignId?.toString() === filterCampaignId;
+    const matchesBranch = filterBranchId === "all" ||
+      (filterBranchId === "none" && !asset.branchId) ||
+      asset.branchId?.toString() === filterBranchId;
     const matchesSearch = !searchQuery || 
       asset.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (asset.description?.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (asset.location?.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (asset.tags?.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase())));
-    return matchesType && matchesCampaign && matchesSearch;
+    return matchesType && matchesCampaign && matchesBranch && matchesSearch;
   });
 
   const assetStats = {
@@ -262,7 +309,7 @@ export default function MarketingAssetsPage() {
   };
 
   const AssetFormContent = ({ isEdit = false }: { isEdit?: boolean }) => (
-    <div className="space-y-4">
+    <div className="space-y-4 max-h-[70vh] overflow-y-auto px-1">
       <div>
         <Label>اسم الأصل *</Label>
         <Input
@@ -274,26 +321,68 @@ export default function MarketingAssetsPage() {
           autoFocus
         />
       </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <Label>نوع الأصل</Label>
+          <Select
+            value={formData.assetType}
+            onValueChange={(value) => setFormData(prev => ({ ...prev, assetType: value }))}
+          >
+            <SelectTrigger className="h-11 sm:h-10" data-testid="select-asset-type">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="max-h-60 overflow-y-auto">
+              {ASSET_TYPES.map((type) => (
+                <SelectItem key={type.value} value={type.value}>
+                  <div className="flex items-center gap-2">
+                    <type.icon className="w-4 h-4" />
+                    {type.label}
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label>الكمية</Label>
+          <Input
+            type="number"
+            min="1"
+            className="h-11 sm:h-10"
+            value={formData.quantity}
+            onChange={(e) => setFormData(prev => ({ ...prev, quantity: parseInt(e.target.value) || 1 }))}
+            data-testid="input-quantity"
+          />
+        </div>
+      </div>
       <div>
-        <Label>نوع الأصل</Label>
+        <Label>الفرع *</Label>
         <Select
-          value={formData.assetType}
-          onValueChange={(value) => setFormData(prev => ({ ...prev, assetType: value }))}
+          value={formData.branchId?.toString() || "none"}
+          onValueChange={(value) => setFormData(prev => ({ ...prev, branchId: value === "none" ? null : value }))}
         >
-          <SelectTrigger className="h-11 sm:h-10" data-testid="select-asset-type">
-            <SelectValue />
+          <SelectTrigger className="h-11 sm:h-10" data-testid="select-branch">
+            <SelectValue placeholder="اختر الفرع" />
           </SelectTrigger>
           <SelectContent className="max-h-60 overflow-y-auto">
-            {ASSET_TYPES.map((type) => (
-              <SelectItem key={type.value} value={type.value}>
-                <div className="flex items-center gap-2">
-                  <type.icon className="w-4 h-4" />
-                  {type.label}
-                </div>
+            <SelectItem value="none">المركز الرئيسي</SelectItem>
+            {branches.map((branch) => (
+              <SelectItem key={branch.id} value={branch.id.toString()}>
+                {branch.nameAr || branch.name}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
+      </div>
+      <div>
+        <Label>مكان التواجد</Label>
+        <Input
+          className="h-11 sm:h-10"
+          value={formData.location || ""}
+          onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
+          placeholder="مثال: المخزن، الواجهة، المكتب..."
+          data-testid="input-location"
+        />
       </div>
       <div>
         <Label>الحملة (اختياري)</Label>
@@ -305,7 +394,7 @@ export default function MarketingAssetsPage() {
             <SelectValue placeholder="اختر الحملة" />
           </SelectTrigger>
           <SelectContent className="max-h-60 overflow-y-auto">
-            <SelectItem value="none">عام (بدون حملة)</SelectItem>
+            <SelectItem value="none">بدون حملة</SelectItem>
             {campaigns.map((campaign) => (
               <SelectItem key={campaign.id} value={campaign.id.toString()}>
                 {campaign.nameAr || campaign.name}
@@ -401,7 +490,7 @@ export default function MarketingAssetsPage() {
   if (isLoading) {
     return (
       <Layout>
-        <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
+        <div className="p-4 md:p-8 lg:p-10 max-w-7xl mx-auto space-y-4" dir="rtl">
           <div className="flex items-center gap-3">
             <Skeleton className="h-9 w-9" />
             <Skeleton className="h-8 w-48" />
@@ -409,9 +498,7 @@ export default function MarketingAssetsPage() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-24" />)}
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {[1, 2, 3, 4, 5, 6, 7, 8].map(i => <Skeleton key={i} className="h-48" />)}
-          </div>
+          <Skeleton className="h-96" />
         </div>
       </Layout>
     );
@@ -419,7 +506,7 @@ export default function MarketingAssetsPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
+      <div className="p-4 md:p-8 lg:p-10 max-w-7xl mx-auto space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link href="/marketing">
@@ -440,7 +527,7 @@ export default function MarketingAssetsPage() {
                 إضافة أصل
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-md" dir="rtl">
+            <DialogContent className="max-w-lg" dir="rtl">
               <DialogHeader>
                 <DialogTitle>إضافة أصل تسويقي</DialogTitle>
               </DialogHeader>
@@ -506,7 +593,7 @@ export default function MarketingAssetsPage() {
 
         <Card>
           <CardContent className="p-4">
-            <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex flex-col lg:flex-row gap-4">
               <div className="relative flex-1">
                 <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
@@ -518,7 +605,7 @@ export default function MarketingAssetsPage() {
                 />
               </div>
               <Select value={filterType} onValueChange={setFilterType}>
-                <SelectTrigger className="w-full sm:w-48 h-11 sm:h-10" data-testid="select-filter-type">
+                <SelectTrigger className="w-full lg:w-40 h-11 sm:h-10" data-testid="select-filter-type">
                   <Filter className="w-4 h-4 ml-2" />
                   <SelectValue placeholder="نوع الأصل" />
                 </SelectTrigger>
@@ -529,8 +616,23 @@ export default function MarketingAssetsPage() {
                   ))}
                 </SelectContent>
               </Select>
+              <Select value={filterBranchId} onValueChange={setFilterBranchId}>
+                <SelectTrigger className="w-full lg:w-40 h-11 sm:h-10" data-testid="select-filter-branch">
+                  <Building2 className="w-4 h-4 ml-2" />
+                  <SelectValue placeholder="الفرع" />
+                </SelectTrigger>
+                <SelectContent className="max-h-60 overflow-y-auto">
+                  <SelectItem value="all">جميع الفروع</SelectItem>
+                  <SelectItem value="none">المركز الرئيسي</SelectItem>
+                  {branches.map((branch) => (
+                    <SelectItem key={branch.id} value={branch.id.toString()}>
+                      {branch.nameAr || branch.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Select value={filterCampaignId} onValueChange={setFilterCampaignId}>
-                <SelectTrigger className="w-full sm:w-48 h-11 sm:h-10" data-testid="select-filter-campaign">
+                <SelectTrigger className="w-full lg:w-40 h-11 sm:h-10" data-testid="select-filter-campaign">
                   <SelectValue placeholder="الحملة" />
                 </SelectTrigger>
                 <SelectContent className="max-h-60 overflow-y-auto">
@@ -547,122 +649,123 @@ export default function MarketingAssetsPage() {
           </CardContent>
         </Card>
 
-        {filteredAssets.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {filteredAssets.map((asset) => {
-              const typeInfo = getAssetTypeInfo(asset.assetType);
-              const TypeIcon = typeInfo.icon;
-              
-              return (
-                <Card key={asset.id} className="hover:shadow-lg transition-shadow group" data-testid={`card-asset-${asset.id}`}>
-                  <CardHeader className="pb-2">
-                    <div className="flex items-start justify-between">
-                      <div className={`p-3 rounded-lg ${typeInfo.color}`}>
-                        <TypeIcon className="w-6 h-6" />
-                      </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <MoreVertical className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => openEditDialog(asset)}>
-                            <Edit className="w-4 h-4 ml-2" />
-                            تعديل
-                          </DropdownMenuItem>
-                          {asset.fileUrl && (
-                            <DropdownMenuItem asChild>
-                              <a href={asset.fileUrl} target="_blank" rel="noopener noreferrer">
-                                <Eye className="w-4 h-4 ml-2" />
-                                معاينة
-                              </a>
-                            </DropdownMenuItem>
-                          )}
-                          <DropdownMenuItem 
-                            className="text-red-600"
-                            onClick={() => deleteAssetMutation.mutate(asset.id)}
-                          >
-                            <Trash2 className="w-4 h-4 ml-2" />
-                            حذف
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div>
-                      <h3 className="font-semibold truncate">{asset.name}</h3>
-                      <p className="text-sm text-muted-foreground">{getCampaignName(asset.campaignId)}</p>
-                    </div>
-                    
-                    {asset.description && (
-                      <p className="text-sm text-muted-foreground line-clamp-2">{asset.description}</p>
-                    )}
-
-                    {asset.tags && asset.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1">
-                        {asset.tags.slice(0, 3).map((tag, i) => (
-                          <Badge key={i} variant="secondary" className="text-xs">
-                            {tag}
-                          </Badge>
-                        ))}
-                        {asset.tags.length > 3 && (
-                          <Badge variant="outline" className="text-xs">
-                            +{asset.tags.length - 3}
-                          </Badge>
-                        )}
-                      </div>
-                    )}
-
-                    <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t">
-                      <div className="flex items-center gap-1">
-                        <Calendar className="w-3 h-3" />
-                        {new Date(asset.createdAt).toLocaleDateString('en-GB')}
-                      </div>
-                      <span>{formatFileSize(asset.fileSize)}</span>
-                    </div>
-
-                    {asset.fileUrl && (
-                      <a 
-                        href={asset.fileUrl} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="block"
-                      >
-                        <Button variant="outline" size="sm" className="w-full h-9 gap-2">
-                          <LinkIcon className="w-4 h-4" />
-                          فتح الملف
-                        </Button>
-                      </a>
-                    )}
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        ) : (
-          <Card className="p-12">
-            <div className="text-center">
-              <FolderOpen className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
-              <h3 className="text-xl font-semibold mb-2">لا توجد أصول</h3>
-              <p className="text-muted-foreground mb-4">
-                {searchQuery || filterType !== "all" || filterCampaignId !== "all"
-                  ? "لا توجد نتائج مطابقة للبحث"
-                  : "قم بإضافة الصور والفيديوهات والملفات التسويقية"}
-              </p>
-              {!searchQuery && filterType === "all" && filterCampaignId === "all" && (
+        <Card>
+          <CardContent className="p-0">
+            {filteredAssets.length > 0 ? (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-right">اسم الأصل</TableHead>
+                      <TableHead className="text-right">النوع</TableHead>
+                      <TableHead className="text-right">الفرع</TableHead>
+                      <TableHead className="text-right">مكان التواجد</TableHead>
+                      <TableHead className="text-right">الكمية</TableHead>
+                      <TableHead className="text-right">الحملة</TableHead>
+                      <TableHead className="text-right">حجم الملف</TableHead>
+                      <TableHead className="text-right">تاريخ الإضافة</TableHead>
+                      <TableHead className="text-right w-16">الإجراءات</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredAssets.map((asset) => {
+                      const typeInfo = getAssetTypeInfo(asset.assetType);
+                      const TypeIcon = typeInfo.icon;
+                      
+                      return (
+                        <TableRow key={asset.id} data-testid={`row-asset-${asset.id}`}>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              <div className={`p-2 rounded-lg ${typeInfo.color}`}>
+                                <TypeIcon className="w-4 h-4" />
+                              </div>
+                              <div>
+                                <p className="font-medium">{asset.name}</p>
+                                {asset.description && (
+                                  <p className="text-sm text-muted-foreground line-clamp-1">{asset.description}</p>
+                                )}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={typeInfo.color}>
+                              {typeInfo.label}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              <Building2 className="w-4 h-4 text-muted-foreground" />
+                              {getBranchName(asset.branchId)}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {asset.location ? (
+                              <div className="flex items-center gap-1">
+                                <MapPin className="w-4 h-4 text-muted-foreground" />
+                                {asset.location}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="secondary">{asset.quantity || 1}</Badge>
+                          </TableCell>
+                          <TableCell>{getCampaignName(asset.campaignId)}</TableCell>
+                          <TableCell>{formatFileSize(asset.fileSize)}</TableCell>
+                          <TableCell>{formatDate(asset.createdAt)}</TableCell>
+                          <TableCell>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <MoreVertical className="w-4 h-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => openEditDialog(asset)}>
+                                  <Edit className="w-4 h-4 ml-2" />
+                                  تعديل
+                                </DropdownMenuItem>
+                                {asset.fileUrl && (
+                                  <DropdownMenuItem asChild>
+                                    <a href={asset.fileUrl} target="_blank" rel="noopener noreferrer">
+                                      <Eye className="w-4 h-4 ml-2" />
+                                      معاينة
+                                    </a>
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem 
+                                  className="text-red-600"
+                                  onClick={() => deleteAssetMutation.mutate(asset.id)}
+                                >
+                                  <Trash2 className="w-4 h-4 ml-2" />
+                                  حذف
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <FolderOpen className="w-16 h-16 mx-auto text-muted-foreground/50 mb-4" />
+                <h3 className="text-lg font-semibold mb-2">لا توجد أصول</h3>
+                <p className="text-muted-foreground mb-4">ابدأ بإضافة أصول تسويقية جديدة</p>
                 <Button onClick={() => setIsAddDialogOpen(true)}>
                   <Plus className="w-4 h-4 ml-2" />
                   إضافة أصل جديد
                 </Button>
-              )}
-            </div>
-          </Card>
-        )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent className="max-w-md" dir="rtl">
+          <DialogContent className="max-w-lg" dir="rtl">
             <DialogHeader>
               <DialogTitle>تعديل الأصل</DialogTitle>
             </DialogHeader>

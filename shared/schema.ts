@@ -3895,10 +3895,14 @@ export const marketingAssets = pgTable("marketing_assets", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   assetType: text("asset_type").notNull(), // image, video, document, design, template
-  fileUrl: text("file_url").notNull(),
+  fileUrl: text("file_url"),
   thumbnailUrl: text("thumbnail_url"),
   campaignId: integer("campaign_id").references(() => marketingCampaigns.id, { onDelete: "set null" }),
+  branchId: varchar("branch_id").references(() => branches.id, { onDelete: "set null" }),
   category: text("category"), // social, print, email, website
+  location: text("location"), // مكان التواجد (المخزن، الواجهة، المكتب)
+  quantity: integer("quantity").default(1), // الكمية
+  description: text("description"), // الوصف
   tags: text("tags").array(),
   fileSize: integer("file_size"), // in bytes
   dimensions: text("dimensions"), // e.g., "1080x1080"
