@@ -9786,6 +9786,7 @@ export class DatabaseStorage implements IStorage {
 
   async createExecMeeting(data: InsertExecMeeting): Promise<ExecMeeting> {
     const [meeting] = await db.insert(execMeetings).values(data).returning();
+    this.invalidateExecDashboardCache(); // Invalidate dashboard cache
     return meeting;
   }
 
@@ -9794,11 +9795,13 @@ export class DatabaseStorage implements IStorage {
       .set({ ...data, updatedAt: new Date() })
       .where(eq(execMeetings.id, id))
       .returning();
+    this.invalidateExecDashboardCache(); // Invalidate dashboard cache
     return updated || undefined;
   }
 
   async deleteExecMeeting(id: number): Promise<boolean> {
     const result = await db.delete(execMeetings).where(eq(execMeetings.id, id));
+    this.invalidateExecDashboardCache(); // Invalidate dashboard cache
     return true;
   }
 
@@ -9884,6 +9887,7 @@ export class DatabaseStorage implements IStorage {
 
   async createExecTask(data: InsertExecTask): Promise<ExecTask> {
     const [task] = await db.insert(execTasks).values(data).returning();
+    this.invalidateExecDashboardCache(); // Invalidate dashboard cache
     return task;
   }
 
@@ -9894,6 +9898,7 @@ export class DatabaseStorage implements IStorage {
     if (data.status === 'completed' && !data.completedAt) {
       updateData.completedAt = new Date();
     }
+    this.invalidateExecDashboardCache(); // Invalidate dashboard cache
     
     const [updated] = await db.update(execTasks)
       .set(updateData)
@@ -9904,6 +9909,7 @@ export class DatabaseStorage implements IStorage {
 
   async deleteExecTask(id: number): Promise<boolean> {
     await db.delete(execTasks).where(eq(execTasks.id, id));
+    this.invalidateExecDashboardCache(); // Invalidate dashboard cache
     return true;
   }
 
@@ -9988,6 +9994,7 @@ export class DatabaseStorage implements IStorage {
 
   async createExecCorrespondence(data: InsertExecCorrespondence): Promise<ExecCorrespondence> {
     const [corr] = await db.insert(execCorrespondence).values(data).returning();
+    this.invalidateExecDashboardCache(); // Invalidate dashboard cache
     return corr;
   }
 
@@ -9996,11 +10003,13 @@ export class DatabaseStorage implements IStorage {
       .set({ ...data, updatedAt: new Date() })
       .where(eq(execCorrespondence.id, id))
       .returning();
+    this.invalidateExecDashboardCache(); // Invalidate dashboard cache
     return updated || undefined;
   }
 
   async deleteExecCorrespondence(id: number): Promise<boolean> {
     await db.delete(execCorrespondence).where(eq(execCorrespondence.id, id));
+    this.invalidateExecDashboardCache(); // Invalidate dashboard cache
     return true;
   }
 
@@ -10075,6 +10084,10 @@ export class DatabaseStorage implements IStorage {
   // Executive Dashboard Stats Cache
   private execDashboardCache = new Map<string, { data: any, timestamp: number }>();
   private EXEC_DASHBOARD_CACHE_TTL = 30000; // 30 seconds
+
+  invalidateExecDashboardCache() {
+    this.execDashboardCache.clear();
+  }
 
   // Executive Dashboard Stats - إحصائيات لوحة التحكم (Optimized with parallel queries)
   async getExecDashboardStats(branchId?: string): Promise<{
@@ -10562,6 +10575,7 @@ export class DatabaseStorage implements IStorage {
 
   async createVisitor(data: InsertVisitor): Promise<Visitor> {
     const [visitor] = await db.insert(visitors).values(data).returning();
+    this.invalidateVisitorsCache(); // Invalidate cache after creation
     return visitor;
   }
 
@@ -10570,11 +10584,13 @@ export class DatabaseStorage implements IStorage {
       .set({ ...data, updatedAt: new Date() })
       .where(eq(visitors.id, id))
       .returning();
+    this.invalidateVisitorsCache(); // Invalidate cache after update
     return visitor;
   }
 
   async deleteVisitor(id: number): Promise<boolean> {
     const result = await db.delete(visitors).where(eq(visitors.id, id));
+    this.invalidateVisitorsCache(); // Invalidate cache after deletion
     return true;
   }
 
