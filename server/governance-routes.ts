@@ -1814,15 +1814,17 @@ export function registerGovernanceRoutes(app: Express) {
         .where(eq(boardResolutions.id, voteRecord.resolutionId));
 
       // Also create a resolution vote record for audit trail
+      // Ensure numeric values fit within precision 18, scale 4
+      const safeVoteWeight = Math.min(voteWeight, 99999999999999);
       await db.insert(resolutionVotes).values({
         resolutionId: voteRecord.resolutionId,
         voterType: "shareholder",
         shareholderId: voteRecord.shareholderId,
-        voterName: "مساهم (تصويت إلكتروني)",
+        voterName: voteRecord.shareholderName || "مساهم (تصويت إلكتروني)",
         vote,
         comments: comments || null,
-        votingPower: "1.00",
-        weightedVote: String(voteWeight),
+        votingPower: "1.0000",
+        weightedVote: safeVoteWeight.toFixed(4),
         voteMethod: "electronic",
         ipAddress,
       });
