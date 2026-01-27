@@ -91,6 +91,10 @@ interface VotingTokenData {
   numberOfShares: number;
   status: string;
   expiresAt?: string;
+  vote?: string;
+  votedAt?: string;
+  signatureData?: string;
+  comments?: string;
 }
 
 export default function VotingPage() {
@@ -223,6 +227,120 @@ export default function VotingPage() {
     const subject = `دعوة للتصويت على قرار مجلس الإدارة - ${resolutionTitle}`;
     const body = `مرحباً ${token.shareholderName}،\n\nأنت مدعو للتصويت على قرار مجلس الإدارة:\n${resolutionTitle}\n\nرابط التصويت:\n${link}\n\nشكراً لك.\n\nشركة الزبد الأفضل التجارية`;
     window.open(`mailto:${token.shareholderEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+  };
+
+  const printResolutionWithSignatures = (resolution: BoardResolution, tokens: VotingTokenData[]) => {
+    const votedTokens = tokens.filter(t => t.status === 'voted');
+    const voteLabels: Record<string, string> = { for: 'موافق', against: 'رافض', abstain: 'ممتنع' };
+    
+    // Sanitize text to prevent XSS/HTML injection
+    const sanitize = (text: string | undefined | null): string => {
+      if (!text) return '';
+      return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    };
+    
+    // Validate signature data format (must be data:image/ URI)
+    const isValidSignature = (data: string | undefined | null): boolean => {
+      if (!data) return false;
+      return data.startsWith('data:image/png') || data.startsWith('data:image/jpeg');
+    };
+    
+    const printContent = `
+      <!DOCTYPE html>
+      <html lang="ar" dir="rtl">
+      <head>
+        <meta charset="UTF-8">
+        <title>قرار مجلس الإدارة - ${sanitize(resolution.resolutionNumber)}</title>
+        <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: 'Cairo', sans-serif; padding: 40px; background: white; color: #333; direction: rtl; }
+          .header { text-align: center; margin-bottom: 40px; border-bottom: 3px solid #d4a853; padding-bottom: 20px; }
+          .logo { font-size: 28px; font-weight: 700; color: #b8962f; margin-bottom: 5px; }
+          .company-name { font-size: 18px; color: #666; }
+          .title { font-size: 24px; font-weight: 700; color: #333; margin: 30px 0 20px; text-align: center; }
+          .resolution-box { background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; margin-bottom: 30px; }
+          .resolution-number { font-size: 16px; color: #b8962f; font-weight: 600; margin-bottom: 10px; }
+          .resolution-title { font-size: 18px; font-weight: 600; margin-bottom: 15px; }
+          .resolution-text { font-size: 14px; line-height: 1.8; }
+          .votes-section { margin: 30px 0; }
+          .votes-title { font-size: 18px; font-weight: 600; margin-bottom: 20px; border-bottom: 2px solid #d4a853; padding-bottom: 10px; }
+          .vote-item { border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; margin-bottom: 15px; background: #fff; }
+          .voter-info { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+          .voter-name { font-weight: 600; font-size: 16px; }
+          .vote-badge { padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+          .vote-for { background: #dcfce7; color: #166534; }
+          .vote-against { background: #fee2e2; color: #991b1b; }
+          .vote-abstain { background: #f3f4f6; color: #374151; }
+          .vote-details { display: flex; gap: 20px; color: #666; font-size: 12px; margin-bottom: 10px; }
+          .signature-container { margin-top: 10px; }
+          .signature-label { font-size: 12px; color: #666; margin-bottom: 5px; }
+          .signature-img { max-width: 200px; max-height: 80px; border: 1px solid #e0e0e0; border-radius: 4px; background: #fff; }
+          .footer { margin-top: 40px; text-align: center; font-size: 12px; color: #888; border-top: 1px solid #e0e0e0; padding-top: 20px; }
+          @media print {
+            body { padding: 20px; }
+            .vote-item { break-inside: avoid; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="logo">🧈 BUTTER BAKERY</div>
+          <div class="company-name">شركة الزبد الأفضل التجارية</div>
+        </div>
+        
+        <div class="title">📋 قرار مجلس الإدارة</div>
+        
+        <div class="resolution-box">
+          <div class="resolution-number">رقم القرار: ${sanitize(resolution.resolutionNumber) || '-'}</div>
+          <div class="resolution-title">${sanitize(resolution.title)}</div>
+          <div class="resolution-text">${sanitize(resolution.description)}</div>
+        </div>
+        
+        <div class="votes-section">
+          <div class="votes-title">🗳️ التصويتات الإلكترونية (${votedTokens.length} تصويت)</div>
+          ${votedTokens.map(token => `
+            <div class="vote-item">
+              <div class="voter-info">
+                <span class="voter-name">${sanitize(token.shareholderName)}</span>
+                <span class="vote-badge ${token.vote === 'for' ? 'vote-for' : token.vote === 'against' ? 'vote-against' : 'vote-abstain'}">
+                  ${voteLabels[token.vote || ''] || sanitize(token.vote)}
+                </span>
+              </div>
+              <div class="vote-details">
+                <span>📅 تاريخ التصويت: ${token.votedAt ? new Date(token.votedAt).toLocaleDateString('ar-SA') : '-'}</span>
+                <span>📊 عدد الأسهم: ${token.numberOfShares?.toLocaleString() || 0}</span>
+              </div>
+              ${token.comments ? `<div style="font-size: 13px; color: #666; margin-bottom: 10px;"><strong>ملاحظات:</strong> ${sanitize(token.comments)}</div>` : ''}
+              ${isValidSignature(token.signatureData) ? `
+                <div class="signature-container">
+                  <div class="signature-label">✍️ التوقيع الإلكتروني:</div>
+                  <img class="signature-img" src="${token.signatureData}" alt="توقيع ${sanitize(token.shareholderName)}" />
+                </div>
+              ` : ''}
+            </div>
+          `).join('')}
+        </div>
+        
+        <div class="footer">
+          <p>تم إصدار هذا المستند إلكترونياً من نظام BUTTER BAKERY</p>
+          <p>تاريخ الطباعة: ${new Date().toLocaleDateString('ar-SA')} - ${new Date().toLocaleTimeString('ar-SA')}</p>
+        </div>
+      </body>
+      </html>
+    `;
+    
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+      setTimeout(() => printWindow.print(), 500);
+    }
   };
 
   const handleSubmitVote = () => {
@@ -1038,6 +1156,19 @@ export default function VotingPage() {
                   <div className="text-center py-8 text-gray-500">
                     <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <p>لا يوجد مساهمين لهم حق التصويت</p>
+                  </div>
+                )}
+
+                {/* Print Resolution with Signatures Button */}
+                {votingTokens.some(t => t.status === 'voted' && t.signatureData) && (
+                  <div className="mt-4 pt-4 border-t">
+                    <Button 
+                      className="w-full gap-2 bg-amber-600 hover:bg-amber-700"
+                      onClick={() => printResolutionWithSignatures(selectedResolutionForLinks!, votingTokens)}
+                    >
+                      <FileText className="h-4 w-4" />
+                      طباعة القرار مع التوقيعات الإلكترونية
+                    </Button>
                   </div>
                 )}
               </div>

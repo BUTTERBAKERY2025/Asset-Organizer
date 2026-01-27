@@ -1594,6 +1594,7 @@ export function registerGovernanceRoutes(app: Express) {
           vote: votingTokens.vote,
           voteWeight: votingTokens.voteWeight,
           comments: votingTokens.comments,
+          signatureData: votingTokens.signatureData,
           status: votingTokens.status,
           votedAt: votingTokens.votedAt,
           expiresAt: votingTokens.expiresAt,

@@ -690,7 +690,7 @@
     }
 
     function updateSubmitButton() {
-      document.getElementById('submitBtn').disabled = !selectedVote || !hasSignature;
+      document.getElementById('submitBtn').disabled = !selectedVote || !hasSignature || !voteToken;
     }
 
     function selectVote(voteValue) {
