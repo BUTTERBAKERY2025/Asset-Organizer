@@ -10072,7 +10072,11 @@ export class DatabaseStorage implements IStorage {
     return Number(result?.count || 0);
   }
 
-  // Executive Dashboard Stats - إحصائيات لوحة التحكم
+  // Executive Dashboard Stats Cache
+  private execDashboardCache = new Map<string, { data: any, timestamp: number }>();
+  private EXEC_DASHBOARD_CACHE_TTL = 30000; // 30 seconds
+
+  // Executive Dashboard Stats - إحصائيات لوحة التحكم (Optimized with parallel queries)
   async getExecDashboardStats(branchId?: string): Promise<{
     meetingsThisWeek: number;
     pendingTasks: number;
@@ -10082,9 +10086,17 @@ export class DatabaseStorage implements IStorage {
     urgentTasks: ExecTask[];
     recentCorrespondence: ExecCorrespondence[];
   }> {
-    const now = new Date();
-    const startOfWeek = new Date(now);
-    startOfWeek.setDate(now.getDate() - now.getDay());
+    const cacheKey = branchId || 'all';
+    const now = Date.now();
+    const cached = this.execDashboardCache.get(cacheKey);
+    
+    if (cached && (now - cached.timestamp) < this.EXEC_DASHBOARD_CACHE_TTL) {
+      return cached.data;
+    }
+
+    const currentDate = new Date();
+    const startOfWeek = new Date(currentDate);
+    startOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
     startOfWeek.setHours(0, 0, 0, 0);
     const endOfWeek = new Date(startOfWeek);
     endOfWeek.setDate(startOfWeek.getDate() + 7);
@@ -10093,76 +10105,84 @@ export class DatabaseStorage implements IStorage {
     const taskBranchCondition = branchId ? eq(execTasks.branchId, branchId) : sql`true`;
     const corrBranchCondition = branchId ? eq(execCorrespondence.branchId, branchId) : sql`true`;
 
-    // Meetings this week
-    const [meetingsCount] = await db.select({ count: sql<number>`count(*)` })
-      .from(execMeetings)
-      .where(and(
-        branchCondition,
-        gte(execMeetings.startAt, startOfWeek),
-        lte(execMeetings.startAt, endOfWeek)
-      ));
+    // Execute all queries in parallel for better performance
+    const [
+      meetingsCountResult,
+      pendingCountResult,
+      overdueCountResult,
+      unreadCountResult,
+      upcomingMeetings,
+      urgentTasks,
+      recentCorrespondence
+    ] = await Promise.all([
+      // Meetings this week
+      db.select({ count: sql<number>`count(*)` })
+        .from(execMeetings)
+        .where(and(
+          branchCondition,
+          gte(execMeetings.startAt, startOfWeek),
+          lte(execMeetings.startAt, endOfWeek)
+        )),
+      // Pending tasks
+      db.select({ count: sql<number>`count(*)` })
+        .from(execTasks)
+        .where(and(
+          taskBranchCondition,
+          eq(execTasks.status, 'pending')
+        )),
+      // Overdue tasks
+      db.select({ count: sql<number>`count(*)` })
+        .from(execTasks)
+        .where(and(
+          taskBranchCondition,
+          sql`status NOT IN ('completed', 'cancelled')`,
+          lte(execTasks.dueDate, currentDate)
+        )),
+      // Unread correspondence
+      db.select({ count: sql<number>`count(*)` })
+        .from(execCorrespondence)
+        .where(and(
+          corrBranchCondition,
+          eq(execCorrespondence.status, 'received')
+        )),
+      // Upcoming meetings (next 7 days)
+      db.select().from(execMeetings)
+        .where(and(
+          branchCondition,
+          gte(execMeetings.startAt, currentDate),
+          lte(execMeetings.startAt, endOfWeek),
+          eq(execMeetings.status, 'scheduled')
+        ))
+        .orderBy(execMeetings.startAt)
+        .limit(5),
+      // Urgent tasks
+      db.select().from(execTasks)
+        .where(and(
+          taskBranchCondition,
+          eq(execTasks.priority, 'urgent'),
+          sql`status NOT IN ('completed', 'cancelled')`
+        ))
+        .orderBy(execTasks.dueDate)
+        .limit(5),
+      // Recent correspondence
+      db.select().from(execCorrespondence)
+        .where(corrBranchCondition)
+        .orderBy(desc(execCorrespondence.createdAt))
+        .limit(5)
+    ]);
 
-    // Pending tasks
-    const [pendingCount] = await db.select({ count: sql<number>`count(*)` })
-      .from(execTasks)
-      .where(and(
-        taskBranchCondition,
-        eq(execTasks.status, 'pending')
-      ));
-
-    // Overdue tasks
-    const [overdueCount] = await db.select({ count: sql<number>`count(*)` })
-      .from(execTasks)
-      .where(and(
-        taskBranchCondition,
-        sql`status NOT IN ('completed', 'cancelled')`,
-        lte(execTasks.dueDate, now)
-      ));
-
-    // Unread correspondence
-    const [unreadCount] = await db.select({ count: sql<number>`count(*)` })
-      .from(execCorrespondence)
-      .where(and(
-        corrBranchCondition,
-        eq(execCorrespondence.status, 'received')
-      ));
-
-    // Upcoming meetings (next 7 days)
-    const upcomingMeetings = await db.select().from(execMeetings)
-      .where(and(
-        branchCondition,
-        gte(execMeetings.startAt, now),
-        lte(execMeetings.startAt, endOfWeek),
-        eq(execMeetings.status, 'scheduled')
-      ))
-      .orderBy(execMeetings.startAt)
-      .limit(5);
-
-    // Urgent tasks
-    const urgentTasks = await db.select().from(execTasks)
-      .where(and(
-        taskBranchCondition,
-        eq(execTasks.priority, 'urgent'),
-        sql`status NOT IN ('completed', 'cancelled')`
-      ))
-      .orderBy(execTasks.dueDate)
-      .limit(5);
-
-    // Recent correspondence
-    const recentCorrespondence = await db.select().from(execCorrespondence)
-      .where(corrBranchCondition)
-      .orderBy(desc(execCorrespondence.createdAt))
-      .limit(5);
-
-    return {
-      meetingsThisWeek: Number(meetingsCount?.count || 0),
-      pendingTasks: Number(pendingCount?.count || 0),
-      overdueTasks: Number(overdueCount?.count || 0),
-      unreadCorrespondence: Number(unreadCount?.count || 0),
+    const result = {
+      meetingsThisWeek: Number(meetingsCountResult[0]?.count || 0),
+      pendingTasks: Number(pendingCountResult[0]?.count || 0),
+      overdueTasks: Number(overdueCountResult[0]?.count || 0),
+      unreadCorrespondence: Number(unreadCountResult[0]?.count || 0),
       upcomingMeetings,
       urgentTasks,
       recentCorrespondence,
     };
+
+    this.execDashboardCache.set(cacheKey, { data: result, timestamp: now });
+    return result;
   }
 
   // ========== Document Management - إدارة الوثائق ==========
@@ -10496,14 +10516,38 @@ export class DatabaseStorage implements IStorage {
   // سجل الزوار - Visitor Management
   // =====================================================
 
-  // Visitors CRUD
-  async getVisitors(branchId?: string): Promise<Visitor[]> {
-    if (branchId) {
-      return db.select().from(visitors)
-        .where(eq(visitors.branchId, branchId))
-        .orderBy(desc(visitors.createdAt));
+  // Visitors Cache
+  private visitorsCache = new Map<string, { data: Visitor[], timestamp: number }>();
+  private VISITORS_CACHE_TTL = 20000; // 20 seconds
+
+  // Visitors CRUD (Optimized with caching and limit)
+  async getVisitors(branchId?: string, limit: number = 100): Promise<Visitor[]> {
+    const cacheKey = `${branchId || 'all'}-${limit}`;
+    const now = Date.now();
+    const cached = this.visitorsCache.get(cacheKey);
+    
+    if (cached && (now - cached.timestamp) < this.VISITORS_CACHE_TTL) {
+      return cached.data;
     }
-    return db.select().from(visitors).orderBy(desc(visitors.createdAt));
+
+    let result: Visitor[];
+    if (branchId) {
+      result = await db.select().from(visitors)
+        .where(eq(visitors.branchId, branchId))
+        .orderBy(desc(visitors.createdAt))
+        .limit(limit);
+    } else {
+      result = await db.select().from(visitors)
+        .orderBy(desc(visitors.createdAt))
+        .limit(limit);
+    }
+
+    this.visitorsCache.set(cacheKey, { data: result, timestamp: now });
+    return result;
+  }
+
+  invalidateVisitorsCache() {
+    this.visitorsCache.clear();
   }
 
   async getVisitor(id: number): Promise<Visitor | undefined> {
