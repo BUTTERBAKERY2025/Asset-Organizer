@@ -524,6 +524,7 @@
     async function loadVoteData() {
       showLoading();
       voteToken = getToken();
+      console.log('loadVoteData - voteToken extracted:', voteToken);
 
       if (!voteToken) {
         showError('رابط غير صالح', 'رابط التصويت غير موجود أو غير صحيح');
@@ -706,7 +707,9 @@
     }
 
     async function submitVote() {
+      console.log('submitVote called - selectedVote:', selectedVote, 'voteToken:', voteToken, 'hasSignature:', hasSignature);
       if (!selectedVote || !voteToken || !hasSignature) {
+        alert('لا يمكن إرسال التصويت - يرجى اختيار تصويتك والتوقيع');
         console.log('Submit blocked - selectedVote:', selectedVote, 'voteToken:', !!voteToken, 'hasSignature:', hasSignature);
         return;
       }
