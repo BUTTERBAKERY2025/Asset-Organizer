@@ -45,7 +45,13 @@ export function usePermissions() {
     return perm.actions.includes(action);
   };
 
-  const canView = (module: SystemModule): boolean => hasPermission(module, "view");
+  const canView = (module: SystemModule): boolean => {
+    const result = hasPermission(module, "view");
+    if (module === "documents") {
+      console.log("[Permissions] canView documents:", result, "permissions:", permissions.find(p => p.module === "documents"));
+    }
+    return result;
+  };
   const canCreate = (module: SystemModule): boolean => hasPermission(module, "create");
   const canEdit = (module: SystemModule): boolean => hasPermission(module, "edit");
   const canDelete = (module: SystemModule): boolean => hasPermission(module, "delete");
