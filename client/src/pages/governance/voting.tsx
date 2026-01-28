@@ -492,21 +492,6 @@ export default function VotingPage() {
           <span>شركة الزبد الأفضل التجارية | سجل تجاري: 7026155296 | رقم القرار: ${sanitize(resolution.resolutionNumber) || '-'}</span>
           <span style="margin-right: 20px;">صفحة <span class="page-number"></span> من <span class="total-pages"></span></span>
         </div>
-        
-        <script>
-          // حساب ترقيم الصفحات يدوياً
-          window.onload = function() {
-            var totalHeight = document.body.scrollHeight;
-            var pageHeight = 700; // ارتفاع الصفحة التقريبي بالبكسل
-            var totalPages = Math.ceil(totalHeight / pageHeight) || 1;
-            document.querySelectorAll('.total-pages').forEach(function(el) {
-              el.textContent = totalPages;
-            });
-            document.querySelectorAll('.page-number').forEach(function(el) {
-              el.textContent = '1';
-            });
-          };
-        </script>
       </body>
       </html>
     `;
