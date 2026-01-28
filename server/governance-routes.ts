@@ -1840,6 +1840,24 @@ export function registerGovernanceRoutes(app: Express) {
           voteMethod: "electronic",
           ipAddress,
         });
+
+        // Record in system audit log
+        const voteLabel = vote === 'for' ? 'موافق' : vote === 'against' ? 'معارض' : 'ممتنع';
+        await db.insert(systemAuditLogs).values({
+          module: 'governance',
+          entityId: voteRecord.resolutionId.toString(),
+          entityName: 'vote',
+          action: 'تصويت مساهم',
+          details: JSON.stringify({
+            shareholderName: voterName,
+            vote: voteLabel,
+            votingPower: safeWeightedVote,
+            comments: comments || null
+          }),
+          userName: voterName,
+          ipAddress,
+          userAgent: req.headers['user-agent'] || null,
+        });
       } catch (auditError) {
         // Log audit error but don't fail the vote - voting token already updated
         console.error("Error creating audit trail (vote was recorded):", auditError);
