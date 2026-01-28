@@ -371,7 +371,7 @@ export default function VotingPage() {
             <div class="logo">BUTTER BAKERY</div>
             <div class="company-name">شركة الزبد الأفضل التجارية</div>
             <div class="company-name-en">Butter Bakery Trading Co.</div>
-            <div class="cr-number">سجل تجاري: 1010XXXXXX</div>
+            <div class="cr-number">سجل تجاري: 7026155296</div>
           </div>
           <div class="header-center">
             <div class="doc-title">محضر قرار مجلس الإدارة</div>
