@@ -323,13 +323,13 @@ export default function VotingPage() {
       pageTokens.forEach((token, idx) => {
         const voteClass = token.vote === 'for' ? 'vote-for' : token.vote === 'against' ? 'vote-against' : 'vote-abstain';
         const voteText = voteLabels[token.vote || ''] || sanitize(token.vote || '');
-        const dateStr = token.votedAt ? new Date(token.votedAt).toLocaleDateString('ar-SA') + '<br>' + new Date(token.votedAt).toLocaleTimeString('ar-SA') : '-';
+        const dateStr = token.votedAt ? new Date(token.votedAt).toLocaleDateString('en-GB') + '<br>' + new Date(token.votedAt).toLocaleTimeString('en-GB') : '-';
         const sigImg = isValidSignature(token.signatureData) ? '<img class="signature-img" src="' + token.signatureData + '" alt="توقيع" />' : '<span style="color: #999;">-</span>';
         
         tableRows += '<tr>' +
           '<td style="text-align: center; font-weight: 600;">' + (startIdx + idx + 1) + '</td>' +
           '<td style="font-weight: 600;">' + sanitize(token.shareholderName) + '</td>' +
-          '<td style="text-align: center;">' + (token.numberOfShares || 0).toLocaleString() + '</td>' +
+          '<td style="text-align: center;">' + (token.numberOfShares || 0).toLocaleString('en-US') + '</td>' +
           '<td style="text-align: center;"><span class="vote-badge ' + voteClass + '">' + voteText + '</span></td>' +
           '<td style="text-align: center; font-size: 9px;">' + dateStr + '</td>' +
           '<td style="font-size: 9px; color: #666;">' + (sanitize(token.comments) || '-') + '</td>' +
@@ -343,7 +343,7 @@ export default function VotingPage() {
           '<div>' +
             '<div style="font-weight: 600; color: #333; margin-bottom: 3px;">مستند رسمي صادر إلكترونياً</div>' +
             '<div>نظام BUTTER BAKERY - إدارة حوكمة الشركات | سجل تجاري: 7026155296</div>' +
-            '<div>تاريخ الطباعة: ' + new Date().toLocaleDateString('ar-SA') + ' - ' + new Date().toLocaleTimeString('ar-SA') + '</div>' +
+            '<div>تاريخ الطباعة: ' + new Date().toLocaleDateString('en-GB') + ' - ' + new Date().toLocaleTimeString('en-GB') + '</div>' +
           '</div>' +
           '<div class="stamp-area">ختم الشركة</div>' +
           '<div style="text-align: left;">' +
@@ -464,9 +464,9 @@ export default function VotingPage() {
           </div>
           <div class="header-left">
             <div style="color: #666; font-size: 10px;">التاريخ الهجري</div>
-            <div style="font-weight: 600;">${new Date().toLocaleDateString('ar-SA-u-ca-islamic')}</div>
+            <div style="font-weight: 600;">${new Date().toLocaleDateString('en-GB-u-ca-islamic')}</div>
             <div style="color: #666; font-size: 10px; margin-top: 5px;">التاريخ الميلادي</div>
-            <div style="font-weight: 600;">${new Date().toLocaleDateString('ar-SA')}</div>
+            <div style="font-weight: 600;">${new Date().toLocaleDateString('en-GB')}</div>
           </div>
         </div>
         
@@ -475,13 +475,13 @@ export default function VotingPage() {
             <div class="info-box-header">بيانات القرار</div>
             <div class="info-row"><span class="info-label">نوع القرار:</span><span class="info-value">${resolution.resolutionType === 'ordinary' ? 'عادي' : resolution.resolutionType === 'extraordinary' ? 'غير عادي' : resolution.resolutionType === 'urgent' ? 'عاجل' : 'كتابي'}</span></div>
             <div class="info-row"><span class="info-label">الأغلبية المطلوبة:</span><span class="info-value">${requiredMajorityInfo.label} (${requiredMajorityInfo.percentage}%)</span></div>
-            <div class="info-row"><span class="info-label">تاريخ انتهاء التصويت:</span><span class="info-value">${resolution.votingDeadline ? new Date(resolution.votingDeadline).toLocaleDateString('ar-SA') : '-'}</span></div>
+            <div class="info-row"><span class="info-label">تاريخ انتهاء التصويت:</span><span class="info-value">${resolution.votingDeadline ? new Date(resolution.votingDeadline).toLocaleDateString('en-GB') : '-'}</span></div>
           </div>
           <div class="info-box">
             <div class="info-box-header">ملخص التصويت</div>
             <div class="info-row"><span class="info-label">إجمالي المصوتين:</span><span class="info-value">${votedTokens.length} مساهم</span></div>
             <div class="info-row"><span class="info-label">موافق / رافض / ممتنع:</span><span class="info-value">${forVotes} / ${againstVotes} / ${abstainVotes}</span></div>
-            <div class="info-row"><span class="info-label">إجمالي الأسهم المصوتة:</span><span class="info-value">${totalSharesVoted.toLocaleString()} سهم</span></div>
+            <div class="info-row"><span class="info-label">إجمالي الأسهم المصوتة:</span><span class="info-value">${totalSharesVoted.toLocaleString('en-US')} سهم</span></div>
           </div>
           <div class="info-box">
             <div class="info-box-header">نتيجة التصويت</div>
