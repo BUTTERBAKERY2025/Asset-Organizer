@@ -1653,7 +1653,7 @@ export function registerGovernanceRoutes(app: Express) {
         }
       }
 
-      // Return all tokens with shareholder info
+      // Return all tokens with shareholder info including vote data for printing
       const allTokens = await db
         .select({
           id: votingTokens.id,
@@ -1665,6 +1665,10 @@ export function registerGovernanceRoutes(app: Express) {
           numberOfShares: shareholders.numberOfShares,
           status: votingTokens.status,
           expiresAt: votingTokens.expiresAt,
+          vote: votingTokens.vote,
+          votedAt: votingTokens.votedAt,
+          signatureData: votingTokens.signatureData,
+          comments: votingTokens.comments,
         })
         .from(votingTokens)
         .innerJoin(shareholders, eq(votingTokens.shareholderId, shareholders.id))
