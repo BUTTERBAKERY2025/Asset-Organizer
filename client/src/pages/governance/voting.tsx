@@ -318,6 +318,12 @@ export default function VotingPage() {
           @page { 
             size: A4 landscape; 
             margin: 15mm 15mm 25mm 15mm;
+            @bottom-center {
+              content: "صفحة " counter(page) " من " counter(pages);
+              font-family: 'Cairo', sans-serif;
+              font-size: 9pt;
+              color: #666;
+            }
           }
           * { margin: 0; padding: 0; box-sizing: border-box; }
           body { font-family: 'Cairo', sans-serif; padding: 20px 30px; background: white; color: #333; direction: rtl; font-size: 11px; }
@@ -334,11 +340,9 @@ export default function VotingPage() {
             background: white;
             border-top: 1px solid #e0e0e0;
           }
-          .page-number::after {
-            content: counter(page);
-          }
-          .total-pages::after {
-            content: counter(pages);
+          
+          @media print {
+            .page-footer .page-info { display: none; }
           }
           
           .document-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #b8962f; padding-bottom: 15px; margin-bottom: 20px; }
@@ -490,7 +494,6 @@ export default function VotingPage() {
         
         <div class="page-footer">
           <span>شركة الزبد الأفضل التجارية | سجل تجاري: 7026155296 | رقم القرار: ${sanitize(resolution.resolutionNumber) || '-'}</span>
-          <span style="margin-right: 20px;">صفحة <span class="page-number"></span> من <span class="total-pages"></span></span>
         </div>
       </body>
       </html>
