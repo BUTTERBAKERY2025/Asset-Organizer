@@ -492,9 +492,9 @@ export default function VotingPage() {
           </div>
         </div>
         
-        <div class="page-footer">
+        <div class="page-footer" style="display: flex; justify-content: space-between; align-items: center;">
+          <span class="page-info" style="font-weight: 600; color: #333;"></span>
           <span>شركة الزبد الأفضل التجارية | سجل تجاري: 7026155296 | رقم القرار: ${sanitize(resolution.resolutionNumber) || '-'}</span>
-          <span class="page-info" style="margin-right: 20px;"></span>
         </div>
         
         <script>
