@@ -333,15 +333,17 @@ export default function VotingPage() {
             padding: 8px 0;
             background: white;
             border-top: 1px solid #e0e0e0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            display: none;
           }
           
-          .page-footer .page-number-dynamic::after {
-            content: "صفحة " counter(page) " من " counter(pages);
-            font-weight: 600;
-            color: #333;
+          @media print {
+            @page {
+              @bottom-center {
+                content: "صفحة " counter(page) " من " counter(pages) " | شركة الزبد الأفضل التجارية | سجل تجاري: 7026155296";
+                font-size: 9pt;
+                color: #666;
+              }
+            }
           }
           
           .document-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #b8962f; padding-bottom: 15px; margin-bottom: 20px; }
@@ -491,36 +493,6 @@ export default function VotingPage() {
           </div>
         </div>
         
-        <div class="page-footer">
-          <span id="page-number-display" style="font-weight: 600; color: #333;"></span>
-          <span>شركة الزبد الأفضل التجارية | سجل تجاري: 7026155296 | رقم القرار: ${sanitize(resolution.resolutionNumber) || '-'}</span>
-        </div>
-        
-        <script>
-          // حساب عدد الصفحات الفعلي عند الطباعة
-          (function() {
-            var rowsPerPage = 6; // عدد الصفوف في كل صفحة
-            var totalRows = ${votedTokens.length};
-            var totalPages = Math.max(1, Math.ceil(totalRows / rowsPerPage));
-            
-            // إذا كان المحتوى قليل
-            if (totalRows <= 4) totalPages = 1;
-            else if (totalRows <= 10) totalPages = 2;
-            else if (totalRows <= 16) totalPages = 3;
-            else totalPages = Math.ceil(totalRows / 6);
-            
-            document.getElementById('page-number-display').textContent = 'صفحة 1 من ' + totalPages;
-            
-            // إنشاء مراقب للصفحات عند الطباعة
-            var style = document.createElement('style');
-            style.textContent = '@media print { @page { counter-increment: page; } }';
-            document.head.appendChild(style);
-            
-            window.onbeforeprint = function() {
-              document.getElementById('page-number-display').textContent = 'إجمالي الصفحات: ' + totalPages;
-            };
-          })();
-        </script>
       </body>
       </html>
     `;
