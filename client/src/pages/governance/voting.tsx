@@ -128,12 +128,17 @@ export default function VotingPage() {
   const totalShares = shareholders.reduce((sum, s) => sum + (s.numberOfShares || 0), 0);
   const totalVotingShares = shareholders.filter(s => s.votingRights).reduce((sum, s) => sum + (s.numberOfShares || 0), 0);
 
+  // حساب نصاب الانعقاد والأغلبية المطلوبة حسب نظام الشركات السعودي 1443هـ
+  // Saudi Companies Law quorum and majority calculation
   const calculateQuorum = (resolution: BoardResolution): VotingStats => {
     const presentShares = (resolution.forVotes || 0) + (resolution.againstVotes || 0) + (resolution.abstainVotes || 0);
     const proxyShares = 0;
     const totalRepresented = presentShares + proxyShares;
     const quorumPercentage = totalVotingShares > 0 ? (totalRepresented / totalVotingShares) * 100 : 0;
-    const requiredQuorum = Number(resolution.requiredMajority) || 50;
+    
+    // نصاب الانعقاد الافتراضي 50% (الاجتماع الأول)
+    // يمكن تعديله حسب نوع القرار في المستقبل
+    const requiredQuorum = 50;
 
     return {
       totalEligibleShares: totalShares,
@@ -144,6 +149,29 @@ export default function VotingPage() {
       quorumMet: quorumPercentage >= requiredQuorum,
       requiredQuorum,
     };
+  };
+  
+  // حساب الأغلبية المطلوبة للموافقة حسب نظام الشركات السعودي 1443هـ
+  // Required majority for approval based on Saudi Companies Law
+  // نستخدم requiredMajority المحفوظ في القرار أو نحسبه حسب نوع القرار
+  const getRequiredMajority = (resolution: BoardResolution): { percentage: number; label: string } => {
+    // إذا كان هناك قيمة محددة مسبقاً في القرار، نستخدمها
+    const savedMajority = Number(resolution.requiredMajority);
+    
+    // تحديد النوع والنسبة بناءً على نوع القرار
+    const isExtraordinary = resolution.resolutionType === 'extraordinary';
+    
+    if (isExtraordinary) {
+      // للقرارات غير العادية: نتحقق إذا كانت النسبة المحددة 75% (قرار جوهري)
+      if (savedMajority >= 75) {
+        return { percentage: 75, label: '¾ الأسهم (قرار جوهري)' };
+      }
+      // القرارات غير العادية العادية: 66.67% (2/3)
+      return { percentage: savedMajority >= 66 ? savedMajority : 66.67, label: '⅔ الأسهم' };
+    }
+    
+    // الجمعية العادية: الأغلبية المطلقة (50%+1)
+    return { percentage: savedMajority > 50 ? savedMajority : 50.01, label: 'الأغلبية المطلقة (50%+1)' };
   };
 
   const voteMutation = useMutation({
@@ -254,10 +282,13 @@ export default function VotingPage() {
     const forVotes = votedTokens.filter(t => t.vote === 'for').length;
     const againstVotes = votedTokens.filter(t => t.vote === 'against').length;
     const abstainVotes = votedTokens.filter(t => t.vote === 'abstain').length;
-    const totalShares = votedTokens.reduce((sum, t) => sum + (t.numberOfShares || 0), 0);
+    const totalSharesVoted = votedTokens.reduce((sum, t) => sum + (t.numberOfShares || 0), 0);
     const forShares = votedTokens.filter(t => t.vote === 'for').reduce((sum, t) => sum + (t.numberOfShares || 0), 0);
-    const approvalPercentage = totalShares > 0 ? ((forShares / totalShares) * 100).toFixed(2) : '0';
-    const isApproved = Number(approvalPercentage) >= Number(resolution.requiredMajority || 50);
+    const approvalPercentage = totalSharesVoted > 0 ? ((forShares / totalSharesVoted) * 100).toFixed(2) : '0';
+    
+    // حساب الأغلبية المطلوبة حسب نظام الشركات السعودي 1443هـ
+    const requiredMajorityInfo = getRequiredMajority(resolution);
+    const isApproved = Number(approvalPercentage) >= requiredMajorityInfo.percentage;
 
     const printContent = `
       <!DOCTYPE html>
@@ -347,14 +378,14 @@ export default function VotingPage() {
           <div class="info-box">
             <div class="info-box-header">بيانات القرار</div>
             <div class="info-row"><span class="info-label">نوع القرار:</span><span class="info-value">${resolution.resolutionType === 'ordinary' ? 'عادي' : resolution.resolutionType === 'extraordinary' ? 'غير عادي' : resolution.resolutionType === 'urgent' ? 'عاجل' : 'كتابي'}</span></div>
-            <div class="info-row"><span class="info-label">الأغلبية المطلوبة:</span><span class="info-value">${resolution.requiredMajority || 50}%</span></div>
+            <div class="info-row"><span class="info-label">الأغلبية المطلوبة:</span><span class="info-value">${requiredMajorityInfo.label} (${requiredMajorityInfo.percentage}%)</span></div>
             <div class="info-row"><span class="info-label">تاريخ انتهاء التصويت:</span><span class="info-value">${resolution.votingDeadline ? new Date(resolution.votingDeadline).toLocaleDateString('ar-SA') : '-'}</span></div>
           </div>
           <div class="info-box">
             <div class="info-box-header">ملخص التصويت</div>
             <div class="info-row"><span class="info-label">إجمالي المصوتين:</span><span class="info-value">${votedTokens.length} مساهم</span></div>
             <div class="info-row"><span class="info-label">موافق / رافض / ممتنع:</span><span class="info-value">${forVotes} / ${againstVotes} / ${abstainVotes}</span></div>
-            <div class="info-row"><span class="info-label">إجمالي الأسهم المصوتة:</span><span class="info-value">${totalShares.toLocaleString()} سهم</span></div>
+            <div class="info-row"><span class="info-label">إجمالي الأسهم المصوتة:</span><span class="info-value">${totalSharesVoted.toLocaleString()} سهم</span></div>
           </div>
           <div class="info-box">
             <div class="info-box-header">نتيجة التصويت</div>
@@ -1029,11 +1060,11 @@ export default function VotingPage() {
         </Dialog>
 
         <Dialog open={showQuorumDetails} onOpenChange={setShowQuorumDetails}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Scale className="h-5 w-5 text-pink-600" />
-                تفاصيل النصاب القانوني
+                تفاصيل النصاب القانوني - نظام الشركات السعودي
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
@@ -1058,14 +1089,66 @@ export default function VotingPage() {
                 </Card>
                 <Card className="bg-amber-50 border-amber-200">
                   <CardContent className="p-4 text-center">
-                    <p className="text-sm text-amber-600">النصاب المطلوب</p>
-                    <p className="text-xl font-bold text-amber-800">50%</p>
+                    <p className="text-sm text-amber-600">مساهمين لهم حق التصويت</p>
+                    <p className="text-xl font-bold text-amber-800">{shareholders.filter(s => s.votingRights).length}</p>
                   </CardContent>
                 </Card>
               </div>
               
+              {/* جدول النسب القانونية حسب نظام الشركات السعودي 1443هـ */}
+              <Card className="border-2 border-pink-200">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <FileText className="h-5 w-5 text-pink-600" />
+                    النسب القانونية حسب نظام الشركات السعودي 1443هـ
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-pink-50">
+                        <TableHead className="text-right font-bold">نوع الجمعية</TableHead>
+                        <TableHead className="text-center font-bold">نصاب الاجتماع الأول</TableHead>
+                        <TableHead className="text-center font-bold">نصاب الاجتماع الثاني</TableHead>
+                        <TableHead className="text-center font-bold">الأغلبية المطلوبة</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      <TableRow>
+                        <TableCell className="font-medium text-right">
+                          <Badge className="bg-blue-100 text-blue-800">الجمعية العامة العادية</Badge>
+                        </TableCell>
+                        <TableCell className="text-center">50% من رأس المال</TableCell>
+                        <TableCell className="text-center text-green-600 font-medium">أي نسبة حضور</TableCell>
+                        <TableCell className="text-center">50% + 1 (الأغلبية المطلقة)</TableCell>
+                      </TableRow>
+                      <TableRow className="bg-amber-50/50">
+                        <TableCell className="font-medium text-right">
+                          <Badge className="bg-amber-100 text-amber-800">الجمعية غير العادية (عادي)</Badge>
+                        </TableCell>
+                        <TableCell className="text-center">50% من رأس المال</TableCell>
+                        <TableCell className="text-center">25% من رأس المال</TableCell>
+                        <TableCell className="text-center font-medium text-amber-700">⅔ (66.67%)</TableCell>
+                      </TableRow>
+                      <TableRow className="bg-red-50/50">
+                        <TableCell className="font-medium text-right">
+                          <Badge className="bg-red-100 text-red-800">الجمعية غير العادية (جوهري)</Badge>
+                        </TableCell>
+                        <TableCell className="text-center">50% من رأس المال</TableCell>
+                        <TableCell className="text-center">25% من رأس المال</TableCell>
+                        <TableCell className="text-center font-medium text-red-700">¾ (75%)</TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                  <div className="mt-3 p-3 bg-gray-50 rounded-lg text-sm text-gray-600">
+                    <p className="font-medium mb-1">القرارات الجوهرية تشمل:</p>
+                    <p>زيادة رأس المال • تخفيض رأس المال • إطالة مدة الشركة • حل الشركة • الاندماج مع شركة أخرى</p>
+                  </div>
+                </CardContent>
+              </Card>
+              
               <div className="bg-gray-50 rounded-lg p-4">
-                <h4 className="font-medium mb-3">توزيع الملكية</h4>
+                <h4 className="font-medium mb-3">توزيع الملكية (أكبر 10 مساهمين)</h4>
                 {shareholders.length > 0 ? (
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
