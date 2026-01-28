@@ -308,7 +308,7 @@ export default function VotingPage() {
     const isApproved = Number(approvalPercentage) >= requiredMajorityInfo.percentage;
 
     // بناء صفحات الجدول مع ترقيم لكل صفحة
-    const rowsPerPage = 5;
+    const rowsPerPage = 8;
     const totalPages = Math.max(1, Math.ceil(votedTokens.length / rowsPerPage));
     let pagesHtml = '';
     
@@ -384,10 +384,10 @@ export default function VotingPage() {
         <style>
           @page { 
             size: A4 landscape; 
-            margin: 15mm 15mm 20mm 15mm;
+            margin: 8mm 10mm 12mm 10mm;
           }
           * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { font-family: 'Cairo', sans-serif; padding: 20px 30px 60px 30px; background: white; color: #333; direction: rtl; font-size: 11px; }
+          body { font-family: 'Cairo', sans-serif; padding: 8px 15px 40px 15px; background: white; color: #333; direction: rtl; font-size: 10px; }
           
           .page-footer {
             position: fixed;
@@ -395,65 +395,58 @@ export default function VotingPage() {
             left: 0;
             right: 0;
             text-align: center;
-            font-size: 9px;
+            font-size: 8px;
             color: #666;
-            padding: 8px 15mm;
+            padding: 4px 10mm;
             background: white;
             border-top: 1px solid #e0e0e0;
             display: flex;
             justify-content: space-between;
           }
           
-          .document-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #b8962f; padding-bottom: 15px; margin-bottom: 20px; }
+          .document-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #b8962f; padding-bottom: 8px; margin-bottom: 8px; }
           .header-right { text-align: right; }
           .header-center { text-align: center; flex: 1; }
           .header-left { text-align: left; }
-          .logo { font-size: 22px; font-weight: 700; color: #b8962f; }
-          .company-name { font-size: 14px; color: #333; font-weight: 600; }
-          .company-name-en { font-size: 11px; color: #666; }
-          .cr-number { font-size: 10px; color: #b8962f; font-weight: 600; margin-top: 3px; }
-          .doc-title { font-size: 18px; font-weight: 700; color: #b8962f; margin-top: 5px; }
-          .doc-number { font-size: 12px; color: #666; background: #f5f5f5; padding: 5px 15px; border-radius: 15px; display: inline-block; }
+          .logo { font-size: 18px; font-weight: 700; color: #b8962f; }
+          .company-name { font-size: 12px; color: #333; font-weight: 600; }
+          .company-name-en { font-size: 9px; color: #666; }
+          .cr-number { font-size: 9px; color: #b8962f; font-weight: 600; margin-top: 2px; }
+          .doc-title { font-size: 14px; font-weight: 700; color: #b8962f; margin-top: 3px; }
+          .doc-number { font-size: 10px; color: #666; background: #f5f5f5; padding: 3px 10px; border-radius: 10px; display: inline-block; }
           
-          .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px; }
-          .info-box { background: #fafafa; border: 1px solid #e0e0e0; border-radius: 6px; padding: 12px; }
-          .info-box-header { font-weight: 600; color: #b8962f; margin-bottom: 8px; font-size: 12px; border-bottom: 1px solid #e0e0e0; padding-bottom: 5px; }
-          .info-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+          .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+          .info-box { background: #fafafa; border: 1px solid #e0e0e0; border-radius: 4px; padding: 6px 8px; }
+          .info-box-header { font-weight: 600; color: #b8962f; margin-bottom: 4px; font-size: 10px; border-bottom: 1px solid #e0e0e0; padding-bottom: 3px; }
+          .info-row { display: flex; justify-content: space-between; margin-bottom: 2px; font-size: 9px; }
           .info-label { color: #666; }
           .info-value { font-weight: 600; color: #333; }
           
-          .resolution-section { background: #fffef5; border: 2px solid #d4a853; border-radius: 8px; padding: 15px; margin-bottom: 15px; }
-          .resolution-title { font-size: 14px; font-weight: 700; color: #333; margin-bottom: 10px; }
-          .resolution-text { font-size: 12px; line-height: 1.8; color: #444; white-space: pre-wrap; }
+          .resolution-section { background: #fffef5; border: 1px solid #d4a853; border-radius: 4px; padding: 8px; margin-bottom: 8px; }
+          .resolution-title { font-size: 11px; font-weight: 700; color: #333; margin-bottom: 4px; }
+          .resolution-text { font-size: 10px; line-height: 1.5; color: #444; white-space: pre-wrap; }
           
-          .result-badge { display: inline-block; padding: 8px 25px; border-radius: 20px; font-size: 14px; font-weight: 700; margin-top: 10px; }
+          .result-badge { display: inline-block; padding: 4px 15px; border-radius: 12px; font-size: 11px; font-weight: 700; margin-top: 4px; }
           .result-approved { background: linear-gradient(135deg, #dcfce7, #bbf7d0); color: #166534; border: 2px solid #22c55e; }
           .result-rejected { background: linear-gradient(135deg, #fee2e2, #fecaca); color: #991b1b; border: 2px solid #ef4444; }
           
-          .votes-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 10px; }
-          .votes-table th { background: linear-gradient(135deg, #b8962f, #d4a853); color: white; padding: 10px 8px; text-align: right; font-weight: 600; }
-          .votes-table td { padding: 8px; border-bottom: 1px solid #e0e0e0; vertical-align: middle; }
+          .votes-table { width: 100%; border-collapse: collapse; margin-bottom: 6px; font-size: 9px; }
+          .votes-table th { background: linear-gradient(135deg, #b8962f, #d4a853); color: white; padding: 4px 5px; text-align: right; font-weight: 600; font-size: 8px; }
+          .votes-table td { padding: 4px 5px; border-bottom: 1px solid #e0e0e0; vertical-align: middle; }
           .votes-table tr:nth-child(even) { background: #fafafa; }
-          .votes-table tr:hover { background: #fffef5; }
           
-          .vote-badge { padding: 3px 10px; border-radius: 12px; font-size: 9px; font-weight: 600; display: inline-block; }
+          .vote-badge { padding: 2px 6px; border-radius: 8px; font-size: 8px; font-weight: 600; display: inline-block; }
           .vote-for { background: #dcfce7; color: #166534; }
           .vote-against { background: #fee2e2; color: #991b1b; }
           .vote-abstain { background: #f3f4f6; color: #374151; }
           
-          .signature-cell { display: flex; align-items: center; gap: 10px; }
-          .signature-img { max-width: 120px; max-height: 40px; border: 1px solid #ddd; border-radius: 4px; }
+          .signature-img { max-width: 80px; max-height: 25px; border: 1px solid #ddd; border-radius: 3px; }
           
-          .summary-row { display: flex; gap: 20px; margin-bottom: 15px; }
-          .summary-box { flex: 1; background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 6px; padding: 12px; text-align: center; }
-          .summary-value { font-size: 20px; font-weight: 700; color: #b8962f; }
-          .summary-label { font-size: 10px; color: #666; margin-top: 3px; }
-          
-          .footer { display: flex; justify-content: space-between; align-items: center; border-top: 2px solid #e0e0e0; padding-top: 15px; margin-top: 15px; font-size: 9px; color: #888; }
-          .stamp-area { border: 2px dashed #ccc; padding: 20px 40px; text-align: center; color: #999; border-radius: 8px; }
+          .footer { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #e0e0e0; padding-top: 6px; margin-top: 6px; font-size: 8px; color: #888; }
+          .stamp-area { border: 1px dashed #ccc; padding: 10px 25px; text-align: center; color: #999; border-radius: 4px; font-size: 8px; }
           
           @media print {
-            body { padding: 10px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            body { padding: 5px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .votes-table tr { break-inside: avoid; }
           }
         </style>
