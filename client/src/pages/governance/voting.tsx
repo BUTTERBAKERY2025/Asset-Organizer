@@ -300,16 +300,29 @@ export default function VotingPage() {
         <style>
           @page { 
             size: A4 landscape; 
-            margin: 15mm 15mm 20mm 15mm;
-            @bottom-center {
-              content: "صفحة " counter(page) " من " counter(pages);
-              font-family: 'Cairo', sans-serif;
-              font-size: 10px;
-              color: #666;
-            }
+            margin: 15mm 15mm 25mm 15mm;
           }
           * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { font-family: 'Cairo', sans-serif; padding: 20px 30px; background: white; color: #333; direction: rtl; font-size: 11px; counter-reset: page; }
+          body { font-family: 'Cairo', sans-serif; padding: 20px 30px; background: white; color: #333; direction: rtl; font-size: 11px; }
+          
+          .page-footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-size: 9px;
+            color: #666;
+            padding: 10px;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+          }
+          .page-number::after {
+            content: counter(page);
+          }
+          .total-pages::after {
+            content: counter(pages);
+          }
           
           .document-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #b8962f; padding-bottom: 15px; margin-bottom: 20px; }
           .header-right { text-align: right; }
@@ -446,7 +459,7 @@ export default function VotingPage() {
         <div class="footer">
           <div>
             <div style="font-weight: 600; color: #333; margin-bottom: 3px;">مستند رسمي صادر إلكترونياً</div>
-            <div>نظام BUTTER BAKERY - إدارة حوكمة الشركات</div>
+            <div>نظام BUTTER BAKERY - إدارة حوكمة الشركات | سجل تجاري: 7026155296</div>
             <div>تاريخ الطباعة: ${new Date().toLocaleDateString('ar-SA')} - ${new Date().toLocaleTimeString('ar-SA')}</div>
           </div>
           <div class="stamp-area">
@@ -457,6 +470,26 @@ export default function VotingPage() {
             <div style="border-bottom: 1px solid #333; width: 150px; height: 40px;"></div>
           </div>
         </div>
+        
+        <div class="page-footer">
+          <span>شركة الزبد الأفضل التجارية | سجل تجاري: 7026155296 | رقم القرار: ${sanitize(resolution.resolutionNumber) || '-'}</span>
+          <span style="margin-right: 20px;">صفحة <span class="page-number"></span> من <span class="total-pages"></span></span>
+        </div>
+        
+        <script>
+          // حساب ترقيم الصفحات يدوياً
+          window.onload = function() {
+            var totalHeight = document.body.scrollHeight;
+            var pageHeight = 700; // ارتفاع الصفحة التقريبي بالبكسل
+            var totalPages = Math.ceil(totalHeight / pageHeight) || 1;
+            document.querySelectorAll('.total-pages').forEach(function(el) {
+              el.textContent = totalPages;
+            });
+            document.querySelectorAll('.page-number').forEach(function(el) {
+              el.textContent = '1';
+            });
+          };
+        </script>
       </body>
       </html>
     `;
