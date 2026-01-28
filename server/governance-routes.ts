@@ -1813,25 +1813,32 @@ export function registerGovernanceRoutes(app: Express) {
         })
         .where(eq(boardResolutions.id, voteRecord.resolutionId));
 
-      // Get shareholder name for audit trail
-      const [shareholderRecord] = await db.select({ fullName: shareholders.fullName })
-        .from(shareholders)
-        .where(eq(shareholders.id, voteRecord.shareholderId));
-      const voterName = shareholderRecord?.fullName || "مساهم (تصويت إلكتروني)";
+      // Try to create audit trail record (non-blocking)
+      try {
+        const [shareholderRecord] = await db.select({ fullName: shareholders.fullName })
+          .from(shareholders)
+          .where(eq(shareholders.id, voteRecord.shareholderId));
+        const voterName = shareholderRecord?.fullName || "مساهم (تصويت إلكتروني)";
 
-      // Also create a resolution vote record for audit trail
-      await db.insert(resolutionVotes).values({
-        resolutionId: voteRecord.resolutionId,
-        voterType: "shareholder",
-        shareholderId: voteRecord.shareholderId,
-        voterName,
-        vote,
-        comments: comments || null,
-        votingPower: "1.0000",
-        weightedVote: String(voteWeight),
-        voteMethod: "electronic",
-        ipAddress,
-      });
+        // Ensure weightedVote fits numeric(18,4) - max 14 digits before decimal
+        const safeWeightedVote = Math.min(voteWeight, 99999999999999).toFixed(4);
+
+        await db.insert(resolutionVotes).values({
+          resolutionId: voteRecord.resolutionId,
+          voterType: "shareholder",
+          shareholderId: voteRecord.shareholderId,
+          voterName,
+          vote,
+          comments: comments || null,
+          votingPower: "1.0000",
+          weightedVote: safeWeightedVote,
+          voteMethod: "electronic",
+          ipAddress,
+        });
+      } catch (auditError) {
+        // Log audit error but don't fail the vote - voting token already updated
+        console.error("Error creating audit trail (vote was recorded):", auditError);
+      }
 
       res.json({ success: true, message: "تم تسجيل تصويتك بنجاح" });
     } catch (error) {
