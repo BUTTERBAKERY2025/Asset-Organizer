@@ -121,6 +121,23 @@ export default function VotingPage() {
     queryKey: ["/api/governance/shareholders"],
   });
 
+  // جلب سجل التدقيق
+  interface AuditLogEntry {
+    id: number;
+    action: string;
+    entityId: string;
+    entityName: string | null;
+    details: string | null;
+    userName: string | null;
+    ipAddress: string | null;
+    createdAt: string;
+  }
+  
+  const { data: auditLogs = [] } = useQuery<AuditLogEntry[]>({
+    queryKey: ["/api/governance/voting-audit-log"],
+    enabled: showAuditLog,
+  });
+
   const votingResolutions = resolutions.filter(r => r.status === 'voting');
   const preVotingResolutions = resolutions.filter(r => r.status === 'proposed');
   const completedVotes = resolutions.filter(r => r.status === 'approved' || r.status === 'rejected');
@@ -1235,19 +1252,76 @@ export default function VotingPage() {
                   <TableRow>
                     <TableHead className="text-right">الوقت</TableHead>
                     <TableHead className="text-right">الإجراء</TableHead>
-                    <TableHead className="text-right">المُصوّت</TableHead>
-                    <TableHead className="text-right">نوع التصويت</TableHead>
-                    <TableHead className="text-right">القيمة</TableHead>
-                    <TableHead className="text-right">قوة التصويت</TableHead>
+                    <TableHead className="text-right">المُستخدم</TableHead>
+                    <TableHead className="text-right">التفاصيل</TableHead>
                     <TableHead className="text-right">IP</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center text-gray-500 py-8">
-                      سيتم عرض سجل التدقيق هنا بعد إجراء عمليات التصويت
-                    </TableCell>
-                  </TableRow>
+                  {auditLogs.length > 0 ? (
+                    auditLogs.map((log) => {
+                      let details: { vote?: string; voteMethod?: string; votingPower?: number } = {};
+                      try {
+                        if (log.details) details = JSON.parse(log.details);
+                      } catch {}
+                      const actionLabels: Record<string, string> = {
+                        vote_submitted: 'تم التصويت',
+                        resolution_created: 'إنشاء قرار',
+                        resolution_updated: 'تحديث قرار',
+                        meeting_created: 'إنشاء اجتماع',
+                      };
+                      const voteLabels: Record<string, string> = {
+                        for: 'موافق',
+                        against: 'رافض',
+                        abstain: 'ممتنع',
+                      };
+                      return (
+                        <TableRow key={log.id}>
+                          <TableCell className="text-sm">
+                            {new Date(log.createdAt).toLocaleDateString('ar-SA')}
+                            <br />
+                            <span className="text-xs text-gray-500">
+                              {new Date(log.createdAt).toLocaleTimeString('ar-SA')}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline">
+                              {actionLabels[log.action] || log.action}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{log.userName || '-'}</TableCell>
+                          <TableCell className="text-sm">
+                            {details.vote && (
+                              <Badge className={
+                                details.vote === 'for' ? 'bg-green-100 text-green-800' :
+                                details.vote === 'against' ? 'bg-red-100 text-red-800' :
+                                'bg-gray-100 text-gray-800'
+                              }>
+                                {voteLabels[details.vote] || details.vote}
+                              </Badge>
+                            )}
+                            {details.votingPower && (
+                              <span className="mr-2 text-gray-600">
+                                ({details.votingPower?.toLocaleString?.()} سهم)
+                              </span>
+                            )}
+                            {log.entityName && !details.vote && (
+                              <span>{log.entityName}</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-xs text-gray-500 font-mono">
+                            {log.ipAddress || '-'}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-gray-500 py-8">
+                        لا توجد سجلات تدقيق حالياً
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
 

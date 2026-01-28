@@ -21,6 +21,7 @@ import {
   disclosures,
   complianceRequirements,
   complianceHistory,
+  systemAuditLogs,
   insertBoardMemberSchema,
   insertShareholderSchema,
   insertShareholderDocumentSchema,
@@ -1848,6 +1849,32 @@ export function registerGovernanceRoutes(app: Express) {
     } catch (error) {
       console.error("Error submitting vote:", error);
       res.status(500).json({ error: "فشل في حفظ التصويت" });
+    }
+  });
+
+  // Get voting audit log
+  app.get("/api/governance/voting-audit-log", isAuthenticated, async (req, res) => {
+    try {
+      const auditLogs = await db
+        .select({
+          id: systemAuditLogs.id,
+          action: systemAuditLogs.action,
+          entityId: systemAuditLogs.entityId,
+          entityName: systemAuditLogs.entityName,
+          details: systemAuditLogs.details,
+          userName: systemAuditLogs.userName,
+          ipAddress: systemAuditLogs.ipAddress,
+          createdAt: systemAuditLogs.createdAt,
+        })
+        .from(systemAuditLogs)
+        .where(eq(systemAuditLogs.module, 'governance'))
+        .orderBy(desc(systemAuditLogs.createdAt))
+        .limit(100);
+
+      res.json(auditLogs);
+    } catch (error) {
+      console.error("Error fetching voting audit log:", error);
+      res.status(500).json({ error: "فشل في جلب سجل التدقيق" });
     }
   });
 }
