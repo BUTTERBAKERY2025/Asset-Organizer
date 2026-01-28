@@ -308,7 +308,7 @@ export default function VotingPage() {
     const isApproved = Number(approvalPercentage) >= requiredMajorityInfo.percentage;
 
     // بناء صفحات الجدول مع ترقيم لكل صفحة
-    const rowsPerPage = 8;
+    const rowsPerPage = 12;
     const totalPages = Math.max(1, Math.ceil(votedTokens.length / rowsPerPage));
     let pagesHtml = '';
     
