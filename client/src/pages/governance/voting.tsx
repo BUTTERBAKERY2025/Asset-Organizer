@@ -133,9 +133,11 @@ export default function VotingPage() {
     createdAt: string;
   }
   
-  const { data: auditLogs = [] } = useQuery<AuditLogEntry[]>({
+  const { data: auditLogs = [], refetch: refetchAuditLogs } = useQuery<AuditLogEntry[]>({
     queryKey: ["/api/governance/voting-audit-log"],
     enabled: showAuditLog,
+    staleTime: 0,
+    refetchOnMount: true,
   });
 
   const votingResolutions = resolutions.filter(r => r.status === 'voting');
@@ -642,7 +644,7 @@ export default function VotingPage() {
               <Scale className="h-4 w-4" />
               النصاب
             </Button>
-            <Button variant="outline" className="gap-2" onClick={() => setShowAuditLog(true)}>
+            <Button variant="outline" className="gap-2" onClick={() => { setShowAuditLog(true); refetchAuditLogs(); }}>
               <History className="h-4 w-4" />
               سجل التدقيق
             </Button>
