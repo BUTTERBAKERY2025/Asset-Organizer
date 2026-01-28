@@ -307,6 +307,73 @@ export default function VotingPage() {
     const requiredMajorityInfo = getRequiredMajority(resolution);
     const isApproved = Number(approvalPercentage) >= requiredMajorityInfo.percentage;
 
+    // بناء صفحات الجدول مع ترقيم لكل صفحة
+    const rowsPerPage = 5;
+    const totalPages = Math.max(1, Math.ceil(votedTokens.length / rowsPerPage));
+    let pagesHtml = '';
+    
+    for (let page = 0; page < totalPages; page++) {
+      const startIdx = page * rowsPerPage;
+      const endIdx = Math.min(startIdx + rowsPerPage, votedTokens.length);
+      const pageTokens = votedTokens.slice(startIdx, endIdx);
+      const isLastPage = page === totalPages - 1;
+      const pageNum = page + 1;
+      
+      let tableRows = '';
+      pageTokens.forEach((token, idx) => {
+        const voteClass = token.vote === 'for' ? 'vote-for' : token.vote === 'against' ? 'vote-against' : 'vote-abstain';
+        const voteText = voteLabels[token.vote || ''] || sanitize(token.vote || '');
+        const dateStr = token.votedAt ? new Date(token.votedAt).toLocaleDateString('ar-SA') + '<br>' + new Date(token.votedAt).toLocaleTimeString('ar-SA') : '-';
+        const sigImg = isValidSignature(token.signatureData) ? '<img class="signature-img" src="' + token.signatureData + '" alt="توقيع" />' : '<span style="color: #999;">-</span>';
+        
+        tableRows += '<tr>' +
+          '<td style="text-align: center; font-weight: 600;">' + (startIdx + idx + 1) + '</td>' +
+          '<td style="font-weight: 600;">' + sanitize(token.shareholderName) + '</td>' +
+          '<td style="text-align: center;">' + (token.numberOfShares || 0).toLocaleString() + '</td>' +
+          '<td style="text-align: center;"><span class="vote-badge ' + voteClass + '">' + voteText + '</span></td>' +
+          '<td style="text-align: center; font-size: 9px;">' + dateStr + '</td>' +
+          '<td style="font-size: 9px; color: #666;">' + (sanitize(token.comments) || '-') + '</td>' +
+          '<td>' + sigImg + '</td>' +
+        '</tr>';
+      });
+      
+      let footerSection = '';
+      if (isLastPage) {
+        footerSection = '<div class="footer">' +
+          '<div>' +
+            '<div style="font-weight: 600; color: #333; margin-bottom: 3px;">مستند رسمي صادر إلكترونياً</div>' +
+            '<div>نظام BUTTER BAKERY - إدارة حوكمة الشركات | سجل تجاري: 7026155296</div>' +
+            '<div>تاريخ الطباعة: ' + new Date().toLocaleDateString('ar-SA') + ' - ' + new Date().toLocaleTimeString('ar-SA') + '</div>' +
+          '</div>' +
+          '<div class="stamp-area">ختم الشركة</div>' +
+          '<div style="text-align: left;">' +
+            '<div style="font-weight: 600; color: #333; margin-bottom: 3px;">توقيع رئيس مجلس الإدارة</div>' +
+            '<div style="border-bottom: 1px solid #333; width: 150px; height: 40px;"></div>' +
+          '</div>' +
+        '</div>';
+      }
+      
+      pagesHtml += '<div class="print-page" style="' + (!isLastPage ? 'page-break-after: always;' : '') + '">' +
+        '<table class="votes-table">' +
+          '<thead><tr>' +
+            '<th style="width: 5%;">#</th>' +
+            '<th style="width: 20%;">اسم المساهم</th>' +
+            '<th style="width: 12%;">عدد الأسهم</th>' +
+            '<th style="width: 10%;">التصويت</th>' +
+            '<th style="width: 13%;">تاريخ التصويت</th>' +
+            '<th style="width: 20%;">الملاحظات</th>' +
+            '<th style="width: 20%;">التوقيع الإلكتروني</th>' +
+          '</tr></thead>' +
+          '<tbody>' + tableRows + '</tbody>' +
+        '</table>' +
+        footerSection +
+        '<div class="page-footer">' +
+          '<span style="font-weight: 600; color: #333;">صفحة ' + pageNum + ' من ' + totalPages + '</span>' +
+          '<span>شركة الزبد الأفضل التجارية | سجل تجاري: 7026155296 | رقم القرار: ' + (sanitize(resolution.resolutionNumber) || '-') + '</span>' +
+        '</div>' +
+      '</div>';
+    }
+
     const printContent = `
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
@@ -438,56 +505,7 @@ export default function VotingPage() {
           <div class="resolution-text">${sanitize(resolution.description)}</div>
         </div>
         
-        <table class="votes-table">
-          <thead>
-            <tr>
-              <th style="width: 5%;">#</th>
-              <th style="width: 20%;">اسم المساهم</th>
-              <th style="width: 12%;">عدد الأسهم</th>
-              <th style="width: 10%;">التصويت</th>
-              <th style="width: 13%;">تاريخ التصويت</th>
-              <th style="width: 20%;">الملاحظات</th>
-              <th style="width: 20%;">التوقيع الإلكتروني</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${votedTokens.map((token, index) => `
-              <tr>
-                <td style="text-align: center; font-weight: 600;">${index + 1}</td>
-                <td style="font-weight: 600;">${sanitize(token.shareholderName)}</td>
-                <td style="text-align: center;">${(token.numberOfShares || 0).toLocaleString()}</td>
-                <td style="text-align: center;">
-                  <span class="vote-badge ${token.vote === 'for' ? 'vote-for' : token.vote === 'against' ? 'vote-against' : 'vote-abstain'}">
-                    ${voteLabels[token.vote || ''] || sanitize(token.vote)}
-                  </span>
-                </td>
-                <td style="text-align: center; font-size: 9px;">${token.votedAt ? new Date(token.votedAt).toLocaleDateString('ar-SA') + '<br>' + new Date(token.votedAt).toLocaleTimeString('ar-SA') : '-'}</td>
-                <td style="font-size: 9px; color: #666;">${sanitize(token.comments) || '-'}</td>
-                <td>${isValidSignature(token.signatureData) ? `<img class="signature-img" src="${token.signatureData}" alt="توقيع" />` : '<span style="color: #999;">-</span>'}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-        
-        <div class="footer">
-          <div>
-            <div style="font-weight: 600; color: #333; margin-bottom: 3px;">مستند رسمي صادر إلكترونياً</div>
-            <div>نظام BUTTER BAKERY - إدارة حوكمة الشركات | سجل تجاري: 7026155296</div>
-            <div>تاريخ الطباعة: ${new Date().toLocaleDateString('ar-SA')} - ${new Date().toLocaleTimeString('ar-SA')}</div>
-          </div>
-          <div class="stamp-area">
-            ختم الشركة
-          </div>
-          <div style="text-align: left;">
-            <div style="font-weight: 600; color: #333; margin-bottom: 3px;">توقيع رئيس مجلس الإدارة</div>
-            <div style="border-bottom: 1px solid #333; width: 150px; height: 40px;"></div>
-          </div>
-        </div>
-        
-        <div class="page-footer">
-          <span style="font-weight: 600; color: #333;">صفحة 1 من ${Math.max(1, Math.ceil(votedTokens.length / 6))}</span>
-          <span>شركة الزبد الأفضل التجارية | سجل تجاري: 7026155296 | رقم القرار: ${sanitize(resolution.resolutionNumber) || '-'}</span>
-        </div>
+        ${pagesHtml}
       </body>
       </html>
     `;
