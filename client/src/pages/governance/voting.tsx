@@ -493,33 +493,9 @@ export default function VotingPage() {
         </div>
         
         <div class="page-footer" style="display: flex; justify-content: space-between; align-items: center;">
-          <span class="page-info" style="font-weight: 600; color: #333;"></span>
+          <span id="page-info" style="font-weight: 600; color: #333;">صفحة 1 من ${votedTokens.length > 8 ? '2' : '1'}</span>
           <span>شركة الزبد الأفضل التجارية | سجل تجاري: 7026155296 | رقم القرار: ${sanitize(resolution.resolutionNumber) || '-'}</span>
         </div>
-        
-        <script>
-          window.onload = function() {
-            // A4 landscape: 297mm width, ~190mm usable height after margins
-            var pageHeightMM = 190;
-            var pixelsPerMM = 3.78; // approximate
-            var pageHeightPx = pageHeightMM * pixelsPerMM;
-            
-            var content = document.querySelector('.print-content') || document.body;
-            var contentHeight = content.scrollHeight;
-            var totalPages = Math.max(1, Math.ceil(contentHeight / pageHeightPx));
-            
-            // إذا كان المحتوى قصيراً جداً، صفحة واحدة
-            if (contentHeight < pageHeightPx * 1.5) {
-              totalPages = 1;
-            } else if (contentHeight < pageHeightPx * 2.5) {
-              totalPages = 2;
-            }
-            
-            document.querySelectorAll('.page-info').forEach(function(el) {
-              el.textContent = 'صفحة 1 من ' + totalPages;
-            });
-          };
-        </script>
       </body>
       </html>
     `;
