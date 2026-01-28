@@ -308,7 +308,7 @@ export default function VotingPage() {
     const isApproved = Number(approvalPercentage) >= requiredMajorityInfo.percentage;
 
     // بناء صفحات الجدول مع ترقيم لكل صفحة
-    const rowsPerPage = 12;
+    const rowsPerPage = 15;
     const totalPages = Math.max(1, Math.ceil(votedTokens.length / rowsPerPage));
     let pagesHtml = '';
     
@@ -384,69 +384,68 @@ export default function VotingPage() {
         <style>
           @page { 
             size: A4 landscape; 
-            margin: 8mm 10mm 12mm 10mm;
+            margin: 5mm 8mm 8mm 8mm;
           }
           * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { font-family: 'Cairo', sans-serif; padding: 8px 15px 40px 15px; background: white; color: #333; direction: rtl; font-size: 10px; }
+          body { font-family: 'Cairo', sans-serif; padding: 5px 10px 30px 10px; background: white; color: #333; direction: rtl; font-size: 9px; line-height: 1.2; }
           
           .page-footer {
             position: fixed;
             bottom: 0;
             left: 0;
             right: 0;
-            text-align: center;
-            font-size: 8px;
+            font-size: 7px;
             color: #666;
-            padding: 4px 10mm;
+            padding: 3px 8mm;
             background: white;
             border-top: 1px solid #e0e0e0;
             display: flex;
             justify-content: space-between;
           }
           
-          .document-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #b8962f; padding-bottom: 8px; margin-bottom: 8px; }
+          .document-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #b8962f; padding-bottom: 4px; margin-bottom: 4px; }
           .header-right { text-align: right; }
           .header-center { text-align: center; flex: 1; }
-          .header-left { text-align: left; }
-          .logo { font-size: 18px; font-weight: 700; color: #b8962f; }
-          .company-name { font-size: 12px; color: #333; font-weight: 600; }
-          .company-name-en { font-size: 9px; color: #666; }
-          .cr-number { font-size: 9px; color: #b8962f; font-weight: 600; margin-top: 2px; }
-          .doc-title { font-size: 14px; font-weight: 700; color: #b8962f; margin-top: 3px; }
-          .doc-number { font-size: 10px; color: #666; background: #f5f5f5; padding: 3px 10px; border-radius: 10px; display: inline-block; }
+          .header-left { text-align: left; font-size: 8px; }
+          .logo { font-size: 14px; font-weight: 700; color: #b8962f; }
+          .company-name { font-size: 10px; color: #333; font-weight: 600; }
+          .company-name-en { font-size: 8px; color: #666; }
+          .cr-number { font-size: 8px; color: #b8962f; font-weight: 600; }
+          .doc-title { font-size: 12px; font-weight: 700; color: #b8962f; }
+          .doc-number { font-size: 9px; color: #666; background: #f5f5f5; padding: 2px 8px; border-radius: 8px; display: inline-block; }
           
-          .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 8px; }
-          .info-box { background: #fafafa; border: 1px solid #e0e0e0; border-radius: 4px; padding: 6px 8px; }
-          .info-box-header { font-weight: 600; color: #b8962f; margin-bottom: 4px; font-size: 10px; border-bottom: 1px solid #e0e0e0; padding-bottom: 3px; }
-          .info-row { display: flex; justify-content: space-between; margin-bottom: 2px; font-size: 9px; }
+          .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; margin-bottom: 4px; }
+          .info-box { background: #fafafa; border: 1px solid #e0e0e0; border-radius: 3px; padding: 4px 6px; }
+          .info-box-header { font-weight: 600; color: #b8962f; margin-bottom: 2px; font-size: 9px; border-bottom: 1px solid #e0e0e0; padding-bottom: 2px; }
+          .info-row { display: flex; justify-content: space-between; margin-bottom: 1px; font-size: 8px; }
           .info-label { color: #666; }
           .info-value { font-weight: 600; color: #333; }
           
-          .resolution-section { background: #fffef5; border: 1px solid #d4a853; border-radius: 4px; padding: 8px; margin-bottom: 8px; }
-          .resolution-title { font-size: 11px; font-weight: 700; color: #333; margin-bottom: 4px; }
-          .resolution-text { font-size: 10px; line-height: 1.5; color: #444; white-space: pre-wrap; }
+          .resolution-section { background: #fffef5; border: 1px solid #d4a853; border-radius: 3px; padding: 4px 6px; margin-bottom: 4px; }
+          .resolution-title { font-size: 9px; font-weight: 700; color: #333; margin-bottom: 2px; }
+          .resolution-text { font-size: 8px; line-height: 1.3; color: #444; white-space: pre-wrap; }
           
-          .result-badge { display: inline-block; padding: 4px 15px; border-radius: 12px; font-size: 11px; font-weight: 700; margin-top: 4px; }
+          .result-badge { display: inline-block; padding: 2px 10px; border-radius: 8px; font-size: 9px; font-weight: 700; }
           .result-approved { background: linear-gradient(135deg, #dcfce7, #bbf7d0); color: #166534; border: 2px solid #22c55e; }
           .result-rejected { background: linear-gradient(135deg, #fee2e2, #fecaca); color: #991b1b; border: 2px solid #ef4444; }
           
-          .votes-table { width: 100%; border-collapse: collapse; margin-bottom: 6px; font-size: 9px; }
-          .votes-table th { background: linear-gradient(135deg, #b8962f, #d4a853); color: white; padding: 4px 5px; text-align: right; font-weight: 600; font-size: 8px; }
-          .votes-table td { padding: 4px 5px; border-bottom: 1px solid #e0e0e0; vertical-align: middle; }
+          .votes-table { width: 100%; border-collapse: collapse; margin-bottom: 3px; font-size: 8px; }
+          .votes-table th { background: linear-gradient(135deg, #b8962f, #d4a853); color: white; padding: 2px 3px; text-align: right; font-weight: 600; font-size: 7px; }
+          .votes-table td { padding: 2px 3px; border-bottom: 1px solid #e0e0e0; vertical-align: middle; font-size: 7px; }
           .votes-table tr:nth-child(even) { background: #fafafa; }
           
-          .vote-badge { padding: 2px 6px; border-radius: 8px; font-size: 8px; font-weight: 600; display: inline-block; }
+          .vote-badge { padding: 1px 4px; border-radius: 6px; font-size: 7px; font-weight: 600; display: inline-block; }
           .vote-for { background: #dcfce7; color: #166534; }
           .vote-against { background: #fee2e2; color: #991b1b; }
           .vote-abstain { background: #f3f4f6; color: #374151; }
           
-          .signature-img { max-width: 80px; max-height: 25px; border: 1px solid #ddd; border-radius: 3px; }
+          .signature-img { max-width: 60px; max-height: 18px; border: 1px solid #ddd; border-radius: 2px; }
           
-          .footer { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #e0e0e0; padding-top: 6px; margin-top: 6px; font-size: 8px; color: #888; }
-          .stamp-area { border: 1px dashed #ccc; padding: 10px 25px; text-align: center; color: #999; border-radius: 4px; font-size: 8px; }
+          .footer { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #e0e0e0; padding-top: 3px; margin-top: 3px; font-size: 7px; color: #888; }
+          .stamp-area { border: 1px dashed #ccc; padding: 6px 15px; text-align: center; color: #999; border-radius: 3px; font-size: 7px; }
           
           @media print {
-            body { padding: 5px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            body { padding: 3px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .votes-table tr { break-inside: avoid; }
           }
         </style>
