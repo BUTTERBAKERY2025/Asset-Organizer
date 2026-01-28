@@ -317,32 +317,31 @@ export default function VotingPage() {
         <style>
           @page { 
             size: A4 landscape; 
-            margin: 15mm 15mm 25mm 15mm;
-            @bottom-center {
-              content: "صفحة " counter(page) " من " counter(pages);
-              font-family: 'Cairo', sans-serif;
-              font-size: 9pt;
-              color: #666;
-            }
+            margin: 15mm 15mm 20mm 15mm;
           }
           * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { font-family: 'Cairo', sans-serif; padding: 20px 30px; background: white; color: #333; direction: rtl; font-size: 11px; }
+          body { font-family: 'Cairo', sans-serif; padding: 20px 30px 60px 30px; background: white; color: #333; direction: rtl; font-size: 11px; }
           
           .page-footer {
             position: fixed;
             bottom: 0;
-            left: 0;
-            right: 0;
+            left: 15mm;
+            right: 15mm;
             text-align: center;
             font-size: 9px;
             color: #666;
-            padding: 10px;
+            padding: 8px 0;
             background: white;
             border-top: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
           }
           
-          @media print {
-            .page-footer .page-info { display: none; }
+          .page-footer .page-number-dynamic::after {
+            content: "صفحة " counter(page) " من " counter(pages);
+            font-weight: 600;
+            color: #333;
           }
           
           .document-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #b8962f; padding-bottom: 15px; margin-bottom: 20px; }
@@ -492,8 +491,8 @@ export default function VotingPage() {
           </div>
         </div>
         
-        <div class="page-footer" style="display: flex; justify-content: space-between; align-items: center;">
-          <span id="page-info" style="font-weight: 600; color: #333;">صفحة 1 من ${votedTokens.length > 8 ? '2' : '1'}</span>
+        <div class="page-footer">
+          <span class="page-number-dynamic"></span>
           <span>شركة الزبد الأفضل التجارية | سجل تجاري: 7026155296 | رقم القرار: ${sanitize(resolution.resolutionNumber) || '-'}</span>
         </div>
       </body>
