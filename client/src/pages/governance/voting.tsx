@@ -250,6 +250,15 @@ export default function VotingPage() {
       return data.startsWith('data:image/png') || data.startsWith('data:image/jpeg');
     };
     
+    // Calculate vote summary
+    const forVotes = votedTokens.filter(t => t.vote === 'for').length;
+    const againstVotes = votedTokens.filter(t => t.vote === 'against').length;
+    const abstainVotes = votedTokens.filter(t => t.vote === 'abstain').length;
+    const totalShares = votedTokens.reduce((sum, t) => sum + (t.numberOfShares || 0), 0);
+    const forShares = votedTokens.filter(t => t.vote === 'for').reduce((sum, t) => sum + (t.numberOfShares || 0), 0);
+    const approvalPercentage = totalShares > 0 ? ((forShares / totalShares) * 100).toFixed(2) : '0';
+    const isApproved = Number(approvalPercentage) >= Number(resolution.requiredMajority || 50);
+
     const printContent = `
       <!DOCTYPE html>
       <html lang="ar" dir="rtl">
@@ -258,78 +267,153 @@ export default function VotingPage() {
         <title>قرار مجلس الإدارة - ${sanitize(resolution.resolutionNumber)}</title>
         <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
         <style>
+          @page { size: A4 landscape; margin: 15mm; }
           * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { font-family: 'Cairo', sans-serif; padding: 40px; background: white; color: #333; direction: rtl; }
-          .header { text-align: center; margin-bottom: 40px; border-bottom: 3px solid #d4a853; padding-bottom: 20px; }
-          .logo { font-size: 28px; font-weight: 700; color: #b8962f; margin-bottom: 5px; }
-          .company-name { font-size: 18px; color: #666; }
-          .title { font-size: 24px; font-weight: 700; color: #333; margin: 30px 0 20px; text-align: center; }
-          .resolution-box { background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; margin-bottom: 30px; }
-          .resolution-number { font-size: 16px; color: #b8962f; font-weight: 600; margin-bottom: 10px; }
-          .resolution-title { font-size: 18px; font-weight: 600; margin-bottom: 15px; }
-          .resolution-text { font-size: 14px; line-height: 1.8; }
-          .votes-section { margin: 30px 0; }
-          .votes-title { font-size: 18px; font-weight: 600; margin-bottom: 20px; border-bottom: 2px solid #d4a853; padding-bottom: 10px; }
-          .vote-item { border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; margin-bottom: 15px; background: #fff; }
-          .voter-info { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-          .voter-name { font-weight: 600; font-size: 16px; }
-          .vote-badge { padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+          body { font-family: 'Cairo', sans-serif; padding: 20px 30px; background: white; color: #333; direction: rtl; font-size: 11px; }
+          
+          .document-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #b8962f; padding-bottom: 15px; margin-bottom: 20px; }
+          .header-right { text-align: right; }
+          .header-center { text-align: center; flex: 1; }
+          .header-left { text-align: left; }
+          .logo { font-size: 22px; font-weight: 700; color: #b8962f; }
+          .company-name { font-size: 14px; color: #333; font-weight: 600; }
+          .company-name-en { font-size: 11px; color: #666; }
+          .doc-title { font-size: 18px; font-weight: 700; color: #b8962f; margin-top: 5px; }
+          .doc-number { font-size: 12px; color: #666; background: #f5f5f5; padding: 5px 15px; border-radius: 15px; display: inline-block; }
+          
+          .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px; }
+          .info-box { background: #fafafa; border: 1px solid #e0e0e0; border-radius: 6px; padding: 12px; }
+          .info-box-header { font-weight: 600; color: #b8962f; margin-bottom: 8px; font-size: 12px; border-bottom: 1px solid #e0e0e0; padding-bottom: 5px; }
+          .info-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+          .info-label { color: #666; }
+          .info-value { font-weight: 600; color: #333; }
+          
+          .resolution-section { background: #fffef5; border: 2px solid #d4a853; border-radius: 8px; padding: 15px; margin-bottom: 15px; }
+          .resolution-title { font-size: 14px; font-weight: 700; color: #333; margin-bottom: 10px; }
+          .resolution-text { font-size: 12px; line-height: 1.8; color: #444; white-space: pre-wrap; }
+          
+          .result-badge { display: inline-block; padding: 8px 25px; border-radius: 20px; font-size: 14px; font-weight: 700; margin-top: 10px; }
+          .result-approved { background: linear-gradient(135deg, #dcfce7, #bbf7d0); color: #166534; border: 2px solid #22c55e; }
+          .result-rejected { background: linear-gradient(135deg, #fee2e2, #fecaca); color: #991b1b; border: 2px solid #ef4444; }
+          
+          .votes-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 10px; }
+          .votes-table th { background: linear-gradient(135deg, #b8962f, #d4a853); color: white; padding: 10px 8px; text-align: right; font-weight: 600; }
+          .votes-table td { padding: 8px; border-bottom: 1px solid #e0e0e0; vertical-align: middle; }
+          .votes-table tr:nth-child(even) { background: #fafafa; }
+          .votes-table tr:hover { background: #fffef5; }
+          
+          .vote-badge { padding: 3px 10px; border-radius: 12px; font-size: 9px; font-weight: 600; display: inline-block; }
           .vote-for { background: #dcfce7; color: #166534; }
           .vote-against { background: #fee2e2; color: #991b1b; }
           .vote-abstain { background: #f3f4f6; color: #374151; }
-          .vote-details { display: flex; gap: 20px; color: #666; font-size: 12px; margin-bottom: 10px; }
-          .signature-container { margin-top: 10px; }
-          .signature-label { font-size: 12px; color: #666; margin-bottom: 5px; }
-          .signature-img { max-width: 200px; max-height: 80px; border: 1px solid #e0e0e0; border-radius: 4px; background: #fff; }
-          .footer { margin-top: 40px; text-align: center; font-size: 12px; color: #888; border-top: 1px solid #e0e0e0; padding-top: 20px; }
+          
+          .signature-cell { display: flex; align-items: center; gap: 10px; }
+          .signature-img { max-width: 120px; max-height: 40px; border: 1px solid #ddd; border-radius: 4px; }
+          
+          .summary-row { display: flex; gap: 20px; margin-bottom: 15px; }
+          .summary-box { flex: 1; background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 6px; padding: 12px; text-align: center; }
+          .summary-value { font-size: 20px; font-weight: 700; color: #b8962f; }
+          .summary-label { font-size: 10px; color: #666; margin-top: 3px; }
+          
+          .footer { display: flex; justify-content: space-between; align-items: center; border-top: 2px solid #e0e0e0; padding-top: 15px; margin-top: 15px; font-size: 9px; color: #888; }
+          .stamp-area { border: 2px dashed #ccc; padding: 20px 40px; text-align: center; color: #999; border-radius: 8px; }
+          
           @media print {
-            body { padding: 20px; }
-            .vote-item { break-inside: avoid; }
+            body { padding: 10px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .votes-table tr { break-inside: avoid; }
           }
         </style>
       </head>
       <body>
-        <div class="header">
-          <div class="logo">🧈 BUTTER BAKERY</div>
-          <div class="company-name">شركة الزبد الأفضل التجارية</div>
+        <div class="document-header">
+          <div class="header-right">
+            <div class="logo">BUTTER BAKERY</div>
+            <div class="company-name">شركة الزبد الأفضل التجارية</div>
+            <div class="company-name-en">Butter Bakery Trading Co.</div>
+          </div>
+          <div class="header-center">
+            <div class="doc-title">محضر قرار مجلس الإدارة</div>
+            <div class="doc-number">رقم القرار: ${sanitize(resolution.resolutionNumber) || '-'}</div>
+          </div>
+          <div class="header-left">
+            <div style="color: #666; font-size: 10px;">التاريخ الهجري</div>
+            <div style="font-weight: 600;">${new Date().toLocaleDateString('ar-SA-u-ca-islamic')}</div>
+            <div style="color: #666; font-size: 10px; margin-top: 5px;">التاريخ الميلادي</div>
+            <div style="font-weight: 600;">${new Date().toLocaleDateString('ar-SA')}</div>
+          </div>
         </div>
         
-        <div class="title">📋 قرار مجلس الإدارة</div>
+        <div class="info-grid">
+          <div class="info-box">
+            <div class="info-box-header">بيانات القرار</div>
+            <div class="info-row"><span class="info-label">نوع القرار:</span><span class="info-value">${resolution.resolutionType === 'ordinary' ? 'عادي' : resolution.resolutionType === 'extraordinary' ? 'غير عادي' : resolution.resolutionType === 'urgent' ? 'عاجل' : 'كتابي'}</span></div>
+            <div class="info-row"><span class="info-label">الأغلبية المطلوبة:</span><span class="info-value">${resolution.requiredMajority || 50}%</span></div>
+            <div class="info-row"><span class="info-label">تاريخ انتهاء التصويت:</span><span class="info-value">${resolution.votingDeadline ? new Date(resolution.votingDeadline).toLocaleDateString('ar-SA') : '-'}</span></div>
+          </div>
+          <div class="info-box">
+            <div class="info-box-header">ملخص التصويت</div>
+            <div class="info-row"><span class="info-label">إجمالي المصوتين:</span><span class="info-value">${votedTokens.length} مساهم</span></div>
+            <div class="info-row"><span class="info-label">موافق / رافض / ممتنع:</span><span class="info-value">${forVotes} / ${againstVotes} / ${abstainVotes}</span></div>
+            <div class="info-row"><span class="info-label">إجمالي الأسهم المصوتة:</span><span class="info-value">${totalShares.toLocaleString()} سهم</span></div>
+          </div>
+          <div class="info-box">
+            <div class="info-box-header">نتيجة التصويت</div>
+            <div class="info-row"><span class="info-label">نسبة الموافقة:</span><span class="info-value" style="color: ${isApproved ? '#166534' : '#991b1b'}; font-size: 16px;">${approvalPercentage}%</span></div>
+            <div style="text-align: center; margin-top: 8px;">
+              <span class="result-badge ${isApproved ? 'result-approved' : 'result-rejected'}">${isApproved ? '✓ تمت الموافقة' : '✗ لم تتم الموافقة'}</span>
+            </div>
+          </div>
+        </div>
         
-        <div class="resolution-box">
-          <div class="resolution-number">رقم القرار: ${sanitize(resolution.resolutionNumber) || '-'}</div>
-          <div class="resolution-title">${sanitize(resolution.title)}</div>
+        <div class="resolution-section">
+          <div class="resolution-title">نص القرار: ${sanitize(resolution.title)}</div>
           <div class="resolution-text">${sanitize(resolution.description)}</div>
         </div>
         
-        <div class="votes-section">
-          <div class="votes-title">🗳️ التصويتات الإلكترونية (${votedTokens.length} تصويت)</div>
-          ${votedTokens.map(token => `
-            <div class="vote-item">
-              <div class="voter-info">
-                <span class="voter-name">${sanitize(token.shareholderName)}</span>
-                <span class="vote-badge ${token.vote === 'for' ? 'vote-for' : token.vote === 'against' ? 'vote-against' : 'vote-abstain'}">
-                  ${voteLabels[token.vote || ''] || sanitize(token.vote)}
-                </span>
-              </div>
-              <div class="vote-details">
-                <span>📅 تاريخ التصويت: ${token.votedAt ? new Date(token.votedAt).toLocaleDateString('ar-SA') : '-'}</span>
-                <span>📊 عدد الأسهم: ${token.numberOfShares?.toLocaleString() || 0}</span>
-              </div>
-              ${token.comments ? `<div style="font-size: 13px; color: #666; margin-bottom: 10px;"><strong>ملاحظات:</strong> ${sanitize(token.comments)}</div>` : ''}
-              ${isValidSignature(token.signatureData) ? `
-                <div class="signature-container">
-                  <div class="signature-label">✍️ التوقيع الإلكتروني:</div>
-                  <img class="signature-img" src="${token.signatureData}" alt="توقيع ${sanitize(token.shareholderName)}" />
-                </div>
-              ` : ''}
-            </div>
-          `).join('')}
-        </div>
+        <table class="votes-table">
+          <thead>
+            <tr>
+              <th style="width: 5%;">#</th>
+              <th style="width: 20%;">اسم المساهم</th>
+              <th style="width: 12%;">عدد الأسهم</th>
+              <th style="width: 10%;">التصويت</th>
+              <th style="width: 13%;">تاريخ التصويت</th>
+              <th style="width: 20%;">الملاحظات</th>
+              <th style="width: 20%;">التوقيع الإلكتروني</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${votedTokens.map((token, index) => `
+              <tr>
+                <td style="text-align: center; font-weight: 600;">${index + 1}</td>
+                <td style="font-weight: 600;">${sanitize(token.shareholderName)}</td>
+                <td style="text-align: center;">${(token.numberOfShares || 0).toLocaleString()}</td>
+                <td style="text-align: center;">
+                  <span class="vote-badge ${token.vote === 'for' ? 'vote-for' : token.vote === 'against' ? 'vote-against' : 'vote-abstain'}">
+                    ${voteLabels[token.vote || ''] || sanitize(token.vote)}
+                  </span>
+                </td>
+                <td style="text-align: center; font-size: 9px;">${token.votedAt ? new Date(token.votedAt).toLocaleDateString('ar-SA') + '<br>' + new Date(token.votedAt).toLocaleTimeString('ar-SA') : '-'}</td>
+                <td style="font-size: 9px; color: #666;">${sanitize(token.comments) || '-'}</td>
+                <td>${isValidSignature(token.signatureData) ? `<img class="signature-img" src="${token.signatureData}" alt="توقيع" />` : '<span style="color: #999;">-</span>'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
         
         <div class="footer">
-          <p>تم إصدار هذا المستند إلكترونياً من نظام BUTTER BAKERY</p>
-          <p>تاريخ الطباعة: ${new Date().toLocaleDateString('ar-SA')} - ${new Date().toLocaleTimeString('ar-SA')}</p>
+          <div>
+            <div style="font-weight: 600; color: #333; margin-bottom: 3px;">مستند رسمي صادر إلكترونياً</div>
+            <div>نظام BUTTER BAKERY - إدارة حوكمة الشركات</div>
+            <div>تاريخ الطباعة: ${new Date().toLocaleDateString('ar-SA')} - ${new Date().toLocaleTimeString('ar-SA')}</div>
+          </div>
+          <div class="stamp-area">
+            ختم الشركة
+          </div>
+          <div style="text-align: left;">
+            <div style="font-weight: 600; color: #333; margin-bottom: 3px;">توقيع رئيس مجلس الإدارة</div>
+            <div style="border-bottom: 1px solid #333; width: 150px; height: 40px;"></div>
+          </div>
         </div>
       </body>
       </html>
