@@ -1155,6 +1155,21 @@ export default function VotingPage() {
                   <p className="text-sm text-blue-600">
                     يمكنك مشاركة روابط التصويت مع المساهمين عبر الواتساب أو البريد الإلكتروني
                   </p>
+                  {/* Vote counts summary */}
+                  <div className="flex gap-4 mt-3 pt-3 border-t border-blue-200">
+                    <div className="flex items-center gap-2">
+                      <span className="text-blue-600 text-sm">إجمالي المساهمين:</span>
+                      <Badge variant="outline" className="bg-white">{votingTokens.length}</Badge>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-green-600 text-sm">تم التصويت:</span>
+                      <Badge className="bg-green-100 text-green-800">{votingTokens.filter(t => t.status === 'voted').length}</Badge>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-yellow-600 text-sm">في الانتظار:</span>
+                      <Badge className="bg-yellow-100 text-yellow-800">{votingTokens.filter(t => t.status === 'pending').length}</Badge>
+                    </div>
+                  </div>
                 </div>
 
                 {createVotingTokensMutation.isPending ? (
@@ -1243,18 +1258,22 @@ export default function VotingPage() {
                   </div>
                 )}
 
-                {/* Print Resolution with Signatures Button */}
-                {votingTokens.some(t => t.status === 'voted' && t.signatureData) && (
-                  <div className="mt-4 pt-4 border-t">
-                    <Button 
-                      className="w-full gap-2 bg-amber-600 hover:bg-amber-700"
-                      onClick={() => printResolutionWithSignatures(selectedResolutionForLinks!, votingTokens)}
-                    >
-                      <FileText className="h-4 w-4" />
-                      طباعة القرار مع التوقيعات الإلكترونية
-                    </Button>
-                  </div>
-                )}
+                {/* Print Resolution with Signatures Button - always show if there are votes */}
+                <div className="mt-4 pt-4 border-t flex gap-3">
+                  <Button 
+                    className="flex-1 gap-2 bg-amber-600 hover:bg-amber-700"
+                    onClick={() => printResolutionWithSignatures(selectedResolutionForLinks!, votingTokens)}
+                    disabled={!votingTokens.some(t => t.status === 'voted')}
+                  >
+                    <FileText className="h-4 w-4" />
+                    طباعة القرار الرسمي
+                    {votingTokens.filter(t => t.status === 'voted').length > 0 && (
+                      <Badge className="bg-white text-amber-700 mr-2">
+                        {votingTokens.filter(t => t.status === 'voted').length} تصويت
+                      </Badge>
+                    )}
+                  </Button>
+                </div>
               </div>
             )}
 
