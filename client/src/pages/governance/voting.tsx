@@ -298,9 +298,18 @@ export default function VotingPage() {
         <title>قرار مجلس الإدارة - ${sanitize(resolution.resolutionNumber)}</title>
         <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
         <style>
-          @page { size: A4 landscape; margin: 15mm; }
+          @page { 
+            size: A4 landscape; 
+            margin: 15mm 15mm 20mm 15mm;
+            @bottom-center {
+              content: "صفحة " counter(page) " من " counter(pages);
+              font-family: 'Cairo', sans-serif;
+              font-size: 10px;
+              color: #666;
+            }
+          }
           * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { font-family: 'Cairo', sans-serif; padding: 20px 30px; background: white; color: #333; direction: rtl; font-size: 11px; }
+          body { font-family: 'Cairo', sans-serif; padding: 20px 30px; background: white; color: #333; direction: rtl; font-size: 11px; counter-reset: page; }
           
           .document-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #b8962f; padding-bottom: 15px; margin-bottom: 20px; }
           .header-right { text-align: right; }
@@ -309,6 +318,7 @@ export default function VotingPage() {
           .logo { font-size: 22px; font-weight: 700; color: #b8962f; }
           .company-name { font-size: 14px; color: #333; font-weight: 600; }
           .company-name-en { font-size: 11px; color: #666; }
+          .cr-number { font-size: 10px; color: #b8962f; font-weight: 600; margin-top: 3px; }
           .doc-title { font-size: 18px; font-weight: 700; color: #b8962f; margin-top: 5px; }
           .doc-number { font-size: 12px; color: #666; background: #f5f5f5; padding: 5px 15px; border-radius: 15px; display: inline-block; }
           
@@ -361,6 +371,7 @@ export default function VotingPage() {
             <div class="logo">BUTTER BAKERY</div>
             <div class="company-name">شركة الزبد الأفضل التجارية</div>
             <div class="company-name-en">Butter Bakery Trading Co.</div>
+            <div class="cr-number">سجل تجاري: 1010XXXXXX</div>
           </div>
           <div class="header-center">
             <div class="doc-title">محضر قرار مجلس الإدارة</div>
