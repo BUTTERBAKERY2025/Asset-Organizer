@@ -1889,6 +1889,8 @@ export function registerGovernanceRoutes(app: Express) {
         .orderBy(desc(systemAuditLogs.createdAt))
         .limit(100);
 
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
       res.json(auditLogs);
     } catch (error) {
       console.error("Error fetching voting audit log:", error);
