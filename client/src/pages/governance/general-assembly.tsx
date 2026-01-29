@@ -1,14 +1,18 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
+import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { 
   Building2, 
@@ -21,9 +25,49 @@ import {
   ArrowRight,
   ChevronLeft,
   Vote,
-  Gavel
+  Gavel,
+  BarChart3,
+  PieChart,
+  TrendingUp,
+  AlertCircle,
+  UserCheck,
+  UserX,
+  ClipboardList,
+  Send,
+  Eye,
+  Edit,
+  Trash2,
+  Download,
+  Printer,
+  Share2,
+  Bell,
+  Mail,
+  Phone,
+  MapPin,
+  CalendarDays,
+  Target,
+  Shield,
+  Scale,
+  CircleDot,
+  CheckSquare,
+  XCircle,
+  MinusCircle,
+  RefreshCw
 } from "lucide-react";
 import { Link } from "wouter";
+
+interface Shareholder {
+  id: number;
+  fullName: string;
+  nationalId?: string;
+  email?: string;
+  phone?: string;
+  numberOfShares: number;
+  sharePercentage?: string;
+  votingRights: boolean;
+  memberType: string;
+  status: string;
+}
 
 interface GeneralAssembly {
   id: number;
@@ -39,8 +83,25 @@ interface GeneralAssembly {
   createdAt: string;
 }
 
+interface BoardResolution {
+  id: number;
+  resolutionNumber: string;
+  title: string;
+  description?: string;
+  resolutionType: string;
+  status: string;
+  votingDeadline?: string;
+}
+
 export default function GeneralAssemblyPage() {
   const [showNewMeeting, setShowNewMeeting] = useState(false);
+  const [showAttendance, setShowAttendance] = useState(false);
+  const [showAgenda, setShowAgenda] = useState(false);
+  const [showInvitations, setShowInvitations] = useState(false);
+  const [selectedMeeting, setSelectedMeeting] = useState<GeneralAssembly | null>(null);
+  const [attendanceList, setAttendanceList] = useState<Record<number, boolean>>({});
+  const [proxyList, setProxyList] = useState<Record<number, string>>({});
+  const [activeTab, setActiveTab] = useState("overview");
   const [newMeeting, setNewMeeting] = useState({
     title: "",
     meetingType: "ordinary",
@@ -52,12 +113,16 @@ export default function GeneralAssemblyPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: meetings = [], isLoading } = useQuery<GeneralAssembly[]>({
+  const { data: meetings = [], isLoading: meetingsLoading } = useQuery<GeneralAssembly[]>({
     queryKey: ["/api/governance/meetings"],
   });
 
-  const { data: shareholders = [] } = useQuery<any[]>({
+  const { data: shareholders = [], isLoading: shareholdersLoading } = useQuery<Shareholder[]>({
     queryKey: ["/api/governance/shareholders"],
+  });
+
+  const { data: resolutions = [] } = useQuery<BoardResolution[]>({
+    queryKey: ["/api/governance/resolutions"],
   });
 
   const createMeetingMutation = useMutation({
@@ -89,47 +154,99 @@ export default function GeneralAssemblyPage() {
     },
   });
 
+  // حسابات المساهمين
+  const shareholderStats = useMemo(() => {
+    const totalShares = shareholders.reduce((sum, s) => sum + (s.numberOfShares || 0), 0);
+    const votingShares = shareholders.filter(s => s.votingRights).reduce((sum, s) => sum + (s.numberOfShares || 0), 0);
+    const activeMembers = shareholders.filter(s => s.status === 'active').length;
+    const foundingMembers = shareholders.filter(s => s.memberType === 'founding').length;
+    const regularMembers = shareholders.filter(s => s.memberType === 'regular').length;
+    
+    return {
+      totalShares,
+      votingShares,
+      totalMembers: shareholders.length,
+      activeMembers,
+      foundingMembers,
+      regularMembers,
+      votingPercentage: totalShares > 0 ? ((votingShares / totalShares) * 100).toFixed(1) : 0,
+    };
+  }, [shareholders]);
+
+  // حسابات الاجتماعات
+  const meetingStats = useMemo(() => {
+    const assemblyMeetings = meetings.filter(m => 
+      m.meetingType === 'ordinary' || m.meetingType === 'extraordinary'
+    );
+    return {
+      total: assemblyMeetings.length,
+      ordinary: assemblyMeetings.filter(m => m.meetingType === 'ordinary').length,
+      extraordinary: assemblyMeetings.filter(m => m.meetingType === 'extraordinary').length,
+      scheduled: assemblyMeetings.filter(m => m.status === 'scheduled').length,
+      completed: assemblyMeetings.filter(m => m.status === 'completed').length,
+      upcoming: assemblyMeetings.filter(m => {
+        if (!m.scheduledDate) return false;
+        return new Date(m.scheduledDate) > new Date();
+      }),
+    };
+  }, [meetings]);
+
+  // حساب النصاب
+  const calculateQuorum = (attendees: number[]) => {
+    const attendingShares = attendees.reduce((sum, id) => {
+      const shareholder = shareholders.find(s => s.id === id);
+      return sum + (shareholder?.numberOfShares || 0);
+    }, 0);
+    const percentage = shareholderStats.totalShares > 0 
+      ? (attendingShares / shareholderStats.totalShares) * 100 
+      : 0;
+    return {
+      shares: attendingShares,
+      percentage: percentage.toFixed(2),
+      hasQuorum: percentage >= (selectedMeeting?.quorumRequired || 50),
+    };
+  };
+
   const assemblyMeetings = meetings.filter(m => 
     m.meetingType === 'ordinary' || m.meetingType === 'extraordinary'
   );
 
-  const ordinaryMeetings = assemblyMeetings.filter(m => m.meetingType === 'ordinary');
-  const extraordinaryMeetings = assemblyMeetings.filter(m => m.meetingType === 'extraordinary');
-  const upcomingMeetings = assemblyMeetings.filter(m => m.status === 'scheduled' || m.status === 'pending');
-  const completedMeetings = assemblyMeetings.filter(m => m.status === 'completed');
-
-  const totalShares = shareholders.reduce((sum, s) => sum + (s.numberOfShares || 0), 0);
-
   const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'scheduled':
-        return <Badge className="bg-blue-100 text-blue-800">مجدولة</Badge>;
-      case 'pending':
-        return <Badge className="bg-yellow-100 text-yellow-800">قيد الانتظار</Badge>;
-      case 'in_progress':
-        return <Badge className="bg-green-100 text-green-800">جارية</Badge>;
-      case 'completed':
-        return <Badge className="bg-gray-100 text-gray-800">مكتملة</Badge>;
-      case 'cancelled':
-        return <Badge className="bg-red-100 text-red-800">ملغية</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
-    }
+    const styles: Record<string, string> = {
+      scheduled: 'bg-blue-100 text-blue-800 border-blue-300',
+      pending: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+      in_progress: 'bg-green-100 text-green-800 border-green-300',
+      completed: 'bg-gray-100 text-gray-800 border-gray-300',
+      cancelled: 'bg-red-100 text-red-800 border-red-300',
+    };
+    const labels: Record<string, string> = {
+      scheduled: 'مجدولة',
+      pending: 'قيد الانتظار',
+      in_progress: 'جارية',
+      completed: 'مكتملة',
+      cancelled: 'ملغية',
+    };
+    return <Badge className={styles[status] || 'bg-gray-100'}>{labels[status] || status}</Badge>;
   };
 
   const getMeetingTypeBadge = (type: string) => {
-    switch (type) {
-      case 'ordinary':
-        return <Badge className="bg-emerald-100 text-emerald-800">عادية</Badge>;
-      case 'extraordinary':
-        return <Badge className="bg-purple-100 text-purple-800">غير عادية</Badge>;
-      default:
-        return <Badge variant="outline">{type}</Badge>;
-    }
+    const styles: Record<string, string> = {
+      ordinary: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+      extraordinary: 'bg-purple-100 text-purple-800 border-purple-300',
+    };
+    const labels: Record<string, string> = {
+      ordinary: 'عادية',
+      extraordinary: 'غير عادية',
+    };
+    return <Badge className={styles[type] || 'bg-gray-100'}>{labels[type] || type}</Badge>;
   };
+
+  const attendingIds = Object.entries(attendanceList).filter(([, v]) => v).map(([k]) => parseInt(k));
+  const quorumData = calculateQuorum(attendingIds);
 
   return (
     <div className="p-6 space-y-6" dir="rtl">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link href="/governance">
@@ -143,226 +260,545 @@ export default function GeneralAssemblyPage() {
               <Building2 className="h-7 w-7 text-blue-600" />
               الجمعية العمومية
             </h1>
-            <p className="text-gray-600">إدارة اجتماعات الجمعية العادية وغير العادية</p>
+            <p className="text-gray-600">إدارة اجتماعات الجمعية العادية وغير العادية وفق نظام الشركات السعودي</p>
           </div>
         </div>
-        <Button className="gap-2" onClick={() => setShowNewMeeting(true)}>
-          <Plus className="h-4 w-4" />
-          اجتماع جديد
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" className="gap-2" onClick={() => setShowInvitations(true)}>
+            <Send className="h-4 w-4" />
+            إرسال الدعوات
+          </Button>
+          <Button className="gap-2" onClick={() => setShowNewMeeting(true)}>
+            <Plus className="h-4 w-4" />
+            اجتماع جديد
+          </Button>
+        </div>
       </div>
 
-      {/* إحصائيات */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-blue-600">إجمالي الاجتماعات</p>
-                <p className="text-2xl font-bold text-blue-800">{assemblyMeetings.length}</p>
-              </div>
-              <Building2 className="h-8 w-8 text-blue-500" />
-            </div>
-          </CardContent>
-        </Card>
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <TabsList className="grid grid-cols-4 w-full max-w-2xl">
+          <TabsTrigger value="overview" className="gap-2">
+            <BarChart3 className="h-4 w-4" />
+            نظرة عامة
+          </TabsTrigger>
+          <TabsTrigger value="meetings" className="gap-2">
+            <Calendar className="h-4 w-4" />
+            الاجتماعات
+          </TabsTrigger>
+          <TabsTrigger value="shareholders" className="gap-2">
+            <Users className="h-4 w-4" />
+            المساهمين
+          </TabsTrigger>
+          <TabsTrigger value="resolutions" className="gap-2">
+            <Gavel className="h-4 w-4" />
+            القرارات
+          </TabsTrigger>
+        </TabsList>
 
-        <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-emerald-600">جمعيات عادية</p>
-                <p className="text-2xl font-bold text-emerald-800">{ordinaryMeetings.length}</p>
-              </div>
-              <Calendar className="h-8 w-8 text-emerald-500" />
-            </div>
-          </CardContent>
-        </Card>
+        {/* نظرة عامة */}
+        <TabsContent value="overview" className="space-y-6">
+          {/* إحصائيات رئيسية */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-blue-600 font-medium">إجمالي المساهمين</p>
+                    <p className="text-3xl font-bold text-blue-800">{shareholderStats.totalMembers}</p>
+                    <p className="text-xs text-blue-500 mt-1">
+                      {shareholderStats.activeMembers} نشط | {shareholderStats.foundingMembers} مؤسس
+                    </p>
+                  </div>
+                  <div className="p-3 bg-blue-200 rounded-full">
+                    <Users className="h-8 w-8 text-blue-700" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-        <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-purple-600">جمعيات غير عادية</p>
-                <p className="text-2xl font-bold text-purple-800">{extraordinaryMeetings.length}</p>
-              </div>
-              <Gavel className="h-8 w-8 text-purple-500" />
-            </div>
-          </CardContent>
-        </Card>
+            <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-amber-600 font-medium">إجمالي الأسهم</p>
+                    <p className="text-3xl font-bold text-amber-800">{shareholderStats.totalShares.toLocaleString('en-US')}</p>
+                    <p className="text-xs text-amber-500 mt-1">
+                      {shareholderStats.votingPercentage}% لها حق التصويت
+                    </p>
+                  </div>
+                  <div className="p-3 bg-amber-200 rounded-full">
+                    <PieChart className="h-8 w-8 text-amber-700" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-        <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-amber-600">قادمة</p>
-                <p className="text-2xl font-bold text-amber-800">{upcomingMeetings.length}</p>
-              </div>
-              <Clock className="h-8 w-8 text-amber-500" />
-            </div>
-          </CardContent>
-        </Card>
+            <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-emerald-600 font-medium">جمعيات عادية</p>
+                    <p className="text-3xl font-bold text-emerald-800">{meetingStats.ordinary}</p>
+                    <p className="text-xs text-emerald-500 mt-1">
+                      {meetingStats.scheduled} مجدولة
+                    </p>
+                  </div>
+                  <div className="p-3 bg-emerald-200 rounded-full">
+                    <Calendar className="h-8 w-8 text-emerald-700" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-        <Card className="bg-gradient-to-br from-gray-50 to-gray-100 border-gray-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">مكتملة</p>
-                <p className="text-2xl font-bold text-gray-800">{completedMeetings.length}</p>
-              </div>
-              <CheckCircle className="h-8 w-8 text-gray-500" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* معلومات المساهمين */}
-      <Card className="bg-gradient-to-r from-amber-50 to-yellow-50 border-amber-200">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Users className="h-10 w-10 text-amber-600" />
-              <div>
-                <h3 className="font-semibold text-amber-800">بيانات المساهمين</h3>
-                <p className="text-sm text-amber-600">
-                  إجمالي المساهمين: {shareholders.length} | إجمالي الأسهم: {totalShares.toLocaleString('en-US')}
-                </p>
-              </div>
-            </div>
-            <Link href="/governance/shareholders">
-              <Button variant="outline" size="sm" className="gap-2">
-                عرض التفاصيل
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
+            <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-purple-600 font-medium">جمعيات غير عادية</p>
+                    <p className="text-3xl font-bold text-purple-800">{meetingStats.extraordinary}</p>
+                    <p className="text-xs text-purple-500 mt-1">
+                      {meetingStats.completed} مكتملة
+                    </p>
+                  </div>
+                  <div className="p-3 bg-purple-200 rounded-full">
+                    <Gavel className="h-8 w-8 text-purple-700" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* قائمة الاجتماعات */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5 text-blue-600" />
-            اجتماعات الجمعية العمومية
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="text-center py-8 text-gray-500">جاري التحميل...</div>
-          ) : assemblyMeetings.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
-              <Building2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>لا توجد اجتماعات جمعية عمومية حالياً</p>
-              <Button className="mt-4" onClick={() => setShowNewMeeting(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                إنشاء اجتماع جديد
-              </Button>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-right">العنوان</TableHead>
-                  <TableHead className="text-right">النوع</TableHead>
-                  <TableHead className="text-right">التاريخ</TableHead>
-                  <TableHead className="text-right">المكان</TableHead>
-                  <TableHead className="text-right">نسبة النصاب</TableHead>
-                  <TableHead className="text-right">الحالة</TableHead>
-                  <TableHead className="text-right">الإجراءات</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {assemblyMeetings.map((meeting) => (
-                  <TableRow key={meeting.id}>
-                    <TableCell className="font-medium">{meeting.title}</TableCell>
-                    <TableCell>{getMeetingTypeBadge(meeting.meetingType)}</TableCell>
-                    <TableCell>
-                      {meeting.scheduledDate 
-                        ? new Date(meeting.scheduledDate).toLocaleDateString('en-GB')
-                        : '-'}
-                    </TableCell>
-                    <TableCell>{meeting.location || '-'}</TableCell>
-                    <TableCell>{meeting.quorumRequired}%</TableCell>
-                    <TableCell>{getStatusBadge(meeting.status)}</TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Link href={`/governance/meetings/${meeting.id}`}>
-                          <Button variant="outline" size="sm">
-                            <FileText className="h-4 w-4" />
-                          </Button>
-                        </Link>
-                        <Link href="/governance/voting">
-                          <Button variant="outline" size="sm">
-                            <Vote className="h-4 w-4" />
-                          </Button>
-                        </Link>
+          {/* الاجتماعات القادمة وأكبر المساهمين */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* الاجتماعات القادمة */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Clock className="h-5 w-5 text-blue-600" />
+                  الاجتماعات القادمة
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {meetingStats.upcoming.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <Calendar className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                    <p>لا توجد اجتماعات قادمة</p>
+                    <Button size="sm" className="mt-3" onClick={() => setShowNewMeeting(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      جدولة اجتماع
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {meetingStats.upcoming.slice(0, 3).map((meeting) => (
+                      <div key={meeting.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                        <div className="flex items-center gap-3">
+                          <div className={`p-2 rounded-lg ${meeting.meetingType === 'ordinary' ? 'bg-emerald-100' : 'bg-purple-100'}`}>
+                            <Building2 className={`h-5 w-5 ${meeting.meetingType === 'ordinary' ? 'text-emerald-600' : 'text-purple-600'}`} />
+                          </div>
+                          <div>
+                            <p className="font-medium">{meeting.title}</p>
+                            <p className="text-sm text-gray-500">
+                              {meeting.scheduledDate ? new Date(meeting.scheduledDate).toLocaleDateString('en-GB') : '-'}
+                            </p>
+                          </div>
+                        </div>
+                        {getMeetingTypeBadge(meeting.meetingType)}
                       </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
-      {/* روابط سريعة */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Link href="/governance/voting">
-          <Card className="hover:border-green-400 hover:shadow-lg transition-all cursor-pointer">
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="p-3 bg-green-100 rounded-lg">
-                <Vote className="h-6 w-6 text-green-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold">التصويت الإلكتروني</h3>
-                <p className="text-sm text-gray-500">التصويت على قرارات الجمعية</p>
+            {/* أكبر المساهمين */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-amber-600" />
+                  أكبر المساهمين
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {shareholders.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <Users className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                    <p>لا توجد بيانات مساهمين</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {[...shareholders]
+                      .sort((a, b) => (b.numberOfShares || 0) - (a.numberOfShares || 0))
+                      .slice(0, 5)
+                      .map((shareholder, index) => {
+                        const percentage = shareholderStats.totalShares > 0 
+                          ? ((shareholder.numberOfShares || 0) / shareholderStats.totalShares * 100).toFixed(1)
+                          : 0;
+                        return (
+                          <div key={shareholder.id} className="flex items-center gap-3">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                              index === 0 ? 'bg-amber-100 text-amber-700' :
+                              index === 1 ? 'bg-gray-100 text-gray-700' :
+                              index === 2 ? 'bg-orange-100 text-orange-700' :
+                              'bg-gray-50 text-gray-500'
+                            }`}>
+                              {index + 1}
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="font-medium text-sm">{shareholder.fullName}</span>
+                                <span className="text-sm text-gray-600">{percentage}%</span>
+                              </div>
+                              <Progress value={Number(percentage)} className="h-2" />
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* النصاب القانوني */}
+          <Card className="bg-gradient-to-r from-indigo-50 to-blue-50 border-indigo-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Scale className="h-5 w-5 text-indigo-600" />
+                معلومات النصاب القانوني
+              </CardTitle>
+              <CardDescription>حسب نظام الشركات السعودي 1443هـ</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="p-4 bg-white rounded-lg border">
+                  <div className="flex items-center gap-2 mb-2">
+                    <CheckCircle className="h-5 w-5 text-emerald-600" />
+                    <span className="font-semibold">الجمعية العادية</span>
+                  </div>
+                  <p className="text-sm text-gray-600 mb-2">نصاب الانعقاد: 25% من رأس المال</p>
+                  <p className="text-sm text-gray-600">الأغلبية المطلوبة: 50% + 1</p>
+                </div>
+                <div className="p-4 bg-white rounded-lg border">
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertCircle className="h-5 w-5 text-purple-600" />
+                    <span className="font-semibold">الجمعية غير العادية</span>
+                  </div>
+                  <p className="text-sm text-gray-600 mb-2">نصاب الانعقاد: 50% من رأس المال</p>
+                  <p className="text-sm text-gray-600">الأغلبية المطلوبة: 75%</p>
+                </div>
+                <div className="p-4 bg-white rounded-lg border">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Shield className="h-5 w-5 text-red-600" />
+                    <span className="font-semibold">قرارات خاصة</span>
+                  </div>
+                  <p className="text-sm text-gray-600 mb-2">تعديل النظام الأساسي</p>
+                  <p className="text-sm text-gray-600">الأغلبية المطلوبة: 75%</p>
+                </div>
               </div>
             </CardContent>
           </Card>
-        </Link>
+        </TabsContent>
 
-        <Link href="/governance/resolutions">
-          <Card className="hover:border-indigo-400 hover:shadow-lg transition-all cursor-pointer">
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="p-3 bg-indigo-100 rounded-lg">
-                <Gavel className="h-6 w-6 text-indigo-600" />
+        {/* الاجتماعات */}
+        <TabsContent value="meetings" className="space-y-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-blue-600" />
+                اجتماعات الجمعية العمومية
+              </CardTitle>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" className="gap-2">
+                  <Download className="h-4 w-4" />
+                  تصدير
+                </Button>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <RefreshCw className="h-4 w-4" />
+                  تحديث
+                </Button>
               </div>
-              <div>
-                <h3 className="font-semibold">القرارات</h3>
-                <p className="text-sm text-gray-500">قرارات الجمعية العمومية</p>
-              </div>
+            </CardHeader>
+            <CardContent>
+              {meetingsLoading ? (
+                <div className="text-center py-8 text-gray-500">جاري التحميل...</div>
+              ) : assemblyMeetings.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  <Building2 className="h-16 w-16 mx-auto mb-4 opacity-30" />
+                  <p className="text-lg mb-2">لا توجد اجتماعات جمعية عمومية</p>
+                  <p className="text-sm mb-4">قم بإنشاء اجتماع جديد للبدء</p>
+                  <Button onClick={() => setShowNewMeeting(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    إنشاء اجتماع جديد
+                  </Button>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-right">العنوان</TableHead>
+                      <TableHead className="text-right">النوع</TableHead>
+                      <TableHead className="text-right">التاريخ</TableHead>
+                      <TableHead className="text-right">المكان</TableHead>
+                      <TableHead className="text-right">النصاب</TableHead>
+                      <TableHead className="text-right">الحالة</TableHead>
+                      <TableHead className="text-right">الإجراءات</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {assemblyMeetings.map((meeting) => (
+                      <TableRow key={meeting.id} className="hover:bg-gray-50">
+                        <TableCell className="font-medium">{meeting.title}</TableCell>
+                        <TableCell>{getMeetingTypeBadge(meeting.meetingType)}</TableCell>
+                        <TableCell>
+                          {meeting.scheduledDate 
+                            ? new Date(meeting.scheduledDate).toLocaleDateString('en-GB')
+                            : '-'}
+                        </TableCell>
+                        <TableCell>{meeting.location || '-'}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{meeting.quorumRequired}%</Badge>
+                        </TableCell>
+                        <TableCell>{getStatusBadge(meeting.status)}</TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => {
+                                setSelectedMeeting(meeting);
+                                setShowAttendance(true);
+                              }}
+                            >
+                              <UserCheck className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => {
+                                setSelectedMeeting(meeting);
+                                setShowAgenda(true);
+                              }}
+                            >
+                              <ClipboardList className="h-4 w-4" />
+                            </Button>
+                            <Link href="/governance/voting">
+                              <Button variant="ghost" size="sm">
+                                <Vote className="h-4 w-4" />
+                              </Button>
+                            </Link>
+                            <Button variant="ghost" size="sm">
+                              <Printer className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
-        </Link>
+        </TabsContent>
 
-        <Link href="/governance/shareholders">
-          <Card className="hover:border-amber-400 hover:shadow-lg transition-all cursor-pointer">
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="p-3 bg-amber-100 rounded-lg">
-                <Users className="h-6 w-6 text-amber-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold">المساهمين</h3>
-                <p className="text-sm text-gray-500">بيانات وسجل المساهمين</p>
-              </div>
+        {/* المساهمين */}
+        <TabsContent value="shareholders" className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <Card className="bg-blue-50 border-blue-200">
+              <CardContent className="p-4 flex items-center gap-4">
+                <Users className="h-10 w-10 text-blue-600" />
+                <div>
+                  <p className="text-sm text-blue-600">إجمالي المساهمين</p>
+                  <p className="text-2xl font-bold text-blue-800">{shareholderStats.totalMembers}</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="bg-emerald-50 border-emerald-200">
+              <CardContent className="p-4 flex items-center gap-4">
+                <UserCheck className="h-10 w-10 text-emerald-600" />
+                <div>
+                  <p className="text-sm text-emerald-600">لهم حق التصويت</p>
+                  <p className="text-2xl font-bold text-emerald-800">
+                    {shareholders.filter(s => s.votingRights).length}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="bg-amber-50 border-amber-200">
+              <CardContent className="p-4 flex items-center gap-4">
+                <PieChart className="h-10 w-10 text-amber-600" />
+                <div>
+                  <p className="text-sm text-amber-600">إجمالي الأسهم</p>
+                  <p className="text-2xl font-bold text-amber-800">{shareholderStats.totalShares.toLocaleString('en-US')}</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5 text-blue-600" />
+                قائمة المساهمين
+              </CardTitle>
+              <Link href="/governance/shareholders">
+                <Button variant="outline" size="sm" className="gap-2">
+                  إدارة المساهمين
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </Link>
+            </CardHeader>
+            <CardContent>
+              {shareholdersLoading ? (
+                <div className="text-center py-8">جاري التحميل...</div>
+              ) : shareholders.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  <Users className="h-16 w-16 mx-auto mb-4 opacity-30" />
+                  <p>لا توجد بيانات مساهمين</p>
+                  <Link href="/governance/shareholders">
+                    <Button className="mt-4">
+                      <Plus className="h-4 w-4 mr-2" />
+                      إضافة مساهمين
+                    </Button>
+                  </Link>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-right">الاسم</TableHead>
+                      <TableHead className="text-right">الهوية</TableHead>
+                      <TableHead className="text-right">عدد الأسهم</TableHead>
+                      <TableHead className="text-right">النسبة</TableHead>
+                      <TableHead className="text-right">حق التصويت</TableHead>
+                      <TableHead className="text-right">النوع</TableHead>
+                      <TableHead className="text-right">الحالة</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {shareholders.map((shareholder) => {
+                      const percentage = shareholderStats.totalShares > 0 
+                        ? ((shareholder.numberOfShares || 0) / shareholderStats.totalShares * 100).toFixed(2)
+                        : 0;
+                      return (
+                        <TableRow key={shareholder.id}>
+                          <TableCell className="font-medium">{shareholder.fullName}</TableCell>
+                          <TableCell>{shareholder.nationalId || '-'}</TableCell>
+                          <TableCell>{(shareholder.numberOfShares || 0).toLocaleString('en-US')}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{percentage}%</Badge>
+                          </TableCell>
+                          <TableCell>
+                            {shareholder.votingRights ? (
+                              <CheckCircle className="h-5 w-5 text-green-600" />
+                            ) : (
+                              <XCircle className="h-5 w-5 text-red-400" />
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Badge className={shareholder.memberType === 'founding' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800'}>
+                              {shareholder.memberType === 'founding' ? 'مؤسس' : 'عادي'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge className={shareholder.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}>
+                              {shareholder.status === 'active' ? 'نشط' : 'غير نشط'}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
-        </Link>
-      </div>
+        </TabsContent>
+
+        {/* القرارات */}
+        <TabsContent value="resolutions" className="space-y-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Gavel className="h-5 w-5 text-indigo-600" />
+                قرارات الجمعية العمومية
+              </CardTitle>
+              <Link href="/governance/voting">
+                <Button className="gap-2">
+                  <Vote className="h-4 w-4" />
+                  التصويت الإلكتروني
+                </Button>
+              </Link>
+            </CardHeader>
+            <CardContent>
+              {resolutions.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  <Gavel className="h-16 w-16 mx-auto mb-4 opacity-30" />
+                  <p>لا توجد قرارات حالياً</p>
+                  <Link href="/governance/resolutions">
+                    <Button className="mt-4">
+                      <Plus className="h-4 w-4 mr-2" />
+                      إنشاء قرار جديد
+                    </Button>
+                  </Link>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-right">رقم القرار</TableHead>
+                      <TableHead className="text-right">العنوان</TableHead>
+                      <TableHead className="text-right">النوع</TableHead>
+                      <TableHead className="text-right">الحالة</TableHead>
+                      <TableHead className="text-right">الإجراءات</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {resolutions.slice(0, 10).map((resolution) => (
+                      <TableRow key={resolution.id}>
+                        <TableCell className="font-mono">{resolution.resolutionNumber}</TableCell>
+                        <TableCell className="font-medium">{resolution.title}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">
+                            {resolution.resolutionType === 'ordinary' ? 'عادي' : 
+                             resolution.resolutionType === 'extraordinary' ? 'غير عادي' : resolution.resolutionType}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{getStatusBadge(resolution.status)}</TableCell>
+                        <TableCell>
+                          <Link href="/governance/voting">
+                            <Button variant="outline" size="sm" className="gap-2">
+                              <Vote className="h-4 w-4" />
+                              تصويت
+                            </Button>
+                          </Link>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       {/* نافذة إنشاء اجتماع جديد */}
       <Dialog open={showNewMeeting} onOpenChange={setShowNewMeeting}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Building2 className="h-5 w-5 text-blue-600" />
               إنشاء اجتماع جمعية عمومية
             </DialogTitle>
+            <DialogDescription>
+              أدخل بيانات الاجتماع الجديد
+            </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>عنوان الاجتماع</Label>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2">
+              <Label>عنوان الاجتماع *</Label>
               <Input
                 value={newMeeting.title}
                 onChange={(e) => setNewMeeting({ ...newMeeting, title: e.target.value })}
@@ -370,22 +806,22 @@ export default function GeneralAssemblyPage() {
               />
             </div>
             <div>
-              <Label>نوع الجمعية</Label>
+              <Label>نوع الجمعية *</Label>
               <Select
                 value={newMeeting.meetingType}
-                onValueChange={(v) => setNewMeeting({ ...newMeeting, meetingType: v })}
+                onValueChange={(v) => setNewMeeting({ ...newMeeting, meetingType: v, quorumRequired: v === 'ordinary' ? 25 : 50 })}
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ordinary">جمعية عادية</SelectItem>
-                  <SelectItem value="extraordinary">جمعية غير عادية</SelectItem>
+                  <SelectItem value="ordinary">جمعية عادية (نصاب 25%)</SelectItem>
+                  <SelectItem value="extraordinary">جمعية غير عادية (نصاب 50%)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <Label>تاريخ الاجتماع</Label>
+              <Label>تاريخ ووقت الاجتماع *</Label>
               <Input
                 type="datetime-local"
                 value={newMeeting.scheduledDate}
@@ -407,16 +843,16 @@ export default function GeneralAssemblyPage() {
                 min="1"
                 max="100"
                 value={newMeeting.quorumRequired}
-                onChange={(e) => setNewMeeting({ ...newMeeting, quorumRequired: parseInt(e.target.value) || 50 })}
+                onChange={(e) => setNewMeeting({ ...newMeeting, quorumRequired: parseInt(e.target.value) || 25 })}
               />
             </div>
-            <div>
+            <div className="col-span-2">
               <Label>جدول الأعمال</Label>
               <Textarea
                 value={newMeeting.agenda}
                 onChange={(e) => setNewMeeting({ ...newMeeting, agenda: e.target.value })}
-                placeholder="أدخل بنود جدول الأعمال..."
-                rows={4}
+                placeholder="1. الافتتاح والترحيب&#10;2. التحقق من النصاب&#10;3. اعتماد جدول الأعمال&#10;4. ..."
+                rows={5}
               />
             </div>
           </div>
@@ -424,9 +860,206 @@ export default function GeneralAssemblyPage() {
             <Button variant="outline" onClick={() => setShowNewMeeting(false)}>إلغاء</Button>
             <Button 
               onClick={() => createMeetingMutation.mutate(newMeeting)}
-              disabled={!newMeeting.title || !newMeeting.scheduledDate}
+              disabled={!newMeeting.title || !newMeeting.scheduledDate || createMeetingMutation.isPending}
             >
-              إنشاء الاجتماع
+              {createMeetingMutation.isPending ? 'جاري الإنشاء...' : 'إنشاء الاجتماع'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* نافذة تسجيل الحضور */}
+      <Dialog open={showAttendance} onOpenChange={setShowAttendance}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserCheck className="h-5 w-5 text-green-600" />
+              تسجيل حضور المساهمين
+            </DialogTitle>
+            <DialogDescription>
+              {selectedMeeting?.title}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {/* ملخص النصاب */}
+          <Card className={`${quorumData.hasQuorum ? 'bg-green-50 border-green-300' : 'bg-yellow-50 border-yellow-300'}`}>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {quorumData.hasQuorum ? (
+                    <CheckCircle className="h-8 w-8 text-green-600" />
+                  ) : (
+                    <AlertCircle className="h-8 w-8 text-yellow-600" />
+                  )}
+                  <div>
+                    <p className="font-semibold">
+                      {quorumData.hasQuorum ? 'تم اكتمال النصاب' : 'النصاب غير مكتمل'}
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      الأسهم الحاضرة: {quorumData.shares.toLocaleString('en-US')} ({quorumData.percentage}%)
+                    </p>
+                  </div>
+                </div>
+                <div className="text-left">
+                  <p className="text-sm text-gray-600">النصاب المطلوب</p>
+                  <p className="text-xl font-bold">{selectedMeeting?.quorumRequired || 50}%</p>
+                </div>
+              </div>
+              <Progress 
+                value={Number(quorumData.percentage)} 
+                className="mt-3 h-3"
+              />
+            </CardContent>
+          </Card>
+
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="text-right w-12">حاضر</TableHead>
+                <TableHead className="text-right">المساهم</TableHead>
+                <TableHead className="text-right">عدد الأسهم</TableHead>
+                <TableHead className="text-right">النسبة</TableHead>
+                <TableHead className="text-right">التوكيل (اختياري)</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {shareholders.filter(s => s.votingRights).map((shareholder) => {
+                const percentage = shareholderStats.totalShares > 0 
+                  ? ((shareholder.numberOfShares || 0) / shareholderStats.totalShares * 100).toFixed(2)
+                  : 0;
+                return (
+                  <TableRow key={shareholder.id}>
+                    <TableCell>
+                      <Checkbox
+                        checked={attendanceList[shareholder.id] || false}
+                        onCheckedChange={(checked) => 
+                          setAttendanceList({ ...attendanceList, [shareholder.id]: !!checked })
+                        }
+                      />
+                    </TableCell>
+                    <TableCell className="font-medium">{shareholder.fullName}</TableCell>
+                    <TableCell>{(shareholder.numberOfShares || 0).toLocaleString('en-US')}</TableCell>
+                    <TableCell>{percentage}%</TableCell>
+                    <TableCell>
+                      <Input
+                        placeholder="اسم الموكَّل"
+                        value={proxyList[shareholder.id] || ''}
+                        onChange={(e) => setProxyList({ ...proxyList, [shareholder.id]: e.target.value })}
+                        className="h-8"
+                      />
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAttendance(false)}>إلغاء</Button>
+            <Button className="gap-2">
+              <CheckSquare className="h-4 w-4" />
+              حفظ الحضور
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* نافذة جدول الأعمال */}
+      <Dialog open={showAgenda} onOpenChange={setShowAgenda}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ClipboardList className="h-5 w-5 text-blue-600" />
+              جدول الأعمال
+            </DialogTitle>
+            <DialogDescription>
+              {selectedMeeting?.title}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {selectedMeeting?.agenda ? (
+              <div className="whitespace-pre-wrap p-4 bg-gray-50 rounded-lg border">
+                {selectedMeeting.agenda}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <ClipboardList className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                <p>لم يتم تحديد جدول أعمال لهذا الاجتماع</p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAgenda(false)}>إغلاق</Button>
+            <Button variant="outline" className="gap-2">
+              <Printer className="h-4 w-4" />
+              طباعة
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* نافذة إرسال الدعوات */}
+      <Dialog open={showInvitations} onOpenChange={setShowInvitations}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="h-5 w-5 text-blue-600" />
+              إرسال دعوات الجمعية العمومية
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <div className="flex items-center gap-2 mb-2">
+                <Bell className="h-5 w-5 text-blue-600" />
+                <span className="font-semibold">إشعار</span>
+              </div>
+              <p className="text-sm text-blue-800">
+                سيتم إرسال الدعوات إلى جميع المساهمين ({shareholders.length} مساهم) الذين لديهم حق التصويت عبر البريد الإلكتروني والرسائل النصية.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-4 border rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <Mail className="h-5 w-5 text-gray-600" />
+                  <span className="font-medium">البريد الإلكتروني</span>
+                </div>
+                <p className="text-sm text-gray-600">
+                  {shareholders.filter(s => s.email).length} مساهم لديه بريد إلكتروني
+                </p>
+              </div>
+              <div className="p-4 border rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <Phone className="h-5 w-5 text-gray-600" />
+                  <span className="font-medium">الرسائل النصية</span>
+                </div>
+                <p className="text-sm text-gray-600">
+                  {shareholders.filter(s => s.phone).length} مساهم لديه رقم جوال
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <Label>اختر الاجتماع</Label>
+              <Select>
+                <SelectTrigger>
+                  <SelectValue placeholder="اختر اجتماع الجمعية" />
+                </SelectTrigger>
+                <SelectContent>
+                  {meetingStats.upcoming.map((meeting) => (
+                    <SelectItem key={meeting.id} value={meeting.id.toString()}>
+                      {meeting.title} - {new Date(meeting.scheduledDate).toLocaleDateString('en-GB')}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowInvitations(false)}>إلغاء</Button>
+            <Button className="gap-2">
+              <Send className="h-4 w-4" />
+              إرسال الدعوات
             </Button>
           </DialogFooter>
         </DialogContent>
