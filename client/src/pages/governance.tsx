@@ -55,7 +55,7 @@ const governanceModules: GovernanceModule[] = [
     icon: Building2,
     color: "text-blue-600",
     bgColor: "bg-blue-100",
-    href: "/governance/meetings",
+    href: "/governance/general-assembly",
   },
   {
     id: "minutes",

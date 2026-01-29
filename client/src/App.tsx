@@ -124,6 +124,7 @@ const DisclosuresPage = lazy(() => import("@/pages/governance/disclosures"));
 const DividendsPage = lazy(() => import("@/pages/governance/dividends"));
 const CapitalPage = lazy(() => import("@/pages/governance/capital"));
 const VotingPage = lazy(() => import("@/pages/governance/voting"));
+const GeneralAssemblyPage = lazy(() => import("@/pages/governance/general-assembly"));
 const VisitorsPage = lazy(() => import("@/pages/visitors"));
 const TravelRequestsPage = lazy(() => import("@/pages/travel-requests"));
 const ExecutiveReportsPage = lazy(() => import("@/pages/executive-reports"));
@@ -331,6 +332,7 @@ function Router() {
       <Route path="/governance/dividends">{() => <ModulePage component={DividendsPage} module="governance_dividends" />}</Route>
       <Route path="/governance/capital">{() => <ModulePage component={CapitalPage} module="governance_capital" />}</Route>
       <Route path="/governance/voting">{() => <ModulePage component={VotingPage} module="governance_voting" />}</Route>
+      <Route path="/governance/general-assembly">{() => <ModulePage component={GeneralAssemblyPage} module="governance_meetings" />}</Route>
       
       <Route component={NotFound} />
     </Switch>
