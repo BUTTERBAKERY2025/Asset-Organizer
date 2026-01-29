@@ -1889,6 +1889,7 @@ export function registerGovernanceRoutes(app: Express) {
         .orderBy(desc(systemAuditLogs.createdAt))
         .limit(100);
 
+      console.log("Audit logs found:", auditLogs.length, "entries");
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
       res.setHeader('Pragma', 'no-cache');
       res.json(auditLogs);
