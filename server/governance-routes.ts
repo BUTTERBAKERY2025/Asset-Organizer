@@ -42,6 +42,7 @@ import {
 } from "@shared/schema";
 import crypto from "crypto";
 import { z } from "zod";
+import { sendMeetingInvitations, isTwilioConfigured } from "./twilio-service";
 
 const updateBoardMemberSchema = insertBoardMemberSchema.partial().omit({ createdBy: true });
 const updateShareholderSchema = insertShareholderSchema.partial().omit({ createdBy: true });
@@ -409,13 +410,55 @@ export function registerGovernanceRoutes(app: Express) {
       const count = await db.select({ count: sql<number>`count(*)` }).from(governanceMeetings);
       const meetingNumber = `MTG-${year}-${String((count[0]?.count || 0) + 1).padStart(4, '0')}`;
       
+      const { sendWhatsApp, sendEmail, sendSMS, invitationMessage, meetingLink, meetingPlatform, ...meetingData } = req.body;
+      
       const data = insertGovernanceMeetingSchema.parse({
-        ...req.body,
+        ...meetingData,
         meetingNumber,
+        notes: meetingLink ? `رابط الاجتماع (${meetingPlatform}): ${meetingLink}\n${meetingData.notes || ''}` : meetingData.notes,
         createdBy: getCurrentUserId(req),
       });
       const [meeting] = await db.insert(governanceMeetings).values(data).returning();
-      res.status(201).json(meeting);
+
+      let invitationResults = null;
+      if (sendWhatsApp || sendSMS) {
+        const shareholdersList = await db.select().from(shareholders).where(eq(shareholders.votingRights, true));
+        
+        if (shareholdersList.length > 0) {
+          const meetingDate = new Date(meetingData.scheduledDate || meetingData.meetingDate);
+          const invitation = {
+            meetingTitle: meetingData.title,
+            meetingDate: meetingDate.toLocaleDateString('ar-SA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
+            meetingTime: meetingDate.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' }),
+            location: meetingData.location || 'سيتم تحديده لاحقاً',
+            meetingLink: meetingLink,
+            agenda: meetingData.agenda,
+          };
+
+          invitationResults = await sendMeetingInvitations(
+            shareholdersList.map(s => ({ fullName: s.fullName, phone: s.phone || undefined, email: s.email || undefined })),
+            invitation,
+            { sendWhatsApp: !!sendWhatsApp, sendSMS: !!sendSMS }
+          );
+
+          await db.insert(systemAuditLogs).values({
+            module: 'governance_meetings',
+            entityId: String(meeting.id),
+            entityName: meeting.title,
+            action: 'send_invitations',
+            details: JSON.stringify({ 
+              meetingId: meeting.id, 
+              channels: { whatsapp: sendWhatsApp, sms: sendSMS },
+              results: invitationResults 
+            }),
+            userId: getCurrentUserId(req),
+            userName: (req as any).currentUser?.username || 'system',
+            ipAddress: req.ip || req.socket.remoteAddress || 'unknown',
+          });
+        }
+      }
+
+      res.status(201).json({ ...meeting, invitationResults });
     } catch (error) {
       console.error("Error creating meeting:", error);
       res.status(500).json({ error: "فشل في إنشاء الاجتماع" });
