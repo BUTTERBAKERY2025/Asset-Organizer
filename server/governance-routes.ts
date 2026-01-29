@@ -410,11 +410,13 @@ export function registerGovernanceRoutes(app: Express) {
       const count = await db.select({ count: sql<number>`count(*)` }).from(governanceMeetings);
       const meetingNumber = `MTG-${year}-${String((count[0]?.count || 0) + 1).padStart(4, '0')}`;
       
-      const { sendWhatsApp, sendEmail, sendSMS, invitationMessage, meetingLink, meetingPlatform, ...meetingData } = req.body;
+      const { sendWhatsApp, sendEmail, sendSMS, invitationMessage, meetingLink, meetingPlatform, scheduledDate, quorumRequired, ...meetingData } = req.body;
       
       const data = insertGovernanceMeetingSchema.parse({
         ...meetingData,
         meetingNumber,
+        meetingDate: scheduledDate ? new Date(scheduledDate) : new Date(),
+        quorumRequired: quorumRequired ? String(quorumRequired) : "50",
         notes: meetingLink ? `رابط الاجتماع (${meetingPlatform}): ${meetingLink}\n${meetingData.notes || ''}` : meetingData.notes,
         createdBy: getCurrentUserId(req),
       });
@@ -425,11 +427,11 @@ export function registerGovernanceRoutes(app: Express) {
         const shareholdersList = await db.select().from(shareholders).where(eq(shareholders.votingRights, true));
         
         if (shareholdersList.length > 0) {
-          const meetingDate = new Date(meetingData.scheduledDate || meetingData.meetingDate);
+          const meetingDateObj = new Date(scheduledDate || meetingData.meetingDate);
           const invitation = {
             meetingTitle: meetingData.title,
-            meetingDate: meetingDate.toLocaleDateString('ar-SA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
-            meetingTime: meetingDate.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' }),
+            meetingDate: meetingDateObj.toLocaleDateString('ar-SA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
+            meetingTime: meetingDateObj.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' }),
             location: meetingData.location || 'سيتم تحديده لاحقاً',
             meetingLink: meetingLink,
             agenda: meetingData.agenda,
