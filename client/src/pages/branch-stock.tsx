@@ -173,20 +173,20 @@ export default function BranchStockPage() {
 
   return (
     <Layout>
-      <div className="p-6 max-w-6xl mx-auto space-y-6" dir={isRTL ? "rtl" : "ltr"}>
+      <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-4 sm:space-y-6" dir={isRTL ? "rtl" : "ltr"}>
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Link href="/warehouse-dashboard">
-              <Button variant="ghost" size="icon">
-                <ArrowLeft className={`w-5 h-5 ${isRTL ? "rotate-180" : ""}`} />
+              <Button variant="ghost" size="icon" className="h-8 w-8 sm:h-9 sm:w-9">
+                <ArrowLeft className={`w-4 h-4 sm:w-5 sm:h-5 ${isRTL ? "rotate-180" : ""}`} />
               </Button>
             </Link>
-            <div className="w-10 h-10 rounded-lg bg-purple-500 flex items-center justify-center">
-              <Store className="w-5 h-5 text-white" />
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-purple-500 flex items-center justify-center">
+              <Store className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold">{isRTL ? "مخزون الفروع" : "Branch Stock"}</h1>
-              <p className="text-muted-foreground text-sm">
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold">{isRTL ? "مخزون الفروع" : "Branch Stock"}</h1>
+              <p className="text-muted-foreground text-xs sm:text-sm">
                 {isRTL ? "متابعة مخزون المواد في الفروع" : "Track material stock in branches"}
               </p>
             </div>
@@ -263,44 +263,47 @@ export default function BranchStockPage() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex flex-wrap gap-4 items-center">
-                  <div className="relative flex-1 min-w-[200px]">
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 items-stretch sm:items-center">
+                  <div className="relative flex-1 min-w-0">
                     <Search className={`absolute ${isRTL ? "right-3" : "left-3"} top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4`} />
                     <Input
                       placeholder={isRTL ? "ابحث عن المواد..." : "Search items..."}
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className={isRTL ? "pr-10" : "pl-10"}
+                      className={`h-9 sm:h-10 ${isRTL ? "pr-10" : "pl-10"}`}
                       data-testid="input-search"
                     />
                   </div>
-                  <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                    <SelectTrigger className="w-[180px]" data-testid="select-category-filter">
-                      <SelectValue placeholder={isRTL ? "جميع الفئات" : "All Categories"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">{isRTL ? "جميع الفئات" : "All Categories"}</SelectItem>
-                      {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
-                        <SelectItem key={key} value={key}>
-                          {isRTL ? label.ar : label.en}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button 
-                    variant={showLowStock ? "default" : "outline"}
-                    onClick={() => setShowLowStock(!showLowStock)}
-                    className="gap-2"
-                    data-testid="btn-toggle-low-stock"
-                  >
-                    <TrendingDown className="w-4 h-4" />
-                    {isRTL ? "المخزون المنخفض" : "Low Stock"}
-                    {lowStockItems.length > 0 && (
-                      <Badge variant="destructive" className="text-xs">
-                        {lowStockItems.length}
-                      </Badge>
-                    )}
-                  </Button>
+                  <div className="flex gap-2">
+                    <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                      <SelectTrigger className="w-[130px] sm:w-[180px] h-9 sm:h-10" data-testid="select-category-filter">
+                        <SelectValue placeholder={isRTL ? "الفئات" : "Categories"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">{isRTL ? "جميع الفئات" : "All Categories"}</SelectItem>
+                        {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
+                          <SelectItem key={key} value={key}>
+                            {isRTL ? label.ar : label.en}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button 
+                      variant={showLowStock ? "default" : "outline"}
+                      onClick={() => setShowLowStock(!showLowStock)}
+                      className="gap-1 sm:gap-2 h-9 sm:h-10 px-2 sm:px-4"
+                      data-testid="btn-toggle-low-stock"
+                    >
+                      <TrendingDown className="w-3 h-3 sm:w-4 sm:h-4" />
+                      <span className="hidden sm:inline">{isRTL ? "المخزون المنخفض" : "Low Stock"}</span>
+                      <span className="sm:hidden">{isRTL ? "منخفض" : "Low"}</span>
+                      {lowStockItems.length > 0 && (
+                        <Badge variant="destructive" className="text-[10px] sm:text-xs">
+                          {lowStockItems.length}
+                        </Badge>
+                      )}
+                    </Button>
+                  </div>
                 </div>
 
                 {isLoading ? (
@@ -319,14 +322,14 @@ export default function BranchStockPage() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>{isRTL ? "المادة" : "Item"}</TableHead>
-                          <TableHead>{isRTL ? "الفئة" : "Category"}</TableHead>
-                          <TableHead>{isRTL ? "الكمية الحالية" : "Current Qty"}</TableHead>
-                          <TableHead>{isRTL ? "الحد الأدنى" : "Min Level"}</TableHead>
-                          <TableHead>{isRTL ? "الاستهلاك اليومي" : "Daily Usage"}</TableHead>
+                          <TableHead className="min-w-[120px]">{isRTL ? "المادة" : "Item"}</TableHead>
+                          <TableHead className="hidden sm:table-cell">{isRTL ? "الفئة" : "Category"}</TableHead>
+                          <TableHead>{isRTL ? "الكمية" : "Qty"}</TableHead>
+                          <TableHead className="hidden md:table-cell">{isRTL ? "الحد الأدنى" : "Min"}</TableHead>
+                          <TableHead className="hidden lg:table-cell">{isRTL ? "الاستهلاك" : "Usage"}</TableHead>
                           <TableHead>{isRTL ? "الحالة" : "Status"}</TableHead>
-                          <TableHead>{isRTL ? "آخر تحديث" : "Last Updated"}</TableHead>
-                          <TableHead className="w-[80px]">{isRTL ? "إجراء" : "Action"}</TableHead>
+                          <TableHead className="hidden md:table-cell">{isRTL ? "آخر تحديث" : "Updated"}</TableHead>
+                          <TableHead className="w-[60px] sm:w-[80px]">{isRTL ? "إجراء" : "Action"}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -335,39 +338,40 @@ export default function BranchStockPage() {
                           const categoryLabel = CATEGORY_LABELS[item.category as keyof typeof CATEGORY_LABELS];
                           return (
                             <TableRow key={item.id} data-testid={`row-stock-${item.id}`}>
-                              <TableCell className="font-medium">
+                              <TableCell className="font-medium text-xs sm:text-sm">
                                 {isRTL ? item.itemName : (item.itemNameEn || item.itemName)}
                               </TableCell>
-                              <TableCell>
-                                <Badge variant="outline">
+                              <TableCell className="hidden sm:table-cell">
+                                <Badge variant="outline" className="text-[10px] sm:text-xs">
                                   {categoryLabel ? (isRTL ? categoryLabel.ar : categoryLabel.en) : item.category}
                                 </Badge>
                               </TableCell>
-                              <TableCell className="font-mono">
+                              <TableCell className="font-mono text-xs sm:text-sm">
                                 {item.currentQuantity} {item.unit}
                               </TableCell>
-                              <TableCell className="font-mono text-muted-foreground">
+                              <TableCell className="hidden md:table-cell font-mono text-xs sm:text-sm text-muted-foreground">
                                 {item.minStockLevel} {item.unit}
                               </TableCell>
-                              <TableCell className="font-mono">
+                              <TableCell className="hidden lg:table-cell font-mono text-xs sm:text-sm">
                                 {item.dailyConsumption} {item.unit}/{isRTL ? "يوم" : "day"}
                               </TableCell>
                               <TableCell>
-                                <Badge className={`${status.color} text-white`}>
+                                <Badge className={`${status.color} text-white text-[10px] sm:text-xs`}>
                                   {isRTL ? status.textAr : status.textEn}
                                 </Badge>
                               </TableCell>
-                              <TableCell className="text-sm text-muted-foreground">
+                              <TableCell className="hidden md:table-cell text-xs sm:text-sm text-muted-foreground">
                                 {new Date(item.lastUpdated).toLocaleDateString(isRTL ? 'en-GB' : 'en-US')}
                               </TableCell>
                               <TableCell>
                                 <Button 
                                   variant="ghost" 
                                   size="sm"
+                                  className="h-7 w-7 sm:h-8 sm:w-8 p-0"
                                   onClick={() => handleEdit(item)}
                                   data-testid={`btn-edit-${item.id}`}
                                 >
-                                  <Edit2 className="w-4 h-4" />
+                                  <Edit2 className="w-3 h-3 sm:w-4 sm:h-4" />
                                 </Button>
                               </TableCell>
                             </TableRow>

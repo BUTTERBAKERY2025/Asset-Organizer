@@ -419,9 +419,9 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
   };
 
   return (
-    <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir={isRTL ? "rtl" : "ltr"}>
+    <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-4" dir={isRTL ? "rtl" : "ltr"}>
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <Card className="bg-yellow-50 border-yellow-200">
           <CardContent className="pt-4">
             <div className="flex items-center justify-between">
@@ -666,13 +666,14 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
               <p>{isRTL ? "لا توجد طلبات نقل" : "No transfer requests"}</p>
             </div>
           ) : (
-            <Table>
+            <div className="overflow-x-auto">
+            <Table className="min-w-[600px]">
               <TableHeader>
                 <TableRow>
                   <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "الموظف" : "Employee"}</TableHead>
                   <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "من" : "From"}</TableHead>
                   <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "إلى" : "To"}</TableHead>
-                  <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "تاريخ النقل" : "Transfer Date"}</TableHead>
+                  <TableHead className={`${isRTL ? "text-right" : "text-left"} hidden md:table-cell`}>{isRTL ? "تاريخ النقل" : "Transfer Date"}</TableHead>
                   <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "الحالة" : "Status"}</TableHead>
                   <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "إجراءات" : "Actions"}</TableHead>
                 </TableRow>
@@ -680,12 +681,12 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
               <TableBody>
                 {filteredTransfers.map((transfer) => (
                   <TableRow key={transfer.id} data-testid={`row-transfer-${transfer.id}`}>
-                    <TableCell>{getEmployeeName(transfer.employeeId)}</TableCell>
-                    <TableCell>{getBranchName(transfer.sourceBranchId)}</TableCell>
-                    <TableCell>{getBranchName(transfer.destinationBranchId)}</TableCell>
-                    <TableCell>{transfer.effectiveDate}</TableCell>
+                    <TableCell className="text-xs sm:text-sm">{getEmployeeName(transfer.employeeId)}</TableCell>
+                    <TableCell className="text-xs sm:text-sm">{getBranchName(transfer.sourceBranchId)}</TableCell>
+                    <TableCell className="text-xs sm:text-sm">{getBranchName(transfer.destinationBranchId)}</TableCell>
+                    <TableCell className="hidden md:table-cell text-xs sm:text-sm">{transfer.effectiveDate}</TableCell>
                     <TableCell>
-                      <Badge className={TRANSFER_STATUS_LABELS[transfer.status]?.color || "bg-gray-100"}>
+                      <Badge className={`${TRANSFER_STATUS_LABELS[transfer.status]?.color || "bg-gray-100"} text-[10px] sm:text-xs`}>
                         {TRANSFER_STATUS_LABELS[transfer.status]?.label || transfer.status}
                       </Badge>
                     </TableCell>
@@ -706,6 +707,7 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
                 ))}
               </TableBody>
             </Table>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -1682,15 +1684,15 @@ export default function BranchEmployeesPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir={isRTL ? "rtl" : "ltr"}>
+      <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-4" dir={isRTL ? "rtl" : "ltr"}>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3 sm:gap-4">
             <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" onClick={() => navigate("/attendance-dashboard")} data-testid="button-back">
               {isRTL ? <ChevronLeft className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
             </Button>
             <div>
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">{t("branchEmployees.pageTitle")}</h1>
-              <p className="text-gray-500 text-sm sm:text-base">{t("branchEmployees.pageDescription")}</p>
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">{t("branchEmployees.pageTitle")}</h1>
+              <p className="text-xs sm:text-sm text-gray-500">{t("branchEmployees.pageDescription")}</p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -2304,16 +2306,17 @@ export default function BranchEmployeesPage() {
                 <p>{t("branchEmployees.noEmployees")}</p>
               </div>
             ) : (
-              <Table>
+              <div className="overflow-x-auto">
+              <Table className="min-w-[600px]">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "الرقم الوظيفي" : "Employee ID"}</TableHead>
+                    <TableHead className={`${isRTL ? "text-right" : "text-left"} hidden md:table-cell`}>{isRTL ? "الرقم الوظيفي" : "Employee ID"}</TableHead>
                     <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "الاسم" : "Name"}</TableHead>
                     <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "الفرع" : "Branch"}</TableHead>
-                    <TableHead className={isRTL ? "text-right" : "text-left"}>{t("branchEmployees.jobTitle")}</TableHead>
-                    <TableHead className={isRTL ? "text-right" : "text-left"}>{t("branchEmployees.nationality")}</TableHead>
-                    <TableHead className={isRTL ? "text-right" : "text-left"}>{t("branchEmployees.totalPackage")}</TableHead>
-                    <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "الشهادة الصحية" : "Health Cert."}</TableHead>
+                    <TableHead className={`${isRTL ? "text-right" : "text-left"} hidden md:table-cell`}>{t("branchEmployees.jobTitle")}</TableHead>
+                    <TableHead className={`${isRTL ? "text-right" : "text-left"} hidden md:table-cell`}>{t("branchEmployees.nationality")}</TableHead>
+                    <TableHead className={`${isRTL ? "text-right" : "text-left"} hidden lg:table-cell`}>{t("branchEmployees.totalPackage")}</TableHead>
+                    <TableHead className={`${isRTL ? "text-right" : "text-left"} hidden lg:table-cell`}>{isRTL ? "الشهادة الصحية" : "Health Cert."}</TableHead>
                     <TableHead className={isRTL ? "text-right" : "text-left"}>{t("branchEmployees.status")}</TableHead>
                     <TableHead className={isRTL ? "text-right" : "text-left"}>{t("branchEmployees.actions")}</TableHead>
                   </TableRow>
@@ -2321,18 +2324,18 @@ export default function BranchEmployeesPage() {
                 <TableBody>
                   {paginatedEmployees.map((emp: BranchEmployee) => (
                     <TableRow key={emp.id} data-testid={`row-employee-${emp.id}`}>
-                      <TableCell className="font-mono text-sm text-amber-700">{emp.employeeNumber || "--"}</TableCell>
+                      <TableCell className="font-mono text-xs sm:text-sm text-amber-700 hidden md:table-cell">{emp.employeeNumber || "--"}</TableCell>
                       <TableCell>
                         <div>
-                          <p className="font-medium">{emp.employeeName}</p>
-                          {emp.employeeNameEn && <p className="text-sm text-gray-500" dir="ltr">{emp.employeeNameEn}</p>}
+                          <p className="font-medium text-xs sm:text-sm">{emp.employeeName}</p>
+                          {emp.employeeNameEn && <p className="text-xs text-gray-500 hidden sm:block" dir="ltr">{emp.employeeNameEn}</p>}
                         </div>
                       </TableCell>
-                      <TableCell>{getBranchName(emp.branchId)}</TableCell>
-                      <TableCell>{emp.jobTitle}</TableCell>
-                      <TableCell>{emp.nationality}</TableCell>
-                      <TableCell className="font-medium">{formatCurrency(emp.totalSalary || emp.salary, isRTL)}</TableCell>
-                      <TableCell>{getHealthBadge(emp.healthCertificate || "none", isRTL)}</TableCell>
+                      <TableCell className="text-xs sm:text-sm">{getBranchName(emp.branchId)}</TableCell>
+                      <TableCell className="text-xs sm:text-sm hidden md:table-cell">{emp.jobTitle}</TableCell>
+                      <TableCell className="text-xs sm:text-sm hidden md:table-cell">{emp.nationality}</TableCell>
+                      <TableCell className="font-medium text-xs sm:text-sm hidden lg:table-cell">{formatCurrency(emp.totalSalary || emp.salary, isRTL)}</TableCell>
+                      <TableCell className="hidden lg:table-cell">{getHealthBadge(emp.healthCertificate || "none", isRTL)}</TableCell>
                       <TableCell>{getStatusBadge(emp.status, isRTL)}</TableCell>
                       <TableCell>
                         <div className="flex gap-1">
@@ -2360,6 +2363,7 @@ export default function BranchEmployeesPage() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             )}
             {totalPages > 1 && (
               <div className="flex items-center justify-between mt-4">

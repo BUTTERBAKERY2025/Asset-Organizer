@@ -99,82 +99,85 @@ export default function WarehouseMovementLogsPage() {
 
   return (
     <Layout>
-      <div className="p-6 max-w-6xl mx-auto space-y-6" dir={isRTL ? "rtl" : "ltr"}>
-        <div className="flex items-center gap-3">
+      <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-4 sm:space-y-6" dir={isRTL ? "rtl" : "ltr"}>
+        <div className="flex items-center gap-2 sm:gap-3">
           <Link href="/warehouse-dashboard">
-            <Button variant="ghost" size="icon">
-              <ArrowLeft className={`w-5 h-5 ${isRTL ? "rotate-180" : ""}`} />
+            <Button variant="ghost" size="icon" className="h-8 w-8 sm:h-9 sm:w-9">
+              <ArrowLeft className={`w-4 h-4 sm:w-5 sm:h-5 ${isRTL ? "rotate-180" : ""}`} />
             </Button>
           </Link>
-          <div className="w-10 h-10 rounded-lg bg-indigo-500 flex items-center justify-center">
-            <History className="w-5 h-5 text-white" />
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-indigo-500 flex items-center justify-center">
+            <History className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-foreground">
+            <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-foreground">
               {isRTL ? "سجل حركات المخزون" : "Inventory Movement Logs"}
             </h1>
-            <p className="text-muted-foreground text-sm">
+            <p className="text-muted-foreground text-xs sm:text-sm">
               {isRTL ? "تتبع جميع حركات المواد الواردة والصادرة" : "Track all incoming and outgoing material movements"}
             </p>
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-3">
-          <div className="relative flex-1 min-w-[200px]">
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+          <div className="relative flex-1 min-w-0">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input 
               placeholder={isRTL ? "بحث باسم المادة أو الفرع..." : "Search by item name or branch..."}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
+              className="pl-9 h-9 sm:h-10"
               data-testid="input-search"
             />
           </div>
-          <Select value={filterType} onValueChange={setFilterType}>
-            <SelectTrigger className="w-[180px]" data-testid="filter-type">
-              <Filter className="w-4 h-4 mr-2" />
-              <SelectValue placeholder={isRTL ? "نوع الحركة" : "Movement Type"} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{isRTL ? "جميع الأنواع" : "All Types"}</SelectItem>
-              {MOVEMENT_TYPES.map((type) => (
-                <SelectItem key={type.value} value={type.value}>
-                  {isRTL ? type.labelAr : type.labelEn}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={filterBranch} onValueChange={setFilterBranch}>
-            <SelectTrigger className="w-[180px]" data-testid="filter-branch">
-              <SelectValue placeholder={isRTL ? "الفرع" : "Branch"} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{isRTL ? "جميع الفروع" : "All Branches"}</SelectItem>
-              {branches.map((branch) => (
-                <SelectItem key={branch.id} value={branch.id}>
-                  {isRTL ? branch.nameAr || branch.name : branch.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex gap-2">
+            <Select value={filterType} onValueChange={setFilterType}>
+              <SelectTrigger className="w-[130px] sm:w-[180px] h-9 sm:h-10" data-testid="filter-type">
+                <Filter className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                <SelectValue placeholder={isRTL ? "النوع" : "Type"} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{isRTL ? "جميع الأنواع" : "All Types"}</SelectItem>
+                {MOVEMENT_TYPES.map((type) => (
+                  <SelectItem key={type.value} value={type.value}>
+                    {isRTL ? type.labelAr : type.labelEn}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={filterBranch} onValueChange={setFilterBranch}>
+              <SelectTrigger className="w-[130px] sm:w-[180px] h-9 sm:h-10" data-testid="filter-branch">
+                <SelectValue placeholder={isRTL ? "الفرع" : "Branch"} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{isRTL ? "جميع الفروع" : "All Branches"}</SelectItem>
+                {branches.map((branch) => (
+                  <SelectItem key={branch.id} value={branch.id}>
+                    {isRTL ? branch.nameAr || branch.name : branch.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         <Card>
           <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{isRTL ? "التاريخ" : "Date"}</TableHead>
-                  <TableHead>{isRTL ? "المادة" : "Item"}</TableHead>
-                  <TableHead>{isRTL ? "الفرع" : "Branch"}</TableHead>
-                  <TableHead>{isRTL ? "نوع الحركة" : "Movement Type"}</TableHead>
-                  <TableHead>{isRTL ? "الكمية" : "Quantity"}</TableHead>
-                  <TableHead>{isRTL ? "الرصيد السابق" : "Before"}</TableHead>
-                  <TableHead>{isRTL ? "الرصيد الحالي" : "After"}</TableHead>
-                  <TableHead>{isRTL ? "بواسطة" : "By"}</TableHead>
-                  <TableHead>{isRTL ? "ملاحظات" : "Notes"}</TableHead>
-                </TableRow>
-              </TableHeader>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="min-w-[80px]">{isRTL ? "التاريخ" : "Date"}</TableHead>
+                    <TableHead className="min-w-[100px]">{isRTL ? "المادة" : "Item"}</TableHead>
+                    <TableHead className="hidden sm:table-cell">{isRTL ? "الفرع" : "Branch"}</TableHead>
+                    <TableHead>{isRTL ? "النوع" : "Type"}</TableHead>
+                    <TableHead>{isRTL ? "الكمية" : "Qty"}</TableHead>
+                    <TableHead className="hidden md:table-cell">{isRTL ? "قبل" : "Before"}</TableHead>
+                    <TableHead className="hidden md:table-cell">{isRTL ? "بعد" : "After"}</TableHead>
+                    <TableHead className="hidden lg:table-cell">{isRTL ? "بواسطة" : "By"}</TableHead>
+                    <TableHead className="hidden lg:table-cell">{isRTL ? "ملاحظات" : "Notes"}</TableHead>
+                  </TableRow>
+                </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
@@ -191,39 +194,40 @@ export default function WarehouseMovementLogsPage() {
                 ) : (
                   filteredLogs.map((log) => (
                     <TableRow key={log.id} data-testid={`log-row-${log.id}`}>
-                      <TableCell className="text-sm">
+                      <TableCell className="text-xs sm:text-sm">
                         <div className="flex items-center gap-1">
-                          <Calendar className="w-3 h-3 text-muted-foreground" />
+                          <Calendar className="w-3 h-3 text-muted-foreground hidden sm:block" />
                           {new Date(log.createdAt).toLocaleDateString(isRTL ? 'en-GB' : 'en-US')}
                         </div>
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-[10px] sm:text-xs text-muted-foreground">
                           {new Date(log.createdAt).toLocaleTimeString(isRTL ? 'en-GB' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Package className="w-4 h-4 text-muted-foreground" />
-                          {log.itemName}
+                        <div className="flex items-center gap-1 sm:gap-2">
+                          <Package className="w-3 h-3 sm:w-4 sm:h-4 text-muted-foreground hidden sm:block" />
+                          <span className="text-xs sm:text-sm">{log.itemName}</span>
                         </div>
                       </TableCell>
-                      <TableCell>{log.branchName || "-"}</TableCell>
+                      <TableCell className="hidden sm:table-cell text-xs sm:text-sm">{log.branchName || "-"}</TableCell>
                       <TableCell>{getMovementTypeBadge(log.movementType, isRTL)}</TableCell>
                       <TableCell>
-                        <span className={log.quantity > 0 ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
+                        <span className={`text-xs sm:text-sm ${log.quantity > 0 ? "text-green-600 font-medium" : "text-red-600 font-medium"}`}>
                           {log.quantity > 0 ? `+${log.quantity}` : log.quantity}
                         </span>
                       </TableCell>
-                      <TableCell className="text-muted-foreground">{log.balanceBefore}</TableCell>
-                      <TableCell className="font-medium">{log.balanceAfter}</TableCell>
-                      <TableCell className="text-sm">{log.createdByName || "-"}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">
+                      <TableCell className="hidden md:table-cell text-muted-foreground text-xs sm:text-sm">{log.balanceBefore}</TableCell>
+                      <TableCell className="hidden md:table-cell font-medium text-xs sm:text-sm">{log.balanceAfter}</TableCell>
+                      <TableCell className="hidden lg:table-cell text-xs sm:text-sm">{log.createdByName || "-"}</TableCell>
+                      <TableCell className="hidden lg:table-cell text-xs sm:text-sm text-muted-foreground max-w-[150px] truncate">
                         {log.notes || "-"}
                       </TableCell>
                     </TableRow>
                   ))
                 )}
               </TableBody>
-            </Table>
+              </Table>
+            </div>
           </CardContent>
         </Card>
       </div>

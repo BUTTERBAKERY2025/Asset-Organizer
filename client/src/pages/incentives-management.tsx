@@ -387,66 +387,69 @@ export default function IncentivesManagement() {
                 ) : awards.length === 0 ? (
                   <div className="text-center py-8 text-gray-500">لا توجد سجلات حوافز</div>
                 ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>الفرع</TableHead>
-                        <TableHead>الفترة</TableHead>
-                        <TableHead>الهدف</TableHead>
-                        <TableHead>المحقق</TableHead>
-                        <TableHead>النسبة</TableHead>
-                        <TableHead>الحافز</TableHead>
-                        <TableHead>الحالة</TableHead>
-                        <TableHead>الإجراءات</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {awards.map((award) => (
-                        <TableRow key={award.id} data-testid={`row-award-${award.id}`}>
-                          <TableCell className="font-medium">{getBranchName(award.branchId)}</TableCell>
-                          <TableCell className="text-sm">{award.periodStart} - {award.periodEnd}</TableCell>
-                          <TableCell className="font-mono">{formatCurrency(award.targetAmount)}</TableCell>
-                          <TableCell className="font-mono">{formatCurrency(award.achievedAmount)}</TableCell>
-                          <TableCell className={`font-bold ${award.achievementPercent >= 100 ? 'text-green-600' : 'text-amber-600'}`}>
-                            {award.achievementPercent.toFixed(1)}%
-                          </TableCell>
-                          <TableCell className="font-mono font-bold text-green-600">
-                            {formatCurrency(award.finalReward)}
-                          </TableCell>
-                          <TableCell>
-                            <Badge className={AWARD_STATUS_COLORS[award.status]}>
-                              {AWARD_STATUS_LABELS[award.status]}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              {award.status === 'pending' && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => approveAwardMutation.mutate(award.id)}
-                                  data-testid={`button-approve-${award.id}`}
-                                >
-                                  <Check className="h-4 w-4" />
-                                </Button>
-                              )}
-                              {award.status === 'approved' && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="text-green-600"
-                                  onClick={() => payAwardMutation.mutate(award.id)}
-                                  data-testid={`button-pay-${award.id}`}
-                                >
-                                  <DollarSign className="h-4 w-4" />
-                                </Button>
-                              )}
-                            </div>
-                          </TableCell>
+                  <div className="overflow-x-auto">
+                    <Table className="min-w-[600px]">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>الفرع</TableHead>
+                          <TableHead className="hidden md:table-cell">الفترة</TableHead>
+                          <TableHead className="hidden sm:table-cell">الهدف</TableHead>
+                          <TableHead className="hidden md:table-cell">المحقق</TableHead>
+                          <TableHead>النسبة</TableHead>
+                          <TableHead>الحافز</TableHead>
+                          <TableHead>الحالة</TableHead>
+                          <TableHead>الإجراءات</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {awards.map((award) => (
+                          <TableRow key={award.id} data-testid={`row-award-${award.id}`}>
+                            <TableCell className="font-medium text-xs sm:text-sm">{getBranchName(award.branchId)}</TableCell>
+                            <TableCell className="text-xs sm:text-sm hidden md:table-cell">{award.periodStart} - {award.periodEnd}</TableCell>
+                            <TableCell className="font-mono text-xs sm:text-sm hidden sm:table-cell">{formatCurrency(award.targetAmount)}</TableCell>
+                            <TableCell className="font-mono text-xs sm:text-sm hidden md:table-cell">{formatCurrency(award.achievedAmount)}</TableCell>
+                            <TableCell className={`font-bold text-xs sm:text-sm ${award.achievementPercent >= 100 ? 'text-green-600' : 'text-amber-600'}`}>
+                              {award.achievementPercent.toFixed(1)}%
+                            </TableCell>
+                            <TableCell className="font-mono font-bold text-green-600 text-xs sm:text-sm">
+                              {formatCurrency(award.finalReward)}
+                            </TableCell>
+                            <TableCell>
+                              <Badge className={`text-[10px] sm:text-xs ${AWARD_STATUS_COLORS[award.status]}`}>
+                                {AWARD_STATUS_LABELS[award.status]}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                {award.status === 'pending' && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8 w-8 sm:h-9 sm:w-auto p-0 sm:px-3"
+                                    onClick={() => approveAwardMutation.mutate(award.id)}
+                                    data-testid={`button-approve-${award.id}`}
+                                  >
+                                    <Check className="h-4 w-4" />
+                                  </Button>
+                                )}
+                                {award.status === 'approved' && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="text-green-600 h-8 w-8 sm:h-9 sm:w-auto p-0 sm:px-3"
+                                    onClick={() => payAwardMutation.mutate(award.id)}
+                                    data-testid={`button-pay-${award.id}`}
+                                  >
+                                    <DollarSign className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 )}
               </CardContent>
             </Card>

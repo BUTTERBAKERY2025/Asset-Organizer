@@ -345,31 +345,32 @@ export default function WarehouseInventoryPage() {
 
   return (
     <Layout>
-      <div className="p-6 max-w-6xl mx-auto space-y-6" dir={isRTL ? "rtl" : "ltr"}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+      <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-4 sm:space-y-6" dir={isRTL ? "rtl" : "ltr"}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Link href="/warehouse-dashboard">
-              <Button variant="ghost" size="icon">
-                <ArrowLeft className={`w-5 h-5 ${isRTL ? "rotate-180" : ""}`} />
+              <Button variant="ghost" size="icon" className="h-8 w-8 sm:h-9 sm:w-9">
+                <ArrowLeft className={`w-4 h-4 sm:w-5 sm:h-5 ${isRTL ? "rotate-180" : ""}`} />
               </Button>
             </Link>
-            <div className="w-10 h-10 rounded-lg bg-amber-500 flex items-center justify-center">
-              <Boxes className="w-5 h-5 text-white" />
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-amber-500 flex items-center justify-center">
+              <Boxes className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-foreground">
                 {isRTL ? "مخزون المستودع" : "Warehouse Inventory"}
               </h1>
-              <p className="text-muted-foreground text-sm">
+              <p className="text-muted-foreground text-xs sm:text-sm">
                 {isRTL ? "إدارة مخزون المواد الخام والمستلزمات" : "Manage raw materials and supplies inventory"}
               </p>
             </div>
           </div>
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
-              <Button data-testid="btn-add-item">
+              <Button data-testid="btn-add-item" className="w-full sm:w-auto">
                 <Plus className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
-                {isRTL ? "إضافة مادة" : "Add Item"}
+                <span className="hidden sm:inline">{isRTL ? "إضافة مادة" : "Add Item"}</span>
+                <span className="sm:hidden">{isRTL ? "إضافة" : "Add"}</span>
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-lg">
@@ -423,58 +424,61 @@ export default function WarehouseInventoryPage() {
           </Card>
         )}
 
-        <div className="flex flex-wrap gap-3">
-          <div className="relative flex-1 min-w-[200px]">
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+          <div className="relative flex-1 min-w-0">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input 
               placeholder={isRTL ? "بحث باسم المادة أو الرمز..." : "Search by name or SKU..."}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
+              className="pl-9 h-9 sm:h-10"
               data-testid="input-search"
             />
           </div>
-          <Select value={filterCategory} onValueChange={setFilterCategory}>
-            <SelectTrigger className="w-[180px]" data-testid="filter-category">
-              <Filter className="w-4 h-4 mr-2" />
-              <SelectValue placeholder={isRTL ? "التصنيف" : "Category"} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{isRTL ? "جميع التصنيفات" : "All Categories"}</SelectItem>
-              {MATERIAL_CATEGORIES.map((cat) => (
-                <SelectItem key={cat.value} value={cat.value}>
-                  {isRTL ? cat.labelAr : cat.labelEn}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={filterStock} onValueChange={setFilterStock}>
-            <SelectTrigger className="w-[150px]" data-testid="filter-stock">
-              <SelectValue placeholder={isRTL ? "حالة المخزون" : "Stock Status"} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{isRTL ? "كل الحالات" : "All Status"}</SelectItem>
-              <SelectItem value="low">{isRTL ? "منخفض" : "Low Stock"}</SelectItem>
-              <SelectItem value="ok">{isRTL ? "متوفر" : "In Stock"}</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex gap-2">
+            <Select value={filterCategory} onValueChange={setFilterCategory}>
+              <SelectTrigger className="w-[140px] sm:w-[180px] h-9 sm:h-10" data-testid="filter-category">
+                <Filter className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                <SelectValue placeholder={isRTL ? "التصنيف" : "Category"} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{isRTL ? "جميع التصنيفات" : "All Categories"}</SelectItem>
+                {MATERIAL_CATEGORIES.map((cat) => (
+                  <SelectItem key={cat.value} value={cat.value}>
+                    {isRTL ? cat.labelAr : cat.labelEn}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={filterStock} onValueChange={setFilterStock}>
+              <SelectTrigger className="w-[100px] sm:w-[150px] h-9 sm:h-10" data-testid="filter-stock">
+                <SelectValue placeholder={isRTL ? "الحالة" : "Status"} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{isRTL ? "كل الحالات" : "All Status"}</SelectItem>
+                <SelectItem value="low">{isRTL ? "منخفض" : "Low Stock"}</SelectItem>
+                <SelectItem value="ok">{isRTL ? "متوفر" : "In Stock"}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         <Card>
           <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{isRTL ? "اسم المادة" : "Item Name"}</TableHead>
-                  <TableHead>{isRTL ? "الرمز" : "SKU"}</TableHead>
-                  <TableHead>{isRTL ? "التصنيف" : "Category"}</TableHead>
-                  <TableHead>{isRTL ? "المخزون الحالي" : "Current Stock"}</TableHead>
-                  <TableHead>{isRTL ? "الحد الأدنى" : "Min Stock"}</TableHead>
-                  <TableHead>{isRTL ? "الحالة" : "Status"}</TableHead>
-                  <TableHead>{isRTL ? "التكلفة" : "Cost"}</TableHead>
-                  <TableHead>{isRTL ? "الإجراءات" : "Actions"}</TableHead>
-                </TableRow>
-              </TableHeader>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="min-w-[140px]">{isRTL ? "اسم المادة" : "Item Name"}</TableHead>
+                    <TableHead className="hidden md:table-cell">{isRTL ? "الرمز" : "SKU"}</TableHead>
+                    <TableHead className="hidden sm:table-cell">{isRTL ? "التصنيف" : "Category"}</TableHead>
+                    <TableHead>{isRTL ? "المخزون" : "Stock"}</TableHead>
+                    <TableHead className="hidden lg:table-cell">{isRTL ? "الحد الأدنى" : "Min Stock"}</TableHead>
+                    <TableHead>{isRTL ? "الحالة" : "Status"}</TableHead>
+                    <TableHead className="hidden md:table-cell">{isRTL ? "التكلفة" : "Cost"}</TableHead>
+                    <TableHead>{isRTL ? "إجراء" : "Actions"}</TableHead>
+                  </TableRow>
+                </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
@@ -493,33 +497,35 @@ export default function WarehouseInventoryPage() {
                     <TableRow key={item.id} data-testid={`item-row-${item.id}`}>
                       <TableCell>
                         <div>
-                          <p className="font-medium">{item.name}</p>
-                          {item.nameEn && <p className="text-xs text-muted-foreground">{item.nameEn}</p>}
+                          <p className="font-medium text-sm sm:text-base">{item.name}</p>
+                          {item.nameEn && <p className="text-[10px] sm:text-xs text-muted-foreground">{item.nameEn}</p>}
                         </div>
                       </TableCell>
-                      <TableCell className="font-mono text-sm">{item.sku || "-"}</TableCell>
-                      <TableCell>{getCategoryBadge(item.category, isRTL)}</TableCell>
+                      <TableCell className="hidden md:table-cell font-mono text-xs sm:text-sm">{item.sku || "-"}</TableCell>
+                      <TableCell className="hidden sm:table-cell">{getCategoryBadge(item.category, isRTL)}</TableCell>
                       <TableCell>
-                        <span className={item.currentStock <= item.reorderPoint ? "text-red-500 font-bold" : ""}>
+                        <span className={`text-xs sm:text-sm ${item.currentStock <= item.reorderPoint ? "text-red-500 font-bold" : ""}`}>
                           {item.currentStock} {item.unit}
                         </span>
                       </TableCell>
-                      <TableCell>{item.minStock} {item.unit}</TableCell>
+                      <TableCell className="hidden lg:table-cell text-xs sm:text-sm">{item.minStock} {item.unit}</TableCell>
                       <TableCell>{getStockStatus(item, isRTL)}</TableCell>
-                      <TableCell>{item.unitCost ? `${item.unitCost.toFixed(2)} ر.س` : "-"}</TableCell>
+                      <TableCell className="hidden md:table-cell text-xs sm:text-sm">{item.unitCost ? `${item.unitCost.toFixed(2)} ر.س` : "-"}</TableCell>
                       <TableCell>
                         <div className="flex gap-1">
                           <Button 
                             variant="ghost" 
                             size="icon" 
+                            className="h-7 w-7 sm:h-8 sm:w-8"
                             onClick={() => handleEdit(item)}
                             data-testid={`btn-edit-${item.id}`}
                           >
-                            <Edit className="w-4 h-4" />
+                            <Edit className="w-3 h-3 sm:w-4 sm:h-4" />
                           </Button>
                           <Button 
                             variant="ghost" 
                             size="icon" 
+                            className="h-7 w-7 sm:h-8 sm:w-8"
                             onClick={() => {
                               if (confirm(isRTL ? "هل أنت متأكد من حذف هذه المادة؟" : "Are you sure you want to delete this item?")) {
                                 deleteMutation.mutate(item.id);
@@ -527,7 +533,7 @@ export default function WarehouseInventoryPage() {
                             }}
                             data-testid={`btn-delete-${item.id}`}
                           >
-                            <Trash2 className="w-4 h-4 text-red-500" />
+                            <Trash2 className="w-3 h-3 sm:w-4 sm:h-4 text-red-500" />
                           </Button>
                         </div>
                       </TableCell>
@@ -535,7 +541,8 @@ export default function WarehouseInventoryPage() {
                   ))
                 )}
               </TableBody>
-            </Table>
+              </Table>
+            </div>
           </CardContent>
         </Card>
 

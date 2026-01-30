@@ -312,15 +312,15 @@ export default function ManagePage() {
   const getStatusBadge = (status?: string | null) => {
     switch(status) {
       case "good": 
-        return <Badge className="bg-green-100 text-green-700 border-green-200 gap-1"><CheckCircle2 className="w-3 h-3" /> جيد</Badge>;
+        return <Badge className="bg-green-100 text-green-700 border-green-200 gap-1 text-[10px] sm:text-xs"><CheckCircle2 className="w-2.5 h-2.5 sm:w-3 sm:h-3" /><span className="hidden sm:inline">جيد</span></Badge>;
       case "maintenance": 
-        return <Badge className="bg-orange-100 text-orange-700 border-orange-200 gap-1"><AlertTriangle className="w-3 h-3" /> صيانة</Badge>;
+        return <Badge className="bg-orange-100 text-orange-700 border-orange-200 gap-1 text-[10px] sm:text-xs"><AlertTriangle className="w-2.5 h-2.5 sm:w-3 sm:h-3" /><span className="hidden sm:inline">صيانة</span></Badge>;
       case "damaged": 
-        return <Badge className="bg-red-100 text-red-700 border-red-200 gap-1"><XCircle className="w-3 h-3" /> تالف</Badge>;
+        return <Badge className="bg-red-100 text-red-700 border-red-200 gap-1 text-[10px] sm:text-xs"><XCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" /><span className="hidden sm:inline">تالف</span></Badge>;
       case "missing": 
-        return <Badge className="bg-gray-100 text-gray-700 border-gray-200 gap-1"><HelpCircle className="w-3 h-3" /> مفقود</Badge>;
+        return <Badge className="bg-gray-100 text-gray-700 border-gray-200 gap-1 text-[10px] sm:text-xs"><HelpCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" /><span className="hidden sm:inline">مفقود</span></Badge>;
       default: 
-        return <Badge variant="outline">غير محدد</Badge>;
+        return <Badge variant="outline" className="text-[10px] sm:text-xs">غير محدد</Badge>;
     }
   };
 
@@ -676,24 +676,24 @@ export default function ManagePage() {
         </div>
 
         <Card>
-          <CardHeader>
-            <CardTitle>قائمة الأصول</CardTitle>
-            <CardDescription>عدد الأصناف: {filteredItems.length}</CardDescription>
+          <CardHeader className="p-3 sm:p-4 md:p-6">
+            <CardTitle className="text-lg sm:text-xl md:text-2xl">قائمة الأصول</CardTitle>
+            <CardDescription className="text-xs sm:text-sm">عدد الأصناف: {filteredItems.length}</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="flex flex-col md:flex-row gap-4 mb-6">
+          <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-4 sm:mb-6">
               <div className="relative flex-1">
                 <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   placeholder="بحث عن صنف..."
-                  className="pr-10"
+                  className="pr-10 h-11 sm:h-10"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   data-testid="input-search-manage"
                 />
               </div>
               <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!canSelectBranch}>
-                <SelectTrigger className="w-full md:w-[200px]" data-testid="select-branch-filter">
+                <SelectTrigger className="w-full sm:w-[200px] h-11 sm:h-10" data-testid="select-branch-filter">
                   <SelectValue placeholder="جميع الفروع" />
                 </SelectTrigger>
                 <SelectContent>
@@ -705,14 +705,14 @@ export default function ManagePage() {
               </Select>
             </div>
 
-            <div className="rounded-md border">
-              <Table>
+            <div className="rounded-md border overflow-x-auto">
+              <Table className="min-w-[600px]">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-right w-[80px]">المعرف</TableHead>
+                    <TableHead className="text-right w-[80px] hidden sm:table-cell">المعرف</TableHead>
                     <TableHead className="text-right">الصنف</TableHead>
-                    <TableHead className="text-right w-[120px]">الفرع</TableHead>
-                    <TableHead className="text-right w-[100px]">الفئة</TableHead>
+                    <TableHead className="text-right w-[120px] hidden md:table-cell">الفرع</TableHead>
+                    <TableHead className="text-right w-[100px] hidden lg:table-cell">الفئة</TableHead>
                     <TableHead className="text-right w-[80px]">الكمية</TableHead>
                     <TableHead className="text-right w-[100px]">الحالة</TableHead>
                     <TableHead className="text-right w-[100px]">الإجراءات</TableHead>
@@ -721,19 +721,19 @@ export default function ManagePage() {
                 <TableBody>
                   {filteredItems.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground text-xs sm:text-sm">
                         لا توجد نتائج
                       </TableCell>
                     </TableRow>
                   ) : (
                     filteredItems.map((item) => (
                       <TableRow key={item.id} data-testid={`row-manage-${item.id}`}>
-                        <TableCell className="font-mono text-xs">{item.id}</TableCell>
-                        <TableCell className="font-medium">{item.name}</TableCell>
-                        <TableCell className="text-sm">{branchMap[item.branchId]}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{item.category}</TableCell>
+                        <TableCell className="font-mono text-[10px] sm:text-xs hidden sm:table-cell">{item.id}</TableCell>
+                        <TableCell className="font-medium text-xs sm:text-sm">{item.name}</TableCell>
+                        <TableCell className="text-xs sm:text-sm hidden md:table-cell">{branchMap[item.branchId]}</TableCell>
+                        <TableCell className="text-xs sm:text-sm text-muted-foreground hidden lg:table-cell">{item.category}</TableCell>
                         <TableCell>
-                          <Badge variant="outline">{item.quantity}</Badge>
+                          <Badge variant="outline" className="text-[10px] sm:text-xs">{item.quantity}</Badge>
                         </TableCell>
                         <TableCell>{getStatusBadge(item.status)}</TableCell>
                         <TableCell>
@@ -741,30 +741,32 @@ export default function ManagePage() {
                             <Button
                               variant="ghost"
                               size="icon"
+                              className="h-8 w-8 sm:h-9 sm:w-9"
                               onClick={() => {
                                 setSelectedItem(item);
                                 setIsDetailsDialogOpen(true);
                               }}
                               data-testid={`button-details-${item.id}`}
                             >
-                              <Eye className="w-4 h-4" />
+                              <Eye className="w-3 h-3 sm:w-4 sm:h-4" />
                             </Button>
                             <Button
                               variant="ghost"
                               size="icon"
+                              className="h-8 w-8 sm:h-9 sm:w-9"
                               onClick={() => handleEdit(item)}
                               data-testid={`button-edit-${item.id}`}
                             >
-                              <Pencil className="w-4 h-4" />
+                              <Pencil className="w-3 h-3 sm:w-4 sm:h-4" />
                             </Button>
                             <Button
                               variant="ghost"
                               size="icon"
+                              className="h-8 w-8 sm:h-9 sm:w-9 text-destructive hover:text-destructive"
                               onClick={() => handleDelete(item)}
-                              className="text-destructive hover:text-destructive"
                               data-testid={`button-delete-${item.id}`}
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
                             </Button>
                           </div>
                         </TableCell>

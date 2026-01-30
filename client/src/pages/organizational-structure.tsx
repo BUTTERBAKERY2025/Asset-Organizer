@@ -830,25 +830,25 @@ export default function OrganizationalStructurePage() {
     <Layout>
       <TooltipProvider>
         <div className="min-h-screen bg-gradient-to-br from-slate-50 via-green-50/30 to-teal-50/20 print:bg-white" dir={isRTL ? "rtl" : "ltr"}>
-          <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4">
-          <div className="flex items-center justify-between mb-6 print:hidden">
-            <div className="flex items-center gap-4">
+          <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 print:hidden">
+            <div className="flex items-center gap-3 sm:gap-4">
               <Link href="/branch-employees">
                 <Button variant="outline" size="sm" className="gap-2 h-11 sm:h-9">
                   <ArrowLeft className="h-4 w-4" />
-                  {t("orgStructure.back")}
+                  <span className="hidden sm:inline">{t("orgStructure.back")}</span>
                 </Button>
               </Link>
               <div>
-                <h1 className="text-xl sm:text-2xl font-bold text-gray-800 flex items-center gap-2">
-                  <Network className="h-6 w-6 text-green-600" />
+                <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-800 flex items-center gap-2">
+                  <Network className="h-5 w-5 sm:h-6 sm:w-6 text-green-600" />
                   {t("orgStructure.pageTitle")}
                 </h1>
-                <p className="text-sm text-gray-500">{t("orgStructure.pageDescription")}</p>
+                <p className="text-xs sm:text-sm text-gray-500">{t("orgStructure.pageDescription")}</p>
               </div>
             </div>
             
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button variant="outline" size="sm" onClick={() => handlePrint()} className="gap-2 h-11 sm:h-9">
                 <Printer className="h-4 w-4" />
                 {t("orgStructure.print")}

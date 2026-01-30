@@ -842,41 +842,44 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
 
   return (
     <Layout>
-      <div className="p-6 max-w-6xl mx-auto space-y-6" dir={isRTL ? "rtl" : "ltr"}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+      <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-4 sm:space-y-6" dir={isRTL ? "rtl" : "ltr"}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Link href="/warehouse-dashboard">
-              <Button variant="ghost" size="icon">
-                <ArrowLeft className={`w-5 h-5 ${isRTL ? "rotate-180" : ""}`} />
+              <Button variant="ghost" size="icon" className="h-8 w-8 sm:h-9 sm:w-9">
+                <ArrowLeft className={`w-4 h-4 sm:w-5 sm:h-5 ${isRTL ? "rotate-180" : ""}`} />
               </Button>
             </Link>
-            <div className="w-10 h-10 rounded-lg bg-green-500 flex items-center justify-center">
-              <Send className="w-5 h-5 text-white" />
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-green-500 flex items-center justify-center">
+              <Send className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">
-                {isRTL ? "طلبات التحويل والطلب" : "Transfer & Order Requests"}
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-foreground">
+                {isRTL ? "طلبات التحويل" : "Transfer Requests"}
               </h1>
-              <p className="text-muted-foreground text-sm">
+              <p className="text-muted-foreground text-xs sm:text-sm hidden sm:block">
                 {isRTL 
-                  ? "إدارة طلبات الأصناف من المستودع الرئيسي وتتبع حالة التحويلات" 
-                  : "Manage item requests from main warehouse and track transfer status"}
+                  ? "إدارة طلبات الأصناف من المستودع الرئيسي" 
+                  : "Manage item requests from main warehouse"}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <ExportButtons
-              data={exportData}
-              columns={exportColumns}
-              fileName={`transfers-${new Date().toISOString().split('T')[0]}`}
-              title={isRTL ? "طلبات التحويل" : "Transfer Requests"}
-              sheetName={isRTL ? "التحويلات" : "Transfers"}
-            />
+            <div className="hidden md:block">
+              <ExportButtons
+                data={exportData}
+                columns={exportColumns}
+                fileName={`transfers-${new Date().toISOString().split('T')[0]}`}
+                title={isRTL ? "طلبات التحويل" : "Transfer Requests"}
+                sheetName={isRTL ? "التحويلات" : "Transfers"}
+              />
+            </div>
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
               <DialogTrigger asChild>
-                <Button data-testid="btn-create-transfer">
-                  <Plus className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
-                  {isRTL ? "طلب جديد" : "New Request"}
+                <Button data-testid="btn-create-transfer" className="w-full sm:w-auto">
+                  <Plus className={`w-4 h-4 ${isRTL ? "ml-1 sm:ml-2" : "mr-1 sm:mr-2"}`} />
+                  <span className="hidden sm:inline">{isRTL ? "طلب جديد" : "New Request"}</span>
+                  <span className="sm:hidden">{isRTL ? "طلب" : "New"}</span>
                 </Button>
               </DialogTrigger>
               <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
@@ -1177,7 +1180,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
         </div>
 
         {/* Status Summary Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 sm:gap-3">
           {[
             { status: "pending", color: "bg-yellow-50 border-yellow-200", icon: "🕐", textColor: "text-yellow-700" },
             { status: "approved", color: "bg-blue-50 border-blue-200", icon: "✓", textColor: "text-blue-700" },
@@ -1191,14 +1194,14 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
               <button
                 key={status}
                 onClick={() => setFilterStatus(filterStatus === status ? "all" : status)}
-                className={`p-3 rounded-lg border ${color} ${filterStatus === status ? "ring-2 ring-offset-1" : ""} transition-all hover:scale-[1.02] cursor-pointer`}
+                className={`p-2 sm:p-3 rounded-lg border ${color} ${filterStatus === status ? "ring-2 ring-offset-1" : ""} transition-all hover:scale-[1.02] cursor-pointer`}
                 data-testid={`status-card-${status}`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-lg">{icon}</span>
-                  <span className={`text-2xl font-bold ${textColor}`}>{count}</span>
+                  <span className="text-sm sm:text-lg">{icon}</span>
+                  <span className={`text-lg sm:text-2xl font-bold ${textColor}`}>{count}</span>
                 </div>
-                <p className={`text-xs mt-1 ${textColor}`}>
+                <p className={`text-[10px] sm:text-xs mt-1 ${textColor} truncate`}>
                   {statusOpt ? (isRTL ? statusOpt.labelAr : statusOpt.labelEn) : status}
                 </p>
               </button>
@@ -1207,71 +1210,74 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
         </div>
 
         {/* Search and Filters */}
-        <div className="flex flex-wrap gap-3">
-          <div className="relative flex-1 min-w-[200px]">
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+          <div className="relative flex-1 min-w-0">
             <Search className={`absolute ${isRTL ? "right-3" : "left-3"} top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground`} />
             <Input 
-              placeholder={isRTL ? "بحث برقم التحويل أو السائق..." : "Search by transfer number or driver..."}
+              placeholder={isRTL ? "بحث برقم التحويل..." : "Search by transfer #..."}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className={isRTL ? "pr-9" : "pl-9"}
+              className={`h-9 sm:h-10 ${isRTL ? "pr-9" : "pl-9"}`}
               data-testid="input-search"
             />
           </div>
-          <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-[180px]" data-testid="filter-status">
-              <Filter className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
-              <SelectValue placeholder={isRTL ? "الحالة" : "Status"} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{isRTL ? "جميع الحالات" : "All Statuses"}</SelectItem>
-              {STATUS_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {isRTL ? opt.labelAr : opt.labelEn}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={filterBranch} onValueChange={setFilterBranch}>
-            <SelectTrigger className="w-[180px]" data-testid="filter-branch">
-              <Building2 className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
-              <SelectValue placeholder={isRTL ? "الفرع" : "Branch"} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{isRTL ? "جميع الفروع" : "All Branches"}</SelectItem>
-              <SelectItem value="main_warehouse">{isRTL ? "المستودع الرئيسي" : "Main Warehouse"}</SelectItem>
-              {branches.map((branch) => (
-                <SelectItem key={branch.id} value={branch.id}>
-                  {branch.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button 
-            variant="outline" 
-            onClick={handleExportExcel}
-            className="bg-green-50 hover:bg-green-100 text-green-700 border-green-200"
-            data-testid="btn-export-excel"
-          >
-            <FileSpreadsheet className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
-            {isRTL ? "تصدير Excel" : "Export Excel"}
-          </Button>
+          <div className="flex gap-2 flex-wrap">
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="w-[120px] sm:w-[150px] h-9 sm:h-10" data-testid="filter-status">
+                <Filter className={`w-3 h-3 sm:w-4 sm:h-4 ${isRTL ? "ml-1 sm:ml-2" : "mr-1 sm:mr-2"}`} />
+                <SelectValue placeholder={isRTL ? "الحالة" : "Status"} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{isRTL ? "جميع الحالات" : "All"}</SelectItem>
+                {STATUS_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {isRTL ? opt.labelAr : opt.labelEn}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={filterBranch} onValueChange={setFilterBranch}>
+              <SelectTrigger className="w-[120px] sm:w-[150px] h-9 sm:h-10" data-testid="filter-branch">
+                <Building2 className={`w-3 h-3 sm:w-4 sm:h-4 ${isRTL ? "ml-1 sm:ml-2" : "mr-1 sm:mr-2"}`} />
+                <SelectValue placeholder={isRTL ? "الفرع" : "Branch"} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{isRTL ? "جميع الفروع" : "All Branches"}</SelectItem>
+                <SelectItem value="main_warehouse">{isRTL ? "المستودع الرئيسي" : "Main Warehouse"}</SelectItem>
+                {branches.map((branch) => (
+                  <SelectItem key={branch.id} value={branch.id}>
+                    {branch.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button 
+              variant="outline" 
+              onClick={handleExportExcel}
+              className="hidden sm:flex bg-green-50 hover:bg-green-100 text-green-700 border-green-200 h-9 sm:h-10"
+              data-testid="btn-export-excel"
+            >
+              <FileSpreadsheet className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
+              <span className="hidden md:inline">{isRTL ? "تصدير Excel" : "Export"}</span>
+            </Button>
+          </div>
         </div>
 
         <Card>
           <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/50">
-                  <TableHead className="font-bold">{isRTL ? "رقم الطلب" : "Request #"}</TableHead>
-                  <TableHead className="font-bold">{isRTL ? "المصدر (المستودع)" : "Source"}</TableHead>
-                  <TableHead className="font-bold">{isRTL ? "الوجهة (الفرع)" : "Destination"}</TableHead>
-                  <TableHead className="font-bold">{isRTL ? "الحالة" : "Status"}</TableHead>
-                  <TableHead className="font-bold">{isRTL ? "التاريخ" : "Date"}</TableHead>
-                  <TableHead className="font-bold">{isRTL ? "معلومات الإرسال" : "Dispatch Info"}</TableHead>
-                  <TableHead className="font-bold text-center">{isRTL ? "الإجراءات" : "Actions"}</TableHead>
-                </TableRow>
-              </TableHeader>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="font-bold text-xs sm:text-sm min-w-[100px]">{isRTL ? "رقم الطلب" : "Request #"}</TableHead>
+                    <TableHead className="font-bold text-xs sm:text-sm hidden md:table-cell">{isRTL ? "المصدر" : "Source"}</TableHead>
+                    <TableHead className="font-bold text-xs sm:text-sm">{isRTL ? "الوجهة" : "Dest"}</TableHead>
+                    <TableHead className="font-bold text-xs sm:text-sm">{isRTL ? "الحالة" : "Status"}</TableHead>
+                    <TableHead className="font-bold text-xs sm:text-sm hidden lg:table-cell">{isRTL ? "التاريخ" : "Date"}</TableHead>
+                    <TableHead className="font-bold text-xs sm:text-sm hidden lg:table-cell">{isRTL ? "الإرسال" : "Dispatch"}</TableHead>
+                    <TableHead className="font-bold text-xs sm:text-sm text-center">{isRTL ? "إجراء" : "Actions"}</TableHead>
+                  </TableRow>
+                </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
@@ -1292,31 +1298,31 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                     return (
                       <TableRow key={transfer.id} data-testid={`transfer-row-${transfer.id}`} className="hover:bg-muted/30">
                         <TableCell>
-                          <span className="font-mono text-sm bg-muted px-2 py-1 rounded">{transfer.transferNumber}</span>
+                          <span className="font-mono text-[10px] sm:text-sm bg-muted px-1 sm:px-2 py-1 rounded">{transfer.transferNumber}</span>
                         </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Warehouse className="w-4 h-4 text-green-600" />
-                            <span>{transfer.sourceBranchName || (isRTL ? "المستودع الرئيسي" : "Main Warehouse")}</span>
+                        <TableCell className="hidden md:table-cell">
+                          <div className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+                            <Warehouse className="w-3 h-3 sm:w-4 sm:h-4 text-green-600" />
+                            <span>{transfer.sourceBranchName || (isRTL ? "المستودع" : "Warehouse")}</span>
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Building2 className="w-4 h-4 text-blue-600" />
-                            <span className="font-medium">{transfer.destinationBranchName || "-"}</span>
+                          <div className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+                            <Building2 className="w-3 h-3 sm:w-4 sm:h-4 text-blue-600" />
+                            <span className="font-medium truncate max-w-[80px] sm:max-w-none">{transfer.destinationBranchName || "-"}</span>
                           </div>
                         </TableCell>
                         <TableCell>{getStatusBadge(transfer.status, isRTL)}</TableCell>
-                        <TableCell className="text-sm">{new Date(transfer.transferDate).toLocaleDateString(isRTL ? 'en-GB' : 'en-US')}</TableCell>
-                        <TableCell>
+                        <TableCell className="text-xs sm:text-sm hidden lg:table-cell">{new Date(transfer.transferDate).toLocaleDateString(isRTL ? 'en-GB' : 'en-US')}</TableCell>
+                        <TableCell className="hidden lg:table-cell">
                           {transfer.driverName ? (
-                            <div className="text-sm space-y-1">
+                            <div className="text-xs sm:text-sm space-y-1">
                               <div className="flex items-center gap-1">
                                 <Truck className="w-3 h-3 text-muted-foreground" />
                                 <span>{transfer.driverName}</span>
                               </div>
                               {transfer.vehicleNumber && (
-                                <span className="text-xs text-muted-foreground">{transfer.vehicleNumber}</span>
+                                <span className="text-[10px] sm:text-xs text-muted-foreground">{transfer.vehicleNumber}</span>
                               )}
                             </div>
                           ) : (
@@ -1328,35 +1334,36 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                             <Button 
                               variant="outline" 
                               size="sm" 
+                              className="h-7 sm:h-8 px-2 sm:px-3 text-[10px] sm:text-xs"
                               onClick={() => handleViewDetails(transfer)}
                               data-testid={`btn-view-${transfer.id}`}
                             >
-                              <FileText className={`w-4 h-4 ${isRTL ? "ml-1" : "mr-1"}`} />
-                              {isRTL ? "عرض" : "View"}
+                              <FileText className={`w-3 h-3 sm:w-4 sm:h-4 ${isRTL ? "ml-1" : "mr-1"}`} />
+                              <span className="hidden sm:inline">{isRTL ? "عرض" : "View"}</span>
                             </Button>
                             {nextStatuses.length > 0 && (
                               <Button 
                                 variant="default" 
-                                size="sm" 
-                                onClick={() => nextStatuses.includes("delivered") ? handleConfirmDelivery(transfer) : handleUpdateStatus(transfer)}
-                                data-testid={`btn-update-${transfer.id}`}
-                                className={
+                                size="sm"
+                                className={`h-7 sm:h-8 px-2 sm:px-3 text-[10px] sm:text-xs ${
                                   nextStatuses.includes("approved") ? "bg-blue-600 hover:bg-blue-700" :
                                   nextStatuses.includes("in_transit") ? "bg-purple-600 hover:bg-purple-700" :
                                   nextStatuses.includes("delivered") ? "bg-green-600 hover:bg-green-700" :
                                   ""
-                                }
+                                }`}
+                                onClick={() => nextStatuses.includes("delivered") ? handleConfirmDelivery(transfer) : handleUpdateStatus(transfer)}
+                                data-testid={`btn-update-${transfer.id}`}
                               >
-                                {nextStatuses.includes("approved") && (isRTL ? "موافقة" : "Approve")}
-                                {nextStatuses.includes("in_transit") && (isRTL ? "إرسال" : "Dispatch")}
-                                {nextStatuses.includes("delivered") && (isRTL ? "تأكيد الاستلام" : "Confirm")}
+                                {nextStatuses.includes("approved") && (isRTL ? "موافقة" : "OK")}
+                                {nextStatuses.includes("in_transit") && (isRTL ? "إرسال" : "Send")}
+                                {nextStatuses.includes("delivered") && (isRTL ? "تأكيد" : "Confirm")}
                                 {!nextStatuses.includes("approved") && !nextStatuses.includes("in_transit") && !nextStatuses.includes("delivered") && (isRTL ? "تحديث" : "Update")}
                               </Button>
                             )}
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" data-testid={`btn-more-${transfer.id}`}>
-                                  <MoreHorizontal className="w-4 h-4" />
+                                <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8" data-testid={`btn-more-${transfer.id}`}>
+                                  <MoreHorizontal className="w-3 h-3 sm:w-4 sm:h-4" />
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align={isRTL ? "start" : "end"}>
@@ -1407,7 +1414,8 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                   })
                 )}
               </TableBody>
-            </Table>
+              </Table>
+            </div>
           </CardContent>
         </Card>
 

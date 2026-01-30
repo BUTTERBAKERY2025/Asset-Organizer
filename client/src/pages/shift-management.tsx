@@ -1021,9 +1021,9 @@ export default function ShiftManagementPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir={isRTL ? "rtl" : "ltr"}>
+      <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-4" dir={isRTL ? "rtl" : "ltr"}>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
             <Button
               variant="ghost"
               size="icon"
@@ -1034,8 +1034,8 @@ export default function ShiftManagementPage() {
               <ArrowRight className="w-5 h-5" />
             </Button>
             <div>
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-primary" data-testid="page-title">{t("shiftManagement.pageTitle")}</h1>
-              <p className="text-muted-foreground mt-1">{t("shiftManagement.pageDescription")}</p>
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-primary" data-testid="page-title">{t("shiftManagement.pageTitle")}</h1>
+              <p className="text-xs sm:text-sm text-muted-foreground mt-1">{t("shiftManagement.pageDescription")}</p>
             </div>
           </div>
           <div className="flex flex-wrap gap-2 items-center">
@@ -1064,18 +1064,18 @@ export default function ShiftManagementPage() {
           </Card>
         ) : (
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid grid-cols-4 w-[600px]">
-              <TabsTrigger value="schedule" className="gap-2" data-testid="tab-schedule">
-                <CalendarDays className="w-4 h-4" />{t("shiftManagement.schedule")}
+            <TabsList className="grid grid-cols-2 sm:grid-cols-4 w-full sm:w-[600px] overflow-x-auto">
+              <TabsTrigger value="schedule" className="gap-1 sm:gap-2 text-xs sm:text-sm" data-testid="tab-schedule">
+                <CalendarDays className="w-3 h-3 sm:w-4 sm:h-4" /><span className="hidden sm:inline">{t("shiftManagement.schedule")}</span><span className="sm:hidden">جدول</span>
               </TabsTrigger>
-              <TabsTrigger value="attendance" className="gap-2" data-testid="tab-attendance">
-                <UserCheck className="w-4 h-4" />{t("shiftManagement.attendanceRecord")}
+              <TabsTrigger value="attendance" className="gap-1 sm:gap-2 text-xs sm:text-sm" data-testid="tab-attendance">
+                <UserCheck className="w-3 h-3 sm:w-4 sm:h-4" /><span className="hidden sm:inline">{t("shiftManagement.attendanceRecord")}</span><span className="sm:hidden">الحضور</span>
               </TabsTrigger>
-              <TabsTrigger value="reports" className="gap-2" data-testid="tab-reports">
-                <FileText className="w-4 h-4" />{t("shiftManagement.reports")}
+              <TabsTrigger value="reports" className="gap-1 sm:gap-2 text-xs sm:text-sm" data-testid="tab-reports">
+                <FileText className="w-3 h-3 sm:w-4 sm:h-4" /><span className="hidden sm:inline">{t("shiftManagement.reports")}</span><span className="sm:hidden">التقارير</span>
               </TabsTrigger>
-              <TabsTrigger value="settings" className="gap-2" data-testid="tab-settings">
-                <Clock className="w-4 h-4" />{t("shiftManagement.shiftSettings")}
+              <TabsTrigger value="settings" className="gap-1 sm:gap-2 text-xs sm:text-sm" data-testid="tab-settings">
+                <Clock className="w-3 h-3 sm:w-4 sm:h-4" /><span className="hidden sm:inline">{t("shiftManagement.shiftSettings")}</span><span className="sm:hidden">الإعدادات</span>
               </TabsTrigger>
             </TabsList>
 

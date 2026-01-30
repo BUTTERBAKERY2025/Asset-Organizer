@@ -114,13 +114,13 @@ export default function BackupsPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "completed":
-        return <Badge className="bg-green-500 text-white"><CheckCircle className="w-3 h-3 ml-1" />مكتملة</Badge>;
+        return <Badge className="bg-green-500 text-white text-[10px] sm:text-xs"><CheckCircle className="w-3 h-3 ml-1" /><span className="hidden sm:inline">مكتملة</span></Badge>;
       case "pending":
-        return <Badge className="bg-yellow-500 text-white"><Clock className="w-3 h-3 ml-1" />قيد التنفيذ</Badge>;
+        return <Badge className="bg-yellow-500 text-white text-[10px] sm:text-xs"><Clock className="w-3 h-3 ml-1" /><span className="hidden sm:inline">قيد التنفيذ</span></Badge>;
       case "failed":
-        return <Badge className="bg-red-500 text-white"><XCircle className="w-3 h-3 ml-1" />فشلت</Badge>;
+        return <Badge className="bg-red-500 text-white text-[10px] sm:text-xs"><XCircle className="w-3 h-3 ml-1" /><span className="hidden sm:inline">فشلت</span></Badge>;
       default:
-        return <Badge variant="outline">{status}</Badge>;
+        return <Badge variant="outline" className="text-[10px] sm:text-xs">{status}</Badge>;
     }
   };
 
@@ -284,45 +284,47 @@ export default function BackupsPage() {
               </div>
             ) : (
               <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-right">الاسم</TableHead>
-                    <TableHead className="text-right">النوع</TableHead>
-                    <TableHead className="text-right">الحالة</TableHead>
-                    <TableHead className="text-right">تاريخ الإنشاء</TableHead>
-                    <TableHead className="text-right">الجداول</TableHead>
-                    <TableHead className="text-right">إجراءات</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {backups.slice((currentPage - 1) * 10, currentPage * 10).map((backup) => (
-                    <TableRow key={backup.id} data-testid={`row-backup-${backup.id}`}>
-                      <TableCell className="font-medium">{backup.name}</TableCell>
-                      <TableCell>{getTypeLabel(backup.type)}</TableCell>
-                      <TableCell>{getStatusBadge(backup.status)}</TableCell>
-                      <TableCell className="text-sm">{formatDate(backup.createdAt)}</TableCell>
-                      <TableCell className="text-sm">
-                        {parseTablesList(backup.tables).length} جدول
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-11 w-11 sm:h-8 sm:w-8"
-                          onClick={() => {
-                            setSelectedBackup(backup);
-                            setIsDeleteDialogOpen(true);
-                          }}
-                          data-testid={`button-delete-backup-${backup.id}`}
-                        >
-                          <Trash2 className="w-4 h-4 text-red-500" />
-                        </Button>
-                      </TableCell>
+              <div className="overflow-x-auto">
+                <Table className="min-w-[600px]">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-right">الاسم</TableHead>
+                      <TableHead className="text-right hidden sm:table-cell">النوع</TableHead>
+                      <TableHead className="text-right">الحالة</TableHead>
+                      <TableHead className="text-right hidden md:table-cell">تاريخ الإنشاء</TableHead>
+                      <TableHead className="text-right hidden lg:table-cell">الجداول</TableHead>
+                      <TableHead className="text-right">إجراءات</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {backups.slice((currentPage - 1) * 10, currentPage * 10).map((backup) => (
+                      <TableRow key={backup.id} data-testid={`row-backup-${backup.id}`}>
+                        <TableCell className="font-medium text-xs sm:text-sm">{backup.name}</TableCell>
+                        <TableCell className="hidden sm:table-cell text-xs sm:text-sm">{getTypeLabel(backup.type)}</TableCell>
+                        <TableCell>{getStatusBadge(backup.status)}</TableCell>
+                        <TableCell className="text-[10px] sm:text-xs hidden md:table-cell">{formatDate(backup.createdAt)}</TableCell>
+                        <TableCell className="text-xs sm:text-sm hidden lg:table-cell">
+                          {parseTablesList(backup.tables).length} جدول
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-11 w-11 sm:h-8 sm:w-8"
+                            onClick={() => {
+                              setSelectedBackup(backup);
+                              setIsDeleteDialogOpen(true);
+                            }}
+                            data-testid={`button-delete-backup-${backup.id}`}
+                          >
+                            <Trash2 className="w-4 h-4 text-red-500" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
               <TablePagination
                 currentPage={currentPage}
                 totalItems={backups.length}

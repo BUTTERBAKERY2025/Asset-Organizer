@@ -286,20 +286,20 @@ export default function ConstructionDashboardPage() {
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <Card data-testid="card-total-projects" className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-amber-800">إجمالي المشاريع</CardTitle>
-              <Hammer className="w-5 h-5 text-amber-600" />
+            <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-4 md:p-6 pb-2">
+              <CardTitle className="text-xs sm:text-sm font-medium text-amber-800">إجمالي المشاريع</CardTitle>
+              <Hammer className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600" />
             </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-amber-900">{stats.totalProjects}</div>
-              <div className="flex gap-2 mt-2 text-xs">
-                <Badge variant="outline" className="bg-green-100 text-green-700 border-green-200">
+            <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+              <div className="text-lg sm:text-2xl md:text-3xl font-bold text-amber-900">{stats.totalProjects}</div>
+              <div className="flex flex-wrap gap-1 sm:gap-2 mt-2 text-xs">
+                <Badge variant="outline" className="bg-green-100 text-green-700 border-green-200 text-[10px] sm:text-xs">
                   {stats.completedProjects} مكتمل
                 </Badge>
-                <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-200">
+                <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-200 text-[10px] sm:text-xs">
                   {stats.activeProjects} قيد التنفيذ
                 </Badge>
-                <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-200">
+                <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-200 text-[10px] sm:text-xs hidden sm:inline-flex">
                   {stats.plannedProjects} مخطط
                 </Badge>
               </div>
@@ -307,33 +307,33 @@ export default function ConstructionDashboardPage() {
           </Card>
 
           <Card data-testid="card-total-budget" className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-blue-800">إجمالي الميزانية</CardTitle>
-              <DollarSign className="w-5 h-5 text-blue-600" />
+            <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-4 md:p-6 pb-2">
+              <CardTitle className="text-xs sm:text-sm font-medium text-blue-800">إجمالي الميزانية</CardTitle>
+              <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-blue-900">{formatCurrency(stats.totalBudget)}</div>
-              <p className="text-xs text-blue-600 mt-1">ميزانية جميع المشاريع</p>
+            <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+              <div className="text-sm sm:text-xl md:text-2xl font-bold text-blue-900">{formatCurrency(stats.totalBudget)}</div>
+              <p className="text-[10px] sm:text-xs text-blue-600 mt-1 hidden sm:block">ميزانية جميع المشاريع</p>
             </CardContent>
           </Card>
 
           <Card data-testid="card-actual-cost" className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-purple-800">التكلفة الفعلية</CardTitle>
-              <TrendingUp className="w-5 h-5 text-purple-600" />
+            <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-4 md:p-6 pb-2">
+              <CardTitle className="text-xs sm:text-sm font-medium text-purple-800">التكلفة الفعلية</CardTitle>
+              <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-purple-900">{formatCurrency(stats.totalActualCost)}</div>
+            <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+              <div className="text-sm sm:text-xl md:text-2xl font-bold text-purple-900">{formatCurrency(stats.totalActualCost)}</div>
               <div className="flex items-center gap-1 mt-1">
                 {stats.budgetVariance >= 0 ? (
                   <>
-                    <ArrowDownRight className="w-4 h-4 text-green-600" />
-                    <span className="text-xs text-green-600">وفر {formatCurrency(stats.budgetVariance)}</span>
+                    <ArrowDownRight className="w-3 h-3 sm:w-4 sm:h-4 text-green-600" />
+                    <span className="text-[10px] sm:text-xs text-green-600 truncate">وفر {formatCurrency(stats.budgetVariance)}</span>
                   </>
                 ) : (
                   <>
-                    <ArrowUpRight className="w-4 h-4 text-red-600" />
-                    <span className="text-xs text-red-600">تجاوز {formatCurrency(Math.abs(stats.budgetVariance))}</span>
+                    <ArrowUpRight className="w-3 h-3 sm:w-4 sm:h-4 text-red-600" />
+                    <span className="text-[10px] sm:text-xs text-red-600 truncate">تجاوز {formatCurrency(Math.abs(stats.budgetVariance))}</span>
                   </>
                 )}
               </div>
@@ -341,26 +341,26 @@ export default function ConstructionDashboardPage() {
           </Card>
 
           <Card data-testid="card-avg-progress" className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-green-800">متوسط التقدم</CardTitle>
-              <CheckCircle2 className="w-5 h-5 text-green-600" />
+            <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-4 md:p-6 pb-2">
+              <CardTitle className="text-xs sm:text-sm font-medium text-green-800">متوسط التقدم</CardTitle>
+              <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
             </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-green-900">{stats.avgProgress}%</div>
+            <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+              <div className="text-lg sm:text-2xl md:text-3xl font-bold text-green-900">{stats.avgProgress}%</div>
               <Progress value={stats.avgProgress} className="mt-2 h-2" />
             </CardContent>
           </Card>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-4">
           <Card data-testid="card-work-items">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">بنود العمل</CardTitle>
-              <BarChart3 className="w-4 h-4 text-muted-foreground" />
+            <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-4 md:p-6 pb-2">
+              <CardTitle className="text-xs sm:text-sm font-medium">بنود العمل</CardTitle>
+              <BarChart3 className="w-3 h-3 sm:w-4 sm:h-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalWorkItems}</div>
-              <p className="text-xs text-muted-foreground">
+            <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+              <div className="text-lg sm:text-2xl font-bold">{stats.totalWorkItems}</div>
+              <p className="text-[10px] sm:text-xs text-muted-foreground">
                 {stats.completedWorkItems} مكتمل من أصل {stats.totalWorkItems}
               </p>
               <Progress 
@@ -371,24 +371,24 @@ export default function ConstructionDashboardPage() {
           </Card>
 
           <Card data-testid="card-contractors">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">المقاولون</CardTitle>
-              <Users className="w-4 h-4 text-muted-foreground" />
+            <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-4 md:p-6 pb-2">
+              <CardTitle className="text-xs sm:text-sm font-medium">المقاولون</CardTitle>
+              <Users className="w-3 h-3 sm:w-4 sm:h-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{contractors.length}</div>
-              <p className="text-xs text-muted-foreground">مقاول مسجل في النظام</p>
+            <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+              <div className="text-lg sm:text-2xl font-bold">{contractors.length}</div>
+              <p className="text-[10px] sm:text-xs text-muted-foreground hidden sm:block">مقاول مسجل في النظام</p>
             </CardContent>
           </Card>
 
           <Card data-testid="card-categories">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">فئات العمل</CardTitle>
-              <PieChartIcon className="w-4 h-4 text-muted-foreground" />
+            <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-4 md:p-6 pb-2">
+              <CardTitle className="text-xs sm:text-sm font-medium">فئات العمل</CardTitle>
+              <PieChartIcon className="w-3 h-3 sm:w-4 sm:h-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{categories.length}</div>
-              <p className="text-xs text-muted-foreground">فئة لتصنيف بنود العمل</p>
+            <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+              <div className="text-lg sm:text-2xl font-bold">{categories.length}</div>
+              <p className="text-[10px] sm:text-xs text-muted-foreground hidden sm:block">فئة لتصنيف بنود العمل</p>
             </CardContent>
           </Card>
         </div>
@@ -405,11 +405,11 @@ export default function ConstructionDashboardPage() {
         )}
 
         <Tabs defaultValue="comparison" className="print:hidden">
-          <TabsList className="grid grid-cols-4 w-full max-w-2xl">
-            <TabsTrigger value="comparison" data-testid="tab-comparison">مقارنة الميزانية</TabsTrigger>
-            <TabsTrigger value="categories" data-testid="tab-categories">تحليل الفئات</TabsTrigger>
-            <TabsTrigger value="branches" data-testid="tab-branches">مقارنة الفروع</TabsTrigger>
-            <TabsTrigger value="status" data-testid="tab-status">حالة المشاريع</TabsTrigger>
+          <TabsList className="grid grid-cols-2 sm:grid-cols-4 w-full max-w-2xl h-auto gap-1">
+            <TabsTrigger value="comparison" data-testid="tab-comparison" className="text-[10px] sm:text-xs md:text-sm px-2 py-1.5 sm:px-3 sm:py-2">مقارنة الميزانية</TabsTrigger>
+            <TabsTrigger value="categories" data-testid="tab-categories" className="text-[10px] sm:text-xs md:text-sm px-2 py-1.5 sm:px-3 sm:py-2">تحليل الفئات</TabsTrigger>
+            <TabsTrigger value="branches" data-testid="tab-branches" className="text-[10px] sm:text-xs md:text-sm px-2 py-1.5 sm:px-3 sm:py-2">مقارنة الفروع</TabsTrigger>
+            <TabsTrigger value="status" data-testid="tab-status" className="text-[10px] sm:text-xs md:text-sm px-2 py-1.5 sm:px-3 sm:py-2">حالة المشاريع</TabsTrigger>
           </TabsList>
 
           <TabsContent value="comparison" className="mt-4">
@@ -459,54 +459,56 @@ export default function ConstructionDashboardPage() {
             </Card>
 
             <Card className="mt-4">
-              <CardHeader>
-                <CardTitle>جدول المقارنة التفصيلي</CardTitle>
+              <CardHeader className="p-3 sm:p-4 md:p-6">
+                <CardTitle className="text-lg sm:text-xl">جدول المقارنة التفصيلي</CardTitle>
               </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>المشروع</TableHead>
-                      <TableHead>الميزانية</TableHead>
-                      <TableHead>التكلفة الفعلية</TableHead>
-                      <TableHead>الفارق</TableHead>
-                      <TableHead>نسبة الصرف</TableHead>
-                      <TableHead>التقدم</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {budgetComparisonData.map((item, index) => {
-                      const spendPercent = item.budget > 0 ? (item.actualCost / item.budget) * 100 : 0;
-                      return (
-                        <TableRow key={index}>
-                          <TableCell className="font-medium">{item.fullName}</TableCell>
-                          <TableCell>{formatCurrency(item.budget)}</TableCell>
-                          <TableCell>{formatCurrency(item.actualCost)}</TableCell>
-                          <TableCell className={item.variance >= 0 ? 'text-green-600' : 'text-red-600'}>
-                            {item.variance >= 0 ? '+' : ''}{formatCurrency(item.variance)}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <Progress value={Math.min(spendPercent, 100)} className="w-16 h-2" />
-                              <span className="text-sm">{spendPercent.toFixed(0)}%</span>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={item.progress >= 100 ? 'default' : 'outline'}>
-                              {item.progress}%
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+              <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+                <div className="overflow-x-auto">
+                  <Table className="min-w-[600px]">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs sm:text-sm">المشروع</TableHead>
+                        <TableHead className="text-xs sm:text-sm">الميزانية</TableHead>
+                        <TableHead className="text-xs sm:text-sm hidden md:table-cell">التكلفة الفعلية</TableHead>
+                        <TableHead className="text-xs sm:text-sm hidden lg:table-cell">الفارق</TableHead>
+                        <TableHead className="text-xs sm:text-sm hidden md:table-cell">نسبة الصرف</TableHead>
+                        <TableHead className="text-xs sm:text-sm">التقدم</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {budgetComparisonData.map((item, index) => {
+                        const spendPercent = item.budget > 0 ? (item.actualCost / item.budget) * 100 : 0;
+                        return (
+                          <TableRow key={index}>
+                            <TableCell className="font-medium text-xs sm:text-sm">{item.fullName}</TableCell>
+                            <TableCell className="text-xs sm:text-sm">{formatCurrency(item.budget)}</TableCell>
+                            <TableCell className="text-xs sm:text-sm hidden md:table-cell">{formatCurrency(item.actualCost)}</TableCell>
+                            <TableCell className={`text-xs sm:text-sm hidden lg:table-cell ${item.variance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {item.variance >= 0 ? '+' : ''}{formatCurrency(item.variance)}
+                            </TableCell>
+                            <TableCell className="hidden md:table-cell">
+                              <div className="flex items-center gap-2">
+                                <Progress value={Math.min(spendPercent, 100)} className="w-12 sm:w-16 h-2" />
+                                <span className="text-xs sm:text-sm">{spendPercent.toFixed(0)}%</span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={item.progress >= 100 ? 'default' : 'outline'} className="text-[10px] sm:text-xs">
+                                {item.progress}%
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
 
           <TabsContent value="categories" className="mt-4">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-6">
               <Card>
                 <CardHeader>
                   <CardTitle>توزيع الصرف حسب الفئة</CardTitle>
@@ -543,51 +545,53 @@ export default function ConstructionDashboardPage() {
               </Card>
 
               <Card>
-                <CardHeader>
-                  <CardTitle>تفاصيل الصرف حسب الفئة</CardTitle>
+                <CardHeader className="p-3 sm:p-4 md:p-6">
+                  <CardTitle className="text-lg sm:text-xl">تفاصيل الصرف حسب الفئة</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>الفئة</TableHead>
-                        <TableHead>إجمالي الصرف</TableHead>
-                        <TableHead>عدد البنود</TableHead>
-                        <TableHead>النسبة</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {categorySpendingData.map((cat, index) => {
-                        const totalSpending = categorySpendingData.reduce((sum, c) => sum + c.amount, 0);
-                        const percent = totalSpending > 0 ? (cat.amount / totalSpending) * 100 : 0;
-                        return (
-                          <TableRow key={index}>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: cat.color }} />
-                                {cat.name}
-                              </div>
-                            </TableCell>
-                            <TableCell>{formatCurrency(cat.amount)}</TableCell>
-                            <TableCell>{cat.count}</TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <Progress value={percent} className="w-16 h-2" />
-                                <span className="text-sm">{percent.toFixed(1)}%</span>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
+                <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+                  <div className="overflow-x-auto">
+                    <Table className="min-w-[400px]">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-xs sm:text-sm">الفئة</TableHead>
+                          <TableHead className="text-xs sm:text-sm">إجمالي الصرف</TableHead>
+                          <TableHead className="text-xs sm:text-sm hidden md:table-cell">عدد البنود</TableHead>
+                          <TableHead className="text-xs sm:text-sm">النسبة</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {categorySpendingData.map((cat, index) => {
+                          const totalSpending = categorySpendingData.reduce((sum, c) => sum + c.amount, 0);
+                          const percent = totalSpending > 0 ? (cat.amount / totalSpending) * 100 : 0;
+                          return (
+                            <TableRow key={index}>
+                              <TableCell className="text-xs sm:text-sm">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
+                                  <span className="truncate">{cat.name}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-xs sm:text-sm">{formatCurrency(cat.amount)}</TableCell>
+                              <TableCell className="text-xs sm:text-sm hidden md:table-cell">{cat.count}</TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-1 sm:gap-2">
+                                  <Progress value={percent} className="w-10 sm:w-16 h-2" />
+                                  <span className="text-[10px] sm:text-sm">{percent.toFixed(1)}%</span>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </CardContent>
               </Card>
             </div>
           </TabsContent>
 
           <TabsContent value="branches" className="mt-4">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-6">
               <Card>
                 <CardHeader>
                   <CardTitle>مقارنة الفروع</CardTitle>
@@ -644,47 +648,49 @@ export default function ConstructionDashboardPage() {
             </div>
 
             <Card className="mt-4">
-              <CardHeader>
-                <CardTitle>ملخص الفروع</CardTitle>
+              <CardHeader className="p-3 sm:p-4 md:p-6">
+                <CardTitle className="text-lg sm:text-xl">ملخص الفروع</CardTitle>
               </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>الفرع</TableHead>
-                      <TableHead>عدد المشاريع</TableHead>
-                      <TableHead>الميزانية</TableHead>
-                      <TableHead>التكلفة الفعلية</TableHead>
-                      <TableHead>الفارق</TableHead>
-                      <TableHead>متوسط التقدم</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {branchComparisonData.map((branch, index) => (
-                      <TableRow key={index}>
-                        <TableCell className="font-medium">{branch.fullName}</TableCell>
-                        <TableCell>{branch.projects}</TableCell>
-                        <TableCell>{formatCurrency(branch.budget)}</TableCell>
-                        <TableCell>{formatCurrency(branch.actualCost)}</TableCell>
-                        <TableCell className={branch.variance >= 0 ? 'text-green-600' : 'text-red-600'}>
-                          {branch.variance >= 0 ? '+' : ''}{formatCurrency(branch.variance)}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Progress value={branch.progress} className="w-16 h-2" />
-                            <span>{branch.progress}%</span>
-                          </div>
-                        </TableCell>
+              <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+                <div className="overflow-x-auto">
+                  <Table className="min-w-[600px]">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs sm:text-sm">الفرع</TableHead>
+                        <TableHead className="text-xs sm:text-sm">عدد المشاريع</TableHead>
+                        <TableHead className="text-xs sm:text-sm hidden md:table-cell">الميزانية</TableHead>
+                        <TableHead className="text-xs sm:text-sm hidden md:table-cell">التكلفة الفعلية</TableHead>
+                        <TableHead className="text-xs sm:text-sm hidden lg:table-cell">الفارق</TableHead>
+                        <TableHead className="text-xs sm:text-sm">متوسط التقدم</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {branchComparisonData.map((branch, index) => (
+                        <TableRow key={index}>
+                          <TableCell className="font-medium text-xs sm:text-sm">{branch.fullName}</TableCell>
+                          <TableCell className="text-xs sm:text-sm">{branch.projects}</TableCell>
+                          <TableCell className="text-xs sm:text-sm hidden md:table-cell">{formatCurrency(branch.budget)}</TableCell>
+                          <TableCell className="text-xs sm:text-sm hidden md:table-cell">{formatCurrency(branch.actualCost)}</TableCell>
+                          <TableCell className={`text-xs sm:text-sm hidden lg:table-cell ${branch.variance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {branch.variance >= 0 ? '+' : ''}{formatCurrency(branch.variance)}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1 sm:gap-2">
+                              <Progress value={branch.progress} className="w-10 sm:w-16 h-2" />
+                              <span className="text-xs sm:text-sm">{branch.progress}%</span>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
 
           <TabsContent value="status" className="mt-4">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-6">
               <Card>
                 <CardHeader>
                   <CardTitle>توزيع المشاريع حسب الحالة</CardTitle>
@@ -720,35 +726,35 @@ export default function ConstructionDashboardPage() {
               </Card>
 
               <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Clock className="w-5 h-5" />
+                <CardHeader className="p-3 sm:p-4 md:p-6">
+                  <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+                    <Clock className="w-4 h-4 sm:w-5 sm:h-5" />
                     أكبر المشاريع قيد التنفيذ
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
                   {topProjects.length > 0 ? (
-                    <div className="space-y-4">
+                    <div className="space-y-3 sm:space-y-4">
                       {topProjects.map((project) => (
-                        <div key={project.id} className="flex items-center gap-4 p-4 border rounded-lg hover:bg-muted/50 transition-colors" data-testid={`project-card-${project.id}`}>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <h3 className="font-medium">{project.title}</h3>
-                              <Badge variant="outline">{branchMap[project.branchId]}</Badge>
+                        <div key={project.id} className="flex items-center gap-2 sm:gap-4 p-2 sm:p-4 border rounded-lg hover:bg-muted/50 transition-colors" data-testid={`project-card-${project.id}`}>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-1">
+                              <h3 className="font-medium text-sm sm:text-base truncate">{project.title}</h3>
+                              <Badge variant="outline" className="text-[10px] sm:text-xs w-fit">{branchMap[project.branchId]}</Badge>
                             </div>
-                            <p className="text-sm text-muted-foreground mb-2">
+                            <p className="text-xs sm:text-sm text-muted-foreground mb-2">
                               الميزانية: {formatCurrency(Number(project.budget) || 0)}
                             </p>
                             <div className="flex items-center gap-2">
                               <Progress value={project.progressPercent || 0} className="flex-1 h-2" />
-                              <span className="text-sm font-medium">{project.progressPercent || 0}%</span>
+                              <span className="text-xs sm:text-sm font-medium">{project.progressPercent || 0}%</span>
                             </div>
                           </div>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <div className="text-center py-8 text-muted-foreground">
+                    <div className="text-center py-8 text-muted-foreground text-sm">
                       لا توجد مشاريع قيد التنفيذ
                     </div>
                   )}

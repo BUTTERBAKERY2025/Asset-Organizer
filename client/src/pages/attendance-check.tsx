@@ -221,27 +221,28 @@ export default function AttendanceCheckPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir={isRTL ? "rtl" : "ltr"}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+      <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-4" dir={isRTL ? "rtl" : "ltr"}>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
             <Button
               variant="ghost"
               size="icon"
+              className="h-11 w-11 sm:h-9 sm:w-9"
               onClick={() => navigate("/attendance-dashboard")}
               data-testid="btn-back"
             >
               <ArrowRight className="w-5 h-5" />
             </Button>
             <div>
-              <h1 className="text-3xl font-bold" data-testid="page-title">{t("attendanceCheck.pageTitle")}</h1>
-              <p className="text-muted-foreground">{t("attendanceCheck.pageDescription")}</p>
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold" data-testid="page-title">{t("attendanceCheck.pageTitle")}</h1>
+              <p className="text-xs sm:text-sm text-muted-foreground">{t("attendanceCheck.pageDescription")}</p>
             </div>
           </div>
           <div className={isRTL ? "text-left" : "text-right"}>
-            <div className="text-3xl font-mono font-bold text-primary" data-testid="current-time">
+            <div className="text-xl sm:text-2xl md:text-3xl font-mono font-bold text-primary" data-testid="current-time">
               {format(currentTime, "hh:mm:ss", { locale: dateLocale })}
             </div>
-            <div className="text-sm text-muted-foreground">
+            <div className="text-xs sm:text-sm text-muted-foreground">
               {format(currentTime, "EEEE, dd MMMM yyyy", { locale: dateLocale })}
             </div>
           </div>
@@ -334,18 +335,18 @@ export default function AttendanceCheckPage() {
                 <div className="text-center py-12 text-muted-foreground">
                   <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
                   <p>{t("attendanceCheck.noScheduledEmployees")}</p>
-                  <p className="text-sm mt-2">{t("attendanceCheck.checkShiftManagement")}</p>
+                  <p className="text-xs sm:text-sm mt-2">{t("attendanceCheck.checkShiftManagement")}</p>
                 </div>
               ) : (
-                <div className="rounded-md border">
-                  <Table>
+                <div className="rounded-md border overflow-x-auto">
+                  <Table className="min-w-[600px]">
                     <TableHeader>
                       <TableRow>
                         <TableHead className={isRTL ? "text-right" : "text-left"}>{t("attendanceCheck.employee")}</TableHead>
                         <TableHead className="text-center">{t("attendanceCheck.startTime")}</TableHead>
                         <TableHead className="text-center">{t("attendanceCheck.endTime")}</TableHead>
-                        <TableHead className="text-center">{t("attendanceCheck.checkIn")}</TableHead>
-                        <TableHead className="text-center">{t("attendanceCheck.checkOut")}</TableHead>
+                        <TableHead className="text-center hidden md:table-cell">{t("attendanceCheck.checkIn")}</TableHead>
+                        <TableHead className="text-center hidden md:table-cell">{t("attendanceCheck.checkOut")}</TableHead>
                         <TableHead className="text-center">{t("attendanceCheck.status")}</TableHead>
                         <TableHead className="text-center">{t("attendanceCheck.actions")}</TableHead>
                       </TableRow>
@@ -363,20 +364,20 @@ export default function AttendanceCheckPage() {
                                 {emp.employeeName}
                               </div>
                             </TableCell>
-                            <TableCell className="text-center font-mono">{emp.startTime || "-"}</TableCell>
-                            <TableCell className="text-center font-mono">{emp.endTime || "-"}</TableCell>
-                            <TableCell className="text-center">
+                            <TableCell className="text-center font-mono text-xs sm:text-sm">{emp.startTime || "-"}</TableCell>
+                            <TableCell className="text-center font-mono text-xs sm:text-sm">{emp.endTime || "-"}</TableCell>
+                            <TableCell className="text-center hidden md:table-cell">
                               {emp.attendance?.actualCheckIn ? (
-                                <span className="font-mono text-green-600">{emp.attendance.actualCheckIn}</span>
+                                <span className="font-mono text-green-600 text-xs sm:text-sm">{emp.attendance.actualCheckIn}</span>
                               ) : "-"}
                             </TableCell>
-                            <TableCell className="text-center">
+                            <TableCell className="text-center hidden md:table-cell">
                               {emp.attendance?.actualCheckOut ? (
-                                <span className="font-mono text-red-600">{emp.attendance.actualCheckOut}</span>
+                                <span className="font-mono text-red-600 text-xs sm:text-sm">{emp.attendance.actualCheckOut}</span>
                               ) : "-"}
                             </TableCell>
                             <TableCell className="text-center">
-                              <Badge className={status.color}>{status.label}</Badge>
+                              <Badge className={`${status.color} text-[10px] sm:text-xs`}>{status.label}</Badge>
                             </TableCell>
                             <TableCell className="text-center">
                               <div className="flex items-center justify-center gap-2">

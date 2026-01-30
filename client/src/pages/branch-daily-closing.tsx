@@ -250,32 +250,33 @@ export default function BranchDailyClosingPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-4" dir="rtl">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
           <div>
-            <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">إغلاق يومي جديد</h1>
-            <p className="text-gray-500 mt-1">تجميع يوميات الكاشير في إغلاق يومي واحد</p>
+            <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">إغلاق يومي جديد</h1>
+            <p className="text-xs sm:text-sm text-gray-500 mt-1">تجميع يوميات الكاشير في إغلاق يومي واحد</p>
           </div>
           <Link href="/branch-daily-closures">
-            <Button variant="outline" className="gap-2">
+            <Button variant="outline" className="gap-2 h-11 sm:h-10 text-xs sm:text-sm w-full sm:w-auto">
               <ArrowLeft className="h-4 w-4" />
-              عرض الإغلاقات السابقة
+              <span className="hidden sm:inline">عرض الإغلاقات السابقة</span>
+              <span className="sm:hidden">الإغلاقات السابقة</span>
             </Button>
           </Link>
         </div>
 
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5 text-amber-600" />
+          <CardHeader className="p-3 sm:p-4 md:p-6">
+            <CardTitle className="flex items-center gap-2 text-sm sm:text-base md:text-lg">
+              <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600" />
               تحديد الفرع والتاريخ
             </CardTitle>
           </CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>الفرع</Label>
+          <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 p-3 sm:p-4 md:p-6 pt-0">
+            <div className="space-y-1 sm:space-y-2">
+              <Label className="text-xs sm:text-sm">الفرع</Label>
               <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                <SelectTrigger disabled={!canSelectBranch}>
+                <SelectTrigger disabled={!canSelectBranch} className="h-11 sm:h-10 text-xs sm:text-sm">
                   <SelectValue placeholder="اختر الفرع" />
                 </SelectTrigger>
                 <SelectContent>
@@ -287,13 +288,13 @@ export default function BranchDailyClosingPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label>التاريخ</Label>
+            <div className="space-y-1 sm:space-y-2">
+              <Label className="text-xs sm:text-sm">التاريخ</Label>
               <Input 
                 type="date" 
                 value={selectedDate} 
                 onChange={(e) => setSelectedDate(e.target.value)}
-                className="w-full"
+                className="w-full h-11 sm:h-10 text-xs sm:text-sm"
               />
             </div>
           </CardContent>
@@ -336,22 +337,22 @@ export default function BranchDailyClosingPage() {
         {!isLoadingPreview && journalPreview?.journals && journalPreview.journals.length > 0 && !journalPreview.existingClosure && (
           <>
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <span className="flex items-center gap-2">
-                    <Receipt className="h-5 w-5 text-amber-600" />
-                    يوميات الكاشير المتاحة ({journalPreview.journals.length})
+              <CardHeader className="p-3 sm:p-4 md:p-6">
+                <CardTitle className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-4">
+                  <span className="flex items-center gap-2 text-sm sm:text-base md:text-lg">
+                    <Receipt className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600 shrink-0" />
+                    يوميات الكاشير ({journalPreview.journals.length})
                   </span>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={selectAllJournals}>
+                  <div className="flex gap-2 w-full sm:w-auto">
+                    <Button variant="outline" size="sm" onClick={selectAllJournals} className="flex-1 sm:flex-none h-9 text-xs sm:text-sm">
                       تحديد الكل
                     </Button>
-                    <Button variant="outline" size="sm" onClick={deselectAllJournals}>
+                    <Button variant="outline" size="sm" onClick={deselectAllJournals} className="flex-1 sm:flex-none h-9 text-xs sm:text-sm">
                       إلغاء التحديد
                     </Button>
                   </div>
                 </CardTitle>
-                <CardDescription>
+                <CardDescription className="text-xs sm:text-sm">
                   حدد اليوميات التي تريد تضمينها في الإغلاق اليومي
                 </CardDescription>
               </CardHeader>
@@ -359,28 +360,29 @@ export default function BranchDailyClosingPage() {
                 <div className="space-y-3">
                   {journalPreview.journals.map((journal: any) => (
                     <Collapsible key={journal.id} open={expandedJournals.includes(journal.id)}>
-                      <div className={`border rounded-lg p-4 transition-colors ${selectedJournals.includes(journal.id) ? 'border-amber-400 bg-amber-50/50' : 'border-gray-200'}`}>
-                        <div className="flex items-center justify-between gap-4">
-                          <div className="flex items-center gap-3">
+                      <div className={`border rounded-lg p-3 sm:p-4 transition-colors ${selectedJournals.includes(journal.id) ? 'border-amber-400 bg-amber-50/50' : 'border-gray-200'}`}>
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+                          <div className="flex items-center gap-2 sm:gap-3">
                             <Checkbox 
                               checked={selectedJournals.includes(journal.id)}
                               onCheckedChange={() => toggleJournal(journal.id)}
                               data-testid={`checkbox-journal-${journal.id}`}
                             />
                             <div>
-                              <p className="font-medium">{journal.cashierName}</p>
-                              <p className="text-sm text-gray-500">
+                              <p className="font-medium text-sm sm:text-base">{journal.cashierName}</p>
+                              <p className="text-xs sm:text-sm text-gray-500">
                                 {journal.shiftType === 'morning' ? 'صباحي' : journal.shiftType === 'evening' ? 'مسائي' : 'كامل'}
                               </p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-4">
-                            <div className="text-left">
-                              <p className="font-semibold">{formatCurrency(journal.totalSales)} ريال</p>
-                              <p className="text-sm text-gray-500">{formatNumber(journal.customerCount)} عميل</p>
+                          <div className="flex items-center gap-2 sm:gap-4 w-full sm:w-auto justify-between sm:justify-end">
+                            <div className="text-right sm:text-left">
+                              <p className="font-semibold text-sm sm:text-base">{formatCurrency(journal.totalSales)} ريال</p>
+                              <p className="text-xs sm:text-sm text-gray-500">{formatNumber(journal.customerCount)} عميل</p>
                             </div>
                             <Badge 
                               variant={journal.status === 'approved' ? 'default' : journal.status === 'draft' ? 'secondary' : 'outline'}
+                              className="text-[10px] sm:text-xs"
                             >
                               {journal.status === 'approved' ? 'معتمد' : journal.status === 'draft' ? 'مسودة' : 'مُقدم'}
                             </Badge>
@@ -389,6 +391,7 @@ export default function BranchDailyClosingPage() {
                                 variant="ghost" 
                                 size="sm"
                                 onClick={() => toggleExpandJournal(journal.id)}
+                                className="h-9 w-9 p-0"
                               >
                                 {expandedJournals.includes(journal.id) ? (
                                   <ChevronUp className="h-4 w-4" />
@@ -400,8 +403,8 @@ export default function BranchDailyClosingPage() {
                           </div>
                         </div>
                         <CollapsibleContent>
-                          <div className="mt-4 pt-4 border-t space-y-4">
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                          <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t space-y-3 sm:space-y-4">
+                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 text-xs sm:text-sm">
                               <div>
                                 <span className="text-gray-500">النقدي:</span>
                                 <span className="font-medium mr-2">{formatCurrency(journal.cashTotal)} ريال</span>
@@ -467,22 +470,22 @@ export default function BranchDailyClosingPage() {
                               </div>
                             )}
 
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 text-[10px] sm:text-xs">
                               <div className="bg-blue-50 rounded p-2">
                                 <span className="text-gray-500 block">عدد العمليات:</span>
                                 <span className="font-semibold">{formatNumber(journal.transactionCount)}</span>
                               </div>
                               <div className="bg-green-50 rounded p-2">
                                 <span className="text-gray-500 block">رصيد الافتتاح:</span>
-                                <span className="font-semibold">{formatCurrency(journal.openingBalance)} ريال</span>
+                                <span className="font-semibold">{formatCurrency(journal.openingBalance)} ر.س</span>
                               </div>
                               <div className="bg-purple-50 rounded p-2">
-                                <span className="text-gray-500 block">المتوقع بالصندوق:</span>
-                                <span className="font-semibold">{formatCurrency(journal.expectedCash)} ريال</span>
+                                <span className="text-gray-500 block">المتوقع:</span>
+                                <span className="font-semibold">{formatCurrency(journal.expectedCash)} ر.س</span>
                               </div>
                               <div className="bg-amber-50 rounded p-2">
-                                <span className="text-gray-500 block">الفعلي بالصندوق:</span>
-                                <span className="font-semibold">{formatCurrency(journal.actualCashDrawer)} ريال</span>
+                                <span className="text-gray-500 block">الفعلي:</span>
+                                <span className="font-semibold">{formatCurrency(journal.actualCashDrawer)} ر.س</span>
                               </div>
                             </div>
                           </div>
@@ -496,68 +499,68 @@ export default function BranchDailyClosingPage() {
 
             {selectedJournals.length > 0 && (
               <Card className="border-amber-200 bg-gradient-to-br from-amber-50 to-white">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Wallet className="h-5 w-5 text-amber-600" />
+                <CardHeader className="p-3 sm:p-4 md:p-6">
+                  <CardTitle className="flex items-center gap-2 text-sm sm:text-base md:text-lg">
+                    <Wallet className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600" />
                     ملخص الإغلاق اليومي
                   </CardTitle>
-                  <CardDescription>
+                  <CardDescription className="text-xs sm:text-sm">
                     مجموع {selectedTotals.journalsCount} يومية محددة • {formatNumber(selectedTotals.totalTransactionCount)} عملية
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="bg-white rounded-lg p-4 border shadow-sm">
-                      <div className="flex items-center gap-2 text-gray-500 text-sm mb-1">
-                        <DollarSign className="h-4 w-4" />
+                <CardContent className="space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6 pt-0">
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+                    <div className="bg-white rounded-lg p-2 sm:p-3 md:p-4 border shadow-sm">
+                      <div className="flex items-center gap-1 sm:gap-2 text-gray-500 text-[10px] sm:text-xs md:text-sm mb-1">
+                        <DollarSign className="h-3 w-3 sm:h-4 sm:w-4" />
                         إجمالي المبيعات
                       </div>
-                      <p className="text-xl font-bold text-amber-700">{formatCurrency(selectedTotals.totalSales)} ريال</p>
+                      <p className="text-sm sm:text-lg md:text-xl font-bold text-amber-700">{formatCurrency(selectedTotals.totalSales)} ر.س</p>
                     </div>
-                    <div className="bg-white rounded-lg p-4 border shadow-sm">
-                      <div className="flex items-center gap-2 text-gray-500 text-sm mb-1">
-                        <Wallet className="h-4 w-4" />
+                    <div className="bg-white rounded-lg p-2 sm:p-3 md:p-4 border shadow-sm">
+                      <div className="flex items-center gap-1 sm:gap-2 text-gray-500 text-[10px] sm:text-xs md:text-sm mb-1">
+                        <Wallet className="h-3 w-3 sm:h-4 sm:w-4" />
                         النقدي
                       </div>
-                      <p className="text-xl font-bold text-green-700">{formatCurrency(selectedTotals.cashTotal)} ريال</p>
+                      <p className="text-sm sm:text-lg md:text-xl font-bold text-green-700">{formatCurrency(selectedTotals.cashTotal)} ر.س</p>
                     </div>
-                    <div className="bg-white rounded-lg p-4 border shadow-sm">
-                      <div className="flex items-center gap-2 text-gray-500 text-sm mb-1">
-                        <CreditCard className="h-4 w-4" />
+                    <div className="bg-white rounded-lg p-2 sm:p-3 md:p-4 border shadow-sm">
+                      <div className="flex items-center gap-1 sm:gap-2 text-gray-500 text-[10px] sm:text-xs md:text-sm mb-1">
+                        <CreditCard className="h-3 w-3 sm:h-4 sm:w-4" />
                         الشبكة
                       </div>
-                      <p className="text-xl font-bold text-blue-700">{formatCurrency(selectedTotals.networkTotal)} ريال</p>
+                      <p className="text-sm sm:text-lg md:text-xl font-bold text-blue-700">{formatCurrency(selectedTotals.networkTotal)} ر.س</p>
                     </div>
-                    <div className="bg-white rounded-lg p-4 border shadow-sm">
-                      <div className="flex items-center gap-2 text-gray-500 text-sm mb-1">
-                        <Users className="h-4 w-4" />
+                    <div className="bg-white rounded-lg p-2 sm:p-3 md:p-4 border shadow-sm">
+                      <div className="flex items-center gap-1 sm:gap-2 text-gray-500 text-[10px] sm:text-xs md:text-sm mb-1">
+                        <Users className="h-3 w-3 sm:h-4 sm:w-4" />
                         العملاء
                       </div>
-                      <p className="text-xl font-bold text-purple-700">{formatNumber(selectedTotals.totalCustomerCount)}</p>
+                      <p className="text-sm sm:text-lg md:text-xl font-bold text-purple-700">{formatNumber(selectedTotals.totalCustomerCount)}</p>
                     </div>
                   </div>
 
-                  <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200 p-4">
-                    <h4 className="font-semibold text-green-800 mb-4 flex items-center gap-2">
-                      <Wallet className="h-5 w-5" />
+                  <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200 p-3 sm:p-4">
+                    <h4 className="font-semibold text-green-800 mb-3 sm:mb-4 flex items-center gap-2 text-sm sm:text-base">
+                      <Wallet className="h-4 w-4 sm:h-5 sm:w-5" />
                       تفاصيل النقدي بالصندوق
                     </h4>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div className="bg-white rounded-lg p-3 border border-green-100">
-                        <span className="text-gray-500 text-sm block mb-1">رصيد الافتتاح</span>
-                        <span className="font-bold text-lg text-gray-800">{formatCurrency(selectedTotals.totalOpeningBalance)} ريال</span>
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+                      <div className="bg-white rounded-lg p-2 sm:p-3 border border-green-100">
+                        <span className="text-gray-500 text-[10px] sm:text-xs md:text-sm block mb-1">رصيد الافتتاح</span>
+                        <span className="font-bold text-sm sm:text-base md:text-lg text-gray-800">{formatCurrency(selectedTotals.totalOpeningBalance)} ر.س</span>
                       </div>
-                      <div className="bg-white rounded-lg p-3 border border-green-100">
-                        <span className="text-gray-500 text-sm block mb-1">مبيعات نقدية</span>
-                        <span className="font-bold text-lg text-green-700">{formatCurrency(selectedTotals.cashTotal)} ريال</span>
+                      <div className="bg-white rounded-lg p-2 sm:p-3 border border-green-100">
+                        <span className="text-gray-500 text-[10px] sm:text-xs md:text-sm block mb-1">مبيعات نقدية</span>
+                        <span className="font-bold text-sm sm:text-base md:text-lg text-green-700">{formatCurrency(selectedTotals.cashTotal)} ر.س</span>
                       </div>
-                      <div className="bg-white rounded-lg p-3 border border-green-100">
-                        <span className="text-gray-500 text-sm block mb-1">المتوقع بالصندوق</span>
-                        <span className="font-bold text-lg text-blue-700">{formatCurrency(selectedTotals.totalExpectedCash)} ريال</span>
+                      <div className="bg-white rounded-lg p-2 sm:p-3 border border-green-100">
+                        <span className="text-gray-500 text-[10px] sm:text-xs md:text-sm block mb-1">المتوقع</span>
+                        <span className="font-bold text-sm sm:text-base md:text-lg text-blue-700">{formatCurrency(selectedTotals.totalExpectedCash)} ر.س</span>
                       </div>
-                      <div className="bg-white rounded-lg p-3 border border-green-100">
-                        <span className="text-gray-500 text-sm block mb-1">الفعلي المعدود</span>
-                        <span className="font-bold text-lg text-amber-700">{formatCurrency(selectedTotals.totalActualCash)} ريال</span>
+                      <div className="bg-white rounded-lg p-2 sm:p-3 border border-green-100">
+                        <span className="text-gray-500 text-[10px] sm:text-xs md:text-sm block mb-1">الفعلي</span>
+                        <span className="font-bold text-sm sm:text-base md:text-lg text-amber-700">{formatCurrency(selectedTotals.totalActualCash)} ر.س</span>
                       </div>
                     </div>
                     <div className={`mt-4 rounded-lg p-4 border ${

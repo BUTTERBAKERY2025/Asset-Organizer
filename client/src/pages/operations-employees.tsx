@@ -290,7 +290,7 @@ export default function OperationsEmployeesPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
+      <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
           <div className="flex items-center gap-3">
             <Link href="/operations">
@@ -299,10 +299,10 @@ export default function OperationsEmployeesPage() {
               </Button>
             </Link>
             <div>
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground" data-testid="text-page-title">
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold tracking-tight text-foreground" data-testid="text-page-title">
                 موظفي التشغيل
               </h1>
-              <p className="text-muted-foreground mt-1">إدارة موظفي الفروع وتعيين المهام والصلاحيات</p>
+              <p className="text-xs sm:text-sm text-muted-foreground mt-1">إدارة موظفي الفروع وتعيين المهام والصلاحيات</p>
             </div>
           </div>
           {canCreate && (
@@ -503,14 +503,14 @@ export default function OperationsEmployeesPage() {
               </Select>
             </div>
 
-            <div className="border rounded-lg overflow-hidden">
-              <Table>
+            <div className="border rounded-lg overflow-x-auto">
+              <Table className="min-w-[600px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead>الموظف</TableHead>
                     <TableHead>الفرع</TableHead>
-                    <TableHead>الوظيفة</TableHead>
-                    <TableHead>الجوال</TableHead>
+                    <TableHead className="hidden md:table-cell">الوظيفة</TableHead>
+                    <TableHead className="hidden md:table-cell">الجوال</TableHead>
                     <TableHead>الحالة</TableHead>
                     <TableHead className="w-[100px]">الإجراءات</TableHead>
                   </TableRow>
@@ -535,17 +535,17 @@ export default function OperationsEmployeesPage() {
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <Building2 className="w-4 h-4 text-muted-foreground" />
-                            {getBranchName(emp.branchId)}
+                            <Building2 className="w-4 h-4 text-muted-foreground hidden sm:block" />
+                            <span className="text-xs sm:text-sm">{getBranchName(emp.branchId)}</span>
                           </div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden md:table-cell">
                           <div className="flex items-center gap-2">
                             <Briefcase className="w-4 h-4 text-muted-foreground" />
                             {getJobTitleLabel(emp.jobTitle)}
                           </div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden md:table-cell">
                           {emp.phone ? (
                             <div className="flex items-center gap-2">
                               <Phone className="w-4 h-4 text-muted-foreground" />

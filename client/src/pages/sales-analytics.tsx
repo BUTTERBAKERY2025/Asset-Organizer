@@ -345,7 +345,7 @@ export default function SalesAnalytics() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
+      <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-4" dir="rtl">
         <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div className="flex items-center gap-3">
@@ -355,105 +355,110 @@ export default function SalesAnalytics() {
                 </Button>
               </Link>
               <div>
-                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 flex items-center gap-2 sm:gap-3">
-                  <BarChart3 className="h-6 w-6 sm:h-8 sm:w-8 text-amber-600" />
+                <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 flex items-center gap-2 sm:gap-3">
+                  <BarChart3 className="h-5 w-5 sm:h-6 sm:w-6 md:h-8 md:w-8 text-amber-600" />
                   تحليلات المبيعات
                 </h1>
-                <p className="text-sm sm:text-base text-gray-600 mt-1">تحليل شامل للمبيعات مقارنة بالأهداف</p>
+                <p className="text-xs sm:text-sm text-gray-600 mt-1">تحليل شامل للمبيعات مقارنة بالأهداف</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap">
-              <Badge variant="outline" className="bg-white/80">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 flex-wrap w-full sm:w-auto">
+              <Badge variant="outline" className="bg-white/80 text-[10px] sm:text-xs">
                 <Clock className="h-3 w-3 ml-1" />
                 آخر تحديث: {formatLastUpdated(lastUpdated)}
               </Badge>
               <Button 
                 variant={autoRefresh ? "default" : "outline"} 
                 onClick={() => setAutoRefresh(!autoRefresh)}
-                className={`h-11 sm:h-9 ${autoRefresh ? "bg-green-600 hover:bg-green-700" : ""}`}
+                className={`h-11 sm:h-9 text-xs sm:text-sm ${autoRefresh ? "bg-green-600 hover:bg-green-700" : ""}`}
                 data-testid="button-auto-refresh"
               >
                 <RefreshCw className={`h-4 w-4 ml-1 ${autoRefresh ? "animate-spin" : ""}`} />
-                {autoRefresh ? "تحديث تلقائي" : "تفعيل التحديث"}
+                <span className="hidden sm:inline">{autoRefresh ? "تحديث تلقائي" : "تفعيل التحديث"}</span>
+                <span className="sm:hidden">{autoRefresh ? "تلقائي" : "تحديث"}</span>
               </Button>
             </div>
           </div>
 
           <Card className="bg-white/80 backdrop-blur border-amber-200">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm flex items-center gap-2">
+            <CardHeader className="pb-3 p-3 sm:p-4 md:p-6">
+              <CardTitle className="text-xs sm:text-sm flex items-center gap-2">
                 <Filter className="h-4 w-4 text-amber-600" />
                 الفلاتر المتقدمة
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-3 items-center">
-                <Select value={selectedYear} onValueChange={setSelectedYear}>
-                  <SelectTrigger className="w-28 h-11 sm:h-10" data-testid="select-year">
-                    <SelectValue placeholder="السنة" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {years.map((y) => (
-                      <SelectItem key={y.value} value={y.value}>{y.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+              <div className="flex flex-col sm:flex-row flex-wrap gap-2 sm:gap-3 items-stretch sm:items-center">
+                <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 sm:gap-3 w-full sm:w-auto">
+                  <Select value={selectedYear} onValueChange={setSelectedYear}>
+                    <SelectTrigger className="w-full sm:w-24 h-11 sm:h-10 text-xs sm:text-sm" data-testid="select-year">
+                      <SelectValue placeholder="السنة" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {years.map((y) => (
+                        <SelectItem key={y.value} value={y.value}>{y.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
 
-                <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                  <SelectTrigger className="w-32 h-11 sm:h-10" data-testid="select-month">
-                    <SelectValue placeholder="الشهر" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {months.map((m) => (
-                      <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                    <SelectTrigger className="w-full sm:w-28 h-11 sm:h-10 text-xs sm:text-sm" data-testid="select-month">
+                      <SelectValue placeholder="الشهر" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {months.map((m) => (
+                        <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
 
-                <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                  <SelectTrigger className="w-40 h-11 sm:h-10" data-testid="select-branch" disabled={!canSelectBranch}>
-                    <SelectValue placeholder="الفرع" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {canSelectBranch && <SelectItem value="all">جميع الفروع</SelectItem>}
-                    {branches.map((b) => (
-                      <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+                    <SelectTrigger className="w-full sm:w-36 h-11 sm:h-10 text-xs sm:text-sm" data-testid="select-branch" disabled={!canSelectBranch}>
+                      <SelectValue placeholder="الفرع" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {canSelectBranch && <SelectItem value="all">جميع الفروع</SelectItem>}
+                      {branches.map((b) => (
+                        <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
 
-                <Select value={journalStatus} onValueChange={setJournalStatus}>
-                  <SelectTrigger className="w-40 h-11 sm:h-10" data-testid="select-journal-status">
-                    <SelectValue placeholder="حالة اليومية" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">كل الحالات</SelectItem>
-                    <SelectItem value="posted">مرحّلة</SelectItem>
-                    <SelectItem value="approved">معتمدة</SelectItem>
-                    <SelectItem value="submitted">مقدمة</SelectItem>
-                    <SelectItem value="draft">مسودة</SelectItem>
-                  </SelectContent>
-                </Select>
+                  <Select value={journalStatus} onValueChange={setJournalStatus}>
+                    <SelectTrigger className="w-full sm:w-36 h-11 sm:h-10 text-xs sm:text-sm" data-testid="select-journal-status">
+                      <SelectValue placeholder="الحالة" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">كل الحالات</SelectItem>
+                      <SelectItem value="posted">مرحّلة</SelectItem>
+                      <SelectItem value="approved">معتمدة</SelectItem>
+                      <SelectItem value="submitted">مقدمة</SelectItem>
+                      <SelectItem value="draft">مسودة</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-                <Select value={discrepancyType} onValueChange={setDiscrepancyType}>
-                  <SelectTrigger className="w-44 h-11 sm:h-10" data-testid="select-discrepancy-type">
-                    <SelectValue placeholder="نوع العجز/الزيادة" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">الكل</SelectItem>
-                    <SelectItem value="balanced">متوازن</SelectItem>
-                    <SelectItem value="shortage">عجز فقط</SelectItem>
-                    <SelectItem value="surplus">زيادة فقط</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <Select value={discrepancyType} onValueChange={setDiscrepancyType}>
+                    <SelectTrigger className="flex-1 sm:w-36 h-11 sm:h-10 text-xs sm:text-sm" data-testid="select-discrepancy-type">
+                      <SelectValue placeholder="الفرق" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">الكل</SelectItem>
+                      <SelectItem value="balanced">متوازن</SelectItem>
+                      <SelectItem value="shortage">عجز</SelectItem>
+                      <SelectItem value="surplus">زيادة</SelectItem>
+                    </SelectContent>
+                  </Select>
 
-                <Button variant="outline" onClick={handleRefresh} className="h-11 w-11 sm:h-8 sm:w-8 p-0" data-testid="button-refresh">
-                  <RefreshCw className="h-4 w-4" />
-                </Button>
+                  <Button variant="outline" onClick={handleRefresh} className="h-11 w-11 sm:h-10 sm:w-10 p-0 shrink-0" data-testid="button-refresh">
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                </div>
 
-                <div className="mr-auto flex items-center gap-2">
-                  <Badge className={`${
+                <div className="w-full sm:w-auto sm:mr-auto flex items-center justify-center sm:justify-end gap-2">
+                  <Badge className={`text-[10px] sm:text-xs ${
                     currentSeason.factor > 1.2 ? "bg-green-100 text-green-800" :
                     currentSeason.factor < 0.9 ? "bg-orange-100 text-orange-800" :
                     "bg-gray-100 text-gray-800"
@@ -466,53 +471,53 @@ export default function SalesAnalytics() {
             </CardContent>
           </Card>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-4">
           <Card className="bg-white/80 backdrop-blur border-amber-200">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs sm:text-sm text-gray-500">إجمالي المبيعات</p>
-                  <p className="text-lg sm:text-2xl font-bold text-gray-900" data-testid="text-total-sales">
+            <CardContent className="p-2 sm:p-3 md:p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] sm:text-xs md:text-sm text-gray-500 truncate">إجمالي المبيعات</p>
+                  <p className="text-sm sm:text-lg md:text-xl font-bold text-gray-900 truncate" data-testid="text-total-sales">
                     {formatCurrency(totalActualSales)}
                   </p>
                 </div>
-                <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-amber-100 flex items-center justify-center">
-                  <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-amber-600" />
+                <div className="h-8 w-8 sm:h-10 sm:w-10 md:h-12 md:w-12 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                  <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-amber-600" />
                 </div>
               </div>
             </CardContent>
           </Card>
 
           <Card className="bg-white/80 backdrop-blur border-amber-200">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs sm:text-sm text-gray-500">الهدف الشهري</p>
-                  <p className="text-lg sm:text-2xl font-bold text-gray-900" data-testid="text-total-target">
+            <CardContent className="p-2 sm:p-3 md:p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] sm:text-xs md:text-sm text-gray-500 truncate">الهدف الشهري</p>
+                  <p className="text-sm sm:text-lg md:text-xl font-bold text-gray-900 truncate" data-testid="text-total-target">
                     {formatCurrency(totalTargetAmount)}
                   </p>
                 </div>
-                <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-blue-100 flex items-center justify-center">
-                  <Target className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />
+                <div className="h-8 w-8 sm:h-10 sm:w-10 md:h-12 md:w-12 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                  <Target className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-blue-600" />
                 </div>
               </div>
             </CardContent>
           </Card>
 
           <Card className="bg-white/80 backdrop-blur border-amber-200">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs sm:text-sm text-gray-500">نسبة التحقيق</p>
-                  <p className="text-lg sm:text-2xl font-bold text-gray-900" data-testid="text-achievement-percent">
+            <CardContent className="p-2 sm:p-3 md:p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] sm:text-xs md:text-sm text-gray-500 truncate">نسبة التحقيق</p>
+                  <p className="text-sm sm:text-lg md:text-xl font-bold text-gray-900" data-testid="text-achievement-percent">
                     {formatPercent(overallAchievement)}
                   </p>
-                  <Progress value={Math.min(overallAchievement, 100)} className="mt-2 h-2" />
+                  <Progress value={Math.min(overallAchievement, 100)} className="mt-1 sm:mt-2 h-1.5 sm:h-2" />
                 </div>
-                <div className={`h-10 w-10 sm:h-12 sm:w-12 rounded-full flex items-center justify-center ${
+                <div className={`h-8 w-8 sm:h-10 sm:w-10 md:h-12 md:w-12 rounded-full flex items-center justify-center shrink-0 ${
                   overallAchievement >= 100 ? "bg-green-100" : overallAchievement >= 80 ? "bg-amber-100" : "bg-red-100"
                 }`}>
-                  <Award className={`h-5 w-5 sm:h-6 sm:w-6 ${
+                  <Award className={`h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 ${
                     overallAchievement >= 100 ? "text-green-600" : overallAchievement >= 80 ? "text-amber-600" : "text-red-600"
                   }`} />
                 </div>
@@ -521,21 +526,21 @@ export default function SalesAnalytics() {
           </Card>
 
           <Card className="bg-white/80 backdrop-blur border-amber-200">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs sm:text-sm text-gray-500">الفارق</p>
-                  <p className={`text-lg sm:text-2xl font-bold ${totalVariance >= 0 ? "text-green-600" : "text-red-600"}`} data-testid="text-variance">
+            <CardContent className="p-2 sm:p-3 md:p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] sm:text-xs md:text-sm text-gray-500 truncate">الفارق</p>
+                  <p className={`text-sm sm:text-lg md:text-xl font-bold truncate ${totalVariance >= 0 ? "text-green-600" : "text-red-600"}`} data-testid="text-variance">
                     {formatCurrency(totalVariance)}
                   </p>
                 </div>
-                <div className={`h-10 w-10 sm:h-12 sm:w-12 rounded-full flex items-center justify-center ${
+                <div className={`h-8 w-8 sm:h-10 sm:w-10 md:h-12 md:w-12 rounded-full flex items-center justify-center shrink-0 ${
                   totalVariance >= 0 ? "bg-green-100" : "bg-red-100"
                 }`}>
                   {totalVariance >= 0 ? (
-                    <ArrowUp className="h-5 w-5 sm:h-6 sm:w-6 text-green-600" />
+                    <ArrowUp className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-green-600" />
                   ) : (
-                    <ArrowDown className="h-5 w-5 sm:h-6 sm:w-6 text-red-600" />
+                    <ArrowDown className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-red-600" />
                   )}
                 </div>
               </div>
@@ -544,13 +549,15 @@ export default function SalesAnalytics() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="bg-white/80 backdrop-blur border border-amber-200">
-            <TabsTrigger value="overview" data-testid="tab-overview">نظرة عامة</TabsTrigger>
-            <TabsTrigger value="branches" data-testid="tab-branches">منافسة الفروع</TabsTrigger>
-            <TabsTrigger value="cashiers" data-testid="tab-cashiers">ترتيب الكاشيرين</TabsTrigger>
-            <TabsTrigger value="shifts" data-testid="tab-shifts">تحليل الورديات</TabsTrigger>
-            <TabsTrigger value="daily" data-testid="tab-daily">الأداء اليومي</TabsTrigger>
-          </TabsList>
+          <div className="overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0">
+            <TabsList className="bg-white/80 backdrop-blur border border-amber-200 inline-flex min-w-max">
+              <TabsTrigger value="overview" data-testid="tab-overview" className="text-xs sm:text-sm">نظرة عامة</TabsTrigger>
+              <TabsTrigger value="branches" data-testid="tab-branches" className="text-xs sm:text-sm">الفروع</TabsTrigger>
+              <TabsTrigger value="cashiers" data-testid="tab-cashiers" className="text-xs sm:text-sm">الكاشيرين</TabsTrigger>
+              <TabsTrigger value="shifts" data-testid="tab-shifts" className="text-xs sm:text-sm">الورديات</TabsTrigger>
+              <TabsTrigger value="daily" data-testid="tab-daily" className="text-xs sm:text-sm">اليومي</TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent value="overview" className="space-y-4">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -749,7 +756,7 @@ export default function SalesAnalytics() {
                           </div>
                         </div>
                         
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 mb-3">
                           <div>
                             <p className="text-xs text-gray-500">الهدف</p>
                             <p className="font-medium">{formatCurrency(branch.targetAmount)}</p>
@@ -789,7 +796,7 @@ export default function SalesAnalytics() {
           </TabsContent>
 
           <TabsContent value="shifts" className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
               {shiftAnalytics.map((shift: any) => {
                 const Icon = shiftIcons[shift.shiftType] || Clock;
                 return (
@@ -879,26 +886,26 @@ export default function SalesAnalytics() {
                     لا توجد بيانات
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
+                  <div className="overflow-x-auto -mx-3 sm:mx-0">
+                    <table className="w-full min-w-[700px]">
                       <thead>
                         <tr className="border-b">
-                          <th className="text-right py-3 px-2">#</th>
-                          <th className="text-right py-3 px-2">الكاشير</th>
-                          <th className="text-right py-3 px-2">الفرع</th>
-                          <th className="text-right py-3 px-2">إجمالي المبيعات</th>
-                          <th className="text-right py-3 px-2">نسبة الإنجاز</th>
-                          <th className="text-right py-3 px-2">مستوى الحافز</th>
-                          <th className="text-right py-3 px-2">المكافأة المتوقعة</th>
-                          <th className="text-right py-3 px-2">متوسط الفاتورة</th>
-                          <th className="text-right py-3 px-2">المساهمة</th>
+                          <th className="text-right py-2 sm:py-3 px-2 text-xs sm:text-sm">#</th>
+                          <th className="text-right py-2 sm:py-3 px-2 text-xs sm:text-sm">الكاشير</th>
+                          <th className="text-right py-2 sm:py-3 px-2 text-xs sm:text-sm hidden md:table-cell">الفرع</th>
+                          <th className="text-right py-2 sm:py-3 px-2 text-xs sm:text-sm">المبيعات</th>
+                          <th className="text-right py-2 sm:py-3 px-2 text-xs sm:text-sm hidden lg:table-cell">الإنجاز</th>
+                          <th className="text-right py-2 sm:py-3 px-2 text-xs sm:text-sm hidden lg:table-cell">الحافز</th>
+                          <th className="text-right py-2 sm:py-3 px-2 text-xs sm:text-sm hidden md:table-cell">المكافأة</th>
+                          <th className="text-right py-2 sm:py-3 px-2 text-xs sm:text-sm hidden lg:table-cell">متوسط</th>
+                          <th className="text-right py-2 sm:py-3 px-2 text-xs sm:text-sm">المساهمة</th>
                         </tr>
                       </thead>
                       <tbody>
                         {cashierLeaderboard.map((cashier: any) => (
                           <tr key={cashier.cashierId} className="border-b hover:bg-gray-50" data-testid={`row-cashier-${cashier.cashierId}`}>
-                            <td className="py-3 px-2">
-                              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                            <td className="py-2 sm:py-3 px-2">
+                              <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm ${
                                 cashier.rank === 1 ? "bg-amber-400 text-white" :
                                 cashier.rank === 2 ? "bg-gray-300 text-gray-700" :
                                 cashier.rank === 3 ? "bg-amber-600 text-white" :
@@ -907,35 +914,35 @@ export default function SalesAnalytics() {
                                 {cashier.rank}
                               </div>
                             </td>
-                            <td className="py-3 px-2 font-medium">{cashier.cashierName}</td>
-                            <td className="py-3 px-2 text-gray-600">{cashier.branchName}</td>
-                            <td className="py-3 px-2 font-bold text-amber-600">{formatCurrency(cashier.totalSales)}</td>
-                            <td className="py-3 px-2">
+                            <td className="py-2 sm:py-3 px-2 font-medium text-xs sm:text-sm">{cashier.cashierName}</td>
+                            <td className="py-2 sm:py-3 px-2 text-gray-600 text-xs sm:text-sm hidden md:table-cell">{cashier.branchName}</td>
+                            <td className="py-2 sm:py-3 px-2 font-bold text-amber-600 text-xs sm:text-sm">{formatCurrency(cashier.totalSales)}</td>
+                            <td className="py-2 sm:py-3 px-2 hidden lg:table-cell">
                               <div className="flex items-center gap-2">
-                                <Progress value={Math.min(cashier.achievementPercent || 0, 100)} className="h-2 w-16" />
-                                <span className="text-sm">{formatPercent(cashier.achievementPercent || 0)}</span>
+                                <Progress value={Math.min(cashier.achievementPercent || 0, 100)} className="h-1.5 sm:h-2 w-12 sm:w-16" />
+                                <span className="text-xs sm:text-sm">{formatPercent(cashier.achievementPercent || 0)}</span>
                               </div>
                             </td>
-                            <td className="py-3 px-2">
+                            <td className="py-2 sm:py-3 px-2 hidden lg:table-cell">
                               {cashier.incentiveTier ? (
-                                <Badge className="bg-green-100 text-green-800 border-green-200">
+                                <Badge className="bg-green-100 text-green-800 border-green-200 text-[10px] sm:text-xs">
                                   <Gift className="h-3 w-3 ml-1" />
                                   {cashier.incentiveTier.name}
                                 </Badge>
                               ) : (
-                                <span className="text-gray-400 text-sm">-</span>
+                                <span className="text-gray-400 text-xs sm:text-sm">-</span>
                               )}
                             </td>
-                            <td className="py-3 px-2">
+                            <td className="py-2 sm:py-3 px-2 hidden md:table-cell">
                               {cashier.calculatedReward > 0 ? (
-                                <span className="font-medium text-green-600">{formatCurrency(cashier.calculatedReward)}</span>
+                                <span className="font-medium text-green-600 text-xs sm:text-sm">{formatCurrency(cashier.calculatedReward)}</span>
                               ) : (
-                                <span className="text-gray-400">-</span>
+                                <span className="text-gray-400 text-xs">-</span>
                               )}
                             </td>
-                            <td className="py-3 px-2">{formatCurrency(cashier.averageTicket)}</td>
-                            <td className="py-3 px-2">
-                              <Badge variant="secondary">{cashier.contribution.toFixed(1)}%</Badge>
+                            <td className="py-2 sm:py-3 px-2 text-xs sm:text-sm hidden lg:table-cell">{formatCurrency(cashier.averageTicket)}</td>
+                            <td className="py-2 sm:py-3 px-2">
+                              <Badge variant="secondary" className="text-[10px] sm:text-xs">{cashier.contribution.toFixed(1)}%</Badge>
                             </td>
                           </tr>
                         ))}

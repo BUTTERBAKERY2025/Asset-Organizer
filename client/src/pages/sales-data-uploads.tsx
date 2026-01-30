@@ -304,19 +304,19 @@ export default function SalesDataUploadsPage() {
 
   return (
     <Layout>
-      <div className="p-6 max-w-6xl mx-auto space-y-6" dir="rtl">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+      <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-4 sm:space-y-6" dir="rtl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Link href="/production-dashboard">
-              <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" data-testid="btn-back">
+              <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8 shrink-0" data-testid="btn-back">
                 <ArrowLeft className="h-4 w-4" />
               </Button>
             </Link>
             <div>
-              <h1 className="text-2xl font-bold text-foreground" data-testid="text-page-title">
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-foreground" data-testid="text-page-title">
                 رفع بيانات المبيعات
               </h1>
-              <p className="text-muted-foreground">
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 رفع ملفات Excel لتحليل بيانات المبيعات وتخطيط الإنتاج
               </p>
             </div>
@@ -324,33 +324,33 @@ export default function SalesDataUploadsPage() {
         </div>
 
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Upload className="w-5 h-5" />
+          <CardHeader className="p-3 sm:p-4 md:p-6">
+            <CardTitle className="flex items-center gap-2 text-sm sm:text-base md:text-lg">
+              <Upload className="w-4 h-4 sm:w-5 sm:h-5" />
               رفع ملف جديد
             </CardTitle>
-            <CardDescription>اختر ملف Excel يحتوي على بيانات المبيعات</CardDescription>
+            <CardDescription className="text-xs sm:text-sm">اختر ملف Excel يحتوي على بيانات المبيعات</CardDescription>
           </CardHeader>
-          <div className="px-6 pb-4">
-            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <h4 className="font-medium text-blue-900 mb-2 flex items-center gap-2">
-                <AlertCircle className="w-4 h-4" />
+          <div className="px-3 sm:px-4 md:px-6 pb-3 sm:pb-4">
+            <div className="p-3 sm:p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <h4 className="font-medium text-blue-900 mb-2 flex items-center gap-2 text-xs sm:text-sm">
+                <AlertCircle className="w-4 h-4 shrink-0" />
                 تنسيق الملف المطلوب
               </h4>
-              <p className="text-sm text-blue-800 mb-2">يجب أن يحتوي ملف Excel على الأعمدة التالية (اسم أي من هذه الأعمدة مقبول):</p>
-              <ul className="text-sm text-blue-700 list-disc list-inside space-y-1">
-                <li><strong>اسم المنتج:</strong> منتج، اسم المنتج، product، name، item</li>
-                <li><strong>الكمية:</strong> كمية، الكمية، quantity، qty، sold</li>
-                <li><strong>الإيرادات (اختياري):</strong> إيرادات، المبيعات، revenue، total، sales</li>
+              <p className="text-xs sm:text-sm text-blue-800 mb-2">يجب أن يحتوي ملف Excel على الأعمدة التالية:</p>
+              <ul className="text-xs sm:text-sm text-blue-700 list-disc list-inside space-y-1">
+                <li><strong>اسم المنتج:</strong> منتج، product، name، item</li>
+                <li><strong>الكمية:</strong> كمية، quantity، qty، sold</li>
+                <li><strong>الإيرادات:</strong> إيرادات، revenue، total، sales</li>
               </ul>
             </div>
           </div>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="branch">الفرع</Label>
+          <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              <div className="space-y-1 sm:space-y-2">
+                <Label htmlFor="branch" className="text-xs sm:text-sm">الفرع</Label>
                 <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!canSelectBranch}>
-                  <SelectTrigger data-testid="select-branch">
+                  <SelectTrigger data-testid="select-branch" className="h-11 sm:h-10 text-xs sm:text-sm">
                     <SelectValue placeholder="اختر الفرع" />
                   </SelectTrigger>
                   <SelectContent className="max-h-60 overflow-y-auto">
@@ -363,30 +363,32 @@ export default function SalesDataUploadsPage() {
                 </Select>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="periodStart">من تاريخ</Label>
+              <div className="space-y-1 sm:space-y-2">
+                <Label htmlFor="periodStart" className="text-xs sm:text-sm">من تاريخ</Label>
                 <Input
                   id="periodStart"
                   type="date"
                   value={periodStart}
                   onChange={(e) => setPeriodStart(e.target.value)}
                   data-testid="input-period-start"
+                  className="h-11 sm:h-10 text-xs sm:text-sm"
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="periodEnd">إلى تاريخ</Label>
+              <div className="space-y-1 sm:space-y-2">
+                <Label htmlFor="periodEnd" className="text-xs sm:text-sm">إلى تاريخ</Label>
                 <Input
                   id="periodEnd"
                   type="date"
                   value={periodEnd}
                   onChange={(e) => setPeriodEnd(e.target.value)}
                   data-testid="input-period-end"
+                  className="h-11 sm:h-10 text-xs sm:text-sm"
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="file">اختر ملف Excel</Label>
+              <div className="space-y-1 sm:space-y-2">
+                <Label htmlFor="file" className="text-xs sm:text-sm">اختر ملف Excel</Label>
                 <Input
                   id="file"
                   ref={fileInputRef}
@@ -394,25 +396,26 @@ export default function SalesDataUploadsPage() {
                   accept=".xlsx,.xls"
                   onChange={handleFileChange}
                   data-testid="input-file"
+                  className="h-11 sm:h-10 text-xs sm:text-sm"
                 />
               </div>
             </div>
 
             {selectedFile && (
-              <div className="mt-4 p-3 bg-muted rounded-lg flex items-center gap-2">
-                <FileSpreadsheet className="w-5 h-5 text-green-600" />
-                <span className="text-sm">{selectedFile.name}</span>
-                <span className="text-xs text-muted-foreground">
+              <div className="mt-3 sm:mt-4 p-2 sm:p-3 bg-muted rounded-lg flex items-center gap-2">
+                <FileSpreadsheet className="w-4 h-4 sm:w-5 sm:h-5 text-green-600 shrink-0" />
+                <span className="text-xs sm:text-sm truncate">{selectedFile.name}</span>
+                <span className="text-[10px] sm:text-xs text-muted-foreground shrink-0">
                   ({(selectedFile.size / 1024).toFixed(1)} KB)
                 </span>
               </div>
             )}
 
-            <div className="mt-6">
+            <div className="mt-4 sm:mt-6">
               <Button
                 onClick={handleUpload}
                 disabled={isUploading || !selectedBranch || !selectedFile || !periodStart || !periodEnd}
-                className="w-full md:w-auto"
+                className="w-full sm:w-auto h-11 sm:h-10 text-sm"
                 data-testid="button-upload"
               >
                 {isUploading ? (
@@ -432,14 +435,14 @@ export default function SalesDataUploadsPage() {
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileSpreadsheet className="w-5 h-5" />
+          <CardHeader className="p-3 sm:p-4 md:p-6">
+            <CardTitle className="flex items-center gap-2 text-sm sm:text-base md:text-lg">
+              <FileSpreadsheet className="w-4 h-4 sm:w-5 sm:h-5" />
               ملفات البيانات المرفوعة
             </CardTitle>
-            <CardDescription>قائمة بجميع ملفات المبيعات المرفوعة</CardDescription>
+            <CardDescription className="text-xs sm:text-sm">قائمة بجميع ملفات المبيعات المرفوعة</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
             {isLoading ? (
               <div className="space-y-3">
                 {[...Array(3)].map((_, i) => (
@@ -447,24 +450,24 @@ export default function SalesDataUploadsPage() {
                 ))}
               </div>
             ) : !uploads || uploads.length === 0 ? (
-              <div className="text-center py-12">
-                <FileSpreadsheet className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-                <h3 className="text-lg font-semibold mb-2">لا توجد ملفات مرفوعة</h3>
-                <p className="text-muted-foreground">قم برفع ملف Excel لبدء تحليل بيانات المبيعات</p>
+              <div className="text-center py-8 sm:py-12">
+                <FileSpreadsheet className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 sm:mb-4 text-muted-foreground" />
+                <h3 className="text-sm sm:text-lg font-semibold mb-2">لا توجد ملفات مرفوعة</h3>
+                <p className="text-xs sm:text-sm text-muted-foreground">قم برفع ملف Excel لبدء تحليل بيانات المبيعات</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <Table>
+              <div className="overflow-x-auto -mx-3 sm:mx-0">
+                <Table className="min-w-[700px]">
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="text-right">اسم الملف</TableHead>
-                      <TableHead className="text-right">الفرع</TableHead>
-                      <TableHead className="text-right">الفترة</TableHead>
-                      <TableHead className="text-right">الحالة</TableHead>
-                      <TableHead className="text-right">إجمالي السجلات</TableHead>
-                      <TableHead className="text-right">قيمة المبيعات</TableHead>
-                      <TableHead className="text-right">المنتجات الفريدة</TableHead>
-                      <TableHead className="text-right">الإجراءات</TableHead>
+                      <TableHead className="text-right text-xs sm:text-sm">اسم الملف</TableHead>
+                      <TableHead className="text-right text-xs sm:text-sm hidden md:table-cell">الفرع</TableHead>
+                      <TableHead className="text-right text-xs sm:text-sm hidden lg:table-cell">الفترة</TableHead>
+                      <TableHead className="text-right text-xs sm:text-sm">الحالة</TableHead>
+                      <TableHead className="text-right text-xs sm:text-sm hidden md:table-cell">السجلات</TableHead>
+                      <TableHead className="text-right text-xs sm:text-sm">المبيعات</TableHead>
+                      <TableHead className="text-right text-xs sm:text-sm hidden lg:table-cell">المنتجات</TableHead>
+                      <TableHead className="text-right text-xs sm:text-sm">الإجراءات</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -473,51 +476,51 @@ export default function SalesDataUploadsPage() {
                       const StatusIcon = statusConfig.icon;
                       return (
                         <TableRow key={upload.id} data-testid={`row-upload-${upload.id}`}>
-                          <TableCell>
+                          <TableCell className="py-2 sm:py-3">
                             <div className="flex items-center gap-2">
-                              <FileSpreadsheet className="w-4 h-4 text-green-600" />
-                              <span data-testid={`text-filename-${upload.id}`}>{upload.fileName}</span>
+                              <FileSpreadsheet className="w-3 h-3 sm:w-4 sm:h-4 text-green-600 shrink-0" />
+                              <span data-testid={`text-filename-${upload.id}`} className="text-xs sm:text-sm truncate max-w-[100px] sm:max-w-none">{upload.fileName}</span>
                             </div>
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="py-2 sm:py-3 hidden md:table-cell">
                             <div className="flex items-center gap-1">
                               <Building2 className="w-3 h-3 text-muted-foreground" />
-                              <span data-testid={`text-branch-${upload.id}`}>{getBranchName(upload.branchId)}</span>
+                              <span data-testid={`text-branch-${upload.id}`} className="text-xs sm:text-sm">{getBranchName(upload.branchId)}</span>
                             </div>
                           </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-1 text-sm">
+                          <TableCell className="py-2 sm:py-3 hidden lg:table-cell">
+                            <div className="flex items-center gap-1 text-xs sm:text-sm">
                               <Calendar className="w-3 h-3 text-muted-foreground" />
                               <span data-testid={`text-period-${upload.id}`}>
                                 {formatDate(upload.periodStart)} - {formatDate(upload.periodEnd)}
                               </span>
                             </div>
                           </TableCell>
-                          <TableCell>
-                            <Badge className={statusConfig.color} data-testid={`badge-status-${upload.id}`}>
+                          <TableCell className="py-2 sm:py-3">
+                            <Badge className={`${statusConfig.color} text-[10px] sm:text-xs`} data-testid={`badge-status-${upload.id}`}>
                               <StatusIcon className={`w-3 h-3 ml-1 ${upload.status === 'processing' ? 'animate-spin' : ''}`} />
-                              {statusConfig.label}
+                              <span className="hidden sm:inline">{statusConfig.label}</span>
                             </Badge>
                           </TableCell>
-                          <TableCell>
-                            <span data-testid={`text-records-${upload.id}`}>
+                          <TableCell className="py-2 sm:py-3 hidden md:table-cell">
+                            <span data-testid={`text-records-${upload.id}`} className="text-xs sm:text-sm">
                               {upload.totalRecords?.toLocaleString('en-US') || 0}
                             </span>
                           </TableCell>
-                          <TableCell>
-                            <span className="text-green-600 font-medium" data-testid={`text-sales-${upload.id}`}>
+                          <TableCell className="py-2 sm:py-3">
+                            <span className="text-green-600 font-medium text-xs sm:text-sm" data-testid={`text-sales-${upload.id}`}>
                               {formatCurrency(upload.totalSalesValue || 0)}
                             </span>
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="py-2 sm:py-3 hidden lg:table-cell">
                             <div className="flex items-center gap-1">
                               <Package className="w-3 h-3 text-muted-foreground" />
-                              <span data-testid={`text-products-${upload.id}`}>
+                              <span data-testid={`text-products-${upload.id}`} className="text-xs sm:text-sm">
                                 {upload.uniqueProducts || 0}
                               </span>
                             </div>
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="py-2 sm:py-3">
                             <Dialog 
                               open={analyticsUploadId === upload.id} 
                               onOpenChange={(open) => open ? handleDialogOpen(upload.id) : handleDialogClose()}

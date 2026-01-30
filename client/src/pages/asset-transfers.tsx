@@ -566,42 +566,42 @@ export default function AssetTransfersPage() {
           </Dialog>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4">
           <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-yellow-100 rounded-lg">
-                  <Clock className="h-6 w-6 text-yellow-600" />
+            <CardContent className="p-3 sm:pt-6 sm:px-6">
+              <div className="flex items-center gap-2 sm:gap-4">
+                <div className="p-2 sm:p-3 bg-yellow-100 rounded-lg">
+                  <Clock className="h-4 w-4 sm:h-6 sm:w-6 text-yellow-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">قيد الانتظار</p>
-                  <p className="text-2xl font-bold" data-testid="count-pending">{pendingCount.toLocaleString('en-US')}</p>
+                  <p className="text-xs sm:text-sm text-gray-500">قيد الانتظار</p>
+                  <p className="text-lg sm:text-2xl font-bold" data-testid="count-pending">{pendingCount.toLocaleString('en-US')}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-blue-100 rounded-lg">
-                  <Send className="h-6 w-6 text-blue-600" />
+            <CardContent className="p-3 sm:pt-6 sm:px-6">
+              <div className="flex items-center gap-2 sm:gap-4">
+                <div className="p-2 sm:p-3 bg-blue-100 rounded-lg">
+                  <Send className="h-4 w-4 sm:h-6 sm:w-6 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">تمت الموافقة</p>
-                  <p className="text-2xl font-bold" data-testid="count-approved">{approvedCount.toLocaleString('en-US')}</p>
+                  <p className="text-xs sm:text-sm text-gray-500">تمت الموافقة</p>
+                  <p className="text-lg sm:text-2xl font-bold" data-testid="count-approved">{approvedCount.toLocaleString('en-US')}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-green-100 rounded-lg">
-                  <Check className="h-6 w-6 text-green-600" />
+          <Card className="col-span-2 lg:col-span-1">
+            <CardContent className="p-3 sm:pt-6 sm:px-6">
+              <div className="flex items-center gap-2 sm:gap-4">
+                <div className="p-2 sm:p-3 bg-green-100 rounded-lg">
+                  <Check className="h-4 w-4 sm:h-6 sm:w-6 text-green-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">مكتملة</p>
-                  <p className="text-2xl font-bold" data-testid="count-completed">{completedCount.toLocaleString('en-US')}</p>
+                  <p className="text-xs sm:text-sm text-gray-500">مكتملة</p>
+                  <p className="text-lg sm:text-2xl font-bold" data-testid="count-completed">{completedCount.toLocaleString('en-US')}</p>
                 </div>
               </div>
             </CardContent>
@@ -609,128 +609,134 @@ export default function AssetTransfersPage() {
         </div>
 
         <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <ArrowLeftRight className="h-5 w-5" />
-                سجل التحويلات
-                <Badge variant="secondary" className="mr-2">
-                  إجمالي: {filteredTransfers.length} عملية نقل
+          <CardHeader className="p-3 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                <ArrowLeftRight className="h-4 w-4 sm:h-5 sm:w-5" />
+                <span className="hidden sm:inline">سجل التحويلات</span>
+                <span className="sm:hidden">التحويلات</span>
+                <Badge variant="secondary" className="text-[10px] sm:text-xs mr-1 sm:mr-2">
+                  {filteredTransfers.length}
                 </Badge>
               </CardTitle>
-              <div className="flex items-center gap-4">
-                <div className="relative">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4">
+                <div className="relative flex-1 sm:flex-none">
                   <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <Input
                     placeholder="بحث..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pr-10 w-64 h-11 sm:h-10"
+                    className="pr-10 w-full sm:w-48 md:w-64 h-9 sm:h-10"
                     data-testid="input-search"
                   />
                 </div>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-40 h-11 sm:h-10" data-testid="select-status-filter">
-                    <SelectValue placeholder="كل الحالات" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">كل الحالات</SelectItem>
-                    <SelectItem value="pending">قيد الانتظار</SelectItem>
-                    <SelectItem value="approved">تمت الموافقة</SelectItem>
-                    <SelectItem value="completed">مكتمل</SelectItem>
-                    <SelectItem value="cancelled">ملغي</SelectItem>
-                  </SelectContent>
-                </Select>
-                <ExportButtons
-                  data={exportData}
-                  columns={exportColumns}
-                  fileName="تحويلات_الأصول"
-                  title="تقرير تحويلات الأصول"
-                  subtitle="سجل جميع عمليات نقل الأصول بين الفروع"
-                  sheetName="التحويلات"
-                />
+                <div className="flex gap-2">
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-[120px] sm:w-40 h-9 sm:h-10" data-testid="select-status-filter">
+                      <SelectValue placeholder="الحالة" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">كل الحالات</SelectItem>
+                      <SelectItem value="pending">قيد الانتظار</SelectItem>
+                      <SelectItem value="approved">تمت الموافقة</SelectItem>
+                      <SelectItem value="completed">مكتمل</SelectItem>
+                      <SelectItem value="cancelled">ملغي</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <div className="hidden sm:block">
+                    <ExportButtons
+                      data={exportData}
+                      columns={exportColumns}
+                      fileName="تحويلات_الأصول"
+                      title="تقرير تحويلات الأصول"
+                      subtitle="سجل جميع عمليات نقل الأصول بين الفروع"
+                      sheetName="التحويلات"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-2 sm:p-6">
             {filteredTransfers.length === 0 ? (
-              <div className="text-center py-12 text-gray-500">
-                <Package className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                <p>لا توجد تحويلات</p>
+              <div className="text-center py-8 sm:py-12 text-gray-500">
+                <Package className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-3 sm:mb-4 text-gray-300" />
+                <p className="text-sm sm:text-base">لا توجد تحويلات</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full">
+                <table className="w-full min-w-[600px]">
                   <thead>
                     <tr className="border-b">
-                      <th className="text-right py-3 px-4 font-medium">رقم التحويل</th>
-                      <th className="text-right py-3 px-4 font-medium">الأصل</th>
-                      <th className="text-right py-3 px-4 font-medium">من</th>
-                      <th className="text-right py-3 px-4 font-medium">إلى</th>
-                      <th className="text-right py-3 px-4 font-medium">التاريخ</th>
-                      <th className="text-right py-3 px-4 font-medium">الحالة</th>
-                      <th className="text-right py-3 px-4 font-medium">الإجراءات</th>
+                      <th className="text-right py-2 sm:py-3 px-2 sm:px-4 font-medium text-xs sm:text-sm">رقم التحويل</th>
+                      <th className="text-right py-2 sm:py-3 px-2 sm:px-4 font-medium text-xs sm:text-sm">الأصل</th>
+                      <th className="text-right py-2 sm:py-3 px-2 sm:px-4 font-medium text-xs sm:text-sm hidden md:table-cell">من</th>
+                      <th className="text-right py-2 sm:py-3 px-2 sm:px-4 font-medium text-xs sm:text-sm hidden md:table-cell">إلى</th>
+                      <th className="text-right py-2 sm:py-3 px-2 sm:px-4 font-medium text-xs sm:text-sm hidden lg:table-cell">التاريخ</th>
+                      <th className="text-right py-2 sm:py-3 px-2 sm:px-4 font-medium text-xs sm:text-sm">الحالة</th>
+                      <th className="text-right py-2 sm:py-3 px-2 sm:px-4 font-medium text-xs sm:text-sm">إجراء</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredTransfers.slice((currentPage - 1) * 10, currentPage * 10).map((transfer) => (
                       <tr key={transfer.id} className="border-b hover:bg-gray-50" data-testid={`row-transfer-${transfer.id}`}>
-                        <td className="py-3 px-4 font-mono text-sm">{transfer.transferNumber}</td>
-                        <td className="py-3 px-4">{getItemName(transfer.itemId)}</td>
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-2">
-                            <Building2 className="h-4 w-4 text-gray-400" />
+                        <td className="py-2 sm:py-3 px-2 sm:px-4 font-mono text-[10px] sm:text-sm">{transfer.transferNumber}</td>
+                        <td className="py-2 sm:py-3 px-2 sm:px-4 text-xs sm:text-sm">{getItemName(transfer.itemId)}</td>
+                        <td className="py-2 sm:py-3 px-2 sm:px-4 hidden md:table-cell">
+                          <div className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+                            <Building2 className="h-3 w-3 sm:h-4 sm:w-4 text-gray-400" />
                             {getBranchName(transfer.fromBranchId)}
                           </div>
                         </td>
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-2">
-                            <Building2 className="h-4 w-4 text-gray-400" />
+                        <td className="py-2 sm:py-3 px-2 sm:px-4 hidden md:table-cell">
+                          <div className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+                            <Building2 className="h-3 w-3 sm:h-4 sm:w-4 text-gray-400" />
                             {getBranchName(transfer.toBranchId)}
                           </div>
                         </td>
-                        <td className="py-3 px-4 text-sm text-gray-500">
+                        <td className="py-2 sm:py-3 px-2 sm:px-4 text-xs sm:text-sm text-gray-500 hidden lg:table-cell">
                           {transfer.requestedAt ? format(new Date(transfer.requestedAt), "dd/MM/yyyy", { locale: ar }) : "-"}
                         </td>
-                        <td className="py-3 px-4">
-                          <Badge className={statusColors[transfer.status] || "bg-gray-100"}>
+                        <td className="py-2 sm:py-3 px-2 sm:px-4">
+                          <Badge className={`text-[10px] sm:text-xs ${statusColors[transfer.status] || "bg-gray-100"}`}>
                             {statusLabels[transfer.status] || transfer.status}
                           </Badge>
                         </td>
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-2">
+                        <td className="py-2 sm:py-3 px-2 sm:px-4">
+                          <div className="flex items-center gap-1">
                             <Button
                               variant="ghost"
                               size="sm"
+                              className="h-7 w-7 sm:h-8 sm:w-8 p-0"
                               onClick={() => {
                                 setSelectedTransfer(transfer);
                                 setIsDetailOpen(true);
                               }}
                               data-testid={`button-view-${transfer.id}`}
                             >
-                              <Eye className="h-4 w-4" />
+                              <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
                             </Button>
                             {transfer.status === "pending" && (
                               <>
                                 <Button
                                   variant="ghost"
                                   size="sm"
+                                  className="h-7 w-7 sm:h-8 sm:w-8 p-0"
                                   onClick={() => approveMutation.mutate(transfer.id)}
                                   disabled={approveMutation.isPending}
-                                  className="text-green-600 hover:text-green-700"
                                   data-testid={`button-approve-${transfer.id}`}
                                 >
-                                  <Check className="h-4 w-4" />
+                                  <Check className="h-3 w-3 sm:h-4 sm:w-4 text-green-600" />
                                 </Button>
                                 <Button
                                   variant="ghost"
                                   size="sm"
+                                  className="h-7 w-7 sm:h-8 sm:w-8 p-0"
                                   onClick={() => cancelMutation.mutate({ id: transfer.id })}
                                   disabled={cancelMutation.isPending}
-                                  className="text-red-600 hover:text-red-700"
                                   data-testid={`button-cancel-${transfer.id}`}
                                 >
-                                  <X className="h-4 w-4" />
+                                  <X className="h-3 w-3 sm:h-4 sm:w-4 text-red-600" />
                                 </Button>
                               </>
                             )}
@@ -738,13 +744,15 @@ export default function AssetTransfersPage() {
                               <Button
                                 variant="outline"
                                 size="sm"
+                                className="h-7 sm:h-8 text-[10px] sm:text-xs px-2"
                                 onClick={() => {
                                   setSelectedTransfer(transfer);
                                   setIsConfirmOpen(true);
                                 }}
                                 data-testid={`button-confirm-${transfer.id}`}
                               >
-                                تأكيد الاستلام
+                                <span className="hidden sm:inline">تأكيد الاستلام</span>
+                                <span className="sm:hidden">تأكيد</span>
                               </Button>
                             )}
                           </div>

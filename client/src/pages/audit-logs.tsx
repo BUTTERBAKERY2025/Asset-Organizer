@@ -88,7 +88,7 @@ export default function AuditLogsPage() {
   const getActionBadge = (action: string) => {
     const actionInfo = ACTIONS.find(a => a.value === action);
     return (
-      <Badge className={`${actionInfo?.color || 'bg-gray-500'} text-white`}>
+      <Badge className={`${actionInfo?.color || 'bg-gray-500'} text-white text-[10px] sm:text-xs`}>
         {actionInfo?.label || action}
       </Badge>
     );
@@ -207,32 +207,32 @@ export default function AuditLogsPage() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <Table>
+                <Table className="min-w-[600px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="text-right">التاريخ</TableHead>
-                      <TableHead className="text-right">القسم</TableHead>
+                      <TableHead className="text-right hidden sm:table-cell">القسم</TableHead>
                       <TableHead className="text-right">العملية</TableHead>
                       <TableHead className="text-right">العنصر</TableHead>
-                      <TableHead className="text-right">المستخدم</TableHead>
-                      <TableHead className="text-right">التفاصيل</TableHead>
+                      <TableHead className="text-right hidden md:table-cell">المستخدم</TableHead>
+                      <TableHead className="text-right hidden lg:table-cell">التفاصيل</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {logs.slice((currentPage - 1) * 15, currentPage * 15).map((log) => (
                       <TableRow key={log.id} data-testid={`row-audit-log-${log.id}`}>
-                        <TableCell className="text-sm">
+                        <TableCell className="text-[10px] sm:text-xs">
                           {formatDate(log.createdAt)}
                         </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{getModuleLabel(log.module)}</Badge>
+                        <TableCell className="hidden sm:table-cell">
+                          <Badge variant="outline" className="text-[10px] sm:text-xs">{getModuleLabel(log.module)}</Badge>
                         </TableCell>
                         <TableCell>{getActionBadge(log.action)}</TableCell>
-                        <TableCell className="font-medium">
+                        <TableCell className="font-medium text-xs sm:text-sm">
                           {log.entityName || log.entityId}
                         </TableCell>
-                        <TableCell>{log.userName || "غير محدد"}</TableCell>
-                        <TableCell className="max-w-xs truncate text-sm text-muted-foreground">
+                        <TableCell className="hidden md:table-cell text-xs sm:text-sm">{log.userName || "غير محدد"}</TableCell>
+                        <TableCell className="max-w-xs truncate text-xs sm:text-sm text-muted-foreground hidden lg:table-cell">
                           {log.details || "-"}
                         </TableCell>
                       </TableRow>

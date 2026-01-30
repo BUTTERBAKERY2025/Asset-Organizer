@@ -352,15 +352,15 @@ export default function BudgetPlanningPage() {
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
-                  <Table>
+                  <Table className="min-w-[600px]">
                     <TableHeader>
                       <TableRow>
                         <TableHead className="text-right">المشروع</TableHead>
-                        <TableHead className="text-right">الفرع</TableHead>
+                        <TableHead className="text-right hidden md:table-cell">الفرع</TableHead>
                         <TableHead className="text-right">الميزانية</TableHead>
-                        <TableHead className="text-right">التكلفة الفعلية</TableHead>
+                        <TableHead className="text-right hidden md:table-cell">التكلفة الفعلية</TableHead>
                         <TableHead className="text-right">الفرق</TableHead>
-                        <TableHead className="text-right">نسبة الانحراف</TableHead>
+                        <TableHead className="text-right hidden sm:table-cell">نسبة الانحراف</TableHead>
                         <TableHead className="text-right">الحالة</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -369,40 +369,40 @@ export default function BudgetPlanningPage() {
                         <TableRow key={project.id} data-testid={`row-project-${project.id}`}>
                           <TableCell>
                             <Link href={`/construction-projects/${project.id}`}>
-                              <span className="text-blue-600 hover:underline cursor-pointer font-medium">
+                              <span className="text-blue-600 hover:underline cursor-pointer font-medium text-xs sm:text-sm">
                                 {project.title}
                               </span>
                             </Link>
                           </TableCell>
-                          <TableCell>{project.branchName}</TableCell>
-                          <TableCell className="font-medium">
+                          <TableCell className="hidden md:table-cell text-xs sm:text-sm">{project.branchName}</TableCell>
+                          <TableCell className="font-medium text-xs sm:text-sm">
                             {(project.budget || 0).toLocaleString()} ر.س
                           </TableCell>
-                          <TableCell className="font-medium">
+                          <TableCell className="font-medium hidden md:table-cell text-xs sm:text-sm">
                             {(project.actualCost || 0).toLocaleString()} ر.س
                           </TableCell>
-                          <TableCell className={project.variance >= 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>
+                          <TableCell className={`${project.variance >= 0 ? 'text-green-600' : 'text-red-600'} font-medium text-xs sm:text-sm`}>
                             {project.variance >= 0 ? '+' : ''}{project.variance.toLocaleString()} ر.س
                           </TableCell>
-                          <TableCell>
-                            <Badge className={
+                          <TableCell className="hidden sm:table-cell">
+                            <Badge className={`text-[10px] sm:text-xs ${
                               project.variancePercent >= 0 
                                 ? 'bg-green-100 text-green-800' 
                                 : 'bg-red-100 text-red-800'
-                            }>
+                            }`}>
                               {project.variancePercent >= 0 ? '+' : ''}{project.variancePercent.toFixed(1)}%
                             </Badge>
                           </TableCell>
                           <TableCell>
                             {project.variance >= 0 ? (
                               <div className="flex items-center gap-1 text-green-600">
-                                <CheckCircle2 className="h-4 w-4" />
-                                <span className="text-sm">ضمن الميزانية</span>
+                                <CheckCircle2 className="h-3 w-3 sm:h-4 sm:w-4" />
+                                <span className="text-[10px] sm:text-sm hidden sm:inline">ضمن الميزانية</span>
                               </div>
                             ) : (
                               <div className="flex items-center gap-1 text-red-600">
-                                <AlertTriangle className="h-4 w-4" />
-                                <span className="text-sm">تجاوز</span>
+                                <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4" />
+                                <span className="text-[10px] sm:text-sm hidden sm:inline">تجاوز</span>
                               </div>
                             )}
                           </TableCell>
@@ -502,14 +502,14 @@ export default function BudgetPlanningPage() {
                       </div>
                     ) : (
                       <div className="overflow-x-auto">
-                        <Table>
+                        <Table className="min-w-[600px]">
                           <TableHeader>
                             <TableRow>
                               <TableHead className="text-right">التصنيف</TableHead>
                               <TableHead className="text-right">المبلغ المخطط</TableHead>
-                              <TableHead className="text-right">المصروف الفعلي</TableHead>
+                              <TableHead className="text-right hidden md:table-cell">المصروف الفعلي</TableHead>
                               <TableHead className="text-right">الفرق</TableHead>
-                              <TableHead className="text-right">نسبة الاستهلاك</TableHead>
+                              <TableHead className="text-right hidden sm:table-cell">نسبة الاستهلاك</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>

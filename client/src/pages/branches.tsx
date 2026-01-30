@@ -183,16 +183,16 @@ export default function BranchesPage() {
         </div>
 
         <Card>
-          <CardHeader>
-            <CardTitle>قائمة الفروع</CardTitle>
-            <CardDescription>عدد الفروع: {branches.length}</CardDescription>
+          <CardHeader className="p-3 sm:p-4 md:p-6">
+            <CardTitle className="text-lg sm:text-xl md:text-2xl">قائمة الفروع</CardTitle>
+            <CardDescription className="text-xs sm:text-sm">عدد الفروع: {branches.length}</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="rounded-md border">
-              <Table>
+          <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+            <div className="rounded-md border overflow-x-auto">
+              <Table className="min-w-[600px]">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-right w-[100px]">المعرف</TableHead>
+                    <TableHead className="text-right w-[100px] hidden sm:table-cell">المعرف</TableHead>
                     <TableHead className="text-right">اسم الفرع</TableHead>
                     <TableHead className="text-right w-[120px]">عدد الأصناف</TableHead>
                     <TableHead className="text-right w-[150px]">إجمالي القيمة</TableHead>
@@ -201,7 +201,7 @@ export default function BranchesPage() {
                 <TableBody>
                   {branches.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={4} className="text-center py-8 text-muted-foreground text-xs sm:text-sm">
                         لا توجد فروع مسجلة
                       </TableCell>
                     </TableRow>
@@ -210,17 +210,17 @@ export default function BranchesPage() {
                       const stats = getBranchStats(branch.id);
                       return (
                         <TableRow key={branch.id} data-testid={`row-branch-${branch.id}`}>
-                          <TableCell className="font-mono">{branch.id}</TableCell>
-                          <TableCell className="font-medium">
+                          <TableCell className="font-mono text-xs sm:text-sm hidden sm:table-cell">{branch.id}</TableCell>
+                          <TableCell className="font-medium text-xs sm:text-sm">
                             <div className="flex items-center gap-2">
-                              <Building2 className="w-4 h-4 text-muted-foreground" />
+                              <Building2 className="w-3 h-3 sm:w-4 sm:h-4 text-muted-foreground" />
                               {branch.name}
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Badge variant="outline">{stats.itemCount} صنف</Badge>
+                            <Badge variant="outline" className="text-[10px] sm:text-xs">{stats.itemCount} صنف</Badge>
                           </TableCell>
-                          <TableCell className="font-medium text-green-600">
+                          <TableCell className="font-medium text-green-600 text-xs sm:text-sm">
                             {stats.totalValue.toLocaleString('en-US')} ريال
                           </TableCell>
                         </TableRow>
