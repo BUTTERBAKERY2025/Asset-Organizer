@@ -159,30 +159,34 @@ export default function SecurityPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} data-testid="security-tabs">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="overview" className="flex items-center gap-2" data-testid="tab-overview">
-            <Activity className="h-4 w-4" />
-            نظرة عامة
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto gap-1 p-1">
+          <TabsTrigger value="overview" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm py-2" data-testid="tab-overview">
+            <Activity className="h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden xs:inline">نظرة عامة</span>
+            <span className="xs:hidden">عام</span>
           </TabsTrigger>
-          <TabsTrigger value="permissions" className="flex items-center gap-2" data-testid="tab-permissions">
-            <Users className="h-4 w-4" />
-            صلاحيات المستخدمين
+          <TabsTrigger value="permissions" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm py-2" data-testid="tab-permissions">
+            <Users className="h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">صلاحيات المستخدمين</span>
+            <span className="sm:hidden">الصلاحيات</span>
           </TabsTrigger>
-          <TabsTrigger value="alerts" className="flex items-center gap-2" data-testid="tab-alerts">
-            <AlertTriangle className="h-4 w-4" />
-            التنبيهات
+          <TabsTrigger value="alerts" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm py-2" data-testid="tab-alerts">
+            <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden xs:inline">التنبيهات</span>
+            <span className="xs:hidden">تنبيه</span>
             {stats?.overview.pendingAlerts ? (
-              <Badge variant="destructive" className="mr-2" data-testid="badge-pending-alerts">{stats.overview.pendingAlerts}</Badge>
+              <Badge variant="destructive" className="mr-1 text-[10px] px-1" data-testid="badge-pending-alerts">{stats.overview.pendingAlerts}</Badge>
             ) : null}
           </TabsTrigger>
-          <TabsTrigger value="audit" className="flex items-center gap-2" data-testid="tab-audit">
-            <FileText className="h-4 w-4" />
-            سجل التدقيق
+          <TabsTrigger value="audit" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm py-2" data-testid="tab-audit">
+            <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">سجل التدقيق</span>
+            <span className="sm:hidden">السجل</span>
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" className="space-y-6" data-testid="content-overview">
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <TabsContent value="overview" className="space-y-4 sm:space-y-6" data-testid="content-overview">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4">
             <Card data-testid="card-total-logs">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">إجمالي السجلات</CardTitle>
@@ -233,24 +237,24 @@ export default function SecurityPage() {
             </Card>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
             <Card>
-              <CardHeader>
-                <CardTitle>أكثر المستخدمين نشاطاً (آخر 7 أيام)</CardTitle>
+              <CardHeader className="pb-2 sm:pb-4">
+                <CardTitle className="text-sm sm:text-base">أكثر المستخدمين نشاطاً (آخر 7 أيام)</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>المستخدم</TableHead>
-                      <TableHead>عدد العمليات</TableHead>
+                      <TableHead className="text-xs sm:text-sm">المستخدم</TableHead>
+                      <TableHead className="text-xs sm:text-sm">عدد العمليات</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {stats?.activeUsers.slice(0, 5).map((u, i) => (
-                      <TableRow key={i}>
-                        <TableCell>{u.userName}</TableCell>
-                        <TableCell>{u.actionsCount.toLocaleString('en-US')}</TableCell>
+                      <TableRow key={i} data-testid={`row-active-user-${i}`}>
+                        <TableCell className="text-xs sm:text-sm">{u.userName}</TableCell>
+                        <TableCell className="text-xs sm:text-sm">{u.actionsCount.toLocaleString('en-US')}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -259,22 +263,22 @@ export default function SecurityPage() {
             </Card>
 
             <Card>
-              <CardHeader>
-                <CardTitle>العمليات حسب الوحدة (آخر 7 أيام)</CardTitle>
+              <CardHeader className="pb-2 sm:pb-4">
+                <CardTitle className="text-sm sm:text-base">العمليات حسب الوحدة (آخر 7 أيام)</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>الوحدة</TableHead>
-                      <TableHead>عدد العمليات</TableHead>
+                      <TableHead className="text-xs sm:text-sm">الوحدة</TableHead>
+                      <TableHead className="text-xs sm:text-sm">عدد العمليات</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {stats?.actionsByModule.slice(0, 5).map((m, i) => (
-                      <TableRow key={i}>
-                        <TableCell>{m.moduleLabel}</TableCell>
-                        <TableCell>{m.count.toLocaleString('en-US')}</TableCell>
+                      <TableRow key={i} data-testid={`row-module-${i}`}>
+                        <TableCell className="text-xs sm:text-sm">{m.moduleLabel}</TableCell>
+                        <TableCell className="text-xs sm:text-sm">{m.count.toLocaleString('en-US')}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -286,61 +290,61 @@ export default function SecurityPage() {
 
         <TabsContent value="permissions" className="space-y-4">
           <Card>
-            <CardHeader>
-              <CardTitle>تقرير صلاحيات المستخدمين</CardTitle>
-              <CardDescription>
+            <CardHeader className="p-3 sm:p-6">
+              <CardTitle className="text-base sm:text-lg">تقرير صلاحيات المستخدمين</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
                 عرض تفصيلي لصلاحيات كل مستخدم والفروع المتاحة له
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-5 gap-4 mb-6">
-                <Card className="bg-blue-50">
-                  <CardContent className="pt-4">
+            <CardContent className="p-3 sm:p-6 pt-0 sm:pt-0">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-4 mb-4 sm:mb-6">
+                <Card className="bg-blue-50" data-testid="card-total-users">
+                  <CardContent className="p-3 sm:pt-4">
                     <div className="text-center">
-                      <div className="text-2xl font-bold text-blue-600">
+                      <div className="text-lg sm:text-2xl font-bold text-blue-600">
                         {permissionsReport?.summary.totalUsers?.toLocaleString('en-US') || 0}
                       </div>
-                      <div className="text-sm text-muted-foreground">إجمالي المستخدمين</div>
+                      <div className="text-xs sm:text-sm text-muted-foreground">إجمالي المستخدمين</div>
                     </div>
                   </CardContent>
                 </Card>
-                <Card className="bg-green-50">
-                  <CardContent className="pt-4">
+                <Card className="bg-green-50" data-testid="card-active-users">
+                  <CardContent className="p-3 sm:pt-4">
                     <div className="text-center">
-                      <div className="text-2xl font-bold text-green-600">
+                      <div className="text-lg sm:text-2xl font-bold text-green-600">
                         {permissionsReport?.summary.activeUsers?.toLocaleString('en-US') || 0}
                       </div>
-                      <div className="text-sm text-muted-foreground">مستخدمين نشطين</div>
+                      <div className="text-xs sm:text-sm text-muted-foreground">مستخدمين نشطين</div>
                     </div>
                   </CardContent>
                 </Card>
-                <Card className="bg-purple-50">
-                  <CardContent className="pt-4">
+                <Card className="bg-purple-50" data-testid="card-admin-users">
+                  <CardContent className="p-3 sm:pt-4">
                     <div className="text-center">
-                      <div className="text-2xl font-bold text-purple-600">
+                      <div className="text-lg sm:text-2xl font-bold text-purple-600">
                         {permissionsReport?.summary.adminUsers?.toLocaleString('en-US') || 0}
                       </div>
-                      <div className="text-sm text-muted-foreground">مديرين</div>
+                      <div className="text-xs sm:text-sm text-muted-foreground">مديرين</div>
                     </div>
                   </CardContent>
                 </Card>
-                <Card className="bg-orange-50">
-                  <CardContent className="pt-4">
+                <Card className="bg-orange-50" data-testid="card-multi-branch">
+                  <CardContent className="p-3 sm:pt-4">
                     <div className="text-center">
-                      <div className="text-2xl font-bold text-orange-600">
+                      <div className="text-lg sm:text-2xl font-bold text-orange-600">
                         {permissionsReport?.summary.multiBranchUsers?.toLocaleString('en-US') || 0}
                       </div>
-                      <div className="text-sm text-muted-foreground">متعدد الفروع</div>
+                      <div className="text-xs sm:text-sm text-muted-foreground">متعدد الفروع</div>
                     </div>
                   </CardContent>
                 </Card>
-                <Card className="bg-red-50">
-                  <CardContent className="pt-4">
+                <Card className="bg-red-50 col-span-2 sm:col-span-1" data-testid="card-no-permissions">
+                  <CardContent className="p-3 sm:pt-4">
                     <div className="text-center">
-                      <div className="text-2xl font-bold text-red-600">
+                      <div className="text-lg sm:text-2xl font-bold text-red-600">
                         {permissionsReport?.summary.usersWithNoPermissions?.toLocaleString('en-US') || 0}
                       </div>
-                      <div className="text-sm text-muted-foreground">بدون صلاحيات</div>
+                      <div className="text-xs sm:text-sm text-muted-foreground">بدون صلاحيات</div>
                     </div>
                   </CardContent>
                 </Card>
@@ -358,63 +362,66 @@ export default function SecurityPage() {
                 </div>
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 {permissionsLoading ? (
-                  <div className="text-center py-8">جاري التحميل...</div>
+                  <div className="text-center py-8 text-sm">جاري التحميل...</div>
                 ) : filteredUsers.map((userReport) => (
-                  <Card key={userReport.user.id} className="border">
-                    <CardHeader className="pb-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                            <Users className="h-5 w-5" />
+                  <Card key={userReport.user.id} className="border" data-testid={`card-user-${userReport.user.id}`}>
+                    <CardHeader className="p-3 sm:pb-2 sm:p-6">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                        <div className="flex items-center gap-2 sm:gap-3">
+                          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                            <Users className="h-4 w-4 sm:h-5 sm:w-5" />
                           </div>
-                          <div>
-                            <CardTitle className="text-base">{userReport.user.fullName}</CardTitle>
-                            <CardDescription>{userReport.user.username} • {userReport.user.email}</CardDescription>
+                          <div className="min-w-0">
+                            <CardTitle className="text-sm sm:text-base truncate">{userReport.user.fullName}</CardTitle>
+                            <CardDescription className="text-xs sm:text-sm truncate">{userReport.user.username}</CardDescription>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          {userReport.hasFullAccess && <Badge className="bg-purple-500">مدير</Badge>}
-                          {userReport.hasMultiBranchAccess && <Badge className="bg-blue-500">متعدد الفروع</Badge>}
-                          <Badge variant={userReport.user.isActive === 'active' ? 'default' : 'secondary'}>
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {userReport.hasFullAccess && <Badge className="bg-purple-500 text-[10px] sm:text-xs">مدير</Badge>}
+                          {userReport.hasMultiBranchAccess && <Badge className="bg-blue-500 text-[10px] sm:text-xs hidden sm:inline-flex">متعدد الفروع</Badge>}
+                          <Badge variant={userReport.user.isActive === 'active' ? 'default' : 'secondary'} className="text-[10px] sm:text-xs">
                             {userReport.user.isActive === 'active' ? 'نشط' : 'غير نشط'}
                           </Badge>
                         </div>
                       </div>
                     </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-2 gap-4">
+                    <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                         <div>
-                          <h4 className="font-medium mb-2">الفروع المتاحة:</h4>
+                          <h4 className="font-medium mb-1 sm:mb-2 text-xs sm:text-sm">الفروع المتاحة:</h4>
                           <div className="flex flex-wrap gap-1">
                             {userReport.hasFullAccess ? (
-                              <Badge variant="outline">جميع الفروع</Badge>
+                              <Badge variant="outline" className="text-[10px] sm:text-xs">جميع الفروع</Badge>
                             ) : userReport.branchAccess.length > 0 ? (
-                              userReport.branchAccess.map((b, i) => (
-                                <Badge key={i} variant="outline" className={b.isDefault ? 'border-primary' : ''}>
+                              userReport.branchAccess.slice(0, 3).map((b, i) => (
+                                <Badge key={i} variant="outline" className={`text-[10px] sm:text-xs ${b.isDefault ? 'border-primary' : ''}`}>
                                   {b.branchName}
                                 </Badge>
                               ))
                             ) : (
-                              <span className="text-muted-foreground text-sm">لا توجد فروع محددة</span>
+                              <span className="text-muted-foreground text-xs">لا توجد فروع</span>
+                            )}
+                            {userReport.branchAccess.length > 3 && (
+                              <Badge variant="outline" className="text-[10px] sm:text-xs">+{userReport.branchAccess.length - 3}</Badge>
                             )}
                           </div>
                         </div>
                         <div>
-                          <h4 className="font-medium mb-2">الصلاحيات ({userReport.permissionsCount}):</h4>
+                          <h4 className="font-medium mb-1 sm:mb-2 text-xs sm:text-sm">الصلاحيات ({userReport.permissionsCount}):</h4>
                           <div className="flex flex-wrap gap-1">
                             {userReport.hasFullAccess ? (
-                              <Badge variant="outline" className="border-purple-500">صلاحيات كاملة</Badge>
+                              <Badge variant="outline" className="border-purple-500 text-[10px] sm:text-xs">صلاحيات كاملة</Badge>
                             ) : userReport.modulesWithAccess.length > 0 ? (
-                              userReport.modulesWithAccess.slice(0, 5).map((m, i) => (
-                                <Badge key={i} variant="outline">{m}</Badge>
+                              userReport.modulesWithAccess.slice(0, 3).map((m, i) => (
+                                <Badge key={i} variant="outline" className="text-[10px] sm:text-xs">{m}</Badge>
                               ))
                             ) : (
-                              <span className="text-muted-foreground text-sm">لا توجد صلاحيات</span>
+                              <span className="text-muted-foreground text-xs">لا توجد صلاحيات</span>
                             )}
-                            {userReport.modulesWithAccess.length > 5 && (
-                              <Badge variant="outline">+{userReport.modulesWithAccess.length - 5}</Badge>
+                            {userReport.modulesWithAccess.length > 3 && (
+                              <Badge variant="outline" className="text-[10px] sm:text-xs">+{userReport.modulesWithAccess.length - 3}</Badge>
                             )}
                           </div>
                         </div>
@@ -427,122 +434,124 @@ export default function SecurityPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="alerts" className="space-y-4">
+        <TabsContent value="alerts" className="space-y-4" data-testid="content-alerts">
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-orange-500" />
+            <CardHeader className="p-3 sm:p-6">
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 text-orange-500" />
                 تنبيهات المحاولات غير المصرح بها
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-xs sm:text-sm">
                 مراقبة المحاولات المرفوضة والأنشطة المشبوهة
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-3 sm:p-6 pt-0 sm:pt-0">
               {alerts?.summary && (
-                <div className="grid grid-cols-5 gap-4 mb-6">
-                  <Card>
-                    <CardContent className="pt-4 text-center">
-                      <div className="text-2xl font-bold">{alerts.summary.total}</div>
-                      <div className="text-sm text-muted-foreground">الإجمالي</div>
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 sm:gap-4 mb-4 sm:mb-6">
+                  <Card data-testid="stat-alerts-total">
+                    <CardContent className="p-3 sm:pt-4 text-center">
+                      <div className="text-lg sm:text-2xl font-bold">{alerts.summary.total}</div>
+                      <div className="text-xs sm:text-sm text-muted-foreground">الإجمالي</div>
                     </CardContent>
                   </Card>
-                  <Card className="bg-red-50">
-                    <CardContent className="pt-4 text-center">
-                      <div className="text-2xl font-bold text-red-600">{alerts.summary.bySeverity.critical}</div>
-                      <div className="text-sm text-muted-foreground">حرج</div>
+                  <Card className="bg-red-50" data-testid="stat-alerts-critical">
+                    <CardContent className="p-3 sm:pt-4 text-center">
+                      <div className="text-lg sm:text-2xl font-bold text-red-600">{alerts.summary.bySeverity.critical}</div>
+                      <div className="text-xs sm:text-sm text-muted-foreground">حرج</div>
                     </CardContent>
                   </Card>
-                  <Card className="bg-orange-50">
-                    <CardContent className="pt-4 text-center">
-                      <div className="text-2xl font-bold text-orange-600">{alerts.summary.bySeverity.high}</div>
-                      <div className="text-sm text-muted-foreground">عالي</div>
+                  <Card className="bg-orange-50" data-testid="stat-alerts-high">
+                    <CardContent className="p-3 sm:pt-4 text-center">
+                      <div className="text-lg sm:text-2xl font-bold text-orange-600">{alerts.summary.bySeverity.high}</div>
+                      <div className="text-xs sm:text-sm text-muted-foreground">عالي</div>
                     </CardContent>
                   </Card>
-                  <Card className="bg-yellow-50">
-                    <CardContent className="pt-4 text-center">
-                      <div className="text-2xl font-bold text-yellow-600">{alerts.summary.bySeverity.medium}</div>
-                      <div className="text-sm text-muted-foreground">متوسط</div>
+                  <Card className="bg-yellow-50 hidden sm:block" data-testid="stat-alerts-medium">
+                    <CardContent className="p-3 sm:pt-4 text-center">
+                      <div className="text-lg sm:text-2xl font-bold text-yellow-600">{alerts.summary.bySeverity.medium}</div>
+                      <div className="text-xs sm:text-sm text-muted-foreground">متوسط</div>
                     </CardContent>
                   </Card>
-                  <Card className="bg-blue-50">
-                    <CardContent className="pt-4 text-center">
-                      <div className="text-2xl font-bold text-blue-600">{alerts.summary.bySeverity.low}</div>
-                      <div className="text-sm text-muted-foreground">منخفض</div>
+                  <Card className="bg-blue-50 hidden sm:block" data-testid="stat-alerts-low">
+                    <CardContent className="p-3 sm:pt-4 text-center">
+                      <div className="text-lg sm:text-2xl font-bold text-blue-600">{alerts.summary.bySeverity.low}</div>
+                      <div className="text-xs sm:text-sm text-muted-foreground">منخفض</div>
                     </CardContent>
                   </Card>
                 </div>
               )}
 
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>الخطورة</TableHead>
-                    <TableHead>النوع</TableHead>
-                    <TableHead>المستخدم</TableHead>
-                    <TableHead>الوحدة</TableHead>
-                    <TableHead>التفاصيل</TableHead>
-                    <TableHead>التاريخ</TableHead>
-                    <TableHead>الحالة</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {alertsLoading ? (
+              <div className="overflow-x-auto -mx-3 sm:mx-0">
+                <Table className="min-w-[600px] sm:min-w-full">
+                  <TableHeader>
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8">جاري التحميل...</TableCell>
+                      <TableHead className="text-xs sm:text-sm">الخطورة</TableHead>
+                      <TableHead className="text-xs sm:text-sm">النوع</TableHead>
+                      <TableHead className="text-xs sm:text-sm">المستخدم</TableHead>
+                      <TableHead className="text-xs sm:text-sm hidden md:table-cell">الوحدة</TableHead>
+                      <TableHead className="text-xs sm:text-sm hidden lg:table-cell">التفاصيل</TableHead>
+                      <TableHead className="text-xs sm:text-sm">التاريخ</TableHead>
+                      <TableHead className="text-xs sm:text-sm">الحالة</TableHead>
                     </TableRow>
-                  ) : alerts?.alerts.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                        لا توجد تنبيهات أمنية
-                      </TableCell>
-                    </TableRow>
-                  ) : alerts?.alerts.map((alert) => (
-                    <TableRow key={alert.id}>
-                      <TableCell>{getSeverityBadge(alert.severity)}</TableCell>
-                      <TableCell>{getAlertTypeLabel(alert.alertType)}</TableCell>
-                      <TableCell>{alert.userName || 'غير معروف'}</TableCell>
-                      <TableCell>{alert.module || '-'}</TableCell>
-                      <TableCell className="max-w-xs truncate">{alert.details || '-'}</TableCell>
-                      <TableCell dir="ltr" className="text-left">
-                        {new Date(alert.createdAt).toLocaleString('en-GB')}
-                      </TableCell>
-                      <TableCell>
-                        {alert.isResolved ? (
-                          <Badge variant="outline" className="text-green-600">
-                            <CheckCircle className="h-3 w-3 ml-1" />
-                            تم الحل
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="text-orange-600">
-                            <Clock className="h-3 w-3 ml-1" />
-                            معلق
-                          </Badge>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {alertsLoading ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-8 text-sm">جاري التحميل...</TableCell>
+                      </TableRow>
+                    ) : alerts?.alerts.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground text-sm">
+                          لا توجد تنبيهات أمنية
+                        </TableCell>
+                      </TableRow>
+                    ) : alerts?.alerts.map((alert) => (
+                      <TableRow key={alert.id} data-testid={`row-alert-${alert.id}`}>
+                        <TableCell className="text-xs sm:text-sm">{getSeverityBadge(alert.severity)}</TableCell>
+                        <TableCell className="text-xs sm:text-sm">{getAlertTypeLabel(alert.alertType)}</TableCell>
+                        <TableCell className="text-xs sm:text-sm">{alert.userName || 'غير معروف'}</TableCell>
+                        <TableCell className="text-xs sm:text-sm hidden md:table-cell">{alert.module || '-'}</TableCell>
+                        <TableCell className="max-w-xs truncate text-xs sm:text-sm hidden lg:table-cell">{alert.details || '-'}</TableCell>
+                        <TableCell dir="ltr" className="text-left text-xs sm:text-sm whitespace-nowrap">
+                          {new Date(alert.createdAt).toLocaleString('en-GB')}
+                        </TableCell>
+                        <TableCell>
+                          {alert.isResolved ? (
+                            <Badge variant="outline" className="text-green-600 text-[10px] sm:text-xs">
+                              <CheckCircle className="h-2.5 w-2.5 sm:h-3 sm:w-3 ml-1" />
+                              <span className="hidden sm:inline">تم الحل</span>
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-orange-600 text-[10px] sm:text-xs">
+                              <Clock className="h-2.5 w-2.5 sm:h-3 sm:w-3 ml-1" />
+                              <span className="hidden sm:inline">معلق</span>
+                            </Badge>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="audit" className="space-y-4">
+        <TabsContent value="audit" className="space-y-4" data-testid="content-audit">
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
+            <CardHeader className="p-3 sm:p-6">
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                <FileText className="h-4 w-4 sm:h-5 sm:w-5" />
                 سجل التدقيق المُعزز
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-xs sm:text-sm">
                 تتبع جميع العمليات والتغييرات في النظام
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="flex gap-4 mb-4">
+            <CardContent className="p-3 sm:p-6 pt-0 sm:pt-0">
+              <div className="flex gap-2 sm:gap-4 mb-4">
                 <Select value={moduleFilter} onValueChange={setModuleFilter}>
-                  <SelectTrigger className="w-48">
+                  <SelectTrigger className="w-full sm:w-48 text-xs sm:text-sm" data-testid="select-module-filter">
                     <SelectValue placeholder="جميع الوحدات" />
                   </SelectTrigger>
                   <SelectContent>
@@ -554,46 +563,48 @@ export default function SecurityPage() {
                 </Select>
               </div>
 
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>التاريخ</TableHead>
-                    <TableHead>المستخدم</TableHead>
-                    <TableHead>الوحدة</TableHead>
-                    <TableHead>العملية</TableHead>
-                    <TableHead>الوصف</TableHead>
-                    <TableHead>العنصر</TableHead>
-                    <TableHead>IP</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {auditLoading ? (
+              <div className="overflow-x-auto -mx-3 sm:mx-0">
+                <Table className="min-w-[700px] sm:min-w-full">
+                  <TableHeader>
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8">جاري التحميل...</TableCell>
+                      <TableHead className="text-xs sm:text-sm">التاريخ</TableHead>
+                      <TableHead className="text-xs sm:text-sm">المستخدم</TableHead>
+                      <TableHead className="text-xs sm:text-sm">الوحدة</TableHead>
+                      <TableHead className="text-xs sm:text-sm">العملية</TableHead>
+                      <TableHead className="text-xs sm:text-sm hidden md:table-cell">الوصف</TableHead>
+                      <TableHead className="text-xs sm:text-sm hidden lg:table-cell">العنصر</TableHead>
+                      <TableHead className="text-xs sm:text-sm hidden lg:table-cell">IP</TableHead>
                     </TableRow>
-                  ) : auditLog?.logs.map((log) => (
-                    <TableRow key={log.id}>
-                      <TableCell dir="ltr" className="text-left whitespace-nowrap">
-                        {new Date(log.createdAt).toLocaleString('en-GB')}
-                      </TableCell>
-                      <TableCell>{log.userName || 'غير معروف'}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{log.moduleLabel}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">{log.actionLabel}</Badge>
-                      </TableCell>
-                      <TableCell className="max-w-xs truncate">{log.description || '-'}</TableCell>
-                      <TableCell>{log.entityName || '-'}</TableCell>
-                      <TableCell dir="ltr" className="text-left">{log.ipAddress || '-'}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {auditLoading ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-8 text-sm">جاري التحميل...</TableCell>
+                      </TableRow>
+                    ) : auditLog?.logs.map((log) => (
+                      <TableRow key={log.id} data-testid={`row-audit-${log.id}`}>
+                        <TableCell dir="ltr" className="text-left whitespace-nowrap text-xs sm:text-sm">
+                          {new Date(log.createdAt).toLocaleString('en-GB')}
+                        </TableCell>
+                        <TableCell className="text-xs sm:text-sm">{log.userName || 'غير معروف'}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-[10px] sm:text-xs">{log.moduleLabel}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className="text-[10px] sm:text-xs">{log.actionLabel}</Badge>
+                        </TableCell>
+                        <TableCell className="max-w-xs truncate text-xs sm:text-sm hidden md:table-cell">{log.description || '-'}</TableCell>
+                        <TableCell className="text-xs sm:text-sm hidden lg:table-cell">{log.entityName || '-'}</TableCell>
+                        <TableCell dir="ltr" className="text-left text-xs sm:text-sm hidden lg:table-cell">{log.ipAddress || '-'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
 
               {auditLog?.pagination && (
-                <div className="flex items-center justify-between mt-4">
-                  <div className="text-sm text-muted-foreground">
+                <div className="flex flex-col sm:flex-row items-center justify-between mt-4 gap-2">
+                  <div className="text-xs sm:text-sm text-muted-foreground">
                     صفحة {auditLog.pagination.page} من {auditLog.pagination.totalPages} 
                     (إجمالي {auditLog.pagination.total.toLocaleString('en-US')} سجل)
                   </div>
@@ -601,16 +612,20 @@ export default function SecurityPage() {
                     <Button 
                       variant="outline" 
                       size="sm"
+                      className="text-xs sm:text-sm"
                       disabled={auditPage <= 1}
                       onClick={() => setAuditPage(p => p - 1)}
+                      data-testid="button-audit-prev"
                     >
                       السابق
                     </Button>
                     <Button 
                       variant="outline" 
                       size="sm"
+                      className="text-xs sm:text-sm"
                       disabled={auditPage >= auditLog.pagination.totalPages}
                       onClick={() => setAuditPage(p => p + 1)}
+                      data-testid="button-audit-next"
                     >
                       التالي
                     </Button>
