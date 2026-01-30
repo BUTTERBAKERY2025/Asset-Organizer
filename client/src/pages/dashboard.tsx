@@ -118,8 +118,8 @@ export default function DashboardPage() {
         </div>
 
         {/* أقسام النظام - بنفس نمط الصورة */}
-        <div className="bg-gray-50 rounded-2xl p-6">
-          <h2 className="text-lg font-semibold text-gray-700 mb-4">أقسام النظام</h2>
+        <div className="bg-gray-50 rounded-2xl p-3 sm:p-4 md:p-6">
+          <h2 className="text-base sm:text-lg font-semibold text-gray-700 mb-3 sm:mb-4">أقسام النظام</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
             {systemModules.map((module) => {
               const IconComponent = module.icon;
@@ -127,19 +127,19 @@ export default function DashboardPage() {
                 <div
                   key={module.id}
                   onClick={() => setLocation(module.path)}
-                  className="bg-white rounded-xl p-6 flex flex-col items-center justify-center gap-3 cursor-pointer transition-all duration-200 hover:shadow-lg hover:-translate-y-1"
+                  className="bg-white rounded-xl p-3 sm:p-4 md:p-6 flex flex-col items-center justify-center gap-2 sm:gap-3 cursor-pointer transition-all duration-200 hover:shadow-lg hover:-translate-y-1"
                   style={{ 
                     boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-                    minHeight: '120px'
+                    minHeight: '90px'
                   }}
                   data-testid={`module-card-${module.id}`}
                 >
                   <IconComponent 
-                    className="w-8 h-8" 
+                    className="w-6 h-6 sm:w-8 sm:h-8" 
                     style={{ color: module.color }}
                     strokeWidth={1.5}
                   />
-                  <span className="text-sm font-medium text-gray-600 text-center">
+                  <span className="text-xs sm:text-sm font-medium text-gray-600 text-center">
                     {module.name}
                   </span>
                 </div>
@@ -150,7 +150,7 @@ export default function DashboardPage() {
 
         {/* إحصائيات سريعة */}
         <div>
-          <h2 className="text-lg font-semibold text-gray-700 mb-4">إحصائيات الأصول</h2>
+          <h2 className="text-base sm:text-lg font-semibold text-gray-700 mb-3 sm:mb-4">إحصائيات الأصول</h2>
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <Card data-testid="card-total-items">
@@ -198,19 +198,19 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 md:gap-6">
           <Card data-testid="chart-branch-comparison">
-            <CardHeader>
-              <CardTitle>مقارنة الفروع - عدد الأصناف</CardTitle>
-              <CardDescription>عدد الأصناف في كل فرع</CardDescription>
+            <CardHeader className="p-3 sm:p-4 md:p-6">
+              <CardTitle className="text-sm sm:text-base md:text-lg">مقارنة الفروع - عدد الأصناف</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">عدد الأصناف في كل فرع</CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="h-[300px]">
+            <CardContent className="p-3 sm:p-4 md:p-6">
+              <div className="h-[200px] sm:h-[250px] md:h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={branchComparisonData} layout="vertical">
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" />
-                    <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 12 }} />
+                    <XAxis type="number" tick={{ fontSize: 10 }} />
+                    <YAxis dataKey="name" type="category" width={80} tick={{ fontSize: 10 }} className="hidden sm:block" />
                     <Tooltip 
                       formatter={(value: number) => [value, "عدد الأصناف"]}
                       contentStyle={{ direction: "rtl" }}
@@ -223,17 +223,17 @@ export default function DashboardPage() {
           </Card>
 
           <Card data-testid="chart-branch-value">
-            <CardHeader>
-              <CardTitle>مقارنة الفروع - القيمة</CardTitle>
-              <CardDescription>إجمالي قيمة الأصول في كل فرع (ريال)</CardDescription>
+            <CardHeader className="p-3 sm:p-4 md:p-6">
+              <CardTitle className="text-sm sm:text-base md:text-lg">مقارنة الفروع - القيمة</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">إجمالي قيمة الأصول في كل فرع (ريال)</CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="h-[300px]">
+            <CardContent className="p-3 sm:p-4 md:p-6">
+              <div className="h-[200px] sm:h-[250px] md:h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={branchComparisonData} layout="vertical">
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" tickFormatter={(value) => value.toLocaleString('en-US')} />
-                    <YAxis dataKey="name" type="category" width={120} tick={{ fontSize: 12 }} />
+                    <XAxis type="number" tickFormatter={(value) => value.toLocaleString('en-US')} tick={{ fontSize: 10 }} />
+                    <YAxis dataKey="name" type="category" width={80} tick={{ fontSize: 10 }} className="hidden sm:block" />
                     <Tooltip 
                       formatter={(value: number) => [value.toLocaleString('en-US') + " ريال", "القيمة"]}
                       contentStyle={{ direction: "rtl" }}
@@ -246,14 +246,14 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 md:gap-6">
           <Card data-testid="chart-category-distribution">
-            <CardHeader>
-              <CardTitle>توزيع الفئات</CardTitle>
-              <CardDescription>توزيع الأصناف حسب الفئة</CardDescription>
+            <CardHeader className="p-3 sm:p-4 md:p-6">
+              <CardTitle className="text-sm sm:text-base md:text-lg">توزيع الفئات</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">توزيع الأصناف حسب الفئة</CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="h-[300px]">
+            <CardContent className="p-3 sm:p-4 md:p-6">
+              <div className="h-[200px] sm:h-[250px] md:h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -261,7 +261,7 @@ export default function DashboardPage() {
                       cx="50%"
                       cy="50%"
                       labelLine={false}
-                      outerRadius={100}
+                      outerRadius={70}
                       fill="#8884d8"
                       dataKey="value"
                       label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
@@ -278,12 +278,12 @@ export default function DashboardPage() {
           </Card>
 
           <Card data-testid="chart-status-distribution">
-            <CardHeader>
-              <CardTitle>حالة الأصول</CardTitle>
-              <CardDescription>توزيع الأصناف حسب الحالة</CardDescription>
+            <CardHeader className="p-3 sm:p-4 md:p-6">
+              <CardTitle className="text-sm sm:text-base md:text-lg">حالة الأصول</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">توزيع الأصناف حسب الحالة</CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="h-[300px]">
+            <CardContent className="p-3 sm:p-4 md:p-6">
+              <div className="h-[200px] sm:h-[250px] md:h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -291,7 +291,7 @@ export default function DashboardPage() {
                       cx="50%"
                       cy="50%"
                       labelLine={false}
-                      outerRadius={100}
+                      outerRadius={70}
                       fill="#8884d8"
                       dataKey="value"
                       label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}

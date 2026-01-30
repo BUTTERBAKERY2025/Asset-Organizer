@@ -598,40 +598,44 @@ export default function TargetsDashboard() {
         </div>
 
         <Tabs defaultValue="alerts" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="alerts" className="flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4" />
-              التنبيهات
+          <TabsList className="flex flex-wrap gap-1 h-auto p-1">
+            <TabsTrigger value="alerts" className="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs md:text-sm px-2 sm:px-3">
+              <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">التنبيهات</span>
+              <span className="sm:hidden">تنبيهات</span>
               {alerts.filter(a => a.alertLevel === 'critical' || a.alertLevel === 'warning').length > 0 && (
-                <Badge variant="destructive" className="h-5 w-5 p-0 flex items-center justify-center text-xs">
+                <Badge variant="destructive" className="h-4 w-4 sm:h-5 sm:w-5 p-0 flex items-center justify-center text-[10px] sm:text-xs">
                   {alerts.filter(a => a.alertLevel === 'critical' || a.alertLevel === 'warning').length}
                 </Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="branches" className="flex items-center gap-2">
-              <Building2 className="h-4 w-4" />
-              ترتيب الفروع
+            <TabsTrigger value="branches" className="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs md:text-sm px-2 sm:px-3">
+              <Building2 className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">ترتيب الفروع</span>
+              <span className="sm:hidden">الفروع</span>
             </TabsTrigger>
-            <TabsTrigger value="cashiers" className="flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              أفضل الكاشيرين
+            <TabsTrigger value="cashiers" className="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs md:text-sm px-2 sm:px-3">
+              <Users className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">أفضل الكاشيرين</span>
+              <span className="sm:hidden">الكاشيرين</span>
             </TabsTrigger>
-            <TabsTrigger value="details" className="flex items-center gap-2">
-              <Calendar className="h-4 w-4" />
-              تفاصيل الفرع
+            <TabsTrigger value="details" className="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs md:text-sm px-2 sm:px-3">
+              <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">تفاصيل الفرع</span>
+              <span className="sm:hidden">التفاصيل</span>
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="alerts">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
               <div className="lg:col-span-2 space-y-4">
                 <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Bell className="h-5 w-5 text-amber-600" />
+                  <CardHeader className="p-3 sm:p-4 md:p-6">
+                    <CardTitle className="flex items-center gap-2 text-sm sm:text-base md:text-lg">
+                      <Bell className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600" />
                       تنبيهات تحقيق الأهداف
                     </CardTitle>
-                    <CardDescription>
+                    <CardDescription className="text-xs sm:text-sm">
                       متابعة مباشرة لأداء الفروع مع التنبيه المبكر للمخاطر
                     </CardDescription>
                   </CardHeader>
@@ -661,10 +665,10 @@ export default function TargetsDashboard() {
                                     </Badge>
                                   </div>
                                   <p className={`text-sm mt-1 ${colors.text}`}>{alert.message}</p>
-                                  <div className="flex items-center gap-4 mt-2 text-xs text-gray-600">
+                                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-4 mt-2 text-[10px] sm:text-xs text-gray-600">
                                     <span>الهدف: {formatCurrency(alert.targetAmount)}</span>
                                     <span>المحقق: {formatCurrency(alert.achievedAmount)}</span>
-                                    <span>الأيام المتبقية: {alert.daysRemaining}</span>
+                                    <span>المتبقي: {alert.daysRemaining} يوم</span>
                                   </div>
                                   <Progress 
                                     value={Math.min(alert.achievementPercent, 100)} 
@@ -742,11 +746,11 @@ export default function TargetsDashboard() {
           </TabsContent>
 
           <TabsContent value="branches">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 md:gap-6">
               <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Trophy className="h-5 w-5 text-amber-600" />
+                <CardHeader className="p-3 sm:p-4 md:p-6">
+                  <CardTitle className="flex items-center gap-2 text-sm sm:text-base md:text-lg">
+                    <Trophy className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600" />
                     ترتيب الفروع
                   </CardTitle>
                 </CardHeader>
@@ -756,19 +760,19 @@ export default function TargetsDashboard() {
                   ) : !leaderboard?.branches.length ? (
                     <div className="text-center py-8 text-gray-500">لا توجد بيانات</div>
                   ) : (
-                    <div className="space-y-4">
+                    <div className="space-y-3 sm:space-y-4">
                       {leaderboard.branches.map((branch) => (
-                        <div key={branch.branchId} className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg" data-testid={`branch-rank-${branch.branchId}`}>
-                          <div className="w-16">{getRankBadge(branch.rank)}</div>
-                          <div className="flex-1">
-                            <div className="font-medium">{branch.branchName}</div>
-                            <div className="flex items-center gap-2 text-sm text-gray-500">
+                        <div key={branch.branchId} className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 p-2 sm:p-3 bg-gray-50 rounded-lg" data-testid={`branch-rank-${branch.branchId}`}>
+                          <div className="w-12 sm:w-16">{getRankBadge(branch.rank)}</div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-sm sm:text-base truncate">{branch.branchName}</div>
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2 text-[10px] sm:text-sm text-gray-500">
                               <span>الهدف: {formatCurrency(branch.target)}</span>
-                              <span>|</span>
+                              <span className="hidden sm:inline">|</span>
                               <span>المحقق: {formatCurrency(branch.achieved)}</span>
                             </div>
                           </div>
-                          <div className={`text-2xl font-bold ${getPercentColor(branch.percent)}`}>
+                          <div className={`text-lg sm:text-2xl font-bold ${getPercentColor(branch.percent)}`}>
                             {branch.percent.toFixed(1)}%
                           </div>
                         </div>
@@ -779,18 +783,18 @@ export default function TargetsDashboard() {
               </Card>
 
               <Card>
-                <CardHeader>
-                  <CardTitle>مقارنة أداء الفروع</CardTitle>
+                <CardHeader className="p-3 sm:p-4 md:p-6">
+                  <CardTitle className="text-sm sm:text-base md:text-lg">مقارنة أداء الفروع</CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="p-3 sm:p-4 md:p-6">
                   {leaderboard?.branches && leaderboard.branches.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={300}>
+                    <ResponsiveContainer width="100%" height={200} className="sm:h-[250px] md:h-[300px]">
                       <BarChart data={leaderboard.branches}>
                         <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="branchName" />
-                        <YAxis />
+                        <XAxis dataKey="branchName" tick={{ fontSize: 10 }} />
+                        <YAxis tick={{ fontSize: 10 }} />
                         <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                        <Legend />
+                        <Legend wrapperStyle={{ fontSize: '10px' }} />
                         <Bar dataKey="target" fill="#f59e0b" name="الهدف" />
                         <Bar dataKey="achieved" fill="#22c55e" name="المحقق" />
                       </BarChart>
@@ -805,30 +809,30 @@ export default function TargetsDashboard() {
 
           <TabsContent value="cashiers">
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5 text-amber-600" />
+              <CardHeader className="p-3 sm:p-4 md:p-6">
+                <CardTitle className="flex items-center gap-2 text-sm sm:text-base md:text-lg">
+                  <Users className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600" />
                   أفضل 20 كاشير
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-3 sm:p-4 md:p-6">
                 {leaderboardLoading ? (
-                  <div className="text-center py-8 text-gray-500">جاري التحميل...</div>
+                  <div className="text-center py-8 text-gray-500 text-xs sm:text-sm">جاري التحميل...</div>
                 ) : !leaderboard?.cashiers.length ? (
-                  <div className="text-center py-8 text-gray-500">لا توجد بيانات</div>
+                  <div className="text-center py-8 text-gray-500 text-xs sm:text-sm">لا توجد بيانات</div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-4">
                     {leaderboard.cashiers.map((cashier) => (
                       <Card key={cashier.cashierId} className={`${cashier.rank <= 3 ? 'border-amber-400 border-2' : ''}`} data-testid={`cashier-rank-${cashier.cashierId}`}>
-                        <CardContent className="p-4">
-                          <div className="flex items-start justify-between mb-2">
+                        <CardContent className="p-2 sm:p-3 md:p-4">
+                          <div className="flex items-start justify-between mb-1 sm:mb-2">
                             {getRankBadge(cashier.rank)}
-                            <span className={`text-xl font-bold ${getPercentColor(cashier.percent)}`}>
+                            <span className={`text-sm sm:text-lg md:text-xl font-bold ${getPercentColor(cashier.percent)}`}>
                               {cashier.achieved > 0 ? formatCurrency(cashier.achieved) : "0"}
                             </span>
                           </div>
-                          <div className="font-medium">{cashier.cashierName}</div>
-                          <div className="text-sm text-gray-500">
+                          <div className="font-medium text-xs sm:text-sm truncate">{cashier.cashierName}</div>
+                          <div className="text-[10px] sm:text-sm text-gray-500 truncate">
                             {branches.find(b => b.id === cashier.branchId)?.name || cashier.branchId}
                           </div>
                         </CardContent>
@@ -979,17 +983,17 @@ export default function TargetsDashboard() {
                             <CardHeader className="pb-2">
                               <CardTitle className="text-base">جدول التقدم اليومي التفصيلي</CardTitle>
                             </CardHeader>
-                            <CardContent>
+                            <CardContent className="p-3 sm:p-4 md:p-6">
                               <div className="overflow-x-auto">
-                                <table className="w-full text-sm table-fixed">
+                                <table className="w-full text-xs sm:text-sm min-w-[500px]">
                                   <thead>
                                     <tr className="bg-gray-100">
-                                      <th className="p-2 text-right w-[100px]">التاريخ</th>
-                                      <th className="p-2 text-right w-[80px]">اليوم</th>
-                                      <th className="p-2 text-left w-[110px]">الهدف</th>
-                                      <th className="p-2 text-left w-[110px]">المحقق</th>
-                                      <th className="p-2 text-center w-[70px]">النسبة</th>
-                                      <th className="p-2 text-left w-[110px]">الفارق</th>
+                                      <th className="p-1.5 sm:p-2 text-right">التاريخ</th>
+                                      <th className="p-1.5 sm:p-2 text-right hidden md:table-cell">اليوم</th>
+                                      <th className="p-1.5 sm:p-2 text-left">الهدف</th>
+                                      <th className="p-1.5 sm:p-2 text-left">المحقق</th>
+                                      <th className="p-1.5 sm:p-2 text-center">النسبة</th>
+                                      <th className="p-1.5 sm:p-2 text-left hidden sm:table-cell">الفارق</th>
                                       <th className="p-2 text-center w-[80px]">يوميات</th>
                                       <th className="p-2 text-center w-[70px]">تراكمي%</th>
                                     </tr>
