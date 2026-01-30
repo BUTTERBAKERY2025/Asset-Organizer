@@ -3,6 +3,8 @@ import type { Express, RequestHandler } from "express";
 import connectPg from "connect-pg-simple";
 import rateLimit from "express-rate-limit";
 import { storage } from "./storage";
+import { db } from "./db";
+import { systemAuditLogs } from "@shared/schema";
 
 declare module "express-session" {
   interface SessionData {
@@ -30,6 +32,36 @@ export const apiRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+// Log security alert for unauthorized attempts
+async function logSecurityAlert(data: {
+  alertType: string;
+  severity: string;
+  userId?: string;
+  userName?: string;
+  module?: string;
+  action?: string;
+  attemptedResource?: string;
+  ipAddress?: string;
+  userAgent?: string;
+}) {
+  try {
+    await db.insert(systemAuditLogs).values({
+      module: 'security',
+      entityId: `alert_${Date.now()}`,
+      entityName: `تنبيه أمني: ${data.alertType}`,
+      action: 'security_alert',
+      details: JSON.stringify(data),
+      userId: data.userId || null,
+      userName: data.userName || 'غير معروف',
+      ipAddress: data.ipAddress || null,
+      userAgent: data.userAgent || null,
+      description: `محاولة ${data.action || 'غير محددة'} على ${data.module || 'غير محدد'}`,
+    });
+  } catch (err) {
+    console.error('Failed to log security alert:', err);
+  }
+}
 
 export function getSession() {
   const sessionSecret = process.env.SESSION_SECRET;
@@ -326,6 +358,14 @@ export async function setupAuth(app: Express) {
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
   if (!req.session.userId) {
+    // Log unauthorized access attempt
+    logSecurityAlert({
+      alertType: 'unauthorized_access',
+      severity: 'low',
+      attemptedResource: req.originalUrl,
+      ipAddress: req.ip || req.headers['x-forwarded-for'] as string,
+      userAgent: req.headers['user-agent'],
+    });
     return res.status(401).json({ message: "غير مصرح" });
   }
 
@@ -336,6 +376,17 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
 
   // Security: Block inactive users from accessing any protected API
   if (user.isActive === "inactive") {
+    // Log inactive user attempt
+    logSecurityAlert({
+      alertType: 'unauthorized_access',
+      severity: 'medium',
+      userId: user.id || undefined,
+      userName: user.username || undefined,
+      action: 'inactive_user_access',
+      attemptedResource: req.originalUrl,
+      ipAddress: req.ip || req.headers['x-forwarded-for'] as string,
+      userAgent: req.headers['user-agent'],
+    });
     req.session.destroy(() => {});
     return res.status(403).json({ message: "حسابك معطّل. يرجى التواصل مع المسؤول." });
   }
@@ -391,6 +442,18 @@ export const requirePermission = (module: string, action: string): RequestHandle
     
     if (!modulePerm) {
       console.log(`[Auth] DENIED: No permission found for module ${module}`);
+      // Log security alert
+      logSecurityAlert({
+        alertType: 'permission_denied',
+        severity: 'medium',
+        userId: user.id,
+        userName: user.username,
+        module,
+        action,
+        attemptedResource: req.originalUrl,
+        ipAddress: req.ip || req.headers['x-forwarded-for'] as string,
+        userAgent: req.headers['user-agent'],
+      });
       return res.status(403).json({ message: "غير مسموح - ليس لديك صلاحية على هذه الوحدة" });
     }
     
@@ -411,6 +474,18 @@ export const requirePermission = (module: string, action: string): RequestHandle
     
     if (!actionsArray.includes(action)) {
       console.log(`[Auth] DENIED: Action "${action}" not in actions`, actionsArray);
+      // Log security alert
+      logSecurityAlert({
+        alertType: 'permission_denied',
+        severity: 'low',
+        userId: user.id,
+        userName: user.username,
+        module,
+        action,
+        attemptedResource: req.originalUrl,
+        ipAddress: req.ip || req.headers['x-forwarded-for'] as string,
+        userAgent: req.headers['user-agent'],
+      });
       return res.status(403).json({ message: `غير مسموح - ليس لديك صلاحية ${action} على هذه الوحدة` });
     }
     

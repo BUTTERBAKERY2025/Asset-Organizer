@@ -125,6 +125,7 @@ const DividendsPage = lazy(() => import("@/pages/governance/dividends"));
 const CapitalPage = lazy(() => import("@/pages/governance/capital"));
 const VotingPage = lazy(() => import("@/pages/governance/voting"));
 const GeneralAssemblyPage = lazy(() => import("@/pages/governance/general-assembly"));
+const SecurityPage = lazy(() => import("@/pages/security"));
 const VisitorsPage = lazy(() => import("@/pages/visitors"));
 const TravelRequestsPage = lazy(() => import("@/pages/travel-requests"));
 const ExecutiveReportsPage = lazy(() => import("@/pages/executive-reports"));
@@ -333,6 +334,9 @@ function Router() {
       <Route path="/governance/capital">{() => <ModulePage component={CapitalPage} module="governance_capital" />}</Route>
       <Route path="/governance/voting">{() => <ModulePage component={VotingPage} module="governance_voting" />}</Route>
       <Route path="/governance/general-assembly">{() => <ModulePage component={GeneralAssemblyPage} module="governance_meetings" />}</Route>
+      
+      {/* Security - الأمان */}
+      <Route path="/security">{() => <ModulePage component={SecurityPage} module="rbac_management" />}</Route>
       
       <Route component={NotFound} />
     </Switch>

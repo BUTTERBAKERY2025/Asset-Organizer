@@ -72,6 +72,7 @@ import { z } from "zod";
 import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, isUserAdmin, getAllowedBranchIds, getEffectiveBranchFilter } from "./auth";
 import { registerGovernanceRoutes } from "./governance-routes";
 import { registerSocialResponsibilityRoutes } from "./social-responsibility-routes";
+import { registerSecurityRoutes } from "./security-routes";
 
 // Normalize date to YYYY-MM-DD format
 function normalizeDate(dateStr: string | null | undefined): string | null {
@@ -107,6 +108,7 @@ export async function registerRoutes(
   // Register governance routes
   registerGovernanceRoutes(app);
   registerSocialResponsibilityRoutes(app);
+  registerSecurityRoutes(app);
 
   // Cached data fetchers
   const getCachedBranches = memoize(async () => {
