@@ -433,69 +433,69 @@ export default function InfluencerContractsPage() {
 
   return (
     <Layout>
-      <div className="p-4 max-w-6xl mx-auto space-y-4">
-        <div className="flex items-center gap-3 mb-2">
+      <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-3 sm:space-y-4" dir="rtl">
+        <div className="flex items-center gap-2 sm:gap-3 mb-2">
           <Link href="/marketing">
-            <Button variant="ghost" size="sm" className="gap-1" data-testid="button-back">
+            <Button variant="ghost" size="sm" className="gap-1 h-9 sm:h-10" data-testid="button-back">
               <ArrowRight className="h-4 w-4" />
-              لوحة التسويق
+              <span className="hidden sm:inline">لوحة التسويق</span>
             </Button>
           </Link>
         </div>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-[#1a3a2f]">عقود المؤثرين</h1>
-            <p className="text-sm text-muted-foreground">إدارة عقود التعاون مع المؤثرين والمدونين</p>
+            <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-[#1a3a2f]">عقود المؤثرين</h1>
+            <p className="text-xs sm:text-sm text-muted-foreground">إدارة عقود التعاون مع المؤثرين والمدونين</p>
           </div>
-          <Button onClick={() => { setSelectedContract(null); setFormData(defaultFormData); setIsDialogOpen(true); }} data-testid="button-add-contract">
+          <Button className="h-10 sm:h-9 w-full sm:w-auto" onClick={() => { setSelectedContract(null); setFormData(defaultFormData); setIsDialogOpen(true); }} data-testid="button-add-contract">
             <Plus className="h-4 w-4 ml-2" />
             عقد جديد
           </Button>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          <Card className="p-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
+          <Card className="p-2 sm:p-3">
             <div className="flex items-center gap-2">
-              <FileText className="h-4 w-4 text-gray-500" />
-              <div>
-                <p className="text-xs text-muted-foreground">إجمالي العقود</p>
-                <p className="text-lg font-bold">{stats.total}</p>
+              <FileText className="h-4 w-4 text-gray-500 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-[10px] sm:text-xs text-muted-foreground">إجمالي العقود</p>
+                <p className="text-base sm:text-lg font-bold">{stats.total}</p>
               </div>
             </div>
           </Card>
-          <Card className="p-3">
+          <Card className="p-2 sm:p-3">
             <div className="flex items-center gap-2">
-              <Clock className="h-4 w-4 text-yellow-500" />
-              <div>
-                <p className="text-xs text-muted-foreground">مسودة</p>
-                <p className="text-lg font-bold">{stats.draft}</p>
+              <Clock className="h-4 w-4 text-yellow-500 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-[10px] sm:text-xs text-muted-foreground">مسودة</p>
+                <p className="text-base sm:text-lg font-bold">{stats.draft}</p>
               </div>
             </div>
           </Card>
-          <Card className="p-3">
+          <Card className="p-2 sm:p-3">
             <div className="flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <div>
-                <p className="text-xs text-muted-foreground">موقّعة</p>
-                <p className="text-lg font-bold">{stats.signed}</p>
+              <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-[10px] sm:text-xs text-muted-foreground">موقّعة</p>
+                <p className="text-base sm:text-lg font-bold">{stats.signed}</p>
               </div>
             </div>
           </Card>
-          <Card className="p-3">
+          <Card className="p-2 sm:p-3">
             <div className="flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-orange-500" />
-              <div>
-                <p className="text-xs text-muted-foreground">بانتظار الدفع</p>
-                <p className="text-lg font-bold">{stats.pendingPayment}</p>
+              <AlertCircle className="h-4 w-4 text-orange-500 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-[10px] sm:text-xs text-muted-foreground truncate">بانتظار الدفع</p>
+                <p className="text-base sm:text-lg font-bold">{stats.pendingPayment}</p>
               </div>
             </div>
           </Card>
-          <Card className="p-3">
+          <Card className="p-2 sm:p-3 col-span-2 sm:col-span-1">
             <div className="flex items-center gap-2">
-              <DollarSign className="h-4 w-4 text-emerald-500" />
-              <div>
-                <p className="text-xs text-muted-foreground">إجمالي القيمة</p>
-                <p className="text-lg font-bold">{formatCurrency(stats.totalAmount)}</p>
+              <DollarSign className="h-4 w-4 text-emerald-500 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-[10px] sm:text-xs text-muted-foreground">إجمالي القيمة</p>
+                <p className="text-base sm:text-lg font-bold truncate">{formatCurrency(stats.totalAmount)}</p>
               </div>
             </div>
           </Card>
@@ -503,43 +503,45 @@ export default function InfluencerContractsPage() {
 
         <Card>
           <CardHeader className="py-3">
-            <div className="flex flex-col md:flex-row gap-3 items-start md:items-center justify-between">
-              <CardTitle className="text-base">قائمة العقود</CardTitle>
-              <div className="flex flex-wrap gap-2 items-center">
-                <div className="relative">
+            <div className="flex flex-col gap-3">
+              <CardTitle className="text-sm sm:text-base">قائمة العقود</CardTitle>
+              <div className="flex flex-col sm:flex-row flex-wrap gap-2 items-stretch sm:items-center">
+                <div className="relative flex-1 sm:flex-none">
                   <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     placeholder="بحث..."
-                    className="pr-9 w-48"
+                    className="pr-9 w-full sm:w-48 h-10"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     data-testid="input-search"
                   />
                 </div>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-36" data-testid="select-status-filter">
-                    <Filter className="h-4 w-4 ml-2" />
-                    <SelectValue placeholder="الحالة" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">جميع الحالات</SelectItem>
-                    {Object.entries(CONTRACT_STATUS_LABELS).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>{label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select value={paymentStatusFilter} onValueChange={setPaymentStatusFilter}>
-                  <SelectTrigger className="w-36" data-testid="select-payment-filter">
-                    <DollarSign className="h-4 w-4 ml-2" />
-                    <SelectValue placeholder="حالة الدفع" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">جميع الحالات</SelectItem>
-                    {Object.entries(PAYMENT_STATUS_LABELS).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>{label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex gap-2 flex-1 sm:flex-none">
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="flex-1 sm:w-32 h-10" data-testid="select-status-filter">
+                      <Filter className="h-3 w-3 sm:h-4 sm:w-4 ml-1 sm:ml-2 shrink-0" />
+                      <SelectValue placeholder="الحالة" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">جميع الحالات</SelectItem>
+                      {Object.entries(CONTRACT_STATUS_LABELS).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>{label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={paymentStatusFilter} onValueChange={setPaymentStatusFilter}>
+                    <SelectTrigger className="flex-1 sm:w-32 h-10" data-testid="select-payment-filter">
+                      <DollarSign className="h-3 w-3 sm:h-4 sm:w-4 ml-1 sm:ml-2 shrink-0" />
+                      <SelectValue placeholder="حالة الدفع" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">جميع الحالات</SelectItem>
+                      {Object.entries(PAYMENT_STATUS_LABELS).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>{label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
           </CardHeader>
@@ -553,76 +555,82 @@ export default function InfluencerContractsPage() {
                 لا توجد عقود
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>رقم العقد</TableHead>
-                    <TableHead>المؤثر</TableHead>
-                    <TableHead>الحملة</TableHead>
-                    <TableHead>القيمة</TableHead>
-                    <TableHead>الحالة</TableHead>
-                    <TableHead>حالة الدفع</TableHead>
-                    <TableHead>التاريخ</TableHead>
-                    <TableHead className="text-left">الإجراءات</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredContracts.map((contract) => (
-                    <TableRow key={contract.id} data-testid={`row-contract-${contract.id}`}>
-                      <TableCell className="font-mono text-sm">{contract.contractNumber}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <User className="h-4 w-4 text-muted-foreground" />
-                          {contract.influencerName}
-                        </div>
-                      </TableCell>
-                      <TableCell>{contract.campaignName}</TableCell>
-                      <TableCell className="font-medium">{formatCurrency(contract.contractAmount)}</TableCell>
-                      <TableCell>{getStatusBadge(contract.status || "draft")}</TableCell>
-                      <TableCell>{getPaymentStatusBadge(contract.paymentStatus || "pending")}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {formatDate(contract.createdAt as any)}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => { setSelectedContract(contract); setIsViewDialogOpen(true); }}
-                            data-testid={`button-view-${contract.id}`}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEdit(contract)}
-                            data-testid={`button-edit-${contract.id}`}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDownloadPdf(contract.id)}
-                            data-testid={`button-download-${contract.id}`}
-                          >
-                            <Download className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => { setSelectedContract(contract); setIsDeleteDialogOpen(true); }}
-                            data-testid={`button-delete-${contract.id}`}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </TableCell>
+              <div className="overflow-x-auto">
+                <Table className="min-w-[700px]">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="hidden sm:table-cell">رقم العقد</TableHead>
+                      <TableHead>المؤثر</TableHead>
+                      <TableHead className="hidden md:table-cell">الحملة</TableHead>
+                      <TableHead>القيمة</TableHead>
+                      <TableHead>الحالة</TableHead>
+                      <TableHead className="hidden lg:table-cell">حالة الدفع</TableHead>
+                      <TableHead className="hidden md:table-cell">التاريخ</TableHead>
+                      <TableHead className="text-left">الإجراءات</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredContracts.map((contract) => (
+                      <TableRow key={contract.id} data-testid={`row-contract-${contract.id}`}>
+                        <TableCell className="font-mono text-xs sm:text-sm hidden sm:table-cell">{contract.contractNumber}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1 sm:gap-2">
+                            <User className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground shrink-0" />
+                            <span className="text-xs sm:text-sm truncate max-w-[80px] sm:max-w-none">{contract.influencerName}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell text-xs sm:text-sm">{contract.campaignName}</TableCell>
+                        <TableCell className="font-medium text-xs sm:text-sm whitespace-nowrap">{formatCurrency(contract.contractAmount)}</TableCell>
+                        <TableCell>{getStatusBadge(contract.status || "draft")}</TableCell>
+                        <TableCell className="hidden lg:table-cell">{getPaymentStatusBadge(contract.paymentStatus || "pending")}</TableCell>
+                        <TableCell className="text-xs sm:text-sm text-muted-foreground hidden md:table-cell">
+                          {formatDate(contract.createdAt as any)}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-0.5 sm:gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 sm:h-8 sm:w-8"
+                              onClick={() => { setSelectedContract(contract); setIsViewDialogOpen(true); }}
+                              data-testid={`button-view-${contract.id}`}
+                            >
+                              <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 sm:h-8 sm:w-8"
+                              onClick={() => handleEdit(contract)}
+                              data-testid={`button-edit-${contract.id}`}
+                            >
+                              <Pencil className="h-3 w-3 sm:h-4 sm:w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 sm:h-8 sm:w-8 hidden sm:flex"
+                              onClick={() => handleDownloadPdf(contract.id)}
+                              data-testid={`button-download-${contract.id}`}
+                            >
+                              <Download className="h-3 w-3 sm:h-4 sm:w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 sm:h-8 sm:w-8"
+                              onClick={() => { setSelectedContract(contract); setIsDeleteDialogOpen(true); }}
+                              data-testid={`button-delete-${contract.id}`}
+                            >
+                              <Trash2 className="h-3 w-3 sm:h-4 sm:w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </CardContent>
         </Card>

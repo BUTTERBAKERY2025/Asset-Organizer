@@ -169,24 +169,25 @@ export default function MarketingGoalsPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-          <div className="flex items-center gap-4">
+      <div className="p-3 sm:p-4 md:p-6 lg:p-8 max-w-6xl mx-auto space-y-3 sm:space-y-4" dir="rtl">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-4 sm:mb-6">
+          <div className="flex items-center gap-2 sm:gap-4">
             <Link href="/marketing">
-              <Button variant="outline" size="sm" className="gap-2 h-11 sm:h-9" data-testid="button-back">
-                <ArrowRight className="h-4 w-4" />
-                العودة للتسويق
+              <Button variant="outline" size="sm" className="gap-1 sm:gap-2 h-10 sm:h-9 text-xs sm:text-sm" data-testid="button-back">
+                <ArrowRight className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden sm:inline">العودة للتسويق</span>
+                <span className="sm:hidden">رجوع</span>
               </Button>
             </Link>
-            <div>
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-800" data-testid="text-page-title">أهداف الحملات</h1>
-              <p className="text-sm text-gray-600">إدارة وتتبع أهداف الحملات التسويقية</p>
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-800 truncate" data-testid="text-page-title">أهداف الحملات</h1>
+              <p className="text-xs sm:text-sm text-gray-600 truncate">إدارة وتتبع أهداف الحملات التسويقية</p>
             </div>
           </div>
           
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-amber-500 hover:bg-amber-600 gap-2 h-11 sm:h-9" data-testid="button-add-goal">
+              <Button className="bg-amber-500 hover:bg-amber-600 gap-1 sm:gap-2 h-10 sm:h-9 w-full sm:w-auto" data-testid="button-add-goal">
                 <Plus className="h-4 w-4" />
                 إضافة هدف
               </Button>
@@ -285,12 +286,12 @@ export default function MarketingGoalsPage() {
           </Dialog>
         </div>
 
-        <div className="mb-6">
+        <div className="mb-4 sm:mb-6">
           <Select
             value={selectedCampaignId?.toString() || "all"}
             onValueChange={(value) => setSelectedCampaignId(value === "all" ? null : parseInt(value))}
           >
-            <SelectTrigger className="w-full sm:w-64 bg-white h-11 sm:h-10" data-testid="select-filter-campaign">
+            <SelectTrigger className="w-full sm:w-64 bg-white h-10 text-sm" data-testid="select-filter-campaign">
               <SelectValue placeholder="جميع الحملات" />
             </SelectTrigger>
             <SelectContent className="max-h-60 overflow-y-auto">
@@ -304,32 +305,32 @@ export default function MarketingGoalsPage() {
           </Select>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4">
           {goals.map((goal) => (
             <Card key={goal.id} className="hover:shadow-lg transition-shadow" data-testid={`card-goal-${goal.id}`}>
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Target className="h-5 w-5 text-amber-500" />
-                    <CardTitle className="text-lg">{goalTypeLabels[goal.goalType] || goal.goalType}</CardTitle>
+              <CardHeader className="p-3 sm:p-4 pb-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                    <Target className="h-4 w-4 sm:h-5 sm:w-5 text-amber-500 shrink-0" />
+                    <CardTitle className="text-sm sm:text-base truncate">{goalTypeLabels[goal.goalType] || goal.goalType}</CardTitle>
                   </div>
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[goal.status]}`}>
+                  <span className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-medium whitespace-nowrap ${statusColors[goal.status]}`}>
                     {statusLabels[goal.status]}
                   </span>
                 </div>
-                <p className="text-sm text-gray-500">{getCampaignName(goal.campaignId)}</p>
+                <p className="text-xs sm:text-sm text-gray-500 truncate">{getCampaignName(goal.campaignId)}</p>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
+              <CardContent className="p-3 sm:p-4 pt-0">
+                <div className="space-y-3 sm:space-y-4">
                   <div>
-                    <div className="flex justify-between text-sm mb-1">
+                    <div className="flex justify-between text-xs sm:text-sm mb-1">
                       <span>التقدم</span>
                       <span className="font-bold">{getProgressPercentage(goal).toLocaleString('en-US')}%</span>
                     </div>
-                    <Progress value={getProgressPercentage(goal)} className="h-2" />
+                    <Progress value={getProgressPercentage(goal)} className="h-1.5 sm:h-2" />
                   </div>
                   
-                  <div className="flex justify-between text-sm">
+                  <div className="flex justify-between text-[11px] sm:text-sm">
                     <div>
                       <span className="text-gray-500">الحالي: </span>
                       <span className="font-bold">{goal.currentValue.toLocaleString('en-US')}</span>
@@ -341,7 +342,7 @@ export default function MarketingGoalsPage() {
                   </div>
 
                   {goal.deadline && (
-                    <div className="text-sm text-gray-500">
+                    <div className="text-[11px] sm:text-sm text-gray-500">
                       الموعد النهائي: {new Date(goal.deadline).toLocaleDateString('en-US')}
                     </div>
                   )}
@@ -351,10 +352,10 @@ export default function MarketingGoalsPage() {
                       variant="ghost"
                       size="sm"
                       onClick={() => deleteGoalMutation.mutate(goal.id)}
-                      className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                      className="h-7 w-7 sm:h-8 sm:w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
                       data-testid={`button-delete-goal-${goal.id}`}
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
                     </Button>
                   </div>
                 </div>

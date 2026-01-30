@@ -566,25 +566,26 @@ export default function MarketingExpensesPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center gap-3">
+      <div className="p-3 sm:p-4 md:p-6 lg:p-8 max-w-6xl mx-auto space-y-3 sm:space-y-4" dir="rtl">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Link href="/marketing">
-              <Button variant="outline" size="icon" className="h-11 w-11 sm:h-9 sm:w-9" data-testid="button-back">
+              <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" data-testid="button-back">
                 <ArrowRight className="w-4 h-4" />
               </Button>
             </Link>
-            <div>
-              <h1 className="text-xl sm:text-2xl font-bold text-foreground" data-testid="text-page-title">
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-foreground truncate" data-testid="text-page-title">
                 مصروفات الحملات
               </h1>
-              <p className="text-muted-foreground">تتبع وإدارة مصروفات الحملات التسويقية</p>
+              <p className="text-xs sm:text-sm text-muted-foreground truncate">تتبع وإدارة مصروفات الحملات التسويقية</p>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" className="h-11 sm:h-9" onClick={handleExportExcel} data-testid="button-export">
-              <Download className="w-4 h-4 ml-2" />
-              تصدير Excel
+          <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+            <Button variant="outline" className="h-10 sm:h-9 flex-1 sm:flex-none text-xs sm:text-sm" onClick={handleExportExcel} data-testid="button-export">
+              <Download className="w-4 h-4 ml-1 sm:ml-2" />
+              <span className="hidden sm:inline">تصدير Excel</span>
+              <span className="sm:hidden">تصدير</span>
             </Button>
             {canEdit && (
               <Button
@@ -596,10 +597,10 @@ export default function MarketingExpensesPage() {
                   setSelectedExpense(null);
                   setIsAddDialogOpen(true);
                 }}
-                className="h-11 sm:h-9 bg-amber-500 hover:bg-amber-600"
+                className="h-10 sm:h-9 flex-1 sm:flex-none bg-amber-500 hover:bg-amber-600 text-xs sm:text-sm"
                 data-testid="button-add-expense"
               >
-                <Plus className="w-4 h-4 ml-2" />
+                <Plus className="w-4 h-4 ml-1 sm:ml-2" />
                 إضافة مصروف
               </Button>
             )}
@@ -659,56 +660,56 @@ export default function MarketingExpensesPage() {
           </TabsList>
 
           <TabsContent value="list" className="space-y-4 mt-4">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
               <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
-                <CardContent className="p-4">
+                <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-muted-foreground">إجمالي المصروفات</p>
-                      <p className="text-2xl font-bold text-amber-700">
-                        {new Intl.NumberFormat("en-US").format(totalExpenses)} ر.س
+                      <p className="text-xs sm:text-sm text-muted-foreground">إجمالي المصروفات</p>
+                      <p className="text-lg sm:text-2xl font-bold text-amber-700">
+                        {new Intl.NumberFormat("en-US").format(totalExpenses)} <span className="text-xs sm:text-sm">ر.س</span>
                       </p>
                     </div>
-                    <DollarSign className="w-8 h-8 text-amber-600" />
+                    <DollarSign className="w-6 h-6 sm:w-8 sm:h-8 text-amber-600" />
                   </div>
                 </CardContent>
               </Card>
               <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-                <CardContent className="p-4">
+                <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-muted-foreground">مدفوع</p>
-                      <p className="text-2xl font-bold text-green-700">
-                        {new Intl.NumberFormat("en-US").format(paidExpenses)} ر.س
+                      <p className="text-xs sm:text-sm text-muted-foreground">مدفوع</p>
+                      <p className="text-lg sm:text-2xl font-bold text-green-700">
+                        {new Intl.NumberFormat("en-US").format(paidExpenses)} <span className="text-xs sm:text-sm">ر.س</span>
                       </p>
                     </div>
-                    <TrendingUp className="w-8 h-8 text-green-600" />
+                    <TrendingUp className="w-6 h-6 sm:w-8 sm:h-8 text-green-600" />
                   </div>
                 </CardContent>
               </Card>
               <Card className="bg-gradient-to-br from-yellow-50 to-yellow-100 border-yellow-200">
-                <CardContent className="p-4">
+                <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-muted-foreground">قيد الانتظار</p>
-                      <p className="text-2xl font-bold text-yellow-700">
-                        {new Intl.NumberFormat("en-US").format(pendingExpenses)} ر.س
+                      <p className="text-xs sm:text-sm text-muted-foreground">قيد الانتظار</p>
+                      <p className="text-lg sm:text-2xl font-bold text-yellow-700">
+                        {new Intl.NumberFormat("en-US").format(pendingExpenses)} <span className="text-xs sm:text-sm">ر.س</span>
                       </p>
                     </div>
-                    <Calendar className="w-8 h-8 text-yellow-600" />
+                    <Calendar className="w-6 h-6 sm:w-8 sm:h-8 text-yellow-600" />
                   </div>
                 </CardContent>
               </Card>
               <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-                <CardContent className="p-4">
+                <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-muted-foreground">عدد المصروفات</p>
-                      <p className="text-2xl font-bold text-blue-700">
+                      <p className="text-xs sm:text-sm text-muted-foreground">عدد المصروفات</p>
+                      <p className="text-lg sm:text-2xl font-bold text-blue-700">
                         {new Intl.NumberFormat("en-US").format(filteredExpenses.length)}
                       </p>
                     </div>
-                    <FileSpreadsheet className="w-8 h-8 text-blue-600" />
+                    <FileSpreadsheet className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600" />
                   </div>
                 </CardContent>
               </Card>
@@ -719,7 +720,7 @@ export default function MarketingExpensesPage() {
                 <CardTitle>تصفية المصروفات</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4">
                   <div className="relative">
                     <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                     <Input
@@ -810,84 +811,88 @@ export default function MarketingExpensesPage() {
             <Card>
               <CardContent className="p-0">
                 <ScrollArea className="h-[500px]">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>الفرع</TableHead>
-                        <TableHead>الحملة</TableHead>
-                        <TableHead>الفئة</TableHead>
-                        <TableHead>الوصف</TableHead>
-                        <TableHead>المبلغ</TableHead>
-                        <TableHead>التاريخ</TableHead>
-                        <TableHead>الحالة</TableHead>
-                        <TableHead>المورد</TableHead>
-                        {canEdit && <TableHead>إجراءات</TableHead>}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {isLoading ? (
+                  <div className="overflow-x-auto">
+                    <Table className="min-w-[800px]">
+                      <TableHeader>
                         <TableRow>
-                          <TableCell colSpan={9} className="text-center py-8">
-                            <Loader2 className="w-6 h-6 animate-spin mx-auto" />
-                          </TableCell>
+                          <TableHead className="hidden md:table-cell">الفرع</TableHead>
+                          <TableHead>الحملة</TableHead>
+                          <TableHead className="hidden sm:table-cell">الفئة</TableHead>
+                          <TableHead>الوصف</TableHead>
+                          <TableHead>المبلغ</TableHead>
+                          <TableHead className="hidden sm:table-cell">التاريخ</TableHead>
+                          <TableHead>الحالة</TableHead>
+                          <TableHead className="hidden lg:table-cell">المورد</TableHead>
+                          {canEdit && <TableHead>إجراءات</TableHead>}
                         </TableRow>
-                      ) : filteredExpenses.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
-                            لا توجد مصروفات
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        filteredExpenses.map((expense) => (
-                          <TableRow key={expense.id} data-testid={`row-expense-${expense.id}`}>
-                            <TableCell className="font-medium">{(expense as any).branchName || "-"}</TableCell>
-                            <TableCell className="font-medium">{getCampaignName(expense.campaignId)}</TableCell>
-                            <TableCell>
-                              <Badge variant="outline">
-                                {CAMPAIGN_EXPENSE_CATEGORY_LABELS[expense.category] || expense.category}
-                              </Badge>
+                      </TableHeader>
+                      <TableBody>
+                        {isLoading ? (
+                          <TableRow>
+                            <TableCell colSpan={9} className="text-center py-8">
+                              <Loader2 className="w-6 h-6 animate-spin mx-auto" />
                             </TableCell>
-                            <TableCell className="max-w-[200px] truncate">{expense.description}</TableCell>
-                            <TableCell className="font-bold">
-                              {new Intl.NumberFormat("en-US").format(expense.amount)} ر.س
-                            </TableCell>
-                            <TableCell>{expense.expenseDate}</TableCell>
-                            <TableCell>
-                              <Badge className={STATUS_COLORS[expense.status] || "bg-gray-500"}>
-                                {CAMPAIGN_EXPENSE_STATUS_LABELS[expense.status] || expense.status}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>{expense.vendor || "-"}</TableCell>
-                            {canEdit && (
-                              <TableCell>
-                                <div className="flex gap-2">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => openEditDialog(expense)}
-                                    data-testid={`button-edit-${expense.id}`}
-                                  >
-                                    <Pencil className="w-4 h-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => {
-                                      setSelectedExpense(expense);
-                                      setIsDeleteDialogOpen(true);
-                                    }}
-                                    data-testid={`button-delete-${expense.id}`}
-                                  >
-                                    <Trash2 className="w-4 h-4 text-red-500" />
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            )}
                           </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
+                        ) : filteredExpenses.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                              لا توجد مصروفات
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          filteredExpenses.map((expense) => (
+                            <TableRow key={expense.id} data-testid={`row-expense-${expense.id}`}>
+                              <TableCell className="font-medium hidden md:table-cell">{(expense as any).branchName || "-"}</TableCell>
+                              <TableCell className="font-medium text-xs sm:text-sm">{getCampaignName(expense.campaignId)}</TableCell>
+                              <TableCell className="hidden sm:table-cell">
+                                <Badge variant="outline" className="text-[10px] sm:text-xs">
+                                  {CAMPAIGN_EXPENSE_CATEGORY_LABELS[expense.category] || expense.category}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="max-w-[120px] sm:max-w-[200px] truncate text-xs sm:text-sm">{expense.description}</TableCell>
+                              <TableCell className="font-bold text-xs sm:text-sm whitespace-nowrap">
+                                {new Intl.NumberFormat("en-US").format(expense.amount)} ر.س
+                              </TableCell>
+                              <TableCell className="hidden sm:table-cell text-xs sm:text-sm">{expense.expenseDate}</TableCell>
+                              <TableCell>
+                                <Badge className={`${STATUS_COLORS[expense.status] || "bg-gray-500"} text-[10px] sm:text-xs`}>
+                                  {CAMPAIGN_EXPENSE_STATUS_LABELS[expense.status] || expense.status}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="hidden lg:table-cell">{expense.vendor || "-"}</TableCell>
+                              {canEdit && (
+                                <TableCell>
+                                  <div className="flex gap-1 sm:gap-2">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-8 w-8 p-0 sm:h-9 sm:w-auto sm:px-3"
+                                      onClick={() => openEditDialog(expense)}
+                                      data-testid={`button-edit-${expense.id}`}
+                                    >
+                                      <Pencil className="w-3 h-3 sm:w-4 sm:h-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-8 w-8 p-0 sm:h-9 sm:w-auto sm:px-3"
+                                      onClick={() => {
+                                        setSelectedExpense(expense);
+                                        setIsDeleteDialogOpen(true);
+                                      }}
+                                      data-testid={`button-delete-${expense.id}`}
+                                    >
+                                      <Trash2 className="w-3 h-3 sm:w-4 sm:h-4 text-red-500" />
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              )}
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </ScrollArea>
               </CardContent>
             </Card>

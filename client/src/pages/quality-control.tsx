@@ -286,37 +286,37 @@ export default function QualityControlPage() {
           </Dialog>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4">
           <Card>
-            <CardContent className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-blue-100 flex items-center justify-center">
-                <ClipboardCheck className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
+            <CardContent className="p-2 sm:p-3 md:p-4 flex items-center gap-2 sm:gap-4">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full bg-blue-100 flex items-center justify-center">
+                <ClipboardCheck className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-blue-600" />
               </div>
               <div>
-                <div className="text-xl sm:text-2xl font-bold">{checks?.length || 0}</div>
-                <div className="text-xs sm:text-sm text-muted-foreground">إجمالي الفحوصات</div>
+                <div className="text-lg sm:text-xl md:text-2xl font-bold">{checks?.length || 0}</div>
+                <div className="text-[10px] sm:text-xs md:text-sm text-muted-foreground">إجمالي الفحوصات</div>
               </div>
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-green-100 flex items-center justify-center">
-                <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
+            <CardContent className="p-2 sm:p-3 md:p-4 flex items-center gap-2 sm:gap-4">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full bg-green-100 flex items-center justify-center">
+                <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-green-600" />
               </div>
               <div>
-                <div className="text-xl sm:text-2xl font-bold text-green-600">{passedCount}</div>
-                <div className="text-xs sm:text-sm text-muted-foreground">ناجح</div>
+                <div className="text-lg sm:text-xl md:text-2xl font-bold text-green-600">{passedCount}</div>
+                <div className="text-[10px] sm:text-xs md:text-sm text-muted-foreground">ناجح</div>
               </div>
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="p-3 sm:p-4 flex items-center gap-3 sm:gap-4">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-red-100 flex items-center justify-center">
-                <XCircle className="w-5 h-5 sm:w-6 sm:h-6 text-red-600" />
+            <CardContent className="p-2 sm:p-3 md:p-4 flex items-center gap-2 sm:gap-4">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full bg-red-100 flex items-center justify-center">
+                <XCircle className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-red-600" />
               </div>
               <div>
-                <div className="text-xl sm:text-2xl font-bold text-red-600">{failedCount}</div>
-                <div className="text-xs sm:text-sm text-muted-foreground">فاشل</div>
+                <div className="text-lg sm:text-xl md:text-2xl font-bold text-red-600">{failedCount}</div>
+                <div className="text-[10px] sm:text-xs md:text-sm text-muted-foreground">فاشل</div>
               </div>
             </CardContent>
           </Card>
@@ -336,66 +336,66 @@ export default function QualityControlPage() {
         </div>
 
         {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4">
             {[1, 2, 3, 4, 5, 6].map(i => (
               <Skeleton key={i} className="h-40" />
             ))}
           </div>
         ) : filteredChecks?.length === 0 ? (
           <Card>
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <ClipboardCheck className="w-12 h-12 text-muted-foreground mb-4" />
-              <p className="text-muted-foreground">لا توجد فحوصات</p>
-              <Button variant="outline" className="mt-4 h-11 sm:h-9" onClick={() => setIsDialogOpen(true)}>
+            <CardContent className="flex flex-col items-center justify-center py-8 sm:py-12">
+              <ClipboardCheck className="w-10 h-10 sm:w-12 sm:h-12 text-muted-foreground mb-4" />
+              <p className="text-muted-foreground text-sm sm:text-base">لا توجد فحوصات</p>
+              <Button variant="outline" className="mt-4 h-10 sm:h-9 text-sm" onClick={() => setIsDialogOpen(true)}>
                 تسجيل أول فحص
               </Button>
             </CardContent>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4">
             {filteredChecks?.map(check => {
               const ResultIcon = CHECK_RESULTS[check.result as keyof typeof CHECK_RESULTS]?.icon || ClipboardCheck;
               return (
                 <Card key={check.id} data-testid={`check-card-${check.id}`}>
-                  <CardHeader className="pb-2">
+                  <CardHeader className="p-3 sm:p-4 md:p-6 pb-2">
                     <div className="flex items-start justify-between">
                       <div>
-                        <CardTitle className="text-base">{getCheckTypeLabel(check.checkType)}</CardTitle>
-                        <CardDescription className="text-xs mt-1">
+                        <CardTitle className="text-sm sm:text-base">{getCheckTypeLabel(check.checkType)}</CardTitle>
+                        <CardDescription className="text-[10px] sm:text-xs mt-1">
                           {getBranchName(check.branchId)}
                         </CardDescription>
                       </div>
-                      <Badge className={CHECK_RESULTS[check.result as keyof typeof CHECK_RESULTS]?.color || "bg-gray-100"}>
-                        <ResultIcon className="w-3 h-3 ml-1" />
+                      <Badge className={`${CHECK_RESULTS[check.result as keyof typeof CHECK_RESULTS]?.color || "bg-gray-100"} text-[10px] sm:text-xs`}>
+                        <ResultIcon className="w-2 h-2 sm:w-3 sm:h-3 ml-1" />
                         {CHECK_RESULTS[check.result as keyof typeof CHECK_RESULTS]?.label || check.result}
                       </Badge>
                     </div>
                   </CardHeader>
-                  <CardContent className="space-y-2">
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                  <CardContent className="p-3 sm:p-4 md:p-6 pt-0 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-muted-foreground">
                       <div className="flex items-center gap-1">
-                        <Calendar className="w-3 h-3" />
+                        <Calendar className="w-2 h-2 sm:w-3 sm:h-3" />
                         {check.checkDate}
                       </div>
-                      {check.checkTime && <span>{check.checkTime}</span>}
+                      {check.checkTime && <span className="hidden sm:inline">{check.checkTime}</span>}
                     </div>
                     {check.score && (
-                      <div className="text-sm">
+                      <div className="text-xs sm:text-sm">
                         الدرجة: <span className="font-bold">{check.score}/100</span>
                       </div>
                     )}
                     {check.temperature && (
-                      <div className="flex items-center gap-1 text-sm">
-                        <Thermometer className="w-3 h-3" />
+                      <div className="flex items-center gap-1 text-xs sm:text-sm">
+                        <Thermometer className="w-2 h-2 sm:w-3 sm:h-3" />
                         {check.temperature}°C
                       </div>
                     )}
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground pt-2 border-t">
-                      <User className="w-3 h-3" />
+                    <div className="flex items-center gap-1 text-[10px] sm:text-xs text-muted-foreground pt-2 border-t">
+                      <User className="w-2 h-2 sm:w-3 sm:h-3" />
                       الفاحص: {check.checkedBy}
                     </div>
                     {check.issues && (
-                      <div className="text-xs text-red-600 bg-red-50 p-2 rounded">
+                      <div className="text-[10px] sm:text-xs text-red-600 bg-red-50 p-1.5 sm:p-2 rounded">
                         المشاكل: {check.issues}
                       </div>
                     )}

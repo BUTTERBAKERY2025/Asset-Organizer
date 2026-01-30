@@ -235,25 +235,25 @@ export default function WarehouseDashboardPage() {
 
   return (
     <Layout>
-      <div className="p-6 max-w-6xl mx-auto space-y-6" dir={isRTL ? "rtl" : "ltr"}>
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg">
-              <Warehouse className="w-6 h-6 text-white" />
+      <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-4 sm:space-y-6" dir={isRTL ? "rtl" : "ltr"}>
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg flex-shrink-0">
+              <Warehouse className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
             </div>
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-foreground truncate">
                 {isRTL ? "لوحة تحكم المخازن" : "Warehouse Dashboard"}
               </h1>
-              <p className="text-muted-foreground text-sm">
+              <p className="text-muted-foreground text-xs sm:text-sm truncate">
                 {selectedBranch !== "all" ? selectedBranchName : (isRTL ? "إدارة شاملة لجميع الفروع" : "Comprehensive management for all branches")}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-              <SelectTrigger className="w-[200px]" data-testid="select-branch">
+              <SelectTrigger className="w-[140px] sm:w-[200px] text-xs sm:text-sm" data-testid="select-branch">
                 <Building2 className="w-4 h-4 opacity-60" />
                 <SelectValue placeholder={isRTL ? "اختر الفرع" : "Select Branch"} />
               </SelectTrigger>
@@ -360,21 +360,21 @@ export default function WarehouseDashboardPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
           {statCards.map((stat, index) => (
             <Card key={index} className="overflow-hidden" data-testid={`stat-card-${index}`}>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-muted-foreground">{stat.title}</p>
+              <CardContent className="p-3 sm:p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-[10px] sm:text-xs text-muted-foreground truncate">{stat.title}</p>
                     {isLoading ? (
-                      <Skeleton className="h-8 w-12 mt-1" />
+                      <Skeleton className="h-6 sm:h-8 w-10 sm:w-12 mt-1" />
                     ) : (
-                      <p className="text-2xl font-bold">{stat.value}</p>
+                      <p className="text-xl sm:text-2xl font-bold">{stat.value}</p>
                     )}
                   </div>
-                  <div className={`w-12 h-12 rounded-xl ${stat.bgColor} flex items-center justify-center`}>
-                    <stat.icon className={`w-6 h-6 ${stat.color}`} />
+                  <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl ${stat.bgColor} flex items-center justify-center flex-shrink-0`}>
+                    <stat.icon className={`w-5 h-5 sm:w-6 sm:h-6 ${stat.color}`} />
                   </div>
                 </div>
               </CardContent>
@@ -382,7 +382,7 @@ export default function WarehouseDashboardPage() {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-4">
           {quickLinks.map((link, index) => (
             <Link key={index} href={link.href}>
               <Card 

@@ -870,23 +870,23 @@ export default function MarketingCalendarPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center gap-3">
+      <div className="p-3 sm:p-4 md:p-6 lg:p-8 max-w-6xl mx-auto space-y-3 sm:space-y-4" dir="rtl">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Link href="/marketing">
-              <Button variant="outline" size="icon" className="h-11 w-11 sm:h-9 sm:w-9" data-testid="button-back">
+              <Button variant="outline" size="icon" className="h-9 w-9 sm:h-9 sm:w-9 shrink-0" data-testid="button-back">
                 <ArrowRight className="w-4 h-4" />
               </Button>
             </Link>
-            <div>
-              <h1 className="text-xl sm:text-2xl font-bold" data-testid="page-title">التقويم التسويقي</h1>
-              <p className="text-sm text-muted-foreground">المناسبات والمواسم والحملات</p>
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold truncate" data-testid="page-title">التقويم التسويقي</h1>
+              <p className="text-xs sm:text-sm text-muted-foreground truncate">المناسبات والمواسم والحملات</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
             <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
               <DialogTrigger asChild>
-                <Button className="h-11 sm:h-9" data-testid="button-add-event">
+                <Button className="h-10 sm:h-9 flex-1 sm:flex-none" data-testid="button-add-event">
                   <Plus className="w-4 h-4 ml-2" />
                   إضافة حدث
                 </Button>
@@ -989,55 +989,55 @@ export default function MarketingCalendarPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
           <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-green-500 flex items-center justify-center">
-                  <Flag className="w-5 h-5 text-white" />
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-green-500 flex items-center justify-center shrink-0">
+                  <Flag className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                 </div>
-                <div>
-                  <div className="text-xl font-bold text-green-700">{thisMonthOccasions.length}</div>
-                  <div className="text-xs text-muted-foreground">مناسبات هذا الشهر</div>
+                <div className="min-w-0">
+                  <div className="text-base sm:text-xl font-bold text-green-700">{thisMonthOccasions.length}</div>
+                  <div className="text-[10px] sm:text-xs text-muted-foreground truncate">مناسبات هذا الشهر</div>
                 </div>
               </div>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-amber-500 flex items-center justify-center">
-                  <Megaphone className="w-5 h-5 text-white" />
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-amber-500 flex items-center justify-center shrink-0">
+                  <Megaphone className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                 </div>
-                <div>
-                  <div className="text-xl font-bold text-amber-700">{campaignCount}</div>
-                  <div className="text-xs text-muted-foreground">حملات نشطة</div>
+                <div className="min-w-0">
+                  <div className="text-base sm:text-xl font-bold text-amber-700">{campaignCount}</div>
+                  <div className="text-[10px] sm:text-xs text-muted-foreground truncate">حملات نشطة</div>
                 </div>
               </div>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center">
-                  <ListTodo className="w-5 h-5 text-white" />
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-blue-500 flex items-center justify-center shrink-0">
+                  <ListTodo className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                 </div>
-                <div>
-                  <div className="text-xl font-bold text-blue-700">{pendingTasksCount}</div>
-                  <div className="text-xs text-muted-foreground">مهام معلقة</div>
+                <div className="min-w-0">
+                  <div className="text-base sm:text-xl font-bold text-blue-700">{pendingTasksCount}</div>
+                  <div className="text-[10px] sm:text-xs text-muted-foreground truncate">مهام معلقة</div>
                 </div>
               </div>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-purple-500 flex items-center justify-center">
-                  <CalendarDays className="w-5 h-5 text-white" />
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-purple-500 flex items-center justify-center shrink-0">
+                  <CalendarDays className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                 </div>
-                <div>
-                  <div className="text-xl font-bold text-purple-700">{events.length}</div>
-                  <div className="text-xs text-muted-foreground">أحداث مخصصة</div>
+                <div className="min-w-0">
+                  <div className="text-base sm:text-xl font-bold text-purple-700">{events.length}</div>
+                  <div className="text-[10px] sm:text-xs text-muted-foreground truncate">أحداث مخصصة</div>
                 </div>
               </div>
             </CardContent>
@@ -1065,23 +1065,23 @@ export default function MarketingCalendarPage() {
           </TabsList>
 
           <TabsContent value="calendar" className="mt-4">
-            <div className="grid lg:grid-cols-4 gap-4">
+            <div className="grid lg:grid-cols-4 gap-2 sm:gap-4">
               <div className="lg:col-span-3">
                 <Card>
-                  <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Button variant="outline" size="icon" onClick={goToPrevMonth} data-testid="button-prev-month">
+                  <CardHeader className="pb-2 p-3 sm:p-4">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                      <div className="flex items-center gap-1 sm:gap-2">
+                        <Button variant="outline" size="icon" className="h-8 w-8 sm:h-9 sm:w-9" onClick={goToPrevMonth} data-testid="button-prev-month">
                           <ChevronRight className="w-4 h-4" />
                         </Button>
-                        <Button variant="outline" size="sm" onClick={goToToday} data-testid="button-today">
+                        <Button variant="outline" size="sm" className="h-8 sm:h-9 text-xs sm:text-sm" onClick={goToToday} data-testid="button-today">
                           اليوم
                         </Button>
-                        <Button variant="outline" size="icon" onClick={goToNextMonth} data-testid="button-next-month">
+                        <Button variant="outline" size="icon" className="h-8 w-8 sm:h-9 sm:w-9" onClick={goToNextMonth} data-testid="button-next-month">
                           <ChevronLeft className="w-4 h-4" />
                         </Button>
                       </div>
-                      <h2 className="text-lg font-bold">
+                      <h2 className="text-sm sm:text-lg font-bold">
                         {MONTHS_AR[currentDate.getMonth()]} {currentDate.getFullYear()}
                       </h2>
                     </div>

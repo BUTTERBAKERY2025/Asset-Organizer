@@ -807,32 +807,33 @@ export default function DailyProductionPage() {
 
   return (
     <Layout>
-      <div className="p-6 max-w-6xl mx-auto space-y-6" dir="rtl">
+      <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-4 sm:space-y-6" dir="rtl">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Link href="/production-dashboard">
-              <Button variant="ghost" size="icon" className="h-8 w-8">
+              <Button variant="ghost" size="icon" className="h-8 w-8 sm:h-9 sm:w-9">
                 <ArrowLeft className="h-4 w-4" />
               </Button>
             </Link>
-            <div className="p-3 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl">
-              <Factory className="w-6 h-6 text-white" />
+            <div className="p-2 sm:p-3 bg-gradient-to-br from-amber-500 to-orange-600 rounded-lg sm:rounded-xl">
+              <Factory className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-foreground" data-testid="text-page-title">الإنتاج الفعلي اليومي</h1>
-              <p className="text-muted-foreground">تسجيل ومتابعة دفعات الإنتاج على مدار اليوم</p>
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-foreground" data-testid="text-page-title">الإنتاج الفعلي اليومي</h1>
+              <p className="text-xs sm:text-sm text-muted-foreground">تسجيل ومتابعة دفعات الإنتاج على مدار اليوم</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Link href="/finished-goods-inventory">
-              <Button variant="outline" size="sm" className="gap-2" data-testid="btn-finished-goods">
-                <Package className="h-4 w-4" />
-                مخزون الإنتاج النهائي
+              <Button variant="outline" size="sm" className="gap-1 sm:gap-2 h-8 sm:h-9 text-xs sm:text-sm" data-testid="btn-finished-goods">
+                <Package className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden sm:inline">مخزون الإنتاج النهائي</span>
+                <span className="sm:hidden">المخزون</span>
               </Button>
             </Link>
             {user && (
-              <Badge variant="outline" className="gap-1 px-3 py-1.5">
+              <Badge variant="outline" className="gap-1 px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs">
                 <User className="h-3 w-3" />
                 {user.firstName || user.username}
                 {isAdmin && <Shield className="h-3 w-3 text-amber-600 mr-1" />}
@@ -842,11 +843,11 @@ export default function DailyProductionPage() {
         </div>
 
         {/* Filters and Controls */}
-        <div className="flex flex-wrap gap-4 items-end">
-          <div className="space-y-2 min-w-[200px]">
-            <Label>الفرع *</Label>
+        <div className="flex flex-wrap gap-2 sm:gap-4 items-end">
+          <div className="space-y-1 sm:space-y-2 w-full sm:w-auto sm:min-w-[200px]">
+            <Label className="text-xs sm:text-sm">الفرع *</Label>
             <Select value={branchId} onValueChange={setBranchId}>
-              <SelectTrigger data-testid="select-branch">
+              <SelectTrigger data-testid="select-branch" className="h-10 sm:h-9">
                 <SelectValue placeholder="اختر الفرع" />
               </SelectTrigger>
               <SelectContent>
@@ -856,20 +857,20 @@ export default function DailyProductionPage() {
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-2">
-            <Label>التاريخ</Label>
+          <div className="space-y-1 sm:space-y-2 flex-1 sm:flex-none">
+            <Label className="text-xs sm:text-sm">التاريخ</Label>
             <Input
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="w-[160px]"
+              className="w-full sm:w-[160px] h-10 sm:h-9"
               data-testid="input-date"
             />
           </div>
-          <div className="space-y-2">
-            <Label>الوردية</Label>
+          <div className="space-y-1 sm:space-y-2 flex-1 sm:flex-none">
+            <Label className="text-xs sm:text-sm">الوردية</Label>
             <Select value={selectedShift} onValueChange={setSelectedShift}>
-              <SelectTrigger className="w-[140px]">
+              <SelectTrigger className="w-full sm:w-[140px] h-10 sm:h-9">
                 <SelectValue placeholder="الوردية" />
               </SelectTrigger>
               <SelectContent>
@@ -887,101 +888,101 @@ export default function DailyProductionPage() {
               </SelectContent>
             </Select>
           </div>
-          <div className="flex items-center gap-2 bg-muted/50 px-3 py-2 rounded-lg">
+          <div className="flex items-center gap-2 bg-muted/50 px-2 sm:px-3 py-2 rounded-lg">
             <Switch
               checked={autoRefresh}
               onCheckedChange={setAutoRefresh}
               id="auto-refresh"
             />
-            <Label htmlFor="auto-refresh" className="text-sm cursor-pointer">
+            <Label htmlFor="auto-refresh" className="text-xs sm:text-sm cursor-pointer">
               تحديث تلقائي
             </Label>
             {autoRefresh && (
-              <Badge variant="secondary" className="text-xs">كل دقيقة</Badge>
+              <Badge variant="secondary" className="text-[10px] sm:text-xs">كل دقيقة</Badge>
             )}
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => refetchBatches()} data-testid="btn-refresh">
-              <RefreshCw className="h-4 w-4 ml-2" />
-              تحديث
+          <div className="flex flex-wrap gap-1 sm:gap-2 w-full sm:w-auto">
+            <Button variant="outline" size="sm" onClick={() => refetchBatches()} data-testid="btn-refresh" className="h-8 sm:h-9 text-xs sm:text-sm flex-1 sm:flex-none">
+              <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4 ml-1 sm:ml-2" />
+              <span className="hidden sm:inline">تحديث</span>
             </Button>
-            <Button variant="outline" size="sm" onClick={exportToExcel} disabled={!batches?.length} data-testid="btn-export">
-              <FileSpreadsheet className="h-4 w-4 ml-2" />
+            <Button variant="outline" size="sm" onClick={exportToExcel} disabled={!batches?.length} data-testid="btn-export" className="h-8 sm:h-9 text-xs sm:text-sm flex-1 sm:flex-none">
+              <FileSpreadsheet className="h-3 w-3 sm:h-4 sm:w-4 ml-1 sm:ml-2" />
               Excel
             </Button>
-            <Button variant="outline" size="sm" onClick={handlePrint} disabled={!batches?.length} data-testid="btn-pdf">
-              <FileDown className="h-4 w-4 ml-2" />
+            <Button variant="outline" size="sm" onClick={handlePrint} disabled={!batches?.length} data-testid="btn-pdf" className="h-8 sm:h-9 text-xs sm:text-sm flex-1 sm:flex-none">
+              <FileDown className="h-3 w-3 sm:h-4 sm:w-4 ml-1 sm:ml-2" />
               PDF
             </Button>
-            <Button variant="outline" size="sm" onClick={handlePrint} disabled={!batches?.length} data-testid="btn-print">
-              <Printer className="h-4 w-4 ml-2" />
-              طباعة
+            <Button variant="outline" size="sm" onClick={handlePrint} disabled={!batches?.length} data-testid="btn-print" className="h-8 sm:h-9 text-xs sm:text-sm flex-1 sm:flex-none">
+              <Printer className="h-3 w-3 sm:h-4 sm:w-4 ml-1 sm:ml-2" />
+              <span className="hidden sm:inline">طباعة</span>
             </Button>
           </div>
         </div>
 
         {/* Stats Cards with Comparison */}
         {branchId && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
             <Card className="border-r-4 border-r-amber-500">
-              <CardContent className="p-4">
+              <CardContent className="p-3 sm:p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">إجمالي الدفعات</p>
-                    <div className="flex items-center gap-2">
-                      <p className="text-2xl font-bold text-amber-700">{stats?.totalBatches || 0}</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">إجمالي الدفعات</p>
+                    <div className="flex items-center gap-1 sm:gap-2">
+                      <p className="text-lg sm:text-2xl font-bold text-amber-700">{stats?.totalBatches || 0}</p>
                       {prevStats && (
-                        <Badge variant={batchDiff.direction === "up" ? "default" : "destructive"} className="text-xs gap-1">
-                          {batchDiff.direction === "up" ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                        <Badge variant={batchDiff.direction === "up" ? "default" : "destructive"} className="text-[10px] sm:text-xs gap-1">
+                          {batchDiff.direction === "up" ? <TrendingUp className="h-2 w-2 sm:h-3 sm:w-3" /> : <TrendingDown className="h-2 w-2 sm:h-3 sm:w-3" />}
                           {batchDiff.value}
                         </Badge>
                       )}
                     </div>
                   </div>
-                  <Package className="h-8 w-8 text-amber-500 opacity-50" />
+                  <Package className="h-6 w-6 sm:h-8 sm:w-8 text-amber-500 opacity-50" />
                 </div>
               </CardContent>
             </Card>
             <Card className="border-r-4 border-r-green-500">
-              <CardContent className="p-4">
+              <CardContent className="p-3 sm:p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">إجمالي الكميات</p>
-                    <div className="flex items-center gap-2">
-                      <p className="text-2xl font-bold text-green-700">{stats?.totalQuantity || 0}</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">إجمالي الكميات</p>
+                    <div className="flex items-center gap-1 sm:gap-2">
+                      <p className="text-lg sm:text-2xl font-bold text-green-700">{stats?.totalQuantity || 0}</p>
                       {prevStats && (
-                        <Badge variant={qtyDiff.direction === "up" ? "default" : "destructive"} className="text-xs gap-1">
-                          {qtyDiff.direction === "up" ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                        <Badge variant={qtyDiff.direction === "up" ? "default" : "destructive"} className="text-[10px] sm:text-xs gap-1">
+                          {qtyDiff.direction === "up" ? <TrendingUp className="h-2 w-2 sm:h-3 sm:w-3" /> : <TrendingDown className="h-2 w-2 sm:h-3 sm:w-3" />}
                           {qtyDiff.value}
                         </Badge>
                       )}
                     </div>
                   </div>
-                  <TrendingUp className="h-8 w-8 text-green-500 opacity-50" />
+                  <TrendingUp className="h-6 w-6 sm:h-8 sm:w-8 text-green-500 opacity-50" />
                 </div>
               </CardContent>
             </Card>
             <Card className="border-r-4 border-r-blue-500">
-              <CardContent className="p-4">
+              <CardContent className="p-3 sm:p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">بار العرض</p>
-                    <p className="text-2xl font-bold text-blue-700">{stats?.byDestination?.display_bar || 0}</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">بار العرض</p>
+                    <p className="text-lg sm:text-2xl font-bold text-blue-700">{stats?.byDestination?.display_bar || 0}</p>
                   </div>
-                  <ShoppingCart className="h-8 w-8 text-blue-500 opacity-50" />
+                  <ShoppingCart className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500 opacity-50" />
                 </div>
               </CardContent>
             </Card>
             <Card className="border-r-4 border-r-cyan-500">
-              <CardContent className="p-4">
+              <CardContent className="p-3 sm:p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">التخزين</p>
-                    <p className="text-2xl font-bold text-cyan-700">
+                    <p className="text-xs sm:text-sm text-muted-foreground">التخزين</p>
+                    <p className="text-lg sm:text-2xl font-bold text-cyan-700">
                       {(stats?.byDestination?.freezer || 0) + (stats?.byDestination?.refrigerator || 0)}
                     </p>
                   </div>
-                  <Snowflake className="h-8 w-8 text-cyan-500 opacity-50" />
+                  <Snowflake className="h-6 w-6 sm:h-8 sm:w-8 text-cyan-500 opacity-50" />
                 </div>
               </CardContent>
             </Card>
@@ -1319,18 +1320,18 @@ export default function DailyProductionPage() {
                   ) : (
                     <>
                       <div className="overflow-x-auto">
-                        <Table>
+                        <Table className="min-w-[700px]">
                           <TableHeader>
                             <TableRow className="bg-muted/50">
-                              <TableHead className="text-right">الوقت</TableHead>
-                              <TableHead className="text-right">المنتج</TableHead>
-                              <TableHead className="text-right">الفئة</TableHead>
-                              <TableHead className="text-center">الكمية</TableHead>
-                              <TableHead className="text-right">الوجهة</TableHead>
-                              <TableHead className="text-right">الحالة</TableHead>
-                              <TableHead className="text-right">الشيف</TableHead>
-                              <TableHead className="text-right">المسجل</TableHead>
-                              <TableHead className="text-left">إجراء</TableHead>
+                              <TableHead className="text-right text-xs sm:text-sm">الوقت</TableHead>
+                              <TableHead className="text-right text-xs sm:text-sm">المنتج</TableHead>
+                              <TableHead className="hidden md:table-cell text-right text-xs sm:text-sm">الفئة</TableHead>
+                              <TableHead className="text-center text-xs sm:text-sm">الكمية</TableHead>
+                              <TableHead className="text-right text-xs sm:text-sm">الوجهة</TableHead>
+                              <TableHead className="hidden sm:table-cell text-right text-xs sm:text-sm">الحالة</TableHead>
+                              <TableHead className="hidden lg:table-cell text-right text-xs sm:text-sm">الشيف</TableHead>
+                              <TableHead className="hidden md:table-cell text-right text-xs sm:text-sm">المسجل</TableHead>
+                              <TableHead className="text-left text-xs sm:text-sm">إجراء</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -1339,51 +1340,51 @@ export default function DailyProductionPage() {
                               const DestIcon = destInfo.icon;
                               return (
                                 <TableRow key={batch.id} className="hover:bg-muted/30" data-testid={`row-batch-${batch.id}`}>
-                                  <TableCell className="font-medium">
-                                    <div className="flex items-center gap-2">
-                                      <Clock className="h-3 w-3 text-muted-foreground" />
+                                  <TableCell className="font-medium text-xs sm:text-sm">
+                                    <div className="flex items-center gap-1 sm:gap-2">
+                                      <Clock className="h-3 w-3 text-muted-foreground hidden sm:inline" />
                                       {formatTime(batch.producedAt)}
                                     </div>
                                   </TableCell>
-                                  <TableCell className="font-medium">{batch.productName}</TableCell>
-                                  <TableCell>
+                                  <TableCell className="font-medium text-xs sm:text-sm">{batch.productName}</TableCell>
+                                  <TableCell className="hidden md:table-cell">
                                     {batch.productCategory && (
-                                      <Badge variant="outline" className="text-xs">{batch.productCategory}</Badge>
+                                      <Badge variant="outline" className="text-[10px] sm:text-xs">{batch.productCategory}</Badge>
                                     )}
                                   </TableCell>
-                                  <TableCell className="text-center font-bold">{batch.quantity}</TableCell>
+                                  <TableCell className="text-center font-bold text-xs sm:text-sm">{batch.quantity}</TableCell>
                                   <TableCell>
-                                    <Badge className={destInfo.color}>
-                                      <DestIcon className="h-3 w-3 ml-1" />
-                                      {destInfo.label}
+                                    <Badge className={`${destInfo.color} text-[10px] sm:text-xs`}>
+                                      <DestIcon className="h-2 w-2 sm:h-3 sm:w-3 ml-1" />
+                                      <span className="hidden sm:inline">{destInfo.label}</span>
                                     </Badge>
                                   </TableCell>
-                                  <TableCell>
+                                  <TableCell className="hidden sm:table-cell">
                                     {isSweetsCategory(batch.productCategory) && batch.status ? (
-                                      <Badge className={batch.status === "finished" ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"}>
+                                      <Badge className={`${batch.status === "finished" ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"} text-[10px] sm:text-xs`}>
                                         {batch.status === "finished" ? (
-                                          <><Check className="h-3 w-3 ml-1" />مكتمل</>
+                                          <><Check className="h-2 w-2 sm:h-3 sm:w-3 ml-1" /><span className="hidden sm:inline">مكتمل</span></>
                                         ) : (
-                                          <><Timer className="h-3 w-3 ml-1" />قيد التحضير</>
+                                          <><Timer className="h-2 w-2 sm:h-3 sm:w-3 ml-1" /><span className="hidden sm:inline">قيد التحضير</span></>
                                         )}
                                       </Badge>
                                     ) : (
                                       <span className="text-muted-foreground text-xs">-</span>
                                     )}
                                   </TableCell>
-                                  <TableCell>
+                                  <TableCell className="hidden lg:table-cell">
                                     {batch.chefName ? (
-                                      <Badge variant="outline" className="gap-1 text-xs">
-                                        <ChefHat className="h-3 w-3" />
+                                      <Badge variant="outline" className="gap-1 text-[10px] sm:text-xs">
+                                        <ChefHat className="h-2 w-2 sm:h-3 sm:w-3" />
                                         {batch.chefName}
                                       </Badge>
                                     ) : (
                                       <span className="text-muted-foreground text-xs">-</span>
                                     )}
                                   </TableCell>
-                                  <TableCell>
-                                    <Badge variant="secondary" className="gap-1 text-xs">
-                                      <User className="h-3 w-3" />
+                                  <TableCell className="hidden md:table-cell">
+                                    <Badge variant="secondary" className="gap-1 text-[10px] sm:text-xs">
+                                      <User className="h-2 w-2 sm:h-3 sm:w-3" />
                                       {batch.recorderName || "-"}
                                     </Badge>
                                   </TableCell>
@@ -1499,21 +1500,21 @@ export default function DailyProductionPage() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-4">
+                    <div className="space-y-3 sm:space-y-4">
                       {Object.entries(batchesByHour)
                         .sort(([a], [b]) => a.localeCompare(b))
                         .map(([hour, hourBatches]) => (
-                          <div key={hour} className="border-r-4 border-indigo-500 pr-4">
-                            <div className="flex items-center gap-3 mb-2">
-                              <Badge className="bg-indigo-100 text-indigo-800 text-sm px-3 py-1">
-                                <Clock className="h-3 w-3 ml-1" />
+                          <div key={hour} className="border-r-4 border-indigo-500 pr-2 sm:pr-4">
+                            <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
+                              <Badge className="bg-indigo-100 text-indigo-800 text-xs sm:text-sm px-2 sm:px-3 py-1">
+                                <Clock className="h-2 w-2 sm:h-3 sm:w-3 ml-1" />
                                 {HOUR_LABELS[hour] || `${hour}:00`}
                               </Badge>
-                              <span className="text-sm text-muted-foreground">
+                              <span className="text-xs sm:text-sm text-muted-foreground">
                                 {hourBatches.length} دفعة - {hourBatches.reduce((s, b) => s + b.quantity, 0)} قطعة
                               </span>
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                               {hourBatches.map((batch) => {
                                 const destInfo = getDestinationInfo(batch.destination);
                                 const DestIcon = destInfo.icon;
@@ -1568,7 +1569,7 @@ export default function DailyProductionPage() {
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-6">
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-lg">

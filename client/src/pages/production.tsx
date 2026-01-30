@@ -325,7 +325,7 @@ export default function ProductionPage() {
         )}
 
         {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4">
             {[1, 2, 3, 4, 5, 6].map(i => (
               <Skeleton key={i} className="h-52" />
             ))}
@@ -342,69 +342,69 @@ export default function ProductionPage() {
           </Card>
         ) : (
           <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4">
             {filteredOrders?.slice((currentPage - 1) * 10, currentPage * 10).map(order => {
               const StatusIcon = ORDER_STATUS[order.status as keyof typeof ORDER_STATUS]?.icon || Clock;
               return (
                 <Card key={order.id} data-testid={`order-card-${order.id}`}>
-                  <CardHeader className="pb-2">
+                  <CardHeader className="p-3 sm:p-4 md:p-6 pb-2">
                     <div className="flex items-start justify-between">
                       <div>
-                        <CardTitle className="text-base flex items-center gap-2">
-                          <Factory className="w-4 h-4" />
+                        <CardTitle className="text-sm sm:text-base flex items-center gap-1 sm:gap-2">
+                          <Factory className="w-3 h-3 sm:w-4 sm:h-4" />
                           {getProductName(order.productId)}
                         </CardTitle>
-                        <CardDescription className="text-xs mt-1">
+                        <CardDescription className="text-[10px] sm:text-xs mt-1">
                           {order.orderNumber}
                         </CardDescription>
                       </div>
                       <div className="flex flex-col gap-1 items-end">
-                        <Badge className={ORDER_STATUS[order.status as keyof typeof ORDER_STATUS]?.color || "bg-gray-100"}>
-                          <StatusIcon className="w-3 h-3 ml-1" />
+                        <Badge className={`${ORDER_STATUS[order.status as keyof typeof ORDER_STATUS]?.color || "bg-gray-100"} text-[10px] sm:text-xs`}>
+                          <StatusIcon className="w-2 h-2 sm:w-3 sm:h-3 ml-1" />
                           {ORDER_STATUS[order.status as keyof typeof ORDER_STATUS]?.label || order.status}
                         </Badge>
                         {order.priority !== 'normal' && (
-                          <Badge className={PRIORITY[order.priority as keyof typeof PRIORITY]?.color || "bg-gray-100"} variant="outline">
+                          <Badge className={`${PRIORITY[order.priority as keyof typeof PRIORITY]?.color || "bg-gray-100"} text-[10px] sm:text-xs`} variant="outline">
                             {PRIORITY[order.priority as keyof typeof PRIORITY]?.label}
                           </Badge>
                         )}
                       </div>
                     </div>
                   </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="text-sm text-muted-foreground">
+                  <CardContent className="p-3 sm:p-4 md:p-6 pt-0 space-y-2 sm:space-y-3">
+                    <div className="text-xs sm:text-sm text-muted-foreground">
                       {getBranchName(order.branchId)}
                     </div>
-                    <div className="grid grid-cols-3 gap-2 text-center">
-                      <div className="bg-secondary/50 rounded p-2">
-                        <div className="text-lg font-bold">{order.targetQuantity}</div>
-                        <div className="text-xs text-muted-foreground">مطلوب</div>
+                    <div className="grid grid-cols-3 gap-1 sm:gap-2 text-center">
+                      <div className="bg-secondary/50 rounded p-1.5 sm:p-2">
+                        <div className="text-sm sm:text-lg font-bold">{order.targetQuantity}</div>
+                        <div className="text-[10px] sm:text-xs text-muted-foreground">مطلوب</div>
                       </div>
-                      <div className="bg-green-100 rounded p-2">
-                        <div className="text-lg font-bold text-green-700">{order.producedQuantity || 0}</div>
-                        <div className="text-xs text-muted-foreground">منتج</div>
+                      <div className="bg-green-100 rounded p-1.5 sm:p-2">
+                        <div className="text-sm sm:text-lg font-bold text-green-700">{order.producedQuantity || 0}</div>
+                        <div className="text-[10px] sm:text-xs text-muted-foreground">منتج</div>
                       </div>
-                      <div className="bg-red-100 rounded p-2">
-                        <div className="text-lg font-bold text-red-700">{order.wastedQuantity || 0}</div>
-                        <div className="text-xs text-muted-foreground">هالك</div>
+                      <div className="bg-red-100 rounded p-1.5 sm:p-2">
+                        <div className="text-sm sm:text-lg font-bold text-red-700">{order.wastedQuantity || 0}</div>
+                        <div className="text-[10px] sm:text-xs text-muted-foreground">هالك</div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-[10px] sm:text-xs text-muted-foreground">
                       <div className="flex items-center gap-1">
-                        <Calendar className="w-3 h-3" />
+                        <Calendar className="w-2 h-2 sm:w-3 sm:h-3" />
                         {order.scheduledDate}
                       </div>
                       {order.assignedTo && (
-                        <span>الخباز: {order.assignedTo}</span>
+                        <span className="hidden sm:inline">الخباز: {order.assignedTo}</span>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 pt-2 border-t">
+                    <div className="flex flex-wrap items-center gap-1 sm:gap-2 pt-2 border-t">
                       {order.status === 'pending' && (
                         <Button 
                           variant="outline" 
                           size="sm" 
                           onClick={() => handleStatusChange(order, 'in_progress')}
-                          className="text-blue-600 h-11 sm:h-9"
+                          className="text-blue-600 h-8 sm:h-9 text-xs sm:text-sm flex-1 sm:flex-none"
                         >
                           <Play className="w-3 h-3 ml-1" />
                           بدء
@@ -415,13 +415,13 @@ export default function ProductionPage() {
                           variant="outline" 
                           size="sm" 
                           onClick={() => handleStatusChange(order, 'completed')}
-                          className="text-green-600 h-11 sm:h-9"
+                          className="text-green-600 h-8 sm:h-9 text-xs sm:text-sm flex-1 sm:flex-none"
                         >
                           <CheckCircle className="w-3 h-3 ml-1" />
                           إكمال
                         </Button>
                       )}
-                      <Button variant="outline" size="sm" className="text-destructive h-11 sm:h-9" onClick={() => deleteMutation.mutate(order.id)}>
+                      <Button variant="outline" size="sm" className="text-destructive h-8 sm:h-9 text-xs sm:text-sm flex-1 sm:flex-none" onClick={() => deleteMutation.mutate(order.id)}>
                         <Trash2 className="w-3 h-3 ml-1" />
                         حذف
                       </Button>

@@ -372,30 +372,30 @@ export default function ShareholdersPage() {
 
   return (
     <Layout>
-      <div className="max-w-6xl mx-auto p-4 md:p-8 lg:p-10 space-y-4" dir="rtl">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
+      <div className="max-w-6xl mx-auto p-3 sm:p-4 md:p-6 lg:p-10 space-y-3 sm:space-y-4" dir="rtl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             <Link href="/governance">
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <ChevronLeft className="h-4 w-4" />
+              <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8">
+                <ChevronLeft className="h-3 w-3 sm:h-4 sm:w-4" />
               </Button>
             </Link>
-            <div className="p-3 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl">
-              <BarChart3 className="w-7 h-7 text-white" />
+            <div className="p-2 sm:p-3 bg-gradient-to-br from-amber-500 to-orange-600 rounded-lg sm:rounded-xl">
+              <BarChart3 className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-amber-800" data-testid="page-title">
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-amber-800" data-testid="page-title">
                 بيانات المساهمين
               </h1>
-              <p className="text-gray-600">إدارة الملكية والتصويت والأرباح</p>
+              <p className="text-xs sm:text-sm text-gray-600">إدارة الملكية والتصويت والأرباح</p>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="gap-2">
-                  <Download className="h-4 w-4" />
-                  تصدير
+                <Button variant="outline" size="sm" className="gap-1 sm:gap-2 text-xs sm:text-sm">
+                  <Download className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="hidden sm:inline">تصدير</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -474,9 +474,9 @@ export default function ShareholdersPage() {
               if (!open) setEditingShareholder(null);
             }}>
               <DialogTrigger asChild>
-                <Button className="gap-2 bg-amber-600 hover:bg-amber-700" data-testid="btn-add-shareholder">
-                  <Plus className="h-4 w-4" />
-                  إضافة مساهم
+                <Button size="sm" className="gap-1 sm:gap-2 text-xs sm:text-sm bg-amber-600 hover:bg-amber-700" data-testid="btn-add-shareholder">
+                  <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="hidden xs:inline">إضافة</span> مساهم
                 </Button>
               </DialogTrigger>
               <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -568,87 +568,87 @@ export default function ShareholdersPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-4">
           <Card className="bg-gradient-to-br from-amber-50 to-orange-50 border-amber-200">
-            <CardContent className="p-4">
+            <CardContent className="p-2 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-amber-600">إجمالي المساهمين</p>
-                  <p className="text-2xl font-bold text-amber-800">{shareholders.length}</p>
+                  <p className="text-[10px] sm:text-sm text-amber-600">إجمالي المساهمين</p>
+                  <p className="text-lg sm:text-2xl font-bold text-amber-800">{shareholders.length}</p>
                 </div>
-                <BarChart3 className="h-8 w-8 text-amber-500" />
+                <BarChart3 className="h-5 w-5 sm:h-8 sm:w-8 text-amber-500" />
               </div>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
-            <CardContent className="p-4">
+            <CardContent className="p-2 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-blue-600">إجمالي الأسهم</p>
-                  <p className="text-2xl font-bold text-blue-800">{totalShares.toLocaleString()}</p>
+                  <p className="text-[10px] sm:text-sm text-blue-600">إجمالي الأسهم</p>
+                  <p className="text-lg sm:text-2xl font-bold text-blue-800">{totalShares.toLocaleString()}</p>
                 </div>
-                <TrendingUp className="h-8 w-8 text-blue-500" />
+                <TrendingUp className="h-5 w-5 sm:h-8 sm:w-8 text-blue-500" />
               </div>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-purple-50 to-violet-50 border-purple-200">
-            <CardContent className="p-4">
+            <CardContent className="p-2 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-purple-600">كبار المساهمين (&gt;5%)</p>
-                  <p className="text-2xl font-bold text-purple-800">{majorShareholders.length}</p>
+                  <p className="text-[10px] sm:text-sm text-purple-600">كبار المساهمين (&gt;5%)</p>
+                  <p className="text-lg sm:text-2xl font-bold text-purple-800">{majorShareholders.length}</p>
                 </div>
-                <Crown className="h-8 w-8 text-purple-500" />
+                <Crown className="h-5 w-5 sm:h-8 sm:w-8 text-purple-500" />
               </div>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
-            <CardContent className="p-4">
+            <CardContent className="p-2 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-green-600">أسهم التصويت</p>
-                  <p className="text-2xl font-bold text-green-800">{votingShares.toLocaleString()}</p>
+                  <p className="text-[10px] sm:text-sm text-green-600">أسهم التصويت</p>
+                  <p className="text-lg sm:text-2xl font-bold text-green-800">{votingShares.toLocaleString()}</p>
                 </div>
-                <Vote className="h-8 w-8 text-green-500" />
+                <Vote className="h-5 w-5 sm:h-8 sm:w-8 text-green-500" />
               </div>
             </CardContent>
           </Card>
-          <Card className="bg-gradient-to-br from-pink-50 to-rose-50 border-pink-200">
-            <CardContent className="p-4">
+          <Card className="bg-gradient-to-br from-pink-50 to-rose-50 border-pink-200 col-span-2 sm:col-span-1">
+            <CardContent className="p-2 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-pink-600">الأرباح المستحقة</p>
-                  <p className="text-2xl font-bold text-pink-800">0</p>
+                  <p className="text-[10px] sm:text-sm text-pink-600">الأرباح المستحقة</p>
+                  <p className="text-lg sm:text-2xl font-bold text-pink-800">0</p>
                 </div>
-                <DollarSign className="h-8 w-8 text-pink-500" />
+                <DollarSign className="h-5 w-5 sm:h-8 sm:w-8 text-pink-500" />
               </div>
             </CardContent>
           </Card>
         </div>
 
         <Card className={`border-2 ${isPercentageValid ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-300'}`}>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
+          <CardContent className="p-2 sm:p-4">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2 sm:gap-3">
                 {isPercentageValid ? (
-                  <CheckCircle2 className="h-8 w-8 text-green-600" />
+                  <CheckCircle2 className="h-5 w-5 sm:h-8 sm:w-8 text-green-600" />
                 ) : (
-                  <AlertTriangle className="h-8 w-8 text-red-600" />
+                  <AlertTriangle className="h-5 w-5 sm:h-8 sm:w-8 text-red-600" />
                 )}
                 <div>
-                  <p className={`text-sm font-medium ${isPercentageValid ? 'text-green-700' : 'text-red-700'}`}>
+                  <p className={`text-[10px] sm:text-sm font-medium ${isPercentageValid ? 'text-green-700' : 'text-red-700'}`}>
                     إجمالي نسب الملكية
                   </p>
-                  <p className={`text-xl font-bold ${isPercentageValid ? 'text-green-800' : 'text-red-800'}`}>
+                  <p className={`text-sm sm:text-xl font-bold ${isPercentageValid ? 'text-green-800' : 'text-red-800'}`}>
                     {totalPercentage.toFixed(2)}%
                   </p>
                 </div>
               </div>
               <div className="text-left">
                 {isPercentageValid ? (
-                  <Badge className="bg-green-600 text-white">متوازن (100%)</Badge>
+                  <Badge className="bg-green-600 text-white text-[10px] sm:text-xs">متوازن (100%)</Badge>
                 ) : (
-                  <Badge variant="destructive">
+                  <Badge variant="destructive" className="text-[10px] sm:text-xs">
                     {totalPercentage > 100 ? `زيادة ${(totalPercentage - 100).toFixed(2)}%` : `نقص ${(100 - totalPercentage).toFixed(2)}%`}
                   </Badge>
                 )}
@@ -658,22 +658,22 @@ export default function ShareholdersPage() {
         </Card>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full max-w-xl grid-cols-4">
-            <TabsTrigger value="list" className="gap-2">
-              <User className="h-4 w-4" />
-              القائمة
+          <TabsList className="grid w-full max-w-xl grid-cols-4 h-auto">
+            <TabsTrigger value="list" className="gap-1 sm:gap-2 text-[10px] sm:text-sm py-1.5 sm:py-2 px-1 sm:px-3">
+              <User className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">القائمة</span>
             </TabsTrigger>
-            <TabsTrigger value="analysis" className="gap-2">
-              <PieChartIcon className="h-4 w-4" />
-              التحليل
+            <TabsTrigger value="analysis" className="gap-1 sm:gap-2 text-[10px] sm:text-sm py-1.5 sm:py-2 px-1 sm:px-3">
+              <PieChartIcon className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">التحليل</span>
             </TabsTrigger>
-            <TabsTrigger value="dividends" className="gap-2">
-              <Wallet className="h-4 w-4" />
-              الأرباح
+            <TabsTrigger value="dividends" className="gap-1 sm:gap-2 text-[10px] sm:text-sm py-1.5 sm:py-2 px-1 sm:px-3">
+              <Wallet className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">الأرباح</span>
             </TabsTrigger>
-            <TabsTrigger value="transfers" className="gap-2">
-              <ArrowRightLeft className="h-4 w-4" />
-              التحويلات
+            <TabsTrigger value="transfers" className="gap-1 sm:gap-2 text-[10px] sm:text-sm py-1.5 sm:py-2 px-1 sm:px-3">
+              <ArrowRightLeft className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">التحويلات</span>
             </TabsTrigger>
           </TabsList>
 
@@ -703,16 +703,16 @@ export default function ShareholdersPage() {
             </div>
 
             <Card>
-              <CardContent className="p-0">
-                <Table>
+              <CardContent className="p-0 overflow-x-auto">
+                <Table className="min-w-[700px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="text-right">المساهم</TableHead>
-                      <TableHead className="text-right">التصنيف</TableHead>
+                      <TableHead className="text-right hidden md:table-cell">التصنيف</TableHead>
                       <TableHead className="text-right">عدد الأسهم</TableHead>
                       <TableHead className="text-right">نسبة الملكية</TableHead>
-                      <TableHead className="text-right">قوة التصويت</TableHead>
-                      <TableHead className="text-right">الأرباح المستحقة</TableHead>
+                      <TableHead className="text-right hidden lg:table-cell">قوة التصويت</TableHead>
+                      <TableHead className="text-right hidden lg:table-cell">الأرباح المستحقة</TableHead>
                       <TableHead className="text-right">الإجراءات</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -751,10 +751,10 @@ export default function ShareholdersPage() {
                                 </div>
                               </div>
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="hidden md:table-cell">
                               {getCategoryBadge(percentage, shareholder.shareholderType)}
                             </TableCell>
-                            <TableCell className="font-medium">
+                            <TableCell className="font-medium text-sm">
                               {shareholder.numberOfShares?.toLocaleString()}
                             </TableCell>
                             <TableCell>
@@ -765,17 +765,17 @@ export default function ShareholdersPage() {
                                 <Progress value={percentage} className="h-2" />
                               </div>
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="hidden lg:table-cell">
                               {shareholder.votingRights ? (
                                 <div className="flex items-center gap-1 text-green-600">
                                   <Vote className="h-4 w-4" />
                                   <span className="font-medium">{percentage.toFixed(2)}%</span>
                                 </div>
                               ) : (
-                                <Badge variant="outline" className="text-gray-500">لا يصوت</Badge>
+                                <Badge variant="outline" className="text-gray-500 text-[10px] sm:text-xs">لا يصوت</Badge>
                               )}
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="hidden lg:table-cell">
                               <span className="text-gray-400">0 ر.س</span>
                             </TableCell>
                             <TableCell>
@@ -826,7 +826,7 @@ export default function ShareholdersPage() {
           </TabsContent>
 
           <TabsContent value="analysis" className="mt-6 space-y-4">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 sm:gap-4">
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center gap-2">
@@ -894,36 +894,36 @@ export default function ShareholdersPage() {
               </Card>
 
               <Card className="lg:col-span-2">
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <Crown className="h-5 w-5 text-amber-600" />
+                <CardHeader className="pb-2 sm:pb-6">
+                  <CardTitle className="text-sm sm:text-lg flex items-center gap-2">
+                    <Crown className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600" />
                     تحليل تركز الملكية
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-amber-50 p-4 rounded-lg text-center">
-                      <p className="text-sm text-amber-600 mb-1">أكبر مساهم</p>
-                      <p className="text-2xl font-bold text-amber-800">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4">
+                    <div className="bg-amber-50 p-2 sm:p-4 rounded-lg text-center">
+                      <p className="text-[10px] sm:text-sm text-amber-600 mb-1">أكبر مساهم</p>
+                      <p className="text-lg sm:text-2xl font-bold text-amber-800">
                         {top10Shareholders[0] ? `${Number(top10Shareholders[0].sharePercentage).toFixed(1)}%` : "-"}
                       </p>
-                      <p className="text-sm text-gray-600 mt-1">
+                      <p className="text-[10px] sm:text-sm text-gray-600 mt-1 truncate">
                         {top10Shareholders[0]?.fullName || "-"}
                       </p>
                     </div>
-                    <div className="bg-blue-50 p-4 rounded-lg text-center">
-                      <p className="text-sm text-blue-600 mb-1">أكبر 5 مساهمين</p>
-                      <p className="text-2xl font-bold text-blue-800">
+                    <div className="bg-blue-50 p-2 sm:p-4 rounded-lg text-center">
+                      <p className="text-[10px] sm:text-sm text-blue-600 mb-1">أكبر 5 مساهمين</p>
+                      <p className="text-lg sm:text-2xl font-bold text-blue-800">
                         {concentrationData[0]?.value.toFixed(1) || 0}%
                       </p>
-                      <p className="text-sm text-gray-600 mt-1">من إجمالي الملكية</p>
+                      <p className="text-[10px] sm:text-sm text-gray-600 mt-1">من إجمالي الملكية</p>
                     </div>
-                    <div className="bg-green-50 p-4 rounded-lg text-center">
-                      <p className="text-sm text-green-600 mb-1">تنوع الملكية</p>
-                      <p className="text-2xl font-bold text-green-800">
+                    <div className="bg-green-50 p-2 sm:p-4 rounded-lg text-center">
+                      <p className="text-[10px] sm:text-sm text-green-600 mb-1">تنوع الملكية</p>
+                      <p className="text-lg sm:text-2xl font-bold text-green-800">
                         {shareholders.length > 0 ? (100 - concentrationData[0]?.value).toFixed(1) : 0}%
                       </p>
-                      <p className="text-sm text-gray-600 mt-1">موزعة على باقي المساهمين</p>
+                      <p className="text-[10px] sm:text-sm text-gray-600 mt-1">موزعة على باقي المساهمين</p>
                     </div>
                   </div>
                 </CardContent>

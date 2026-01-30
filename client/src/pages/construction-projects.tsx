@@ -183,7 +183,7 @@ export default function ConstructionProjectsPage() {
   const getStatusBadge = (status: string) => {
     const statusInfo = PROJECT_STATUSES.find((s) => s.value === status);
     return (
-      <Badge className={`${statusInfo?.color || "bg-gray-500"} text-white`}>
+      <Badge className={`${statusInfo?.color || "bg-gray-500"} text-white text-[10px] sm:text-xs`}>
         {statusInfo?.label || status}
       </Badge>
     );
@@ -280,10 +280,10 @@ export default function ConstructionProjectsPage() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4">
             {filteredProjects.map((project) => (
               <Card key={project.id} className="hover:shadow-lg transition-shadow" data-testid={`card-project-${project.id}`}>
-                <CardHeader className="pb-2">
+                <CardHeader className="p-3 sm:p-4 md:p-6 pb-2">
                   <div className="flex items-start justify-between">
                     <CardTitle className="text-lg">{project.title}</CardTitle>
                     {getStatusBadge(project.status)}
@@ -293,7 +293,7 @@ export default function ConstructionProjectsPage() {
                     {getBranchName(project.branchId)}
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="p-3 sm:p-4 md:p-6 pt-0 space-y-3 sm:space-y-4">
                   {project.description && (
                     <p className="text-sm text-muted-foreground line-clamp-2">{project.description}</p>
                   )}

@@ -250,8 +250,8 @@ export default function ContractorsPage() {
                   <TableRow>
                     <TableHead>الاسم</TableHead>
                     <TableHead>التخصص</TableHead>
-                    <TableHead>الهاتف</TableHead>
-                    <TableHead>البريد الإلكتروني</TableHead>
+                    <TableHead className="hidden md:table-cell">الهاتف</TableHead>
+                    <TableHead className="hidden lg:table-cell">البريد الإلكتروني</TableHead>
                     <TableHead>التقييم</TableHead>
                     {canEdit && <TableHead>إجراءات</TableHead>}
                   </TableRow>
@@ -265,20 +265,20 @@ export default function ContractorsPage() {
                           <span className="font-medium">{contractor.name}</span>
                         </div>
                       </TableCell>
-                      <TableCell>{contractor.specialization || "-"}</TableCell>
-                      <TableCell>
+                      <TableCell className="text-xs sm:text-sm">{contractor.specialization || "-"}</TableCell>
+                      <TableCell className="hidden md:table-cell">
                         {contractor.phone ? (
                           <div className="flex items-center gap-1">
                             <Phone className="w-3 h-3 text-muted-foreground" />
-                            <span dir="ltr">{contractor.phone}</span>
+                            <span dir="ltr" className="text-xs sm:text-sm">{contractor.phone}</span>
                           </div>
                         ) : "-"}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="hidden lg:table-cell">
                         {contractor.email ? (
                           <div className="flex items-center gap-1">
                             <Mail className="w-3 h-3 text-muted-foreground" />
-                            <span>{contractor.email}</span>
+                            <span className="text-xs sm:text-sm">{contractor.email}</span>
                           </div>
                         ) : "-"}
                       </TableCell>

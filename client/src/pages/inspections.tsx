@@ -207,38 +207,38 @@ export default function InspectionsPage() {
           </Select>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4">
           <Card className="bg-red-50/50 border-red-200">
-            <CardHeader className="pb-2">
-              <CardDescription className="flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-red-500" />
+            <CardHeader className="p-3 sm:p-4 md:p-6 pb-2">
+              <CardDescription className="flex items-center gap-2 text-xs sm:text-sm">
+                <AlertTriangle className="w-3 h-3 sm:w-4 sm:h-4 text-red-500" />
                 تحتاج فحص فوري
               </CardDescription>
-              <CardTitle className="text-3xl text-red-600 font-mono" data-testid="text-overdue-count">
+              <CardTitle className="text-xl sm:text-2xl md:text-3xl text-red-600 font-mono" data-testid="text-overdue-count">
                 {itemsNeedingInspection.length}
               </CardTitle>
             </CardHeader>
           </Card>
 
           <Card className="bg-yellow-50/50 border-yellow-200">
-            <CardHeader className="pb-2">
-              <CardDescription className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-yellow-500" />
+            <CardHeader className="p-3 sm:p-4 md:p-6 pb-2">
+              <CardDescription className="flex items-center gap-2 text-xs sm:text-sm">
+                <Clock className="w-3 h-3 sm:w-4 sm:h-4 text-yellow-500" />
                 مجدولة للفحص
               </CardDescription>
-              <CardTitle className="text-3xl text-yellow-600 font-mono" data-testid="text-scheduled-count">
+              <CardTitle className="text-xl sm:text-2xl md:text-3xl text-yellow-600 font-mono" data-testid="text-scheduled-count">
                 {scheduledItems.length}
               </CardTitle>
             </CardHeader>
           </Card>
 
           <Card className="bg-gray-50/50 border-gray-200">
-            <CardHeader className="pb-2">
-              <CardDescription className="flex items-center gap-2">
-                <CalendarDays className="w-4 h-4 text-gray-500" />
+            <CardHeader className="p-3 sm:p-4 md:p-6 pb-2">
+              <CardDescription className="flex items-center gap-2 text-xs sm:text-sm">
+                <CalendarDays className="w-3 h-3 sm:w-4 sm:h-4 text-gray-500" />
                 بدون جدولة
               </CardDescription>
-              <CardTitle className="text-3xl text-gray-600 font-mono" data-testid="text-unscheduled-count">
+              <CardTitle className="text-xl sm:text-2xl md:text-3xl text-gray-600 font-mono" data-testid="text-unscheduled-count">
                 {unscheduledItems.length}
               </CardTitle>
             </CardHeader>
@@ -254,12 +254,12 @@ export default function InspectionsPage() {
               </CardTitle>
               <CardDescription>هذه الأصول تجاوزت موعد الفحص المحدد</CardDescription>
             </CardHeader>
-            <CardContent className="p-0">
-              <Table>
+            <CardContent className="p-0 overflow-x-auto">
+              <Table className="min-w-[600px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-right">الأصل</TableHead>
-                    <TableHead className="text-right">الفرع</TableHead>
+                    <TableHead className="text-right hidden md:table-cell">الفرع</TableHead>
                     <TableHead className="text-right">تاريخ الفحص المستحق</TableHead>
                     <TableHead className="text-right">التأخير</TableHead>
                     <TableHead className="text-right">الإجراءات</TableHead>
@@ -273,11 +273,11 @@ export default function InspectionsPage() {
                     
                     return (
                       <TableRow key={item.id} className="bg-red-50/30" data-testid={`row-overdue-${item.id}`}>
-                        <TableCell className="font-medium">{item.name}</TableCell>
-                        <TableCell>{branchMap[item.branchId]}</TableCell>
-                        <TableCell>{dueDate.toLocaleDateString('en-GB')}</TableCell>
+                        <TableCell className="font-medium text-xs sm:text-sm">{item.name}</TableCell>
+                        <TableCell className="hidden md:table-cell text-xs sm:text-sm">{branchMap[item.branchId]}</TableCell>
+                        <TableCell className="text-xs sm:text-sm">{dueDate.toLocaleDateString('en-GB')}</TableCell>
                         <TableCell>
-                          <Badge variant="destructive">{diffDays} يوم</Badge>
+                          <Badge variant="destructive" className="text-[10px] sm:text-xs">{diffDays} يوم</Badge>
                         </TableCell>
                         <TableCell>
                           <Button 
@@ -308,19 +308,19 @@ export default function InspectionsPage() {
             </CardTitle>
             <CardDescription>أصول لها مواعيد فحص قادمة</CardDescription>
           </CardHeader>
-          <CardContent className="p-0">
+          <CardContent className="p-0 overflow-x-auto">
             {scheduledItems.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 لا توجد أصول مجدولة للفحص
               </div>
             ) : (
-              <Table>
+              <Table className="min-w-[600px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-right">الأصل</TableHead>
-                    <TableHead className="text-right">الفرع</TableHead>
+                    <TableHead className="text-right hidden md:table-cell">الفرع</TableHead>
                     <TableHead className="text-right">موعد الفحص القادم</TableHead>
-                    <TableHead className="text-right">الفترة</TableHead>
+                    <TableHead className="text-right hidden sm:table-cell">الفترة</TableHead>
                     <TableHead className="text-right">الإجراءات</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -330,11 +330,11 @@ export default function InspectionsPage() {
                     
                     return (
                       <TableRow key={item.id} data-testid={`row-scheduled-${item.id}`}>
-                        <TableCell className="font-medium">{item.name}</TableCell>
-                        <TableCell>{branchMap[item.branchId]}</TableCell>
-                        <TableCell>{nextDate.toLocaleDateString('en-GB')}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">كل {item.inspectionIntervalDays || 30} يوم</Badge>
+                        <TableCell className="font-medium text-xs sm:text-sm">{item.name}</TableCell>
+                        <TableCell className="hidden md:table-cell text-xs sm:text-sm">{branchMap[item.branchId]}</TableCell>
+                        <TableCell className="text-xs sm:text-sm">{nextDate.toLocaleDateString('en-GB')}</TableCell>
+                        <TableCell className="hidden sm:table-cell">
+                          <Badge variant="outline" className="text-[10px] sm:text-xs">كل {item.inspectionIntervalDays || 30} يوم</Badge>
                         </TableCell>
                         <TableCell>
                           <Button 
@@ -368,27 +368,27 @@ export default function InspectionsPage() {
             </CardTitle>
             <CardDescription>يمكنك إضافة جدولة فحص دوري لهذه الأصول</CardDescription>
           </CardHeader>
-          <CardContent className="p-0">
+          <CardContent className="p-0 overflow-x-auto">
             {unscheduledItems.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 جميع الأصول لها جدولة فحص
               </div>
             ) : (
-              <Table>
+              <Table className="min-w-[500px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-right">الأصل</TableHead>
-                    <TableHead className="text-right">الفرع</TableHead>
-                    <TableHead className="text-right">الفئة</TableHead>
+                    <TableHead className="text-right hidden md:table-cell">الفرع</TableHead>
+                    <TableHead className="text-right hidden sm:table-cell">الفئة</TableHead>
                     <TableHead className="text-right">الإجراءات</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {unscheduledItems.slice(0, 20).map(item => (
                     <TableRow key={item.id} data-testid={`row-unscheduled-${item.id}`}>
-                      <TableCell className="font-medium">{item.name}</TableCell>
-                      <TableCell>{branchMap[item.branchId]}</TableCell>
-                      <TableCell>{item.category}</TableCell>
+                      <TableCell className="font-medium text-xs sm:text-sm">{item.name}</TableCell>
+                      <TableCell className="hidden md:table-cell text-xs sm:text-sm">{branchMap[item.branchId]}</TableCell>
+                      <TableCell className="hidden sm:table-cell text-xs sm:text-sm">{item.category}</TableCell>
                       <TableCell>
                         <Button 
                           size="sm"

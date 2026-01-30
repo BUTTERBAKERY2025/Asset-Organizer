@@ -188,30 +188,30 @@ export default function MeetingsPage() {
 
   return (
     <Layout>
-      <div className="max-w-6xl mx-auto p-4 md:p-8 lg:p-10 space-y-4" dir="rtl">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
+      <div className="max-w-6xl mx-auto p-3 sm:p-4 md:p-6 lg:p-10 space-y-3 sm:space-y-4" dir="rtl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             <Link href="/governance">
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <ChevronLeft className="h-4 w-4" />
+              <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8">
+                <ChevronLeft className="h-3 w-3 sm:h-4 sm:w-4" />
               </Button>
             </Link>
-            <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl">
-              <Building2 className="w-7 h-7 text-white" />
+            <div className="p-2 sm:p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg sm:rounded-xl">
+              <Building2 className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-blue-800" data-testid="page-title">
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-blue-800" data-testid="page-title">
                 الاجتماعات والجمعيات
               </h1>
-              <p className="text-gray-600">إدارة جدول الأعمال والمستندات والحضور</p>
+              <p className="text-xs sm:text-sm text-gray-600">إدارة جدول الأعمال والمستندات والحضور</p>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="gap-2">
-                  <Download className="h-4 w-4" />
-                  تصدير
+                <Button variant="outline" size="sm" className="gap-1 sm:gap-2 text-xs sm:text-sm">
+                  <Download className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="hidden sm:inline">تصدير</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -259,15 +259,15 @@ export default function MeetingsPage() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button variant="outline" className="gap-2">
-              <Calendar className="h-4 w-4" />
-              عرض التقويم
+            <Button variant="outline" size="sm" className="gap-1 sm:gap-2 text-xs sm:text-sm hidden sm:flex">
+              <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden md:inline">عرض التقويم</span>
             </Button>
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
-                <Button className="gap-2 bg-blue-600 hover:bg-blue-700" data-testid="btn-add-meeting">
-                  <Plus className="h-4 w-4" />
-                  اجتماع جديد
+                <Button size="sm" className="gap-1 sm:gap-2 text-xs sm:text-sm bg-blue-600 hover:bg-blue-700" data-testid="btn-add-meeting">
+                  <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="hidden xs:inline">اجتماع</span> جديد
                 </Button>
               </DialogTrigger>
               <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -347,70 +347,70 @@ export default function MeetingsPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
           <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
-            <CardContent className="p-4">
+            <CardContent className="p-2 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-blue-600">اجتماعات قادمة</p>
-                  <p className="text-2xl font-bold text-blue-800">{upcomingMeetings.length}</p>
+                  <p className="text-[10px] sm:text-sm text-blue-600">اجتماعات قادمة</p>
+                  <p className="text-lg sm:text-2xl font-bold text-blue-800">{upcomingMeetings.length}</p>
                 </div>
-                <Calendar className="h-8 w-8 text-blue-500" />
+                <Calendar className="h-5 w-5 sm:h-8 sm:w-8 text-blue-500" />
               </div>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
-            <CardContent className="p-4">
+            <CardContent className="p-2 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-green-600">مكتملة هذا العام</p>
-                  <p className="text-2xl font-bold text-green-800">{pastMeetings.length}</p>
+                  <p className="text-[10px] sm:text-sm text-green-600">مكتملة هذا العام</p>
+                  <p className="text-lg sm:text-2xl font-bold text-green-800">{pastMeetings.length}</p>
                 </div>
-                <CheckCircle className="h-8 w-8 text-green-500" />
+                <CheckCircle className="h-5 w-5 sm:h-8 sm:w-8 text-green-500" />
               </div>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-purple-50 to-violet-50 border-purple-200">
-            <CardContent className="p-4">
+            <CardContent className="p-2 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-purple-600">معدل الحضور</p>
-                  <p className="text-2xl font-bold text-purple-800">85%</p>
+                  <p className="text-[10px] sm:text-sm text-purple-600">معدل الحضور</p>
+                  <p className="text-lg sm:text-2xl font-bold text-purple-800">85%</p>
                 </div>
-                <UserCheck className="h-8 w-8 text-purple-500" />
+                <UserCheck className="h-5 w-5 sm:h-8 sm:w-8 text-purple-500" />
               </div>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-amber-50 to-yellow-50 border-amber-200">
-            <CardContent className="p-4">
+            <CardContent className="p-2 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-amber-600">قرارات معلقة</p>
-                  <p className="text-2xl font-bold text-amber-800">0</p>
+                  <p className="text-[10px] sm:text-sm text-amber-600">قرارات معلقة</p>
+                  <p className="text-lg sm:text-2xl font-bold text-amber-800">0</p>
                 </div>
-                <FileText className="h-8 w-8 text-amber-500" />
+                <FileText className="h-5 w-5 sm:h-8 sm:w-8 text-amber-500" />
               </div>
             </CardContent>
           </Card>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full max-w-lg grid-cols-4">
-            <TabsTrigger value="upcoming" className="gap-2">
-              <Calendar className="h-4 w-4" />
-              قادمة ({upcomingMeetings.length})
+          <TabsList className="grid w-full max-w-lg grid-cols-4 h-auto">
+            <TabsTrigger value="upcoming" className="gap-1 sm:gap-2 text-[10px] sm:text-sm py-1.5 sm:py-2 px-1 sm:px-3">
+              <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">قادمة</span> ({upcomingMeetings.length})
             </TabsTrigger>
-            <TabsTrigger value="past" className="gap-2">
-              <History className="h-4 w-4" />
-              سابقة ({pastMeetings.length})
+            <TabsTrigger value="past" className="gap-1 sm:gap-2 text-[10px] sm:text-sm py-1.5 sm:py-2 px-1 sm:px-3">
+              <History className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">سابقة</span> ({pastMeetings.length})
             </TabsTrigger>
-            <TabsTrigger value="cancelled" className="gap-2">
-              <XCircle className="h-4 w-4" />
-              ملغية ({cancelledMeetings.length})
+            <TabsTrigger value="cancelled" className="gap-1 sm:gap-2 text-[10px] sm:text-sm py-1.5 sm:py-2 px-1 sm:px-3">
+              <XCircle className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">ملغية</span> ({cancelledMeetings.length})
             </TabsTrigger>
-            <TabsTrigger value="all" className="gap-2">
-              <ClipboardList className="h-4 w-4" />
-              الكل ({meetings.length})
+            <TabsTrigger value="all" className="gap-1 sm:gap-2 text-[10px] sm:text-sm py-1.5 sm:py-2 px-1 sm:px-3">
+              <ClipboardList className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">الكل</span> ({meetings.length})
             </TabsTrigger>
           </TabsList>
 
@@ -432,24 +432,24 @@ export default function MeetingsPage() {
               <div className="grid gap-4">
                 {getMeetingsByTab().map((meeting) => (
                   <Card key={meeting.id} className="hover:shadow-lg transition-shadow" data-testid={`meeting-card-${meeting.id}`}>
-                    <CardContent className="p-4">
-                      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                    <CardContent className="p-3 sm:p-4">
+                      <div className="flex flex-col gap-3 sm:gap-4">
                         <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2 flex-wrap">
-                            <Badge className={meetingTypes.find(t => t.value === meeting.meetingType)?.color}>
+                          <div className="flex items-center gap-1 sm:gap-2 mb-2 flex-wrap">
+                            <Badge className={`${meetingTypes.find(t => t.value === meeting.meetingType)?.color} text-[10px] sm:text-xs`}>
                               {meetingTypes.find(t => t.value === meeting.meetingType)?.label}
                             </Badge>
                             {getStatusBadge(meeting.status || "scheduled")}
                             {meeting.locationType && (
-                              <Badge variant="outline" className="gap-1">
-                                {meeting.locationType === 'virtual' && <Video className="h-3 w-3" />}
-                                {meeting.locationType === 'in_person' && <MapPin className="h-3 w-3" />}
+                              <Badge variant="outline" className="gap-1 text-[10px] sm:text-xs hidden sm:flex">
+                                {meeting.locationType === 'virtual' && <Video className="h-2.5 w-2.5 sm:h-3 sm:w-3" />}
+                                {meeting.locationType === 'in_person' && <MapPin className="h-2.5 w-2.5 sm:h-3 sm:w-3" />}
                                 {locationTypes.find(l => l.value === meeting.locationType)?.label}
                               </Badge>
                             )}
                           </div>
-                          <h3 className="font-semibold text-lg mb-2">{meeting.title}</h3>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm text-gray-600">
+                          <h3 className="font-semibold text-sm sm:text-lg mb-2">{meeting.title}</h3>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 text-xs sm:text-sm text-gray-600">
                             <div className="flex items-center gap-1">
                               <Calendar className="h-4 w-4 text-blue-500" />
                               <span>{formatDate(meeting.meetingDate)}</span>
@@ -472,54 +472,54 @@ export default function MeetingsPage() {
                             </div>
                           </div>
                         </div>
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap gap-1 sm:gap-2 pt-2 border-t">
                           <Button
                             variant="outline"
                             size="sm"
-                            className="gap-1"
+                            className="gap-1 text-xs h-7 sm:h-8 px-2 sm:px-3"
                             onClick={() => {
                               setSelectedMeeting(meeting);
                               setShowMeetingDetails(true);
                             }}
                           >
-                            <Eye className="h-4 w-4" />
-                            عرض
+                            <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
+                            <span className="hidden sm:inline">عرض</span>
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
-                            className="gap-1"
+                            className="gap-1 text-xs h-7 sm:h-8 px-2 sm:px-3"
                             onClick={() => {
                               setSelectedMeeting(meeting);
                               setShowAgendaBuilder(true);
                             }}
                           >
-                            <ListOrdered className="h-4 w-4" />
-                            جدول الأعمال
+                            <ListOrdered className="h-3 w-3 sm:h-4 sm:w-4" />
+                            <span className="hidden sm:inline">جدول الأعمال</span>
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
-                            className="gap-1"
+                            className="gap-1 text-xs h-7 sm:h-8 px-2 sm:px-3 hidden sm:flex"
                             onClick={() => {
                               setSelectedMeeting(meeting);
                               setShowAttendance(true);
                             }}
                           >
-                            <UserCheck className="h-4 w-4" />
-                            الحضور
+                            <UserCheck className="h-3 w-3 sm:h-4 sm:w-4" />
+                            <span className="hidden md:inline">الحضور</span>
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
-                            className="gap-1"
+                            className="gap-1 text-xs h-7 sm:h-8 px-2 sm:px-3 hidden sm:flex"
                             onClick={() => {
                               setSelectedMeeting(meeting);
                               setShowDocuments(true);
                             }}
                           >
-                            <Paperclip className="h-4 w-4" />
-                            المستندات
+                            <Paperclip className="h-3 w-3 sm:h-4 sm:w-4" />
+                            <span className="hidden md:inline">المستندات</span>
                           </Button>
                         </div>
                       </div>

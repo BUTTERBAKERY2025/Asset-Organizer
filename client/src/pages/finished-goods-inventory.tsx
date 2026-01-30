@@ -248,16 +248,16 @@ export default function FinishedGoodsInventoryPage() {
 
   return (
     <Layout>
-      <div className="p-6 max-w-6xl mx-auto space-y-6" dir="rtl">
-        <div className="flex items-center justify-between">
+      <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-4 sm:space-y-6" dir="rtl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Package className="h-6 w-6 text-amber-600" />
+            <h1 className="text-lg sm:text-xl md:text-2xl font-bold flex items-center gap-2">
+              <Package className="h-5 w-5 sm:h-6 sm:w-6 text-amber-600" />
               مخزون الإنتاج النهائي
             </h1>
-            <p className="text-muted-foreground">إدارة وتحويل المنتجات النهائية للفروع أو بار العرض</p>
+            <p className="text-xs sm:text-sm text-muted-foreground">إدارة وتحويل المنتجات النهائية للفروع أو بار العرض</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" data-testid="btn-export">
@@ -299,11 +299,11 @@ export default function FinishedGoodsInventoryPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
               <div>
-                <Label>الفرع</Label>
+                <Label className="text-xs sm:text-sm">الفرع</Label>
                 <Select value={branchId} onValueChange={setBranchId}>
-                  <SelectTrigger data-testid="select-branch">
+                  <SelectTrigger data-testid="select-branch" className="h-10 sm:h-9">
                     <SelectValue placeholder="اختر الفرع" />
                   </SelectTrigger>
                   <SelectContent>
@@ -314,18 +314,19 @@ export default function FinishedGoodsInventoryPage() {
                 </Select>
               </div>
               <div>
-                <Label>تاريخ الإنتاج</Label>
+                <Label className="text-xs sm:text-sm">تاريخ الإنتاج</Label>
                 <Input
                   type="date"
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
                   data-testid="input-date"
+                  className="h-10 sm:h-9"
                 />
               </div>
               <div>
-                <Label>الفئة</Label>
+                <Label className="text-xs sm:text-sm">الفئة</Label>
                 <Select value={categoryFilter || "all"} onValueChange={(val) => setCategoryFilter(val === "all" ? "" : val)}>
-                  <SelectTrigger data-testid="select-category">
+                  <SelectTrigger data-testid="select-category" className="h-10 sm:h-9">
                     <SelectValue placeholder="كل الفئات" />
                   </SelectTrigger>
                   <SelectContent>
@@ -337,14 +338,14 @@ export default function FinishedGoodsInventoryPage() {
                 </Select>
               </div>
               <div>
-                <Label>البحث</Label>
+                <Label className="text-xs sm:text-sm">البحث</Label>
                 <div className="relative">
                   <Search className="absolute right-2 top-2.5 h-4 w-4 text-muted-foreground" />
                   <Input
                     placeholder="ابحث عن منتج..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pr-8"
+                    className="pr-8 h-10 sm:h-9"
                     data-testid="input-search"
                   />
                 </div>
@@ -355,65 +356,69 @@ export default function FinishedGoodsInventoryPage() {
 
         <div ref={printRef} className="print:p-4">
           <Card>
-            <CardHeader className="pb-3">
+            <CardHeader className="p-3 sm:p-4 md:p-6 pb-3">
               <div className="hidden print:block text-center mb-4">
                 <h1 className="text-xl font-bold">مخزون الإنتاج النهائي</h1>
                 <p className="text-sm text-muted-foreground">
                   {branches?.find(b => b.id === branchId)?.name} - {format(new Date(), "yyyy-MM-dd")}
                 </p>
               </div>
-              <CardTitle className="text-lg print:hidden">المخزون المتاح</CardTitle>
-              <CardDescription>
+              <CardTitle className="text-base sm:text-lg print:hidden">المخزون المتاح</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
                 {filteredInventory.length} منتج متاح للتحويل
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
               {isLoading ? (
               <div className="space-y-2">
                 {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
               </div>
             ) : filteredInventory.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
+              <div className="text-center py-8 text-muted-foreground text-sm">
                 لا توجد منتجات في المخزون
               </div>
             ) : (
               <>
-                <Table>
+                <div className="overflow-x-auto">
+                <Table className="min-w-[600px]">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>المنتج</TableHead>
-                      <TableHead>الفئة</TableHead>
-                      <TableHead className="text-center">الكمية</TableHead>
-                      <TableHead>الوحدة</TableHead>
-                      <TableHead>تاريخ الإنتاج</TableHead>
-                      <TableHead className="text-left">إجراءات</TableHead>
+                      <TableHead className="text-xs sm:text-sm">المنتج</TableHead>
+                      <TableHead className="hidden md:table-cell text-xs sm:text-sm">الفئة</TableHead>
+                      <TableHead className="text-center text-xs sm:text-sm">الكمية</TableHead>
+                      <TableHead className="hidden sm:table-cell text-xs sm:text-sm">الوحدة</TableHead>
+                      <TableHead className="hidden md:table-cell text-xs sm:text-sm">تاريخ الإنتاج</TableHead>
+                      <TableHead className="text-left text-xs sm:text-sm">إجراءات</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {paginatedInventory.map((item) => (
                       <TableRow key={item.id} data-testid={`row-inventory-${item.id}`}>
-                        <TableCell className="font-medium">{item.productName}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{item.productCategory || "-"}</Badge>
+                        <TableCell className="font-medium text-xs sm:text-sm">{item.productName}</TableCell>
+                        <TableCell className="hidden md:table-cell">
+                          <Badge variant="outline" className="text-[10px] sm:text-xs">{item.productCategory || "-"}</Badge>
                         </TableCell>
-                        <TableCell className="text-center font-bold text-lg">{item.quantity}</TableCell>
-                        <TableCell>{item.unit}</TableCell>
-                        <TableCell>{item.productionDate}</TableCell>
+                        <TableCell className="text-center font-bold text-sm sm:text-lg">{item.quantity}</TableCell>
+                        <TableCell className="hidden sm:table-cell text-xs sm:text-sm">{item.unit}</TableCell>
+                        <TableCell className="hidden md:table-cell text-xs sm:text-sm">{item.productionDate}</TableCell>
                         <TableCell>
                           <Button
                             size="sm"
                             onClick={() => openTransferDialog(item)}
                             disabled={item.quantity <= 0}
                             data-testid={`btn-transfer-${item.id}`}
+                            className="h-8 sm:h-9 text-xs sm:text-sm"
                           >
-                            <ArrowRight className="h-4 w-4 ml-1" />
-                            تحويل
+                            <ArrowRight className="h-3 w-3 sm:h-4 sm:w-4 ml-1" />
+                            <span className="hidden sm:inline">تحويل</span>
+                            <span className="sm:hidden">نقل</span>
                           </Button>
                         </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
+                </div>
                 {filteredInventory.length > itemsPerPage && (
                   <div className="mt-4">
                     <TablePagination
@@ -431,36 +436,37 @@ export default function FinishedGoodsInventoryPage() {
         </div>
 
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg">آخر التحويلات</CardTitle>
+          <CardHeader className="p-3 sm:p-4 md:p-6 pb-3">
+            <CardTitle className="text-base sm:text-lg">آخر التحويلات</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
             {!transfers || transfers.length === 0 ? (
-              <div className="text-center py-4 text-muted-foreground">
+              <div className="text-center py-4 text-muted-foreground text-sm">
                 لا توجد تحويلات
               </div>
             ) : (
-              <Table>
+              <div className="overflow-x-auto">
+              <Table className="min-w-[600px]">
                 <TableHeader>
                   <TableRow>
-                    <TableHead>المنتج</TableHead>
-                    <TableHead className="text-center">الكمية</TableHead>
-                    <TableHead>الوجهة</TableHead>
-                    <TableHead>الفرع المستهدف</TableHead>
-                    <TableHead>التاريخ</TableHead>
-                    <TableHead>الحالة</TableHead>
+                    <TableHead className="text-xs sm:text-sm">المنتج</TableHead>
+                    <TableHead className="text-center text-xs sm:text-sm">الكمية</TableHead>
+                    <TableHead className="text-xs sm:text-sm">الوجهة</TableHead>
+                    <TableHead className="hidden md:table-cell text-xs sm:text-sm">الفرع المستهدف</TableHead>
+                    <TableHead className="hidden sm:table-cell text-xs sm:text-sm">التاريخ</TableHead>
+                    <TableHead className="text-xs sm:text-sm">الحالة</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {transfers.slice(0, 10).map((transfer) => (
                     <TableRow key={transfer.id} data-testid={`row-transfer-${transfer.id}`}>
-                      <TableCell className="font-medium">{transfer.productName}</TableCell>
-                      <TableCell className="text-center">{transfer.quantity}</TableCell>
-                      <TableCell>{getDestinationLabel(transfer.destinationType)}</TableCell>
-                      <TableCell>{getBranchName(transfer.destinationBranchId)}</TableCell>
-                      <TableCell>{transfer.transferDate}</TableCell>
+                      <TableCell className="font-medium text-xs sm:text-sm">{transfer.productName}</TableCell>
+                      <TableCell className="text-center text-xs sm:text-sm">{transfer.quantity}</TableCell>
+                      <TableCell className="text-xs sm:text-sm">{getDestinationLabel(transfer.destinationType)}</TableCell>
+                      <TableCell className="hidden md:table-cell text-xs sm:text-sm">{getBranchName(transfer.destinationBranchId)}</TableCell>
+                      <TableCell className="hidden sm:table-cell text-xs sm:text-sm">{transfer.transferDate}</TableCell>
                       <TableCell>
-                        <Badge variant={transfer.status === "completed" ? "default" : "secondary"}>
+                        <Badge variant={transfer.status === "completed" ? "default" : "secondary"} className="text-[10px] sm:text-xs">
                           {transfer.status === "completed" ? "مكتمل" : transfer.status}
                         </Badge>
                       </TableCell>
@@ -468,6 +474,7 @@ export default function FinishedGoodsInventoryPage() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             )}
           </CardContent>
         </Card>

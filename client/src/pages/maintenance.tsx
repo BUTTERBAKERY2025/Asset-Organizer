@@ -113,13 +113,13 @@ export default function MaintenancePage() {
   const getStatusBadge = (status?: string | null) => {
     switch(status) {
       case "maintenance": 
-        return <Badge className="bg-orange-100 text-orange-700 border-orange-200 gap-1"><AlertTriangle className="w-3 h-3" /> صيانة</Badge>;
+        return <Badge className="bg-orange-100 text-orange-700 border-orange-200 gap-1 text-[10px] sm:text-xs"><AlertTriangle className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> صيانة</Badge>;
       case "damaged": 
-        return <Badge className="bg-red-100 text-red-700 border-red-200 gap-1"><XCircle className="w-3 h-3" /> تالف</Badge>;
+        return <Badge className="bg-red-100 text-red-700 border-red-200 gap-1 text-[10px] sm:text-xs"><XCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> تالف</Badge>;
       case "missing": 
-        return <Badge className="bg-gray-100 text-gray-700 border-gray-200 gap-1"><HelpCircle className="w-3 h-3" /> مفقود</Badge>;
+        return <Badge className="bg-gray-100 text-gray-700 border-gray-200 gap-1 text-[10px] sm:text-xs"><HelpCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> مفقود</Badge>;
       default: 
-        return <Badge variant="outline">غير محدد</Badge>;
+        return <Badge variant="outline" className="text-[10px] sm:text-xs">غير محدد</Badge>;
     }
   };
 
@@ -166,44 +166,44 @@ export default function MaintenancePage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
           <Card data-testid="card-maintenance-count">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">تحتاج صيانة</CardTitle>
-              <AlertTriangle className="h-4 w-4 text-orange-500" />
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-4 md:p-6 pb-2">
+              <CardTitle className="text-xs sm:text-sm font-medium">تحتاج صيانة</CardTitle>
+              <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4 text-orange-500" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-orange-500">{stats.maintenance}</div>
+            <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+              <div className="text-lg sm:text-2xl font-bold text-orange-500">{stats.maintenance}</div>
             </CardContent>
           </Card>
 
           <Card data-testid="card-damaged-count">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">تالف</CardTitle>
-              <XCircle className="h-4 w-4 text-red-500" />
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-4 md:p-6 pb-2">
+              <CardTitle className="text-xs sm:text-sm font-medium">تالف</CardTitle>
+              <XCircle className="h-3 w-3 sm:h-4 sm:w-4 text-red-500" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-red-500">{stats.damaged}</div>
+            <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+              <div className="text-lg sm:text-2xl font-bold text-red-500">{stats.damaged}</div>
             </CardContent>
           </Card>
 
           <Card data-testid="card-missing-count">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">مفقود</CardTitle>
-              <HelpCircle className="h-4 w-4 text-gray-500" />
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-4 md:p-6 pb-2">
+              <CardTitle className="text-xs sm:text-sm font-medium">مفقود</CardTitle>
+              <HelpCircle className="h-3 w-3 sm:h-4 sm:w-4 text-gray-500" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-gray-500">{stats.missing}</div>
+            <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+              <div className="text-lg sm:text-2xl font-bold text-gray-500">{stats.missing}</div>
             </CardContent>
           </Card>
 
           <Card data-testid="card-undefined-count">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">غير محدد</CardTitle>
-              <HelpCircle className="h-4 w-4 text-blue-500" />
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-4 md:p-6 pb-2">
+              <CardTitle className="text-xs sm:text-sm font-medium">غير محدد</CardTitle>
+              <HelpCircle className="h-3 w-3 sm:h-4 sm:w-4 text-blue-500" />
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-blue-500">{stats.undefined}</div>
+            <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+              <div className="text-lg sm:text-2xl font-bold text-blue-500">{stats.undefined}</div>
             </CardContent>
           </Card>
         </div>
@@ -247,17 +247,17 @@ export default function MaintenancePage() {
                 subtitle={`إجمالي ${problemItems.length} صنف يحتاج متابعة`}
               />
 
-              <div className="rounded-md border">
-                <Table>
+              <div className="rounded-md border overflow-x-auto">
+                <Table className="min-w-[700px]">
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="text-right w-[80px]">المعرف</TableHead>
+                      <TableHead className="text-right w-[80px] hidden md:table-cell">المعرف</TableHead>
                       <TableHead className="text-right">الصنف</TableHead>
-                      <TableHead className="text-right w-[120px]">الفرع</TableHead>
-                      <TableHead className="text-right w-[100px]">الفئة</TableHead>
-                      <TableHead className="text-right w-[80px]">الكمية</TableHead>
+                      <TableHead className="text-right w-[120px] hidden sm:table-cell">الفرع</TableHead>
+                      <TableHead className="text-right w-[100px] hidden lg:table-cell">الفئة</TableHead>
+                      <TableHead className="text-right w-[80px] hidden md:table-cell">الكمية</TableHead>
                       <TableHead className="text-right w-[100px]">الحالة</TableHead>
-                      <TableHead className="text-right print:hidden">ملاحظات</TableHead>
+                      <TableHead className="text-right print:hidden hidden xl:table-cell">ملاحظات</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -270,15 +270,15 @@ export default function MaintenancePage() {
                     ) : (
                       problemItems.map((item) => (
                         <TableRow key={item.id} data-testid={`row-maintenance-${item.id}`}>
-                          <TableCell className="font-mono text-xs">{item.id}</TableCell>
-                          <TableCell className="font-medium">{item.name}</TableCell>
-                          <TableCell className="text-sm">{branchMap[item.branchId]}</TableCell>
-                          <TableCell className="text-sm text-muted-foreground">{item.category}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline">{item.quantity} {item.unit}</Badge>
+                          <TableCell className="font-mono text-xs hidden md:table-cell">{item.id}</TableCell>
+                          <TableCell className="font-medium text-xs sm:text-sm">{item.name}</TableCell>
+                          <TableCell className="text-xs sm:text-sm hidden sm:table-cell">{branchMap[item.branchId]}</TableCell>
+                          <TableCell className="text-xs sm:text-sm text-muted-foreground hidden lg:table-cell">{item.category}</TableCell>
+                          <TableCell className="hidden md:table-cell">
+                            <Badge variant="outline" className="text-[10px] sm:text-xs">{item.quantity} {item.unit}</Badge>
                           </TableCell>
                           <TableCell>{getStatusBadge(item.status)}</TableCell>
-                          <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate print:hidden">
+                          <TableCell className="text-xs sm:text-sm text-muted-foreground max-w-[200px] truncate print:hidden hidden xl:table-cell">
                             {item.notes || "-"}
                           </TableCell>
                         </TableRow>

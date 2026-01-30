@@ -220,22 +220,22 @@ export default function BoardMembersPage() {
 
   return (
     <Layout>
-      <div className="max-w-6xl mx-auto p-4 md:p-8 lg:p-10 space-y-4" dir="rtl">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
+      <div className="max-w-6xl mx-auto p-3 sm:p-4 md:p-6 lg:p-10 space-y-3 sm:space-y-4" dir="rtl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             <Link href="/governance">
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <ChevronLeft className="h-4 w-4" />
+              <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8">
+                <ChevronLeft className="h-3 w-3 sm:h-4 sm:w-4" />
               </Button>
             </Link>
-            <div className="p-3 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl">
-              <Users className="w-7 h-7 text-white" />
+            <div className="p-2 sm:p-3 bg-gradient-to-br from-violet-500 to-purple-600 rounded-lg sm:rounded-xl">
+              <Users className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-violet-800" data-testid="page-title">
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-violet-800" data-testid="page-title">
                 أعضاء مجلس الإدارة
               </h1>
-              <p className="text-gray-600">إدارة الأعضاء واللجان والتدريب والإفصاحات</p>
+              <p className="text-xs sm:text-sm text-gray-600">إدارة الأعضاء واللجان والتدريب والإفصاحات</p>
             </div>
           </div>
           <Dialog open={isDialogOpen} onOpenChange={(open) => {
@@ -243,8 +243,8 @@ export default function BoardMembersPage() {
             if (!open) setEditingMember(null);
           }}>
             <DialogTrigger asChild>
-              <Button className="gap-2 bg-violet-600 hover:bg-violet-700" data-testid="btn-add-member">
-                <Plus className="h-4 w-4" />
+              <Button size="sm" className="gap-1 sm:gap-2 text-xs sm:text-sm bg-violet-600 hover:bg-violet-700" data-testid="btn-add-member">
+                <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
                 إضافة عضو
               </Button>
             </DialogTrigger>
@@ -347,70 +347,70 @@ export default function BoardMembersPage() {
           </Dialog>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
           <Card className="bg-gradient-to-br from-violet-50 to-purple-50 border-violet-200">
-            <CardContent className="p-4">
+            <CardContent className="p-2 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-violet-600">الأعضاء النشطين</p>
-                  <p className="text-2xl font-bold text-violet-800">{activeMembers.length}</p>
+                  <p className="text-[10px] sm:text-sm text-violet-600">الأعضاء النشطين</p>
+                  <p className="text-lg sm:text-2xl font-bold text-violet-800">{activeMembers.length}</p>
                 </div>
-                <Users className="h-8 w-8 text-violet-500" />
+                <Users className="h-5 w-5 sm:h-8 sm:w-8 text-violet-500" />
               </div>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-amber-50 to-yellow-50 border-amber-200">
-            <CardContent className="p-4">
+            <CardContent className="p-2 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-amber-600">قرب انتهاء العضوية</p>
-                  <p className="text-2xl font-bold text-amber-800">{expiringMembers.length}</p>
+                  <p className="text-[10px] sm:text-sm text-amber-600">قرب انتهاء العضوية</p>
+                  <p className="text-lg sm:text-2xl font-bold text-amber-800">{expiringMembers.length}</p>
                 </div>
-                <AlertTriangle className="h-8 w-8 text-amber-500" />
+                <AlertTriangle className="h-5 w-5 sm:h-8 sm:w-8 text-amber-500" />
               </div>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
-            <CardContent className="p-4">
+            <CardContent className="p-2 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-blue-600">اللجان الفرعية</p>
-                  <p className="text-2xl font-bold text-blue-800">{committeeTypes.length}</p>
+                  <p className="text-[10px] sm:text-sm text-blue-600">اللجان الفرعية</p>
+                  <p className="text-lg sm:text-2xl font-bold text-blue-800">{committeeTypes.length}</p>
                 </div>
-                <Briefcase className="h-8 w-8 text-blue-500" />
+                <Briefcase className="h-5 w-5 sm:h-8 sm:w-8 text-blue-500" />
               </div>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
-            <CardContent className="p-4">
+            <CardContent className="p-2 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-green-600">معدل الحضور</p>
-                  <p className="text-2xl font-bold text-green-800">85%</p>
+                  <p className="text-[10px] sm:text-sm text-green-600">معدل الحضور</p>
+                  <p className="text-lg sm:text-2xl font-bold text-green-800">85%</p>
                 </div>
-                <CalendarCheck className="h-8 w-8 text-green-500" />
+                <CalendarCheck className="h-5 w-5 sm:h-8 sm:w-8 text-green-500" />
               </div>
             </CardContent>
           </Card>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full max-w-2xl grid-cols-4">
-            <TabsTrigger value="members" className="gap-2">
-              <Users className="h-4 w-4" />
-              الأعضاء
+          <TabsList className="grid w-full max-w-2xl grid-cols-4 h-auto">
+            <TabsTrigger value="members" className="gap-1 sm:gap-2 text-[10px] sm:text-sm py-1.5 sm:py-2 px-1 sm:px-3">
+              <Users className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">الأعضاء</span>
             </TabsTrigger>
-            <TabsTrigger value="committees" className="gap-2">
-              <Briefcase className="h-4 w-4" />
-              اللجان
+            <TabsTrigger value="committees" className="gap-1 sm:gap-2 text-[10px] sm:text-sm py-1.5 sm:py-2 px-1 sm:px-3">
+              <Briefcase className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">اللجان</span>
             </TabsTrigger>
-            <TabsTrigger value="training" className="gap-2">
-              <GraduationCap className="h-4 w-4" />
-              التدريب
+            <TabsTrigger value="training" className="gap-1 sm:gap-2 text-[10px] sm:text-sm py-1.5 sm:py-2 px-1 sm:px-3">
+              <GraduationCap className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">التدريب</span>
             </TabsTrigger>
-            <TabsTrigger value="declarations" className="gap-2">
-              <FileText className="h-4 w-4" />
-              الإفصاحات
+            <TabsTrigger value="declarations" className="gap-1 sm:gap-2 text-[10px] sm:text-sm py-1.5 sm:py-2 px-1 sm:px-3">
+              <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">الإفصاحات</span>
             </TabsTrigger>
           </TabsList>
 
@@ -472,15 +472,15 @@ export default function BoardMembersPage() {
             )}
 
             <Card>
-              <CardContent className="p-0">
-                <Table>
+              <CardContent className="p-0 overflow-x-auto">
+                <Table className="min-w-[800px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="text-right">العضو</TableHead>
                       <TableHead className="text-right">المنصب</TableHead>
-                      <TableHead className="text-right">نوع العضوية</TableHead>
-                      <TableHead className="text-right">التواصل</TableHead>
-                      <TableHead className="text-right">فترة العضوية</TableHead>
+                      <TableHead className="text-right hidden md:table-cell">نوع العضوية</TableHead>
+                      <TableHead className="text-right hidden lg:table-cell">التواصل</TableHead>
+                      <TableHead className="text-right hidden md:table-cell">فترة العضوية</TableHead>
                       <TableHead className="text-right">الحالة</TableHead>
                       <TableHead className="text-right">الإجراءات</TableHead>
                     </TableRow>
@@ -524,27 +524,27 @@ export default function BoardMembersPage() {
                                 <span>{positions.find(p => p.value === member.position)?.label}</span>
                               </div>
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="hidden md:table-cell">
                               {memberTypes.find(t => t.value === member.memberType)?.label}
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="hidden lg:table-cell">
                               <div className="space-y-1">
                                 {member.email && (
-                                  <div className="flex items-center gap-1 text-sm text-gray-600">
+                                  <div className="flex items-center gap-1 text-xs text-gray-600">
                                     <Mail className="h-3 w-3" />
-                                    {member.email}
+                                    <span className="truncate max-w-[120px]">{member.email}</span>
                                   </div>
                                 )}
                                 {member.phone && (
-                                  <div className="flex items-center gap-1 text-sm text-gray-600">
+                                  <div className="flex items-center gap-1 text-xs text-gray-600">
                                     <Phone className="h-3 w-3" />
                                     {member.phone}
                                   </div>
                                 )}
                               </div>
                             </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-1 text-sm">
+                            <TableCell className="hidden md:table-cell">
+                              <div className="flex items-center gap-1 text-xs">
                                 <Calendar className="h-3 w-3 text-gray-400" />
                                 <span>{member.appointmentDate}</span>
                                 {member.termEndDate && (
@@ -555,7 +555,7 @@ export default function BoardMembersPage() {
                                 )}
                               </div>
                               {isExpiring && (
-                                <Badge className="mt-1 bg-amber-100 text-amber-800 text-xs">
+                                <Badge className="mt-1 bg-amber-100 text-amber-800 text-[10px] sm:text-xs">
                                   {days} يوم متبقي
                                 </Badge>
                               )}
@@ -615,7 +615,7 @@ export default function BoardMembersPage() {
           </TabsContent>
 
           <TabsContent value="committees" className="mt-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4">
               {committeeTypes.map((committee) => (
                 <Card key={committee.value} className="hover:shadow-lg transition-shadow">
                   <CardHeader className="pb-3">
@@ -662,7 +662,7 @@ export default function BoardMembersPage() {
               </Button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4">
               {trainingTypes.map((type) => (
                 <Card key={type.value} className="bg-gradient-to-br from-gray-50 to-white">
                   <CardHeader className="pb-2">
@@ -704,37 +704,37 @@ export default function BoardMembersPage() {
               </Button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4">
               <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
-                <CardContent className="p-4">
+                <CardContent className="p-2 sm:p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-blue-600">إفصاحات سنوية</p>
-                      <p className="text-2xl font-bold text-blue-800">0</p>
+                      <p className="text-[10px] sm:text-sm text-blue-600">إفصاحات سنوية</p>
+                      <p className="text-lg sm:text-2xl font-bold text-blue-800">0</p>
                     </div>
-                    <Calendar className="h-8 w-8 text-blue-500" />
+                    <Calendar className="h-5 w-5 sm:h-8 sm:w-8 text-blue-500" />
                   </div>
                 </CardContent>
               </Card>
               <Card className="bg-gradient-to-br from-amber-50 to-yellow-50 border-amber-200">
-                <CardContent className="p-4">
+                <CardContent className="p-2 sm:p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-amber-600">تعارض مصالح</p>
-                      <p className="text-2xl font-bold text-amber-800">0</p>
+                      <p className="text-[10px] sm:text-sm text-amber-600">تعارض مصالح</p>
+                      <p className="text-lg sm:text-2xl font-bold text-amber-800">0</p>
                     </div>
-                    <AlertTriangle className="h-8 w-8 text-amber-500" />
+                    <AlertTriangle className="h-5 w-5 sm:h-8 sm:w-8 text-amber-500" />
                   </div>
                 </CardContent>
               </Card>
               <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
-                <CardContent className="p-4">
+                <CardContent className="p-2 sm:p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-green-600">تمت المراجعة</p>
-                      <p className="text-2xl font-bold text-green-800">0</p>
+                      <p className="text-[10px] sm:text-sm text-green-600">تمت المراجعة</p>
+                      <p className="text-lg sm:text-2xl font-bold text-green-800">0</p>
                     </div>
-                    <CheckCircle className="h-8 w-8 text-green-500" />
+                    <CheckCircle className="h-5 w-5 sm:h-8 sm:w-8 text-green-500" />
                   </div>
                 </CardContent>
               </Card>

@@ -95,28 +95,28 @@ export default function CapitalPage() {
 
   return (
     <Layout>
-      <div className="max-w-6xl mx-auto p-4 md:p-8 lg:p-10 space-y-4" dir="rtl">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
+      <div className="max-w-6xl mx-auto p-3 sm:p-4 md:p-6 lg:p-10 space-y-3 sm:space-y-4" dir="rtl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             <Link href="/governance">
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <ChevronLeft className="h-4 w-4" />
+              <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8">
+                <ChevronLeft className="h-3 w-3 sm:h-4 sm:w-4" />
               </Button>
             </Link>
-            <div className="p-3 bg-gradient-to-br from-purple-500 to-violet-600 rounded-xl">
-              <Briefcase className="w-7 h-7 text-white" />
+            <div className="p-2 sm:p-3 bg-gradient-to-br from-purple-500 to-violet-600 rounded-lg sm:rounded-xl">
+              <Briefcase className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-purple-800" data-testid="page-title">
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-purple-800" data-testid="page-title">
                 إدارة رأس المال
               </h1>
-              <p className="text-gray-600">زيادة وتخفيض رأس المال وإدارة الأسهم</p>
+              <p className="text-xs sm:text-sm text-gray-600">زيادة وتخفيض رأس المال وإدارة الأسهم</p>
             </div>
           </div>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="gap-2 bg-purple-600 hover:bg-purple-700" data-testid="btn-add-transaction">
-                <Plus className="h-4 w-4" />
+              <Button size="sm" className="gap-1 sm:gap-2 text-xs sm:text-sm bg-purple-600 hover:bg-purple-700" data-testid="btn-add-transaction">
+                <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
                 معاملة جديدة
               </Button>
             </DialogTrigger>
@@ -185,52 +185,52 @@ export default function CapitalPage() {
           </Dialog>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
           <Card className="bg-gradient-to-br from-purple-50 to-violet-50 border-purple-200">
-            <CardContent className="p-4">
+            <CardContent className="p-2 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-purple-600">رأس المال الحالي</p>
-                  <p className="text-2xl font-bold text-purple-800">{currentCapital.toLocaleString()} ر.س</p>
+                  <p className="text-[10px] sm:text-sm text-purple-600">رأس المال الحالي</p>
+                  <p className="text-sm sm:text-2xl font-bold text-purple-800">{currentCapital.toLocaleString()} <span className="text-[10px] sm:text-base">ر.س</span></p>
                 </div>
-                <DollarSign className="h-8 w-8 text-purple-500" />
+                <DollarSign className="h-5 w-5 sm:h-8 sm:w-8 text-purple-500" />
               </div>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
-            <CardContent className="p-4">
+            <CardContent className="p-2 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-blue-600">عدد الأسهم</p>
-                  <p className="text-2xl font-bold text-blue-800">{(currentShares || 0).toLocaleString()}</p>
+                  <p className="text-[10px] sm:text-sm text-blue-600">عدد الأسهم</p>
+                  <p className="text-lg sm:text-2xl font-bold text-blue-800">{(currentShares || 0).toLocaleString()}</p>
                 </div>
-                <Briefcase className="h-8 w-8 text-blue-500" />
+                <Briefcase className="h-5 w-5 sm:h-8 sm:w-8 text-blue-500" />
               </div>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
-            <CardContent className="p-4">
+            <CardContent className="p-2 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-green-600">زيادات رأس المال</p>
-                  <p className="text-2xl font-bold text-green-800">
+                  <p className="text-[10px] sm:text-sm text-green-600">زيادات رأس المال</p>
+                  <p className="text-lg sm:text-2xl font-bold text-green-800">
                     {transactions.filter(t => t.transactionType === 'increase').length}
                   </p>
                 </div>
-                <TrendingUp className="h-8 w-8 text-green-500" />
+                <TrendingUp className="h-5 w-5 sm:h-8 sm:w-8 text-green-500" />
               </div>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-yellow-50 to-amber-50 border-yellow-200">
-            <CardContent className="p-4">
+            <CardContent className="p-2 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-yellow-600">قيد المراجعة</p>
-                  <p className="text-2xl font-bold text-yellow-800">
+                  <p className="text-[10px] sm:text-sm text-yellow-600">قيد المراجعة</p>
+                  <p className="text-lg sm:text-2xl font-bold text-yellow-800">
                     {transactions.filter(t => t.status === 'pending').length}
                   </p>
                 </div>
-                <Clock className="h-8 w-8 text-yellow-500" />
+                <Clock className="h-5 w-5 sm:h-8 sm:w-8 text-yellow-500" />
               </div>
             </CardContent>
           </Card>
@@ -255,44 +255,44 @@ export default function CapitalPage() {
               const TypeIcon = typeInfo?.icon || Briefcase;
               return (
                 <Card key={transaction.id} className="hover:shadow-md transition-shadow" data-testid={`capital-card-${transaction.id}`}>
-                  <CardContent className="p-4">
-                    <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-                      <div className="flex items-start gap-4">
-                        <div className={`p-3 rounded-lg ${transaction.transactionType === 'increase' ? 'bg-green-100' : 'bg-red-100'}`}>
-                          <TypeIcon className={`h-6 w-6 ${typeInfo?.color}`} />
+                  <CardContent className="p-3 sm:p-4">
+                    <div className="flex flex-col gap-3 sm:gap-4">
+                      <div className="flex items-start gap-2 sm:gap-4">
+                        <div className={`p-2 sm:p-3 rounded-lg ${transaction.transactionType === 'increase' ? 'bg-green-100' : 'bg-red-100'}`}>
+                          <TypeIcon className={`h-4 w-4 sm:h-6 sm:w-6 ${typeInfo?.color}`} />
                         </div>
                         <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2 flex-wrap">
-                            <Badge variant="outline" className="font-mono text-xs">
+                          <div className="flex items-center gap-1 sm:gap-2 mb-2 flex-wrap">
+                            <Badge variant="outline" className="font-mono text-[10px] sm:text-xs">
                               {transaction.transactionNumber}
                             </Badge>
-                            <Badge className={transactionStatuses.find(s => s.value === transaction.status)?.color}>
+                            <Badge className={`${transactionStatuses.find(s => s.value === transaction.status)?.color} text-[10px] sm:text-xs`}>
                               {transactionStatuses.find(s => s.value === transaction.status)?.label}
                             </Badge>
-                            <Badge variant="outline">{typeInfo?.label}</Badge>
+                            <Badge variant="outline" className="text-[10px] sm:text-xs hidden sm:inline-flex">{typeInfo?.label}</Badge>
                           </div>
-                          <p className="text-gray-600 mb-3">{transaction.description}</p>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <div className="bg-gray-50 p-3 rounded-lg">
-                              <p className="text-sm text-gray-600">رأس المال السابق</p>
-                              <p className="font-semibold">{Number(transaction.previousCapital).toLocaleString()} ر.س</p>
+                          <p className="text-xs sm:text-sm text-gray-600 mb-2 sm:mb-3 line-clamp-2">{transaction.description}</p>
+                          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+                            <div className="bg-gray-50 p-2 sm:p-3 rounded-lg">
+                              <p className="text-[10px] sm:text-sm text-gray-600">رأس المال السابق</p>
+                              <p className="text-xs sm:text-base font-semibold">{Number(transaction.previousCapital).toLocaleString()} <span className="text-[10px] sm:text-xs">ر.س</span></p>
                             </div>
-                            <div className="bg-gray-50 p-3 rounded-lg">
-                              <p className="text-sm text-gray-600">رأس المال الجديد</p>
-                              <p className="font-semibold">{Number(transaction.newCapital).toLocaleString()} ر.س</p>
+                            <div className="bg-gray-50 p-2 sm:p-3 rounded-lg">
+                              <p className="text-[10px] sm:text-sm text-gray-600">رأس المال الجديد</p>
+                              <p className="text-xs sm:text-base font-semibold">{Number(transaction.newCapital).toLocaleString()} <span className="text-[10px] sm:text-xs">ر.س</span></p>
                             </div>
-                            <div className={`p-3 rounded-lg ${transaction.transactionType === 'increase' ? 'bg-green-50' : 'bg-red-50'}`}>
-                              <p className="text-sm text-gray-600">التغيير</p>
-                              <p className={`font-semibold ${transaction.transactionType === 'increase' ? 'text-green-600' : 'text-red-600'}`}>
-                                {transaction.transactionType === 'increase' ? '+' : '-'}{Number(transaction.changeAmount).toLocaleString()} ر.س
+                            <div className={`p-2 sm:p-3 rounded-lg ${transaction.transactionType === 'increase' ? 'bg-green-50' : 'bg-red-50'}`}>
+                              <p className="text-[10px] sm:text-sm text-gray-600">التغيير</p>
+                              <p className={`text-xs sm:text-base font-semibold ${transaction.transactionType === 'increase' ? 'text-green-600' : 'text-red-600'}`}>
+                                {transaction.transactionType === 'increase' ? '+' : '-'}{Number(transaction.changeAmount).toLocaleString()} <span className="text-[10px] sm:text-xs">ر.س</span>
                               </p>
                             </div>
-                            <div className="bg-gray-50 p-3 rounded-lg">
-                              <div className="flex items-center gap-1 text-sm text-gray-600">
-                                <Calendar className="h-3 w-3" />
+                            <div className="bg-gray-50 p-2 sm:p-3 rounded-lg">
+                              <div className="flex items-center gap-1 text-[10px] sm:text-sm text-gray-600">
+                                <Calendar className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
                                 <span>تاريخ السريان</span>
                               </div>
-                              <p className="font-semibold">
+                              <p className="text-xs sm:text-base font-semibold">
                                 {transaction.effectiveDate ? new Date(transaction.effectiveDate).toLocaleDateString('en-GB') : '-'}
                               </p>
                             </div>

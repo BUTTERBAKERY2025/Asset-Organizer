@@ -516,78 +516,78 @@ export default function MarketingSocialPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+      <div className="p-3 sm:p-4 md:p-6 lg:p-8 max-w-6xl mx-auto space-y-3 sm:space-y-4" dir="rtl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Link href="/marketing">
-              <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" data-testid="btn-back">
+              <Button variant="ghost" size="icon" className="h-9 w-9 sm:h-8 sm:w-8 shrink-0" data-testid="btn-back">
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
-            <div className="bg-gradient-to-r from-purple-500 to-rose-500 p-2 rounded-lg">
-              <Share2 className="h-6 w-6 text-white" />
+            <div className="bg-gradient-to-r from-purple-500 to-rose-500 p-1.5 sm:p-2 rounded-lg shrink-0">
+              <Share2 className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
             </div>
-            <div>
-              <h1 className="text-2xl font-bold">إدارة السوشيال ميديا</h1>
-              <p className="text-muted-foreground text-sm">إدارة حساباتك ومنشوراتك على منصات التواصل الاجتماعي</p>
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold truncate">إدارة السوشيال ميديا</h1>
+              <p className="text-muted-foreground text-xs sm:text-sm truncate">إدارة حساباتك ومنشوراتك على منصات التواصل</p>
             </div>
           </div>
-          <Button onClick={() => setShowPostDialog(true)} className="gap-2" data-testid="button-new-post">
+          <Button onClick={() => setShowPostDialog(true)} className="gap-2 h-10 sm:h-9 w-full sm:w-auto" data-testid="button-new-post">
             <Plus className="h-4 w-4" />
             منشور جديد
           </Button>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
           <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="bg-purple-100 p-2 rounded-lg">
-                  <Users className="h-5 w-5 text-purple-600" />
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="bg-purple-100 p-1.5 sm:p-2 rounded-lg shrink-0">
+                  <Users className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600" />
                 </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">إجمالي المتابعين</p>
-                  <p className="text-xl font-bold" data-testid="text-total-followers">{formatNum(analytics.totalFollowers)}</p>
-                  <p className="text-xs text-green-600">+{formatNum(analytics.followersGrowth)}%</p>
+                <div className="min-w-0">
+                  <p className="text-[10px] sm:text-xs text-muted-foreground">إجمالي المتابعين</p>
+                  <p className="text-base sm:text-xl font-bold" data-testid="text-total-followers">{formatNum(analytics.totalFollowers)}</p>
+                  <p className="text-[10px] sm:text-xs text-green-600">+{formatNum(analytics.followersGrowth)}%</p>
                 </div>
               </div>
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="bg-blue-100 p-2 rounded-lg">
-                  <Eye className="h-5 w-5 text-blue-600" />
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="bg-blue-100 p-1.5 sm:p-2 rounded-lg shrink-0">
+                  <Eye className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
                 </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">الوصول</p>
-                  <p className="text-xl font-bold" data-testid="text-total-reach">{formatNum(analytics.totalReach)}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="bg-green-100 p-2 rounded-lg">
-                  <Heart className="h-5 w-5 text-green-600" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">التفاعل</p>
-                  <p className="text-xl font-bold" data-testid="text-total-engagement">{formatNum(analytics.totalEngagement)}</p>
+                <div className="min-w-0">
+                  <p className="text-[10px] sm:text-xs text-muted-foreground">الوصول</p>
+                  <p className="text-base sm:text-xl font-bold" data-testid="text-total-reach">{formatNum(analytics.totalReach)}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="bg-amber-100 p-2 rounded-lg">
-                  <TrendingUp className="h-5 w-5 text-amber-600" />
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="bg-green-100 p-1.5 sm:p-2 rounded-lg shrink-0">
+                  <Heart className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
                 </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">معدل التفاعل</p>
-                  <p className="text-xl font-bold" data-testid="text-engagement-rate">{formatNum(analytics.engagementRate)}%</p>
+                <div className="min-w-0">
+                  <p className="text-[10px] sm:text-xs text-muted-foreground">التفاعل</p>
+                  <p className="text-base sm:text-xl font-bold" data-testid="text-total-engagement">{formatNum(analytics.totalEngagement)}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="bg-amber-100 p-1.5 sm:p-2 rounded-lg shrink-0">
+                  <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] sm:text-xs text-muted-foreground">معدل التفاعل</p>
+                  <p className="text-base sm:text-xl font-bold" data-testid="text-engagement-rate">{formatNum(analytics.engagementRate)}%</p>
                 </div>
               </div>
             </CardContent>
@@ -595,31 +595,31 @@ export default function MarketingSocialPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-5 h-auto">
-            <TabsTrigger value="accounts" className="flex items-center gap-2 py-2" data-testid="tab-accounts">
-              <Link2 className="h-4 w-4" />
+          <TabsList className="grid w-full grid-cols-5 h-auto gap-1">
+            <TabsTrigger value="accounts" className="flex items-center gap-1 sm:gap-2 py-2 text-xs sm:text-sm" data-testid="tab-accounts">
+              <Link2 className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">الحسابات</span>
             </TabsTrigger>
-            <TabsTrigger value="calendar" className="flex items-center gap-2 py-2" data-testid="tab-calendar">
-              <Calendar className="h-4 w-4" />
+            <TabsTrigger value="calendar" className="flex items-center gap-1 sm:gap-2 py-2 text-xs sm:text-sm" data-testid="tab-calendar">
+              <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">الجدولة</span>
             </TabsTrigger>
-            <TabsTrigger value="posts" className="flex items-center gap-2 py-2" data-testid="tab-posts">
-              <FileEdit className="h-4 w-4" />
+            <TabsTrigger value="posts" className="flex items-center gap-1 sm:gap-2 py-2 text-xs sm:text-sm" data-testid="tab-posts">
+              <FileEdit className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">المنشورات</span>
             </TabsTrigger>
-            <TabsTrigger value="analytics" className="flex items-center gap-2 py-2" data-testid="tab-analytics">
-              <BarChart3 className="h-4 w-4" />
+            <TabsTrigger value="analytics" className="flex items-center gap-1 sm:gap-2 py-2 text-xs sm:text-sm" data-testid="tab-analytics">
+              <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">التحليلات</span>
             </TabsTrigger>
-            <TabsTrigger value="templates" className="flex items-center gap-2 py-2" data-testid="tab-templates">
-              <LayoutIcon className="h-4 w-4" />
+            <TabsTrigger value="templates" className="flex items-center gap-1 sm:gap-2 py-2 text-xs sm:text-sm" data-testid="tab-templates">
+              <LayoutIcon className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">القوالب</span>
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="accounts" className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4">
               {PLATFORMS.map((platform) => {
                 const account = accounts.find(a => a.platform === platform.id);
                 const Icon = platform.icon;

@@ -325,58 +325,58 @@ export default function ContractsPage() {
           )}
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 mb-6">
           <Card>
-            <CardContent className="pt-6">
+            <CardContent className="p-3 sm:p-4 md:p-6">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-blue-100 rounded-lg">
                   <FileText className="h-5 w-5 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">إجمالي العقود</p>
-                  <p className="text-2xl font-bold">{contracts.length}</p>
+                  <p className="text-xs sm:text-sm text-gray-500">إجمالي العقود</p>
+                  <p className="text-lg sm:text-2xl font-bold">{contracts.length}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
           <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <DollarSign className="h-5 w-5 text-green-600" />
+            <CardContent className="p-3 sm:p-4 md:p-6">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 bg-green-100 rounded-lg">
+                  <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">قيمة العقود</p>
-                  <p className="text-2xl font-bold">{totalContractValue.toLocaleString()} ر.س</p>
+                  <p className="text-xs sm:text-sm text-gray-500">قيمة العقود</p>
+                  <p className="text-sm sm:text-xl md:text-2xl font-bold">{totalContractValue.toLocaleString()} ر.س</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
           <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-yellow-100 rounded-lg">
-                  <DollarSign className="h-5 w-5 text-yellow-600" />
+            <CardContent className="p-3 sm:p-4 md:p-6">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 bg-yellow-100 rounded-lg">
+                  <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">المدفوعات</p>
-                  <p className="text-2xl font-bold">{totalPaid.toLocaleString()} ر.س</p>
+                  <p className="text-xs sm:text-sm text-gray-500">المدفوعات</p>
+                  <p className="text-sm sm:text-xl md:text-2xl font-bold">{totalPaid.toLocaleString()} ر.س</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
           <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <FileText className="h-5 w-5 text-purple-600" />
+            <CardContent className="p-3 sm:p-4 md:p-6">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 bg-purple-100 rounded-lg">
+                  <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">العقود النشطة</p>
-                  <p className="text-2xl font-bold">{activeContractsCount}</p>
+                  <p className="text-xs sm:text-sm text-gray-500">العقود النشطة</p>
+                  <p className="text-lg sm:text-2xl font-bold">{activeContractsCount}</p>
                 </div>
               </div>
             </CardContent>
@@ -448,16 +448,16 @@ export default function ContractsPage() {
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
-              <Table>
+              <Table className="min-w-[800px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-right">رقم العقد</TableHead>
                     <TableHead className="text-right">العنوان</TableHead>
-                    <TableHead className="text-right">المشروع</TableHead>
-                    <TableHead className="text-right">المقاول</TableHead>
-                    <TableHead className="text-right">النوع</TableHead>
+                    <TableHead className="text-right hidden md:table-cell">المشروع</TableHead>
+                    <TableHead className="text-right hidden lg:table-cell">المقاول</TableHead>
+                    <TableHead className="text-right hidden xl:table-cell">النوع</TableHead>
                     <TableHead className="text-right">القيمة</TableHead>
-                    <TableHead className="text-right">المدفوع</TableHead>
+                    <TableHead className="text-right hidden md:table-cell">المدفوع</TableHead>
                     <TableHead className="text-right">الحالة</TableHead>
                     <TableHead className="text-right">الإجراءات</TableHead>
                   </TableRow>
@@ -478,28 +478,28 @@ export default function ContractsPage() {
                       
                       return (
                         <TableRow key={contract.id} data-testid={`row-contract-${contract.id}`}>
-                          <TableCell className="font-medium">
+                          <TableCell className="font-medium text-xs sm:text-sm">
                             {contract.contractNumber || `#${contract.id}`}
                           </TableCell>
-                          <TableCell>{contract.title}</TableCell>
-                          <TableCell>
+                          <TableCell className="text-xs sm:text-sm">{contract.title}</TableCell>
+                          <TableCell className="hidden md:table-cell">
                             <Link href={`/construction/projects/${contract.projectId}`}>
-                              <span className="text-blue-600 hover:underline cursor-pointer">
+                              <span className="text-blue-600 hover:underline cursor-pointer text-xs sm:text-sm">
                                 {getProjectName(contract.projectId)}
                               </span>
                             </Link>
                           </TableCell>
-                          <TableCell>{getContractorName(contract.contractorId)}</TableCell>
-                          <TableCell>{getTypeLabel(contract.contractType)}</TableCell>
-                          <TableCell>{(contract.totalAmount || 0).toLocaleString()} ر.س</TableCell>
-                          <TableCell>
+                          <TableCell className="hidden lg:table-cell text-xs sm:text-sm">{getContractorName(contract.contractorId)}</TableCell>
+                          <TableCell className="hidden xl:table-cell text-xs sm:text-sm">{getTypeLabel(contract.contractType)}</TableCell>
+                          <TableCell className="text-xs sm:text-sm">{(contract.totalAmount || 0).toLocaleString()} ر.س</TableCell>
+                          <TableCell className="hidden md:table-cell">
                             <div className="flex items-center gap-2">
-                              <span>{(contract.paidAmount || 0).toLocaleString()} ر.س</span>
+                              <span className="text-xs sm:text-sm">{(contract.paidAmount || 0).toLocaleString()} ر.س</span>
                               <Progress value={paidPercent} className="w-16 h-2" />
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Badge className={`${statusInfo.color} text-white`}>
+                            <Badge className={`${statusInfo.color} text-white text-[10px] sm:text-xs`}>
                               {statusInfo.label}
                             </Badge>
                           </TableCell>

@@ -237,17 +237,17 @@ export default function MarketingTeamPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center gap-3">
+      <div className="p-3 sm:p-4 md:p-6 lg:p-8 max-w-6xl mx-auto space-y-3 sm:space-y-4" dir="rtl">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Link href="/marketing">
-              <Button variant="outline" size="icon" className="h-11 w-11 sm:h-9 sm:w-9" data-testid="button-back">
+              <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" data-testid="button-back">
                 <ArrowRight className="w-4 h-4" />
               </Button>
             </Link>
-            <div>
-              <h1 className="text-xl sm:text-2xl font-bold" data-testid="page-title">فريق التسويق</h1>
-              <p className="text-sm text-muted-foreground">إدارة أعضاء فريق التسويق وتتبع عبء العمل</p>
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold truncate" data-testid="page-title">فريق التسويق</h1>
+              <p className="text-xs sm:text-sm text-muted-foreground truncate">إدارة أعضاء فريق التسويق وتتبع عبء العمل</p>
             </div>
           </div>
           <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
@@ -258,7 +258,7 @@ export default function MarketingTeamPage() {
             }
           }}>
             <DialogTrigger asChild>
-              <Button className="h-11 sm:h-9" data-testid="button-add-member">
+              <Button className="h-10 sm:h-9 w-full sm:w-auto" data-testid="button-add-member">
                 <Plus className="w-4 h-4 ml-2" />
                 إضافة عضو
               </Button>
@@ -331,55 +331,55 @@ export default function MarketingTeamPage() {
           </Dialog>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
           <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <Users className="w-5 h-5 text-blue-600" />
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 bg-blue-100 rounded-lg shrink-0">
+                  <Users className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
                 </div>
-                <div>
-                  <p className="text-2xl font-bold">{teamMembers.length}</p>
-                  <p className="text-sm text-muted-foreground">إجمالي الأعضاء</p>
+                <div className="min-w-0">
+                  <p className="text-lg sm:text-2xl font-bold">{teamMembers.length}</p>
+                  <p className="text-[10px] sm:text-sm text-muted-foreground truncate">إجمالي الأعضاء</p>
                 </div>
               </div>
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <CheckCircle className="w-5 h-5 text-green-600" />
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 bg-green-100 rounded-lg shrink-0">
+                  <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
                 </div>
-                <div>
-                  <p className="text-2xl font-bold">{activeMembers.length}</p>
-                  <p className="text-sm text-muted-foreground">أعضاء نشطين</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-amber-100 rounded-lg">
-                  <ListTodo className="w-5 h-5 text-amber-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">{totalPendingTasks}</p>
-                  <p className="text-sm text-muted-foreground">مهام قيد التنفيذ</p>
+                <div className="min-w-0">
+                  <p className="text-lg sm:text-2xl font-bold">{activeMembers.length}</p>
+                  <p className="text-[10px] sm:text-sm text-muted-foreground truncate">أعضاء نشطين</p>
                 </div>
               </div>
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <TrendingUp className="w-5 h-5 text-purple-600" />
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 bg-amber-100 rounded-lg shrink-0">
+                  <ListTodo className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600" />
                 </div>
-                <div>
-                  <p className="text-2xl font-bold">{avgTasksPerMember}</p>
-                  <p className="text-sm text-muted-foreground">متوسط المهام/عضو</p>
+                <div className="min-w-0">
+                  <p className="text-lg sm:text-2xl font-bold">{totalPendingTasks}</p>
+                  <p className="text-[10px] sm:text-sm text-muted-foreground truncate">مهام قيد التنفيذ</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 bg-purple-100 rounded-lg shrink-0">
+                  <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-lg sm:text-2xl font-bold">{avgTasksPerMember}</p>
+                  <p className="text-[10px] sm:text-sm text-muted-foreground truncate">متوسط المهام/عضو</p>
                 </div>
               </div>
             </CardContent>
@@ -425,22 +425,22 @@ export default function MarketingTeamPage() {
                           )}
                         </div>
                       </div>
-                      <div className="grid grid-cols-4 gap-2 text-center text-xs mb-2">
-                        <div className="p-2 bg-gray-50 rounded">
+                      <div className="grid grid-cols-4 gap-1 sm:gap-2 text-center text-[10px] sm:text-xs mb-2">
+                        <div className="p-1.5 sm:p-2 bg-gray-50 rounded">
                           <p className="font-bold text-gray-700">{workload.pending}</p>
-                          <p className="text-muted-foreground">معلقة</p>
+                          <p className="text-muted-foreground truncate">معلقة</p>
                         </div>
-                        <div className="p-2 bg-blue-50 rounded">
+                        <div className="p-1.5 sm:p-2 bg-blue-50 rounded">
                           <p className="font-bold text-blue-700">{workload.inProgress}</p>
-                          <p className="text-muted-foreground">قيد التنفيذ</p>
+                          <p className="text-muted-foreground truncate">قيد التنفيذ</p>
                         </div>
-                        <div className="p-2 bg-green-50 rounded">
+                        <div className="p-1.5 sm:p-2 bg-green-50 rounded">
                           <p className="font-bold text-green-700">{workload.completed}</p>
-                          <p className="text-muted-foreground">مكتملة</p>
+                          <p className="text-muted-foreground truncate">مكتملة</p>
                         </div>
-                        <div className="p-2 bg-purple-50 rounded">
+                        <div className="p-1.5 sm:p-2 bg-purple-50 rounded">
                           <p className="font-bold text-purple-700">{workload.total}</p>
-                          <p className="text-muted-foreground">الإجمالي</p>
+                          <p className="text-muted-foreground truncate">الإجمالي</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -458,24 +458,24 @@ export default function MarketingTeamPage() {
         </Card>
 
         {isLoading ? (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4">
             {[1, 2, 3].map((i) => (
               <Skeleton key={i} className="h-48" />
             ))}
           </div>
         ) : teamMembers.length === 0 ? (
           <Card>
-            <CardContent className="p-8 text-center">
-              <Users className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-              <p className="text-muted-foreground">لا يوجد أعضاء في الفريق</p>
-              <Button className="mt-4 h-11 sm:h-9" onClick={() => setIsAddDialogOpen(true)}>
+            <CardContent className="p-4 sm:p-8 text-center">
+              <Users className="w-10 h-10 sm:w-12 sm:h-12 mx-auto text-muted-foreground mb-4" />
+              <p className="text-sm sm:text-base text-muted-foreground">لا يوجد أعضاء في الفريق</p>
+              <Button className="mt-4 h-10 sm:h-9" onClick={() => setIsAddDialogOpen(true)}>
                 <Plus className="w-4 h-4 ml-2" />
                 إضافة عضو جديد
               </Button>
             </CardContent>
           </Card>
         ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4">
             {teamMembers.map((member) => {
               const workload = getMemberWorkload(member.name);
               const workloadLevel = getWorkloadLevel(workload.total - workload.completed);
