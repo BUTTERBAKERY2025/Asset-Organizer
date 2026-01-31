@@ -1169,84 +1169,83 @@ export default function CashierJournalFormPage() {
 
   return (
     <Layout>
-      <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-3" dir="rtl">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div className="flex items-center gap-2 sm:gap-3">
+      {/* iPad-optimized: compact padding & spacing for 10.9" screens */}
+      <div className="p-2 sm:p-3 md:p-4 max-w-6xl mx-auto space-y-2" dir="rtl">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
             <Link href="/cashier-journals">
-              <Button variant="ghost" size="sm" className="h-9 w-9 sm:h-8 sm:w-8" data-testid="button-back">
+              <Button variant="ghost" size="sm" className="h-8 w-8" data-testid="button-back">
                 <ArrowRight className="w-4 h-4" />
               </Button>
             </Link>
-            <div>
-              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-primary" data-testid="page-title">
-                {isEdit ? "تعديل يومية المبيعات" : "يومية مبيعات جديدة"}
-              </h1>
-            </div>
+            <h1 className="text-base sm:text-lg font-bold text-primary" data-testid="page-title">
+              {isEdit ? "تعديل يومية المبيعات" : "يومية مبيعات جديدة"}
+            </h1>
           </div>
           {isEdit && (
-            <Button onClick={handleExportPDF} className="gap-2 bg-amber-600 hover:bg-amber-700 h-11 sm:h-9 text-sm" data-testid="button-export-pdf">
-              <FileDown className="w-4 h-4" />
-              <span className="hidden sm:inline">تصدير PDF</span>
-              <span className="sm:hidden">PDF</span>
+            <Button onClick={handleExportPDF} className="gap-1.5 bg-amber-600 hover:bg-amber-700 h-8 text-xs px-2" data-testid="button-export-pdf">
+              <FileDown className="w-3.5 h-3.5" />
+              PDF
             </Button>
           )}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-          <div className="lg:col-span-2 space-y-3">
-            <Card>
-              <CardHeader className="py-2 px-3">
-                <CardTitle className="text-base">معلومات اليومية</CardTitle>
+        {/* iPad-optimized grid: 2 columns on tablet */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
+          <div className="lg:col-span-2 space-y-2">
+            <Card className="shadow-sm">
+              <CardHeader className="py-1.5 px-2.5 bg-primary/5">
+                <CardTitle className="text-sm font-semibold">معلومات اليومية</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2 p-3 pt-0">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  <div className="space-y-1">
-                    <Label className="text-xs">الفرع *</Label>
+              <CardContent className="p-2 pt-1.5">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5">
+                  <div className="space-y-0.5">
+                    <Label className="text-[11px] text-muted-foreground">الفرع *</Label>
                     <Select value={formData.branchId} onValueChange={(v) => setFormData({ ...formData, branchId: v })} disabled={isReadOnly || !canSelectBranch}>
-                      <SelectTrigger className="h-9 text-sm" data-testid="select-branch">
+                      <SelectTrigger className="h-8 text-xs" data-testid="select-branch">
                         <SelectValue placeholder="اختر الفرع" />
                       </SelectTrigger>
                       <SelectContent className="max-h-60 overflow-y-auto">
                         {filteredBranches?.map((branch) => (
-                          <SelectItem key={branch.id} value={branch.id}>
+                          <SelectItem key={branch.id} value={branch.id} className="text-xs">
                             {branch.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">التاريخ *</Label>
+                  <div className="space-y-0.5">
+                    <Label className="text-[11px] text-muted-foreground">التاريخ *</Label>
                     <Input
                       type="date"
                       value={formData.journalDate}
                       onChange={(e) => setFormData({ ...formData, journalDate: e.target.value })}
                       disabled={isReadOnly}
-                      className="h-9 text-sm"
+                      className="h-8 text-xs"
                       data-testid="input-date"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">الوردية *</Label>
+                  <div className="space-y-0.5">
+                    <Label className="text-[11px] text-muted-foreground">الوردية *</Label>
                     <Select value={formData.shiftType} onValueChange={(v) => setFormData({ ...formData, shiftType: v })} disabled={isReadOnly}>
-                      <SelectTrigger className="h-9 text-sm" data-testid="select-shift">
+                      <SelectTrigger className="h-8 text-xs" data-testid="select-shift">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="max-h-60 overflow-y-auto">
                         {SHIFT_TYPES.map((shift) => (
-                          <SelectItem key={shift.value} value={shift.value}>
+                          <SelectItem key={shift.value} value={shift.value} className="text-xs">
                             {shift.label}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">اسم الكاشير *</Label>
+                  <div className="space-y-0.5">
+                    <Label className="text-[11px] text-muted-foreground">الكاشير *</Label>
                     <Input
                       value={formData.cashierName}
                       readOnly
-                      className="bg-muted cursor-not-allowed h-9 text-sm"
+                      className="bg-muted cursor-not-allowed h-8 text-xs"
                       placeholder="اسم الكاشير"
                       data-testid="input-cashier-name"
                     />
@@ -1255,65 +1254,68 @@ export default function CashierJournalFormPage() {
               </CardContent>
             </Card>
 
-            <Card className="border border-primary/20">
-              <CardHeader className="bg-primary/5 py-2 px-3">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Receipt className="w-4 h-4" />
-                  إجمالي المبيعات من تقرير الشفت
+            <Card className="border border-primary/20 shadow-sm">
+              <CardHeader className="bg-primary/5 py-1.5 px-2.5">
+                <CardTitle className="flex items-center gap-1.5 text-sm">
+                  <Receipt className="w-3.5 h-3.5" />
+                  إجمالي المبيعات
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2 p-3 pt-2">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <div className="space-y-1">
-                    <Label className="text-xs font-semibold">إجمالي المبيعات (ر.س) *</Label>
+              <CardContent className="p-2 pt-1.5">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                  <div className="space-y-0.5">
+                    <Label className="text-[11px] font-semibold text-primary">المبيعات (ر.س) *</Label>
                     <Input
                       type="number"
+                      inputMode="decimal"
                       value={formData.totalSales ?? ""}
                       onChange={(e) => setFormData({ ...formData, totalSales: parseNumericValue(e.target.value) })}
                       onWheel={preventWheelChange}
-                      className="text-base font-bold h-10"
+                      className="text-sm font-bold h-9"
                       placeholder="0.00"
                       disabled={isReadOnly}
                       data-testid="input-total-sales"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <Label className="flex items-center gap-1 text-xs">
-                      <Users className="w-3 h-3" />
-                      عدد الفواتير *
+                  <div className="space-y-0.5">
+                    <Label className="flex items-center gap-0.5 text-[11px] text-muted-foreground">
+                      <Users className="w-2.5 h-2.5" />
+                      الفواتير *
                     </Label>
                     <Input
                       type="number"
+                      inputMode="numeric"
                       value={formData.transactionCount ?? ""}
                       onChange={(e) => setFormData({ ...formData, transactionCount: parseNumericValue(e.target.value, false) })}
                       onWheel={preventWheelChange}
-                      className="h-10"
+                      className="h-9 text-xs"
                       placeholder="0"
                       disabled={isReadOnly}
                       data-testid="input-transaction-count"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <Label className="flex items-center gap-1 text-xs">
-                      <Calculator className="w-3 h-3" />
-                      متوسط الفاتورة
+                  <div className="space-y-0.5">
+                    <Label className="flex items-center gap-0.5 text-[11px] text-muted-foreground">
+                      <Calculator className="w-2.5 h-2.5" />
+                      المتوسط
                     </Label>
-                    <div className="h-10 flex items-center justify-center bg-muted rounded-md px-2">
-                      <span className="text-sm font-bold text-primary" data-testid="text-average-ticket">
+                    <div className="h-9 flex items-center justify-center bg-muted rounded-md px-1.5">
+                      <span className="text-xs font-bold text-primary" data-testid="text-average-ticket">
                         {averageTicket.toFixed(2)} ر.س
                       </span>
                     </div>
                   </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">رصيد سابق للدرج (عهدة)</Label>
+                  <div className="space-y-0.5">
+                    <Label className="text-[11px] text-muted-foreground">العهدة</Label>
                     <Input
                       type="number"
+                      inputMode="decimal"
                       value={formData.openingBalance ?? ""}
                       onChange={(e) => setFormData({ ...formData, openingBalance: parseNumericValue(e.target.value) })}
                       onWheel={preventWheelChange}
                       placeholder="0.00"
                       disabled={isReadOnly}
-                      className="h-10"
+                      className="h-9 text-xs"
                       data-testid="input-opening-balance"
                     />
                   </div>
@@ -1321,22 +1323,20 @@ export default function CashierJournalFormPage() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="py-2 px-3">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                  <div>
-                    <CardTitle className="text-base">تفصيل المبيعات حسب طريقة الدفع</CardTitle>
-                  </div>
+            <Card className="shadow-sm">
+              <CardHeader className="py-1.5 px-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <CardTitle className="text-sm">طرق الدفع</CardTitle>
                   {!isReadOnly && (
-                    <Button variant="outline" size="sm" className="h-8 px-3 gap-1 text-sm" onClick={addPaymentBreakdown} data-testid="button-add-payment">
-                      <Plus className="w-4 h-4" />
-                      إضافة طريقة دفع
+                    <Button variant="outline" size="sm" className="h-7 px-2 gap-1 text-xs" onClick={addPaymentBreakdown} data-testid="button-add-payment">
+                      <Plus className="w-3 h-3" />
+                      إضافة
                     </Button>
                   )}
                 </div>
               </CardHeader>
-              <CardContent className="p-3 pt-2">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <CardContent className="p-2 pt-1.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                 {paymentBreakdowns.map((breakdown, index) => {
                   const method = PAYMENT_METHODS.find((m) => m.value === breakdown.paymentMethod);
                   const Icon = method?.icon || Wallet;
@@ -2183,70 +2183,71 @@ export default function CashierJournalFormPage() {
               </CardContent>
             </Card>
 
-            <Card className="bg-gradient-to-br from-primary/5 to-primary/10">
-              <CardHeader className="py-2 px-3">
-                <CardTitle className="text-sm">ملخص اليومية</CardTitle>
+            {/* iPad-optimized summary card */}
+            <Card className="bg-gradient-to-br from-primary/5 to-primary/10 shadow-sm">
+              <CardHeader className="py-1.5 px-2.5">
+                <CardTitle className="text-xs font-semibold">ملخص اليومية</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2 p-3 pt-0">
-                <div className="flex justify-between text-sm">
+              <CardContent className="space-y-1.5 p-2 pt-0">
+                <div className="flex justify-between text-xs">
                   <span className="text-muted-foreground">إجمالي المبيعات</span>
-                  <span className="font-bold text-lg">{getBreakdownTotal().toFixed(2)} ر.س</span>
+                  <span className="font-bold text-sm">{getBreakdownTotal().toFixed(2)} ر.س</span>
                 </div>
-                <Separator />
-                <div className="flex justify-between text-sm">
+                <Separator className="my-1" />
+                <div className="flex justify-between text-[11px]">
                   <span className="text-muted-foreground">عدد الفواتير</span>
                   <span className="font-medium">{formData.transactionCount}</span>
                 </div>
-                <div className="flex justify-between text-sm">
+                <div className="flex justify-between text-[11px]">
                   <span className="text-muted-foreground">متوسط الفاتورة</span>
                   <span className="font-medium">{averageTicket.toFixed(2)} ر.س</span>
                 </div>
-                <Separator />
+                <Separator className="my-1" />
                 
-                <div className="space-y-2">
-                  <div className="text-xs font-semibold text-muted-foreground">تصنيف المبيعات</div>
-                  <div className={`flex justify-between text-sm p-2 rounded ${PAYMENT_CATEGORIES.cash.color}`}>
-                    <span className="flex items-center gap-1">
-                      <Wallet className="w-3 h-3" />
+                <div className="space-y-1">
+                  <div className="text-[10px] font-semibold text-muted-foreground">تصنيف المبيعات</div>
+                  <div className={`flex justify-between text-[11px] p-1.5 rounded ${PAYMENT_CATEGORIES.cash.color}`}>
+                    <span className="flex items-center gap-0.5">
+                      <Wallet className="w-2.5 h-2.5" />
                       نقدي
                     </span>
                     <span className="font-medium">{getCategoryTotals().cash.toFixed(2)} ر.س</span>
                   </div>
-                  <div className={`flex justify-between text-sm p-2 rounded ${PAYMENT_CATEGORIES.cards.color}`}>
-                    <span className="flex items-center gap-1">
-                      <CreditCard className="w-3 h-3" />
-                      بطاقات وشبكة
+                  <div className={`flex justify-between text-[11px] p-1.5 rounded ${PAYMENT_CATEGORIES.cards.color}`}>
+                    <span className="flex items-center gap-0.5">
+                      <CreditCard className="w-2.5 h-2.5" />
+                      بطاقات
                     </span>
                     <span className="font-medium">{getCategoryTotals().cards.toFixed(2)} ر.س</span>
                   </div>
                   {getCardBreakdowns().length > 0 && (
-                    <div className="pr-4 space-y-1">
+                    <div className="pr-3 space-y-0.5">
                       {getCardBreakdowns().map((b, i) => {
                         const method = PAYMENT_METHODS.find((m) => m.value === b.paymentMethod);
                         return (
-                          <div key={i} className="flex justify-between text-xs text-blue-600">
+                          <div key={i} className="flex justify-between text-[10px] text-blue-600">
                             <span>• {method?.label}</span>
-                            <span>{b.amount.toFixed(2)} ر.س</span>
+                            <span>{b.amount.toFixed(2)}</span>
                           </div>
                         );
                       })}
                     </div>
                   )}
-                  <div className={`flex justify-between text-sm p-2 rounded ${PAYMENT_CATEGORIES.apps.color}`}>
-                    <span className="flex items-center gap-1">
-                      <Truck className="w-3 h-3" />
-                      تطبيقات التوصيل (آجل)
+                  <div className={`flex justify-between text-[11px] p-1.5 rounded ${PAYMENT_CATEGORIES.apps.color}`}>
+                    <span className="flex items-center gap-0.5">
+                      <Truck className="w-2.5 h-2.5" />
+                      تطبيقات (آجل)
                     </span>
                     <span className="font-medium">{getCategoryTotals().apps.toFixed(2)} ر.س</span>
                   </div>
                   {getAppBreakdowns().length > 0 && (
-                    <div className="pr-4 space-y-1">
+                    <div className="pr-3 space-y-0.5">
                       {getAppBreakdowns().map((b, i) => {
                         const method = PAYMENT_METHODS.find((m) => m.value === b.paymentMethod);
                         return (
-                          <div key={i} className="flex justify-between text-xs text-purple-600">
+                          <div key={i} className="flex justify-between text-[10px] text-purple-600">
                             <span>• {method?.label}</span>
-                            <span>{b.amount.toFixed(2)} ر.س</span>
+                            <span>{b.amount.toFixed(2)}</span>
                           </div>
                         );
                       })}
@@ -2477,23 +2478,23 @@ export default function CashierJournalFormPage() {
               </div>
             )}
             
-            {/* Summary Stats and Action Buttons Row */}
-            <div className="flex flex-col md:flex-row items-center justify-between gap-2">
-            {/* Summary Stats */}
-            <div className="flex flex-wrap items-center justify-center gap-2 md:gap-4 text-sm">
-              <div className="flex items-center gap-2 bg-gray-100 px-3 py-2 rounded-lg">
-                <Receipt className="w-4 h-4 text-gray-500" />
+            {/* iPad-optimized Summary Stats and Action Buttons Row */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-1.5">
+            {/* Summary Stats - compact for iPad */}
+            <div className="flex flex-wrap items-center justify-center gap-1.5 text-xs">
+              <div className="flex items-center gap-1 bg-gray-100 px-2 py-1.5 rounded">
+                <Receipt className="w-3 h-3 text-gray-500" />
                 <span className="text-gray-600">المبيعات:</span>
-                <span className="font-bold text-lg">{formData.totalSales.toLocaleString('en')} ر.س</span>
+                <span className="font-bold text-sm">{formData.totalSales.toLocaleString('en')} ر.س</span>
               </div>
               {returnData.hasReturn && returnData.returnAmount > 0 && (
-                <div className="flex items-center gap-2 bg-red-100 px-3 py-2 rounded-lg">
-                  <RotateCcw className="w-4 h-4 text-red-500" />
+                <div className="flex items-center gap-1 bg-red-100 px-2 py-1.5 rounded">
+                  <RotateCcw className="w-3 h-3 text-red-500" />
                   <span className="text-red-600">مرتجع:</span>
-                  <span className="font-bold text-red-700">-{returnData.returnAmount.toLocaleString('en')}</span>
+                  <span className="font-bold text-sm text-red-700">-{returnData.returnAmount.toLocaleString('en')}</span>
                 </div>
               )}
-              <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${
+              <div className={`flex items-center gap-1 px-2 py-1.5 rounded ${
                 (() => {
                   const variance = getVarianceSummary();
                   if (variance.varianceType === 'balanced') return 'bg-green-100';
@@ -2501,9 +2502,9 @@ export default function CashierJournalFormPage() {
                   return 'bg-red-100';
                 })()
               }`}>
-                <Calculator className="w-4 h-4" />
+                <Calculator className="w-3 h-3" />
                 <span>الفارق:</span>
-                <span className={`font-bold text-lg ${
+                <span className={`font-bold text-sm ${
                   (() => {
                     const variance = getVarianceSummary();
                     if (variance.varianceType === 'balanced') return 'text-green-700';
@@ -2516,29 +2517,29 @@ export default function CashierJournalFormPage() {
               </div>
             </div>
             
-            {/* Action Buttons */}
-            <div className="flex items-center gap-3">
+            {/* Action Buttons - iPad optimized */}
+            <div className="flex items-center gap-2">
               {!isReadOnly && (
                 <>
                   <Button
-                    size="lg"
-                    className="gap-2 h-12 px-6 text-base min-w-[140px]"
+                    size="default"
+                    className="gap-1.5 h-9 px-4 text-sm"
                     onClick={handleSave}
                     disabled={createMutation.isPending || updateMutation.isPending || !canSave}
                     data-testid="button-save-sticky"
                   >
-                    <Save className="w-5 h-5" />
+                    <Save className="w-4 h-4" />
                     {isEdit ? "حفظ" : "حفظ مسودة"}
                   </Button>
                   {isEdit && existingJournal?.status === "draft" && (
                     <Button
-                      size="lg"
-                      className="gap-2 bg-green-600 hover:bg-green-700 h-12 px-6 text-base min-w-[140px]"
+                      size="default"
+                      className="gap-1.5 bg-green-600 hover:bg-green-700 h-9 px-4 text-sm"
                       onClick={handleSaveAndPost}
                       disabled={postMutation.isPending || updateMutation.isPending || !canPost}
                       data-testid="button-post-sticky"
                     >
-                      <Send className="w-5 h-5" />
+                      <Send className="w-4 h-4" />
                       ترحيل
                     </Button>
                   )}
@@ -2547,12 +2548,12 @@ export default function CashierJournalFormPage() {
               {isReadOnly && (
                 <Button
                   variant="outline"
-                  size="lg"
-                  className="gap-2 h-12 px-6"
+                  size="default"
+                  className="gap-1.5 h-9 px-4 text-sm"
                   onClick={() => setLocation("/cashier-journals")}
                 >
-                  <ArrowRight className="w-5 h-5" />
-                  العودة للقائمة
+                  <ArrowRight className="w-4 h-4" />
+                  العودة
                 </Button>
               )}
             </div>
@@ -2560,8 +2561,8 @@ export default function CashierJournalFormPage() {
           </div>
         </div>
         
-        {/* Spacer for sticky bar */}
-        <div className="h-36 md:h-28" />
+        {/* Spacer for sticky bar - reduced for iPad */}
+        <div className="h-24 md:h-20" />
       </div>
 
       {/* Variance Confirmation Dialog - for posting with mismatch */}
