@@ -153,7 +153,7 @@ const templates: Template[] = [
 
 function CompanyHeader({ templateTitle, templateTitleEn }: { templateTitle?: string; templateTitleEn?: string }) {
   return (
-    <div className="mb-6 relative">
+    <div className="mb-3 relative">
       {/* Watermark Background */}
       <div 
         className="absolute inset-0 flex items-center justify-center pointer-events-none z-0"
@@ -162,8 +162,8 @@ function CompanyHeader({ templateTitle, templateTitleEn }: { templateTitle?: str
           top: '50%',
           left: '50%',
           transform: 'translate(-50%, -50%)',
-          width: '400px',
-          height: '400px',
+          width: '280px',
+          height: '280px',
         }}
       >
         <img 
@@ -174,14 +174,14 @@ function CompanyHeader({ templateTitle, templateTitleEn }: { templateTitle?: str
         />
       </div>
 
-      {/* Main Header with Logo on Left */}
-      <div className="flex items-start justify-between border-b-2 border-[#1a3a2f] pb-4 mb-4 relative z-10">
+      {/* Main Header with Logo on Left - Compact */}
+      <div className="flex items-start justify-between border-b-2 border-[#1a3a2f] pb-2 mb-2 relative z-10">
         {/* Logo - Left Side */}
         <div className="flex-shrink-0">
           <img 
             src={COMPANY_INFO.logo} 
             alt="Company Logo" 
-            className="h-24 w-auto object-contain"
+            className="h-14 w-auto object-contain"
             onError={(e) => {
               e.currentTarget.style.display = 'none';
             }}
@@ -189,21 +189,18 @@ function CompanyHeader({ templateTitle, templateTitleEn }: { templateTitle?: str
         </div>
         
         {/* Company Info - Center & Right */}
-        <div className="flex-1 text-center px-4">
-          <h1 className="text-xl font-bold text-[#1a3a2f]">{COMPANY_INFO.name}</h1>
-          <h2 className="text-lg font-semibold text-[#1a3a2f] mt-1">{COMPANY_INFO.nameEn}</h2>
-          <div className="flex justify-center gap-6 mt-2 text-xs text-slate-600">
-            <span>سجل تجاري / C.R: {COMPANY_INFO.cr}</span>
-          </div>
-          <p className="text-xs text-slate-500 mt-1">{COMPANY_INFO.address} / {COMPANY_INFO.addressEn}</p>
+        <div className="flex-1 text-center px-2">
+          <h1 className="text-base font-bold text-[#1a3a2f]">{COMPANY_INFO.name}</h1>
+          <h2 className="text-sm font-semibold text-[#1a3a2f]">{COMPANY_INFO.nameEn}</h2>
+          <span className="text-xs text-slate-600">سجل تجاري / C.R: {COMPANY_INFO.cr}</span>
         </div>
       </div>
       
-      {/* Template Title */}
+      {/* Template Title - Compact */}
       {templateTitle && (
-        <div className="text-center border-2 border-[#1a3a2f] rounded-lg py-3 px-4 bg-slate-50 relative z-10">
-          <h2 className="text-xl font-bold text-[#1a3a2f]">{templateTitle}</h2>
-          {templateTitleEn && <p className="text-base font-medium text-slate-600">{templateTitleEn}</p>}
+        <div className="text-center border border-[#1a3a2f] rounded py-1 px-2 bg-slate-50 relative z-10">
+          <h2 className="text-sm font-bold text-[#1a3a2f]">{templateTitle}</h2>
+          {templateTitleEn && <p className="text-xs font-medium text-slate-600">{templateTitleEn}</p>}
         </div>
       )}
     </div>
@@ -212,11 +209,11 @@ function CompanyHeader({ templateTitle, templateTitleEn }: { templateTitle?: str
 
 function CompanyFooter() {
   return (
-    <div className="mt-8 pt-4 border-t-2 border-[#1a3a2f] text-center text-xs text-slate-600 relative z-10">
+    <div className="mt-3 pt-2 border-t border-[#1a3a2f] text-center text-xs text-slate-600 relative z-10">
       <div className="flex justify-between items-center">
-        <p className="font-semibold">{COMPANY_INFO.name}</p>
-        <p>C.R: {COMPANY_INFO.cr}</p>
-        <p className="font-semibold">{COMPANY_INFO.nameEn}</p>
+        <p className="font-semibold text-xs">{COMPANY_INFO.name}</p>
+        <p className="text-xs">C.R: {COMPANY_INFO.cr}</p>
+        <p className="font-semibold text-xs">{COMPANY_INFO.nameEn}</p>
       </div>
     </div>
   );
@@ -298,12 +295,12 @@ function WorkStartTemplate() {
       </Button>
 
       <div className="hidden">
-        <div ref={printRef} className="p-8 bg-white print:block" dir="rtl">
+        <div ref={printRef} className="p-4 bg-white print:block text-sm" dir="rtl">
           <CompanyHeader templateTitle="إشعار مباشرة العمل" templateTitleEn="Effective Date Notice" />
           
-          <div className="border-2 border-slate-300 rounded-lg p-4 mb-4">
-            <h3 className="font-bold text-slate-700 mb-3 border-b pb-2">1. بيانات الموظف / Employee Data</h3>
-            <div className="grid grid-cols-2 gap-4 text-sm">
+          <div className="border border-slate-300 rounded p-2 mb-2">
+            <h3 className="font-bold text-slate-700 mb-1 border-b pb-1 text-xs">1. بيانات الموظف / Employee Data</h3>
+            <div className="grid grid-cols-2 gap-1 text-xs">
               <div><span className="font-semibold">الاسم / Name:</span> {formData.employeeName}</div>
               <div><span className="font-semibold">رقم الموظف / Employee No:</span> {formData.employeeNo}</div>
               <div><span className="font-semibold">الوظيفة / Job Title:</span> {formData.position}</div>
@@ -316,8 +313,8 @@ function WorkStartTemplate() {
             </div>
           </div>
 
-          <div className="border-2 border-slate-300 rounded-lg p-4 mb-4">
-            <h3 className="font-bold text-slate-700 mb-3 border-b pb-2">2. إلى: الموارد البشرية / To: HR Department</h3>
+          <div className="border border-slate-300 rounded p-2 mb-2">
+            <h3 className="font-bold text-slate-700 mb-1 border-b pb-1 text-xs">2. إلى: الموارد البشرية / To: HR Department</h3>
             <p className="text-sm mb-2">نأمل اعتماد مباشرة العمل للموظف / Please approve work commencement for employee:</p>
             <div className="flex gap-4 text-sm flex-wrap">
               <div className="flex items-center gap-2">
@@ -329,22 +326,22 @@ function WorkStartTemplate() {
                 التحق بالعمل بعد العودة من / Returned from: {formData.returnedFrom}
               </div>
             </div>
-            <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
+            <div className="mt-4 grid grid-cols-2 gap-1 text-xs">
               <div><span className="font-semibold">المدير المباشر / Direct Manager:</span> {formData.managerName}</div>
               <div><span className="font-semibold">التوقيع / Signature:</span> ___________________</div>
               <div><span className="font-semibold">التاريخ / Date:</span> ___/___/______</div>
             </div>
           </div>
 
-          <div className="border-2 border-slate-300 rounded-lg p-4">
-            <h3 className="font-bold text-slate-700 mb-3 border-b pb-2">3. لاستخدام الموارد البشرية فقط / HR Use Only</h3>
+          <div className="border border-slate-300 rounded p-2">
+            <h3 className="font-bold text-slate-700 mb-1 border-b pb-1 text-xs">3. لاستخدام الموارد البشرية فقط / HR Use Only</h3>
             <div className="space-y-2 text-sm">
               <p>□ المذكور باشر في التاريخ المحدد ويدرج اسمه بكشوفات الرواتب اعتباراً من: ___/___/______</p>
               <p className="text-xs text-slate-500 mr-6">The employee started on the specified date and will be added to payroll from: ___/___/______</p>
               <p>□ المذكور باشر العمل متأخراً _____ يوم ويدرج اسمه بكشوفات الرواتب اعتباراً من: ___/___/______</p>
               <p className="text-xs text-slate-500 mr-6">The employee started late by _____ days and will be added to payroll from: ___/___/______</p>
             </div>
-            <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
+            <div className="mt-4 grid grid-cols-2 gap-1 text-xs">
               <div><span className="font-semibold">الموظف المختص / HR Specialist:</span> {formData.hrSpecialist}</div>
               <div><span className="font-semibold">التوقيع / Signature:</span> ___________________</div>
               <div><span className="font-semibold">محاسب الرواتب / Payroll Accountant:</span> ___________________</div>
@@ -434,12 +431,12 @@ function FinalSettlementTemplate() {
       </Button>
 
       <div className="hidden">
-        <div ref={printRef} className="p-8 bg-white print:block" dir="rtl">
+        <div ref={printRef} className="p-4 bg-white print:block text-sm" dir="rtl">
           <CompanyHeader templateTitle="نموذج مخالصة نهائية" templateTitleEn="Final Settlement" />
           
-          <div className="border-2 border-slate-300 rounded-lg p-4 mb-4">
-            <h3 className="font-bold text-slate-700 mb-3 border-b pb-2">1. بيانات الموظف / Employee Data</h3>
-            <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="border border-slate-300 rounded p-2 mb-2">
+            <h3 className="font-bold text-slate-700 mb-1 border-b pb-1 text-xs">1. بيانات الموظف / Employee Data</h3>
+            <div className="grid grid-cols-2 gap-1 text-xs">
               <div><span className="font-semibold">الاسم / Name:</span> {formData.employeeName}</div>
               <div><span className="font-semibold">الجنسية / Nationality:</span> {formData.nationality}</div>
               <div><span className="font-semibold">الرقم / No:</span> {formData.employeeNo}</div>
@@ -452,8 +449,8 @@ function FinalSettlementTemplate() {
             </div>
           </div>
 
-          <div className="border-2 border-slate-300 rounded-lg p-4">
-            <h3 className="font-bold text-slate-700 mb-3 border-b pb-2">2. إقرار الموظف / Employee Affirmance</h3>
+          <div className="border border-slate-300 rounded p-2">
+            <h3 className="font-bold text-slate-700 mb-1 border-b pb-1 text-xs">2. إقرار الموظف / Employee Affirmance</h3>
             <div className="grid grid-cols-2 gap-4">
               <div className="text-sm leading-relaxed">
                 <p>بهذا أقر أنا الموقع أدناه بأنني قد تسلمت مبلغ المخالصة النهائية بقيمة:</p>
@@ -467,7 +464,7 @@ function FinalSettlementTemplate() {
                 <p className="mt-2">The amount comprises all accrued entitlements due to me at termination of my contract pursuant to company regulations and the labor and workmen law.</p>
               </div>
             </div>
-            <div className="mt-6 grid grid-cols-2 gap-4 text-sm border-t pt-4">
+            <div className="mt-6 grid grid-cols-2 gap-1 text-xs border-t pt-4">
               <div>
                 <p><span className="font-semibold">اسم الموظف:</span> {formData.employeeName}</p>
                 <p className="mt-2"><span className="font-semibold">التوقيع:</span> ___________________</p>
@@ -576,7 +573,7 @@ function PaymentOrderTemplate() {
       </Button>
 
       <div className="hidden">
-        <div ref={printRef} className="p-8 bg-white print:block" dir="rtl">
+        <div ref={printRef} className="p-4 bg-white print:block text-sm" dir="rtl">
           <CompanyHeader templateTitle="نموذج أمر صرف / دفع" templateTitleEn="Payment Order" />
           <div className="text-center mb-4">
             <p className="text-sm text-slate-600">التاريخ / Date: {formData.date}</p>
@@ -587,7 +584,7 @@ function PaymentOrderTemplate() {
             <p>تحية طيبة وبعد... / Greetings</p>
           </div>
 
-          <div className="border-2 border-slate-300 rounded-lg p-4 mb-4">
+          <div className="border border-slate-300 rounded p-2 mb-2">
             <p className="mb-3">الرجاء الموافقة على تحويل / صرف لأمر السيد / Please approve transfer/payment to: <span className="font-bold">{formData.beneficiaryName}</span></p>
             <p className="text-lg font-bold">المبلغ / Amount: ({formData.amount}) ريال SAR - ({formData.amountWords})</p>
             
@@ -728,12 +725,12 @@ function ClearanceTemplate() {
       </Button>
 
       <div className="hidden">
-        <div ref={printRef} className="p-8 bg-white print:block" dir="rtl">
+        <div ref={printRef} className="p-4 bg-white print:block text-sm" dir="rtl">
           <CompanyHeader templateTitle="إخلاء طرف" templateTitleEn="Clearance Form" />
 
-          <div className="border-2 border-slate-300 rounded-lg p-4 mb-4">
-            <h3 className="font-bold text-slate-700 mb-3 border-b pb-2">1. بيانات الموظف / Employee Data</h3>
-            <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="border border-slate-300 rounded p-2 mb-2">
+            <h3 className="font-bold text-slate-700 mb-1 border-b pb-1 text-xs">1. بيانات الموظف / Employee Data</h3>
+            <div className="grid grid-cols-2 gap-1 text-xs">
               <div><span className="font-semibold">الاسم / Name:</span> {formData.employeeName}</div>
               <div><span className="font-semibold">رقم الموظف / No:</span> {formData.employeeNo}</div>
               <div><span className="font-semibold">الجنسية / Nationality:</span> {formData.nationality}</div>
@@ -753,8 +750,8 @@ function ClearanceTemplate() {
             </div>
           </div>
 
-          <div className="border-2 border-slate-300 rounded-lg p-4">
-            <h3 className="font-bold text-slate-700 mb-3 border-b pb-2">2. الجهات ذات العلاقة / Related Departments</h3>
+          <div className="border border-slate-300 rounded p-2">
+            <h3 className="font-bold text-slate-700 mb-1 border-b pb-1 text-xs">2. الجهات ذات العلاقة / Related Departments</h3>
             <div className="space-y-4">
               {departments.map((dept, index) => (
                 <div key={index} className="border-b pb-3 last:border-b-0">
@@ -868,12 +865,12 @@ function PenaltyTemplate() {
       </Button>
 
       <div className="hidden">
-        <div ref={printRef} className="p-8 bg-white print:block" dir="rtl">
+        <div ref={printRef} className="p-4 bg-white print:block text-sm" dir="rtl">
           <CompanyHeader templateTitle="إجراء جزائي" templateTitleEn="Penalty Procedure" />
 
-          <div className="border-2 border-slate-300 rounded-lg p-4 mb-4">
-            <h3 className="font-bold text-slate-700 mb-3 border-b pb-2">1. بيانات الموظف / Employee Data</h3>
-            <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="border border-slate-300 rounded p-2 mb-2">
+            <h3 className="font-bold text-slate-700 mb-1 border-b pb-1 text-xs">1. بيانات الموظف / Employee Data</h3>
+            <div className="grid grid-cols-2 gap-1 text-xs">
               <div><span className="font-semibold">الاسم / Name:</span> {formData.employeeName}</div>
               <div><span className="font-semibold">الرقم / No:</span> {formData.employeeNo}</div>
               <div><span className="font-semibold">الإدارة / Location:</span> {formData.department}</div>
@@ -886,9 +883,9 @@ function PenaltyTemplate() {
             </div>
           </div>
 
-          <div className="border-2 border-slate-300 rounded-lg p-4 mb-4">
-            <h3 className="font-bold text-slate-700 mb-3 border-b pb-2">2. الإجراء الجزائي / Penalty Action</h3>
-            <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="border border-slate-300 rounded p-2 mb-2">
+            <h3 className="font-bold text-slate-700 mb-1 border-b pb-1 text-xs">2. الإجراء الجزائي / Penalty Action</h3>
+            <div className="grid grid-cols-2 gap-1 text-xs">
               {penalties.map((p) => (
                 <div key={p.value} className="flex items-center gap-2">
                   <span className={`w-4 h-4 border ${formData.penaltyType === p.value ? 'bg-slate-800' : ''}`}></span>
@@ -901,7 +898,7 @@ function PenaltyTemplate() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 text-sm">
+          <div className="grid grid-cols-2 gap-1 text-xs">
             <div className="border rounded p-3">
               <p className="font-semibold">توقيع الموظف / Employee Signature</p>
               <p className="mt-4">التوقيع / Signature: ___________________</p>
@@ -983,7 +980,7 @@ function AssetHandoverTemplate() {
       </Button>
 
       <div className="hidden">
-        <div ref={printRef} className="p-8 bg-white print:block" dir="rtl">
+        <div ref={printRef} className="p-4 bg-white print:block text-sm" dir="rtl">
           <CompanyHeader templateTitle="نموذج تسليم عهدة" templateTitleEn="Asset Handover Form" />
 
           <div className="grid grid-cols-3 gap-4 mb-6 text-sm">
@@ -1015,7 +1012,7 @@ function AssetHandoverTemplate() {
             </tbody>
           </table>
 
-          <div className="mt-6 grid grid-cols-2 gap-4 text-sm">
+          <div className="mt-6 grid grid-cols-2 gap-1 text-xs">
             <div className="border rounded p-3">
               <p className="font-semibold">التوقيع بالاستلام / Received By</p>
               <p className="mt-2"><span className="font-semibold">الاسم / Name:</span> ___________________</p>
@@ -1129,7 +1126,7 @@ function EmployeeStatusChangeTemplate() {
       </Button>
 
       <div className="hidden">
-        <div ref={printRef} className="p-8 bg-white print:block" dir="rtl">
+        <div ref={printRef} className="p-4 bg-white print:block text-sm" dir="rtl">
           <CompanyHeader templateTitle="طلب تعديل حالة موظف" templateTitleEn="Employee Status Change Request" />
           <div className="text-center mb-4">
             <p className="text-sm text-slate-600">التاريخ / Date: {formData.date}</p>
@@ -1139,8 +1136,8 @@ function EmployeeStatusChangeTemplate() {
             <p className="font-semibold">إلى: سعادة المدير التنفيذي المحترم / To: CEO</p>
           </div>
 
-          <div className="border-2 border-slate-300 rounded-lg p-4 mb-4">
-            <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="border border-slate-300 rounded p-2 mb-2">
+            <div className="grid grid-cols-2 gap-1 text-xs">
               <div><span className="font-semibold">اسم الموظف / Employee Name:</span> {formData.employeeName}</div>
               <div><span className="font-semibold">رقم الموظف / Employee No:</span> {formData.employeeNo}</div>
               <div><span className="font-semibold">الإدارة/القسم / Dept/Section:</span> {formData.department}</div>
@@ -1184,12 +1181,12 @@ function EmployeeStatusChangeTemplate() {
             </tbody>
           </table>
 
-          <div className="grid grid-cols-2 gap-4 text-sm mb-4">
+          <div className="grid grid-cols-2 gap-1 text-xs mb-4">
             <div><span className="font-semibold">وذلك من تاريخ / Effective Date:</span> {formData.effectiveDate}</div>
             <div><span className="font-semibold">سبب تقديم الطلب / Reason:</span> {formData.reason}</div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 text-sm">
+          <div className="grid grid-cols-2 gap-1 text-xs">
             <div className="border rounded p-3">
               <p className="font-semibold">مدير الإدارة (طالب النقل) / Dept Manager (Requester)</p>
               <p className="mt-2">الاسم / Name: ___________________</p>
@@ -1355,10 +1352,10 @@ function ProbationEvaluationTemplate() {
       </Button>
 
       <div className="hidden">
-        <div ref={printRef} className="p-8 bg-white print:block" dir="rtl">
+        <div ref={printRef} className="p-4 bg-white print:block text-sm" dir="rtl">
           <CompanyHeader templateTitle="نموذج تقييم أداء لموظفين تحت التجربة" templateTitleEn="Probation Period Performance Evaluation" />
 
-          <div className="grid grid-cols-2 gap-4 text-sm mb-4">
+          <div className="grid grid-cols-2 gap-1 text-xs mb-4">
             <div><span className="font-semibold">اسم الموظف / Employee Name:</span> {formData.employeeName}</div>
             <div><span className="font-semibold">الوظيفة / Position:</span> {formData.position}</div>
             <div><span className="font-semibold">الإدارة / Department:</span> {formData.department}</div>
@@ -1425,7 +1422,7 @@ function ProbationEvaluationTemplate() {
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-4 text-sm">
+          <div className="grid grid-cols-2 gap-1 text-xs">
             <div className="border rounded p-3">
               <p className="font-semibold">المسؤول المباشر / Direct Supervisor</p>
               <p className="mt-2">التوقيع / Signature: ___________________</p>
@@ -1565,7 +1562,7 @@ function JobOfferTemplate() {
       </Button>
 
       <div className="hidden">
-        <div ref={printRef} className="p-8 bg-white print:block" dir="rtl">
+        <div ref={printRef} className="p-4 bg-white print:block text-sm" dir="rtl">
           <CompanyHeader templateTitle="تفاصيل عرض العمل" templateTitleEn="Job Offer Specification" />
 
           <table className="w-full border-collapse border text-sm mb-4">
