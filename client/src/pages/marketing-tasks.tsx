@@ -317,17 +317,17 @@ export default function MarketingTasksPage() {
           </DropdownMenu>
         </div>
         <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-          <Badge className={`${priorityInfo.color} text-xs px-1.5 py-0`}>
+          <Badge className={`${priorityInfo.color} text-[10px] sm:text-xs px-1.5 py-0`}>
             {priorityInfo.label}
           </Badge>
           {task.dueDate && (
-            <Badge variant="outline" className={`text-xs px-1.5 py-0 ${overdue ? "border-red-400 text-red-600" : ""}`}>
+            <Badge variant="outline" className={`text-[10px] sm:text-xs px-1.5 py-0 ${overdue ? "border-red-400 text-red-600" : ""}`}>
               <Calendar className="w-3 h-3 ml-0.5" />
               {formatDate(task.dueDate)}
             </Badge>
           )}
           {task.assignedTo && (
-            <Badge variant="secondary" className="text-xs px-1.5 py-0">
+            <Badge variant="secondary" className="text-[10px] sm:text-xs px-1.5 py-0">
               <User className="w-3 h-3 ml-0.5" />
               {task.assignedTo}
             </Badge>

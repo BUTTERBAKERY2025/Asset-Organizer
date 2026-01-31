@@ -234,13 +234,13 @@ export default function TravelRequestsPage() {
 
   return (
     <Layout>
-    <div className="max-w-6xl mx-auto p-4 md:p-8 lg:p-10 space-y-4" dir="rtl">
-      <div className="flex items-center justify-between">
+    <div className="max-w-6xl mx-auto p-3 sm:p-4 md:p-6 space-y-4" dir="rtl">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-amber-800" data-testid="page-title">
+          <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-amber-800" data-testid="page-title">
             إدارة السفر والحجوزات
           </h1>
-          <p className="text-gray-600">إدارة طلبات السفر والميزانيات</p>
+          <p className="text-xs sm:text-sm text-gray-600">إدارة طلبات السفر والميزانيات</p>
         </div>
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogTrigger asChild>
@@ -373,72 +373,72 @@ export default function TravelRequestsPage() {
         </Dialog>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-4">
         <Card className="bg-gradient-to-br from-yellow-500 to-yellow-600 text-white">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Clock className="h-5 w-5" />
+          <CardHeader className="p-3 sm:p-4 pb-2">
+            <CardTitle className="flex items-center gap-2 text-xs sm:text-sm md:text-lg">
+              <Clock className="h-4 w-4 sm:h-5 sm:w-5" />
               قيد الانتظار
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-bold" data-testid="stat-pending">
+          <CardContent className="p-3 sm:p-4 pt-0">
+            <div className="text-xl sm:text-2xl md:text-4xl font-bold" data-testid="stat-pending">
               {stats?.pendingRequests || 0}
             </div>
           </CardContent>
         </Card>
 
         <Card className="bg-gradient-to-br from-green-500 to-green-600 text-white">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <CheckCircle className="h-5 w-5" />
+          <CardHeader className="p-3 sm:p-4 pb-2">
+            <CardTitle className="flex items-center gap-2 text-xs sm:text-sm md:text-lg">
+              <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5" />
               معتمدة
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-bold" data-testid="stat-approved">
+          <CardContent className="p-3 sm:p-4 pt-0">
+            <div className="text-xl sm:text-2xl md:text-4xl font-bold" data-testid="stat-approved">
               {stats?.approvedRequests || 0}
             </div>
           </CardContent>
         </Card>
 
         <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Plane className="h-5 w-5" />
+          <CardHeader className="p-3 sm:p-4 pb-2">
+            <CardTitle className="flex items-center gap-2 text-xs sm:text-sm md:text-lg">
+              <Plane className="h-4 w-4 sm:h-5 sm:w-5" />
               مكتملة
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-bold" data-testid="stat-completed">
+          <CardContent className="p-3 sm:p-4 pt-0">
+            <div className="text-xl sm:text-2xl md:text-4xl font-bold" data-testid="stat-completed">
               {stats?.completedTrips || 0}
             </div>
           </CardContent>
         </Card>
 
         <Card className="bg-gradient-to-br from-purple-500 to-purple-600 text-white">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <DollarSign className="h-5 w-5" />
+          <CardHeader className="p-3 sm:p-4 pb-2">
+            <CardTitle className="flex items-center gap-2 text-xs sm:text-sm md:text-lg">
+              <DollarSign className="h-4 w-4 sm:h-5 sm:w-5" />
               الميزانية
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold" data-testid="stat-budget">
+          <CardContent className="p-3 sm:p-4 pt-0">
+            <div className="text-sm sm:text-lg md:text-2xl font-bold" data-testid="stat-budget">
               {(stats?.totalBudget || 0).toLocaleString()} ر.س
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-amber-500 to-amber-600 text-white">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <DollarSign className="h-5 w-5" />
+        <Card className="bg-gradient-to-br from-amber-500 to-amber-600 text-white col-span-2 lg:col-span-1">
+          <CardHeader className="p-3 sm:p-4 pb-2">
+            <CardTitle className="flex items-center gap-2 text-xs sm:text-sm md:text-lg">
+              <DollarSign className="h-4 w-4 sm:h-5 sm:w-5" />
               المصروف
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold" data-testid="stat-spent">
+          <CardContent className="p-3 sm:p-4 pt-0">
+            <div className="text-sm sm:text-lg md:text-2xl font-bold" data-testid="stat-spent">
               {(stats?.totalSpent || 0).toLocaleString()} ر.س
             </div>
           </CardContent>
@@ -446,18 +446,20 @@ export default function TravelRequestsPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="mb-4">
-          <TabsTrigger value="all" className="gap-2" data-testid="tab-all">
-            <Plane className="h-4 w-4" />
-            جميع الطلبات
+        <TabsList className="mb-4 w-full flex-wrap h-auto p-1 overflow-x-auto">
+          <TabsTrigger value="all" className="gap-1 sm:gap-2 text-[10px] sm:text-xs md:text-sm" data-testid="tab-all">
+            <Plane className="h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">جميع الطلبات</span>
+            <span className="sm:hidden">الكل</span>
           </TabsTrigger>
-          <TabsTrigger value="my" className="gap-2" data-testid="tab-my">
-            <User className="h-4 w-4" />
+          <TabsTrigger value="my" className="gap-1 sm:gap-2 text-[10px] sm:text-xs md:text-sm" data-testid="tab-my">
+            <User className="h-3 w-3 sm:h-4 sm:w-4" />
             طلباتي
           </TabsTrigger>
-          <TabsTrigger value="pending" className="gap-2" data-testid="tab-pending">
-            <Clock className="h-4 w-4" />
-            بانتظار الموافقة
+          <TabsTrigger value="pending" className="gap-1 sm:gap-2 text-[10px] sm:text-xs md:text-sm" data-testid="tab-pending">
+            <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">بانتظار الموافقة</span>
+            <span className="sm:hidden">انتظار</span>
           </TabsTrigger>
         </TabsList>
 

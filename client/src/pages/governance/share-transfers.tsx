@@ -120,22 +120,22 @@ export default function ShareTransfersPage() {
 
   return (
     <Layout>
-      <div className="max-w-6xl mx-auto p-4 md:p-8 lg:p-10 space-y-4" dir="rtl">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
+      <div className="max-w-6xl mx-auto p-3 sm:p-4 md:p-6 space-y-4" dir="rtl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
             <Link href="/governance">
               <Button variant="ghost" size="icon" className="h-8 w-8">
                 <ChevronLeft className="h-4 w-4" />
               </Button>
             </Link>
-            <div className="p-3 bg-gradient-to-br from-cyan-500 to-teal-600 rounded-xl">
-              <ArrowLeftRight className="w-7 h-7 text-white" />
+            <div className="p-2 sm:p-3 bg-gradient-to-br from-cyan-500 to-teal-600 rounded-xl">
+              <ArrowLeftRight className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-cyan-800" data-testid="page-title">
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-cyan-800" data-testid="page-title">
                 تحويلات الأسهم
               </h1>
-              <p className="text-gray-600">إدارة عمليات نقل ملكية الأسهم</p>
+              <p className="text-xs sm:text-sm text-gray-600">إدارة عمليات نقل ملكية الأسهم</p>
             </div>
           </div>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -220,54 +220,54 @@ export default function ShareTransfersPage() {
           </Dialog>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <Card className="bg-gradient-to-br from-cyan-50 to-teal-50 border-cyan-200">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-cyan-600">إجمالي التحويلات</p>
-                  <p className="text-2xl font-bold text-cyan-800">{transfers.length}</p>
+                  <p className="text-xs sm:text-sm text-cyan-600">إجمالي التحويلات</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-cyan-800">{transfers.length}</p>
                 </div>
-                <ArrowLeftRight className="h-8 w-8 text-cyan-500" />
+                <ArrowLeftRight className="h-6 w-6 sm:h-8 sm:w-8 text-cyan-500" />
               </div>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-yellow-50 to-amber-50 border-yellow-200">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-yellow-600">قيد المراجعة</p>
-                  <p className="text-2xl font-bold text-yellow-800">
+                  <p className="text-xs sm:text-sm text-yellow-600">قيد المراجعة</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-yellow-800">
                     {transfers.filter(t => t.approvalStatus === 'pending').length}
                   </p>
                 </div>
-                <Clock className="h-8 w-8 text-yellow-500" />
+                <Clock className="h-6 w-6 sm:h-8 sm:w-8 text-yellow-500" />
               </div>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-green-600">معتمدة</p>
-                  <p className="text-2xl font-bold text-green-800">
+                  <p className="text-xs sm:text-sm text-green-600">معتمدة</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-green-800">
                     {transfers.filter(t => t.approvalStatus === 'approved').length}
                   </p>
                 </div>
-                <CheckCircle className="h-8 w-8 text-green-500" />
+                <CheckCircle className="h-6 w-6 sm:h-8 sm:w-8 text-green-500" />
               </div>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-blue-600">إجمالي القيمة</p>
-                  <p className="text-2xl font-bold text-blue-800">
-                    {transfers.reduce((sum, t) => sum + (Number(t.totalValue) || 0), 0).toLocaleString()} ر.س
+                  <p className="text-xs sm:text-sm text-blue-600">إجمالي القيمة</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-blue-800">
+                    {transfers.reduce((sum, t) => sum + (Number(t.totalValue) || 0), 0).toLocaleString()} <span className="text-xs sm:text-sm">ر.س</span>
                   </p>
                 </div>
-                <DollarSign className="h-8 w-8 text-blue-500" />
+                <DollarSign className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500" />
               </div>
             </CardContent>
           </Card>
@@ -286,16 +286,17 @@ export default function ShareTransfersPage() {
 
         <Card>
           <CardContent className="p-0">
-            <Table>
+            <div className="overflow-x-auto">
+            <Table className="min-w-[800px]">
               <TableHeader>
                 <TableRow>
                   <TableHead className="text-right">رقم التحويل</TableHead>
                   <TableHead className="text-right">من</TableHead>
                   <TableHead className="text-right">إلى</TableHead>
                   <TableHead className="text-right">عدد الأسهم</TableHead>
-                  <TableHead className="text-right">القيمة الإجمالية</TableHead>
-                  <TableHead className="text-right">النوع</TableHead>
-                  <TableHead className="text-right">التاريخ</TableHead>
+                  <TableHead className="text-right hidden md:table-cell">القيمة الإجمالية</TableHead>
+                  <TableHead className="text-right hidden md:table-cell">النوع</TableHead>
+                  <TableHead className="text-right hidden lg:table-cell">التاريخ</TableHead>
                   <TableHead className="text-right">الحالة</TableHead>
                   <TableHead className="text-right">الإجراءات</TableHead>
                 </TableRow>
@@ -316,34 +317,34 @@ export default function ShareTransfersPage() {
                 ) : (
                   filteredTransfers.map((transfer) => (
                     <TableRow key={transfer.id} data-testid={`transfer-row-${transfer.id}`}>
-                      <TableCell className="font-mono text-sm">{transfer.transferNumber}</TableCell>
+                      <TableCell className="font-mono text-xs sm:text-sm">{transfer.transferNumber}</TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2">
-                          <User className="h-4 w-4 text-gray-400" />
-                          {getShareholderName(transfer.fromShareholderId)}
+                        <div className="flex items-center gap-1 sm:gap-2">
+                          <User className="h-3 w-3 sm:h-4 sm:w-4 text-gray-400" />
+                          <span className="text-xs sm:text-sm">{getShareholderName(transfer.fromShareholderId)}</span>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2">
-                          <User className="h-4 w-4 text-gray-400" />
-                          {getShareholderName(transfer.toShareholderId)}
+                        <div className="flex items-center gap-1 sm:gap-2">
+                          <User className="h-3 w-3 sm:h-4 sm:w-4 text-gray-400" />
+                          <span className="text-xs sm:text-sm">{getShareholderName(transfer.toShareholderId)}</span>
                         </div>
                       </TableCell>
-                      <TableCell className="font-medium">{transfer.numberOfShares?.toLocaleString()}</TableCell>
-                      <TableCell>{Number(transfer.totalValue).toLocaleString()} ر.س</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">
+                      <TableCell className="font-medium text-xs sm:text-sm">{transfer.numberOfShares?.toLocaleString()}</TableCell>
+                      <TableCell className="hidden md:table-cell text-xs sm:text-sm">{Number(transfer.totalValue).toLocaleString()} ر.س</TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        <Badge variant="outline" className="text-[10px] sm:text-xs">
                           {transferTypes.find(t => t.value === transfer.transferType)?.label}
                         </Badge>
                       </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1 text-sm">
+                      <TableCell className="hidden lg:table-cell">
+                        <div className="flex items-center gap-1 text-xs sm:text-sm">
                           <Calendar className="h-3 w-3 text-gray-400" />
                           {transfer.transferDate ? new Date(transfer.transferDate).toLocaleDateString('en-GB') : '-'}
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge className={transferStatuses.find(s => s.value === transfer.approvalStatus)?.color}>
+                        <Badge className={`text-[10px] sm:text-xs ${transferStatuses.find(s => s.value === transfer.approvalStatus)?.color}`}>
                           {transferStatuses.find(s => s.value === transfer.approvalStatus)?.label}
                         </Badge>
                       </TableCell>
@@ -353,20 +354,20 @@ export default function ShareTransfersPage() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 text-green-600"
+                              className="h-7 w-7 sm:h-8 sm:w-8 text-green-600"
                               onClick={() => approveMutation.mutate({ id: transfer.id, status: 'approved' })}
                               data-testid={`approve-${transfer.id}`}
                             >
-                              <CheckCircle className="h-4 w-4" />
+                              <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4" />
                             </Button>
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 text-red-600"
+                              className="h-7 w-7 sm:h-8 sm:w-8 text-red-600"
                               onClick={() => approveMutation.mutate({ id: transfer.id, status: 'rejected' })}
                               data-testid={`reject-${transfer.id}`}
                             >
-                              <XCircle className="h-4 w-4" />
+                              <XCircle className="h-3 w-3 sm:h-4 sm:w-4" />
                             </Button>
                           </div>
                         )}
@@ -376,6 +377,7 @@ export default function ShareTransfersPage() {
                 )}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
       </div>

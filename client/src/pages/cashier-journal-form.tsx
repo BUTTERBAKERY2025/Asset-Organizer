@@ -1159,9 +1159,9 @@ export default function CashierJournalFormPage() {
   if (isEdit && loadingJournal) {
     return (
       <Layout>
-        <div className="p-6">
-          <Skeleton className="h-12 w-48 mb-6" />
-          <Skeleton className="h-96 w-full" />
+        <div className="p-3 sm:p-4 md:p-6">
+          <Skeleton className="h-10 sm:h-12 w-40 sm:w-48 mb-4 sm:mb-6" />
+          <Skeleton className="h-72 sm:h-96 w-full" />
         </div>
       </Layout>
     );
@@ -1169,7 +1169,7 @@ export default function CashierJournalFormPage() {
 
   return (
     <Layout>
-      <div className="p-3 md:p-6 lg:p-8 max-w-6xl mx-auto space-y-3" dir="rtl">
+      <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-3" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="flex items-center gap-2 sm:gap-3">
             <Link href="/cashier-journals">
@@ -1184,9 +1184,10 @@ export default function CashierJournalFormPage() {
             </div>
           </div>
           {isEdit && (
-            <Button onClick={handleExportPDF} className="gap-2 bg-amber-600 hover:bg-amber-700 h-9 sm:h-8 text-sm" data-testid="button-export-pdf">
+            <Button onClick={handleExportPDF} className="gap-2 bg-amber-600 hover:bg-amber-700 h-11 sm:h-9 text-sm" data-testid="button-export-pdf">
               <FileDown className="w-4 h-4" />
-              تصدير PDF
+              <span className="hidden sm:inline">تصدير PDF</span>
+              <span className="sm:hidden">PDF</span>
             </Button>
           )}
         </div>

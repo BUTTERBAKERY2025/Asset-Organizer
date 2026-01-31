@@ -209,19 +209,19 @@ export default function ExecutiveCalendar() {
 
   return (
     <Layout>
-      <div className="max-w-6xl mx-auto p-4 md:p-8 lg:p-10 space-y-4" dir="rtl">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-4">
+      <div className="max-w-6xl mx-auto p-3 sm:p-4 md:p-6 space-y-4" dir="rtl">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2 sm:gap-4">
           <Link href="/executive">
-            <Button variant="ghost" size="icon">
-              <ArrowRight className="h-5 w-5" />
+            <Button variant="ghost" size="sm" className="h-8 w-8 sm:h-9 sm:w-9">
+              <ArrowRight className="h-4 w-4 sm:h-5 sm:w-5" />
             </Button>
           </Link>
           <div>
-            <h1 className="text-3xl font-bold text-amber-800" data-testid="page-title">
+            <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-amber-800" data-testid="page-title">
               التقويم التنفيذي
             </h1>
-            <p className="text-gray-600">
+            <p className="text-[10px] sm:text-xs text-gray-600">
               عرض الاجتماعات والمهام في تقويم تفاعلي
             </p>
           </div>
@@ -229,52 +229,53 @@ export default function ExecutiveCalendar() {
 
         <div className="flex items-center gap-2">
           <Tabs value={view} onValueChange={(v) => setView(v as 'month' | 'week')}>
-            <TabsList>
-              <TabsTrigger value="month">شهري</TabsTrigger>
-              <TabsTrigger value="week">أسبوعي</TabsTrigger>
+            <TabsList className="h-8 sm:h-9">
+              <TabsTrigger value="month" className="text-xs sm:text-sm px-2 sm:px-3">شهري</TabsTrigger>
+              <TabsTrigger value="week" className="text-xs sm:text-sm px-2 sm:px-3">أسبوعي</TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
       </div>
 
       <Card>
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="icon" onClick={navigatePrev}>
-                <ChevronRight className="h-4 w-4" />
+        <CardHeader className="p-3 sm:p-4 pb-2">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
+            <div className="flex items-center gap-1 sm:gap-2 order-2 sm:order-1">
+              <Button variant="outline" size="icon" onClick={navigatePrev} className="h-7 w-7 sm:h-9 sm:w-9">
+                <ChevronRight className="h-3 w-3 sm:h-4 sm:w-4" />
               </Button>
-              <Button variant="outline" size="icon" onClick={navigateNext}>
-                <ChevronLeft className="h-4 w-4" />
+              <Button variant="outline" size="icon" onClick={navigateNext} className="h-7 w-7 sm:h-9 sm:w-9">
+                <ChevronLeft className="h-3 w-3 sm:h-4 sm:w-4" />
               </Button>
-              <Button variant="outline" size="sm" onClick={goToToday}>
+              <Button variant="outline" size="sm" onClick={goToToday} className="h-7 sm:h-9 text-xs sm:text-sm">
                 اليوم
               </Button>
             </div>
-            <CardTitle className="text-xl">
+            <CardTitle className="text-sm sm:text-lg md:text-xl order-1 sm:order-2">
               {view === 'month' 
                 ? format(currentDate, 'MMMM yyyy', { locale: ar })
                 : `${format(weekStart, 'd MMM', { locale: ar })} - ${format(weekEnd, 'd MMM yyyy', { locale: ar })}`
               }
             </CardTitle>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                <span className="text-sm">اجتماعات</span>
+            <div className="hidden sm:flex items-center gap-4 order-3">
+              <div className="flex items-center gap-1 sm:gap-2">
+                <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-blue-500"></div>
+                <span className="text-xs sm:text-sm">اجتماعات</span>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-amber-500"></div>
-                <span className="text-sm">مهام</span>
+              <div className="flex items-center gap-1 sm:gap-2">
+                <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-amber-500"></div>
+                <span className="text-xs sm:text-sm">مهام</span>
               </div>
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-2 sm:p-4 overflow-x-auto">
           {view === 'month' ? (
-            <div className="grid grid-cols-7 gap-1">
+            <div className="grid grid-cols-7 gap-0.5 sm:gap-1 min-w-[350px] sm:min-w-0">
               {arabicDays.map((day) => (
-                <div key={day} className="p-2 text-center font-semibold text-gray-600 border-b">
-                  {day}
+                <div key={day} className="p-1 sm:p-2 text-center font-semibold text-gray-600 border-b text-[10px] sm:text-sm">
+                  <span className="hidden sm:inline">{day}</span>
+                  <span className="sm:hidden">{day.charAt(0)}</span>
                 </div>
               ))}
               {monthDays.map((day, index) => {
@@ -285,32 +286,32 @@ export default function ExecutiveCalendar() {
                 return (
                   <div
                     key={index}
-                    className={`min-h-24 p-1 border rounded-lg ${
+                    className={`min-h-16 sm:min-h-24 p-0.5 sm:p-1 border rounded sm:rounded-lg ${
                       isCurrentMonth ? 'bg-white' : 'bg-gray-50'
-                    } ${isCurrentDay ? 'ring-2 ring-amber-500' : ''}`}
+                    } ${isCurrentDay ? 'ring-1 sm:ring-2 ring-amber-500' : ''}`}
                   >
-                    <div className={`text-sm font-medium mb-1 ${
+                    <div className={`text-[10px] sm:text-sm font-medium mb-0.5 sm:mb-1 ${
                       isCurrentMonth ? 'text-gray-900' : 'text-gray-400'
                     } ${isCurrentDay ? 'text-amber-600' : ''}`}>
                       {format(day, 'd')}
                     </div>
-                    <div className="space-y-1">
-                      {dayEvents.slice(0, 3).map((event) => (
+                    <div className="space-y-0.5 sm:space-y-1">
+                      {dayEvents.slice(0, 2).map((event) => (
                         <button
                           key={event.id}
                           onClick={() => handleEventClick(event)}
-                          className={`w-full text-right text-xs p-1 rounded truncate text-white ${
+                          className={`w-full text-right text-[8px] sm:text-xs p-0.5 sm:p-1 rounded truncate text-white ${
                             event.type === 'meeting' ? 'bg-blue-500 hover:bg-blue-600' : 'bg-amber-500 hover:bg-amber-600'
                           }`}
                           data-testid={`event-${event.id}`}
                         >
-                          {event.time && <span className="ml-1">{event.time}</span>}
-                          {event.title}
+                          <span className="hidden sm:inline">{event.time && <span className="ml-1">{event.time}</span>}</span>
+                          <span className="truncate">{event.title}</span>
                         </button>
                       ))}
-                      {dayEvents.length > 3 && (
-                        <div className="text-xs text-gray-500 text-center">
-                          +{dayEvents.length - 3} المزيد
+                      {dayEvents.length > 2 && (
+                        <div className="text-[8px] sm:text-xs text-gray-500 text-center">
+                          +{dayEvents.length - 2}
                         </div>
                       )}
                     </div>
@@ -319,41 +320,41 @@ export default function ExecutiveCalendar() {
               })}
             </div>
           ) : (
-            <div className="grid grid-cols-7 gap-2">
+            <div className="grid grid-cols-7 gap-1 sm:gap-2 min-w-[500px] sm:min-w-0">
               {weekDays.map((day, index) => {
                 const dayEvents = getEventsForDay(day);
                 const isCurrentDay = isToday(day);
 
                 return (
-                  <div key={index} className="min-h-[400px]">
-                    <div className={`p-2 text-center border-b ${isCurrentDay ? 'bg-amber-50' : ''}`}>
-                      <div className="text-sm text-gray-600">{arabicDays[index]}</div>
-                      <div className={`text-lg font-bold ${isCurrentDay ? 'text-amber-600' : ''}`}>
+                  <div key={index} className="min-h-[200px] sm:min-h-[400px]">
+                    <div className={`p-1 sm:p-2 text-center border-b ${isCurrentDay ? 'bg-amber-50' : ''}`}>
+                      <div className="text-[10px] sm:text-sm text-gray-600">{arabicDays[index]}</div>
+                      <div className={`text-sm sm:text-lg font-bold ${isCurrentDay ? 'text-amber-600' : ''}`}>
                         {format(day, 'd')}
                       </div>
                     </div>
-                    <div className="p-1 space-y-2">
+                    <div className="p-0.5 sm:p-1 space-y-1 sm:space-y-2">
                       {dayEvents.map((event) => (
                         <button
                           key={event.id}
                           onClick={() => handleEventClick(event)}
-                          className={`w-full text-right p-2 rounded-lg text-white ${
+                          className={`w-full text-right p-1 sm:p-2 rounded sm:rounded-lg text-white ${
                             event.type === 'meeting' ? 'bg-blue-500 hover:bg-blue-600' : 'bg-amber-500 hover:bg-amber-600'
                           }`}
                           data-testid={`event-${event.id}`}
                         >
-                          <div className="flex items-center gap-1 mb-1">
+                          <div className="flex items-center gap-1 mb-0.5 sm:mb-1">
                             {event.type === 'meeting' && event.meetingType && meetingTypeIcons[event.meetingType]}
                             {event.time && (
-                              <span className="text-xs flex items-center gap-1">
-                                <Clock className="h-3 w-3" />
+                              <span className="text-[10px] sm:text-xs flex items-center gap-0.5 sm:gap-1">
+                                <Clock className="h-2 w-2 sm:h-3 sm:w-3" />
                                 {event.time}
                               </span>
                             )}
                           </div>
-                          <div className="text-sm font-medium truncate">{event.title}</div>
+                          <div className="text-[10px] sm:text-sm font-medium truncate">{event.title}</div>
                           {event.location && (
-                            <div className="text-xs opacity-80 flex items-center gap-1 mt-1">
+                            <div className="hidden sm:flex text-xs opacity-80 items-center gap-1 mt-1">
                               <MapPin className="h-3 w-3" />
                               {event.location}
                             </div>

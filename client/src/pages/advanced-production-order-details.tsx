@@ -251,7 +251,7 @@ export default function AdvancedProductionOrderDetailsPage() {
   if (isLoading) {
     return (
       <Layout>
-        <div className="p-6 max-w-6xl mx-auto space-y-6" dir="rtl">
+        <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-4 sm:space-y-6" dir="rtl">
           <Skeleton className="h-12 w-64" />
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-6">
@@ -351,8 +351,8 @@ export default function AdvancedProductionOrderDetailsPage() {
                   <CardTitle className="text-lg">تفاصيل الأمر</CardTitle>
                 </div>
               </CardHeader>
-              <CardContent className="p-3 sm:p-6">
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              <CardContent className="p-3 sm:p-4 md:p-6">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-4">
                   <div className="space-y-1">
                     <p className="text-sm text-gray-500">نوع الأمر</p>
                     <Badge className={typeConfig.color}>{typeConfig.label}</Badge>
@@ -379,9 +379,9 @@ export default function AdvancedProductionOrderDetailsPage() {
 
                 <Separator className="my-4" />
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div className="space-y-1">
-                    <p className="text-sm text-gray-500 flex items-center gap-1">
+                    <p className="text-xs sm:text-sm text-gray-500 flex items-center gap-1">
                       <Building2 className="h-4 w-4" />
                       الفرع المصدر
                     </p>
@@ -430,42 +430,42 @@ export default function AdvancedProductionOrderDetailsPage() {
               </CardHeader>
               <CardContent>
                 {items.length > 0 ? (
-                  <div className="rounded-lg border overflow-hidden">
-                    <Table>
+                  <div className="rounded-lg border overflow-x-auto">
+                    <Table className="min-w-[600px]">
                       <TableHeader>
                         <TableRow className="bg-gray-50">
                           <TableHead className="text-right">#</TableHead>
                           <TableHead className="text-right">المنتج</TableHead>
-                          <TableHead className="text-right">الفئة</TableHead>
+                          <TableHead className="text-right hidden md:table-cell">الفئة</TableHead>
                           <TableHead className="text-right">الكمية المطلوبة</TableHead>
-                          <TableHead className="text-right">الكمية المنتجة</TableHead>
-                          <TableHead className="text-right">سعر الوحدة</TableHead>
+                          <TableHead className="text-right hidden md:table-cell">الكمية المنتجة</TableHead>
+                          <TableHead className="text-right hidden sm:table-cell">سعر الوحدة</TableHead>
                           <TableHead className="text-right">الإجمالي</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {items.map((item: OrderItem, index: number) => (
                           <TableRow key={item.id || index}>
-                            <TableCell className="font-medium">{index + 1}</TableCell>
+                            <TableCell className="font-medium text-xs sm:text-sm">{index + 1}</TableCell>
                             <TableCell>
                               <div>
-                                <p className="font-medium">{item.productName}</p>
-                                {item.notes && <p className="text-xs text-gray-500">{item.notes}</p>}
+                                <p className="font-medium text-xs sm:text-sm">{item.productName}</p>
+                                {item.notes && <p className="text-[10px] sm:text-xs text-gray-500">{item.notes}</p>}
                               </div>
                             </TableCell>
-                            <TableCell>
-                              <Badge variant="outline" className="text-xs bg-slate-50 border-slate-300 text-slate-600">
+                            <TableCell className="hidden md:table-cell">
+                              <Badge variant="outline" className="text-[10px] sm:text-xs bg-slate-50 border-slate-300 text-slate-600">
                                 {item.category || 'عام'}
                               </Badge>
                             </TableCell>
-                            <TableCell>{item.targetQuantity} {item.unit}</TableCell>
-                            <TableCell>
+                            <TableCell className="text-xs sm:text-sm">{item.targetQuantity} {item.unit}</TableCell>
+                            <TableCell className="hidden md:table-cell">
                               <span className={item.producedQuantity >= item.targetQuantity ? "text-green-600" : "text-amber-600"}>
                                 {item.producedQuantity || 0} {item.unit}
                               </span>
                             </TableCell>
-                            <TableCell>{formatCurrency(item.unitPrice)}</TableCell>
-                            <TableCell className="font-medium">{formatCurrency((item.targetQuantity || 0) * (item.unitPrice || 0))}</TableCell>
+                            <TableCell className="hidden sm:table-cell text-xs sm:text-sm">{formatCurrency(item.unitPrice)}</TableCell>
+                            <TableCell className="font-medium text-xs sm:text-sm">{formatCurrency((item.targetQuantity || 0) * (item.unitPrice || 0))}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -491,29 +491,29 @@ export default function AdvancedProductionOrderDetailsPage() {
                     <Badge variant="secondary">{schedules.length} موعد</Badge>
                   </div>
                 </CardHeader>
-                <CardContent>
-                  <div className="rounded-lg border overflow-hidden">
-                    <Table>
+                <CardContent className="p-3 sm:p-4 md:p-6">
+                  <div className="rounded-lg border overflow-x-auto">
+                    <Table className="min-w-[600px]">
                       <TableHeader>
                         <TableRow className="bg-gray-50">
                           <TableHead className="text-right">التاريخ</TableHead>
                           <TableHead className="text-right">الفترة</TableHead>
                           <TableHead className="text-right">المنتج</TableHead>
-                          <TableHead className="text-right">الكمية</TableHead>
+                          <TableHead className="text-right hidden sm:table-cell">الكمية</TableHead>
                           <TableHead className="text-right">الحالة</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {schedules.map((schedule: OrderSchedule, index: number) => (
                           <TableRow key={schedule.id || index}>
-                            <TableCell>{formatDate(schedule.scheduleDate)}</TableCell>
+                            <TableCell className="text-xs sm:text-sm">{formatDate(schedule.scheduleDate)}</TableCell>
                             <TableCell>
-                              <Badge variant="outline">
+                              <Badge variant="outline" className="text-[10px] sm:text-xs">
                                 {schedule.shift === "morning" ? "صباحي" : schedule.shift === "evening" ? "مسائي" : "ليلي"}
                               </Badge>
                             </TableCell>
-                            <TableCell>{schedule.productName}</TableCell>
-                            <TableCell>{schedule.quantity}</TableCell>
+                            <TableCell className="text-xs sm:text-sm">{schedule.productName}</TableCell>
+                            <TableCell className="hidden sm:table-cell text-xs sm:text-sm">{schedule.quantity}</TableCell>
                             <TableCell>
                               <Badge className={
                                 schedule.status === "completed" ? "bg-green-100 text-green-700" :

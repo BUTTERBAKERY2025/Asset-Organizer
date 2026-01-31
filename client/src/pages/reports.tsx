@@ -430,36 +430,42 @@ export default function ReportsPage() {
           </div>
 
           <Tabs value={reportType} onValueChange={setReportType} className="print:hidden">
-            <TabsList className="grid grid-cols-7 w-full" data-testid="tabs-report-type">
-              <TabsTrigger value="overview" data-testid="tab-overview">
-                <BarChart3 className="w-4 h-4 ml-1" />
-                نظرة عامة
-              </TabsTrigger>
-              <TabsTrigger value="branches" data-testid="tab-branches">
-                <Building2 className="w-4 h-4 ml-1" />
-                الفروع
-              </TabsTrigger>
-              <TabsTrigger value="categories" data-testid="tab-categories">
-                <Layers className="w-4 h-4 ml-1" />
-                التصنيفات
-              </TabsTrigger>
-              <TabsTrigger value="status" data-testid="tab-status">
-                <AlertTriangle className="w-4 h-4 ml-1" />
-                الحالات
-              </TabsTrigger>
-              <TabsTrigger value="images" data-testid="tab-images">
-                <Image className="w-4 h-4 ml-1" />
-                الصور
-              </TabsTrigger>
-              <TabsTrigger value="details" data-testid="tab-details">
-                <Eye className="w-4 h-4 ml-1" />
-                التفاصيل
-              </TabsTrigger>
-              <TabsTrigger value="inventory-count" data-testid="tab-inventory-count">
-                <ClipboardList className="w-4 h-4 ml-1" />
-                محضر الجرد
-              </TabsTrigger>
-            </TabsList>
+            <div className="overflow-x-auto pb-2">
+              <TabsList className="inline-flex w-auto min-w-full sm:grid sm:grid-cols-7 sm:w-full gap-1" data-testid="tabs-report-type">
+                <TabsTrigger value="overview" data-testid="tab-overview" className="text-[10px] sm:text-sm px-2 sm:px-3 whitespace-nowrap">
+                  <BarChart3 className="w-3 h-3 sm:w-4 sm:h-4 ml-1" />
+                  <span className="hidden sm:inline">نظرة عامة</span>
+                  <span className="sm:hidden">عام</span>
+                </TabsTrigger>
+                <TabsTrigger value="branches" data-testid="tab-branches" className="text-[10px] sm:text-sm px-2 sm:px-3 whitespace-nowrap">
+                  <Building2 className="w-3 h-3 sm:w-4 sm:h-4 ml-1" />
+                  الفروع
+                </TabsTrigger>
+                <TabsTrigger value="categories" data-testid="tab-categories" className="text-[10px] sm:text-sm px-2 sm:px-3 whitespace-nowrap">
+                  <Layers className="w-3 h-3 sm:w-4 sm:h-4 ml-1" />
+                  <span className="hidden sm:inline">التصنيفات</span>
+                  <span className="sm:hidden">تصنيف</span>
+                </TabsTrigger>
+                <TabsTrigger value="status" data-testid="tab-status" className="text-[10px] sm:text-sm px-2 sm:px-3 whitespace-nowrap">
+                  <AlertTriangle className="w-3 h-3 sm:w-4 sm:h-4 ml-1" />
+                  الحالات
+                </TabsTrigger>
+                <TabsTrigger value="images" data-testid="tab-images" className="text-[10px] sm:text-sm px-2 sm:px-3 whitespace-nowrap">
+                  <Image className="w-3 h-3 sm:w-4 sm:h-4 ml-1" />
+                  الصور
+                </TabsTrigger>
+                <TabsTrigger value="details" data-testid="tab-details" className="text-[10px] sm:text-sm px-2 sm:px-3 whitespace-nowrap">
+                  <Eye className="w-3 h-3 sm:w-4 sm:h-4 ml-1" />
+                  <span className="hidden sm:inline">التفاصيل</span>
+                  <span className="sm:hidden">تفصيل</span>
+                </TabsTrigger>
+                <TabsTrigger value="inventory-count" data-testid="tab-inventory-count" className="text-[10px] sm:text-sm px-2 sm:px-3 whitespace-nowrap">
+                  <ClipboardList className="w-3 h-3 sm:w-4 sm:h-4 ml-1" />
+                  <span className="hidden sm:inline">محضر الجرد</span>
+                  <span className="sm:hidden">جرد</span>
+                </TabsTrigger>
+              </TabsList>
+            </div>
 
             <TabsContent value="overview" className="mt-4 space-y-4">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

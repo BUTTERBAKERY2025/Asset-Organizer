@@ -654,20 +654,20 @@ export default function DisplayBarWastePage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+      <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-3 sm:space-y-4" dir="rtl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Link href="/operations">
               <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" data-testid="btn-back">
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
             <div>
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold flex items-center gap-2">
-                <Package className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold flex items-center gap-2">
+                <Package className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
                 بار العرض والهالك
               </h1>
-              <p className="text-sm text-muted-foreground">إدارة استلام الإنتاج ومتابعة الهالك اليومي</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">إدارة استلام الإنتاج ومتابعة الهالك اليومي</p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -694,59 +694,59 @@ export default function DisplayBarWastePage() {
         </div>
 
         {/* Stats Cards - Basic */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
           <Card className="bg-blue-50/50 border-blue-100">
-            <CardContent className="p-3">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center">
-                  <Package className="w-4 h-4 text-blue-600" />
+            <CardContent className="p-2 sm:p-3">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-blue-100 flex items-center justify-center">
+                  <Package className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600" />
                 </div>
                 <div>
-                  <div className="text-xl font-bold text-blue-700">{receiptOrders.length}</div>
-                  <div className="text-[11px] text-blue-600/70">أوامر استلام</div>
+                  <div className="text-lg sm:text-xl font-bold text-blue-700">{receiptOrders.length}</div>
+                  <div className="text-[10px] sm:text-[11px] text-blue-600/70">أوامر استلام</div>
                 </div>
               </div>
             </CardContent>
           </Card>
           <Card className="bg-green-50/50 border-green-100">
-            <CardContent className="p-3">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-green-100 flex items-center justify-center">
-                  <Check className="w-4 h-4 text-green-600" />
+            <CardContent className="p-2 sm:p-3">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-green-100 flex items-center justify-center">
+                  <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-600" />
                 </div>
                 <div>
-                  <div className="text-xl font-bold text-green-700">
+                  <div className="text-lg sm:text-xl font-bold text-green-700">
                     {filteredReceipts.reduce((sum: number, r: any) => sum + (r.quantity || 0), 0)}
                   </div>
-                  <div className="text-[11px] text-green-600/70">وحدات مستلمة</div>
+                  <div className="text-[10px] sm:text-[11px] text-green-600/70">وحدات مستلمة</div>
                 </div>
               </div>
             </CardContent>
           </Card>
           <Card className="bg-red-50/50 border-red-100">
-            <CardContent className="p-3">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-red-100 flex items-center justify-center">
-                  <AlertTriangle className="w-4 h-4 text-red-600" />
+            <CardContent className="p-2 sm:p-3">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-red-100 flex items-center justify-center">
+                  <AlertTriangle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-600" />
                 </div>
                 <div>
-                  <div className="text-xl font-bold text-red-700">{filteredWasteReports.length}</div>
-                  <div className="text-[11px] text-red-600/70">تقارير الهالك</div>
+                  <div className="text-lg sm:text-xl font-bold text-red-700">{filteredWasteReports.length}</div>
+                  <div className="text-[10px] sm:text-[11px] text-red-600/70">تقارير الهالك</div>
                 </div>
               </div>
             </CardContent>
           </Card>
           <Card className="bg-amber-50/50 border-amber-100">
-            <CardContent className="p-3">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-amber-100 flex items-center justify-center">
-                  <TrendingDown className="w-4 h-4 text-amber-600" />
+            <CardContent className="p-2 sm:p-3">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-amber-100 flex items-center justify-center">
+                  <TrendingDown className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-600" />
                 </div>
                 <div>
-                  <div className="text-xl font-bold text-amber-700">
+                  <div className="text-lg sm:text-xl font-bold text-amber-700">
                     {filteredWasteReports.reduce((sum: number, r: WasteReport) => sum + (r.totalValue || 0), 0).toLocaleString()} ر.س
                   </div>
-                  <div className="text-[11px] text-amber-600/70">قيمة الهالك</div>
+                  <div className="text-[10px] sm:text-[11px] text-amber-600/70">قيمة الهالك</div>
                 </div>
               </div>
             </CardContent>
@@ -1168,17 +1168,17 @@ export default function DisplayBarWastePage() {
           <TabsContent value="receipts" className="mt-4">
             <Card>
               <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                <div className="overflow-x-auto -mx-3 sm:mx-0">
+                  <table className="w-full text-xs sm:text-sm min-w-[600px]">
                     <thead className="bg-muted/50">
                       <tr>
-                        <th className="p-3 text-right font-medium">رقم الأمر</th>
-                        <th className="p-3 text-right font-medium">الفرع</th>
-                        <th className="p-3 text-right font-medium">المستلم</th>
-                        <th className="p-3 text-right font-medium">التاريخ</th>
-                        <th className="p-3 text-right font-medium">الوقت</th>
-                        <th className="p-3 text-right font-medium">عدد الأصناف</th>
-                        <th className="p-3 text-right font-medium">إجراءات</th>
+                        <th className="p-2 sm:p-3 text-right font-medium">رقم الأمر</th>
+                        <th className="p-2 sm:p-3 text-right font-medium">الفرع</th>
+                        <th className="p-2 sm:p-3 text-right font-medium hidden md:table-cell">المستلم</th>
+                        <th className="p-2 sm:p-3 text-right font-medium hidden sm:table-cell">التاريخ</th>
+                        <th className="p-2 sm:p-3 text-right font-medium hidden md:table-cell">الوقت</th>
+                        <th className="p-2 sm:p-3 text-right font-medium">عدد الأصناف</th>
+                        <th className="p-2 sm:p-3 text-right font-medium">إجراءات</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y">
@@ -1191,41 +1191,41 @@ export default function DisplayBarWastePage() {
                       ) : (
                         paginatedReceiptOrders.map((order: any, index: number) => (
                           <tr key={order.id} className="hover:bg-muted/30 cursor-pointer" onClick={() => { setSelectedReceiptOrder(order); setShowReceiptDetailDialog(true); }}>
-                            <td className="p-3">
-                              <div className="flex items-center gap-2">
-                                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                                  <Hash className="w-4 h-4 text-primary" />
+                            <td className="p-2 sm:p-3">
+                              <div className="flex items-center gap-1 sm:gap-2">
+                                <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                                  <Hash className="w-3 h-3 sm:w-4 sm:h-4 text-primary" />
                                 </div>
-                                <span className="font-bold text-primary">#{(currentPage - 1) * itemsPerPage + index + 1}</span>
+                                <span className="font-bold text-primary text-xs sm:text-sm">#{(currentPage - 1) * itemsPerPage + index + 1}</span>
                               </div>
                             </td>
-                            <td className="p-3">
-                              <Badge variant="outline" className="gap-1">
-                                <Building2 className="w-3 h-3" />
+                            <td className="p-2 sm:p-3">
+                              <Badge variant="outline" className="gap-1 text-[10px] sm:text-xs">
+                                <Building2 className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                                 {order.branchName}
                               </Badge>
                             </td>
-                            <td className="p-3">
+                            <td className="p-2 sm:p-3 hidden md:table-cell">
                               <div className="flex items-center gap-1">
                                 <User className="w-3 h-3 text-muted-foreground" />
                                 {order.createdByName}
                               </div>
                             </td>
-                            <td className="p-3">{order.receiptDate}</td>
-                            <td className="p-3">
-                              <div className="flex items-center gap-1 text-muted-foreground">
+                            <td className="p-2 sm:p-3 hidden sm:table-cell">{order.receiptDate}</td>
+                            <td className="p-2 sm:p-3 hidden md:table-cell">
+                              <div className="flex items-center gap-1 text-muted-foreground text-xs">
                                 <Clock className="w-3 h-3" />
                                 {order.firstTime} - {order.lastTime}
                               </div>
                             </td>
-                            <td className="p-3">
-                              <Badge className="bg-green-100 text-green-700">{order.items.length} صنف</Badge>
-                              <span className="text-xs text-muted-foreground mr-2">({order.totalQuantity} وحدة)</span>
+                            <td className="p-2 sm:p-3">
+                              <Badge className="bg-green-100 text-green-700 text-[10px] sm:text-xs">{order.items.length} صنف</Badge>
+                              <span className="text-[10px] sm:text-xs text-muted-foreground mr-1 sm:mr-2 hidden sm:inline">({order.totalQuantity} وحدة)</span>
                             </td>
-                            <td className="p-3">
-                              <Button size="sm" variant="ghost" className="gap-1 h-11 sm:h-9" onClick={(e) => { e.stopPropagation(); setSelectedReceiptOrder(order); setShowReceiptDetailDialog(true); }}>
+                            <td className="p-2 sm:p-3">
+                              <Button size="sm" variant="ghost" className="gap-1 h-11 sm:h-9 text-xs" onClick={(e) => { e.stopPropagation(); setSelectedReceiptOrder(order); setShowReceiptDetailDialog(true); }}>
                                 <Eye className="w-4 h-4" />
-                                عرض
+                                <span className="hidden sm:inline">عرض</span>
                               </Button>
                             </td>
                           </tr>

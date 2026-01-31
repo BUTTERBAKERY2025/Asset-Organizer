@@ -257,124 +257,130 @@ export default function GeneralAssemblyPage() {
   const quorumData = calculateQuorum(attendingIds);
 
   return (
-    <div className="p-6 space-y-6" dir="rtl">
+    <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6" dir="rtl">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3 sm:gap-4">
           <Link href="/governance">
-            <Button variant="ghost" size="sm" className="gap-2">
+            <Button variant="ghost" size="sm" className="gap-2 text-xs sm:text-sm">
               <ChevronLeft className="h-4 w-4" />
-              العودة للحوكمة
+              <span className="hidden sm:inline">العودة للحوكمة</span>
             </Button>
           </Link>
           <div>
-            <h1 className="text-2xl font-bold flex items-center gap-3">
-              <Building2 className="h-7 w-7 text-blue-600" />
+            <h1 className="text-lg sm:text-xl md:text-2xl font-bold flex items-center gap-2 sm:gap-3">
+              <Building2 className="h-5 w-5 sm:h-7 sm:w-7 text-blue-600" />
               الجمعية العمومية
             </h1>
-            <p className="text-gray-600">إدارة اجتماعات الجمعية العادية وغير العادية وفق نظام الشركات السعودي</p>
+            <p className="text-xs sm:text-sm text-gray-600">إدارة اجتماعات الجمعية العادية وغير العادية وفق نظام الشركات السعودي</p>
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" className="gap-2" onClick={() => setShowInvitations(true)}>
-            <Send className="h-4 w-4" />
-            إرسال الدعوات
+          <Button variant="outline" className="gap-2 text-xs sm:text-sm" onClick={() => setShowInvitations(true)}>
+            <Send className="h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">إرسال الدعوات</span>
+            <span className="sm:hidden">دعوات</span>
           </Button>
-          <Button className="gap-2" onClick={() => setShowNewMeeting(true)}>
-            <Plus className="h-4 w-4" />
-            اجتماع جديد
+          <Button className="gap-2 text-xs sm:text-sm" onClick={() => setShowNewMeeting(true)}>
+            <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">اجتماع جديد</span>
+            <span className="sm:hidden">جديد</span>
           </Button>
         </div>
       </div>
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid grid-cols-4 w-full max-w-2xl">
-          <TabsTrigger value="overview" className="gap-2">
-            <BarChart3 className="h-4 w-4" />
-            نظرة عامة
+        <TabsList className="grid grid-cols-4 w-full max-w-2xl text-xs sm:text-sm">
+          <TabsTrigger value="overview" className="gap-1 sm:gap-2 px-1 sm:px-3">
+            <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">نظرة عامة</span>
+            <span className="sm:hidden">عامة</span>
           </TabsTrigger>
-          <TabsTrigger value="meetings" className="gap-2">
-            <Calendar className="h-4 w-4" />
-            الاجتماعات
+          <TabsTrigger value="meetings" className="gap-1 sm:gap-2 px-1 sm:px-3">
+            <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">الاجتماعات</span>
+            <span className="sm:hidden">اجتماعات</span>
           </TabsTrigger>
-          <TabsTrigger value="shareholders" className="gap-2">
-            <Users className="h-4 w-4" />
-            المساهمين
+          <TabsTrigger value="shareholders" className="gap-1 sm:gap-2 px-1 sm:px-3">
+            <Users className="h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">المساهمين</span>
+            <span className="sm:hidden">مساهمين</span>
           </TabsTrigger>
-          <TabsTrigger value="resolutions" className="gap-2">
-            <Gavel className="h-4 w-4" />
-            القرارات
+          <TabsTrigger value="resolutions" className="gap-1 sm:gap-2 px-1 sm:px-3">
+            <Gavel className="h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">القرارات</span>
+            <span className="sm:hidden">قرارات</span>
           </TabsTrigger>
         </TabsList>
 
         {/* نظرة عامة */}
         <TabsContent value="overview" className="space-y-6">
           {/* إحصائيات رئيسية */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-              <CardContent className="p-4">
+              <CardContent className="p-3 sm:p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-blue-600 font-medium">إجمالي المساهمين</p>
-                    <p className="text-3xl font-bold text-blue-800">{shareholderStats.totalMembers}</p>
-                    <p className="text-xs text-blue-500 mt-1">
+                    <p className="text-xs sm:text-sm text-blue-600 font-medium">إجمالي المساهمين</p>
+                    <p className="text-lg sm:text-xl md:text-3xl font-bold text-blue-800">{shareholderStats.totalMembers}</p>
+                    <p className="text-[10px] sm:text-xs text-blue-500 mt-1">
                       {shareholderStats.activeMembers} نشط | {shareholderStats.foundingMembers} مؤسس
                     </p>
                   </div>
-                  <div className="p-3 bg-blue-200 rounded-full">
-                    <Users className="h-8 w-8 text-blue-700" />
+                  <div className="p-2 sm:p-3 bg-blue-200 rounded-full">
+                    <Users className="h-5 w-5 sm:h-8 sm:w-8 text-blue-700" />
                   </div>
                 </div>
               </CardContent>
             </Card>
 
             <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
-              <CardContent className="p-4">
+              <CardContent className="p-3 sm:p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-amber-600 font-medium">إجمالي الأسهم</p>
-                    <p className="text-3xl font-bold text-amber-800">{shareholderStats.totalShares.toLocaleString('en-US')}</p>
-                    <p className="text-xs text-amber-500 mt-1">
+                    <p className="text-xs sm:text-sm text-amber-600 font-medium">إجمالي الأسهم</p>
+                    <p className="text-lg sm:text-xl md:text-3xl font-bold text-amber-800">{shareholderStats.totalShares.toLocaleString('en-US')}</p>
+                    <p className="text-[10px] sm:text-xs text-amber-500 mt-1">
                       {shareholderStats.votingPercentage}% لها حق التصويت
                     </p>
                   </div>
-                  <div className="p-3 bg-amber-200 rounded-full">
-                    <PieChart className="h-8 w-8 text-amber-700" />
+                  <div className="p-2 sm:p-3 bg-amber-200 rounded-full">
+                    <PieChart className="h-5 w-5 sm:h-8 sm:w-8 text-amber-700" />
                   </div>
                 </div>
               </CardContent>
             </Card>
 
             <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-200">
-              <CardContent className="p-4">
+              <CardContent className="p-3 sm:p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-emerald-600 font-medium">جمعيات عادية</p>
-                    <p className="text-3xl font-bold text-emerald-800">{meetingStats.ordinary}</p>
-                    <p className="text-xs text-emerald-500 mt-1">
+                    <p className="text-xs sm:text-sm text-emerald-600 font-medium">جمعيات عادية</p>
+                    <p className="text-lg sm:text-xl md:text-3xl font-bold text-emerald-800">{meetingStats.ordinary}</p>
+                    <p className="text-[10px] sm:text-xs text-emerald-500 mt-1">
                       {meetingStats.scheduled} مجدولة
                     </p>
                   </div>
-                  <div className="p-3 bg-emerald-200 rounded-full">
-                    <Calendar className="h-8 w-8 text-emerald-700" />
+                  <div className="p-2 sm:p-3 bg-emerald-200 rounded-full">
+                    <Calendar className="h-5 w-5 sm:h-8 sm:w-8 text-emerald-700" />
                   </div>
                 </div>
               </CardContent>
             </Card>
 
             <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-              <CardContent className="p-4">
+              <CardContent className="p-3 sm:p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-purple-600 font-medium">جمعيات غير عادية</p>
-                    <p className="text-3xl font-bold text-purple-800">{meetingStats.extraordinary}</p>
-                    <p className="text-xs text-purple-500 mt-1">
+                    <p className="text-xs sm:text-sm text-purple-600 font-medium">جمعيات غير عادية</p>
+                    <p className="text-lg sm:text-xl md:text-3xl font-bold text-purple-800">{meetingStats.extraordinary}</p>
+                    <p className="text-[10px] sm:text-xs text-purple-500 mt-1">
                       {meetingStats.completed} مكتملة
                     </p>
                   </div>
-                  <div className="p-3 bg-purple-200 rounded-full">
-                    <Gavel className="h-8 w-8 text-purple-700" />
+                  <div className="p-2 sm:p-3 bg-purple-200 rounded-full">
+                    <Gavel className="h-5 w-5 sm:h-8 sm:w-8 text-purple-700" />
                   </div>
                 </div>
               </CardContent>

@@ -64,10 +64,10 @@ export default function IntegrationsPage() {
   return (
     <div className="p-4 md:p-8 lg:p-10 max-w-7xl mx-auto space-y-4" dir="rtl">
       <SettingsBreadcrumb currentPage="التكاملات" currentIcon={Link2} />
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-butter-dark">التكامل مع الأنظمة الخارجية</h1>
-          <p className="text-muted-foreground mt-1">ربط النظام مع جميع الخدمات والأنظمة الخارجية</p>
+          <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-butter-dark">التكامل مع الأنظمة الخارجية</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">ربط النظام مع جميع الخدمات والأنظمة الخارجية</p>
         </div>
       </div>
 
@@ -253,43 +253,60 @@ function OverviewSection({ onNavigate }: { onNavigate: (tab: string) => void }) 
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <CheckCircle className="h-5 w-5 text-green-500" />
-              تكاملات نشطة
+          <CardHeader className="p-3 sm:p-4 pb-2">
+            <CardTitle className="text-sm sm:text-base md:text-lg flex items-center gap-2">
+              <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-green-500" />
+              <span className="hidden sm:inline">تكاملات نشطة</span>
+              <span className="sm:hidden">نشطة</span>
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-green-600">3</div>
-            <p className="text-sm text-muted-foreground">من أصل 7 تكاملات</p>
+          <CardContent className="p-3 sm:p-4 pt-0">
+            <div className="text-xl sm:text-2xl md:text-3xl font-bold text-green-600">3</div>
+            <p className="text-xs sm:text-sm text-muted-foreground">من أصل 7 تكاملات</p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Send className="h-5 w-5 text-blue-500" />
-              رسائل مرسلة
+          <CardHeader className="p-3 sm:p-4 pb-2">
+            <CardTitle className="text-sm sm:text-base md:text-lg flex items-center gap-2">
+              <Send className="h-4 w-4 sm:h-5 sm:w-5 text-blue-500" />
+              <span className="hidden sm:inline">رسائل مرسلة</span>
+              <span className="sm:hidden">مرسلة</span>
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-blue-600">0</div>
-            <p className="text-sm text-muted-foreground">هذا الشهر</p>
+          <CardContent className="p-3 sm:p-4 pt-0">
+            <div className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-600">0</div>
+            <p className="text-xs sm:text-sm text-muted-foreground">هذا الشهر</p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Shield className="h-5 w-5 text-purple-500" />
-              أمان التكاملات
+          <CardHeader className="p-3 sm:p-4 pb-2">
+            <CardTitle className="text-sm sm:text-base md:text-lg flex items-center gap-2">
+              <Shield className="h-4 w-4 sm:h-5 sm:w-5 text-purple-500" />
+              <span className="hidden sm:inline">أمان التكاملات</span>
+              <span className="sm:hidden">الأمان</span>
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-purple-600">100%</div>
-            <p className="text-sm text-muted-foreground">جميع الاتصالات مشفرة</p>
+          <CardContent className="p-3 sm:p-4 pt-0">
+            <div className="text-xl sm:text-2xl md:text-3xl font-bold text-purple-600">100%</div>
+            <p className="text-xs sm:text-sm text-muted-foreground">جميع الاتصالات مشفرة</p>
+          </CardContent>
+        </Card>
+
+        <Card className="col-span-2 lg:col-span-1">
+          <CardHeader className="p-3 sm:p-4 pb-2">
+            <CardTitle className="text-sm sm:text-base md:text-lg flex items-center gap-2">
+              <Zap className="h-4 w-4 sm:h-5 sm:w-5 text-amber-500" />
+              <span className="hidden sm:inline">حالة النظام</span>
+              <span className="sm:hidden">النظام</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-3 sm:p-4 pt-0">
+            <div className="text-xl sm:text-2xl md:text-3xl font-bold text-amber-600">فعّال</div>
+            <p className="text-xs sm:text-sm text-muted-foreground">جميع الخدمات تعمل</p>
           </CardContent>
         </Card>
       </div>

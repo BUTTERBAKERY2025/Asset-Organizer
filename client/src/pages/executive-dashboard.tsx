@@ -72,18 +72,18 @@ export default function ExecutiveDashboard() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-6 lg:p-8" dir="rtl">
-        <div className="max-w-6xl mx-auto space-y-5">
+      <div className="p-3 sm:p-4 md:p-6" dir="rtl">
+        <div className="max-w-6xl mx-auto space-y-4 sm:space-y-5">
           
           {/* Header - Compact */}
-          <div className="flex items-center justify-between bg-amber-700 rounded-lg px-4 py-3">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-amber-700 rounded-lg px-3 sm:px-4 py-3">
             <div className="flex items-center gap-3">
-              <Crown className="h-5 w-5 text-white" />
+              <Crown className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
               <div>
-                <h1 className="text-base font-bold text-white" data-testid="page-title">
+                <h1 className="text-sm sm:text-base font-bold text-white" data-testid="page-title">
                   السكرتارية التنفيذية
                 </h1>
-                <p className="text-xs text-amber-100">مركز قيادة الرئيس التنفيذي</p>
+                <p className="text-[10px] sm:text-xs text-amber-100">مركز قيادة الرئيس التنفيذي</p>
               </div>
             </div>
             <Link href="/executive/meetings">
@@ -95,16 +95,16 @@ export default function ExecutiveDashboard() {
           </div>
 
           {/* Stats - Equal sized cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
             <Link href="/executive/meetings" className="block">
               <Card className="h-full border border-slate-200 hover:border-blue-300 hover:shadow-sm transition-all bg-white">
-                <CardContent className="p-4 flex items-center gap-3">
-                  <div className="p-2 bg-blue-600 rounded-lg shrink-0">
-                    <Calendar className="h-4 w-4 text-white" />
+                <CardContent className="p-2 sm:p-4 flex items-center gap-2 sm:gap-3">
+                  <div className="p-1.5 sm:p-2 bg-blue-600 rounded-lg shrink-0">
+                    <Calendar className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs text-slate-600 truncate">اجتماعات الأسبوع</p>
-                    <p className="text-lg font-bold text-slate-900" data-testid="stat-meetings">
+                    <p className="text-[10px] sm:text-xs text-slate-600 truncate">اجتماعات الأسبوع</p>
+                    <p className="text-base sm:text-lg font-bold text-slate-900" data-testid="stat-meetings">
                       {stats?.meetingsThisWeek || 0}
                     </p>
                   </div>
@@ -114,13 +114,13 @@ export default function ExecutiveDashboard() {
 
             <Link href="/executive/tasks" className="block">
               <Card className="h-full border border-slate-200 hover:border-amber-300 hover:shadow-sm transition-all bg-white">
-                <CardContent className="p-4 flex items-center gap-3">
-                  <div className="p-2 bg-amber-600 rounded-lg shrink-0">
-                    <CheckSquare className="h-4 w-4 text-white" />
+                <CardContent className="p-2 sm:p-4 flex items-center gap-2 sm:gap-3">
+                  <div className="p-1.5 sm:p-2 bg-amber-600 rounded-lg shrink-0">
+                    <CheckSquare className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs text-slate-600 truncate">المهام المعلقة</p>
-                    <p className="text-lg font-bold text-slate-900" data-testid="stat-pending-tasks">
+                    <p className="text-[10px] sm:text-xs text-slate-600 truncate">المهام المعلقة</p>
+                    <p className="text-base sm:text-lg font-bold text-slate-900" data-testid="stat-pending-tasks">
                       {stats?.pendingTasks || 0}
                     </p>
                   </div>
@@ -130,13 +130,13 @@ export default function ExecutiveDashboard() {
 
             <Link href="/executive/tasks" className="block">
               <Card className={`h-full border hover:shadow-sm transition-all bg-white ${(stats?.overdueTasks || 0) > 0 ? 'border-red-300 bg-red-50' : 'border-slate-200 hover:border-red-300'}`}>
-                <CardContent className="p-4 flex items-center gap-3">
-                  <div className="p-2 bg-red-600 rounded-lg shrink-0">
-                    <AlertTriangle className="h-4 w-4 text-white" />
+                <CardContent className="p-2 sm:p-4 flex items-center gap-2 sm:gap-3">
+                  <div className="p-1.5 sm:p-2 bg-red-600 rounded-lg shrink-0">
+                    <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs text-slate-600 truncate">المهام المتأخرة</p>
-                    <p className="text-lg font-bold text-slate-900" data-testid="stat-overdue-tasks">
+                    <p className="text-[10px] sm:text-xs text-slate-600 truncate">المهام المتأخرة</p>
+                    <p className="text-base sm:text-lg font-bold text-slate-900" data-testid="stat-overdue-tasks">
                       {stats?.overdueTasks || 0}
                     </p>
                   </div>
@@ -146,13 +146,13 @@ export default function ExecutiveDashboard() {
 
             <Link href="/executive/correspondence" className="block">
               <Card className="h-full border border-slate-200 hover:border-green-300 hover:shadow-sm transition-all bg-white">
-                <CardContent className="p-4 flex items-center gap-3">
-                  <div className="p-2 bg-green-600 rounded-lg shrink-0">
-                    <Mail className="h-4 w-4 text-white" />
+                <CardContent className="p-2 sm:p-4 flex items-center gap-2 sm:gap-3">
+                  <div className="p-1.5 sm:p-2 bg-green-600 rounded-lg shrink-0">
+                    <Mail className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs text-slate-600 truncate">مراسلات جديدة</p>
-                    <p className="text-lg font-bold text-slate-900" data-testid="stat-unread-corr">
+                    <p className="text-[10px] sm:text-xs text-slate-600 truncate">مراسلات جديدة</p>
+                    <p className="text-base sm:text-lg font-bold text-slate-900" data-testid="stat-unread-corr">
                       {stats?.unreadCorrespondence || 0}
                     </p>
                   </div>
@@ -162,40 +162,40 @@ export default function ExecutiveDashboard() {
           </div>
 
           {/* Quick Access - Two columns */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4">
             <Link href="/governance" className="block">
               <Card className="border-0 bg-slate-800 hover:bg-slate-700 transition-colors">
-                <CardContent className="p-4 flex items-center gap-3">
-                  <div className="p-2 bg-slate-700 rounded-lg">
-                    <Shield className="h-4 w-4 text-amber-400" />
+                <CardContent className="p-3 sm:p-4 flex items-center gap-2 sm:gap-3">
+                  <div className="p-1.5 sm:p-2 bg-slate-700 rounded-lg">
+                    <Shield className="h-3 w-3 sm:h-4 sm:w-4 text-amber-400" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-white">الحوكمة المؤسسية</p>
-                    <p className="text-xs text-slate-400">السياسات والإجراءات</p>
+                    <p className="text-xs sm:text-sm font-semibold text-white">الحوكمة المؤسسية</p>
+                    <p className="text-[10px] sm:text-xs text-slate-400">السياسات والإجراءات</p>
                   </div>
-                  <ArrowLeft className="h-4 w-4 text-slate-500" />
+                  <ArrowLeft className="h-3 w-3 sm:h-4 sm:w-4 text-slate-500" />
                 </CardContent>
               </Card>
             </Link>
 
             <Link href="/governance/board" className="block">
               <Card className="border-0 bg-amber-600 hover:bg-amber-500 transition-colors">
-                <CardContent className="p-4 flex items-center gap-3">
-                  <div className="p-2 bg-amber-500 rounded-lg">
-                    <Crown className="h-4 w-4 text-white" />
+                <CardContent className="p-3 sm:p-4 flex items-center gap-2 sm:gap-3">
+                  <div className="p-1.5 sm:p-2 bg-amber-500 rounded-lg">
+                    <Crown className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-white">مجلس الإدارة</p>
-                    <p className="text-xs text-amber-100">الأعضاء والقرارات</p>
+                    <p className="text-xs sm:text-sm font-semibold text-white">مجلس الإدارة</p>
+                    <p className="text-[10px] sm:text-xs text-amber-100">الأعضاء والقرارات</p>
                   </div>
-                  <ArrowLeft className="h-4 w-4 text-amber-300" />
+                  <ArrowLeft className="h-3 w-3 sm:h-4 sm:w-4 text-amber-300" />
                 </CardContent>
               </Card>
             </Link>
           </div>
 
           {/* Main Content - Three columns on desktop, stacked on mobile */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-5">
             
             {/* Meetings */}
             <Card className="border border-slate-200 bg-white">
@@ -269,7 +269,7 @@ export default function ExecutiveDashboard() {
                       >
                         <div className="flex items-start justify-between gap-2">
                           <p className="text-sm font-medium text-slate-900 leading-tight flex-1">{task.title}</p>
-                          <Badge className={`${priorityColors[task.priority]} text-[10px] px-1.5 py-0.5 shrink-0`}>
+                          <Badge className={`${priorityColors[task.priority]} text-[8px] sm:text-[10px] px-1 sm:px-1.5 py-0.5 shrink-0`}>
                             {priorityLabels[task.priority] || task.priority}
                           </Badge>
                         </div>
@@ -336,7 +336,7 @@ export default function ExecutiveDashboard() {
           </div>
 
           {/* Quick Links - Compact grid */}
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 sm:gap-3">
             <Link href="/executive/calendar" className="block">
               <Card className="border border-slate-200 hover:border-purple-300 hover:shadow-sm transition-all bg-white">
                 <CardContent className="p-3 flex flex-col items-center text-center gap-1.5">

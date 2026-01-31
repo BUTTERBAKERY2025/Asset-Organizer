@@ -332,28 +332,28 @@ export default function PurchasingRequestsPage() {
 
   return (
     <Layout>
-      <div className="p-4 space-y-6" dir={isRTL ? "rtl" : "ltr"}>
-        <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6" dir={isRTL ? "rtl" : "ltr"}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link href="/warehouse-dashboard">
-              <Button variant="ghost" size="icon" data-testid="btn-back">
+              <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" data-testid="btn-back">
                 <ArrowLeft className={`w-5 h-5 ${isRTL ? "rotate-180" : ""}`} />
               </Button>
             </Link>
-            <div className="w-10 h-10 rounded-lg bg-purple-500 flex items-center justify-center">
-              <ShoppingCart className="w-5 h-5 text-white" />
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-purple-500 flex items-center justify-center">
+              <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-foreground">
                 {isRTL ? "طلبات المشتريات" : "Purchasing Requests"}
               </h1>
-              <p className="text-muted-foreground text-sm">
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 {isRTL ? "إدارة طلبات الشراء من الموردين" : "Manage purchase orders from vendors"}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button onClick={() => setIsCreateOpen(true)} data-testid="btn-create-request">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <Button onClick={() => setIsCreateOpen(true)} className="flex-1 sm:flex-none h-11 sm:h-9" data-testid="btn-create-request">
               <Plus className="w-4 h-4 mr-2" />
               {isRTL ? "طلب جديد" : "New Request"}
             </Button>
@@ -368,95 +368,97 @@ export default function PurchasingRequestsPage() {
         </div>
 
         {/* Filters */}
-        <div className="flex flex-wrap gap-3">
-          <div className="relative flex-1 min-w-[200px]">
+        <div className="flex flex-col sm:flex-row flex-wrap gap-2 sm:gap-3">
+          <div className="relative flex-1 min-w-0 sm:min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input 
               placeholder={isRTL ? "بحث برقم الطلب أو المورد..." : "Search by request number or vendor..."}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
+              className="pl-9 h-11 sm:h-9"
               data-testid="input-search"
             />
           </div>
-          <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-[160px]" data-testid="filter-status">
-              <Filter className="w-4 h-4 mr-2" />
-              <SelectValue placeholder={isRTL ? "الحالة" : "Status"} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{isRTL ? "جميع الحالات" : "All Statuses"}</SelectItem>
-              {STATUS_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {isRTL ? opt.labelAr : opt.labelEn}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={filterBranch} onValueChange={setFilterBranch}>
-            <SelectTrigger className="w-[160px]" data-testid="filter-branch">
-              <SelectValue placeholder={isRTL ? "الفرع" : "Branch"} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{isRTL ? "كل الفروع" : "All Branches"}</SelectItem>
-              {branches.map((branch) => (
-                <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={filterPriority} onValueChange={setFilterPriority}>
-            <SelectTrigger className="w-[140px]" data-testid="filter-priority">
-              <SelectValue placeholder={isRTL ? "الأولوية" : "Priority"} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{isRTL ? "كل الأولويات" : "All Priorities"}</SelectItem>
-              {PRIORITY_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {isRTL ? opt.labelAr : opt.labelEn}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <div className="flex items-center gap-2">
+          <div className="grid grid-cols-3 gap-2 sm:flex sm:gap-3">
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="w-full sm:w-[140px] h-11 sm:h-9" data-testid="filter-status">
+                <Filter className="w-4 h-4 mr-1 sm:mr-2" />
+                <SelectValue placeholder={isRTL ? "الحالة" : "Status"} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{isRTL ? "جميع الحالات" : "All Statuses"}</SelectItem>
+                {STATUS_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {isRTL ? opt.labelAr : opt.labelEn}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={filterBranch} onValueChange={setFilterBranch}>
+              <SelectTrigger className="w-full sm:w-[140px] h-11 sm:h-9" data-testid="filter-branch">
+                <SelectValue placeholder={isRTL ? "الفرع" : "Branch"} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{isRTL ? "كل الفروع" : "All Branches"}</SelectItem>
+                {branches.map((branch) => (
+                  <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={filterPriority} onValueChange={setFilterPriority}>
+              <SelectTrigger className="w-full sm:w-[120px] h-11 sm:h-9" data-testid="filter-priority">
+                <SelectValue placeholder={isRTL ? "الأولوية" : "Priority"} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{isRTL ? "كل الأولويات" : "All Priorities"}</SelectItem>
+                {PRIORITY_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {isRTL ? opt.labelAr : opt.labelEn}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
             <Input
               type="date"
               value={filterDateFrom}
               onChange={(e) => setFilterDateFrom(e.target.value)}
-              className="w-[140px]"
+              className="flex-1 sm:w-[130px] h-11 sm:h-9"
               data-testid="filter-date-from"
             />
-            <span className="text-muted-foreground">-</span>
+            <span className="text-muted-foreground text-xs">-</span>
             <Input
               type="date"
               value={filterDateTo}
               onChange={(e) => setFilterDateTo(e.target.value)}
-              className="w-[140px]"
+              className="flex-1 sm:w-[130px] h-11 sm:h-9"
               data-testid="filter-date-to"
             />
           </div>
         </div>
 
         <Card>
-          <CardHeader>
-            <CardTitle>{isRTL ? "قائمة طلبات المشتريات" : "Purchasing Requests List"}</CardTitle>
-            <CardDescription>
+          <CardHeader className="p-3 sm:p-6">
+            <CardTitle className="text-base sm:text-lg">{isRTL ? "قائمة طلبات المشتريات" : "Purchasing Requests List"}</CardTitle>
+            <CardDescription className="text-xs sm:text-sm">
               {isRTL ? `${filteredRequests.length} طلب` : `${filteredRequests.length} requests`}
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-0 sm:p-6 sm:pt-0">
             <div className="overflow-x-auto">
-              <Table>
+              <Table className="min-w-[700px]">
                 <TableHeader>
                   <TableRow>
-                    <TableHead>{isRTL ? "رقم الطلب" : "Request #"}</TableHead>
-                    <TableHead>{isRTL ? "الفرع" : "Branch"}</TableHead>
-                    <TableHead>{isRTL ? "المورد" : "Vendor"}</TableHead>
-                    <TableHead>{isRTL ? "الحالة" : "Status"}</TableHead>
-                    <TableHead>{isRTL ? "الأولوية" : "Priority"}</TableHead>
-                    <TableHead>{isRTL ? "التكلفة المتوقعة" : "Est. Cost"}</TableHead>
-                    <TableHead>{isRTL ? "تاريخ التسليم" : "Delivery Date"}</TableHead>
-                    <TableHead>{isRTL ? "التاريخ" : "Date"}</TableHead>
-                    <TableHead>{isRTL ? "الإجراءات" : "Actions"}</TableHead>
+                    <TableHead className="text-xs sm:text-sm">{isRTL ? "رقم الطلب" : "Request #"}</TableHead>
+                    <TableHead className="text-xs sm:text-sm hidden md:table-cell">{isRTL ? "الفرع" : "Branch"}</TableHead>
+                    <TableHead className="text-xs sm:text-sm">{isRTL ? "المورد" : "Vendor"}</TableHead>
+                    <TableHead className="text-xs sm:text-sm">{isRTL ? "الحالة" : "Status"}</TableHead>
+                    <TableHead className="text-xs sm:text-sm hidden md:table-cell">{isRTL ? "الأولوية" : "Priority"}</TableHead>
+                    <TableHead className="text-xs sm:text-sm">{isRTL ? "التكلفة" : "Cost"}</TableHead>
+                    <TableHead className="text-xs sm:text-sm hidden lg:table-cell">{isRTL ? "تاريخ التسليم" : "Delivery"}</TableHead>
+                    <TableHead className="text-xs sm:text-sm hidden sm:table-cell">{isRTL ? "التاريخ" : "Date"}</TableHead>
+                    <TableHead className="text-xs sm:text-sm">{isRTL ? "الإجراءات" : "Actions"}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -469,18 +471,18 @@ export default function PurchasingRequestsPage() {
                   ) : (
                     filteredRequests.map((request) => (
                       <TableRow key={request.id} data-testid={`row-request-${request.id}`}>
-                        <TableCell className="font-mono font-medium">{request.requestNumber}</TableCell>
-                        <TableCell>{getBranchName(request.branchId)}</TableCell>
-                        <TableCell>{request.vendorName || "-"}</TableCell>
-                        <TableCell>{getStatusBadge(request.status, isRTL)}</TableCell>
-                        <TableCell>{getPriorityBadge(request.priority, isRTL)}</TableCell>
-                        <TableCell>
+                        <TableCell className="font-mono font-medium text-xs sm:text-sm">{request.requestNumber}</TableCell>
+                        <TableCell className="text-xs sm:text-sm hidden md:table-cell">{getBranchName(request.branchId)}</TableCell>
+                        <TableCell className="text-xs sm:text-sm">{request.vendorName || "-"}</TableCell>
+                        <TableCell><span className="text-[10px] sm:text-xs">{getStatusBadge(request.status, isRTL)}</span></TableCell>
+                        <TableCell className="hidden md:table-cell"><span className="text-[10px] sm:text-xs">{getPriorityBadge(request.priority, isRTL)}</span></TableCell>
+                        <TableCell className="text-xs sm:text-sm">
                           {request.totalEstimatedCost ? `${parseFloat(request.totalEstimatedCost).toLocaleString()} ر.س` : "-"}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-xs sm:text-sm hidden lg:table-cell">
                           {request.expectedDeliveryDate ? new Date(request.expectedDeliveryDate).toLocaleDateString("en-GB") : "-"}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="text-xs sm:text-sm hidden sm:table-cell">
                           {request.createdAt ? new Date(request.createdAt).toLocaleDateString("en-GB") : "-"}
                         </TableCell>
                         <TableCell>

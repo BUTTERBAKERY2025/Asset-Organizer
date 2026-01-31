@@ -113,38 +113,38 @@ export default function DiscountCardPage() {
             }} />
           </div>
           
-          <div className="relative z-10 p-6">
+          <div className="relative z-10 p-4 sm:p-6">
             {/* Logo */}
-            <div className="text-center mb-6">
-              <div className="inline-block bg-white rounded-2xl p-4 shadow-xl">
+            <div className="text-center mb-4 sm:mb-6">
+              <div className="inline-block bg-white rounded-xl sm:rounded-2xl p-3 sm:p-4 shadow-xl">
                 <img 
                   src="/butter-logo.png" 
                   alt="BUTTER BAKERY" 
-                  className="h-16 mx-auto"
+                  className="h-12 sm:h-16 mx-auto"
                   onError={(e) => {
                     e.currentTarget.style.display = 'none';
                     const next = e.currentTarget.nextElementSibling as HTMLElement;
                     if (next) next.classList.remove('hidden');
                   }}
                 />
-                <div className="hidden text-2xl font-black text-orange-500 tracking-wider">
+                <div className="hidden text-xl sm:text-2xl font-black text-orange-500 tracking-wider">
                   BUTTER BAKERY
                 </div>
               </div>
             </div>
 
             {/* Discount Name */}
-            <div className="text-center mb-4">
-              <h2 className="text-xl font-bold text-white">{discount.name}</h2>
+            <div className="text-center mb-3 sm:mb-4">
+              <h2 className="text-lg sm:text-xl font-bold text-white">{discount.name}</h2>
             </div>
 
             {/* Discount Value */}
-            <div className="text-center my-6">
+            <div className="text-center my-4 sm:my-6">
               <div className="inline-block relative">
-                <div className="absolute inset-0 bg-orange-500 rounded-2xl blur-xl opacity-40" />
-                <div className="relative bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl px-12 py-6 shadow-2xl border border-orange-400/30">
-                  <p className="text-orange-100 text-sm mb-1 font-medium">خصم حصري</p>
-                  <p className="text-5xl font-black text-white drop-shadow-lg">
+                <div className="absolute inset-0 bg-orange-500 rounded-xl sm:rounded-2xl blur-xl opacity-40" />
+                <div className="relative bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl sm:rounded-2xl px-8 sm:px-12 py-4 sm:py-6 shadow-2xl border border-orange-400/30">
+                  <p className="text-orange-100 text-xs sm:text-sm mb-1 font-medium">خصم حصري</p>
+                  <p className="text-3xl sm:text-4xl md:text-5xl font-black text-white drop-shadow-lg">
                     {discount.discountType === "percentage" 
                       ? `${discount.discountValue}%` 
                       : `${Number(discount.discountValue).toLocaleString()} ر.س`}
@@ -154,23 +154,24 @@ export default function DiscountCardPage() {
             </div>
 
             {/* QR Code */}
-            <div className="flex justify-center my-6">
-              <div className="bg-white p-4 rounded-2xl shadow-xl">
+            <div className="flex justify-center my-4 sm:my-6">
+              <div className="bg-white p-3 sm:p-4 rounded-xl sm:rounded-2xl shadow-xl">
                 <QRCodeSVG 
                   value={window.location.href}
-                  size={130}
+                  size={100}
                   level="H"
                   includeMargin={false}
                   fgColor="#1e293b"
+                  className="w-[100px] h-[100px] sm:w-[130px] sm:h-[130px]"
                 />
               </div>
             </div>
 
             {/* Code */}
-            <div className="text-center my-4">
-              <p className="text-slate-400 text-sm mb-2">رمز الخصم</p>
-              <div className="inline-block bg-slate-700/50 backdrop-blur-sm rounded-xl px-8 py-4 border border-slate-600">
-                <code className="text-2xl font-black tracking-widest text-white">{discount.code}</code>
+            <div className="text-center my-3 sm:my-4">
+              <p className="text-slate-400 text-xs sm:text-sm mb-2">رمز الخصم</p>
+              <div className="inline-block bg-slate-700/50 backdrop-blur-sm rounded-lg sm:rounded-xl px-6 sm:px-8 py-3 sm:py-4 border border-slate-600">
+                <code className="text-lg sm:text-xl md:text-2xl font-black tracking-widest text-white">{discount.code}</code>
               </div>
             </div>
 

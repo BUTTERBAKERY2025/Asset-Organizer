@@ -230,13 +230,13 @@ export default function VisitorsPage() {
 
   return (
     <Layout>
-    <div className="max-w-6xl mx-auto p-4 md:p-8 lg:p-10 space-y-4" dir="rtl">
-      <div className="flex items-center justify-between">
+    <div className="max-w-6xl mx-auto p-3 sm:p-4 md:p-6 space-y-4" dir="rtl">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-amber-800" data-testid="page-title">
+          <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-amber-800" data-testid="page-title">
             سجل الزوار
           </h1>
-          <p className="text-gray-600">إدارة تسجيل دخول وخروج الزوار</p>
+          <p className="text-xs sm:text-sm text-gray-600">إدارة تسجيل دخول وخروج الزوار</p>
         </div>
         <div className="flex gap-2">
           <Dialog open={isAddVisitorOpen} onOpenChange={setIsAddVisitorOpen}>
@@ -312,58 +312,58 @@ export default function VisitorsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
         <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <CalendarDays className="h-5 w-5" />
+          <CardHeader className="p-3 sm:p-4 pb-2">
+            <CardTitle className="flex items-center gap-2 text-xs sm:text-sm md:text-lg">
+              <CalendarDays className="h-4 w-4 sm:h-5 sm:w-5" />
               زوار اليوم
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-bold" data-testid="stat-today">
+          <CardContent className="p-3 sm:p-4 pt-0">
+            <div className="text-xl sm:text-2xl md:text-4xl font-bold" data-testid="stat-today">
               {stats?.todayVisitors || 0}
             </div>
           </CardContent>
         </Card>
 
         <Card className="bg-gradient-to-br from-green-500 to-green-600 text-white">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Users className="h-5 w-5" />
+          <CardHeader className="p-3 sm:p-4 pb-2">
+            <CardTitle className="flex items-center gap-2 text-xs sm:text-sm md:text-lg">
+              <Users className="h-4 w-4 sm:h-5 sm:w-5" />
               داخل المبنى الآن
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-bold" data-testid="stat-active">
+          <CardContent className="p-3 sm:p-4 pt-0">
+            <div className="text-xl sm:text-2xl md:text-4xl font-bold" data-testid="stat-active">
               {stats?.activeVisitors || 0}
             </div>
           </CardContent>
         </Card>
 
         <Card className="bg-gradient-to-br from-amber-500 to-amber-600 text-white">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <IdCard className="h-5 w-5" />
+          <CardHeader className="p-3 sm:p-4 pb-2">
+            <CardTitle className="flex items-center gap-2 text-xs sm:text-sm md:text-lg">
+              <IdCard className="h-4 w-4 sm:h-5 sm:w-5" />
               إجمالي الزوار
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-bold" data-testid="stat-total">
+          <CardContent className="p-3 sm:p-4 pt-0">
+            <div className="text-xl sm:text-2xl md:text-4xl font-bold" data-testid="stat-total">
               {stats?.totalVisitors || 0}
             </div>
           </CardContent>
         </Card>
 
         <Card className="bg-gradient-to-br from-red-500 to-red-600 text-white">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Shield className="h-5 w-5" />
+          <CardHeader className="p-3 sm:p-4 pb-2">
+            <CardTitle className="flex items-center gap-2 text-xs sm:text-sm md:text-lg">
+              <Shield className="h-4 w-4 sm:h-5 sm:w-5" />
               القائمة السوداء
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-bold" data-testid="stat-blacklisted">
+          <CardContent className="p-3 sm:p-4 pt-0">
+            <div className="text-xl sm:text-2xl md:text-4xl font-bold" data-testid="stat-blacklisted">
               {stats?.blacklistedCount || 0}
             </div>
           </CardContent>
@@ -404,22 +404,27 @@ export default function VisitorsPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="mb-4">
-          <TabsTrigger value="active" className="gap-2" data-testid="tab-active">
-            <Users className="h-4 w-4" />
-            الزوار الحاليون ({stats?.activeVisitors || 0})
+        <TabsList className="mb-4 w-full flex-wrap h-auto p-1 overflow-x-auto">
+          <TabsTrigger value="active" className="gap-1 sm:gap-2 text-[10px] sm:text-xs md:text-sm" data-testid="tab-active">
+            <Users className="h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">الزوار الحاليون</span>
+            <span className="sm:hidden">الحاليون</span>
+            ({stats?.activeVisitors || 0})
           </TabsTrigger>
-          <TabsTrigger value="logs" className="gap-2" data-testid="tab-logs">
-            <Clock className="h-4 w-4" />
-            سجل الزيارات
+          <TabsTrigger value="logs" className="gap-1 sm:gap-2 text-[10px] sm:text-xs md:text-sm" data-testid="tab-logs">
+            <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">سجل الزيارات</span>
+            <span className="sm:hidden">السجل</span>
           </TabsTrigger>
-          <TabsTrigger value="visitors" className="gap-2" data-testid="tab-visitors">
-            <IdCard className="h-4 w-4" />
-            قائمة الزوار
+          <TabsTrigger value="visitors" className="gap-1 sm:gap-2 text-[10px] sm:text-xs md:text-sm" data-testid="tab-visitors">
+            <IdCard className="h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">قائمة الزوار</span>
+            <span className="sm:hidden">الزوار</span>
           </TabsTrigger>
-          <TabsTrigger value="blacklist" className="gap-2" data-testid="tab-blacklist">
-            <AlertTriangle className="h-4 w-4" />
-            القائمة السوداء
+          <TabsTrigger value="blacklist" className="gap-1 sm:gap-2 text-[10px] sm:text-xs md:text-sm" data-testid="tab-blacklist">
+            <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4" />
+            <span className="hidden sm:inline">القائمة السوداء</span>
+            <span className="sm:hidden">السوداء</span>
           </TabsTrigger>
         </TabsList>
 
@@ -503,35 +508,35 @@ export default function VisitorsPage() {
                 </div>
               ) : allLogs && allLogs.length > 0 ? (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-right">
+                  <table className="w-full text-right min-w-[600px]">
                     <thead>
                       <tr className="border-b">
-                        <th className="p-2">رقم الزيارة</th>
-                        <th className="p-2">التاريخ</th>
-                        <th className="p-2">الغرض</th>
-                        <th className="p-2">المضيف</th>
-                        <th className="p-2">الدخول</th>
-                        <th className="p-2">الخروج</th>
-                        <th className="p-2">الحالة</th>
+                        <th className="p-2 text-xs sm:text-sm">رقم الزيارة</th>
+                        <th className="p-2 text-xs sm:text-sm">التاريخ</th>
+                        <th className="p-2 text-xs sm:text-sm">الغرض</th>
+                        <th className="p-2 text-xs sm:text-sm hidden md:table-cell">المضيف</th>
+                        <th className="p-2 text-xs sm:text-sm">الدخول</th>
+                        <th className="p-2 text-xs sm:text-sm">الخروج</th>
+                        <th className="p-2 text-xs sm:text-sm">الحالة</th>
                       </tr>
                     </thead>
                     <tbody>
                       {allLogs.map((log) => (
                         <tr key={log.id} className="border-b hover:bg-gray-50" data-testid={`log-row-${log.id}`}>
-                          <td className="p-2 font-mono text-sm">{log.visitNumber}</td>
-                          <td className="p-2">
+                          <td className="p-2 font-mono text-xs sm:text-sm">{log.visitNumber}</td>
+                          <td className="p-2 text-xs sm:text-sm">
                             {format(new Date(log.visitDate), "yyyy/MM/dd", { locale: ar })}
                           </td>
-                          <td className="p-2">{log.visitPurpose}</td>
-                          <td className="p-2">{log.hostName || "-"}</td>
-                          <td className="p-2">
+                          <td className="p-2 text-xs sm:text-sm">{log.visitPurpose}</td>
+                          <td className="p-2 text-xs sm:text-sm hidden md:table-cell">{log.hostName || "-"}</td>
+                          <td className="p-2 text-xs sm:text-sm">
                             {log.checkInTime ? format(new Date(log.checkInTime), "HH:mm") : "-"}
                           </td>
-                          <td className="p-2">
+                          <td className="p-2 text-xs sm:text-sm">
                             {log.checkOutTime ? format(new Date(log.checkOutTime), "HH:mm") : "-"}
                           </td>
                           <td className="p-2">
-                            <Badge className={statusColors[log.status || "pending"]}>
+                            <Badge className={`${statusColors[log.status || "pending"]} text-[10px] sm:text-xs`}>
                               {statusLabels[log.status || "pending"]}
                             </Badge>
                           </td>

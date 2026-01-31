@@ -196,26 +196,26 @@ export default function ExecutiveReports() {
 
   return (
     <Layout>
-      <div className="max-w-6xl mx-auto p-4 md:p-8 lg:p-10 space-y-4" dir="rtl">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-4">
+      <div className="max-w-6xl mx-auto p-3 sm:p-4 md:p-6 space-y-4" dir="rtl">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2 sm:gap-4">
           <Link href="/executive">
-            <Button variant="ghost" size="icon">
-              <ArrowRight className="h-5 w-5" />
+            <Button variant="ghost" size="sm" className="h-8 w-8 sm:h-9 sm:w-9">
+              <ArrowRight className="h-4 w-4 sm:h-5 sm:w-5" />
             </Button>
           </Link>
           <div>
-            <h1 className="text-3xl font-bold text-amber-800" data-testid="page-title">
+            <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-amber-800" data-testid="page-title">
               تقارير السكرتارية التنفيذية
             </h1>
-            <p className="text-gray-600">
+            <p className="text-[10px] sm:text-xs text-gray-600">
               تقارير PDF موحدة وقابلة للطباعة
             </p>
           </div>
         </div>
-        <div className="flex gap-2 items-center">
+        <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center w-full sm:w-auto">
           <Select value={reportType} onValueChange={setReportType}>
-            <SelectTrigger className="w-48">
+            <SelectTrigger className="w-full sm:w-40 text-xs sm:text-sm h-8 sm:h-9">
               <SelectValue placeholder="نوع التقرير" />
             </SelectTrigger>
             <SelectContent>
@@ -226,123 +226,123 @@ export default function ExecutiveReports() {
               ))}
             </SelectContent>
           </Select>
-          <Button onClick={() => handlePrint()} className="gap-2 bg-amber-600 hover:bg-amber-700">
-            <Printer className="h-4 w-4" />
+          <Button onClick={() => handlePrint()} className="gap-1 sm:gap-2 bg-amber-600 hover:bg-amber-700 text-xs sm:text-sm h-8 sm:h-9">
+            <Printer className="h-3 w-3 sm:h-4 sm:w-4" />
             طباعة التقرير
           </Button>
         </div>
       </div>
 
       <Card className="mb-4">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Download className="h-5 w-5" />
+        <CardHeader className="p-3 sm:p-4 pb-2">
+          <CardTitle className="text-sm sm:text-lg flex items-center gap-2">
+            <Download className="h-4 w-4 sm:h-5 sm:w-5" />
             تصدير البيانات والتذكيرات
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-3 sm:p-4 pt-0">
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={exportMeetings} className="gap-2">
-              <FileSpreadsheet className="h-4 w-4" />
-              تصدير الاجتماعات
+            <Button variant="outline" onClick={exportMeetings} className="gap-1 sm:gap-2 text-[10px] sm:text-xs h-7 sm:h-9 px-2 sm:px-3">
+              <FileSpreadsheet className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">تصدير</span> الاجتماعات
             </Button>
-            <Button variant="outline" onClick={exportTasks} className="gap-2">
-              <FileSpreadsheet className="h-4 w-4" />
-              تصدير المهام
+            <Button variant="outline" onClick={exportTasks} className="gap-1 sm:gap-2 text-[10px] sm:text-xs h-7 sm:h-9 px-2 sm:px-3">
+              <FileSpreadsheet className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">تصدير</span> المهام
             </Button>
-            <Button variant="outline" onClick={exportVisitors} className="gap-2">
-              <FileSpreadsheet className="h-4 w-4" />
-              تصدير الزوار
+            <Button variant="outline" onClick={exportVisitors} className="gap-1 sm:gap-2 text-[10px] sm:text-xs h-7 sm:h-9 px-2 sm:px-3">
+              <FileSpreadsheet className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">تصدير</span> الزوار
             </Button>
             <Button 
               variant="outline" 
               onClick={() => generateRemindersMutation.mutate()}
               disabled={generateRemindersMutation.isPending}
-              className="gap-2 bg-blue-50 hover:bg-blue-100"
+              className="gap-1 sm:gap-2 text-[10px] sm:text-xs h-7 sm:h-9 px-2 sm:px-3 bg-blue-50 hover:bg-blue-100"
             >
               {generateRemindersMutation.isPending ? (
-                <RefreshCw className="h-4 w-4 animate-spin" />
+                <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
               ) : (
-                <Bell className="h-4 w-4" />
+                <Bell className="h-3 w-3 sm:h-4 sm:w-4" />
               )}
-              إنشاء تذكيرات تلقائية
+              تذكيرات تلقائية
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      <div ref={printRef} className="bg-white p-8 rounded-lg shadow print:shadow-none">
+      <div ref={printRef} className="bg-white p-4 sm:p-6 md:p-8 rounded-lg shadow print:shadow-none">
         <div className="print:block">
-          <div className="text-center mb-8 border-b-2 border-amber-500 pb-4">
-            <h1 className="text-2xl font-bold text-amber-800">BUTTER BAKERY</h1>
-            <h2 className="text-xl font-semibold mt-2">{getReportTitle()}</h2>
-            <p className="text-gray-600 mt-1">{getDateRange()}</p>
-            <p className="text-sm text-gray-500 mt-1">
+          <div className="text-center mb-4 sm:mb-8 border-b-2 border-amber-500 pb-4">
+            <h1 className="text-lg sm:text-2xl font-bold text-amber-800">BUTTER BAKERY</h1>
+            <h2 className="text-sm sm:text-xl font-semibold mt-2">{getReportTitle()}</h2>
+            <p className="text-xs sm:text-base text-gray-600 mt-1">{getDateRange()}</p>
+            <p className="text-[10px] sm:text-sm text-gray-500 mt-1">
               تاريخ الإنشاء: {format(new Date(), 'yyyy/MM/dd HH:mm', { locale: ar })}
             </p>
           </div>
 
           {(reportType === "weekly" || reportType === "monthly") && (
             <>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 mb-4 sm:mb-8">
                 <Card className="border-blue-200">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-blue-500" />
+                  <CardHeader className="p-2 sm:p-4 pb-1 sm:pb-2">
+                    <CardTitle className="text-[10px] sm:text-sm flex items-center gap-1 sm:gap-2">
+                      <Calendar className="h-3 w-3 sm:h-4 sm:w-4 text-blue-500" />
                       الاجتماعات
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold text-blue-600">
+                  <CardContent className="p-2 sm:p-4 pt-0">
+                    <div className="text-lg sm:text-2xl font-bold text-blue-600">
                       {stats?.meetingsThisWeek || meetings.length || 0}
                     </div>
                   </CardContent>
                 </Card>
 
                 <Card className="border-amber-200">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm flex items-center gap-2">
-                      <CheckSquare className="h-4 w-4 text-amber-500" />
+                  <CardHeader className="p-2 sm:p-4 pb-1 sm:pb-2">
+                    <CardTitle className="text-[10px] sm:text-sm flex items-center gap-1 sm:gap-2">
+                      <CheckSquare className="h-3 w-3 sm:h-4 sm:w-4 text-amber-500" />
                       المهام المعلقة
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold text-amber-600">
+                  <CardContent className="p-2 sm:p-4 pt-0">
+                    <div className="text-lg sm:text-2xl font-bold text-amber-600">
                       {stats?.pendingTasks || 0}
                     </div>
                   </CardContent>
                 </Card>
 
                 <Card className="border-green-200">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm flex items-center gap-2">
-                      <Mail className="h-4 w-4 text-green-500" />
+                  <CardHeader className="p-2 sm:p-4 pb-1 sm:pb-2">
+                    <CardTitle className="text-[10px] sm:text-sm flex items-center gap-1 sm:gap-2">
+                      <Mail className="h-3 w-3 sm:h-4 sm:w-4 text-green-500" />
                       المراسلات
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold text-green-600">
+                  <CardContent className="p-2 sm:p-4 pt-0">
+                    <div className="text-lg sm:text-2xl font-bold text-green-600">
                       {correspondence.length || 0}
                     </div>
                   </CardContent>
                 </Card>
 
                 <Card className="border-purple-200">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm flex items-center gap-2">
-                      <Users className="h-4 w-4 text-purple-500" />
+                  <CardHeader className="p-2 sm:p-4 pb-1 sm:pb-2">
+                    <CardTitle className="text-[10px] sm:text-sm flex items-center gap-1 sm:gap-2">
+                      <Users className="h-3 w-3 sm:h-4 sm:w-4 text-purple-500" />
                       الزوار
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold text-purple-600">
+                  <CardContent className="p-2 sm:p-4 pt-0">
+                    <div className="text-lg sm:text-2xl font-bold text-purple-600">
                       {visitorStats?.todayVisitors || 0}
                     </div>
                   </CardContent>
                 </Card>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-6 mb-4 sm:mb-8">
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -443,98 +443,102 @@ export default function ExecutiveReports() {
 
           {reportType === "meetings" && (
             <Card>
-              <CardHeader>
-                <CardTitle>تفاصيل الاجتماعات</CardTitle>
+              <CardHeader className="p-3 sm:p-4">
+                <CardTitle className="text-sm sm:text-lg">تفاصيل الاجتماعات</CardTitle>
               </CardHeader>
-              <CardContent>
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-right p-2">العنوان</th>
-                      <th className="text-right p-2">التاريخ</th>
-                      <th className="text-right p-2">النوع</th>
-                      <th className="text-right p-2">الحالة</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {meetings.slice(0, 20).map((meeting: any) => (
-                      <tr key={meeting.id} className="border-b">
-                        <td className="p-2">{meeting.title}</td>
-                        <td className="p-2">{format(new Date(meeting.startAt), 'yyyy/MM/dd HH:mm', { locale: ar })}</td>
-                        <td className="p-2">{meeting.meetingType}</td>
-                        <td className="p-2">
-                          <Badge variant="outline">{meeting.status}</Badge>
-                        </td>
+              <CardContent className="p-0 sm:p-4">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs sm:text-sm min-w-[500px]">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-right p-2">العنوان</th>
+                        <th className="text-right p-2">التاريخ</th>
+                        <th className="text-right p-2 hidden md:table-cell">النوع</th>
+                        <th className="text-right p-2">الحالة</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {meetings.slice(0, 20).map((meeting: any) => (
+                        <tr key={meeting.id} className="border-b">
+                          <td className="p-2 truncate max-w-[150px]">{meeting.title}</td>
+                          <td className="p-2">{format(new Date(meeting.startAt), 'MM/dd HH:mm', { locale: ar })}</td>
+                          <td className="p-2 hidden md:table-cell">{meeting.meetingType}</td>
+                          <td className="p-2">
+                            <Badge variant="outline" className="text-[10px] sm:text-xs">{meeting.status}</Badge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </CardContent>
             </Card>
           )}
 
           {reportType === "tasks" && (
             <Card>
-              <CardHeader>
-                <CardTitle>تفاصيل المهام</CardTitle>
+              <CardHeader className="p-3 sm:p-4">
+                <CardTitle className="text-sm sm:text-lg">تفاصيل المهام</CardTitle>
               </CardHeader>
-              <CardContent>
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-right p-2">العنوان</th>
-                      <th className="text-right p-2">الأولوية</th>
-                      <th className="text-right p-2">تاريخ الاستحقاق</th>
-                      <th className="text-right p-2">الحالة</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {tasks.slice(0, 20).map((task: any) => (
-                      <tr key={task.id} className="border-b">
-                        <td className="p-2">{task.title}</td>
-                        <td className="p-2">{task.priority}</td>
-                        <td className="p-2">{task.dueDate ? format(new Date(task.dueDate), 'yyyy/MM/dd', { locale: ar }) : '-'}</td>
-                        <td className="p-2">
-                          <Badge variant="outline">{task.status}</Badge>
-                        </td>
+              <CardContent className="p-0 sm:p-4">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs sm:text-sm min-w-[500px]">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-right p-2">العنوان</th>
+                        <th className="text-right p-2 hidden md:table-cell">الأولوية</th>
+                        <th className="text-right p-2">الاستحقاق</th>
+                        <th className="text-right p-2">الحالة</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {tasks.slice(0, 20).map((task: any) => (
+                        <tr key={task.id} className="border-b">
+                          <td className="p-2 truncate max-w-[150px]">{task.title}</td>
+                          <td className="p-2 hidden md:table-cell">{task.priority}</td>
+                          <td className="p-2">{task.dueDate ? format(new Date(task.dueDate), 'MM/dd', { locale: ar }) : '-'}</td>
+                          <td className="p-2">
+                            <Badge variant="outline" className="text-[10px] sm:text-xs">{task.status}</Badge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </CardContent>
             </Card>
           )}
 
           {reportType === "visitors" && (
             <Card>
-              <CardHeader>
-                <CardTitle>إحصائيات الزوار</CardTitle>
+              <CardHeader className="p-3 sm:p-4">
+                <CardTitle className="text-sm sm:text-lg">إحصائيات الزوار</CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="text-center p-4 bg-gray-50 rounded-lg">
-                    <div className="text-2xl font-bold text-blue-600">
+              <CardContent className="p-3 sm:p-4 pt-0">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+                  <div className="text-center p-2 sm:p-4 bg-gray-50 rounded-lg">
+                    <div className="text-lg sm:text-2xl font-bold text-blue-600">
                       {visitorStats?.todayVisitors || 0}
                     </div>
-                    <div className="text-sm text-gray-600">زوار اليوم</div>
+                    <div className="text-[10px] sm:text-sm text-gray-600">زوار اليوم</div>
                   </div>
-                  <div className="text-center p-4 bg-gray-50 rounded-lg">
-                    <div className="text-2xl font-bold text-green-600">
+                  <div className="text-center p-2 sm:p-4 bg-gray-50 rounded-lg">
+                    <div className="text-lg sm:text-2xl font-bold text-green-600">
                       {visitorStats?.currentlyInside || 0}
                     </div>
-                    <div className="text-sm text-gray-600">داخل المبنى حالياً</div>
+                    <div className="text-[10px] sm:text-sm text-gray-600">داخل المبنى</div>
                   </div>
-                  <div className="text-center p-4 bg-gray-50 rounded-lg">
-                    <div className="text-2xl font-bold text-amber-600">
+                  <div className="text-center p-2 sm:p-4 bg-gray-50 rounded-lg">
+                    <div className="text-lg sm:text-2xl font-bold text-amber-600">
                       {visitorStats?.weeklyVisitors || 0}
                     </div>
-                    <div className="text-sm text-gray-600">زوار هذا الأسبوع</div>
+                    <div className="text-[10px] sm:text-sm text-gray-600">هذا الأسبوع</div>
                   </div>
-                  <div className="text-center p-4 bg-gray-50 rounded-lg">
-                    <div className="text-2xl font-bold text-purple-600">
+                  <div className="text-center p-2 sm:p-4 bg-gray-50 rounded-lg">
+                    <div className="text-lg sm:text-2xl font-bold text-purple-600">
                       {visitorStats?.monthlyVisitors || 0}
                     </div>
-                    <div className="text-sm text-gray-600">زوار هذا الشهر</div>
+                    <div className="text-[10px] sm:text-sm text-gray-600">هذا الشهر</div>
                   </div>
                 </div>
               </CardContent>

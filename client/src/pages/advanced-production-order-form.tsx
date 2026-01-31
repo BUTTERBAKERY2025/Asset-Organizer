@@ -405,7 +405,7 @@ export default function AdvancedProductionOrderFormPage() {
   if (isEdit && loadingOrder) {
     return (
       <Layout>
-        <div className="p-6 max-w-6xl mx-auto space-y-6" dir="rtl">
+        <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-4 sm:space-y-6" dir="rtl">
           <Skeleton className="h-8 w-64" />
           <Skeleton className="h-[600px]" />
         </div>
@@ -487,7 +487,7 @@ export default function AdvancedProductionOrderFormPage() {
         </div>
 
         <Card>
-          <CardContent className="p-6">
+          <CardContent className="p-3 sm:p-4 md:p-6">
             {currentStep === "info" && (
               <div className="space-y-6">
                 <div>
@@ -497,7 +497,7 @@ export default function AdvancedProductionOrderFormPage() {
                   </h2>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 md:gap-6">
                   <div className="space-y-2">
                     <Label htmlFor="title">عنوان الأمر *</Label>
                     <Input
@@ -629,12 +629,12 @@ export default function AdvancedProductionOrderFormPage() {
 
             {currentStep === "products" && (
               <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-semibold flex items-center gap-2">
-                    <Package className="w-5 h-5 text-primary" />
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+                  <h2 className="text-base sm:text-lg font-semibold flex items-center gap-2">
+                    <Package className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
                     اختيار المنتجات
                   </h2>
-                  <Button onClick={addProduct} variant="outline" data-testid="button-add-product">
+                  <Button onClick={addProduct} variant="outline" size="sm" className="h-10 sm:h-9 text-xs sm:text-sm" data-testid="button-add-product">
                     <Plus className="w-4 h-4 ml-2" />
                     إضافة منتج
                   </Button>
@@ -651,8 +651,8 @@ export default function AdvancedProductionOrderFormPage() {
                 ) : (
                   <div className="space-y-4">
                     {formData.items.map((item, index) => (
-                      <Card key={index} className="p-4">
-                        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                      <Card key={index} className="p-3 sm:p-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-12 gap-2 sm:gap-3 md:gap-4 items-end">
                           <div className="md:col-span-5 space-y-2">
                             <Label>المنتج</Label>
                             {item.productName ? (
@@ -724,16 +724,16 @@ export default function AdvancedProductionOrderFormPage() {
 
                     <Separator />
 
-                    <div className="flex justify-end gap-8 text-lg">
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">إجمالي الكميات:</span>
-                        <Badge variant="secondary" className="text-lg px-3 py-1">
+                    <div className="flex flex-col sm:flex-row justify-end gap-3 sm:gap-8 text-sm sm:text-lg">
+                      <div className="flex items-center justify-between sm:justify-start gap-2">
+                        <span className="text-muted-foreground text-xs sm:text-base">إجمالي الكميات:</span>
+                        <Badge variant="secondary" className="text-sm sm:text-lg px-2 sm:px-3 py-1">
                           {calculateTotals.totalQuantity}
                         </Badge>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">الإجمالي:</span>
-                        <Badge variant="default" className="text-lg px-3 py-1">
+                      <div className="flex items-center justify-between sm:justify-start gap-2">
+                        <span className="text-muted-foreground text-xs sm:text-base">الإجمالي:</span>
+                        <Badge variant="default" className="text-sm sm:text-lg px-2 sm:px-3 py-1">
                           {formatCurrency(calculateTotals.totalCost)}
                         </Badge>
                       </div>

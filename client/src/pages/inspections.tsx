@@ -178,20 +178,20 @@ export default function InspectionsPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
+      <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3 sm:gap-4">
             <Link href="/dashboard">
-              <Button variant="outline" size="sm" className="gap-2 h-11 sm:h-9" data-testid="button-back">
+              <Button variant="outline" size="sm" className="gap-2 h-11 sm:h-9 w-full sm:w-auto" data-testid="button-back">
                 <ArrowRight className="h-4 w-4" />
                 لوحة الأصول
               </Button>
             </Link>
             <div>
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground" data-testid="text-page-title">
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold tracking-tight text-foreground" data-testid="text-page-title">
                 جدولة الفحص الدوري
               </h1>
-              <p className="text-muted-foreground mt-1">إدارة مواعيد فحص الأصول وتتبع التنبيهات</p>
+              <p className="text-xs sm:text-sm text-muted-foreground mt-1">إدارة مواعيد فحص الأصول وتتبع التنبيهات</p>
             </div>
           </div>
           <Select value={filterBranch} onValueChange={setFilterBranch}>

@@ -1535,135 +1535,135 @@ export default function PnLDashboard() {
                       </Card>
                     )}
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                       <Card className="border-l-4 border-l-blue-500">
-                        <CardContent className="p-6">
+                        <CardContent className="p-3 sm:p-4 md:p-6">
                           <div className="flex items-center justify-between">
-                            <div>
-                              <p className="text-sm text-muted-foreground">إجمالي الإيرادات</p>
-                              <p className="text-2xl font-bold">{formatCurrency(metrics.totalRevenue)}</p>
+                            <div className="min-w-0">
+                              <p className="text-xs sm:text-sm text-muted-foreground">إجمالي الإيرادات</p>
+                              <p className="text-lg sm:text-xl md:text-2xl font-bold truncate">{formatCurrency(metrics.totalRevenue)}</p>
                             </div>
-                            <DollarSign className="h-10 w-10 text-blue-500 opacity-50" />
+                            <DollarSign className="h-8 w-8 sm:h-10 sm:w-10 text-blue-500 opacity-50 shrink-0" />
                           </div>
-                          <div className="mt-2 text-xs text-muted-foreground">
+                          <div className="mt-2 text-[10px] sm:text-xs text-muted-foreground">
                             {metrics.invoiceCount} فاتورة - متوسط {formatCurrency(metrics.avgInvoiceValue)}
                           </div>
                         </CardContent>
                       </Card>
 
                       <Card className="border-l-4 border-l-green-500">
-                        <CardContent className="p-6">
+                        <CardContent className="p-3 sm:p-4 md:p-6">
                           <div className="flex items-center justify-between">
-                            <div>
-                              <p className="text-sm text-muted-foreground">إجمالي الربح</p>
-                              <p className="text-2xl font-bold">{formatCurrency(metrics.grossProfit)}</p>
+                            <div className="min-w-0">
+                              <p className="text-xs sm:text-sm text-muted-foreground">إجمالي الربح</p>
+                              <p className="text-lg sm:text-xl md:text-2xl font-bold truncate">{formatCurrency(metrics.grossProfit)}</p>
                             </div>
-                            <TrendingUp className="h-10 w-10 text-green-500 opacity-50" />
+                            <TrendingUp className="h-8 w-8 sm:h-10 sm:w-10 text-green-500 opacity-50 shrink-0" />
                           </div>
-                          <div className="mt-2 flex items-center gap-2">
-                            <Badge variant="secondary">{formatPercent(metrics.grossMarginPct)}</Badge>
-                            <span className="text-xs text-muted-foreground">هامش إجمالي</span>
+                          <div className="mt-2 flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2">
+                            <Badge variant="secondary" className="text-[10px] sm:text-xs">{formatPercent(metrics.grossMarginPct)}</Badge>
+                            <span className="text-[10px] sm:text-xs text-muted-foreground">هامش إجمالي</span>
                           </div>
                         </CardContent>
                       </Card>
 
                       <Card className={`border-l-4 ${metrics.netProfit >= 0 ? "border-l-emerald-500" : "border-l-red-500"}`}>
-                        <CardContent className="p-6">
+                        <CardContent className="p-3 sm:p-4 md:p-6">
                           <div className="flex items-center justify-between">
-                            <div>
-                              <p className="text-sm text-muted-foreground">صافي الربح</p>
-                              <p className={`text-2xl font-bold ${metrics.netProfit >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                            <div className="min-w-0">
+                              <p className="text-xs sm:text-sm text-muted-foreground">صافي الربح</p>
+                              <p className={`text-lg sm:text-xl md:text-2xl font-bold truncate ${metrics.netProfit >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                                 {formatCurrency(metrics.netProfit)}
                               </p>
                             </div>
                             {metrics.netProfit >= 0 ? (
-                              <TrendingUp className="h-10 w-10 text-emerald-500 opacity-50" />
+                              <TrendingUp className="h-8 w-8 sm:h-10 sm:w-10 text-emerald-500 opacity-50 shrink-0" />
                             ) : (
-                              <TrendingDown className="h-10 w-10 text-red-500 opacity-50" />
+                              <TrendingDown className="h-8 w-8 sm:h-10 sm:w-10 text-red-500 opacity-50 shrink-0" />
                             )}
                           </div>
-                          <div className="mt-2 flex items-center gap-2">
-                            <Badge variant={metrics.netProfit >= 0 ? "default" : "destructive"}>
+                          <div className="mt-2 flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2">
+                            <Badge variant={metrics.netProfit >= 0 ? "default" : "destructive"} className="text-[10px] sm:text-xs">
                               {formatPercent(metrics.netMarginPct)}
                             </Badge>
-                            <span className="text-xs text-muted-foreground">هامش صافي</span>
+                            <span className="text-[10px] sm:text-xs text-muted-foreground">هامش صافي</span>
                           </div>
                         </CardContent>
                       </Card>
 
                       <Card className="border-l-4 border-l-amber-500">
-                        <CardContent className="p-6">
+                        <CardContent className="p-3 sm:p-4 md:p-6">
                           <div className="flex items-center justify-between">
-                            <div>
-                              <p className="text-sm text-muted-foreground">نقطة التعادل</p>
-                              <p className="text-2xl font-bold">{formatCurrency(metrics.breakEvenSales)}</p>
+                            <div className="min-w-0">
+                              <p className="text-xs sm:text-sm text-muted-foreground">نقطة التعادل</p>
+                              <p className="text-lg sm:text-xl md:text-2xl font-bold truncate">{formatCurrency(metrics.breakEvenSales)}</p>
                             </div>
-                            <Target className="h-10 w-10 text-amber-500 opacity-50" />
+                            <Target className="h-8 w-8 sm:h-10 sm:w-10 text-amber-500 opacity-50 shrink-0" />
                           </div>
-                          <div className="mt-2 text-xs text-muted-foreground">
+                          <div className="mt-2 text-[10px] sm:text-xs text-muted-foreground">
                             {metrics.totalRevenue >= metrics.breakEvenSales ? (
-                              <span className="text-green-600">✓ تم تجاوز نقطة التعادل</span>
+                              <span className="text-green-600">✓ تجاوز التعادل</span>
                             ) : (
-                              <span className="text-red-600">✗ لم يتم الوصول لنقطة التعادل</span>
+                              <span className="text-red-600">✗ قبل التعادل</span>
                             )}
                           </div>
                         </CardContent>
                       </Card>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                       <Card>
-                        <CardContent className="p-6">
+                        <CardContent className="p-3 sm:p-4 md:p-6">
                           <div className="flex items-center gap-2 mb-2">
-                            <Users className="h-5 w-5 text-purple-500" />
-                            <span className="font-medium">نسبة الرواتب للمبيعات</span>
+                            <Users className="h-4 w-4 sm:h-5 sm:w-5 text-purple-500" />
+                            <span className="font-medium text-xs sm:text-sm">نسبة الرواتب للمبيعات</span>
                           </div>
-                          <p className="text-3xl font-bold">{formatPercent(metrics.salaryToSalesPct)}</p>
+                          <p className="text-xl sm:text-2xl md:text-3xl font-bold">{formatPercent(metrics.salaryToSalesPct)}</p>
                           <div className="mt-2">
                             {metrics.salaryToSalesPct <= 25 ? (
-                              <Badge className="bg-green-100 text-green-800">ممتاز</Badge>
+                              <Badge className="bg-green-100 text-green-800 text-[10px] sm:text-xs">ممتاز</Badge>
                             ) : metrics.salaryToSalesPct <= 35 ? (
-                              <Badge className="bg-yellow-100 text-yellow-800">مقبول</Badge>
+                              <Badge className="bg-yellow-100 text-yellow-800 text-[10px] sm:text-xs">مقبول</Badge>
                             ) : (
-                              <Badge className="bg-red-100 text-red-800">مرتفع</Badge>
+                              <Badge className="bg-red-100 text-red-800 text-[10px] sm:text-xs">مرتفع</Badge>
                             )}
                           </div>
                         </CardContent>
                       </Card>
 
                       <Card>
-                        <CardContent className="p-6">
+                        <CardContent className="p-3 sm:p-4 md:p-6">
                           <div className="flex items-center gap-2 mb-2">
-                            <Home className="h-5 w-5 text-orange-500" />
-                            <span className="font-medium">نسبة الإيجار للإيرادات</span>
+                            <Home className="h-4 w-4 sm:h-5 sm:w-5 text-orange-500" />
+                            <span className="font-medium text-xs sm:text-sm">نسبة الإيجار للإيرادات</span>
                           </div>
-                          <p className="text-3xl font-bold">{formatPercent(metrics.rentToRevenuePct)}</p>
+                          <p className="text-xl sm:text-2xl md:text-3xl font-bold">{formatPercent(metrics.rentToRevenuePct)}</p>
                           <div className="mt-2">
                             {metrics.rentToRevenuePct <= 10 ? (
-                              <Badge className="bg-green-100 text-green-800">ممتاز</Badge>
+                              <Badge className="bg-green-100 text-green-800 text-[10px] sm:text-xs">ممتاز</Badge>
                             ) : metrics.rentToRevenuePct <= 15 ? (
-                              <Badge className="bg-yellow-100 text-yellow-800">مقبول</Badge>
+                              <Badge className="bg-yellow-100 text-yellow-800 text-[10px] sm:text-xs">مقبول</Badge>
                             ) : (
-                              <Badge className="bg-red-100 text-red-800">مرتفع</Badge>
+                              <Badge className="bg-red-100 text-red-800 text-[10px] sm:text-xs">مرتفع</Badge>
                             )}
                           </div>
                         </CardContent>
                       </Card>
 
                       <Card>
-                        <CardContent className="p-6">
+                        <CardContent className="p-3 sm:p-4 md:p-6">
                           <div className="flex items-center gap-2 mb-2">
-                            <Package className="h-5 w-5 text-red-500" />
-                            <span className="font-medium">نسبة الهدر</span>
+                            <Package className="h-4 w-4 sm:h-5 sm:w-5 text-red-500" />
+                            <span className="font-medium text-xs sm:text-sm">نسبة الهدر</span>
                           </div>
-                          <p className="text-3xl font-bold">{formatPercent(metrics.wastePct)}</p>
+                          <p className="text-xl sm:text-2xl md:text-3xl font-bold">{formatPercent(metrics.wastePct)}</p>
                           <div className="mt-2">
                             {metrics.wastePct <= 3 ? (
-                              <Badge className="bg-green-100 text-green-800">ممتاز</Badge>
+                              <Badge className="bg-green-100 text-green-800 text-[10px] sm:text-xs">ممتاز</Badge>
                             ) : metrics.wastePct <= 5 ? (
-                              <Badge className="bg-yellow-100 text-yellow-800">مقبول</Badge>
+                              <Badge className="bg-yellow-100 text-yellow-800 text-[10px] sm:text-xs">مقبول</Badge>
                             ) : (
-                              <Badge className="bg-red-100 text-red-800">مرتفع</Badge>
+                              <Badge className="bg-red-100 text-red-800 text-[10px] sm:text-xs">مرتفع</Badge>
                             )}
                           </div>
                         </CardContent>
@@ -1671,68 +1671,68 @@ export default function PnLDashboard() {
                     </div>
 
                     {/* Advanced Financial KPIs */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                       <Card className="border-l-4 border-l-indigo-500">
-                        <CardContent className="p-6">
+                        <CardContent className="p-3 sm:p-4 md:p-6">
                           <div className="flex items-center gap-2 mb-2">
-                            <BarChart3 className="h-5 w-5 text-indigo-500" />
-                            <span className="font-medium">EBITDA</span>
+                            <BarChart3 className="h-4 w-4 sm:h-5 sm:w-5 text-indigo-500" />
+                            <span className="font-medium text-xs sm:text-sm">EBITDA</span>
                           </div>
-                          <p className="text-2xl font-bold">{formatCurrency(metrics.ebitda || 0)}</p>
-                          <div className="mt-2 flex items-center gap-2">
-                            <Badge variant="secondary">{formatPercent(metrics.ebitdaMarginPct || 0)}</Badge>
-                            <span className="text-xs text-muted-foreground">هامش EBITDA</span>
+                          <p className="text-lg sm:text-xl md:text-2xl font-bold truncate">{formatCurrency(metrics.ebitda || 0)}</p>
+                          <div className="mt-2 flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2">
+                            <Badge variant="secondary" className="text-[10px] sm:text-xs">{formatPercent(metrics.ebitdaMarginPct || 0)}</Badge>
+                            <span className="text-[10px] sm:text-xs text-muted-foreground">هامش EBITDA</span>
                           </div>
                         </CardContent>
                       </Card>
 
                       <Card className="border-l-4 border-l-cyan-500">
-                        <CardContent className="p-6">
+                        <CardContent className="p-3 sm:p-4 md:p-6">
                           <div className="flex items-center gap-2 mb-2">
-                            <TrendingUp className="h-5 w-5 text-cyan-500" />
-                            <span className="font-medium">هامش المساهمة</span>
+                            <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-cyan-500" />
+                            <span className="font-medium text-xs sm:text-sm">هامش المساهمة</span>
                           </div>
-                          <p className="text-2xl font-bold">{formatCurrency(metrics.contributionMargin || 0)}</p>
-                          <div className="mt-2 flex items-center gap-2">
-                            <Badge variant="secondary">{formatPercent(metrics.contributionMarginPct || 0)}</Badge>
-                            <span className="text-xs text-muted-foreground">من الإيرادات</span>
+                          <p className="text-lg sm:text-xl md:text-2xl font-bold truncate">{formatCurrency(metrics.contributionMargin || 0)}</p>
+                          <div className="mt-2 flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2">
+                            <Badge variant="secondary" className="text-[10px] sm:text-xs">{formatPercent(metrics.contributionMarginPct || 0)}</Badge>
+                            <span className="text-[10px] sm:text-xs text-muted-foreground">من الإيرادات</span>
                           </div>
                         </CardContent>
                       </Card>
 
                       <Card className="border-l-4 border-l-pink-500">
-                        <CardContent className="p-6">
+                        <CardContent className="p-3 sm:p-4 md:p-6">
                           <div className="flex items-center gap-2 mb-2">
-                            <Calculator className="h-5 w-5 text-pink-500" />
-                            <span className="font-medium">الربح التشغيلي</span>
+                            <Calculator className="h-4 w-4 sm:h-5 sm:w-5 text-pink-500" />
+                            <span className="font-medium text-xs sm:text-sm">الربح التشغيلي</span>
                           </div>
-                          <p className={`text-2xl font-bold ${(metrics.operatingProfit || 0) >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                          <p className={`text-lg sm:text-xl md:text-2xl font-bold truncate ${(metrics.operatingProfit || 0) >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                             {formatCurrency(metrics.operatingProfit || 0)}
                           </p>
-                          <div className="mt-2 flex items-center gap-2">
-                            <Badge variant={(metrics.operatingProfit || 0) >= 0 ? "default" : "destructive"}>
+                          <div className="mt-2 flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2">
+                            <Badge variant={(metrics.operatingProfit || 0) >= 0 ? "default" : "destructive"} className="text-[10px] sm:text-xs">
                               {formatPercent(metrics.operatingMarginPct || 0)}
                             </Badge>
-                            <span className="text-xs text-muted-foreground">هامش تشغيلي</span>
+                            <span className="text-[10px] sm:text-xs text-muted-foreground">هامش تشغيلي</span>
                           </div>
                         </CardContent>
                       </Card>
 
                       <Card className="border-l-4 border-l-violet-500">
-                        <CardContent className="p-6">
+                        <CardContent className="p-3 sm:p-4 md:p-6">
                           <div className="flex items-center gap-2 mb-2">
-                            <Users className="h-5 w-5 text-violet-500" />
-                            <span className="font-medium">إنتاجية العمالة</span>
+                            <Users className="h-4 w-4 sm:h-5 sm:w-5 text-violet-500" />
+                            <span className="font-medium text-xs sm:text-sm">إنتاجية العمالة</span>
                           </div>
-                          <p className="text-2xl font-bold">{formatCurrency(metrics.revenuePerEmployee || 0)}</p>
+                          <p className="text-lg sm:text-xl md:text-2xl font-bold truncate">{formatCurrency(metrics.revenuePerEmployee || 0)}</p>
                           <div className="mt-2">
-                            <span className="text-xs text-muted-foreground">
+                            <span className="text-[10px] sm:text-xs text-muted-foreground">
                               لكل موظف من {metrics.employeeCount || 0} موظف
                             </span>
                           </div>
                           {metrics.laborProductivity && metrics.laborProductivity > 0 && (
                             <div className="mt-1">
-                              <Badge variant="outline">
+                              <Badge variant="outline" className="text-[10px] sm:text-xs">
                                 {formatPercent(metrics.laborProductivity)} عائد للراتب
                               </Badge>
                             </div>

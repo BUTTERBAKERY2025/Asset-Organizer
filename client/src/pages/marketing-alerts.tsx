@@ -322,55 +322,55 @@ export default function MarketingAlertsPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-blue-100">
-                  <Bell className="w-5 h-5 text-blue-600" />
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 rounded-lg bg-blue-100">
+                  <Bell className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{alertStats.total}</p>
-                  <p className="text-sm text-muted-foreground">إجمالي التنبيهات</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold">{alertStats.total}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">إجمالي التنبيهات</p>
                 </div>
               </div>
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-amber-100">
-                  <BellRing className="w-5 h-5 text-amber-600" />
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 rounded-lg bg-amber-100">
+                  <BellRing className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{alertStats.unread}</p>
-                  <p className="text-sm text-muted-foreground">غير مقروءة</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold">{alertStats.unread}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">غير مقروءة</p>
                 </div>
               </div>
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-red-100">
-                  <AlertTriangle className="w-5 h-5 text-red-600" />
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 rounded-lg bg-red-100">
+                  <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-red-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{alertStats.urgent}</p>
-                  <p className="text-sm text-muted-foreground">عاجلة</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold">{alertStats.urgent}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">عاجلة</p>
                 </div>
               </div>
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-gray-100">
-                  <Clock className="w-5 h-5 text-gray-600" />
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 rounded-lg bg-gray-100">
+                  <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{alertStats.pending}</p>
-                  <p className="text-sm text-muted-foreground">بانتظار التأكيد</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold">{alertStats.pending}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">بانتظار التأكيد</p>
                 </div>
               </div>
             </CardContent>
@@ -443,9 +443,9 @@ export default function MarketingAlertsPage() {
                             <h3 className={`font-semibold ${!alert.isRead ? '' : 'text-muted-foreground'}`}>
                               {alert.title}
                             </h3>
-                            <div className="flex items-center gap-2 mt-1">
-                              <Badge className={priorityInfo.color}>{priorityInfo.label}</Badge>
-                              <Badge variant="outline">{typeInfo.label}</Badge>
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+                              <Badge className={`${priorityInfo.color} text-[10px] sm:text-xs`}>{priorityInfo.label}</Badge>
+                              <Badge variant="outline" className="text-[10px] sm:text-xs">{typeInfo.label}</Badge>
                             </div>
                           </div>
                           {alert.isAcknowledged && (

@@ -567,57 +567,57 @@ export default function RBACManagementPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
+      <div className="p-3 sm:p-4 md:p-6 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
         <SettingsBreadcrumb currentPage="الأدوار والصلاحيات" currentIcon={Shield} />
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Link href="/settings">
-              <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" data-testid="btn-back">
+              <Button variant="ghost" size="icon" className="h-9 w-9 sm:h-8 sm:w-8" data-testid="btn-back">
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
             <div>
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold" data-testid="text-page-title">إدارة الأدوار والصلاحيات</h1>
-              <p className="text-sm sm:text-base text-muted-foreground">نظام التحكم بالوصول المبني على الأدوار (RBAC)</p>
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold" data-testid="text-page-title">إدارة الأدوار والصلاحيات</h1>
+              <p className="text-xs sm:text-sm text-muted-foreground">نظام التحكم بالوصول المبني على الأدوار (RBAC)</p>
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-4">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-4 md:p-6 md:pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium">الأقسام</CardTitle>
-              <Building2 className="h-4 w-4 text-muted-foreground" />
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-2 sm:p-3 md:p-4">
+              <CardTitle className="text-[10px] sm:text-xs font-medium">الأقسام</CardTitle>
+              <Building2 className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
-              <div className="text-xl sm:text-2xl font-bold" data-testid="text-departments-count">{departments.length}</div>
+            <CardContent className="p-2 sm:p-3 md:p-4 pt-0">
+              <div className="text-lg sm:text-xl md:text-2xl font-bold" data-testid="text-departments-count">{departments.length}</div>
             </CardContent>
           </Card>
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-4 md:p-6 md:pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium">الأدوار</CardTitle>
-              <Shield className="h-4 w-4 text-muted-foreground" />
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-2 sm:p-3 md:p-4">
+              <CardTitle className="text-[10px] sm:text-xs font-medium">الأدوار</CardTitle>
+              <Shield className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
-              <div className="text-xl sm:text-2xl font-bold" data-testid="text-roles-count">{roles.length}</div>
+            <CardContent className="p-2 sm:p-3 md:p-4 pt-0">
+              <div className="text-lg sm:text-xl md:text-2xl font-bold" data-testid="text-roles-count">{roles.length}</div>
             </CardContent>
           </Card>
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-4 md:p-6 md:pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium">الصلاحيات</CardTitle>
-              <Key className="h-4 w-4 text-muted-foreground" />
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-2 sm:p-3 md:p-4">
+              <CardTitle className="text-[10px] sm:text-xs font-medium">الصلاحيات</CardTitle>
+              <Key className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
-              <div className="text-xl sm:text-2xl font-bold" data-testid="text-permissions-count">{allPermissions.length}</div>
+            <CardContent className="p-2 sm:p-3 md:p-4 pt-0">
+              <div className="text-lg sm:text-xl md:text-2xl font-bold" data-testid="text-permissions-count">{allPermissions.length}</div>
             </CardContent>
           </Card>
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-4 md:p-6 md:pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium">الوحدات</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-2 sm:p-3 md:p-4">
+              <CardTitle className="text-[10px] sm:text-xs font-medium">الوحدات</CardTitle>
+              <Users className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
-              <div className="text-xl sm:text-2xl font-bold" data-testid="text-modules-count">{Object.keys(permissionsByModule).length}</div>
+            <CardContent className="p-2 sm:p-3 md:p-4 pt-0">
+              <div className="text-lg sm:text-xl md:text-2xl font-bold" data-testid="text-modules-count">{Object.keys(permissionsByModule).length}</div>
             </CardContent>
           </Card>
         </div>
@@ -636,19 +636,19 @@ export default function RBACManagementPage() {
                 <CardTitle className="text-base sm:text-lg">المستخدمين وتعييناتهم</CardTitle>
                 <CardDescription className="text-xs sm:text-sm">إدارة تعيينات المستخدمين للأدوار والفروع</CardDescription>
               </CardHeader>
-              <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+              <CardContent className="p-3 sm:p-4 md:p-6 pt-0 overflow-x-auto">
                 {usersLoading ? (
                   <div className="flex justify-center p-4">
                     <Loader2 className="h-6 w-6 animate-spin" />
                   </div>
                 ) : (
-                  <Table>
+                  <Table className="min-w-[500px]">
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="text-right">المستخدم</TableHead>
-                        <TableHead className="text-right">البريد الإلكتروني</TableHead>
-                        <TableHead className="text-right">النوع</TableHead>
-                        <TableHead className="text-right">الإجراءات</TableHead>
+                        <TableHead className="text-right text-xs sm:text-sm">المستخدم</TableHead>
+                        <TableHead className="text-right text-xs sm:text-sm hidden md:table-cell">البريد الإلكتروني</TableHead>
+                        <TableHead className="text-right text-xs sm:text-sm">النوع</TableHead>
+                        <TableHead className="text-right text-xs sm:text-sm">الإجراءات</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -657,17 +657,17 @@ export default function RBACManagementPage() {
                           <TableCell className="font-medium">
                             <div className="flex items-center gap-2">
                               {user.profileImageUrl && (
-                                <img src={user.profileImageUrl} alt="" className="w-8 h-8 rounded-full" />
+                                <img src={user.profileImageUrl} alt="" className="w-6 h-6 sm:w-8 sm:h-8 rounded-full" />
                               )}
-                              <span>{user.firstName || user.username}</span>
+                              <span className="text-xs sm:text-sm">{user.firstName || user.username}</span>
                             </div>
                           </TableCell>
-                          <TableCell className="text-muted-foreground">{user.email || '-'}</TableCell>
+                          <TableCell className="text-muted-foreground text-xs hidden md:table-cell">{user.email || '-'}</TableCell>
                           <TableCell>
                             {user.isAdmin ? (
-                              <Badge className="bg-red-500">مدير</Badge>
+                              <Badge className="bg-red-500 text-[10px] sm:text-xs">مدير</Badge>
                             ) : (
-                              <Badge variant="secondary">مستخدم</Badge>
+                              <Badge variant="secondary" className="text-[10px] sm:text-xs">مستخدم</Badge>
                             )}
                           </TableCell>
                           <TableCell>

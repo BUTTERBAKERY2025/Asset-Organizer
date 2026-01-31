@@ -561,8 +561,8 @@ export default function ConstructionReportsPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-4" dir="rtl">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link href="/construction-projects">
               <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" data-testid="btn-back">
@@ -570,8 +570,8 @@ export default function ConstructionReportsPage() {
               </Button>
             </Link>
             <div>
-              <h1 className="text-xl sm:text-2xl font-bold" data-testid="text-page-title">تقارير المشاريع الإنشائية</h1>
-              <p className="text-muted-foreground">مقارنة وتحليل المشاريع والبنود والفئات</p>
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold" data-testid="text-page-title">تقارير المشاريع الإنشائية</h1>
+              <p className="text-xs sm:text-sm text-muted-foreground">مقارنة وتحليل المشاريع والبنود والفئات</p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -768,70 +768,70 @@ export default function ConstructionReportsPage() {
           </Collapsible>
         </Card>
 
-        <div ref={printRef} className="space-y-6 print:p-4">
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+        <div ref={printRef} className="space-y-4 sm:space-y-6 print:p-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-2 sm:gap-4">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">المشاريع</CardTitle>
-                <Hammer className="w-4 h-4 text-muted-foreground" />
+              <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-4 pb-2">
+                <CardTitle className="text-xs sm:text-sm font-medium">المشاريع</CardTitle>
+                <Hammer className="w-3 h-3 sm:w-4 sm:h-4 text-muted-foreground" />
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{filteredProjects.length}</div>
+              <CardContent className="p-3 sm:p-4 pt-0">
+                <div className="text-lg sm:text-2xl font-bold">{filteredProjects.length}</div>
               </CardContent>
             </Card>
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">قيد التنفيذ</CardTitle>
-                <Clock className="w-4 h-4 text-yellow-500" />
+              <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-4 pb-2">
+                <CardTitle className="text-xs sm:text-sm font-medium">قيد التنفيذ</CardTitle>
+                <Clock className="w-3 h-3 sm:w-4 sm:h-4 text-yellow-500" />
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{filteredProjects.filter(p => p.status === "in_progress").length}</div>
+              <CardContent className="p-3 sm:p-4 pt-0">
+                <div className="text-lg sm:text-2xl font-bold">{filteredProjects.filter(p => p.status === "in_progress").length}</div>
               </CardContent>
             </Card>
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">البنود (مفلترة)</CardTitle>
-                <Search className="w-4 h-4 text-blue-500" />
+              <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-4 pb-2">
+                <CardTitle className="text-xs sm:text-sm font-medium">البنود (مفلترة)</CardTitle>
+                <Search className="w-3 h-3 sm:w-4 sm:h-4 text-blue-500" />
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{filteredWorkItemsStats.count}</div>
-                <p className="text-xs text-muted-foreground">من {workItemsByProject.length}</p>
+              <CardContent className="p-3 sm:p-4 pt-0">
+                <div className="text-lg sm:text-2xl font-bold">{filteredWorkItemsStats.count}</div>
+                <p className="text-[10px] sm:text-xs text-muted-foreground">من {workItemsByProject.length}</p>
               </CardContent>
             </Card>
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">إجمالي التكاليف</CardTitle>
-                <DollarSign className="w-4 h-4 text-amber-500" />
+              <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-4 pb-2">
+                <CardTitle className="text-xs sm:text-sm font-medium">إجمالي التكاليف</CardTitle>
+                <DollarSign className="w-3 h-3 sm:w-4 sm:h-4 text-amber-500" />
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-amber-600">
+              <CardContent className="p-3 sm:p-4 pt-0">
+                <div className="text-base sm:text-2xl font-bold text-amber-600">
                   {filteredWorkItemsStats.totalCost.toLocaleString()}
                 </div>
-                <p className="text-xs text-muted-foreground">ر.س</p>
+                <p className="text-[10px] sm:text-xs text-muted-foreground">ر.س</p>
               </CardContent>
             </Card>
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">متوسط التكلفة</CardTitle>
-                <TrendingUp className="w-4 h-4 text-green-500" />
+              <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-4 pb-2">
+                <CardTitle className="text-xs sm:text-sm font-medium">متوسط التكلفة</CardTitle>
+                <TrendingUp className="w-3 h-3 sm:w-4 sm:h-4 text-green-500" />
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
+              <CardContent className="p-3 sm:p-4 pt-0">
+                <div className="text-base sm:text-2xl font-bold">
                   {filteredWorkItemsStats.avgCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                 </div>
-                <p className="text-xs text-muted-foreground">ر.س / بند</p>
+                <p className="text-[10px] sm:text-xs text-muted-foreground">ر.س / بند</p>
               </CardContent>
             </Card>
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium">الميزانية</CardTitle>
-                <Building2 className="w-4 h-4 text-muted-foreground" />
+              <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-4 pb-2">
+                <CardTitle className="text-xs sm:text-sm font-medium">الميزانية</CardTitle>
+                <Building2 className="w-3 h-3 sm:w-4 sm:h-4 text-muted-foreground" />
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
+              <CardContent className="p-3 sm:p-4 pt-0">
+                <div className="text-base sm:text-2xl font-bold">
                   {filteredProjects.reduce((sum, p) => sum + (Number(p.budget) || 0), 0).toLocaleString()}
                 </div>
-                <p className="text-xs text-muted-foreground">ر.س</p>
+                <p className="text-[10px] sm:text-xs text-muted-foreground">ر.س</p>
               </CardContent>
             </Card>
           </div>

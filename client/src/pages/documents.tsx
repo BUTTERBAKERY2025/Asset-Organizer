@@ -602,15 +602,15 @@ export default function DocumentsPage() {
 
   return (
     <Layout>
-    <div className="container mx-auto p-6 space-y-6" dir="rtl">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="container mx-auto p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6" dir="rtl">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-amber-800" data-testid="page-title">
+          <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-amber-800" data-testid="page-title">
             إدارة الوثائق والأرشفة
           </h1>
-          <p className="text-gray-600 mt-1">تنظيم وإدارة ملفات ووثائق المؤسسة</p>
+          <p className="text-xs sm:text-sm text-gray-600 mt-1">تنظيم وإدارة ملفات ووثائق المؤسسة</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Dialog open={isNewCategoryDialogOpen} onOpenChange={setIsNewCategoryDialogOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" data-testid="btn-new-category">
@@ -977,68 +977,68 @@ export default function DocumentsPage() {
       </Dialog>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-4">
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <FileText className="h-5 w-5 text-blue-600" />
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="p-1.5 sm:p-2 bg-blue-100 rounded-lg">
+                <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
               </div>
               <div>
-                <p className="text-sm text-gray-500">إجمالي الوثائق</p>
-                <p className="text-2xl font-bold">{stats?.totalDocuments || 0}</p>
+                <p className="text-xs sm:text-sm text-gray-500">إجمالي الوثائق</p>
+                <p className="text-lg sm:text-2xl font-bold">{stats?.totalDocuments || 0}</p>
               </div>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <File className="h-5 w-5 text-green-600" />
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="p-1.5 sm:p-2 bg-green-100 rounded-lg">
+                <File className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
               </div>
               <div>
-                <p className="text-sm text-gray-500">الوثائق النشطة</p>
-                <p className="text-2xl font-bold">{stats?.activeDocuments || 0}</p>
+                <p className="text-xs sm:text-sm text-gray-500">الوثائق النشطة</p>
+                <p className="text-lg sm:text-2xl font-bold">{stats?.activeDocuments || 0}</p>
               </div>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-amber-100 rounded-lg">
-                <Archive className="h-5 w-5 text-amber-600" />
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="p-1.5 sm:p-2 bg-amber-100 rounded-lg">
+                <Archive className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600" />
               </div>
               <div>
-                <p className="text-sm text-gray-500">الوثائق المؤرشفة</p>
-                <p className="text-2xl font-bold">{stats?.archivedDocuments || 0}</p>
+                <p className="text-xs sm:text-sm text-gray-500">الوثائق المؤرشفة</p>
+                <p className="text-lg sm:text-2xl font-bold">{stats?.archivedDocuments || 0}</p>
               </div>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <Folder className="h-5 w-5 text-purple-600" />
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="p-1.5 sm:p-2 bg-purple-100 rounded-lg">
+                <Folder className="h-4 w-4 sm:h-5 sm:w-5 text-purple-600" />
               </div>
               <div>
-                <p className="text-sm text-gray-500">المجلدات</p>
-                <p className="text-2xl font-bold">{stats?.totalFolders || 0}</p>
+                <p className="text-xs sm:text-sm text-gray-500">المجلدات</p>
+                <p className="text-lg sm:text-2xl font-bold">{stats?.totalFolders || 0}</p>
               </div>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-indigo-100 rounded-lg">
-                <Grid className="h-5 w-5 text-indigo-600" />
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="p-1.5 sm:p-2 bg-indigo-100 rounded-lg">
+                <Grid className="h-4 w-4 sm:h-5 sm:w-5 text-indigo-600" />
               </div>
               <div>
-                <p className="text-sm text-gray-500">التصنيفات</p>
-                <p className="text-2xl font-bold">{stats?.totalCategories || 0}</p>
+                <p className="text-xs sm:text-sm text-gray-500">التصنيفات</p>
+                <p className="text-lg sm:text-2xl font-bold">{stats?.totalCategories || 0}</p>
               </div>
             </div>
           </CardContent>
@@ -1046,7 +1046,7 @@ export default function DocumentsPage() {
       </div>
 
       {/* Main Content */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6">
         {/* Categories Sidebar */}
         <Card className="lg:col-span-1">
           <CardHeader>

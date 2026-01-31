@@ -297,7 +297,7 @@ export default function ContractsPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
+      <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div className="flex items-center gap-3">
             <Link href="/construction-projects">
@@ -306,8 +306,8 @@ export default function ContractsPage() {
               </Button>
             </Link>
             <div>
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">إدارة العقود</h1>
-              <p className="text-sm sm:text-base text-gray-500 mt-1">إدارة عقود المقاولين والموردين</p>
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">إدارة العقود</h1>
+              <p className="text-xs sm:text-sm text-gray-500 mt-1">إدارة عقود المقاولين والموردين</p>
             </div>
           </div>
           {canCreateContract && (

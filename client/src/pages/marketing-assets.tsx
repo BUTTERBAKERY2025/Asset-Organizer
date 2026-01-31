@@ -653,17 +653,17 @@ export default function MarketingAssetsPage() {
           <CardContent className="p-0">
             {filteredAssets.length > 0 ? (
               <div className="overflow-x-auto">
-                <Table>
+                <Table className="min-w-[700px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="text-right">اسم الأصل</TableHead>
                       <TableHead className="text-right">النوع</TableHead>
-                      <TableHead className="text-right">الفرع</TableHead>
-                      <TableHead className="text-right">مكان التواجد</TableHead>
+                      <TableHead className="text-right hidden md:table-cell">الفرع</TableHead>
+                      <TableHead className="text-right hidden lg:table-cell">مكان التواجد</TableHead>
                       <TableHead className="text-right">الكمية</TableHead>
-                      <TableHead className="text-right">الحملة</TableHead>
-                      <TableHead className="text-right">حجم الملف</TableHead>
-                      <TableHead className="text-right">تاريخ الإضافة</TableHead>
+                      <TableHead className="text-right hidden md:table-cell">الحملة</TableHead>
+                      <TableHead className="text-right hidden lg:table-cell">حجم الملف</TableHead>
+                      <TableHead className="text-right hidden sm:table-cell">تاريخ الإضافة</TableHead>
                       <TableHead className="text-right w-16">الإجراءات</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -688,17 +688,17 @@ export default function MarketingAssetsPage() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Badge variant="outline" className={typeInfo.color}>
+                            <Badge variant="outline" className={`${typeInfo.color} text-[10px] sm:text-xs`}>
                               {typeInfo.label}
                             </Badge>
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="hidden md:table-cell">
                             <div className="flex items-center gap-1">
                               <Building2 className="w-4 h-4 text-muted-foreground" />
                               {getBranchName(asset.branchId)}
                             </div>
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="hidden lg:table-cell">
                             {asset.location ? (
                               <div className="flex items-center gap-1">
                                 <MapPin className="w-4 h-4 text-muted-foreground" />
@@ -709,11 +709,11 @@ export default function MarketingAssetsPage() {
                             )}
                           </TableCell>
                           <TableCell>
-                            <Badge variant="secondary">{asset.quantity || 1}</Badge>
+                            <Badge variant="secondary" className="text-[10px] sm:text-xs">{asset.quantity || 1}</Badge>
                           </TableCell>
-                          <TableCell>{getCampaignName(asset.campaignId)}</TableCell>
-                          <TableCell>{formatFileSize(asset.fileSize)}</TableCell>
-                          <TableCell>{formatDate(asset.createdAt)}</TableCell>
+                          <TableCell className="hidden md:table-cell">{getCampaignName(asset.campaignId)}</TableCell>
+                          <TableCell className="hidden lg:table-cell">{formatFileSize(asset.fileSize)}</TableCell>
+                          <TableCell className="hidden sm:table-cell">{formatDate(asset.createdAt)}</TableCell>
                           <TableCell>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>

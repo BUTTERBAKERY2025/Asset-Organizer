@@ -350,64 +350,65 @@ ${discount.minimumOrder ? `🛒 الحد الأدنى للطلب: ${Number(disco
                 عودة إلى لوحة التسويق
               </Button>
             </Link>
-            <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2" data-testid="text-page-title">
-              <Handshake className="h-8 w-8 text-amber-600" />
-              المشاركات الاجتماعية والمسؤولية المجتمعية
+            <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold flex items-center gap-2" data-testid="text-page-title">
+              <Handshake className="h-6 w-6 sm:h-7 sm:w-7 md:h-8 md:w-8 text-amber-600" />
+              <span className="hidden sm:inline">المشاركات الاجتماعية والمسؤولية المجتمعية</span>
+              <span className="sm:hidden">المسؤولية المجتمعية</span>
             </h1>
-            <p className="text-gray-600 mt-1">إدارة الجهات المستفيدة والمبادرات والخصومات المجتمعية</p>
+            <p className="text-xs sm:text-sm text-gray-600 mt-1">إدارة الجهات المستفيدة والمبادرات والخصومات المجتمعية</p>
           </div>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-blue-600">الجهات المستفيدة</p>
-                  <p className="text-2xl font-bold text-blue-800" data-testid="stat-organizations-total">{stats?.organizations?.total || 0}</p>
-                  <p className="text-xs text-blue-500">{stats?.organizations?.active || 0} نشطة</p>
+                  <p className="text-xs sm:text-sm text-blue-600">الجهات المستفيدة</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-blue-800" data-testid="stat-organizations-total">{stats?.organizations?.total || 0}</p>
+                  <p className="text-[10px] sm:text-xs text-blue-500">{stats?.organizations?.active || 0} نشطة</p>
                 </div>
-                <Building2 className="h-10 w-10 text-blue-400" />
+                <Building2 className="h-8 w-8 sm:h-10 sm:w-10 text-blue-400" />
               </div>
             </CardContent>
           </Card>
 
           <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-green-600">المبادرات</p>
-                  <p className="text-2xl font-bold text-green-800" data-testid="stat-initiatives-total">{stats?.initiatives?.total || 0}</p>
-                  <p className="text-xs text-green-500">{stats?.initiatives?.active || 0} جارية</p>
+                  <p className="text-xs sm:text-sm text-green-600">المبادرات</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-green-800" data-testid="stat-initiatives-total">{stats?.initiatives?.total || 0}</p>
+                  <p className="text-[10px] sm:text-xs text-green-500">{stats?.initiatives?.active || 0} جارية</p>
                 </div>
-                <Heart className="h-10 w-10 text-green-400" />
+                <Heart className="h-8 w-8 sm:h-10 sm:w-10 text-green-400" />
               </div>
             </CardContent>
           </Card>
 
           <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-purple-600">الخصومات</p>
-                  <p className="text-2xl font-bold text-purple-800" data-testid="stat-discounts-total">{stats?.discounts?.total || 0}</p>
-                  <p className="text-xs text-purple-500">{stats?.discounts?.active || 0} فعالة</p>
+                  <p className="text-xs sm:text-sm text-purple-600">الخصومات</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-purple-800" data-testid="stat-discounts-total">{stats?.discounts?.total || 0}</p>
+                  <p className="text-[10px] sm:text-xs text-purple-500">{stats?.discounts?.active || 0} فعالة</p>
                 </div>
-                <Ticket className="h-10 w-10 text-purple-400" />
+                <Ticket className="h-8 w-8 sm:h-10 sm:w-10 text-purple-400" />
               </div>
             </CardContent>
           </Card>
 
           <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-amber-600">استخدام الخصومات</p>
-                  <p className="text-2xl font-bold text-amber-800" data-testid="stat-discount-usage">{stats?.totalDiscountUsage || 0}</p>
-                  <p className="text-xs text-amber-500">مرة</p>
+                  <p className="text-xs sm:text-sm text-amber-600">استخدام الخصومات</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-amber-800" data-testid="stat-discount-usage">{stats?.totalDiscountUsage || 0}</p>
+                  <p className="text-[10px] sm:text-xs text-amber-500">مرة</p>
                 </div>
-                <TrendingUp className="h-10 w-10 text-amber-400" />
+                <TrendingUp className="h-8 w-8 sm:h-10 sm:w-10 text-amber-400" />
               </div>
             </CardContent>
           </Card>
@@ -429,20 +430,25 @@ ${discount.minimumOrder ? `🛒 الحد الأدنى للطلب: ${Number(disco
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="organizations" className="gap-2" data-testid="tab-organizations">
-              <Building2 className="h-4 w-4" />
-              الجهات المستفيدة
-            </TabsTrigger>
-            <TabsTrigger value="initiatives" className="gap-2" data-testid="tab-initiatives">
-              <Heart className="h-4 w-4" />
-              المبادرات
-            </TabsTrigger>
-            <TabsTrigger value="discounts" className="gap-2" data-testid="tab-discounts">
-              <Ticket className="h-4 w-4" />
-              الخصومات
-            </TabsTrigger>
-          </TabsList>
+          <div className="overflow-x-auto">
+            <TabsList className="inline-flex w-auto min-w-full sm:grid sm:w-full sm:grid-cols-3">
+              <TabsTrigger value="organizations" className="gap-1 sm:gap-2 text-xs sm:text-sm" data-testid="tab-organizations">
+                <Building2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                <span className="hidden sm:inline">الجهات المستفيدة</span>
+                <span className="sm:hidden">الجهات</span>
+              </TabsTrigger>
+              <TabsTrigger value="initiatives" className="gap-1 sm:gap-2 text-xs sm:text-sm" data-testid="tab-initiatives">
+                <Heart className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                <span className="hidden sm:inline">المبادرات</span>
+                <span className="sm:hidden">المبادرات</span>
+              </TabsTrigger>
+              <TabsTrigger value="discounts" className="gap-1 sm:gap-2 text-xs sm:text-sm" data-testid="tab-discounts">
+                <Ticket className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                <span className="hidden sm:inline">الخصومات</span>
+                <span className="sm:hidden">الخصومات</span>
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           {/* Organizations Tab */}
           <TabsContent value="organizations" className="mt-4">
@@ -457,14 +463,14 @@ ${discount.minimumOrder ? `🛒 الحد الأدنى للطلب: ${Number(disco
                   إضافة جهة
                 </Button>
               </CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <Table>
+              <CardContent className="p-3 sm:p-6">
+                <div className="overflow-x-auto -mx-3 sm:mx-0">
+                  <Table className="min-w-[600px]">
                     <TableHeader>
-                      <TableRow>
+                      <TableRow className="text-xs sm:text-sm">
                         <TableHead>اسم الجهة</TableHead>
-                        <TableHead>النوع</TableHead>
-                        <TableHead>نوع الشراكة</TableHead>
+                        <TableHead className="hidden md:table-cell">النوع</TableHead>
+                        <TableHead className="hidden lg:table-cell">نوع الشراكة</TableHead>
                         <TableHead>نسبة الخصم</TableHead>
                         <TableHead>الحالة</TableHead>
                         <TableHead>الإجراءات</TableHead>
@@ -479,47 +485,49 @@ ${discount.minimumOrder ? `🛒 الحد الأدنى للطلب: ${Number(disco
                         </TableRow>
                       ) : filteredOrgs.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                          <TableCell colSpan={6} className="text-center py-8 text-gray-500 text-sm">
                             لا توجد جهات مسجلة
                           </TableCell>
                         </TableRow>
                       ) : (
                         filteredOrgs.map((org) => (
-                          <TableRow key={org.id}>
+                          <TableRow key={org.id} className="text-xs sm:text-sm">
                             <TableCell>
                               <div>
-                                <p className="font-medium">{org.name}</p>
-                                {org.contactPerson && <p className="text-sm text-gray-500">{org.contactPerson}</p>}
+                                <p className="font-medium text-sm">{org.name}</p>
+                                {org.contactPerson && <p className="text-xs text-gray-500">{org.contactPerson}</p>}
+                                <p className="text-xs text-gray-400 md:hidden">{organizationTypes.find(t => t.value === org.organizationType)?.label}</p>
                               </div>
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="hidden md:table-cell">
                               {organizationTypes.find(t => t.value === org.organizationType)?.label || org.organizationType}
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="hidden lg:table-cell">
                               {partnershipTypes.find(t => t.value === org.partnershipType)?.label || org.partnershipType || "-"}
                             </TableCell>
                             <TableCell>{org.discountPercentage ? `${org.discountPercentage}%` : "-"}</TableCell>
                             <TableCell>
-                              <Badge className={statusColors[org.status || "active"]}>
+                              <Badge className={`${statusColors[org.status || "active"]} text-[10px] sm:text-xs`}>
                                 {org.status === "active" ? "نشط" : org.status === "inactive" ? "غير نشط" : "موقوف"}
                               </Badge>
                             </TableCell>
                             <TableCell>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1">
                                 <Button
                                   variant="ghost"
                                   size="icon"
+                                  className="h-7 w-7 sm:h-8 sm:w-8"
                                   onClick={() => { setSelectedOrg(org); setShowOrgDialog(true); }}
                                 >
-                                  <Pencil className="h-4 w-4" />
+                                  <Pencil className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                 </Button>
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="text-red-500"
+                                  className="h-7 w-7 sm:h-8 sm:w-8 text-red-500"
                                   onClick={() => deleteOrgMutation.mutate(org.id)}
                                 >
-                                  <Trash2 className="h-4 w-4" />
+                                  <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                 </Button>
                               </div>
                             </TableCell>
@@ -536,24 +544,25 @@ ${discount.minimumOrder ? `🛒 الحد الأدنى للطلب: ${Number(disco
           {/* Initiatives Tab */}
           <TabsContent value="initiatives" className="mt-4">
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
+              <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 sm:p-6">
                 <div>
-                  <CardTitle>المبادرات الاجتماعية</CardTitle>
-                  <CardDescription>الحملات والفعاليات والأنشطة المجتمعية</CardDescription>
+                  <CardTitle className="text-base sm:text-lg">المبادرات الاجتماعية</CardTitle>
+                  <CardDescription className="text-xs sm:text-sm">الحملات والفعاليات والأنشطة المجتمعية</CardDescription>
                 </div>
-                <Button onClick={() => { setSelectedInitiative(null); setShowInitiativeDialog(true); }} className="gap-2" data-testid="button-add-initiative">
+                <Button onClick={() => { setSelectedInitiative(null); setShowInitiativeDialog(true); }} className="gap-2 h-9 sm:h-10 text-sm" data-testid="button-add-initiative">
                   <Plus className="h-4 w-4" />
-                  إضافة مبادرة
+                  <span className="hidden sm:inline">إضافة مبادرة</span>
+                  <span className="sm:hidden">إضافة</span>
                 </Button>
               </CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <Table>
+              <CardContent className="p-3 sm:p-6">
+                <div className="overflow-x-auto -mx-3 sm:mx-0">
+                  <Table className="min-w-[600px]">
                     <TableHeader>
-                      <TableRow>
+                      <TableRow className="text-xs sm:text-sm">
                         <TableHead>عنوان المبادرة</TableHead>
-                        <TableHead>النوع</TableHead>
-                        <TableHead>الفترة</TableHead>
+                        <TableHead className="hidden md:table-cell">النوع</TableHead>
+                        <TableHead className="hidden lg:table-cell">الفترة</TableHead>
                         <TableHead>الميزانية</TableHead>
                         <TableHead>الحالة</TableHead>
                         <TableHead>الإجراءات</TableHead>
@@ -568,56 +577,58 @@ ${discount.minimumOrder ? `🛒 الحد الأدنى للطلب: ${Number(disco
                         </TableRow>
                       ) : filteredInitiatives.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={6} className="text-center py-8 text-gray-500">
+                          <TableCell colSpan={6} className="text-center py-8 text-gray-500 text-sm">
                             لا توجد مبادرات مسجلة
                           </TableCell>
                         </TableRow>
                       ) : (
                         filteredInitiatives.map((init) => (
-                          <TableRow key={init.id}>
+                          <TableRow key={init.id} className="text-xs sm:text-sm">
                             <TableCell>
                               <div>
-                                <p className="font-medium">{init.title}</p>
+                                <p className="font-medium text-sm">{init.title}</p>
                                 {init.category && (
-                                  <Badge variant="outline" className="text-xs">
+                                  <Badge variant="outline" className="text-[10px] sm:text-xs">
                                     {categories.find(c => c.value === init.category)?.label}
                                   </Badge>
                                 )}
+                                <p className="text-xs text-gray-400 md:hidden">{initiativeTypes.find(t => t.value === init.initiativeType)?.label}</p>
                               </div>
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="hidden md:table-cell">
                               {initiativeTypes.find(t => t.value === init.initiativeType)?.label || init.initiativeType}
                             </TableCell>
-                            <TableCell>
-                              <div className="text-sm">
+                            <TableCell className="hidden lg:table-cell">
+                              <div className="text-xs">
                                 {init.startDate && <p>من: {init.startDate}</p>}
                                 {init.endDate && <p>إلى: {init.endDate}</p>}
                               </div>
                             </TableCell>
-                            <TableCell>{init.budget ? `${Number(init.budget).toLocaleString()} ر.س` : "-"}</TableCell>
+                            <TableCell className="text-xs sm:text-sm">{init.budget ? `${Number(init.budget).toLocaleString()} ر.س` : "-"}</TableCell>
                             <TableCell>
-                              <Badge className={statusColors[init.status || "planned"]}>
+                              <Badge className={`${statusColors[init.status || "planned"]} text-[10px] sm:text-xs`}>
                                 {init.status === "active" ? "جارية" : 
                                  init.status === "completed" ? "منتهية" : 
                                  init.status === "cancelled" ? "ملغية" : "مخططة"}
                               </Badge>
                             </TableCell>
                             <TableCell>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1">
                                 <Button
                                   variant="ghost"
                                   size="icon"
+                                  className="h-7 w-7 sm:h-8 sm:w-8"
                                   onClick={() => { setSelectedInitiative(init); setShowInitiativeDialog(true); }}
                                 >
-                                  <Pencil className="h-4 w-4" />
+                                  <Pencil className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                 </Button>
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="text-red-500"
+                                  className="h-7 w-7 sm:h-8 sm:w-8 text-red-500"
                                   onClick={() => deleteInitiativeMutation.mutate(init.id)}
                                 >
-                                  <Trash2 className="h-4 w-4" />
+                                  <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                 </Button>
                               </div>
                             </TableCell>

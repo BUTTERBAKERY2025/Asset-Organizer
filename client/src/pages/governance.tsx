@@ -151,32 +151,33 @@ export default function GovernancePage() {
 
   return (
     <Layout>
-      <div className="max-w-6xl mx-auto p-4 md:p-8 lg:p-10 space-y-4" dir="rtl">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
+      <div className="max-w-6xl mx-auto p-3 sm:p-4 md:p-6 space-y-4" dir="rtl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
             <Link href="/executive">
               <Button variant="ghost" size="icon" className="h-8 w-8">
                 <ChevronLeft className="h-4 w-4" />
               </Button>
             </Link>
-            <div className="p-3 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl">
-              <Landmark className="w-7 h-7 text-white" />
+            <div className="p-2 sm:p-3 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl">
+              <Landmark className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-violet-800" data-testid="page-title">
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-violet-800" data-testid="page-title">
                 الحوكمة ومجلس الإدارة
               </h1>
-              <p className="text-gray-600">إدارة شؤون مجلس الإدارة والجمعية العمومية والامتثال</p>
+              <p className="text-xs sm:text-sm text-gray-600">إدارة شؤون مجلس الإدارة والجمعية العمومية والامتثال</p>
             </div>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" className="gap-2" data-testid="btn-notifications">
-              <Bell className="h-4 w-4" />
-              التنبيهات
+            <Button variant="outline" className="gap-2 text-xs sm:text-sm" data-testid="btn-notifications">
+              <Bell className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">التنبيهات</span>
             </Button>
-            <Button className="gap-2 bg-violet-600 hover:bg-violet-700" data-testid="btn-new-meeting">
-              <Plus className="h-4 w-4" />
-              اجتماع جديد
+            <Button className="gap-2 text-xs sm:text-sm bg-violet-600 hover:bg-violet-700" data-testid="btn-new-meeting">
+              <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">اجتماع جديد</span>
+              <span className="sm:hidden">جديد</span>
             </Button>
           </div>
         </div>
@@ -279,44 +280,44 @@ export default function GovernancePage() {
           </TabsContent>
         </Tabs>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           <Card className="bg-gradient-to-br from-violet-50 to-purple-50 border-violet-200">
-            <CardContent className="p-6">
+            <CardContent className="p-3 sm:p-4 md:p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-violet-600 font-medium">أعضاء المجلس</p>
-                  <p className="text-3xl font-bold text-violet-800">5</p>
+                  <p className="text-xs sm:text-sm text-violet-600 font-medium">أعضاء المجلس</p>
+                  <p className="text-xl sm:text-2xl md:text-3xl font-bold text-violet-800">5</p>
                 </div>
-                <div className="p-3 bg-violet-100 rounded-lg">
-                  <Users className="h-6 w-6 text-violet-600" />
+                <div className="p-2 sm:p-3 bg-violet-100 rounded-lg">
+                  <Users className="h-5 w-5 sm:h-6 sm:w-6 text-violet-600" />
                 </div>
               </div>
             </CardContent>
           </Card>
 
           <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
-            <CardContent className="p-6">
+            <CardContent className="p-3 sm:p-4 md:p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-blue-600 font-medium">اجتماعات هذا العام</p>
-                  <p className="text-3xl font-bold text-blue-800">12</p>
+                  <p className="text-xs sm:text-sm text-blue-600 font-medium">اجتماعات هذا العام</p>
+                  <p className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-800">12</p>
                 </div>
-                <div className="p-3 bg-blue-100 rounded-lg">
-                  <Calendar className="h-6 w-6 text-blue-600" />
+                <div className="p-2 sm:p-3 bg-blue-100 rounded-lg">
+                  <Calendar className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="bg-gradient-to-br from-emerald-50 to-green-50 border-emerald-200">
-            <CardContent className="p-6">
+          <Card className="bg-gradient-to-br from-emerald-50 to-green-50 border-emerald-200 col-span-2 lg:col-span-1">
+            <CardContent className="p-3 sm:p-4 md:p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-emerald-600 font-medium">نسبة الامتثال</p>
-                  <p className="text-3xl font-bold text-emerald-800">98%</p>
+                  <p className="text-xs sm:text-sm text-emerald-600 font-medium">نسبة الامتثال</p>
+                  <p className="text-xl sm:text-2xl md:text-3xl font-bold text-emerald-800">98%</p>
                 </div>
-                <div className="p-3 bg-emerald-100 rounded-lg">
-                  <Shield className="h-6 w-6 text-emerald-600" />
+                <div className="p-2 sm:p-3 bg-emerald-100 rounded-lg">
+                  <Shield className="h-5 w-5 sm:h-6 sm:w-6 text-emerald-600" />
                 </div>
               </div>
             </CardContent>

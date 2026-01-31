@@ -508,7 +508,7 @@ export default function TargetsPlanning() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
+      <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link href="/cashier-journals">
@@ -517,11 +517,11 @@ export default function TargetsPlanning() {
               </Button>
             </Link>
             <div>
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-amber-900 flex items-center gap-2 sm:gap-3">
-                <Target className="h-6 w-6 sm:h-8 sm:w-8" />
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-amber-900 flex items-center gap-2 sm:gap-3">
+                <Target className="h-5 w-5 sm:h-6 sm:w-6 md:h-8 md:w-8" />
                 تخطيط الأهداف الشهرية
               </h1>
-              <p className="text-sm sm:text-base text-amber-700 mt-1">تحديد وتوزيع الأهداف على الفروع والأيام</p>
+              <p className="text-xs sm:text-sm text-amber-700 mt-1">تحديد وتوزيع الأهداف على الفروع والأيام</p>
             </div>
           </div>
           

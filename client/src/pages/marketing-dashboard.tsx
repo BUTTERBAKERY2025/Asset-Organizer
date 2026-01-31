@@ -327,18 +327,18 @@ export default function MarketingDashboardPage() {
         </div>
 
         {/* Primary Stats Row */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <Card className="bg-amber-50/50 border-amber-100">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4 md:p-6">
               {isLoading ? <Skeleton className="h-16" /> : (
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-lg bg-amber-100 flex items-center justify-center">
-                    <Megaphone className="w-6 h-6 text-amber-600" />
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+                    <Megaphone className="w-5 h-5 sm:w-6 sm:h-6 text-amber-600" />
                   </div>
-                  <div>
-                    <div className="text-2xl font-bold text-amber-700">{formatNumber(allCampaigns.length)}</div>
-                    <div className="text-xs text-muted-foreground">إجمالي الحملات</div>
-                    <Badge variant="secondary" className="mt-1 text-xs">{activeCampaigns.length} نشطة</Badge>
+                  <div className="min-w-0">
+                    <div className="text-lg sm:text-xl md:text-2xl font-bold text-amber-700">{formatNumber(allCampaigns.length)}</div>
+                    <div className="text-xs sm:text-sm text-muted-foreground">إجمالي الحملات</div>
+                    <Badge variant="secondary" className="mt-1 text-[10px] sm:text-xs">{activeCampaigns.length} نشطة</Badge>
                   </div>
                 </div>
               )}
@@ -346,16 +346,16 @@ export default function MarketingDashboardPage() {
           </Card>
 
           <Card className="bg-blue-50/50 border-blue-100">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4 md:p-6">
               {isLoading ? <Skeleton className="h-16" /> : (
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center">
-                    <Users className="w-6 h-6 text-blue-600" />
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
+                    <Users className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
                   </div>
-                  <div>
-                    <div className="text-2xl font-bold text-blue-700">{formatNumber(allInfluencers.length)}</div>
-                    <div className="text-xs text-muted-foreground">المؤثرين</div>
-                    <Badge variant="secondary" className="mt-1 text-xs">{formatCompactNumber(totalFollowers)} متابع</Badge>
+                  <div className="min-w-0">
+                    <div className="text-lg sm:text-xl md:text-2xl font-bold text-blue-700">{formatNumber(allInfluencers.length)}</div>
+                    <div className="text-xs sm:text-sm text-muted-foreground">المؤثرين</div>
+                    <Badge variant="secondary" className="mt-1 text-[10px] sm:text-xs">{formatCompactNumber(totalFollowers)} متابع</Badge>
                   </div>
                 </div>
               )}
@@ -363,16 +363,16 @@ export default function MarketingDashboardPage() {
           </Card>
 
           <Card className="bg-green-50/50 border-green-100">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4 md:p-6">
               {isLoading ? <Skeleton className="h-16" /> : (
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-lg bg-green-100 flex items-center justify-center">
-                    <DollarSign className="w-6 h-6 text-green-600" />
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-green-100 flex items-center justify-center shrink-0">
+                    <DollarSign className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
                   </div>
-                  <div>
-                    <div className="text-2xl font-bold text-green-700">{formatCurrency(totalBudget)}</div>
-                    <div className="text-xs text-muted-foreground">الميزانية</div>
-                    <Badge variant="secondary" className="mt-1 text-xs">{formatCurrency(spentBudget)} مصروف</Badge>
+                  <div className="min-w-0">
+                    <div className="text-lg sm:text-xl md:text-2xl font-bold text-green-700 truncate">{formatCurrency(totalBudget)}</div>
+                    <div className="text-xs sm:text-sm text-muted-foreground">الميزانية</div>
+                    <Badge variant="secondary" className="mt-1 text-[10px] sm:text-xs">{formatCurrency(spentBudget)} مصروف</Badge>
                   </div>
                 </div>
               )}
@@ -380,18 +380,18 @@ export default function MarketingDashboardPage() {
           </Card>
 
           <Card className={`${pendingTasks.length > 0 ? 'bg-orange-50/50 border-orange-100' : 'bg-emerald-50/50 border-emerald-100'}`}>
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4 md:p-6">
               {isLoading ? <Skeleton className="h-16" /> : (
-                <div className="flex items-center gap-3">
-                  <div className={`w-12 h-12 rounded-lg ${pendingTasks.length > 0 ? 'bg-orange-100' : 'bg-emerald-100'} flex items-center justify-center`}>
-                    <Clock className={`w-6 h-6 ${pendingTasks.length > 0 ? 'text-orange-600' : 'text-emerald-600'}`} />
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-lg ${pendingTasks.length > 0 ? 'bg-orange-100' : 'bg-emerald-100'} flex items-center justify-center shrink-0`}>
+                    <Clock className={`w-5 h-5 sm:w-6 sm:h-6 ${pendingTasks.length > 0 ? 'text-orange-600' : 'text-emerald-600'}`} />
                   </div>
-                  <div>
-                    <div className={`text-2xl font-bold ${pendingTasks.length > 0 ? 'text-orange-700' : 'text-emerald-700'}`}>
+                  <div className="min-w-0">
+                    <div className={`text-lg sm:text-xl md:text-2xl font-bold ${pendingTasks.length > 0 ? 'text-orange-700' : 'text-emerald-700'}`}>
                       {formatNumber(allTasks.length)}
                     </div>
-                    <div className="text-xs text-muted-foreground">المهام</div>
-                    <Badge variant="secondary" className="mt-1 text-xs">{pendingTasks.length} قيد التنفيذ</Badge>
+                    <div className="text-xs sm:text-sm text-muted-foreground">المهام</div>
+                    <Badge variant="secondary" className="mt-1 text-[10px] sm:text-xs">{pendingTasks.length} قيد التنفيذ</Badge>
                   </div>
                 </div>
               )}
@@ -400,24 +400,24 @@ export default function MarketingDashboardPage() {
         </div>
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {kpiCards.map((kpi, index) => (
             <Card key={index} className="relative overflow-hidden">
-              <CardContent className="p-4">
+              <CardContent className="p-3 sm:p-4 md:p-6">
                 {isLoading ? <Skeleton className="h-20" /> : (
                   <>
                     <div className="flex items-center justify-between mb-2">
-                      <kpi.icon className={`w-5 h-5 ${
+                      <kpi.icon className={`w-4 h-4 sm:w-5 sm:h-5 ${
                         kpi.trend === 'good' ? 'text-green-500' : 
                         kpi.trend === 'warning' ? 'text-orange-500' : 'text-blue-500'
                       }`} />
-                      <Badge variant={kpi.trend === 'good' ? 'default' : kpi.trend === 'warning' ? 'destructive' : 'secondary'} className="text-xs">
+                      <Badge variant={kpi.trend === 'good' ? 'default' : kpi.trend === 'warning' ? 'destructive' : 'secondary'} className="text-[10px] sm:text-xs">
                         {kpi.trend === 'good' ? 'جيد' : kpi.trend === 'warning' ? 'تحذير' : 'متوسط'}
                       </Badge>
                     </div>
-                    <div className="text-2xl font-bold">{kpi.value}</div>
-                    <div className="text-xs text-muted-foreground">{kpi.title}</div>
-                    <div className="text-xs text-muted-foreground/80 mt-1">{kpi.description}</div>
+                    <div className="text-lg sm:text-xl md:text-2xl font-bold">{kpi.value}</div>
+                    <div className="text-xs sm:text-sm text-muted-foreground">{kpi.title}</div>
+                    <div className="text-[10px] sm:text-xs text-muted-foreground/80 mt-1">{kpi.description}</div>
                   </>
                 )}
               </CardContent>
@@ -426,12 +426,12 @@ export default function MarketingDashboardPage() {
         </div>
 
         {/* Charts Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 md:gap-6">
           {/* Influencer Tiers */}
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">تصنيف المؤثرين</CardTitle>
-              <CardDescription>توزيع المؤثرين حسب عدد المتابعين</CardDescription>
+            <CardHeader className="p-3 sm:p-4 md:p-6 pb-2">
+              <CardTitle className="text-sm sm:text-base md:text-lg">تصنيف المؤثرين</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">توزيع المؤثرين حسب عدد المتابعين</CardDescription>
             </CardHeader>
             <CardContent>
               {isLoading ? <Skeleton className="h-48" /> : (
@@ -483,9 +483,9 @@ export default function MarketingDashboardPage() {
 
           {/* Platform Distribution */}
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">توزيع المنصات</CardTitle>
-              <CardDescription>المؤثرين حسب المنصة</CardDescription>
+            <CardHeader className="p-3 sm:p-4 md:p-6 pb-2">
+              <CardTitle className="text-sm sm:text-base md:text-lg">توزيع المنصات</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">المؤثرين حسب المنصة</CardDescription>
             </CardHeader>
             <CardContent>
               {isLoading ? <Skeleton className="h-48" /> : platformChartData.length > 0 ? (
@@ -518,12 +518,12 @@ export default function MarketingDashboardPage() {
         </div>
 
         {/* Campaign Status & Budget */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 md:gap-6">
           {/* Campaign Status */}
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">حالة الحملات</CardTitle>
-              <CardDescription>توزيع الحملات حسب الحالة</CardDescription>
+            <CardHeader className="p-3 sm:p-4 md:p-6 pb-2">
+              <CardTitle className="text-sm sm:text-base md:text-lg">حالة الحملات</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">توزيع الحملات حسب الحالة</CardDescription>
             </CardHeader>
             <CardContent>
               {isLoading ? <Skeleton className="h-48" /> : campaignStatusChartData.length > 0 ? (
@@ -546,9 +546,9 @@ export default function MarketingDashboardPage() {
 
           {/* Budget Utilization */}
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">استخدام الميزانية</CardTitle>
-              <CardDescription>نسبة الصرف من الميزانية المخصصة</CardDescription>
+            <CardHeader className="p-3 sm:p-4 md:p-6 pb-2">
+              <CardTitle className="text-sm sm:text-base md:text-lg">استخدام الميزانية</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">نسبة الصرف من الميزانية المخصصة</CardDescription>
             </CardHeader>
             <CardContent>
               {isLoading ? <Skeleton className="h-48" /> : (
@@ -575,12 +575,12 @@ export default function MarketingDashboardPage() {
         </div>
 
         {/* Top Influencers & Upcoming Events */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 md:gap-6">
           {/* Top Influencers */}
           <Card>
-            <CardHeader className="pb-2">
+            <CardHeader className="p-3 sm:p-4 md:p-6 pb-2">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-base">أفضل المؤثرين</CardTitle>
+                <CardTitle className="text-sm sm:text-base md:text-lg">أفضل المؤثرين</CardTitle>
                 <Link href="/marketing-influencers">
                   <Badge variant="outline" className="cursor-pointer hover:bg-muted">
                     عرض الكل
@@ -628,9 +628,9 @@ export default function MarketingDashboardPage() {
 
           {/* Upcoming Events & Urgent Tasks */}
           <Card>
-            <CardHeader className="pb-2">
+            <CardHeader className="p-3 sm:p-4 md:p-6 pb-2">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-base">المواعيد والمهام العاجلة</CardTitle>
+                <CardTitle className="text-sm sm:text-base md:text-lg">المواعيد والمهام العاجلة</CardTitle>
                 <Link href="/marketing-calendar">
                   <Badge variant="outline" className="cursor-pointer hover:bg-muted">
                     عرض التقويم

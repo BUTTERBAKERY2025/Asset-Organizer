@@ -489,9 +489,9 @@ export default function TimesheetPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir={isRTL ? "rtl" : "ltr"}>
+      <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-4" dir={isRTL ? "rtl" : "ltr"}>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
             <Button
               variant="ghost"
               size="icon"
@@ -502,25 +502,28 @@ export default function TimesheetPage() {
               <ArrowRight className="w-5 h-5" />
             </Button>
             <div>
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold" data-testid="text-page-title">{t("timesheet.pageTitle")}</h1>
-              <p className="text-muted-foreground">{t("timesheet.pageDescription")}</p>
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold" data-testid="text-page-title">{t("timesheet.pageTitle")}</h1>
+              <p className="text-xs sm:text-sm text-muted-foreground">{t("timesheet.pageDescription")}</p>
             </div>
           </div>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="generate" className="gap-2" data-testid="tab-generate">
-              <FileText className="w-4 h-4" />
-              {t("timesheet.generateReport")}
+          <TabsList className="grid w-full grid-cols-3 h-auto p-1">
+            <TabsTrigger value="generate" className="gap-1 sm:gap-2 text-[10px] sm:text-xs md:text-sm py-2" data-testid="tab-generate">
+              <FileText className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">{t("timesheet.generateReport")}</span>
+              <span className="sm:hidden">إنشاء</span>
             </TabsTrigger>
-            <TabsTrigger value="view" className="gap-2" data-testid="tab-view" disabled={!selectedReport}>
-              <Calendar className="w-4 h-4" />
-              {t("timesheet.viewReport")}
+            <TabsTrigger value="view" className="gap-1 sm:gap-2 text-[10px] sm:text-xs md:text-sm py-2" data-testid="tab-view" disabled={!selectedReport}>
+              <Calendar className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">{t("timesheet.viewReport")}</span>
+              <span className="sm:hidden">عرض</span>
             </TabsTrigger>
-            <TabsTrigger value="history" className="gap-2" data-testid="tab-history">
-              <Clock className="w-4 h-4" />
-              {t("timesheet.previousRecords")}
+            <TabsTrigger value="history" className="gap-1 sm:gap-2 text-[10px] sm:text-xs md:text-sm py-2" data-testid="tab-history">
+              <Clock className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">{t("timesheet.previousRecords")}</span>
+              <span className="sm:hidden">السجل</span>
             </TabsTrigger>
           </TabsList>
 

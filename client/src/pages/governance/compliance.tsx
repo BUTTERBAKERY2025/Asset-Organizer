@@ -210,22 +210,22 @@ export default function CompliancePage() {
 
   return (
     <Layout>
-      <div className="max-w-6xl mx-auto p-4 md:p-8 lg:p-10 space-y-4" dir="rtl">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
+      <div className="max-w-6xl mx-auto p-3 sm:p-4 md:p-6 space-y-4" dir="rtl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
             <Link href="/governance">
               <Button variant="ghost" size="icon" className="h-8 w-8">
                 <ChevronLeft className="h-4 w-4" />
               </Button>
             </Link>
-            <div className="p-3 bg-gradient-to-br from-teal-500 to-cyan-600 rounded-xl">
-              <Shield className="w-7 h-7 text-white" />
+            <div className="p-2 sm:p-3 bg-gradient-to-br from-teal-500 to-cyan-600 rounded-xl">
+              <Shield className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-teal-800" data-testid="page-title">
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-teal-800" data-testid="page-title">
                 الامتثال والالتزام
               </h1>
-              <p className="text-gray-600">متابعة المتطلبات التنظيمية والتراخيص</p>
+              <p className="text-xs sm:text-sm text-gray-600">متابعة المتطلبات التنظيمية والتراخيص</p>
             </div>
           </div>
           <div className="flex gap-2">
@@ -373,60 +373,60 @@ export default function CompliancePage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          <Card className="bg-gradient-to-br from-teal-50 to-cyan-50 border-teal-200">
-            <CardContent className="p-4">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+          <Card className="bg-gradient-to-br from-teal-50 to-cyan-50 border-teal-200 col-span-2 lg:col-span-1">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-teal-600">نسبة الامتثال</p>
-                  <p className="text-2xl font-bold text-teal-800">{complianceRate.toFixed(0)}%</p>
+                  <p className="text-xs sm:text-sm text-teal-600">نسبة الامتثال</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-teal-800">{complianceRate.toFixed(0)}%</p>
                 </div>
-                <TrendingUp className="h-8 w-8 text-teal-500" />
+                <TrendingUp className="h-6 w-6 sm:h-8 sm:w-8 text-teal-500" />
               </div>
               <Progress value={complianceRate} className="h-2 mt-2" />
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-green-600">سارية</p>
-                  <p className="text-2xl font-bold text-green-800">{validCount}</p>
+                  <p className="text-xs sm:text-sm text-green-600">سارية</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-green-800">{validCount}</p>
                 </div>
-                <CheckCircle className="h-8 w-8 text-green-500" />
+                <CheckCircle className="h-6 w-6 sm:h-8 sm:w-8 text-green-500" />
               </div>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-yellow-50 to-amber-50 border-yellow-200">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-yellow-600">قارب الانتهاء</p>
-                  <p className="text-2xl font-bold text-yellow-800">{expiringCount}</p>
+                  <p className="text-xs sm:text-sm text-yellow-600">قارب الانتهاء</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-yellow-800">{expiringCount}</p>
                 </div>
-                <AlertTriangle className="h-8 w-8 text-yellow-500" />
+                <AlertTriangle className="h-6 w-6 sm:h-8 sm:w-8 text-yellow-500" />
               </div>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-red-50 to-rose-50 border-red-200">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-red-600">منتهية</p>
-                  <p className="text-2xl font-bold text-red-800">{expiredCount}</p>
+                  <p className="text-xs sm:text-sm text-red-600">منتهية</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-red-800">{expiredCount}</p>
                 </div>
-                <XCircle className="h-8 w-8 text-red-500" />
+                <XCircle className="h-6 w-6 sm:h-8 sm:w-8 text-red-500" />
               </div>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-blue-600">إجمالي المتطلبات</p>
-                  <p className="text-2xl font-bold text-blue-800">{requirements.length}</p>
+                  <p className="text-xs sm:text-sm text-blue-600">إجمالي المتطلبات</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-blue-800">{requirements.length}</p>
                 </div>
-                <Shield className="h-8 w-8 text-blue-500" />
+                <Shield className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500" />
               </div>
             </CardContent>
           </Card>
@@ -503,13 +503,14 @@ export default function CompliancePage() {
 
             <Card>
               <CardContent className="p-0">
-                <Table>
+                <div className="overflow-x-auto">
+                <Table className="min-w-[700px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="text-right">المتطلب</TableHead>
-                      <TableHead className="text-right">الجهة</TableHead>
-                      <TableHead className="text-right">النوع</TableHead>
-                      <TableHead className="text-right">التكرار</TableHead>
+                      <TableHead className="text-right hidden md:table-cell">الجهة</TableHead>
+                      <TableHead className="text-right hidden lg:table-cell">النوع</TableHead>
+                      <TableHead className="text-right hidden lg:table-cell">التكرار</TableHead>
                       <TableHead className="text-right">تاريخ الانتهاء</TableHead>
                       <TableHead className="text-right">الحالة</TableHead>
                       <TableHead className="text-right">الإجراءات</TableHead>
@@ -536,32 +537,32 @@ export default function CompliancePage() {
                           <TableRow key={req.id} className={isExpiring ? "bg-amber-50" : ""} data-testid={`requirement-row-${req.id}`}>
                             <TableCell>
                               <div>
-                                <p className="font-medium">{req.title}</p>
+                                <p className="font-medium text-sm sm:text-base">{req.title}</p>
                                 {req.documentNumber && (
-                                  <p className="text-sm text-gray-500">{req.documentNumber}</p>
+                                  <p className="text-xs sm:text-sm text-gray-500">{req.documentNumber}</p>
                                 )}
                               </div>
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="hidden md:table-cell text-xs sm:text-sm">
                               {regulatoryBodies.find(b => b.value === req.regulatoryBody)?.label}
                             </TableCell>
-                            <TableCell>
-                              <Badge variant="outline">
+                            <TableCell className="hidden lg:table-cell">
+                              <Badge variant="outline" className="text-[10px] sm:text-xs">
                                 {complianceCategories.find(c => c.value === req.category)?.label}
                               </Badge>
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="hidden lg:table-cell text-xs sm:text-sm">
                               {frequencies.find(f => f.value === req.frequency)?.label}
                             </TableCell>
                             <TableCell>
                               {req.validUntil ? (
                                 <div className="flex items-center gap-1">
-                                  <Calendar className="h-4 w-4 text-gray-400" />
-                                  <span className={isExpiring ? "text-amber-600 font-medium" : ""}>{req.validUntil}</span>
+                                  <Calendar className="h-3 w-3 sm:h-4 sm:w-4 text-gray-400" />
+                                  <span className={`text-xs sm:text-sm ${isExpiring ? "text-amber-600 font-medium" : ""}`}>{req.validUntil}</span>
                                 </div>
                               ) : "-"}
                               {isExpiring && days !== null && (
-                                <Badge className="mt-1 bg-amber-100 text-amber-800 text-xs">
+                                <Badge className="mt-1 bg-amber-100 text-amber-800 text-[10px] sm:text-xs">
                                   {days} يوم
                                 </Badge>
                               )}
@@ -574,23 +575,25 @@ export default function CompliancePage() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
+                                  className="h-7 w-7 sm:h-8 sm:w-8"
                                   onClick={() => {
                                     setSelectedRequirement(req);
                                     setShowDetails(true);
                                   }}
                                 >
-                                  <Eye className="h-4 w-4" />
+                                  <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
                                 </Button>
                                 <Button
                                   variant="ghost"
                                   size="icon"
+                                  className="h-7 w-7 sm:h-8 sm:w-8"
                                   onClick={() => {
                                     setEditingRequirement(req);
                                     setIsDialogOpen(true);
                                   }}
                                   data-testid={`edit-requirement-${req.id}`}
                                 >
-                                  <Edit className="h-4 w-4" />
+                                  <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
                                 </Button>
                               </div>
                             </TableCell>
@@ -600,6 +603,7 @@ export default function CompliancePage() {
                     )}
                   </TableBody>
                 </Table>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

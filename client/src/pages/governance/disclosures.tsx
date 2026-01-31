@@ -122,22 +122,22 @@ export default function DisclosuresPage() {
 
   return (
     <Layout>
-      <div className="max-w-6xl mx-auto p-4 md:p-8 lg:p-10 space-y-4" dir="rtl">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
+      <div className="max-w-6xl mx-auto p-3 sm:p-4 md:p-6 space-y-4" dir="rtl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
             <Link href="/governance">
               <Button variant="ghost" size="icon" className="h-8 w-8">
                 <ChevronLeft className="h-4 w-4" />
               </Button>
             </Link>
-            <div className="p-3 bg-gradient-to-br from-teal-500 to-emerald-600 rounded-xl">
-              <FileCheck className="w-7 h-7 text-white" />
+            <div className="p-2 sm:p-3 bg-gradient-to-br from-teal-500 to-emerald-600 rounded-xl">
+              <FileCheck className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-teal-800" data-testid="page-title">
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-teal-800" data-testid="page-title">
                 الإفصاحات والتقارير
               </h1>
-              <p className="text-gray-600">رفع القوائم المالية والتقارير النظامية</p>
+              <p className="text-xs sm:text-sm text-gray-600">رفع القوائم المالية والتقارير النظامية</p>
             </div>
           </div>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -235,54 +235,54 @@ export default function DisclosuresPage() {
           </Dialog>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <Card className="bg-gradient-to-br from-teal-50 to-emerald-50 border-teal-200">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-teal-600">إجمالي الإفصاحات</p>
-                  <p className="text-2xl font-bold text-teal-800">{disclosures.length}</p>
+                  <p className="text-xs sm:text-sm text-teal-600">إجمالي الإفصاحات</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-teal-800">{disclosures.length}</p>
                 </div>
-                <FileCheck className="h-8 w-8 text-teal-500" />
+                <FileCheck className="h-6 w-6 sm:h-8 sm:w-8 text-teal-500" />
               </div>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-yellow-50 to-amber-50 border-yellow-200">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-yellow-600">قيد المراجعة</p>
-                  <p className="text-2xl font-bold text-yellow-800">
+                  <p className="text-xs sm:text-sm text-yellow-600">قيد المراجعة</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-yellow-800">
                     {disclosures.filter(d => d.status === 'pending_review').length}
                   </p>
                 </div>
-                <Clock className="h-8 w-8 text-yellow-500" />
+                <Clock className="h-6 w-6 sm:h-8 sm:w-8 text-yellow-500" />
               </div>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-green-600">منشور</p>
-                  <p className="text-2xl font-bold text-green-800">
+                  <p className="text-xs sm:text-sm text-green-600">منشور</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-green-800">
                     {disclosures.filter(d => d.status === 'published').length}
                   </p>
                 </div>
-                <CheckCircle className="h-8 w-8 text-green-500" />
+                <CheckCircle className="h-6 w-6 sm:h-8 sm:w-8 text-green-500" />
               </div>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-blue-600">مقدم</p>
-                  <p className="text-2xl font-bold text-blue-800">
+                  <p className="text-xs sm:text-sm text-blue-600">مقدم</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-blue-800">
                     {disclosures.filter(d => d.status === 'submitted').length}
                   </p>
                 </div>
-                <Send className="h-8 w-8 text-blue-500" />
+                <Send className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500" />
               </div>
             </CardContent>
           </Card>
@@ -333,18 +333,18 @@ export default function DisclosuresPage() {
                   <CardContent className="p-4">
                     <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                       <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2 flex-wrap">
-                          <Badge variant="outline" className="font-mono text-xs">
+                        <div className="flex items-center gap-1 sm:gap-2 mb-2 flex-wrap">
+                          <Badge variant="outline" className="font-mono text-[10px] sm:text-xs">
                             {disclosure.disclosureNumber}
                           </Badge>
-                          <Badge className={disclosureStatuses.find(s => s.value === disclosure.status)?.color}>
+                          <Badge className={`text-[10px] sm:text-xs ${disclosureStatuses.find(s => s.value === disclosure.status)?.color}`}>
                             {disclosureStatuses.find(s => s.value === disclosure.status)?.label}
                           </Badge>
-                          <Badge variant="outline">
+                          <Badge variant="outline" className="text-[10px] sm:text-xs">
                             {disclosureTypes.find(t => t.value === disclosure.disclosureType)?.label}
                           </Badge>
                           {disclosure.fiscalQuarter && (
-                            <Badge variant="outline">{fiscalQuarters.find(q => q.value === disclosure.fiscalQuarter)?.label}</Badge>
+                            <Badge variant="outline" className="text-[10px] sm:text-xs">{fiscalQuarters.find(q => q.value === disclosure.fiscalQuarter)?.label}</Badge>
                           )}
                         </div>
                         <h3 className="font-semibold text-lg mb-2">{disclosure.title}</h3>

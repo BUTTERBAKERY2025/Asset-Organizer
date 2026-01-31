@@ -152,7 +152,7 @@ export default function ExecutiveMeetings() {
       postponed: "bg-yellow-500 text-white",
     };
     return (
-      <Badge className={colors[status] || "bg-gray-500"}>
+      <Badge className={`${colors[status] || "bg-gray-500"} text-[10px] sm:text-xs px-1.5 sm:px-2`}>
         {statusInfo?.label || status}
       </Badge>
     );
@@ -161,11 +161,11 @@ export default function ExecutiveMeetings() {
   const getMeetingTypeIcon = (type: string) => {
     switch (type) {
       case "virtual":
-        return <Video className="h-4 w-4" />;
+        return <Video className="h-3 w-3 sm:h-4 sm:w-4" />;
       case "phone":
-        return <Phone className="h-4 w-4" />;
+        return <Phone className="h-3 w-3 sm:h-4 sm:w-4" />;
       default:
-        return <Users className="h-4 w-4" />;
+        return <Users className="h-3 w-3 sm:h-4 sm:w-4" />;
     }
   };
 
@@ -186,28 +186,28 @@ export default function ExecutiveMeetings() {
 
   return (
     <Layout>
-      <div className="max-w-6xl mx-auto p-4 md:p-8 lg:p-10 space-y-4" dir="rtl">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="max-w-6xl mx-auto p-3 sm:p-4 md:p-6 space-y-4" dir="rtl">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2 sm:gap-4">
           <Link href="/executive">
-            <Button variant="ghost" size="sm" className="gap-1">
-              <ArrowRight className="h-4 w-4" />
+            <Button variant="ghost" size="sm" className="gap-1 h-8 text-xs sm:text-sm">
+              <ArrowRight className="h-3 w-3 sm:h-4 sm:w-4" />
               العودة
             </Button>
           </Link>
           <div>
-            <h1 className="text-3xl font-bold text-amber-800" data-testid="page-title">
+            <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-amber-800" data-testid="page-title">
               إدارة الاجتماعات
             </h1>
-            <p className="text-gray-600">
+            <p className="text-[10px] sm:text-xs text-gray-600">
               BUTTER BAKERY - MEETINGS MANAGEMENT
             </p>
           </div>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="gap-2 bg-amber-600 hover:bg-amber-700" onClick={() => setSelectedMeeting(null)}>
-              <Plus className="h-4 w-4" />
+            <Button className="gap-1 sm:gap-2 bg-amber-600 hover:bg-amber-700 text-xs sm:text-sm h-8 sm:h-9" onClick={() => setSelectedMeeting(null)}>
+              <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
               اجتماع جديد
             </Button>
           </DialogTrigger>
@@ -370,21 +370,21 @@ export default function ExecutiveMeetings() {
         </Dialog>
       </div>
 
-      <div className="flex items-center gap-4 flex-wrap">
-        <div className="relative flex-1 max-w-md">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4">
+        <div className="relative flex-1 min-w-0">
           <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <Input
             placeholder="البحث في الاجتماعات..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pr-10"
+            className="pr-10 text-sm"
             data-testid="input-search"
           />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-48" data-testid="filter-status">
-            <Filter className="h-4 w-4 ml-2" />
-            <SelectValue placeholder="تصفية حسب الحالة" />
+          <SelectTrigger className="w-full sm:w-40 text-xs sm:text-sm" data-testid="filter-status">
+            <Filter className="h-3 w-3 sm:h-4 sm:w-4 ml-2" />
+            <SelectValue placeholder="الحالة" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">جميع الحالات</SelectItem>
@@ -406,49 +406,50 @@ export default function ExecutiveMeetings() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4">
           {filteredMeetings.map((meeting) => (
             <Card key={meeting.id} className="hover:shadow-lg transition-shadow" data-testid={`meeting-card-${meeting.id}`}>
-              <CardHeader className="pb-2">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-2">
+              <CardHeader className="p-3 sm:p-4 pb-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-1 sm:gap-2">
                     {getMeetingTypeIcon(meeting.meetingType)}
-                    <span className="text-xs text-gray-500">
+                    <span className="text-[10px] sm:text-xs text-gray-500">
                       {meetingTypes.find((t) => t.value === meeting.meetingType)?.label}
                     </span>
                   </div>
                   {getStatusBadge(meeting.status)}
                 </div>
-                <CardTitle className="text-lg mt-2">{meeting.title}</CardTitle>
+                <CardTitle className="text-sm sm:text-lg mt-2">{meeting.title}</CardTitle>
                 {meeting.titleEn && (
                   <CardDescription>{meeting.titleEn}</CardDescription>
                 )}
               </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Clock className="h-4 w-4" />
-                  {format(new Date(meeting.startAt), "EEEE، d MMMM yyyy", { locale: ar })}
-                  <span className="text-amber-600 font-semibold">
+              <CardContent className="p-3 sm:p-4 pt-0 space-y-2 sm:space-y-3">
+                <div className="flex flex-wrap items-center gap-1 sm:gap-2 text-xs sm:text-sm text-gray-600">
+                  <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="hidden sm:inline">{format(new Date(meeting.startAt), "EEEE، d MMMM yyyy", { locale: ar })}</span>
+                  <span className="sm:hidden">{format(new Date(meeting.startAt), "d/M/yyyy", { locale: ar })}</span>
+                  <span className="text-amber-600 font-semibold text-[10px] sm:text-sm">
                     {format(new Date(meeting.startAt), "h:mm a", { locale: ar })}
                   </span>
                 </div>
                 {meeting.location && (
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <MapPin className="h-4 w-4" />
-                    {meeting.location}
+                  <div className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm text-gray-600">
+                    <MapPin className="h-3 w-3 sm:h-4 sm:w-4" />
+                    <span className="truncate">{meeting.location}</span>
                   </div>
                 )}
                 {meeting.organizerName && (
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <Users className="h-4 w-4" />
-                    منظم: {meeting.organizerName}
+                  <div className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm text-gray-600">
+                    <Users className="h-3 w-3 sm:h-4 sm:w-4" />
+                    <span className="truncate">منظم: {meeting.organizerName}</span>
                   </div>
                 )}
-                <div className="flex items-center gap-2 pt-2 border-t">
+                <div className="flex items-center gap-1 sm:gap-2 pt-2 border-t">
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="flex-1 gap-1"
+                    className="flex-1 gap-1 text-xs sm:text-sm h-7 sm:h-8"
                     onClick={() => {
                       setSelectedMeeting(meeting);
                       setIsDialogOpen(true);
@@ -460,15 +461,15 @@ export default function ExecutiveMeetings() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="flex-1 gap-1 text-red-600 hover:text-red-700 hover:bg-red-50"
+                    className="flex-1 gap-1 text-xs sm:text-sm h-7 sm:h-8 text-red-600 hover:text-red-700 hover:bg-red-50"
                     onClick={() => {
                       if (confirm("هل أنت متأكد من حذف هذا الاجتماع؟")) {
                         deleteMutation.mutate(meeting.id);
                       }
                     }}
                   >
-                    <Trash2 className="h-4 w-4" />
-                    حذف
+                    <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
+                    <span className="hidden sm:inline">حذف</span>
                   </Button>
                 </div>
               </CardContent>

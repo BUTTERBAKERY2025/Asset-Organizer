@@ -244,31 +244,32 @@ export default function CashierShiftPerformance() {
 
   return (
     <Layout>
-      <div className="p-3 sm:p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-          <div className="flex items-center gap-4">
+      <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-4 sm:space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-4 sm:mb-6">
+          <div className="flex items-center gap-2 sm:gap-4">
             <Link href="/targets-dashboard">
               <Button variant="ghost" size="icon" data-testid="button-back" className="h-11 w-11 sm:h-8 sm:w-8">
                 <ChevronLeft className="h-5 w-5" />
               </Button>
             </Link>
             <div>
-              <h1 className="text-xl sm:text-2xl font-bold text-[#8B4513]" data-testid="text-page-title">
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-[#8B4513]" data-testid="text-page-title">
                 تتبع أداء الكاشير بالشفتات
               </h1>
-              <p className="text-muted-foreground text-sm sm:text-base">مراقبة الأهداف والأداء لكل كاشير حسب الشفت</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">مراقبة الأهداف والأداء لكل كاشير حسب الشفت</p>
             </div>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={handleRefresh} data-testid="button-refresh" className="h-11 sm:h-9">
-              <RefreshCw className="h-4 w-4 ml-2" />
-              تحديث
+            <Button variant="outline" onClick={handleRefresh} data-testid="button-refresh" className="h-11 sm:h-9 text-sm">
+              <RefreshCw className="h-4 w-4 ml-1 sm:ml-2" />
+              <span className="hidden sm:inline">تحديث</span>
             </Button>
             <Dialog open={showTargetDialog} onOpenChange={setShowTargetDialog}>
               <DialogTrigger asChild>
-                <Button data-testid="button-add-target" className="h-11 sm:h-9">
-                  <Plus className="h-4 w-4 ml-2" />
-                  إضافة هدف جديد
+                <Button data-testid="button-add-target" className="h-11 sm:h-9 text-sm">
+                  <Plus className="h-4 w-4 ml-1 sm:ml-2" />
+                  <span className="hidden sm:inline">إضافة هدف جديد</span>
+                  <span className="sm:hidden">هدف جديد</span>
                 </Button>
               </DialogTrigger>
               <DialogContent className="max-w-md">
@@ -441,44 +442,44 @@ export default function CashierShiftPerformance() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
           <Card data-testid="card-total-target">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 rounded-full bg-blue-100">
-                  <Target className="h-6 w-6 text-blue-600" />
+            <CardContent className="p-3 sm:pt-6 sm:px-6">
+              <div className="flex items-center gap-2 sm:gap-4">
+                <div className="p-2 sm:p-3 rounded-full bg-blue-100">
+                  <Target className="h-4 w-4 sm:h-6 sm:w-6 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">إجمالي الأهداف</p>
-                  <p className="text-2xl font-bold">{formatCurrency(summaryStats.totalTarget)}</p>
+                  <p className="text-[10px] sm:text-sm text-muted-foreground">إجمالي الأهداف</p>
+                  <p className="text-lg sm:text-2xl font-bold">{formatCurrency(summaryStats.totalTarget)}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
           <Card data-testid="card-total-achieved">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 rounded-full bg-green-100">
-                  <DollarSign className="h-6 w-6 text-green-600" />
+            <CardContent className="p-3 sm:pt-6 sm:px-6">
+              <div className="flex items-center gap-2 sm:gap-4">
+                <div className="p-2 sm:p-3 rounded-full bg-green-100">
+                  <DollarSign className="h-4 w-4 sm:h-6 sm:w-6 text-green-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">إجمالي المحقق</p>
-                  <p className="text-2xl font-bold">{formatCurrency(summaryStats.totalAchieved)}</p>
+                  <p className="text-[10px] sm:text-sm text-muted-foreground">إجمالي المحقق</p>
+                  <p className="text-lg sm:text-2xl font-bold">{formatCurrency(summaryStats.totalAchieved)}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
           <Card data-testid="card-avg-percent">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 rounded-full bg-amber-100">
-                  <BarChartIcon className="h-6 w-6 text-amber-600" />
+            <CardContent className="p-3 sm:pt-6 sm:px-6">
+              <div className="flex items-center gap-2 sm:gap-4">
+                <div className="p-2 sm:p-3 rounded-full bg-amber-100">
+                  <BarChartIcon className="h-4 w-4 sm:h-6 sm:w-6 text-amber-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">نسبة الإنجاز</p>
-                  <p className={`text-2xl font-bold ${getPercentColor(summaryStats.avgPercent)}`}>
+                  <p className="text-[10px] sm:text-sm text-muted-foreground">نسبة الإنجاز</p>
+                  <p className={`text-lg sm:text-2xl font-bold ${getPercentColor(summaryStats.avgPercent)}`}>
                     {summaryStats.avgPercent.toFixed(1)}%
                   </p>
                 </div>
@@ -487,14 +488,14 @@ export default function CashierShiftPerformance() {
           </Card>
 
           <Card data-testid="card-alerts">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div className={`p-3 rounded-full ${summaryStats.alertCount > 0 ? 'bg-red-100' : 'bg-gray-100'}`}>
-                  <Bell className={`h-6 w-6 ${summaryStats.alertCount > 0 ? 'text-red-600' : 'text-gray-600'}`} />
+            <CardContent className="p-3 sm:pt-6 sm:px-6">
+              <div className="flex items-center gap-2 sm:gap-4">
+                <div className={`p-2 sm:p-3 rounded-full ${summaryStats.alertCount > 0 ? 'bg-red-100' : 'bg-gray-100'}`}>
+                  <Bell className={`h-4 w-4 sm:h-6 sm:w-6 ${summaryStats.alertCount > 0 ? 'text-red-600' : 'text-gray-600'}`} />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">تنبيهات نشطة</p>
-                  <p className="text-2xl font-bold">{summaryStats.alertCount}</p>
+                  <p className="text-[10px] sm:text-sm text-muted-foreground">تنبيهات نشطة</p>
+                  <p className="text-lg sm:text-2xl font-bold">{summaryStats.alertCount}</p>
                 </div>
               </div>
             </CardContent>

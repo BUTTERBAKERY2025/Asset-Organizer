@@ -200,7 +200,7 @@ export default function ExecutiveCorrespondence() {
       low: "bg-gray-500 text-white",
     };
     return (
-      <Badge className={colors[priority] || "bg-gray-500"}>
+      <Badge className={`${colors[priority] || "bg-gray-500"} text-[10px] sm:text-xs px-1.5 sm:px-2`}>
         {priorityInfo?.label || priority}
       </Badge>
     );
@@ -218,7 +218,7 @@ export default function ExecutiveCorrespondence() {
       sent: "bg-green-500 text-white",
     };
     return (
-      <Badge className={colors[status] || "bg-gray-500"}>
+      <Badge className={`${colors[status] || "bg-gray-500"} text-[10px] sm:text-xs px-1.5 sm:px-2`}>
         {statusInfo?.label || status}
       </Badge>
     );
@@ -242,28 +242,28 @@ export default function ExecutiveCorrespondence() {
 
   return (
     <Layout>
-      <div className="max-w-6xl mx-auto p-4 md:p-8 lg:p-10 space-y-4" dir="rtl">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="max-w-6xl mx-auto p-3 sm:p-4 md:p-6 space-y-4" dir="rtl">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2 sm:gap-4">
           <Link href="/executive">
-            <Button variant="ghost" size="sm" className="gap-1">
-              <ArrowRight className="h-4 w-4" />
+            <Button variant="ghost" size="sm" className="gap-1 h-8 text-xs sm:text-sm">
+              <ArrowRight className="h-3 w-3 sm:h-4 sm:w-4" />
               العودة
             </Button>
           </Link>
           <div>
-            <h1 className="text-3xl font-bold text-amber-800" data-testid="page-title">
+            <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-amber-800" data-testid="page-title">
               إدارة المراسلات
             </h1>
-            <p className="text-gray-600">
+            <p className="text-[10px] sm:text-xs text-gray-600">
               BUTTER BAKERY - CORRESPONDENCE MANAGEMENT
             </p>
           </div>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="gap-2 bg-amber-600 hover:bg-amber-700" onClick={() => setSelectedCorr(null)}>
-              <Plus className="h-4 w-4" />
+            <Button className="gap-1 sm:gap-2 bg-amber-600 hover:bg-amber-700 text-xs sm:text-sm h-8 sm:h-9" onClick={() => setSelectedCorr(null)}>
+              <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
               مراسلة جديدة
             </Button>
           </DialogTrigger>
@@ -501,32 +501,32 @@ export default function ExecutiveCorrespondence() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="incoming" className="gap-2">
-            <Inbox className="h-4 w-4" />
+        <TabsList className="grid w-full max-w-xs sm:max-w-md grid-cols-2">
+          <TabsTrigger value="incoming" className="gap-1 sm:gap-2 text-xs sm:text-sm">
+            <Inbox className="h-3 w-3 sm:h-4 sm:w-4" />
             وارد ({incomingCorr.length})
           </TabsTrigger>
-          <TabsTrigger value="outgoing" className="gap-2">
-            <Send className="h-4 w-4" />
+          <TabsTrigger value="outgoing" className="gap-1 sm:gap-2 text-xs sm:text-sm">
+            <Send className="h-3 w-3 sm:h-4 sm:w-4" />
             صادر ({outgoingCorr.length})
           </TabsTrigger>
         </TabsList>
 
-        <div className="flex items-center gap-4 flex-wrap">
-          <div className="relative flex-1 max-w-md">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4">
+          <div className="relative flex-1 min-w-0">
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
               placeholder="البحث في المراسلات..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pr-10"
+              className="pr-10 text-sm"
               data-testid="input-search"
             />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-48" data-testid="filter-status">
-              <Filter className="h-4 w-4 ml-2" />
-              <SelectValue placeholder="تصفية حسب الحالة" />
+            <SelectTrigger className="w-full sm:w-40 text-xs sm:text-sm" data-testid="filter-status">
+              <Filter className="h-3 w-3 sm:h-4 sm:w-4 ml-2" />
+              <SelectValue placeholder="الحالة" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">جميع الحالات</SelectItem>

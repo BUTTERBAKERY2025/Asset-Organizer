@@ -305,22 +305,22 @@ export default function ResolutionsPage() {
 
   return (
     <Layout>
-      <div className="max-w-6xl mx-auto p-4 md:p-8 lg:p-10 space-y-4" dir="rtl">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
+      <div className="max-w-6xl mx-auto p-3 sm:p-4 md:p-6 space-y-4" dir="rtl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
             <Link href="/governance">
               <Button variant="ghost" size="icon" className="h-8 w-8">
                 <ChevronLeft className="h-4 w-4" />
               </Button>
             </Link>
-            <div className="p-3 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl">
-              <Scale className="w-7 h-7 text-white" />
+            <div className="p-2 sm:p-3 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl">
+              <Scale className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-emerald-800" data-testid="page-title">
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-emerald-800" data-testid="page-title">
                 القرارات والتوصيات
               </h1>
-              <p className="text-gray-600">سير العمل والتوقيع الإلكتروني</p>
+              <p className="text-xs sm:text-sm text-gray-600">سير العمل والتوقيع الإلكتروني</p>
             </div>
           </div>
           <div className="flex gap-2">
@@ -456,48 +456,48 @@ export default function ResolutionsPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <Card className="bg-gradient-to-br from-gray-50 to-slate-50 border-gray-200">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600">مسودات</p>
-                  <p className="text-2xl font-bold text-gray-800">{draftCount}</p>
+                  <p className="text-xs sm:text-sm text-gray-600">مسودات</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-gray-800">{draftCount}</p>
                 </div>
-                <FileText className="h-8 w-8 text-gray-500" />
+                <FileText className="h-6 w-6 sm:h-8 sm:w-8 text-gray-500" />
               </div>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-yellow-50 to-amber-50 border-yellow-200">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-yellow-600">قيد التصويت</p>
-                  <p className="text-2xl font-bold text-yellow-800">{votingCount}</p>
+                  <p className="text-xs sm:text-sm text-yellow-600">قيد التصويت</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-yellow-800">{votingCount}</p>
                 </div>
-                <Vote className="h-8 w-8 text-yellow-500" />
+                <Vote className="h-6 w-6 sm:h-8 sm:w-8 text-yellow-500" />
               </div>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-green-600">معتمدة</p>
-                  <p className="text-2xl font-bold text-green-800">{approvedCount}</p>
+                  <p className="text-xs sm:text-sm text-green-600">معتمدة</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-green-800">{approvedCount}</p>
                 </div>
-                <CheckCircle className="h-8 w-8 text-green-500" />
+                <CheckCircle className="h-6 w-6 sm:h-8 sm:w-8 text-green-500" />
               </div>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-200">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-emerald-600">منفذة</p>
-                  <p className="text-2xl font-bold text-emerald-800">{implementedCount}</p>
+                  <p className="text-xs sm:text-sm text-emerald-600">منفذة</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-emerald-800">{implementedCount}</p>
                 </div>
-                <CheckCheck className="h-8 w-8 text-emerald-500" />
+                <CheckCheck className="h-6 w-6 sm:h-8 sm:w-8 text-emerald-500" />
               </div>
             </CardContent>
           </Card>
@@ -1604,21 +1604,22 @@ export default function ResolutionsPage() {
                   </div>
                 ) : (
                   <>
-                    <Table>
+                    <div className="overflow-x-auto">
+                    <Table className="min-w-[500px]">
                       <TableHeader>
                         <TableRow>
                           <TableHead className="text-right">العضو</TableHead>
-                          <TableHead className="text-right">المنصب</TableHead>
+                          <TableHead className="text-right hidden sm:table-cell">المنصب</TableHead>
                           <TableHead className="text-right">الحالة</TableHead>
-                          <TableHead className="text-right">التاريخ</TableHead>
+                          <TableHead className="text-right hidden md:table-cell">التاريخ</TableHead>
                           <TableHead className="text-right">الإجراء</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {signatures.map((sig) => (
                           <TableRow key={sig.id}>
-                            <TableCell className="font-medium">{sig.memberName}</TableCell>
-                            <TableCell>{sig.memberPosition}</TableCell>
+                            <TableCell className="font-medium text-xs sm:text-sm">{sig.memberName}</TableCell>
+                            <TableCell className="hidden sm:table-cell text-xs sm:text-sm">{sig.memberPosition}</TableCell>
                             <TableCell>
                               {sig.status === "signed" && (
                                 <Badge className="bg-green-100 text-green-800 gap-1">
@@ -1645,7 +1646,7 @@ export default function ResolutionsPage() {
                                 </Badge>
                               )}
                             </TableCell>
-                            <TableCell className="text-gray-600">
+                            <TableCell className="hidden md:table-cell text-xs sm:text-sm text-gray-600">
                               {sig.signedAt ? new Date(sig.signedAt).toLocaleDateString('ar-SA') : '-'}
                             </TableCell>
                             <TableCell>
@@ -1701,6 +1702,7 @@ export default function ResolutionsPage() {
                         ))}
                       </TableBody>
                     </Table>
+                    </div>
 
                     <div className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
                       <span className="font-medium">التوقيعات المكتملة</span>

@@ -355,27 +355,27 @@ export default function InventoryPage() {
           </div>
           
           <Card className="overflow-hidden border-none shadow-sm ring-1 ring-border/50 break-inside-avoid mb-6">
-            <CardContent className="p-0">
-              <Table>
+            <CardContent className="p-0 overflow-x-auto">
+              <Table className="min-w-[600px]">
                 <TableHeader className="bg-muted/30 print:bg-transparent">
                   <TableRow className="hover:bg-transparent">
-                    <TableHead className="text-right w-[50px] print:text-black font-bold">#</TableHead>
-                    <TableHead className="text-right w-[60px] print:text-black font-bold">الصورة</TableHead>
+                    <TableHead className="text-right w-[50px] print:text-black font-bold text-xs sm:text-sm">#</TableHead>
+                    <TableHead className="text-right w-[60px] print:text-black font-bold hidden sm:table-cell">الصورة</TableHead>
                     {isGlobalSearch && (
-                      <TableHead className="text-right w-[120px] print:text-black font-bold text-primary">الفرع</TableHead>
+                      <TableHead className="text-right w-[120px] print:text-black font-bold text-primary text-xs sm:text-sm">الفرع</TableHead>
                     )}
-                    <TableHead className="text-right w-[120px] print:text-black font-bold">الفئة</TableHead>
-                    <TableHead className="text-right print:text-black font-bold">البيان / اسم الأصل</TableHead>
-                    <TableHead className="text-right w-[80px] print:text-black font-bold">الكمية</TableHead>
+                    <TableHead className="text-right w-[120px] print:text-black font-bold text-xs sm:text-sm hidden md:table-cell">الفئة</TableHead>
+                    <TableHead className="text-right print:text-black font-bold text-xs sm:text-sm">البيان / اسم الأصل</TableHead>
+                    <TableHead className="text-right w-[80px] print:text-black font-bold text-xs sm:text-sm">الكمية</TableHead>
                     {showPrices && (
                       <>
-                        <TableHead className="text-right w-[100px] print:text-black font-bold">السعر</TableHead>
-                        <TableHead className="text-right w-[100px] print:text-black font-bold">الإجمالي</TableHead>
-                        <TableHead className="text-right w-[100px] print:text-black font-bold">الضريبة (15%)</TableHead>
-                        <TableHead className="text-right w-[110px] print:text-black font-bold">الصافي</TableHead>
+                        <TableHead className="text-right w-[100px] print:text-black font-bold text-xs sm:text-sm hidden lg:table-cell">السعر</TableHead>
+                        <TableHead className="text-right w-[100px] print:text-black font-bold text-xs sm:text-sm hidden lg:table-cell">الإجمالي</TableHead>
+                        <TableHead className="text-right w-[100px] print:text-black font-bold text-xs sm:text-sm hidden xl:table-cell">الضريبة (15%)</TableHead>
+                        <TableHead className="text-right w-[110px] print:text-black font-bold text-xs sm:text-sm">الصافي</TableHead>
                       </>
                     )}
-                    <TableHead className="text-right w-[100px] print:text-black font-bold">الحالة</TableHead>
+                    <TableHead className="text-right w-[100px] print:text-black font-bold text-xs sm:text-sm">الحالة</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -393,51 +393,51 @@ export default function InventoryPage() {
                         onClick={() => { setSelectedItem(item); setIsItemCardOpen(true); }}
                       >
                         <TableCell className="font-medium text-muted-foreground print:text-black font-mono text-xs">{formatNumber(globalIndex)}</TableCell>
-                        <TableCell className="p-1">
+                        <TableCell className="p-1 hidden sm:table-cell">
                           {item.imageUrl ? (
                             <img 
                               src={item.imageUrl} 
                               alt={item.name}
-                              className="w-12 h-12 object-cover rounded-md border border-border shadow-sm"
+                              className="w-10 h-10 sm:w-12 sm:h-12 object-cover rounded-md border border-border shadow-sm"
                               onError={(e) => { e.currentTarget.style.display = 'none'; }}
                             />
                           ) : (
-                            <div className="w-12 h-12 bg-muted/50 rounded-md flex items-center justify-center text-muted-foreground/50 text-xs">
+                            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-muted/50 rounded-md flex items-center justify-center text-muted-foreground/50 text-xs">
                               -
                             </div>
                           )}
                         </TableCell>
                         {isGlobalSearch && (
-                           <TableCell className="font-medium text-primary print:text-black text-sm">{item.branchName}</TableCell>
+                           <TableCell className="font-medium text-primary print:text-black text-xs sm:text-sm">{item.branchName}</TableCell>
                         )}
-                        <TableCell className="text-muted-foreground print:text-black text-sm">{item.category}</TableCell>
-                        <TableCell className="font-semibold text-foreground/90 print:text-black">
+                        <TableCell className="text-muted-foreground print:text-black text-xs sm:text-sm hidden md:table-cell">{item.category}</TableCell>
+                        <TableCell className="font-semibold text-foreground/90 print:text-black text-xs sm:text-sm">
                           {item.name}
-                          {item.lastCheck && <div className="text-xs text-muted-foreground print:hidden">آخر فحص: {item.lastCheck}</div>}
+                          {item.lastCheck && <div className="text-[10px] sm:text-xs text-muted-foreground print:hidden">آخر فحص: {item.lastCheck}</div>}
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className="font-bold min-w-[3rem] justify-center print:border-black print:text-black font-mono">
+                          <Badge variant="outline" className="font-bold min-w-[2rem] sm:min-w-[3rem] justify-center print:border-black print:text-black font-mono text-[10px] sm:text-xs">
                             {formatNumber(item.quantity)}
                           </Badge>
                         </TableCell>
                         {showPrices && (
                           <>
-                            <TableCell className="text-muted-foreground print:text-black font-mono text-xs">
+                            <TableCell className="text-muted-foreground print:text-black font-mono text-[10px] sm:text-xs hidden lg:table-cell">
                               {item.price ? formatCurrency(item.price) : "-"}
                             </TableCell>
-                            <TableCell className="text-foreground print:text-black font-mono text-xs">
+                            <TableCell className="text-foreground print:text-black font-mono text-[10px] sm:text-xs hidden lg:table-cell">
                               {item.price ? formatCurrency(total) : "-"}
                             </TableCell>
-                            <TableCell className="text-muted-foreground print:text-black font-mono text-xs">
+                            <TableCell className="text-muted-foreground print:text-black font-mono text-[10px] sm:text-xs hidden xl:table-cell">
                               {item.price ? formatCurrency(vat) : "-"}
                             </TableCell>
-                            <TableCell className="font-bold text-green-700 print:text-black font-mono text-xs">
+                            <TableCell className="font-bold text-green-700 print:text-black font-mono text-[10px] sm:text-xs">
                               {item.price ? formatCurrency(totalWithVat) : "-"}
                             </TableCell>
                           </>
                         )}
                         <TableCell className="print:text-black">
-                          <div className="print:hidden scale-90 origin-right">{getStatusBadge(item.status)}</div>
+                          <div className="print:hidden scale-75 sm:scale-90 origin-right">{getStatusBadge(item.status)}</div>
                           <div className="hidden print:block text-xs">{getStatusLabel(item.status)}</div>
                         </TableCell>
                       </TableRow>
@@ -475,24 +475,25 @@ export default function InventoryPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4 print:space-y-0" dir="rtl">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 print:hidden">
-          <div className="flex items-center gap-3 sm:gap-4">
+      <div className="p-3 sm:p-4 md:p-6 lg:p-10 max-w-6xl mx-auto space-y-4 print:space-y-0" dir="rtl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 print:hidden">
+          <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
             <Link href="/dashboard">
-              <Button variant="outline" size="sm" className="gap-2 h-11 sm:h-9" data-testid="button-back">
-                <ArrowRight className="h-4 w-4" />
-                لوحة الأصول
+              <Button variant="outline" size="sm" className="gap-1 sm:gap-2 h-8 sm:h-9 text-xs sm:text-sm" data-testid="button-back">
+                <ArrowRight className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden sm:inline">لوحة الأصول</span>
+                <span className="sm:hidden">رجوع</span>
               </Button>
             </Link>
             <div>
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground" data-testid="text-page-title">جرد الأصول والمعدات</h1>
-              <p className="text-muted-foreground mt-1 text-sm sm:text-base">إدارة ومتابعة أصول الفروع وتجهيزاتها</p>
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold tracking-tight text-foreground" data-testid="text-page-title">جرد الأصول والمعدات</h1>
+              <p className="text-muted-foreground mt-1 text-xs sm:text-sm">إدارة ومتابعة أصول الفروع وتجهيزاتها</p>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" className="gap-2 h-11 sm:h-9" onClick={handlePrint} data-testid="button-print">
-              <Printer className="w-4 h-4" />
-              <span>طباعة</span>
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+            <Button variant="outline" className="gap-1 sm:gap-2 h-8 sm:h-9 text-xs sm:text-sm" onClick={handlePrint} data-testid="button-print">
+              <Printer className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">طباعة</span>
             </Button>
             <ExportButtons
               data={exportData}

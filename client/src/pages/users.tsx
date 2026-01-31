@@ -554,26 +554,26 @@ export default function UsersPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
+      <div className="p-3 sm:p-4 md:p-6 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
         <SettingsBreadcrumb currentPage="إدارة المستخدمين" currentIcon={Users} />
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Link href="/settings">
-              <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" data-testid="btn-back">
+              <Button variant="ghost" size="icon" className="h-9 w-9 sm:h-8 sm:w-8" data-testid="btn-back">
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
             <div>
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground" data-testid="text-page-title">
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold tracking-tight text-foreground" data-testid="text-page-title">
                 إدارة المستخدمين
               </h1>
-              <p className="text-muted-foreground mt-1 text-sm sm:text-base">إضافة وإدارة صلاحيات المستخدمين</p>
+              <p className="text-muted-foreground mt-1 text-xs sm:text-sm">إضافة وإدارة صلاحيات المستخدمين</p>
             </div>
           </div>
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="h-11 sm:h-9" data-testid="button-add-user">
-                <Plus className="w-4 h-4 ml-2" />
+              <Button className="h-9 sm:h-9 text-xs sm:text-sm" data-testid="button-add-user">
+                <Plus className="w-3 h-3 sm:w-4 sm:h-4 ml-1 sm:ml-2" />
                 إضافة مستخدم
               </Button>
             </DialogTrigger>
@@ -583,7 +583,7 @@ export default function UsersPage() {
                 <DialogDescription>أدخل بيانات المستخدم الجديد</DialogDescription>
               </DialogHeader>
               <form onSubmit={handleAddUser} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="firstName">الاسم الأول</Label>
                     <Input
@@ -685,15 +685,15 @@ export default function UsersPage() {
             const count = users.filter((u) => u.role === role.value).length;
             return (
               <Card key={role.value}>
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <role.icon className="w-5 h-5" />
+                <CardHeader className="pb-2 p-3 sm:p-4 md:p-6 md:pb-2">
+                  <CardTitle className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm md:text-lg">
+                    <role.icon className="w-4 h-4 sm:w-5 sm:h-5" />
                     {role.label}
                   </CardTitle>
-                  <CardDescription>{role.description}</CardDescription>
+                  <CardDescription className="text-[10px] sm:text-xs md:text-sm hidden sm:block">{role.description}</CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold">{count}</p>
+                <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+                  <p className="text-lg sm:text-2xl md:text-3xl font-bold">{count}</p>
                 </CardContent>
               </Card>
             );
@@ -872,16 +872,16 @@ export default function UsersPage() {
                   </div>
                   
                   <div className="rounded-md border overflow-x-auto">
-                    <Table className="min-w-[700px]">
+                    <Table className="min-w-[600px]">
                       <TableHeader>
                         <TableRow className="bg-muted/50">
-                          <TableHead className="text-right font-semibold">المستخدم</TableHead>
-                          <TableHead className="text-right font-semibold">اسم المستخدم</TableHead>
-                          <TableHead className="text-right font-semibold">الفرع</TableHead>
-                          <TableHead className="text-right font-semibold">تاريخ التسجيل</TableHead>
-                          <TableHead className="text-right font-semibold">الصلاحية</TableHead>
-                          <TableHead className="text-center font-semibold">الحالة</TableHead>
-                          <TableHead className="text-right font-semibold">الإجراءات</TableHead>
+                          <TableHead className="text-right font-semibold text-xs sm:text-sm">المستخدم</TableHead>
+                          <TableHead className="text-right font-semibold text-xs sm:text-sm hidden md:table-cell">اسم المستخدم</TableHead>
+                          <TableHead className="text-right font-semibold text-xs sm:text-sm hidden lg:table-cell">الفرع</TableHead>
+                          <TableHead className="text-right font-semibold text-xs sm:text-sm hidden xl:table-cell">تاريخ التسجيل</TableHead>
+                          <TableHead className="text-right font-semibold text-xs sm:text-sm">الصلاحية</TableHead>
+                          <TableHead className="text-center font-semibold text-xs sm:text-sm">الحالة</TableHead>
+                          <TableHead className="text-right font-semibold text-xs sm:text-sm">الإجراءات</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -895,29 +895,29 @@ export default function UsersPage() {
                           paginatedUsers.map((user) => (
                       <TableRow key={user.id} data-testid={`row-user-${user.id}`}>
                         <TableCell>
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-8 w-8">
+                          <div className="flex items-center gap-2 sm:gap-3">
+                            <Avatar className="h-6 w-6 sm:h-8 sm:w-8">
                               <AvatarImage src={user.profileImageUrl || undefined} style={{ objectFit: 'cover' }} />
-                              <AvatarFallback>{user.firstName?.[0] || user.phone?.[0] || 'U'}</AvatarFallback>
+                              <AvatarFallback className="text-xs">{user.firstName?.[0] || user.phone?.[0] || 'U'}</AvatarFallback>
                             </Avatar>
                             <div>
-                              <span className="font-medium">
+                              <span className="font-medium text-xs sm:text-sm">
                                 {user.firstName || user.lastName 
                                   ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
                                   : 'مستخدم'
                                 }
                               </span>
                               {user.id === currentUser?.id && (
-                                <Badge variant="outline" className="mr-2 text-xs">أنت</Badge>
+                                <Badge variant="outline" className="mr-2 text-[10px] sm:text-xs">أنت</Badge>
                               )}
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell className="text-muted-foreground font-mono" dir="ltr">{user.username || "-"}</TableCell>
-                        <TableCell className="text-muted-foreground">
+                        <TableCell className="text-muted-foreground font-mono text-xs hidden md:table-cell" dir="ltr">{user.username || "-"}</TableCell>
+                        <TableCell className="text-muted-foreground text-xs sm:text-sm hidden lg:table-cell">
                           {user.branchId === "all_branches" ? "🌐 جميع الفروع" : user.branchId ? branches.find(b => b.id === user.branchId)?.name || user.branchId : "-"}
                         </TableCell>
-                        <TableCell className="text-muted-foreground">{formatDate(user.createdAt)}</TableCell>
+                        <TableCell className="text-muted-foreground text-xs hidden xl:table-cell">{formatDate(user.createdAt)}</TableCell>
                         <TableCell>
                           <Select
                             value={user.role}
@@ -957,48 +957,48 @@ export default function UsersPage() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-0.5 sm:gap-1">
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="text-amber-600 hover:text-amber-700 h-11 w-11 sm:h-8 sm:w-8"
+                              className="text-amber-600 hover:text-amber-700 h-7 w-7 sm:h-8 sm:w-8"
                               onClick={() => openEditDialog(user)}
                               data-testid={`button-edit-${user.id}`}
                               title="تعديل البيانات"
                             >
-                              <Pencil className="w-4 h-4" />
+                              <Pencil className="w-3 h-3 sm:w-4 sm:h-4" />
                             </Button>
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="text-purple-600 hover:text-purple-700 h-11 w-11 sm:h-8 sm:w-8"
+                              className="text-purple-600 hover:text-purple-700 h-7 w-7 sm:h-8 sm:w-8 hidden sm:flex"
                               onClick={() => setResetPasswordUser(user)}
                               disabled={user.id === currentUser?.id}
                               data-testid={`button-reset-password-${user.id}`}
                               title="إعادة تعيين كلمة المرور"
                             >
-                              <KeyRound className="w-4 h-4" />
+                              <KeyRound className="w-3 h-3 sm:w-4 sm:h-4" />
                             </Button>
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="text-blue-600 hover:text-blue-700 h-11 w-11 sm:h-8 sm:w-8"
+                              className="text-blue-600 hover:text-blue-700 h-7 w-7 sm:h-8 sm:w-8 hidden md:flex"
                               onClick={() => openPermissionsDialog(user)}
                               data-testid={`button-permissions-${user.id}`}
                               title="إدارة الصلاحيات"
                             >
-                              <Settings2 className="w-4 h-4" />
+                              <Settings2 className="w-3 h-3 sm:w-4 sm:h-4" />
                             </Button>
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="text-destructive hover:text-destructive h-11 w-11 sm:h-8 sm:w-8"
+                              className="text-destructive hover:text-destructive h-7 w-7 sm:h-8 sm:w-8"
                               onClick={() => setDeleteConfirmUser(user)}
                               disabled={user.id === currentUser?.id || deleteUserMutation.isPending}
                               data-testid={`button-delete-${user.id}`}
                               title="حذف المستخدم"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
                             </Button>
                           </div>
                         </TableCell>
@@ -1251,7 +1251,7 @@ export default function UsersPage() {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleEditUser} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div className="space-y-2">
                 <Label htmlFor="editFirstName">الاسم الأول</Label>
                 <Input

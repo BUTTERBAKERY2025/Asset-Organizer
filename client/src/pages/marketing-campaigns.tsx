@@ -582,15 +582,15 @@ export default function MarketingCampaignsPage() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <Table>
+                <Table className="min-w-[600px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead>اسم الحملة</TableHead>
-                      <TableHead>الهدف</TableHead>
-                      <TableHead>الموسم</TableHead>
+                      <TableHead className="hidden sm:table-cell">الهدف</TableHead>
+                      <TableHead className="hidden md:table-cell">الموسم</TableHead>
                       <TableHead>الحالة</TableHead>
                       <TableHead>الميزانية</TableHead>
-                      <TableHead>الفترة</TableHead>
+                      <TableHead className="hidden sm:table-cell">الفترة</TableHead>
                       {canEdit && <TableHead>إجراءات</TableHead>}
                     </TableRow>
                   </TableHeader>
@@ -608,10 +608,10 @@ export default function MarketingCampaignsPage() {
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden sm:table-cell">
                           {CAMPAIGN_OBJECTIVE_LABELS[campaign.objective as keyof typeof CAMPAIGN_OBJECTIVE_LABELS] || campaign.objective}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden md:table-cell">
                           {campaign.season
                             ? CAMPAIGN_SEASON_LABELS[campaign.season as keyof typeof CAMPAIGN_SEASON_LABELS] || campaign.season
                             : "-"}
@@ -623,10 +623,10 @@ export default function MarketingCampaignsPage() {
                             <span>{formatCurrency(campaign.totalBudget)}</span>
                           </div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden sm:table-cell">
                           <div className="flex items-center gap-1">
                             <Calendar className="w-3 h-3 text-muted-foreground" />
-                            <span className="text-sm">{formatDateRange(campaign.startDate, campaign.endDate)}</span>
+                            <span className="text-xs sm:text-sm">{formatDateRange(campaign.startDate, campaign.endDate)}</span>
                           </div>
                         </TableCell>
                         {canEdit && (

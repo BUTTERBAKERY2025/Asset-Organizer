@@ -98,22 +98,22 @@ export default function DividendsPage() {
 
   return (
     <Layout>
-      <div className="max-w-6xl mx-auto p-4 md:p-8 lg:p-10 space-y-4" dir="rtl">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
+      <div className="max-w-6xl mx-auto p-3 sm:p-4 md:p-6 space-y-4" dir="rtl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
             <Link href="/governance">
               <Button variant="ghost" size="icon" className="h-8 w-8">
                 <ChevronLeft className="h-4 w-4" />
               </Button>
             </Link>
-            <div className="p-3 bg-gradient-to-br from-orange-500 to-amber-600 rounded-xl">
-              <Banknote className="w-7 h-7 text-white" />
+            <div className="p-2 sm:p-3 bg-gradient-to-br from-orange-500 to-amber-600 rounded-xl">
+              <Banknote className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-orange-800" data-testid="page-title">
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-orange-800" data-testid="page-title">
                 توزيعات الأرباح
               </h1>
-              <p className="text-gray-600">إدارة توزيعات أرباح المساهمين</p>
+              <p className="text-xs sm:text-sm text-gray-600">إدارة توزيعات أرباح المساهمين</p>
             </div>
           </div>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -184,50 +184,50 @@ export default function DividendsPage() {
           </Dialog>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <Card className="bg-gradient-to-br from-orange-50 to-amber-50 border-orange-200">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-orange-600">إجمالي التوزيعات</p>
-                  <p className="text-2xl font-bold text-orange-800">{distributions.length}</p>
+                  <p className="text-xs sm:text-sm text-orange-600">إجمالي التوزيعات</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-orange-800">{distributions.length}</p>
                 </div>
-                <Banknote className="h-8 w-8 text-orange-500" />
+                <Banknote className="h-6 w-6 sm:h-8 sm:w-8 text-orange-500" />
               </div>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-green-600">تم توزيعها</p>
-                  <p className="text-2xl font-bold text-green-800">{totalDistributed.toLocaleString()} ر.س</p>
+                  <p className="text-xs sm:text-sm text-green-600">تم توزيعها</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-green-800">{totalDistributed.toLocaleString()} <span className="text-xs sm:text-sm">ر.س</span></p>
                 </div>
-                <CheckCircle className="h-8 w-8 text-green-500" />
+                <CheckCircle className="h-6 w-6 sm:h-8 sm:w-8 text-green-500" />
               </div>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-blue-600">إجمالي معلن</p>
-                  <p className="text-2xl font-bold text-blue-800">{totalAnnounced.toLocaleString()} ر.س</p>
+                  <p className="text-xs sm:text-sm text-blue-600">إجمالي معلن</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-blue-800">{totalAnnounced.toLocaleString()} <span className="text-xs sm:text-sm">ر.س</span></p>
                 </div>
-                <TrendingUp className="h-8 w-8 text-blue-500" />
+                <TrendingUp className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500" />
               </div>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-yellow-50 to-amber-50 border-yellow-200">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-yellow-600">جاري التوزيع</p>
-                  <p className="text-2xl font-bold text-yellow-800">
+                  <p className="text-xs sm:text-sm text-yellow-600">جاري التوزيع</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-yellow-800">
                     {distributions.filter(d => d.status === 'in_progress').length}
                   </p>
                 </div>
-                <Clock className="h-8 w-8 text-yellow-500" />
+                <Clock className="h-6 w-6 sm:h-8 sm:w-8 text-yellow-500" />
               </div>
             </CardContent>
           </Card>
@@ -256,14 +256,14 @@ export default function DividendsPage() {
                   <CardContent className="p-4">
                     <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                       <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2 flex-wrap">
-                          <Badge variant="outline" className="font-mono text-xs">
+                        <div className="flex items-center gap-1 sm:gap-2 mb-2 flex-wrap">
+                          <Badge variant="outline" className="font-mono text-[10px] sm:text-xs">
                             {distribution.distributionNumber}
                           </Badge>
-                          <Badge className={distributionStatuses.find(s => s.value === distribution.status)?.color}>
+                          <Badge className={`text-[10px] sm:text-xs ${distributionStatuses.find(s => s.value === distribution.status)?.color}`}>
                             {distributionStatuses.find(s => s.value === distribution.status)?.label}
                           </Badge>
-                          <Badge variant="outline">
+                          <Badge variant="outline" className="text-[10px] sm:text-xs">
                             {distributionTypes.find(t => t.value === distribution.distributionType)?.label}
                           </Badge>
                         </div>
@@ -273,34 +273,34 @@ export default function DividendsPage() {
                         {distribution.description && (
                           <p className="text-sm text-gray-600 mb-3">{distribution.description}</p>
                         )}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                          <div className="bg-gray-50 p-3 rounded-lg">
-                            <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">
-                              <DollarSign className="h-4 w-4" />
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 mb-4">
+                          <div className="bg-gray-50 p-2 sm:p-3 rounded-lg">
+                            <div className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm text-gray-600 mb-1">
+                              <DollarSign className="h-3 w-3 sm:h-4 sm:w-4" />
                               <span>إجمالي المبلغ</span>
                             </div>
-                            <p className="font-semibold">{Number(distribution.totalAmount).toLocaleString()} ر.س</p>
+                            <p className="font-semibold text-sm sm:text-base">{Number(distribution.totalAmount).toLocaleString()} ر.س</p>
                           </div>
-                          <div className="bg-gray-50 p-3 rounded-lg">
-                            <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">
-                              <CreditCard className="h-4 w-4" />
+                          <div className="bg-gray-50 p-2 sm:p-3 rounded-lg">
+                            <div className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm text-gray-600 mb-1">
+                              <CreditCard className="h-3 w-3 sm:h-4 sm:w-4" />
                               <span>لكل سهم</span>
                             </div>
-                            <p className="font-semibold">{Number(distribution.amountPerShare).toFixed(4)} ر.س</p>
+                            <p className="font-semibold text-sm sm:text-base">{Number(distribution.amountPerShare).toFixed(4)} ر.س</p>
                           </div>
-                          <div className="bg-gray-50 p-3 rounded-lg">
-                            <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">
-                              <Users className="h-4 w-4" />
+                          <div className="bg-gray-50 p-2 sm:p-3 rounded-lg">
+                            <div className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm text-gray-600 mb-1">
+                              <Users className="h-3 w-3 sm:h-4 sm:w-4" />
                               <span>الأسهم المستحقة</span>
                             </div>
-                            <p className="font-semibold">{distribution.eligibleShares?.toLocaleString()}</p>
+                            <p className="font-semibold text-sm sm:text-base">{distribution.eligibleShares?.toLocaleString()}</p>
                           </div>
-                          <div className="bg-gray-50 p-3 rounded-lg">
-                            <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">
-                              <Percent className="h-4 w-4" />
+                          <div className="bg-gray-50 p-2 sm:p-3 rounded-lg">
+                            <div className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm text-gray-600 mb-1">
+                              <Percent className="h-3 w-3 sm:h-4 sm:w-4" />
                               <span>نسبة الضريبة</span>
                             </div>
-                            <p className="font-semibold">{Number(distribution.withholdingTaxRate)}%</p>
+                            <p className="font-semibold text-sm sm:text-base">{Number(distribution.withholdingTaxRate)}%</p>
                           </div>
                         </div>
                         <div className="flex flex-wrap gap-4 text-sm text-gray-600 mb-3">

@@ -1249,17 +1249,18 @@ export default function MarketingInfluencersPage() {
         ) : (
           <Card>
             <CardContent className="p-0">
-              <Table>
+              <div className="overflow-x-auto">
+              <Table className="min-w-[800px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-right">المؤثر</TableHead>
                     <TableHead className="text-right">التخصص</TableHead>
-                    <TableHead className="text-right">المنصات</TableHead>
+                    <TableHead className="text-right hidden md:table-cell">المنصات</TableHead>
                     <TableHead className="text-right">المتابعين</TableHead>
-                    <TableHead className="text-right">التفاعل</TableHead>
-                    <TableHead className="text-right">التقييم</TableHead>
-                    <TableHead className="text-right">التواصل</TableHead>
-                    <TableHead className="text-right">البنك</TableHead>
+                    <TableHead className="text-right hidden lg:table-cell">التفاعل</TableHead>
+                    <TableHead className="text-right hidden lg:table-cell">التقييم</TableHead>
+                    <TableHead className="text-right hidden md:table-cell">التواصل</TableHead>
+                    <TableHead className="text-right hidden lg:table-cell">البنك</TableHead>
                     <TableHead className="text-right">الحالة</TableHead>
                     <TableHead className="text-right">الإجراءات</TableHead>
                   </TableRow>
@@ -1290,21 +1291,21 @@ export default function MarketingInfluencersPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline">
+                        <Badge variant="outline" className="text-[10px] sm:text-xs">
                           {INFLUENCER_SPECIALTY_LABELS[influencer.specialty as keyof typeof INFLUENCER_SPECIALTY_LABELS] ||
                             influencer.specialty}
                         </Badge>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="hidden md:table-cell">
                         {influencer.platforms && influencer.platforms.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
                             {influencer.platforms.slice(0, 2).map((platform) => (
-                              <Badge key={platform} variant="secondary" className="text-xs">
+                              <Badge key={platform} variant="secondary" className="text-[10px] sm:text-xs">
                                 {INFLUENCER_PLATFORM_LABELS[platform as keyof typeof INFLUENCER_PLATFORM_LABELS] || platform}
                               </Badge>
                             ))}
                             {influencer.platforms.length > 2 && (
-                              <Badge variant="secondary" className="text-xs">+{influencer.platforms.length - 2}</Badge>
+                              <Badge variant="secondary" className="text-[10px] sm:text-xs">+{influencer.platforms.length - 2}</Badge>
                             )}
                           </div>
                         ) : (
@@ -1327,20 +1328,20 @@ export default function MarketingInfluencersPage() {
                           })()}
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="hidden lg:table-cell">
                         <div className="flex items-center gap-1">
                           <Activity className="w-4 h-4 text-muted-foreground" />
                           <span>{influencer.engagementRate ? `${influencer.engagementRate}%` : "-"}</span>
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="hidden lg:table-cell">
                         <div className="flex items-center gap-1">
                           {renderStars(influencer.rating)}
-                          {influencer.rating && <span className="text-sm text-muted-foreground">({influencer.rating.toFixed(1)})</span>}
+                          {influencer.rating && <span className="text-xs sm:text-sm text-muted-foreground">({influencer.rating.toFixed(1)})</span>}
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <div className="space-y-1 text-sm text-muted-foreground">
+                      <TableCell className="hidden md:table-cell">
+                        <div className="space-y-1 text-xs sm:text-sm text-muted-foreground">
                           {influencer.email && (
                             <div className="flex items-center gap-1">
                               <Mail className="w-3 h-3" />
@@ -1356,7 +1357,7 @@ export default function MarketingInfluencersPage() {
                           {!influencer.email && !influencer.phone && <span>-</span>}
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="hidden lg:table-cell">
                         {influencer.bankAccountNumber && influencer.bankName ? (
                           <div className="flex items-center gap-1">
                             <CheckCircle className="w-4 h-4 text-green-500" />
@@ -1370,7 +1371,7 @@ export default function MarketingInfluencersPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={influencer.isActive ? "default" : "secondary"}>
+                        <Badge variant={influencer.isActive ? "default" : "secondary"} className="text-[10px] sm:text-xs">
                           {influencer.isActive ? "نشط" : "غير نشط"}
                         </Badge>
                       </TableCell>
@@ -1418,6 +1419,7 @@ export default function MarketingInfluencersPage() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             </CardContent>
             
             {/* Pagination Controls */}

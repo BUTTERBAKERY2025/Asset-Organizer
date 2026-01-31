@@ -2501,8 +2501,8 @@ export default function EmployeeReportsDashboardPage() {
               <ChevronLeft className="w-5 h-5" />
             </Button>
             <div>
-              <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{isRTL ? "التقارير الشاملة" : "Comprehensive Reports"}</h1>
-              <p className="text-gray-500">{isRTL ? "تقارير تحليلية شاملة لموظفي الفروع والحضور والرواتب" : "Comprehensive analytics reports for branch employees, attendance, and salaries"}</p>
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">{isRTL ? "التقارير الشاملة" : "Comprehensive Reports"}</h1>
+              <p className="text-xs sm:text-sm text-gray-500">{isRTL ? "تقارير تحليلية شاملة لموظفي الفروع والحضور والرواتب" : "Comprehensive analytics reports for branch employees, attendance, and salaries"}</p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -2587,81 +2587,81 @@ export default function EmployeeReportsDashboardPage() {
           </CardContent>
         </Card>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3 sm:gap-4">
           <Card>
-            <CardContent className="pt-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <Users className="w-5 h-5 text-blue-600" />
+            <CardContent className="p-3 sm:p-4 pt-3 sm:pt-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 bg-blue-100 rounded-lg">
+                  <Users className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{formatNumber(overviewStats.totalEmployees)}</p>
-                  <p className="text-xs text-gray-500">{isRTL ? "إجمالي الموظفين" : "Total Employees"}</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold">{formatNumber(overviewStats.totalEmployees)}</p>
+                  <p className="text-[10px] sm:text-xs text-gray-500">{isRTL ? "إجمالي الموظفين" : "Total Employees"}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="pt-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <CheckCircle className="w-5 h-5 text-green-600" />
+            <CardContent className="p-3 sm:p-4 pt-3 sm:pt-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 bg-green-100 rounded-lg">
+                  <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{overviewStats.attendanceRate}%</p>
-                  <p className="text-xs text-gray-500">{isRTL ? "نسبة الحضور" : "Attendance Rate"}</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold">{overviewStats.attendanceRate}%</p>
+                  <p className="text-[10px] sm:text-xs text-gray-500">{isRTL ? "نسبة الحضور" : "Attendance Rate"}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="pt-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-red-100 rounded-lg">
-                  <XCircle className="w-5 h-5 text-red-600" />
+            <CardContent className="p-3 sm:p-4 pt-3 sm:pt-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 bg-red-100 rounded-lg">
+                  <XCircle className="w-4 h-4 sm:w-5 sm:h-5 text-red-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{formatNumber(overviewStats.absentCount)}</p>
-                  <p className="text-xs text-gray-500">{isRTL ? "أيام الغياب" : "Absent Days"}</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold">{formatNumber(overviewStats.absentCount)}</p>
+                  <p className="text-[10px] sm:text-xs text-gray-500">{isRTL ? "أيام الغياب" : "Absent Days"}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="pt-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-amber-100 rounded-lg">
-                  <DollarSign className="w-5 h-5 text-amber-600" />
+            <CardContent className="p-3 sm:p-4 pt-3 sm:pt-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 bg-amber-100 rounded-lg">
+                  <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{formatCurrency(overviewStats.totalSalaries, isRTL)}</p>
-                  <p className="text-xs text-gray-500">{isRTL ? "إجمالي الرواتب" : "Total Salaries"}</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold">{formatCurrency(overviewStats.totalSalaries, isRTL)}</p>
+                  <p className="text-[10px] sm:text-xs text-gray-500">{isRTL ? "إجمالي الرواتب" : "Total Salaries"}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="pt-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-teal-100 rounded-lg">
-                  <Building2 className="w-5 h-5 text-teal-600" />
+            <CardContent className="p-3 sm:p-4 pt-3 sm:pt-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 bg-teal-100 rounded-lg">
+                  <Building2 className="w-4 h-4 sm:w-5 sm:h-5 text-teal-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{formatNumber(overviewStats.saudiEmployees)}</p>
-                  <p className="text-xs text-gray-500">{isRTL ? "الموظفين السعوديين" : "Saudi Employees"}</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold">{formatNumber(overviewStats.saudiEmployees)}</p>
+                  <p className="text-[10px] sm:text-xs text-gray-500">{isRTL ? "الموظفين السعوديين" : "Saudi Employees"}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="pt-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <Wallet className="w-5 h-5 text-purple-600" />
+            <CardContent className="p-3 sm:p-4 pt-3 sm:pt-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 bg-purple-100 rounded-lg">
+                  <Wallet className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{formatCurrency(overviewStats.totalInsurance, isRTL)}</p>
-                  <p className="text-xs text-gray-500">{isRTL ? "التأمينات الاجتماعية" : "Social Insurance"}</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold">{formatCurrency(overviewStats.totalInsurance, isRTL)}</p>
+                  <p className="text-[10px] sm:text-xs text-gray-500">{isRTL ? "التأمينات الاجتماعية" : "Social Insurance"}</p>
                 </div>
               </div>
             </CardContent>
@@ -3194,21 +3194,21 @@ export default function EmployeeReportsDashboardPage() {
                           <p className="text-xs text-blue-600">{isRTL ? "الإجمالي" : "Total"}</p>
                         </div>
                       </div>
-                      <div className="max-h-48 overflow-y-auto">
-                        <Table>
+                      <div className="max-h-48 overflow-y-auto overflow-x-auto -mx-2 sm:mx-0">
+                        <Table className="min-w-[400px]">
                           <TableHeader>
-                            <TableRow>
+                            <TableRow className="text-[10px] sm:text-xs">
                               <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "الموظف" : "Employee"}</TableHead>
-                              <TableHead className="text-center">{isRTL ? "الراتب الأساسي" : "Base Salary"}</TableHead>
+                              <TableHead className="hidden md:table-cell text-center">{isRTL ? "الراتب الأساسي" : "Base Salary"}</TableHead>
                               <TableHead className="text-center">{isRTL ? "حصة الموظف" : "Employee Share"}</TableHead>
                               <TableHead className="text-center">{isRTL ? "حصة صاحب العمل" : "Employer Share"}</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {complianceMetrics.gosiReport.slice(0, 10).map(row => (
-                              <TableRow key={row.emp.id}>
+                              <TableRow key={row.emp.id} className="text-xs sm:text-sm">
                                 <TableCell className={isRTL ? "text-right" : "text-left"}>{row.emp.employeeName}</TableCell>
-                                <TableCell className="text-center">{formatCurrency(row.baseSalary, isRTL)}</TableCell>
+                                <TableCell className="hidden md:table-cell text-center">{formatCurrency(row.baseSalary, isRTL)}</TableCell>
                                 <TableCell className="text-center">{formatCurrency(row.employeeContribution, isRTL)}</TableCell>
                                 <TableCell className="text-center">{formatCurrency(row.employerContribution, isRTL)}</TableCell>
                               </TableRow>
@@ -3273,25 +3273,25 @@ export default function EmployeeReportsDashboardPage() {
                 </CardHeader>
                 <CardContent>
                   {/* ملخص التكاليف */}
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
-                    <div className="text-center p-3 bg-orange-50 rounded-lg">
-                      <p className="text-2xl font-bold text-orange-600">{formatNumber(complianceMetrics.totalNonSaudiCount)}</p>
-                      <p className="text-xs text-gray-600">{isRTL ? "غير سعودي" : "Non-Saudi"}</p>
+                  <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-3 mb-4 sm:mb-6">
+                    <div className="text-center p-2 sm:p-3 bg-orange-50 rounded-lg">
+                      <p className="text-lg sm:text-xl md:text-2xl font-bold text-orange-600">{formatNumber(complianceMetrics.totalNonSaudiCount)}</p>
+                      <p className="text-[10px] sm:text-xs text-gray-600">{isRTL ? "غير سعودي" : "Non-Saudi"}</p>
                     </div>
-                    <div className="text-center p-3 bg-blue-50 rounded-lg">
-                      <p className="text-xl font-bold text-blue-600">{formatCurrency(complianceMetrics.totalNonSaudiInsurance, isRTL)}</p>
-                      <p className="text-xs text-gray-600">{isRTL ? "تأمين 2%" : "Insurance 2%"}</p>
+                    <div className="text-center p-2 sm:p-3 bg-blue-50 rounded-lg">
+                      <p className="text-base sm:text-lg md:text-xl font-bold text-blue-600">{formatCurrency(complianceMetrics.totalNonSaudiInsurance, isRTL)}</p>
+                      <p className="text-[10px] sm:text-xs text-gray-600">{isRTL ? "تأمين 2%" : "Insurance 2%"}</p>
                     </div>
-                    <div className="text-center p-3 bg-purple-50 rounded-lg">
-                      <p className="text-xl font-bold text-purple-600">{formatCurrency(complianceMetrics.totalNonSaudiWorkPermit, isRTL)}</p>
-                      <p className="text-xs text-gray-600">{isRTL ? "رخصة العمل" : "Work Permit"}</p>
+                    <div className="text-center p-2 sm:p-3 bg-purple-50 rounded-lg">
+                      <p className="text-base sm:text-lg md:text-xl font-bold text-purple-600">{formatCurrency(complianceMetrics.totalNonSaudiWorkPermit, isRTL)}</p>
+                      <p className="text-[10px] sm:text-xs text-gray-600">{isRTL ? "رخصة العمل" : "Work Permit"}</p>
                     </div>
-                    <div className="text-center p-3 bg-teal-50 rounded-lg">
-                      <p className="text-xl font-bold text-teal-600">{formatCurrency(complianceMetrics.totalNonSaudiIqama, isRTL)}</p>
-                      <p className="text-xs text-gray-600">{isRTL ? "رسوم الإقامة" : "Residency Fees"}</p>
+                    <div className="text-center p-2 sm:p-3 bg-teal-50 rounded-lg">
+                      <p className="text-base sm:text-lg md:text-xl font-bold text-teal-600">{formatCurrency(complianceMetrics.totalNonSaudiIqama, isRTL)}</p>
+                      <p className="text-[10px] sm:text-xs text-gray-600">{isRTL ? "رسوم الإقامة" : "Residency Fees"}</p>
                     </div>
-                    <div className="text-center p-3 bg-red-50 rounded-lg">
-                      <p className="text-xl font-bold text-red-600">{formatCurrency(complianceMetrics.totalNonSaudiMonthlyCost, isRTL)}</p>
+                    <div className="text-center p-2 sm:p-3 bg-red-50 rounded-lg col-span-2 lg:col-span-1">
+                      <p className="text-base sm:text-lg md:text-xl font-bold text-red-600">{formatCurrency(complianceMetrics.totalNonSaudiMonthlyCost, isRTL)}</p>
                       <p className="text-xs text-gray-600">{isRTL ? "إجمالي شهري" : "Monthly Total"}</p>
                     </div>
                   </div>

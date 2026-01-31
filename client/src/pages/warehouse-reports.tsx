@@ -333,23 +333,23 @@ export default function WarehouseReportsPage() {
 
   return (
     <Layout>
-      <div className="p-6 max-w-6xl mx-auto space-y-6" dir={isRTL ? "rtl" : "ltr"}>
-        <div className="flex items-center justify-between">
+      <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-4 sm:space-y-6" dir={isRTL ? "rtl" : "ltr"}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-indigo-500 flex items-center justify-center">
-              <BarChart3 className="w-5 h-5 text-white" />
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-indigo-500 flex items-center justify-center">
+              <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-foreground">
                 {isRTL ? "تقارير المخازن" : "Warehouse Reports"}
               </h1>
-              <p className="text-muted-foreground text-sm">
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 {isRTL ? "تقارير شاملة عن المخزون والطلبات والتحويلات" : "Comprehensive reports on inventory, requests and transfers"}
               </p>
             </div>
           </div>
           <Link href="/warehouse-dashboard">
-            <Button variant="outline" size="sm" className="gap-2" data-testid="btn-back-dashboard">
+            <Button variant="outline" size="sm" className="gap-2 h-11 sm:h-9 w-full sm:w-auto" data-testid="btn-back-dashboard">
               {isRTL ? "العودة للوحة التحكم" : "Back to Dashboard"}
               <ArrowRight className="h-4 w-4" />
             </Button>
@@ -357,17 +357,16 @@ export default function WarehouseReportsPage() {
         </div>
 
         <Card>
-          <CardHeader>
-            <CardTitle>{isRTL ? "فلاتر التقرير" : "Report Filters"}</CardTitle>
+          <CardHeader className="p-3 sm:p-4 md:p-6">
+            <CardTitle className="text-base sm:text-lg">{isRTL ? "فلاتر التقرير" : "Report Filters"}</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
               <div className="space-y-2">
-                <Label>{isRTL ? "الفرع" : "Branch"}</Label>
+                <Label className="text-xs sm:text-sm">{isRTL ? "الفرع" : "Branch"}</Label>
                 <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                  <SelectTrigger data-testid="select-branch">
+                  <SelectTrigger className="h-11 sm:h-10" data-testid="select-branch">
                     <SelectValue placeholder={isRTL ? "جميع الفروع" : "All Branches"} />
-                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">{isRTL ? "جميع الفروع" : "All Branches"}</SelectItem>
                     {branches?.map(branch => (
@@ -377,20 +376,22 @@ export default function WarehouseReportsPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>{isRTL ? "من تاريخ" : "From Date"}</Label>
+                <Label className="text-xs sm:text-sm">{isRTL ? "من تاريخ" : "From Date"}</Label>
                 <Input
                   type="date"
                   value={dateFrom}
                   onChange={(e) => setDateFrom(e.target.value)}
+                  className="h-11 sm:h-10"
                   data-testid="input-date-from"
                 />
               </div>
               <div className="space-y-2">
-                <Label>{isRTL ? "إلى تاريخ" : "To Date"}</Label>
+                <Label className="text-xs sm:text-sm">{isRTL ? "إلى تاريخ" : "To Date"}</Label>
                 <Input
                   type="date"
                   value={dateTo}
                   onChange={(e) => setDateTo(e.target.value)}
+                  className="h-11 sm:h-10"
                   data-testid="input-date-to"
                 />
               </div>
@@ -398,42 +399,42 @@ export default function WarehouseReportsPage() {
           </CardContent>
         </Card>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4">
           <Card data-testid="stat-transfers-total">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/20">
-                  <Truck className="h-5 w-5 text-green-500" />
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 rounded-lg bg-green-100 dark:bg-green-900/20">
+                  <Truck className="h-4 w-4 sm:h-5 sm:w-5 text-green-500" />
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">{isRTL ? "إجمالي التحويلات" : "Total Transfers"}</p>
-                  <p className="text-2xl font-bold">{transferStats.total}</p>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground">{isRTL ? "إجمالي التحويلات" : "Total Transfers"}</p>
+                  <p className="text-xl sm:text-2xl font-bold">{transferStats.total}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
           <Card data-testid="stat-delivered">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-cyan-100 dark:bg-cyan-900/20">
-                  <CheckCircle className="h-5 w-5 text-cyan-500" />
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 rounded-lg bg-cyan-100 dark:bg-cyan-900/20">
+                  <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-cyan-500" />
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">{isRTL ? "تحويلات مستلمة" : "Delivered"}</p>
-                  <p className="text-2xl font-bold">{transferStats.delivered}</p>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground">{isRTL ? "تحويلات مستلمة" : "Delivered"}</p>
+                  <p className="text-xl sm:text-2xl font-bold">{transferStats.delivered}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
           <Card data-testid="stat-low-stock">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/20">
-                  <AlertTriangle className="h-5 w-5 text-red-500" />
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="p-1.5 sm:p-2 rounded-lg bg-red-100 dark:bg-red-900/20">
+                  <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 text-red-500" />
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">{isRTL ? "مواد منخفضة" : "Low Stock"}</p>
-                  <p className="text-2xl font-bold">{lowStockItems.length}</p>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground">{isRTL ? "مواد منخفضة" : "Low Stock"}</p>
+                  <p className="text-xl sm:text-2xl font-bold">{lowStockItems.length}</p>
                 </div>
               </div>
             </CardContent>
@@ -441,7 +442,7 @@ export default function WarehouseReportsPage() {
         </div>
 
         <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList className="flex flex-wrap gap-1 h-auto p-1">
+          <TabsList className="flex flex-wrap gap-1 h-auto p-1 overflow-x-auto">
             <TabsTrigger value="overview" data-testid="tab-overview" className="text-xs md:text-sm">
               {isRTL ? "نظرة عامة" : "Overview"}
             </TabsTrigger>

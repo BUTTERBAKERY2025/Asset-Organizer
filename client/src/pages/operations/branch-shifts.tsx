@@ -611,30 +611,30 @@ export default function BranchShiftsPage() {
 
   return (
     <Layout>
-      <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+      <div className="max-w-6xl mx-auto p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
             <Link href="/operations">
-              <Button variant="outline" size="sm" className="gap-2">
+              <Button variant="outline" size="sm" className="gap-2 h-10 sm:h-9 text-xs sm:text-sm">
                 <ChevronLeft className="h-4 w-4" />
-                لوحة التشغيل
+                <span className="hidden sm:inline">لوحة التشغيل</span>
               </Button>
             </Link>
             <div>
-              <h1 className="text-2xl font-bold">نظام فتح وإغلاق الفروع</h1>
-              <p className="text-gray-500">قوائم التحقق اليومية مع التوثيق</p>
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold">نظام فتح وإغلاق الفروع</h1>
+              <p className="text-xs sm:text-sm text-gray-500">قوائم التحقق اليومية مع التوثيق</p>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 w-full sm:w-auto">
             <Link href="/shift-reports">
-              <Button variant="default" className="gap-2 bg-amber-600 hover:bg-amber-700" data-testid="btn-reports">
+              <Button variant="default" className="gap-2 bg-amber-600 hover:bg-amber-700 h-10 sm:h-9 text-xs sm:text-sm" data-testid="btn-reports">
                 <ClipboardList className="h-4 w-4" />
-                التقارير
+                <span className="hidden sm:inline">التقارير</span>
               </Button>
             </Link>
-            <Button variant="outline" className="gap-2" onClick={() => setShowHistory(true)} data-testid="btn-history">
+            <Button variant="outline" className="gap-2 h-10 sm:h-9 text-xs sm:text-sm" onClick={() => setShowHistory(true)} data-testid="btn-history">
               <History className="h-4 w-4" />
-              السجل
+              <span className="hidden sm:inline">السجل</span>
             </Button>
           </div>
         </div>
@@ -652,7 +652,7 @@ export default function BranchShiftsPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-3">
               {todayShifts.map((branch: any) => (
                 <div 
                   key={branch.branchId} 
@@ -701,7 +701,7 @@ export default function BranchShiftsPage() {
               <CardDescription>اختر الفرع ونوع الشفت للبدء</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                 <div className="space-y-2">
                   <Label>الفرع *</Label>
                   <Select value={selectedBranch} onValueChange={setSelectedBranch}>
@@ -782,38 +782,38 @@ export default function BranchShiftsPage() {
               </Tabs>
 
               {/* عرض الوقت الفعلي وحالة الاتصال والموقع */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3 md:gap-4">
                 {/* الوقت الفعلي */}
-                <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-lg p-4 text-center">
-                  <p className="text-sm text-amber-700 mb-1">الوقت الفعلي للتسجيل</p>
+                <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-lg p-3 sm:p-4 text-center">
+                  <p className="text-xs sm:text-sm text-amber-700 mb-1">الوقت الفعلي للتسجيل</p>
                   <div className="flex items-center justify-center gap-2">
-                    <Clock className="h-6 w-6 text-amber-600" />
-                    <span className="text-2xl font-bold text-amber-800 font-mono" dir="ltr">
+                    <Clock className="h-5 w-5 sm:h-6 sm:w-6 text-amber-600" />
+                    <span className="text-lg sm:text-2xl font-bold text-amber-800 font-mono" dir="ltr">
                       {currentTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true })}
                     </span>
                   </div>
-                  <p className="text-xs text-amber-600 mt-1" dir="ltr">
+                  <p className="text-[10px] sm:text-xs text-amber-600 mt-1" dir="ltr">
                     {currentTime.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
                   </p>
                 </div>
 
                 {/* حالة الاتصال */}
-                <div className={`border rounded-lg p-4 text-center ${isOffline ? "bg-red-50 border-red-200" : "bg-green-50 border-green-200"}`}>
-                  <p className={`text-sm mb-1 ${isOffline ? "text-red-700" : "text-green-700"}`}>حالة الاتصال</p>
+                <div className={`border rounded-lg p-3 sm:p-4 text-center ${isOffline ? "bg-red-50 border-red-200" : "bg-green-50 border-green-200"}`}>
+                  <p className={`text-xs sm:text-sm mb-1 ${isOffline ? "text-red-700" : "text-green-700"}`}>حالة الاتصال</p>
                   <div className="flex items-center justify-center gap-2">
                     <div className={`w-3 h-3 rounded-full ${isOffline ? "bg-red-500 animate-pulse" : "bg-green-500"}`}></div>
-                    <span className={`text-lg font-bold ${isOffline ? "text-red-800" : "text-green-800"}`}>
+                    <span className={`text-sm sm:text-lg font-bold ${isOffline ? "text-red-800" : "text-green-800"}`}>
                       {isOffline ? "غير متصل" : "متصل"}
                     </span>
                   </div>
-                  <p className={`text-xs mt-1 ${isOffline ? "text-red-600" : "text-green-600"}`}>
+                  <p className={`text-[10px] sm:text-xs mt-1 ${isOffline ? "text-red-600" : "text-green-600"}`}>
                     {isOffline ? "سيتم حفظ البيانات محلياً" : "البيانات محفوظة على السيرفر"}
                   </p>
                 </div>
 
                 {/* الموقع الجغرافي */}
-                <div className={`border rounded-lg p-4 text-center ${gpsLocation ? "bg-blue-50 border-blue-200" : "bg-gray-50 border-gray-200"}`}>
-                  <p className={`text-sm mb-1 ${gpsLocation ? "text-blue-700" : "text-gray-500"}`}>الموقع الجغرافي</p>
+                <div className={`border rounded-lg p-3 sm:p-4 text-center ${gpsLocation ? "bg-blue-50 border-blue-200" : "bg-gray-50 border-gray-200"}`}>
+                  <p className={`text-xs sm:text-sm mb-1 ${gpsLocation ? "text-blue-700" : "text-gray-500"}`}>الموقع الجغرافي</p>
                   <div className="flex items-center justify-center gap-2">
                     {gpsLocation ? (
                       <>
@@ -852,32 +852,32 @@ export default function BranchShiftsPage() {
         ) : (
           <div className="space-y-6">
             <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-4">
-                    <Badge variant="outline" className="text-lg px-4 py-2">
-                      <Building2 className="h-4 w-4 ml-2" />
+              <CardContent className="p-3 sm:p-4">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 mb-4">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-4">
+                    <Badge variant="outline" className="text-xs sm:text-lg px-2 sm:px-4 py-1 sm:py-2">
+                      <Building2 className="h-3 w-3 sm:h-4 sm:w-4 ml-1 sm:ml-2" />
                       {branches.find((b: any) => b.id === currentShift.branchId)?.name}
                     </Badge>
-                    <Badge variant={activeTab === "opening" ? "default" : "secondary"}>
+                    <Badge variant={activeTab === "opening" ? "default" : "secondary"} className="text-[10px] sm:text-xs">
                       {activeTab === "opening" ? "فتح الفرع" : "إغلاق الفرع"}
                     </Badge>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <div className="bg-amber-100 rounded-lg px-3 py-2 flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-amber-600" />
-                      <span className="font-mono font-bold text-amber-800" dir="ltr">
+                  <div className="flex items-center gap-2 sm:gap-4 w-full sm:w-auto justify-between sm:justify-end">
+                    <div className="bg-amber-100 rounded-lg px-2 sm:px-3 py-1 sm:py-2 flex items-center gap-1 sm:gap-2">
+                      <Clock className="h-3 w-3 sm:h-4 sm:w-4 text-amber-600" />
+                      <span className="font-mono font-bold text-amber-800 text-xs sm:text-sm" dir="ltr">
                         {currentTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true })}
                       </span>
                     </div>
                     <div className="text-left">
-                      <p className="text-sm text-gray-500">نسبة الإكمال</p>
-                      <p className="text-2xl font-bold">{Math.round(progressPercentage)}%</p>
+                      <p className="text-xs sm:text-sm text-gray-500">نسبة الإكمال</p>
+                      <p className="text-lg sm:text-2xl font-bold">{Math.round(progressPercentage)}%</p>
                     </div>
                   </div>
                 </div>
-                <Progress value={progressPercentage} className="h-3" />
-                <p className="text-sm text-gray-500 mt-2 text-center">
+                <Progress value={progressPercentage} className="h-2 sm:h-3" />
+                <p className="text-xs sm:text-sm text-gray-500 mt-2 text-center">
                   {completedItems} من {totalItems} بند مكتمل
                 </p>
               </CardContent>
@@ -909,7 +909,7 @@ export default function BranchShiftsPage() {
                       </div>
                     </AccordionTrigger>
                     <AccordionContent className="px-1 pb-2">
-                      <div className="grid grid-cols-2 gap-1">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
                         {template.items.map((item) => (
                           <div
                             key={item.id}

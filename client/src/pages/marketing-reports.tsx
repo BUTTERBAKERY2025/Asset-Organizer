@@ -640,63 +640,63 @@ export default function MarketingReportsPage() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3 sm:gap-4">
               <Card className="border-amber-200" data-testid="kpi-total-campaigns">
-                <CardContent className="p-4">
+                <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <Megaphone className="w-5 h-5 text-amber-500" />
-                    <Badge variant="outline" className="text-amber-600">{stats.activeCampaigns} نشطة</Badge>
+                    <Megaphone className="w-4 h-4 sm:w-5 sm:h-5 text-amber-500" />
+                    <Badge variant="outline" className="text-amber-600 text-[10px] sm:text-xs">{stats.activeCampaigns} نشطة</Badge>
                   </div>
-                  <p className="text-2xl font-bold">{stats.totalCampaigns}</p>
-                  <p className="text-sm text-muted-foreground">إجمالي الحملات</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold">{stats.totalCampaigns}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">إجمالي الحملات</p>
                 </CardContent>
               </Card>
               <Card className="border-blue-200" data-testid="kpi-total-budget">
-                <CardContent className="p-4">
+                <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <DollarSign className="w-5 h-5 text-blue-500" />
-                    <Badge variant="outline" className="text-blue-600">{stats.budgetUtilization}%</Badge>
+                    <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500" />
+                    <Badge variant="outline" className="text-blue-600 text-[10px] sm:text-xs">{stats.budgetUtilization}%</Badge>
                   </div>
-                  <p className="text-2xl font-bold">{formatCurrency(stats.totalBudget)}</p>
-                  <p className="text-sm text-muted-foreground">إجمالي الميزانية</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold">{formatCurrency(stats.totalBudget)}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">إجمالي الميزانية</p>
                 </CardContent>
               </Card>
               <Card className="border-green-200" data-testid="kpi-spent-budget">
-                <CardContent className="p-4">
+                <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <TrendingUp className="w-5 h-5 text-green-500" />
+                    <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" />
                   </div>
-                  <p className="text-2xl font-bold text-green-600">{formatCurrency(stats.spentBudget)}</p>
-                  <p className="text-sm text-muted-foreground">المصروف</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-green-600">{formatCurrency(stats.spentBudget)}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">المصروف</p>
                 </CardContent>
               </Card>
               <Card className="border-amber-200" data-testid="kpi-remaining-budget">
-                <CardContent className="p-4">
+                <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <Target className="w-5 h-5 text-amber-500" />
+                    <Target className="w-4 h-4 sm:w-5 sm:h-5 text-amber-500" />
                   </div>
-                  <p className="text-2xl font-bold text-amber-600">{formatCurrency(stats.remainingBudget)}</p>
-                  <p className="text-sm text-muted-foreground">المتبقي</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-amber-600">{formatCurrency(stats.remainingBudget)}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">المتبقي</p>
                 </CardContent>
               </Card>
               <Card className="border-purple-200" data-testid="kpi-total-expenses">
-                <CardContent className="p-4">
+                <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <Receipt className="w-5 h-5 text-purple-500" />
-                    <Badge variant="outline" className="text-purple-600">{stats.expenseCount}</Badge>
+                    <Receipt className="w-4 h-4 sm:w-5 sm:h-5 text-purple-500" />
+                    <Badge variant="outline" className="text-purple-600 text-[10px] sm:text-xs">{stats.expenseCount}</Badge>
                   </div>
-                  <p className="text-2xl font-bold text-purple-600">{formatCurrency(stats.totalExpenses)}</p>
-                  <p className="text-sm text-muted-foreground">إجمالي المصروفات</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-purple-600">{formatCurrency(stats.totalExpenses)}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">إجمالي المصروفات</p>
                 </CardContent>
               </Card>
               <Card className="border-indigo-200" data-testid="kpi-total-influencers">
-                <CardContent className="p-4">
+                <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <Users className="w-5 h-5 text-indigo-500" />
-                    <Badge variant="outline" className="text-indigo-600">{stats.activeInfluencers} نشط</Badge>
+                    <Users className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-500" />
+                    <Badge variant="outline" className="text-indigo-600 text-[10px] sm:text-xs">{stats.activeInfluencers} نشط</Badge>
                   </div>
-                  <p className="text-2xl font-bold">{stats.totalInfluencers}</p>
-                  <p className="text-sm text-muted-foreground">المؤثرين</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold">{stats.totalInfluencers}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">المؤثرين</p>
                 </CardContent>
               </Card>
             </div>
@@ -756,18 +756,18 @@ export default function MarketingReportsPage() {
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-4">
-                        <div className="grid grid-cols-3 gap-4">
-                          <div className="text-center p-4 bg-yellow-50 rounded-lg">
-                            <p className="text-xl font-bold text-yellow-700">{formatCurrency(stats.pendingExpenses)}</p>
-                            <p className="text-xs text-yellow-600">قيد الانتظار</p>
+                        <div className="grid grid-cols-3 gap-2 sm:gap-4">
+                          <div className="text-center p-2 sm:p-4 bg-yellow-50 rounded-lg">
+                            <p className="text-sm sm:text-lg md:text-xl font-bold text-yellow-700">{formatCurrency(stats.pendingExpenses)}</p>
+                            <p className="text-[10px] sm:text-xs text-yellow-600">قيد الانتظار</p>
                           </div>
-                          <div className="text-center p-4 bg-blue-50 rounded-lg">
-                            <p className="text-xl font-bold text-blue-700">{formatCurrency(stats.approvedExpenses)}</p>
-                            <p className="text-xs text-blue-600">معتمدة</p>
+                          <div className="text-center p-2 sm:p-4 bg-blue-50 rounded-lg">
+                            <p className="text-sm sm:text-lg md:text-xl font-bold text-blue-700">{formatCurrency(stats.approvedExpenses)}</p>
+                            <p className="text-[10px] sm:text-xs text-blue-600">معتمدة</p>
                           </div>
-                          <div className="text-center p-4 bg-green-50 rounded-lg">
-                            <p className="text-xl font-bold text-green-700">{formatCurrency(stats.paidExpenses)}</p>
-                            <p className="text-xs text-green-600">مدفوعة</p>
+                          <div className="text-center p-2 sm:p-4 bg-green-50 rounded-lg">
+                            <p className="text-sm sm:text-lg md:text-xl font-bold text-green-700">{formatCurrency(stats.paidExpenses)}</p>
+                            <p className="text-[10px] sm:text-xs text-green-600">مدفوعة</p>
                           </div>
                         </div>
                         <div className="h-4 bg-muted rounded-full overflow-hidden flex">
@@ -801,26 +801,26 @@ export default function MarketingReportsPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div className="text-center p-4 bg-muted/50 rounded-lg">
-                        <Eye className="w-6 h-6 mx-auto mb-2 text-amber-500" />
-                        <p className="text-xl font-bold">{formatNumber(stats.totalReach)}</p>
-                        <p className="text-xs text-muted-foreground">الوصول الإجمالي</p>
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                      <div className="text-center p-3 sm:p-4 bg-muted/50 rounded-lg">
+                        <Eye className="w-5 h-5 sm:w-6 sm:h-6 mx-auto mb-2 text-amber-500" />
+                        <p className="text-lg sm:text-xl font-bold">{formatNumber(stats.totalReach)}</p>
+                        <p className="text-[10px] sm:text-xs text-muted-foreground">الوصول الإجمالي</p>
                       </div>
-                      <div className="text-center p-4 bg-muted/50 rounded-lg">
-                        <Heart className="w-6 h-6 mx-auto mb-2 text-red-500" />
-                        <p className="text-xl font-bold">{stats.avgEngagement.toFixed(1)}%</p>
-                        <p className="text-xs text-muted-foreground">متوسط التفاعل</p>
+                      <div className="text-center p-3 sm:p-4 bg-muted/50 rounded-lg">
+                        <Heart className="w-5 h-5 sm:w-6 sm:h-6 mx-auto mb-2 text-red-500" />
+                        <p className="text-lg sm:text-xl font-bold">{stats.avgEngagement.toFixed(1)}%</p>
+                        <p className="text-[10px] sm:text-xs text-muted-foreground">متوسط التفاعل</p>
                       </div>
-                      <div className="text-center p-4 bg-muted/50 rounded-lg">
-                        <DollarSign className="w-6 h-6 mx-auto mb-2 text-green-500" />
-                        <p className="text-xl font-bold">{formatCurrency(stats.totalInfluencerPayments)}</p>
-                        <p className="text-xs text-muted-foreground">مدفوعات المؤثرين</p>
+                      <div className="text-center p-3 sm:p-4 bg-muted/50 rounded-lg">
+                        <DollarSign className="w-5 h-5 sm:w-6 sm:h-6 mx-auto mb-2 text-green-500" />
+                        <p className="text-lg sm:text-xl font-bold">{formatCurrency(stats.totalInfluencerPayments)}</p>
+                        <p className="text-[10px] sm:text-xs text-muted-foreground">مدفوعات المؤثرين</p>
                       </div>
-                      <div className="text-center p-4 bg-muted/50 rounded-lg">
-                        <Users className="w-6 h-6 mx-auto mb-2 text-indigo-500" />
-                        <p className="text-xl font-bold">{stats.activeInfluencers}</p>
-                        <p className="text-xs text-muted-foreground">المؤثرين النشطين</p>
+                      <div className="text-center p-3 sm:p-4 bg-muted/50 rounded-lg">
+                        <Users className="w-5 h-5 sm:w-6 sm:h-6 mx-auto mb-2 text-indigo-500" />
+                        <p className="text-lg sm:text-xl font-bold">{stats.activeInfluencers}</p>
+                        <p className="text-[10px] sm:text-xs text-muted-foreground">المؤثرين النشطين</p>
                       </div>
                     </div>
                   </CardContent>

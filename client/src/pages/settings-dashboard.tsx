@@ -737,30 +737,30 @@ export default function SettingsDashboardPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-7xl mx-auto space-y-6" dir="rtl">
-      <div className="mb-8">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
-          <div className="p-3 bg-gradient-to-br from-primary/20 to-primary/5 rounded-2xl w-fit">
-            <Settings className="w-8 h-8 text-primary" />
+      <div className="p-3 sm:p-4 md:p-6 lg:p-10 max-w-7xl mx-auto space-y-4 sm:space-y-6" dir="rtl">
+      <div className="mb-4 sm:mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 mb-4">
+          <div className="p-2 sm:p-3 bg-gradient-to-br from-primary/20 to-primary/5 rounded-xl sm:rounded-2xl w-fit">
+            <Settings className="w-6 h-6 sm:w-8 sm:h-8 text-primary" />
           </div>
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-foreground" data-testid="text-page-title">
+            <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-foreground" data-testid="text-page-title">
               مركز الإعدادات
             </h1>
-            <p className="text-muted-foreground mt-1">
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
               إدارة جميع إعدادات ومحتويات النظام من مكان واحد
             </p>
           </div>
         </div>
       </div>
 
-      <div className="relative mb-8">
-        <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+      <div className="relative mb-4 sm:mb-8">
+        <Search className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground" />
         <Input
-          placeholder="ابحث في الإعدادات... (مثال: أمان، فروع، موظفين)"
+          placeholder="ابحث في الإعدادات..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="pr-12 h-12 text-base rounded-xl border-2 focus:border-primary"
+          className="pr-10 sm:pr-12 h-10 sm:h-12 text-sm sm:text-base rounded-lg sm:rounded-xl border-2 focus:border-primary"
           data-testid="input-search-settings"
         />
       </div>
@@ -780,26 +780,26 @@ export default function SettingsDashboardPage() {
               </div>
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <CardContent className="p-3 sm:p-4 md:p-6">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
               {visibleCriticalSettings.map((item) => (
                 <Link key={item.id} href={item.path}>
                   <div
-                    className="p-4 rounded-xl border-2 border-red-100 bg-white hover:border-red-300 hover:shadow-lg cursor-pointer transition-all group"
+                    className="p-2 sm:p-4 rounded-lg sm:rounded-xl border-2 border-red-100 bg-white hover:border-red-300 hover:shadow-lg cursor-pointer transition-all group"
                     data-testid={`critical-link-${item.id}`}
                   >
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="p-2 bg-red-100 rounded-lg group-hover:bg-red-200 transition-colors">
-                        <item.icon className="w-5 h-5 text-red-600" />
+                    <div className="flex items-center gap-2 sm:gap-3 mb-2">
+                      <div className="p-1.5 sm:p-2 bg-red-100 rounded-lg group-hover:bg-red-200 transition-colors">
+                        <item.icon className="w-4 h-4 sm:w-5 sm:h-5 text-red-600" />
                       </div>
                       {item.badge && (
-                        <Badge variant={item.badgeVariant} className="text-xs">
+                        <Badge variant={item.badgeVariant} className="text-[10px] sm:text-xs">
                           {item.badge}
                         </Badge>
                       )}
                     </div>
-                    <h3 className="font-semibold text-foreground mb-1">{item.title}</h3>
-                    <p className="text-sm text-muted-foreground">{item.description}</p>
+                    <h3 className="font-semibold text-foreground mb-1 text-xs sm:text-sm">{item.title}</h3>
+                    <p className="text-[10px] sm:text-sm text-muted-foreground line-clamp-2">{item.description}</p>
                   </div>
                 </Link>
               ))}
@@ -808,7 +808,7 @@ export default function SettingsDashboardPage() {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-6">
         {filteredSections.map((section) => {
           const visibleItems = section.items.filter(
             (item) => !item.adminOnly || isAdmin
@@ -825,44 +825,44 @@ export default function SettingsDashboardPage() {
               className={`border-2 hover:shadow-lg transition-all ${section.bgColor} border-transparent hover:border-gray-200`}
               data-testid={`section-${section.id}`}
             >
-              <CardHeader className="pb-3">
+              <CardHeader className="pb-2 sm:pb-3 p-3 sm:p-4 md:p-6">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2.5 rounded-xl bg-white shadow-sm`}>
-                      <section.icon className={`w-6 h-6 ${section.color}`} />
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <div className={`p-1.5 sm:p-2.5 rounded-lg sm:rounded-xl bg-white shadow-sm`}>
+                      <section.icon className={`w-5 h-5 sm:w-6 sm:h-6 ${section.color}`} />
                     </div>
                     <div>
-                      <CardTitle className="text-lg font-bold">{section.title}</CardTitle>
-                      <CardDescription className="text-sm mt-0.5">{section.description}</CardDescription>
+                      <CardTitle className="text-sm sm:text-lg font-bold">{section.title}</CardTitle>
+                      <CardDescription className="text-xs sm:text-sm mt-0.5 hidden sm:block">{section.description}</CardDescription>
                     </div>
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="pt-0">
-                <div className="space-y-2">
+              <CardContent className="pt-0 p-3 sm:p-4 md:p-6 md:pt-0">
+                <div className="space-y-1 sm:space-y-2">
                   {displayItems.map((item) => (
                     <Link key={item.id} href={item.path}>
                       <div
-                        className="flex items-center justify-between p-3 rounded-lg bg-white/80 hover:bg-white hover:shadow-md cursor-pointer transition-all group border border-transparent hover:border-gray-200"
+                        className="flex items-center justify-between p-2 sm:p-3 rounded-lg bg-white/80 hover:bg-white hover:shadow-md cursor-pointer transition-all group border border-transparent hover:border-gray-200"
                         data-testid={`link-${item.id}`}
                       >
-                        <div className="flex items-center gap-3">
-                          <div className={`p-1.5 rounded-lg bg-gray-100 group-hover:bg-gray-200 transition-colors`}>
-                            <item.icon className="w-4 h-4 text-gray-600 group-hover:text-gray-800" />
+                        <div className="flex items-center gap-2 sm:gap-3">
+                          <div className={`p-1 sm:p-1.5 rounded-lg bg-gray-100 group-hover:bg-gray-200 transition-colors`}>
+                            <item.icon className="w-3 h-3 sm:w-4 sm:h-4 text-gray-600 group-hover:text-gray-800" />
                           </div>
                           <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-sm">{item.title}</span>
+                            <div className="flex items-center gap-1 sm:gap-2">
+                              <span className="font-medium text-xs sm:text-sm">{item.title}</span>
                               {item.badge && (
-                                <Badge variant={item.badgeVariant || "secondary"} className="text-[10px] px-1.5 py-0">
+                                <Badge variant={item.badgeVariant || "secondary"} className="text-[8px] sm:text-[10px] px-1 sm:px-1.5 py-0">
                                   {item.badge}
                                 </Badge>
                               )}
                             </div>
-                            <p className="text-xs text-muted-foreground">{item.description}</p>
+                            <p className="text-[10px] sm:text-xs text-muted-foreground hidden sm:block">{item.description}</p>
                           </div>
                         </div>
-                        <ChevronLeft className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                        <ChevronLeft className="w-3 h-3 sm:w-4 sm:h-4 text-muted-foreground group-hover:text-primary transition-colors" />
                       </div>
                     </Link>
                   ))}
@@ -871,7 +871,7 @@ export default function SettingsDashboardPage() {
                 {hasMore && (
                   <Button
                     variant="ghost"
-                    className="w-full mt-3 text-sm hover:bg-white/50"
+                    className="w-full mt-2 sm:mt-3 text-xs sm:text-sm hover:bg-white/50 h-8 sm:h-9"
                     onClick={() => toggleSection(section.id)}
                     data-testid={`btn-toggle-${section.id}`}
                   >
@@ -880,7 +880,7 @@ export default function SettingsDashboardPage() {
                     ) : (
                       <>
                         عرض الكل ({visibleItems.length})
-                        <ChevronDown className="w-4 h-4 mr-1" />
+                        <ChevronDown className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
                       </>
                     )}
                   </Button>

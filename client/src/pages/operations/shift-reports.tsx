@@ -349,35 +349,35 @@ export default function ShiftReportsPage() {
 
   return (
     <Layout>
-      <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6">
+      <div className="max-w-7xl mx-auto p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
         <Card className="bg-gradient-to-l from-amber-50 to-orange-50 border-amber-200">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between flex-wrap gap-4">
-              <div className="flex items-center gap-4">
+          <CardContent className="p-3 sm:p-4 md:p-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+              <div className="flex items-center gap-3 sm:gap-4">
                 <Link href="/branch-shifts">
-                  <Button variant="outline" size="icon" className="bg-white hover:bg-amber-100" data-testid="btn-back">
+                  <Button variant="outline" size="icon" className="bg-white hover:bg-amber-100 h-10 w-10 sm:h-9 sm:w-9" data-testid="btn-back">
                     <ChevronLeft className="h-5 w-5" />
                   </Button>
                 </Link>
-                <div className="p-3 bg-amber-600 rounded-xl">
-                  <FileText className="h-8 w-8 text-white" />
+                <div className="p-2 sm:p-3 bg-amber-600 rounded-xl">
+                  <FileText className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold text-amber-900">تقارير الفتح والإغلاق</h1>
-                  <p className="text-amber-700">عرض وطباعة وتحليل تقارير شفتات الفروع</p>
+                  <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-amber-900">تقارير الفتح والإغلاق</h1>
+                  <p className="text-xs sm:text-sm text-amber-700">عرض وطباعة وتحليل تقارير شفتات الفروع</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                 <Button 
                   variant="outline" 
-                  className="gap-2 bg-white"
+                  className="gap-2 bg-white h-10 sm:h-9 text-xs sm:text-sm"
                   onClick={exportToExcel}
                   data-testid="btn-export-excel"
                 >
                   <FileSpreadsheet className="h-4 w-4" />
-                  تصدير Excel
+                  <span className="hidden sm:inline">تصدير</span> Excel
                 </Button>
-                <Badge variant="outline" className="bg-white text-amber-800 border-amber-300 px-4 py-2">
+                <Badge variant="outline" className="bg-white text-amber-800 border-amber-300 px-2 sm:px-4 py-1 sm:py-2 text-[10px] sm:text-xs">
                   {new Date().toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
                 </Badge>
               </div>
@@ -398,66 +398,66 @@ export default function ShiftReportsPage() {
           </TabsList>
 
           <TabsContent value="daily" className="space-y-6">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-4">
               <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-                <CardContent className="p-4">
+                <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-blue-600 font-medium">إجمالي الشفتات</p>
-                      <p className="text-3xl font-bold text-blue-800">{analytics.totalShifts}</p>
+                      <p className="text-xs sm:text-sm text-blue-600 font-medium">إجمالي الشفتات</p>
+                      <p className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-800">{analytics.totalShifts}</p>
                     </div>
-                    <div className="p-3 bg-blue-500 rounded-xl">
-                      <Activity className="h-6 w-6 text-white" />
+                    <div className="p-2 sm:p-3 bg-blue-500 rounded-xl">
+                      <Activity className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
               <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-                <CardContent className="p-4">
+                <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-green-600 font-medium">مكتمل بالكامل</p>
-                      <p className="text-3xl font-bold text-green-800">{analytics.fullyCompleted}</p>
+                      <p className="text-xs sm:text-sm text-green-600 font-medium">مكتمل بالكامل</p>
+                      <p className="text-xl sm:text-2xl md:text-3xl font-bold text-green-800">{analytics.fullyCompleted}</p>
                     </div>
-                    <div className="p-3 bg-green-500 rounded-xl">
-                      <CheckCircle2 className="h-6 w-6 text-white" />
+                    <div className="p-2 sm:p-3 bg-green-500 rounded-xl">
+                      <CheckCircle2 className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
                     </div>
                   </div>
                   <Progress value={analytics.fullCompletionRate} className="mt-2 h-2" />
-                  <p className="text-xs text-green-600 mt-1">{analytics.fullCompletionRate}% نسبة الإكمال</p>
+                  <p className="text-[10px] sm:text-xs text-green-600 mt-1">{analytics.fullCompletionRate}% نسبة الإكمال</p>
                 </CardContent>
               </Card>
 
               <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
-                <CardContent className="p-4">
+                <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-amber-600 font-medium">الفتح المكتمل</p>
-                      <p className="text-3xl font-bold text-amber-800">{analytics.openingCompleted}</p>
+                      <p className="text-xs sm:text-sm text-amber-600 font-medium">الفتح المكتمل</p>
+                      <p className="text-xl sm:text-2xl md:text-3xl font-bold text-amber-800">{analytics.openingCompleted}</p>
                     </div>
-                    <div className="p-3 bg-amber-500 rounded-xl">
-                      <TrendingUp className="h-6 w-6 text-white" />
+                    <div className="p-2 sm:p-3 bg-amber-500 rounded-xl">
+                      <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
                     </div>
                   </div>
                   <Progress value={analytics.openingRate} className="mt-2 h-2" />
-                  <p className="text-xs text-amber-600 mt-1">{analytics.openingRate}%</p>
+                  <p className="text-[10px] sm:text-xs text-amber-600 mt-1">{analytics.openingRate}%</p>
                 </CardContent>
               </Card>
 
               <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-                <CardContent className="p-4">
+                <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-purple-600 font-medium">الإغلاق المكتمل</p>
-                      <p className="text-3xl font-bold text-purple-800">{analytics.closingCompleted}</p>
+                      <p className="text-xs sm:text-sm text-purple-600 font-medium">الإغلاق المكتمل</p>
+                      <p className="text-xl sm:text-2xl md:text-3xl font-bold text-purple-800">{analytics.closingCompleted}</p>
                     </div>
-                    <div className="p-3 bg-purple-500 rounded-xl">
-                      <TrendingDown className="h-6 w-6 text-white" />
+                    <div className="p-2 sm:p-3 bg-purple-500 rounded-xl">
+                      <TrendingDown className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
                     </div>
                   </div>
                   <Progress value={analytics.closingRate} className="mt-2 h-2" />
-                  <p className="text-xs text-purple-600 mt-1">{analytics.closingRate}%</p>
+                  <p className="text-[10px] sm:text-xs text-purple-600 mt-1">{analytics.closingRate}%</p>
                 </CardContent>
               </Card>
             </div>
@@ -469,8 +469,8 @@ export default function ShiftReportsPage() {
                   فلترة التقارير
                 </CardTitle>
               </CardHeader>
-              <CardContent className="pt-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <CardContent className="p-3 sm:p-4 md:p-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
                   <div className="space-y-2">
                     <Label className="text-sm font-semibold text-gray-700">التاريخ</Label>
                     <Input
@@ -551,19 +551,19 @@ export default function ShiftReportsPage() {
                     filteredShifts.map((shift) => (
                       <div 
                         key={shift.id} 
-                        className="p-4 rounded-xl border-2 hover:border-amber-300 transition-all bg-gradient-to-l from-gray-50 to-white"
+                        className="p-3 sm:p-4 rounded-xl border-2 hover:border-amber-300 transition-all bg-gradient-to-l from-gray-50 to-white"
                         data-testid={`card-shift-${shift.id}`}
                       >
-                        <div className="flex items-center justify-between flex-wrap gap-4">
-                          <div className="flex items-center gap-4">
-                            <div className={`p-3 rounded-xl ${
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+                          <div className="flex items-center gap-3 sm:gap-4">
+                            <div className={`p-2 sm:p-3 rounded-xl ${
                               shift.openingCompleted && shift.closingCompleted 
                                 ? "bg-green-100" 
                                 : shift.openingCompleted 
                                   ? "bg-amber-100" 
                                   : "bg-gray-100"
                             }`}>
-                              <Building2 className={`h-6 w-6 ${
+                              <Building2 className={`h-5 w-5 sm:h-6 sm:w-6 ${
                                 shift.openingCompleted && shift.closingCompleted 
                                   ? "text-green-600" 
                                   : shift.openingCompleted 
@@ -572,24 +572,24 @@ export default function ShiftReportsPage() {
                               }`} />
                             </div>
                             <div>
-                              <h3 className="font-bold text-lg text-gray-800">{getBranchName(shift.branchId)}</h3>
-                              <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1 flex-wrap">
-                                <span className="flex items-center gap-1 bg-gray-100 px-2 py-1 rounded">
+                              <h3 className="font-bold text-sm sm:text-lg text-gray-800">{getBranchName(shift.branchId)}</h3>
+                              <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm text-muted-foreground mt-1 flex-wrap">
+                                <span className="flex items-center gap-1 bg-gray-100 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-[10px] sm:text-xs">
                                   <Calendar className="h-3 w-3" />
                                   {shift.shiftDate}
                                 </span>
-                                <span className={`flex items-center gap-1 px-2 py-1 rounded text-white ${getShiftTypeColor(shift.shiftType)}`}>
+                                <span className={`flex items-center gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-white text-[10px] sm:text-xs ${getShiftTypeColor(shift.shiftType)}`}>
                                   <Clock className="h-3 w-3" />
                                   {getShiftTypeName(shift.shiftType)}
                                 </span>
                                 {shift.supervisorName && (
-                                  <span className="flex items-center gap-1 bg-blue-50 px-2 py-1 rounded text-blue-700">
+                                  <span className="hidden sm:flex items-center gap-1 bg-blue-50 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-blue-700 text-[10px] sm:text-xs">
                                     <User className="h-3 w-3" />
                                     {shift.supervisorName}
                                   </span>
                                 )}
                                 {shift.employeeCount && shift.employeeCount > 0 && (
-                                  <span className="flex items-center gap-1 bg-purple-50 px-2 py-1 rounded text-purple-700">
+                                  <span className="hidden md:flex items-center gap-1 bg-purple-50 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-purple-700 text-[10px] sm:text-xs">
                                     <Users className="h-3 w-3" />
                                     {shift.employeeCount} موظف
                                   </span>
@@ -597,11 +597,11 @@ export default function ShiftReportsPage() {
                               </div>
                             </div>
                           </div>
-                          <div className="flex items-center gap-4">
-                            <div className="flex gap-2">
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 w-full sm:w-auto">
+                            <div className="flex gap-1 sm:gap-2">
                               <Badge 
                                 variant={shift.openingCompleted ? "default" : "outline"} 
-                                className={shift.openingCompleted ? "bg-green-600" : ""}
+                                className={`text-[10px] sm:text-xs ${shift.openingCompleted ? "bg-green-600" : ""}`}
                               >
                                 {shift.openingCompleted ? (
                                   <CheckCircle2 className="h-3 w-3 ml-1" />
@@ -612,7 +612,7 @@ export default function ShiftReportsPage() {
                               </Badge>
                               <Badge 
                                 variant={shift.closingCompleted ? "default" : "outline"}
-                                className={shift.closingCompleted ? "bg-green-600" : ""}
+                                className={`text-[10px] sm:text-xs ${shift.closingCompleted ? "bg-green-600" : ""}`}
                               >
                                 {shift.closingCompleted ? (
                                   <CheckCircle2 className="h-3 w-3 ml-1" />
@@ -622,28 +622,28 @@ export default function ShiftReportsPage() {
                                 الإغلاق
                               </Badge>
                             </div>
-                            <div className="flex gap-2">
+                            <div className="flex gap-1 sm:gap-2">
                               <Button
                                 variant={shift.openingCompleted ? "default" : "outline"}
                                 size="sm"
                                 onClick={() => openReport(shift, "opening")}
                                 disabled={!shift.openingCompleted}
-                                className={shift.openingCompleted ? "bg-amber-600 hover:bg-amber-700" : ""}
+                                className={`h-8 sm:h-9 text-[10px] sm:text-xs ${shift.openingCompleted ? "bg-amber-600 hover:bg-amber-700" : ""}`}
                                 data-testid={`btn-view-opening-${shift.id}`}
                               >
-                                <FileText className="h-4 w-4 ml-1" />
-                                تقرير الفتح
+                                <FileText className="h-3 w-3 sm:h-4 sm:w-4 ml-1" />
+                                <span className="hidden sm:inline">تقرير</span> الفتح
                               </Button>
                               <Button
                                 variant={shift.closingCompleted ? "default" : "outline"}
                                 size="sm"
                                 onClick={() => openReport(shift, "closing")}
                                 disabled={!shift.closingCompleted}
-                                className={shift.closingCompleted ? "bg-blue-600 hover:bg-blue-700" : ""}
+                                className={`h-8 sm:h-9 text-[10px] sm:text-xs ${shift.closingCompleted ? "bg-blue-600 hover:bg-blue-700" : ""}`}
                                 data-testid={`btn-view-closing-${shift.id}`}
                               >
-                                <FileText className="h-4 w-4 ml-1" />
-                                تقرير الإغلاق
+                                <FileText className="h-3 w-3 sm:h-4 sm:w-4 ml-1" />
+                                <span className="hidden sm:inline">تقرير</span> الإغلاق
                               </Button>
                             </div>
                           </div>
@@ -664,8 +664,8 @@ export default function ShiftReportsPage() {
                   نطاق التاريخ للتحليل
                 </CardTitle>
               </CardHeader>
-              <CardContent className="pt-4">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <CardContent className="p-3 sm:p-4 md:p-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
                   <div className="space-y-2">
                     <Label className="text-sm font-semibold text-gray-700">من تاريخ</Label>
                     <Input
@@ -729,7 +729,7 @@ export default function ShiftReportsPage() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-4">
                 <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
@@ -780,7 +780,7 @@ export default function ShiftReportsPage() {
                 </Card>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 md:gap-6">
                 {analytics.bestBranch && (
                   <Card className="border-2 border-green-200">
                     <CardHeader className="pb-2 bg-gradient-to-l from-green-50 to-white">

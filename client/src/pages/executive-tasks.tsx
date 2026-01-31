@@ -163,7 +163,7 @@ export default function ExecutiveTasks() {
   const getPriorityBadge = (priority: string) => {
     const priorityInfo = priorities.find((p) => p.value === priority);
     return (
-      <Badge className={`${priorityInfo?.color || "bg-gray-500"} text-white`}>
+      <Badge className={`${priorityInfo?.color || "bg-gray-500"} text-white text-[10px] sm:text-xs px-1.5 sm:px-2`}>
         {priorityInfo?.label || priority}
       </Badge>
     );
@@ -178,7 +178,7 @@ export default function ExecutiveTasks() {
       cancelled: "bg-gray-500 text-white",
     };
     return (
-      <Badge className={colors[status] || "bg-gray-500"}>
+      <Badge className={`${colors[status] || "bg-gray-500"} text-[10px] sm:text-xs px-1.5 sm:px-2`}>
         {statusInfo?.label || status}
       </Badge>
     );
@@ -294,31 +294,31 @@ export default function ExecutiveTasks() {
 
   return (
     <Layout>
-      <div className="max-w-6xl mx-auto p-4 md:p-8 lg:p-10 space-y-4" dir="rtl">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+      <div className="max-w-6xl mx-auto p-3 sm:p-4 md:p-6 space-y-4" dir="rtl">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2 sm:gap-4">
             <Link href="/executive">
-              <Button variant="ghost" size="sm" className="gap-1">
-                <ArrowRight className="h-4 w-4" />
+              <Button variant="ghost" size="sm" className="gap-1 h-8 text-xs sm:text-sm">
+                <ArrowRight className="h-3 w-3 sm:h-4 sm:w-4" />
                 العودة
               </Button>
             </Link>
             <div>
-              <h1 className="text-3xl font-bold text-amber-800" data-testid="page-title">
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-amber-800" data-testid="page-title">
                 إدارة المهام
               </h1>
-              <p className="text-gray-600">
+              <p className="text-[10px] sm:text-xs text-gray-600">
                 BUTTER BAKERY - TASKS MANAGEMENT
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
             <div className="flex border rounded-lg overflow-hidden">
               <Button
                 variant={viewMode === "list" ? "default" : "ghost"}
                 size="sm"
                 onClick={() => setViewMode("list")}
-                className={viewMode === "list" ? "bg-amber-600" : ""}
+                className={`${viewMode === "list" ? "bg-amber-600" : ""} text-xs sm:text-sm h-7 sm:h-8 px-2 sm:px-3`}
               >
                 قائمة
               </Button>
@@ -326,15 +326,15 @@ export default function ExecutiveTasks() {
                 variant={viewMode === "kanban" ? "default" : "ghost"}
                 size="sm"
                 onClick={() => setViewMode("kanban")}
-                className={viewMode === "kanban" ? "bg-amber-600" : ""}
+                className={`${viewMode === "kanban" ? "bg-amber-600" : ""} text-xs sm:text-sm h-7 sm:h-8 px-2 sm:px-3`}
               >
                 Kanban
               </Button>
             </div>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="gap-2 bg-amber-600 hover:bg-amber-700" onClick={() => setSelectedTask(null)}>
-                <Plus className="h-4 w-4" />
+              <Button className="gap-1 sm:gap-2 bg-amber-600 hover:bg-amber-700 text-xs sm:text-sm h-8 sm:h-9" onClick={() => setSelectedTask(null)}>
+                <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
                 مهمة جديدة
               </Button>
             </DialogTrigger>
@@ -467,20 +467,21 @@ export default function ExecutiveTasks() {
         </div>
       </div>
 
-      <div className="flex items-center gap-4 flex-wrap">
-        <div className="relative flex-1 max-w-md">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4">
+        <div className="relative flex-1 min-w-0">
           <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <Input
             placeholder="البحث في المهام..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pr-10"
+            className="pr-10 text-sm"
             data-testid="input-search"
           />
         </div>
+        <div className="flex gap-2">
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-40" data-testid="filter-status">
-            <Filter className="h-4 w-4 ml-2" />
+          <SelectTrigger className="w-full sm:w-32 text-xs sm:text-sm" data-testid="filter-status">
+            <Filter className="h-3 w-3 sm:h-4 sm:w-4 ml-1" />
             <SelectValue placeholder="الحالة" />
           </SelectTrigger>
           <SelectContent>
@@ -493,8 +494,8 @@ export default function ExecutiveTasks() {
           </SelectContent>
         </Select>
         <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-          <SelectTrigger className="w-40" data-testid="filter-priority">
-            <Filter className="h-4 w-4 ml-2" />
+          <SelectTrigger className="w-full sm:w-32 text-xs sm:text-sm" data-testid="filter-priority">
+            <Filter className="h-3 w-3 sm:h-4 sm:w-4 ml-1" />
             <SelectValue placeholder="الأولوية" />
           </SelectTrigger>
           <SelectContent>
@@ -506,6 +507,7 @@ export default function ExecutiveTasks() {
             ))}
           </SelectContent>
         </Select>
+        </div>
       </div>
 
       {filteredTasks.length === 0 ? (
@@ -517,29 +519,29 @@ export default function ExecutiveTasks() {
           </CardContent>
         </Card>
       ) : viewMode === "kanban" ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 p-3 bg-yellow-100 rounded-lg">
-              <Clock className="h-5 w-5 text-yellow-600" />
-              <h3 className="font-semibold text-yellow-800">معلق ({groupedTasks.pending.length})</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-6">
+          <div className="space-y-3 sm:space-y-4">
+            <div className="flex items-center gap-2 p-2 sm:p-3 bg-yellow-100 rounded-lg">
+              <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-600" />
+              <h3 className="text-sm sm:text-base font-semibold text-yellow-800">معلق ({groupedTasks.pending.length})</h3>
             </div>
             {groupedTasks.pending.map((task) => (
               <TaskCard key={task.id} task={task} />
             ))}
           </div>
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 p-3 bg-blue-100 rounded-lg">
-              <CheckSquare className="h-5 w-5 text-blue-600" />
-              <h3 className="font-semibold text-blue-800">جاري ({groupedTasks.in_progress.length})</h3>
+          <div className="space-y-3 sm:space-y-4">
+            <div className="flex items-center gap-2 p-2 sm:p-3 bg-blue-100 rounded-lg">
+              <CheckSquare className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
+              <h3 className="text-sm sm:text-base font-semibold text-blue-800">جاري ({groupedTasks.in_progress.length})</h3>
             </div>
             {groupedTasks.in_progress.map((task) => (
               <TaskCard key={task.id} task={task} />
             ))}
           </div>
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 p-3 bg-green-100 rounded-lg">
-              <CheckCircle className="h-5 w-5 text-green-600" />
-              <h3 className="font-semibold text-green-800">مكتمل ({groupedTasks.completed.length})</h3>
+          <div className="space-y-3 sm:space-y-4">
+            <div className="flex items-center gap-2 p-2 sm:p-3 bg-green-100 rounded-lg">
+              <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
+              <h3 className="text-sm sm:text-base font-semibold text-green-800">مكتمل ({groupedTasks.completed.length})</h3>
             </div>
             {groupedTasks.completed.map((task) => (
               <TaskCard key={task.id} task={task} />
@@ -547,7 +549,7 @@ export default function ExecutiveTasks() {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4">
           {filteredTasks.map((task) => (
             <TaskCard key={task.id} task={task} />
           ))}

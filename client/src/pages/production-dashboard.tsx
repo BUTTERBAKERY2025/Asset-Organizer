@@ -285,25 +285,25 @@ export default function ProductionDashboardPage() {
 
   return (
     <Layout>
-      <div className="p-6 max-w-6xl mx-auto space-y-6" dir="rtl">
+      <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-4 md:space-y-6" dir="rtl">
           
           {/* Header Section */}
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg">
-                <Factory className="w-6 h-6 text-white" />
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg">
+                <Factory className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-foreground" data-testid="page-title">
+                <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-foreground" data-testid="page-title">
                   لوحة الإنتاج
                 </h1>
-                <p className="text-muted-foreground text-sm">{format(new Date(selectedDate), "EEEE، dd MMMM yyyy", { locale: ar })}</p>
+                <p className="text-xs sm:text-sm text-muted-foreground">{format(new Date(selectedDate), "EEEE، dd MMMM yyyy", { locale: ar })}</p>
               </div>
             </div>
               
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!canSelectBranch}>
-                <SelectTrigger className="w-[160px]">
+                <SelectTrigger className="w-[130px] sm:w-[160px] h-11 sm:h-10">
                   <SelectValue placeholder="كل الفروع" />
                 </SelectTrigger>
                 <SelectContent>
@@ -318,38 +318,39 @@ export default function ProductionDashboardPage() {
                 type="date"
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
-                className="w-[140px]"
+                className="w-[120px] sm:w-[140px] h-11 sm:h-10"
               />
               
-              <Button variant="outline" size="icon" onClick={handleRefresh} data-testid="btn-refresh">
+              <Button variant="outline" size="icon" onClick={handleRefresh} data-testid="btn-refresh" className="h-11 w-11 sm:h-10 sm:w-10">
                 <RefreshCw className={`h-4 w-4 ${dailyLoading ? 'animate-spin' : ''}`} />
               </Button>
               
               <Link href="/advanced-production-orders/new">
-                <Button data-testid="btn-new-order">
+                <Button data-testid="btn-new-order" className="h-11 sm:h-10 text-sm">
                   <Plus className="h-4 w-4 ml-1" />
-                  أمر جديد
+                  <span className="hidden sm:inline">أمر جديد</span>
+                  <span className="sm:hidden">جديد</span>
                 </Button>
               </Link>
             </div>
           </div>
 
           {/* Main KPIs Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
             {/* Production Today */}
             <Card className="overflow-hidden" data-testid="card-daily-qty">
-              <CardContent className="p-4">
+              <CardContent className="p-3 sm:p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs text-muted-foreground">إنتاج اليوم</p>
+                    <p className="text-[10px] sm:text-xs text-muted-foreground">إنتاج اليوم</p>
                     {dailyLoading ? (
-                      <Skeleton className="h-8 w-20 mt-1" />
+                      <Skeleton className="h-6 sm:h-8 w-16 sm:w-20 mt-1" />
                     ) : (
-                      <p className="text-2xl font-bold">{dailyStats?.totalQuantity || 0}</p>
+                      <p className="text-xl sm:text-2xl font-bold">{dailyStats?.totalQuantity || 0}</p>
                     )}
                   </div>
-                  <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center">
-                    <Activity className="w-6 h-6 text-green-600" />
+                  <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl bg-green-100 flex items-center justify-center">
+                    <Activity className="w-4 h-4 sm:w-6 sm:h-6 text-green-600" />
                   </div>
                 </div>
               </CardContent>
@@ -357,18 +358,18 @@ export default function ProductionDashboardPage() {
 
             {/* Batches Today */}
             <Card className="overflow-hidden" data-testid="card-daily-batches">
-              <CardContent className="p-4">
+              <CardContent className="p-3 sm:p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs text-muted-foreground">الدفعات</p>
+                    <p className="text-[10px] sm:text-xs text-muted-foreground">الدفعات</p>
                     {dailyLoading ? (
-                      <Skeleton className="h-8 w-16 mt-1" />
+                      <Skeleton className="h-6 sm:h-8 w-12 sm:w-16 mt-1" />
                     ) : (
-                      <p className="text-2xl font-bold">{dailyStats?.totalBatches || 0}</p>
+                      <p className="text-xl sm:text-2xl font-bold">{dailyStats?.totalBatches || 0}</p>
                     )}
                   </div>
-                  <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center">
-                    <Package className="w-6 h-6 text-amber-600" />
+                  <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl bg-amber-100 flex items-center justify-center">
+                    <Package className="w-4 h-4 sm:w-6 sm:h-6 text-amber-600" />
                   </div>
                 </div>
               </CardContent>
@@ -376,18 +377,18 @@ export default function ProductionDashboardPage() {
 
             {/* Display Bar */}
             <Card className="overflow-hidden" data-testid="card-display">
-              <CardContent className="p-4">
+              <CardContent className="p-3 sm:p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs text-muted-foreground">بار العرض</p>
+                    <p className="text-[10px] sm:text-xs text-muted-foreground">بار العرض</p>
                     {dailyLoading ? (
-                      <Skeleton className="h-8 w-16 mt-1" />
+                      <Skeleton className="h-6 sm:h-8 w-12 sm:w-16 mt-1" />
                     ) : (
-                      <p className="text-2xl font-bold">{dailyStats?.byDestination?.display_bar || 0}</p>
+                      <p className="text-xl sm:text-2xl font-bold">{dailyStats?.byDestination?.display_bar || 0}</p>
                     )}
                   </div>
-                  <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center">
-                    <ShoppingCart className="w-6 h-6 text-blue-600" />
+                  <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl bg-blue-100 flex items-center justify-center">
+                    <ShoppingCart className="w-4 h-4 sm:w-6 sm:h-6 text-blue-600" />
                   </div>
                 </div>
               </CardContent>
@@ -395,18 +396,18 @@ export default function ProductionDashboardPage() {
 
             {/* Active Orders */}
             <Card className="overflow-hidden" data-testid="card-active-orders">
-              <CardContent className="p-4">
+              <CardContent className="p-3 sm:p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs text-muted-foreground">أوامر نشطة</p>
+                    <p className="text-[10px] sm:text-xs text-muted-foreground">أوامر نشطة</p>
                     {statsLoading ? (
-                      <Skeleton className="h-8 w-12 mt-1" />
+                      <Skeleton className="h-6 sm:h-8 w-10 sm:w-12 mt-1" />
                     ) : (
-                      <p className="text-2xl font-bold">{hubData?.activeOrders || 0}</p>
+                      <p className="text-xl sm:text-2xl font-bold">{hubData?.activeOrders || 0}</p>
                     )}
                   </div>
-                  <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center">
-                    <Clock className="w-6 h-6 text-purple-600" />
+                  <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl bg-purple-100 flex items-center justify-center">
+                    <Clock className="w-4 h-4 sm:w-6 sm:h-6 text-purple-600" />
                   </div>
                 </div>
               </CardContent>
@@ -416,46 +417,48 @@ export default function ProductionDashboardPage() {
           {/* Target Progress Card */}
           {hubData?.target && hubData.target.totalTarget > 0 && (
             <Card data-testid="card-target-vs-actual">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="h-10 w-10 bg-amber-100 rounded-xl flex items-center justify-center">
-                    <Target className="h-5 w-5 text-amber-600" />
+              <CardContent className="p-3 sm:p-4">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <div className="h-8 w-8 sm:h-10 sm:w-10 bg-amber-100 rounded-xl flex items-center justify-center">
+                      <Target className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-sm sm:text-base text-slate-800">الهدف مقابل الإنتاج الفعلي</h3>
+                      <p className="text-[10px] sm:text-xs text-slate-500">متابعة تحقيق الأهداف اليومية</p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-bold text-slate-800">الهدف مقابل الإنتاج الفعلي</h3>
-                    <p className="text-xs text-slate-500">متابعة تحقيق الأهداف اليومية</p>
-                  </div>
-                  <div className="mr-auto">
+                  <div className="sm:mr-auto">
                     {hubData.target.completionRate >= 100 && (
-                      <Badge className="bg-green-500 text-white">تم تحقيق الهدف</Badge>
+                      <Badge className="bg-green-500 text-white text-[10px] sm:text-xs">تم تحقيق الهدف</Badge>
                     )}
                     {hubData.target.completionRate >= 80 && hubData.target.completionRate < 100 && (
-                      <Badge className="bg-amber-500 text-white">قريب من الهدف</Badge>
+                      <Badge className="bg-amber-500 text-white text-[10px] sm:text-xs">قريب من الهدف</Badge>
                     )}
                     {hubData.target.completionRate < 80 && hubData.target.completionRate > 0 && (
-                      <Badge className="bg-red-500 text-white">يحتاج متابعة</Badge>
+                      <Badge className="bg-red-500 text-white text-[10px] sm:text-xs">يحتاج متابعة</Badge>
                     )}
                   </div>
                 </div>
                 
-                <div className="grid grid-cols-4 gap-4 mb-6">
-                  <div className="bg-white rounded-xl p-4 text-center shadow-sm border border-slate-100">
-                    <p className="text-xs text-slate-500 mb-1">الهدف</p>
-                    <p className="text-2xl font-bold text-slate-800">{hubData.target.totalTarget}</p>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 mb-4 sm:mb-6">
+                  <div className="bg-white rounded-xl p-2 sm:p-4 text-center shadow-sm border border-slate-100">
+                    <p className="text-[10px] sm:text-xs text-slate-500 mb-1">الهدف</p>
+                    <p className="text-lg sm:text-2xl font-bold text-slate-800">{hubData.target.totalTarget}</p>
                   </div>
-                  <div className="bg-white rounded-xl p-4 text-center shadow-sm border border-green-100">
-                    <p className="text-xs text-slate-500 mb-1">المُنتَج</p>
-                    <p className="text-2xl font-bold text-green-600">{hubData.target.totalProduced}</p>
+                  <div className="bg-white rounded-xl p-2 sm:p-4 text-center shadow-sm border border-green-100">
+                    <p className="text-[10px] sm:text-xs text-slate-500 mb-1">المُنتَج</p>
+                    <p className="text-lg sm:text-2xl font-bold text-green-600">{hubData.target.totalProduced}</p>
                   </div>
-                  <div className="bg-white rounded-xl p-4 text-center shadow-sm border border-slate-100">
-                    <p className="text-xs text-slate-500 mb-1">الفرق</p>
-                    <p className={`text-2xl font-bold ${hubData.target.gap > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                  <div className="bg-white rounded-xl p-2 sm:p-4 text-center shadow-sm border border-slate-100">
+                    <p className="text-[10px] sm:text-xs text-slate-500 mb-1">الفرق</p>
+                    <p className={`text-lg sm:text-2xl font-bold ${hubData.target.gap > 0 ? 'text-red-600' : 'text-green-600'}`}>
                       {hubData.target.gap > 0 ? `-${hubData.target.gap}` : hubData.target.gap === 0 ? '0' : `+${Math.abs(hubData.target.gap)}`}
                     </p>
                   </div>
-                  <div className="bg-white rounded-xl p-4 text-center shadow-sm border border-amber-100">
-                    <p className="text-xs text-slate-500 mb-1">نسبة الإنجاز</p>
-                    <p className={`text-2xl font-bold ${
+                  <div className="bg-white rounded-xl p-2 sm:p-4 text-center shadow-sm border border-amber-100">
+                    <p className="text-[10px] sm:text-xs text-slate-500 mb-1">نسبة الإنجاز</p>
+                    <p className={`text-lg sm:text-2xl font-bold ${
                       hubData.target.completionRate >= 100 ? 'text-green-600' : 
                       hubData.target.completionRate >= 80 ? 'text-amber-600' : 'text-red-600'
                     }`}>

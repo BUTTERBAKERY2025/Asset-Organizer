@@ -228,20 +228,20 @@ export default function ProductsPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+      <div className="p-3 sm:p-4 md:p-6 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Link href="/operations">
-              <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" data-testid="btn-back">
+              <Button variant="ghost" size="icon" className="h-9 w-9 sm:h-8 sm:w-8" data-testid="btn-back">
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
             <div>
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold flex items-center gap-2">
-                <Package className="w-5 h-5 text-primary" />
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold flex items-center gap-2">
+                <Package className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
                 إدارة المنتجات
               </h1>
-              <p className="text-sm text-muted-foreground">قائمة المنتجات والأسعار - {products.length} منتج</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">قائمة المنتجات والأسعار - {products.length} منتج</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -469,19 +469,19 @@ export default function ProductsPage() {
             ) : (
               <>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <table className="w-full text-sm min-w-[700px]">
                     <thead className="bg-muted/50 text-xs">
                       <tr>
-                        <th className="p-3 text-right font-semibold">#</th>
-                        <th className="p-3 text-right font-semibold">SKU</th>
-                        <th className="p-3 text-right font-semibold">اسم المنتج</th>
-                        <th className="p-3 text-right font-semibold">الفئة</th>
-                        <th className="p-3 text-right font-semibold">النوع</th>
-                        <th className="p-3 text-right font-semibold">الوحدة</th>
-                        <th className="p-3 text-right font-semibold">السعر بدون ضريبة</th>
-                        <th className="p-3 text-right font-semibold">الضريبة</th>
-                        <th className="p-3 text-right font-semibold">السعر شامل</th>
-                        <th className="p-3 text-right font-semibold">إجراءات</th>
+                        <th className="p-2 sm:p-3 text-right font-semibold">#</th>
+                        <th className="p-2 sm:p-3 text-right font-semibold hidden md:table-cell">SKU</th>
+                        <th className="p-2 sm:p-3 text-right font-semibold">اسم المنتج</th>
+                        <th className="p-2 sm:p-3 text-right font-semibold">الفئة</th>
+                        <th className="p-2 sm:p-3 text-right font-semibold hidden md:table-cell">النوع</th>
+                        <th className="p-2 sm:p-3 text-right font-semibold hidden lg:table-cell">الوحدة</th>
+                        <th className="p-2 sm:p-3 text-right font-semibold hidden lg:table-cell">السعر بدون ضريبة</th>
+                        <th className="p-2 sm:p-3 text-right font-semibold hidden lg:table-cell">الضريبة</th>
+                        <th className="p-2 sm:p-3 text-right font-semibold">السعر شامل</th>
+                        <th className="p-2 sm:p-3 text-right font-semibold">إجراءات</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y">
@@ -494,54 +494,54 @@ export default function ProductsPage() {
                       ) : (
                         paginatedProducts.map((product, index) => (
                           <tr key={product.id} className="hover:bg-muted/30" data-testid={`row-product-${product.id}`}>
-                            <td className="p-3 text-muted-foreground text-xs">
+                            <td className="p-2 sm:p-3 text-muted-foreground text-xs">
                               {(currentPage - 1) * itemsPerPage + index + 1}
                             </td>
-                            <td className="p-3">
-                              <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
+                            <td className="p-2 sm:p-3 hidden md:table-cell">
+                              <code className="text-[10px] sm:text-xs bg-muted px-1.5 py-0.5 rounded">
                                 {(product as any).sku || "-"}
                               </code>
                             </td>
-                            <td className="p-3 font-medium">{product.name}</td>
-                            <td className="p-3">
-                              <Badge className={getCategoryBadgeColor(product.category)} variant="secondary">
+                            <td className="p-2 sm:p-3 font-medium text-xs sm:text-sm">{product.name}</td>
+                            <td className="p-2 sm:p-3">
+                              <Badge className={`${getCategoryBadgeColor(product.category)} text-[10px] sm:text-xs`} variant="secondary">
                                 {product.category}
                               </Badge>
                             </td>
-                            <td className="p-3">
-                              <Badge className={getProductTypeBadgeColor((product as any).productType || "finish")} variant="secondary">
+                            <td className="p-2 sm:p-3 hidden md:table-cell">
+                              <Badge className={`${getProductTypeBadgeColor((product as any).productType || "finish")} text-[10px] sm:text-xs`} variant="secondary">
                                 {getProductTypeLabel((product as any).productType || "finish")}
                               </Badge>
                             </td>
-                            <td className="p-3 text-muted-foreground">{product.unit}</td>
-                            <td className="p-3 tabular-nums">
+                            <td className="p-2 sm:p-3 text-muted-foreground hidden lg:table-cell">{product.unit}</td>
+                            <td className="p-2 sm:p-3 tabular-nums hidden lg:table-cell">
                               {((product as any).priceExclVat || 0).toFixed(2)}
                             </td>
-                            <td className="p-3 tabular-nums text-muted-foreground">
+                            <td className="p-2 sm:p-3 tabular-nums text-muted-foreground hidden lg:table-cell">
                               {((product as any).vatAmount || 0).toFixed(2)}
                             </td>
-                            <td className="p-3 tabular-nums font-semibold text-primary">
+                            <td className="p-2 sm:p-3 tabular-nums font-semibold text-primary text-xs sm:text-sm">
                               {(product.basePrice || 0).toFixed(2)} ر.س
                             </td>
-                            <td className="p-3">
+                            <td className="p-2 sm:p-3">
                               <div className="flex items-center gap-1">
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-11 w-11 sm:h-8 sm:w-8"
+                                  className="h-8 w-8 sm:h-8 sm:w-8"
                                   onClick={() => handleEdit(product)}
                                   data-testid={`button-edit-${product.id}`}
                                 >
-                                  <Edit className="w-4 h-4" />
+                                  <Edit className="w-3 h-3 sm:w-4 sm:h-4" />
                                 </Button>
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-11 w-11 sm:h-8 sm:w-8 text-destructive hover:text-destructive"
+                                  className="h-8 w-8 sm:h-8 sm:w-8 text-destructive hover:text-destructive"
                                   onClick={() => deleteMutation.mutate(product.id)}
                                   data-testid={`button-delete-${product.id}`}
                                 >
-                                  <Trash2 className="w-4 h-4" />
+                                  <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
                                 </Button>
                               </div>
                             </td>

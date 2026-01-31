@@ -629,52 +629,52 @@ export default function ConstructionProjectDetailPage() {
           )}
         </div>
 
-        <div className="grid gap-4 grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-5">
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-muted-foreground">الميزانية المخططة</CardTitle>
+            <CardHeader className="p-3 sm:p-4 pb-2">
+              <CardTitle className="text-xs sm:text-sm text-muted-foreground">الميزانية المخططة</CardTitle>
             </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold">{formatCurrency(totalPlannedBudget || project.budget)}</p>
+            <CardContent className="p-3 sm:p-4 pt-0">
+              <p className="text-lg sm:text-xl md:text-2xl font-bold">{formatCurrency(totalPlannedBudget || project.budget)}</p>
             </CardContent>
           </Card>
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-muted-foreground">التكلفة الفعلية</CardTitle>
+            <CardHeader className="p-3 sm:p-4 pb-2">
+              <CardTitle className="text-xs sm:text-sm text-muted-foreground">التكلفة الفعلية</CardTitle>
             </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold">{formatCurrency(totalActualCost)}</p>
+            <CardContent className="p-3 sm:p-4 pt-0">
+              <p className="text-lg sm:text-xl md:text-2xl font-bold">{formatCurrency(totalActualCost)}</p>
             </CardContent>
           </Card>
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-muted-foreground">الفرق</CardTitle>
+            <CardHeader className="p-3 sm:p-4 pb-2">
+              <CardTitle className="text-xs sm:text-sm text-muted-foreground">الفرق</CardTitle>
             </CardHeader>
-            <CardContent>
-              <p className={`text-2xl font-bold ${(totalPlannedBudget - totalActualCost) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            <CardContent className="p-3 sm:p-4 pt-0">
+              <p className={`text-lg sm:text-xl md:text-2xl font-bold ${(totalPlannedBudget - totalActualCost) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                 {formatCurrency(Math.abs(totalPlannedBudget - totalActualCost))}
-                <span className="text-sm mr-1">{(totalPlannedBudget - totalActualCost) >= 0 ? '(وفر)' : '(تجاوز)'}</span>
+                <span className="text-[10px] sm:text-xs md:text-sm mr-1">{(totalPlannedBudget - totalActualCost) >= 0 ? '(وفر)' : '(تجاوز)'}</span>
               </p>
             </CardContent>
           </Card>
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-muted-foreground">نسبة التقدم</CardTitle>
+            <CardHeader className="p-3 sm:p-4 pb-2">
+              <CardTitle className="text-xs sm:text-sm text-muted-foreground">نسبة التقدم</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-3 sm:p-4 pt-0">
               <div className="space-y-2">
-                <p className="text-2xl font-bold">{project.progressPercent || 0}%</p>
+                <p className="text-lg sm:text-xl md:text-2xl font-bold">{project.progressPercent || 0}%</p>
                 <Progress value={project.progressPercent || 0} className="h-2" />
               </div>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-muted-foreground">بنود العمل</CardTitle>
+          <Card className="col-span-2 lg:col-span-1">
+            <CardHeader className="p-3 sm:p-4 pb-2">
+              <CardTitle className="text-xs sm:text-sm text-muted-foreground">بنود العمل</CardTitle>
             </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold">{completedItems}/{workItems.length}</p>
-              <p className="text-xs text-muted-foreground">مكتملة</p>
+            <CardContent className="p-3 sm:p-4 pt-0">
+              <p className="text-lg sm:text-xl md:text-2xl font-bold">{completedItems}/{workItems.length}</p>
+              <p className="text-[10px] sm:text-xs text-muted-foreground">مكتملة</p>
             </CardContent>
           </Card>
         </div>
@@ -850,44 +850,45 @@ export default function ConstructionProjectDetailPage() {
                           </CardHeader>
                         </CollapsibleTrigger>
                         <CollapsibleContent>
-                          <CardContent className="pt-0">
-                            <div className="overflow-x-auto">
-                              <Table>
+                          <CardContent className="pt-0 p-2 sm:p-4">
+                            <div className="overflow-x-auto -mx-2 sm:mx-0">
+                              <Table className="min-w-[500px]">
                                 <TableHeader>
-                                  <TableRow className="text-xs bg-muted/30">
-                                    <TableHead className="w-10">#</TableHead>
-                                    <TableHead className="min-w-[300px]">البيان</TableHead>
-                                    <TableHead className="w-28">المقاول</TableHead>
-                                    <TableHead className="w-28 text-left">التكلفة</TableHead>
-                                    <TableHead className="w-20">الحالة</TableHead>
-                                    {canEdit && <TableHead className="w-16">إجراءات</TableHead>}
+                                  <TableRow className="text-[10px] sm:text-xs bg-muted/30">
+                                    <TableHead className="w-8 sm:w-10">#</TableHead>
+                                    <TableHead className="min-w-[200px] sm:min-w-[300px]">البيان</TableHead>
+                                    <TableHead className="hidden md:table-cell w-28">المقاول</TableHead>
+                                    <TableHead className="w-24 sm:w-28 text-left">التكلفة</TableHead>
+                                    <TableHead className="w-16 sm:w-20">الحالة</TableHead>
+                                    {canEdit && <TableHead className="w-14 sm:w-16">إجراءات</TableHead>}
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                   {group.items.map((item, itemIndex) => (
-                                    <TableRow key={item.id} className="text-sm hover:bg-amber-50/30" data-testid={`row-work-item-${item.id}`}>
-                                      <TableCell className="text-muted-foreground text-xs font-medium">{itemIndex + 1}</TableCell>
+                                    <TableRow key={item.id} className="text-xs sm:text-sm hover:bg-amber-50/30" data-testid={`row-work-item-${item.id}`}>
+                                      <TableCell className="text-muted-foreground text-[10px] sm:text-xs font-medium">{itemIndex + 1}</TableCell>
                                       <TableCell>
                                         <div>
-                                          <p className="font-medium text-sm" title={item.name}>{item.name}</p>
+                                          <p className="font-medium text-xs sm:text-sm" title={item.name}>{item.name}</p>
                                           {item.description && (
-                                            <p className="text-xs text-muted-foreground mt-0.5">{item.description}</p>
+                                            <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 line-clamp-2">{item.description}</p>
                                           )}
+                                          <p className="text-[10px] text-gray-400 md:hidden">{getContractorName(item.contractorId)}</p>
                                           {(item.scheduledStart || item.scheduledEnd) && (
-                                            <p className="text-xs text-blue-600 mt-0.5">
+                                            <p className="text-[10px] sm:text-xs text-blue-600 mt-0.5">
                                               📅 {item.scheduledStart && `من: ${item.scheduledStart}`}
                                               {item.scheduledStart && item.scheduledEnd && " - "}
                                               {item.scheduledEnd && `إلى: ${item.scheduledEnd}`}
                                             </p>
                                           )}
                                           {item.notes && (
-                                            <p className="text-xs text-amber-600 mt-0.5">📝 {item.notes}</p>
+                                            <p className="text-[10px] sm:text-xs text-amber-600 mt-0.5 line-clamp-1">📝 {item.notes}</p>
                                           )}
                                         </div>
                                       </TableCell>
-                                      <TableCell className="text-xs">{getContractorName(item.contractorId)}</TableCell>
+                                      <TableCell className="hidden md:table-cell text-xs">{getContractorName(item.contractorId)}</TableCell>
                                       <TableCell className="text-left">
-                                        <p className="font-semibold text-sm">{formatCurrency(item.actualCost)}</p>
+                                        <p className="font-semibold text-xs sm:text-sm">{formatCurrency(item.actualCost)}</p>
                                       </TableCell>
                                       <TableCell>{getWorkItemStatusBadge(item.status)}</TableCell>
                                       {canEdit && (
@@ -908,9 +909,9 @@ export default function ConstructionProjectDetailPage() {
                                   ))}
                                   <TableRow className="bg-amber-100/50 font-bold border-t-2 border-amber-300">
                                     <TableCell></TableCell>
-                                    <TableCell className="text-sm">مجموع {group.category?.name || "غير مصنف"}</TableCell>
-                                    <TableCell className="text-xs">{group.items.length} بند</TableCell>
-                                    <TableCell className="text-left text-sm font-bold text-primary">{formatCurrency(group.totalCost)}</TableCell>
+                                    <TableCell className="text-xs sm:text-sm">مجموع {group.category?.name || "غير مصنف"}</TableCell>
+                                    <TableCell className="hidden md:table-cell text-xs">{group.items.length} بند</TableCell>
+                                    <TableCell className="text-left text-xs sm:text-sm font-bold text-primary">{formatCurrency(group.totalCost)}</TableCell>
                                     <TableCell></TableCell>
                                     {canEdit && <TableCell></TableCell>}
                                   </TableRow>

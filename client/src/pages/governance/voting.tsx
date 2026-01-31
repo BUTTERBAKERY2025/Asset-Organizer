@@ -569,30 +569,30 @@ export default function VotingPage() {
 
   return (
     <Layout>
-      <div className="max-w-6xl mx-auto p-4 md:p-8 lg:p-10 space-y-4" dir="rtl">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
+      <div className="max-w-6xl mx-auto p-3 sm:p-4 md:p-6 space-y-4" dir="rtl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
             <Link href="/governance">
               <Button variant="ghost" size="icon" className="h-8 w-8">
                 <ChevronLeft className="h-4 w-4" />
               </Button>
             </Link>
-            <div className="p-3 bg-gradient-to-br from-pink-500 to-rose-600 rounded-xl">
-              <Vote className="w-7 h-7 text-white" />
+            <div className="p-2 sm:p-3 bg-gradient-to-br from-pink-500 to-rose-600 rounded-xl">
+              <Vote className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-pink-800" data-testid="page-title">
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-pink-800" data-testid="page-title">
                 التصويت الإلكتروني المتقدم
               </h1>
-              <p className="text-gray-600">تصويت مرجح - وكالات - سجل تدقيق كامل</p>
+              <p className="text-xs sm:text-sm text-gray-600">تصويت مرجح - وكالات - سجل تدقيق كامل</p>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="gap-2">
-                  <Download className="h-4 w-4" />
-                  تصدير
+                <Button variant="outline" className="gap-2 text-xs sm:text-sm">
+                  <Download className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="hidden sm:inline">تصدير</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -640,92 +640,92 @@ export default function VotingPage() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button variant="outline" className="gap-2" onClick={() => setShowQuorumDetails(true)}>
-              <Scale className="h-4 w-4" />
-              النصاب
+            <Button variant="outline" className="gap-2 text-xs sm:text-sm" onClick={() => setShowQuorumDetails(true)}>
+              <Scale className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">النصاب</span>
             </Button>
-            <Button variant="outline" className="gap-2" onClick={() => { setShowAuditLog(true); refetchAuditLogs(); }}>
-              <History className="h-4 w-4" />
-              سجل التدقيق
+            <Button variant="outline" className="gap-2 text-xs sm:text-sm" onClick={() => { setShowAuditLog(true); refetchAuditLogs(); }}>
+              <History className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">سجل التدقيق</span>
             </Button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
           <Card className="bg-gradient-to-br from-pink-50 to-rose-50 border-pink-200">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-pink-600">قيد التصويت</p>
-                  <p className="text-2xl font-bold text-pink-800">{votingResolutions.length}</p>
+                  <p className="text-xs sm:text-sm text-pink-600">قيد التصويت</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-pink-800">{votingResolutions.length}</p>
                 </div>
-                <Vote className="h-8 w-8 text-pink-500" />
+                <Vote className="h-6 w-6 sm:h-8 sm:w-8 text-pink-500" />
               </div>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-amber-50 to-yellow-50 border-amber-200">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-amber-600">تصويت مسبق</p>
-                  <p className="text-2xl font-bold text-amber-800">{preVotingResolutions.length}</p>
+                  <p className="text-xs sm:text-sm text-amber-600">تصويت مسبق</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-amber-800">{preVotingResolutions.length}</p>
                 </div>
-                <Clock className="h-8 w-8 text-amber-500" />
+                <Clock className="h-6 w-6 sm:h-8 sm:w-8 text-amber-500" />
               </div>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-green-600">معتمدة</p>
-                  <p className="text-2xl font-bold text-green-800">
+                  <p className="text-xs sm:text-sm text-green-600">معتمدة</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-green-800">
                     {resolutions.filter(r => r.status === 'approved').length}
                   </p>
                 </div>
-                <CheckCircle className="h-8 w-8 text-green-500" />
+                <CheckCircle className="h-6 w-6 sm:h-8 sm:w-8 text-green-500" />
               </div>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-red-50 to-rose-50 border-red-200">
-            <CardContent className="p-4">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-red-600">مرفوضة</p>
-                  <p className="text-2xl font-bold text-red-800">
+                  <p className="text-xs sm:text-sm text-red-600">مرفوضة</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-red-800">
                     {resolutions.filter(r => r.status === 'rejected').length}
                   </p>
                 </div>
-                <XCircle className="h-8 w-8 text-red-500" />
+                <XCircle className="h-6 w-6 sm:h-8 sm:w-8 text-red-500" />
               </div>
             </CardContent>
           </Card>
-          <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
-            <CardContent className="p-4">
+          <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200 col-span-2 lg:col-span-1">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-blue-600">إجمالي الأسهم</p>
-                  <p className="text-2xl font-bold text-blue-800">{totalShares.toLocaleString()}</p>
+                  <p className="text-xs sm:text-sm text-blue-600">إجمالي الأسهم</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-blue-800">{totalShares.toLocaleString()}</p>
                 </div>
-                <BarChart3 className="h-8 w-8 text-blue-500" />
+                <BarChart3 className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500" />
               </div>
             </CardContent>
           </Card>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full max-w-lg grid-cols-3">
-            <TabsTrigger value="active" className="gap-2">
-              <Vote className="h-4 w-4" />
-              جارية ({votingResolutions.length})
+          <TabsList className="grid w-full max-w-lg grid-cols-3 text-xs sm:text-sm">
+            <TabsTrigger value="active" className="gap-1 sm:gap-2 px-1 sm:px-3">
+              <Vote className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">جارية</span> ({votingResolutions.length})
             </TabsTrigger>
-            <TabsTrigger value="pre" className="gap-2">
-              <Clock className="h-4 w-4" />
-              مسبقة ({preVotingResolutions.length})
+            <TabsTrigger value="pre" className="gap-1 sm:gap-2 px-1 sm:px-3">
+              <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">مسبقة</span> ({preVotingResolutions.length})
             </TabsTrigger>
-            <TabsTrigger value="completed" className="gap-2">
-              <CheckCircle className="h-4 w-4" />
-              مكتملة ({completedVotes.length})
+            <TabsTrigger value="completed" className="gap-1 sm:gap-2 px-1 sm:px-3">
+              <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">مكتملة</span> ({completedVotes.length})
             </TabsTrigger>
           </TabsList>
 
