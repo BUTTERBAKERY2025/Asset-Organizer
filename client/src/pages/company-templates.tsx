@@ -416,21 +416,21 @@ function FinalSettlementTemplate() {
           <Input type="date" value={formData.endDate} onChange={(e) => setFormData({...formData, endDate: e.target.value})} />
         </div>
         <div className="space-y-2 col-span-2">
-          <Label>سبب انتهاء العلاقة مع الشركة</Label>
+          <Label>سبب انتهاء العلاقة مع الشركة / Termination Reason</Label>
           <Input value={formData.endReason} onChange={(e) => setFormData({...formData, endReason: e.target.value})} />
         </div>
         <div className="space-y-2">
-          <Label>مبلغ المخالصة (ريال)</Label>
+          <Label>مبلغ المخالصة (ريال) / Settlement Amount (SAR)</Label>
           <Input type="number" value={formData.totalAmount} onChange={(e) => setFormData({...formData, totalAmount: e.target.value})} />
         </div>
         <div className="space-y-2">
-          <Label>المبلغ كتابة</Label>
-          <Input value={formData.totalAmountWords} onChange={(e) => setFormData({...formData, totalAmountWords: e.target.value})} placeholder="فقط ... ريال لا غير" />
+          <Label>المبلغ كتابة / Amount in Words</Label>
+          <Input value={formData.totalAmountWords} onChange={(e) => setFormData({...formData, totalAmountWords: e.target.value})} placeholder="فقط ... ريال لا غير / Only ... SAR" />
         </div>
       </div>
 
       <Button onClick={() => handlePrint()} className="w-full gap-2 bg-green-600 hover:bg-green-700">
-        <Printer className="h-4 w-4" /> طباعة النموذج
+        <Printer className="h-4 w-4" /> طباعة النموذج / Print
       </Button>
 
       <div className="hidden">
@@ -446,9 +446,9 @@ function FinalSettlementTemplate() {
               <div><span className="font-semibold">الوظيفة / Job Title:</span> {formData.position}</div>
               <div><span className="font-semibold">الإدارة / Dept:</span> {formData.department}</div>
               <div><span className="font-semibold">القسم / Section:</span> {formData.section}</div>
-              <div><span className="font-semibold">تاريخ التعيين:</span> {formData.joiningDate}</div>
-              <div><span className="font-semibold">تاريخ انتهاء الخدمة:</span> {formData.endDate}</div>
-              <div className="col-span-2"><span className="font-semibold">سبب انتهاء العلاقة:</span> {formData.endReason}</div>
+              <div><span className="font-semibold">تاريخ التعيين / Joining Date:</span> {formData.joiningDate}</div>
+              <div><span className="font-semibold">تاريخ انتهاء الخدمة / End Date:</span> {formData.endDate}</div>
+              <div className="col-span-2"><span className="font-semibold">سبب انتهاء العلاقة / Termination Reason:</span> {formData.endReason}</div>
             </div>
           </div>
 
@@ -481,9 +481,7 @@ function FinalSettlementTemplate() {
             </div>
           </div>
 
-          <div className="mt-6 text-center text-xs text-slate-500">
-            <p>{COMPANY_INFO.name} - سجل تجاري: {COMPANY_INFO.cr}</p>
-          </div>
+          <CompanyFooter />
         </div>
       </div>
     </div>
@@ -524,19 +522,19 @@ function PaymentOrderTemplate() {
           <Input type="date" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} />
         </div>
         <div className="space-y-2">
-          <Label>اسم المستفيد</Label>
+          <Label>اسم المستفيد / Beneficiary Name</Label>
           <Input value={formData.beneficiaryName} onChange={(e) => setFormData({...formData, beneficiaryName: e.target.value})} />
         </div>
         <div className="space-y-2">
-          <Label>المبلغ (ريال)</Label>
+          <Label>المبلغ (ريال) / Amount (SAR)</Label>
           <Input type="number" value={formData.amount} onChange={(e) => setFormData({...formData, amount: e.target.value})} />
         </div>
         <div className="space-y-2">
-          <Label>المبلغ كتابة</Label>
+          <Label>المبلغ كتابة / Amount in Words</Label>
           <Input value={formData.amountWords} onChange={(e) => setFormData({...formData, amountWords: e.target.value})} />
         </div>
         <div className="space-y-2 col-span-2">
-          <Label>الغرض من الصرف</Label>
+          <Label>الغرض من الصرف / Payment Purpose</Label>
           <Select value={formData.purpose} onValueChange={(value) => setFormData({...formData, purpose: value})}>
             <SelectTrigger>
               <SelectValue />
@@ -550,31 +548,31 @@ function PaymentOrderTemplate() {
         </div>
         {formData.purpose === "other" && (
           <div className="space-y-2 col-span-2">
-            <Label>تحديد الغرض</Label>
+            <Label>تحديد الغرض / Specify Purpose</Label>
             <Input value={formData.customPurpose} onChange={(e) => setFormData({...formData, customPurpose: e.target.value})} />
           </div>
         )}
         <div className="space-y-2">
-          <Label>طريقة الدفع</Label>
+          <Label>طريقة الدفع / Payment Method</Label>
           <Select value={formData.paymentMethod} onValueChange={(value) => setFormData({...formData, paymentMethod: value})}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="cash">نقدي</SelectItem>
-              <SelectItem value="check">شيك</SelectItem>
-              <SelectItem value="transfer">تحويل بنكي</SelectItem>
+              <SelectItem value="cash">نقدي / Cash</SelectItem>
+              <SelectItem value="check">شيك / Cheque</SelectItem>
+              <SelectItem value="transfer">تحويل بنكي / Bank Transfer</SelectItem>
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-2">
-          <Label>مدير الإدارة الطالبة</Label>
+          <Label>مدير الإدارة الطالبة / Requesting Dept. Manager</Label>
           <Input value={formData.departmentManager} onChange={(e) => setFormData({...formData, departmentManager: e.target.value})} />
         </div>
       </div>
 
       <Button onClick={() => handlePrint()} className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700">
-        <Printer className="h-4 w-4" /> طباعة النموذج
+        <Printer className="h-4 w-4" /> طباعة النموذج / Print
       </Button>
 
       <div className="hidden">
@@ -712,7 +710,7 @@ function ClearanceTemplate() {
           <Input value={formData.section} onChange={(e) => setFormData({...formData, section: e.target.value})} />
         </div>
         <div className="space-y-2 col-span-2">
-          <Label>سبب إخلاء الطرف</Label>
+          <Label>سبب إخلاء الطرف / Clearance Reason</Label>
           <Select value={formData.clearanceReason} onValueChange={(value) => setFormData({...formData, clearanceReason: value})}>
             <SelectTrigger>
               <SelectValue />
@@ -726,7 +724,7 @@ function ClearanceTemplate() {
       </div>
 
       <Button onClick={() => handlePrint()} className="w-full gap-2 bg-slate-600 hover:bg-slate-700">
-        <Printer className="h-4 w-4" /> طباعة النموذج
+        <Printer className="h-4 w-4" /> طباعة النموذج / Print
       </Button>
 
       <div className="hidden">
@@ -841,7 +839,7 @@ function PenaltyTemplate() {
           <Input value={formData.position} onChange={(e) => setFormData({...formData, position: e.target.value})} />
         </div>
         <div className="space-y-2">
-          <Label>نوع الإجراء الجزائي</Label>
+          <Label>نوع الإجراء الجزائي / Penalty Type</Label>
           <Select value={formData.penaltyType} onValueChange={(value) => setFormData({...formData, penaltyType: value})}>
             <SelectTrigger>
               <SelectValue />
@@ -855,18 +853,18 @@ function PenaltyTemplate() {
         </div>
         {formData.penaltyType === "suspension" && (
           <div className="space-y-2">
-            <Label>عدد أيام الإيقاف</Label>
+            <Label>عدد أيام الإيقاف / Suspension Days</Label>
             <Input type="number" value={formData.suspensionDays} onChange={(e) => setFormData({...formData, suspensionDays: e.target.value})} />
           </div>
         )}
         <div className="space-y-2 col-span-2">
-          <Label>المخالفة</Label>
+          <Label>المخالفة / Violation</Label>
           <Textarea value={formData.violation} onChange={(e) => setFormData({...formData, violation: e.target.value})} rows={3} />
         </div>
       </div>
 
       <Button onClick={() => handlePrint()} className="w-full gap-2 bg-red-600 hover:bg-red-700">
-        <Printer className="h-4 w-4" /> طباعة النموذج
+        <Printer className="h-4 w-4" /> طباعة النموذج / Print
       </Button>
 
       <div className="hidden">
@@ -971,17 +969,17 @@ function AssetHandoverTemplate() {
         <div className="space-y-3">
           {formData.assets.map((asset, index) => (
             <div key={index} className="grid grid-cols-4 gap-2">
-              <Input placeholder="بيان العهدة" value={asset.description} onChange={(e) => updateAsset(index, "description", e.target.value)} />
-              <Input placeholder="العدد" value={asset.quantity} onChange={(e) => updateAsset(index, "quantity", e.target.value)} />
-              <Input placeholder="الحالة" value={asset.condition} onChange={(e) => updateAsset(index, "condition", e.target.value)} />
-              <Input placeholder="ملاحظات" value={asset.remarks} onChange={(e) => updateAsset(index, "remarks", e.target.value)} />
+              <Input placeholder="بيان العهدة / Description" value={asset.description} onChange={(e) => updateAsset(index, "description", e.target.value)} />
+              <Input placeholder="العدد / Qty" value={asset.quantity} onChange={(e) => updateAsset(index, "quantity", e.target.value)} />
+              <Input placeholder="الحالة / Condition" value={asset.condition} onChange={(e) => updateAsset(index, "condition", e.target.value)} />
+              <Input placeholder="ملاحظات / Remarks" value={asset.remarks} onChange={(e) => updateAsset(index, "remarks", e.target.value)} />
             </div>
           ))}
         </div>
       </div>
 
       <Button onClick={() => handlePrint()} className="w-full gap-2 bg-orange-600 hover:bg-orange-700">
-        <Printer className="h-4 w-4" /> طباعة النموذج
+        <Printer className="h-4 w-4" /> طباعة النموذج / Print
       </Button>
 
       <div className="hidden">
@@ -1082,52 +1080,52 @@ function EmployeeStatusChangeTemplate() {
           <Input value={formData.employeeNo} onChange={(e) => setFormData({...formData, employeeNo: e.target.value})} />
         </div>
         <div className="space-y-2">
-          <Label>الإدارة/القسم الحالي</Label>
+          <Label>الإدارة/القسم الحالي / Current Dept/Section</Label>
           <Input value={formData.department} onChange={(e) => setFormData({...formData, department: e.target.value})} />
         </div>
         <div className="space-y-2">
-          <Label>تاريخ التعيين</Label>
+          <Label>تاريخ التعيين / Date of Hire</Label>
           <Input type="date" value={formData.hireDate} onChange={(e) => setFormData({...formData, hireDate: e.target.value})} />
         </div>
         <div className="space-y-2">
-          <Label>الراتب الأساسي الحالي</Label>
+          <Label>الراتب الأساسي الحالي / Current Basic Salary</Label>
           <Input value={formData.currentSalary} onChange={(e) => setFormData({...formData, currentSalary: e.target.value})} />
         </div>
       </div>
 
       <div className="border rounded-lg p-4">
-        <h4 className="font-semibold mb-3">تفاصيل التعديل</h4>
+        <h4 className="font-semibold mb-3">تفاصيل التعديل / Change Details</h4>
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-3">
-            <h5 className="font-medium text-slate-600">من (الحالي)</h5>
-            <Input placeholder="الوظيفة" value={formData.fromPosition} onChange={(e) => setFormData({...formData, fromPosition: e.target.value})} />
-            <Input placeholder="الموقع" value={formData.fromLocation} onChange={(e) => setFormData({...formData, fromLocation: e.target.value})} />
-            <Input placeholder="الإدارة/القسم" value={formData.fromDepartment} onChange={(e) => setFormData({...formData, fromDepartment: e.target.value})} />
-            <Input placeholder="الأجر" value={formData.fromSalary} onChange={(e) => setFormData({...formData, fromSalary: e.target.value})} />
+            <h5 className="font-medium text-slate-600">من (الحالي) / From (Current)</h5>
+            <Input placeholder="الوظيفة / Position" value={formData.fromPosition} onChange={(e) => setFormData({...formData, fromPosition: e.target.value})} />
+            <Input placeholder="الموقع / Location" value={formData.fromLocation} onChange={(e) => setFormData({...formData, fromLocation: e.target.value})} />
+            <Input placeholder="الإدارة/القسم / Dept" value={formData.fromDepartment} onChange={(e) => setFormData({...formData, fromDepartment: e.target.value})} />
+            <Input placeholder="الأجر / Salary" value={formData.fromSalary} onChange={(e) => setFormData({...formData, fromSalary: e.target.value})} />
           </div>
           <div className="space-y-3">
-            <h5 className="font-medium text-slate-600">إلى (الجديد)</h5>
-            <Input placeholder="الوظيفة" value={formData.toPosition} onChange={(e) => setFormData({...formData, toPosition: e.target.value})} />
-            <Input placeholder="الموقع" value={formData.toLocation} onChange={(e) => setFormData({...formData, toLocation: e.target.value})} />
-            <Input placeholder="الإدارة/القسم" value={formData.toDepartment} onChange={(e) => setFormData({...formData, toDepartment: e.target.value})} />
-            <Input placeholder="الأجر" value={formData.toSalary} onChange={(e) => setFormData({...formData, toSalary: e.target.value})} />
+            <h5 className="font-medium text-slate-600">إلى (الجديد) / To (New)</h5>
+            <Input placeholder="الوظيفة / Position" value={formData.toPosition} onChange={(e) => setFormData({...formData, toPosition: e.target.value})} />
+            <Input placeholder="الموقع / Location" value={formData.toLocation} onChange={(e) => setFormData({...formData, toLocation: e.target.value})} />
+            <Input placeholder="الإدارة/القسم / Dept" value={formData.toDepartment} onChange={(e) => setFormData({...formData, toDepartment: e.target.value})} />
+            <Input placeholder="الأجر / Salary" value={formData.toSalary} onChange={(e) => setFormData({...formData, toSalary: e.target.value})} />
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label>وذلك من تاريخ</Label>
+          <Label>وذلك من تاريخ / Effective Date</Label>
           <Input type="date" value={formData.effectiveDate} onChange={(e) => setFormData({...formData, effectiveDate: e.target.value})} />
         </div>
         <div className="space-y-2">
-          <Label>سبب تقديم الطلب</Label>
+          <Label>سبب تقديم الطلب / Reason</Label>
           <Input value={formData.reason} onChange={(e) => setFormData({...formData, reason: e.target.value})} />
         </div>
       </div>
 
       <Button onClick={() => handlePrint()} className="w-full gap-2 bg-indigo-600 hover:bg-indigo-700">
-        <Printer className="h-4 w-4" /> طباعة النموذج
+        <Printer className="h-4 w-4" /> طباعة النموذج / Print
       </Button>
 
       <div className="hidden">
@@ -1275,37 +1273,37 @@ function ProbationEvaluationTemplate() {
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label>اسم الموظف</Label>
+          <Label>اسم الموظف / Employee Name</Label>
           <Input value={formData.employeeName} onChange={(e) => setFormData({...formData, employeeName: e.target.value})} />
         </div>
         <div className="space-y-2">
-          <Label>الوظيفة</Label>
+          <Label>الوظيفة / Position</Label>
           <Input value={formData.position} onChange={(e) => setFormData({...formData, position: e.target.value})} />
         </div>
         <div className="space-y-2">
-          <Label>الإدارة</Label>
+          <Label>الإدارة / Department</Label>
           <Input value={formData.department} onChange={(e) => setFormData({...formData, department: e.target.value})} />
         </div>
         <div className="space-y-2">
-          <Label>تاريخ التعيين</Label>
+          <Label>تاريخ التعيين / Hire Date</Label>
           <Input type="date" value={formData.hireDate} onChange={(e) => setFormData({...formData, hireDate: e.target.value})} />
         </div>
         <div className="space-y-2">
-          <Label>اسم المسؤول المباشر</Label>
+          <Label>اسم المسؤول المباشر / Supervisor Name</Label>
           <Input value={formData.supervisorName} onChange={(e) => setFormData({...formData, supervisorName: e.target.value})} />
         </div>
         <div className="space-y-2">
-          <Label>تاريخ التقييم</Label>
+          <Label>تاريخ التقييم / Evaluation Date</Label>
           <Input type="date" value={formData.evaluationDate} onChange={(e) => setFormData({...formData, evaluationDate: e.target.value})} />
         </div>
       </div>
 
       <div className="border rounded-lg p-4">
-        <h4 className="font-semibold mb-3">عناصر التقويم (من 10)</h4>
+        <h4 className="font-semibold mb-3">عناصر التقويم (من 10) / Evaluation Items (out of 10)</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {evaluationItems.map((item) => (
             <div key={item.key} className="flex items-center gap-3">
-              <Label className="flex-1">{item.label}</Label>
+              <Label className="flex-1">{item.label} / {item.labelEn}</Label>
               <Select 
                 value={String(formData.scores[item.key as keyof typeof formData.scores])} 
                 onValueChange={(value) => setFormData({
@@ -1326,7 +1324,7 @@ function ProbationEvaluationTemplate() {
           ))}
         </div>
         <div className="mt-4 p-3 bg-slate-100 rounded flex justify-between items-center">
-          <span className="font-semibold">المجموع: {totalScore} / 100</span>
+          <span className="font-semibold">المجموع / Total: {totalScore} / 100</span>
           <Badge className={totalScore >= 70 ? "bg-green-600" : totalScore >= 60 ? "bg-amber-600" : "bg-red-600"}>
             {getGrade(totalScore)}
           </Badge>
@@ -1334,21 +1332,21 @@ function ProbationEvaluationTemplate() {
       </div>
 
       <div className="space-y-2">
-        <Label>توصية المسؤول المباشر</Label>
+        <Label>توصية المسؤول المباشر / Supervisor Recommendation</Label>
         <Select value={formData.recommendation} onValueChange={(value) => setFormData({...formData, recommendation: value})}>
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="confirm">تثبيت</SelectItem>
-            <SelectItem value="extend">تمديد فترة التجربة</SelectItem>
-            <SelectItem value="terminate">الاستغناء عن الخدمة</SelectItem>
+            <SelectItem value="confirm">تثبيت / Confirm</SelectItem>
+            <SelectItem value="extend">تمديد فترة التجربة / Extend Probation</SelectItem>
+            <SelectItem value="terminate">الاستغناء عن الخدمة / Terminate</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
       <div className="space-y-2">
-        <Label>ملاحظات</Label>
+        <Label>ملاحظات / Remarks</Label>
         <Textarea value={formData.notes} onChange={(e) => setFormData({...formData, notes: e.target.value})} rows={3} />
       </div>
 
@@ -1488,82 +1486,82 @@ function JobOfferTemplate() {
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="space-y-2">
-          <Label>التاريخ</Label>
+          <Label>التاريخ / Date</Label>
           <Input type="date" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} />
         </div>
         <div className="space-y-2">
-          <Label>الاسم الكامل</Label>
+          <Label>الاسم الكامل / Full Name</Label>
           <Input value={formData.employeeName} onChange={(e) => setFormData({...formData, employeeName: e.target.value})} />
         </div>
         <div className="space-y-2">
-          <Label>الجنسية</Label>
+          <Label>الجنسية / Nationality</Label>
           <Input value={formData.nationality} onChange={(e) => setFormData({...formData, nationality: e.target.value})} />
         </div>
         <div className="space-y-2">
-          <Label>رقم الهوية/الإقامة</Label>
+          <Label>رقم الهوية/الإقامة / ID/Iqama No</Label>
           <Input value={formData.idNumber} onChange={(e) => setFormData({...formData, idNumber: e.target.value})} />
         </div>
         <div className="space-y-2">
-          <Label>مكان الإصدار</Label>
+          <Label>مكان الإصدار / Issue Place</Label>
           <Input value={formData.idPlace} onChange={(e) => setFormData({...formData, idPlace: e.target.value})} />
         </div>
         <div className="space-y-2">
-          <Label>تاريخ الانتهاء</Label>
+          <Label>تاريخ الانتهاء / Expiry Date</Label>
           <Input type="date" value={formData.idExpiry} onChange={(e) => setFormData({...formData, idExpiry: e.target.value})} />
         </div>
         <div className="space-y-2">
-          <Label>رقم الهاتف</Label>
+          <Label>رقم الهاتف / Phone No</Label>
           <Input value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} />
         </div>
         <div className="space-y-2">
-          <Label>المؤهل العلمي</Label>
+          <Label>المؤهل العلمي / Qualification</Label>
           <Input value={formData.qualification} onChange={(e) => setFormData({...formData, qualification: e.target.value})} />
         </div>
         <div className="space-y-2">
-          <Label>الوظيفة</Label>
+          <Label>الوظيفة / Position</Label>
           <Input value={formData.position} onChange={(e) => setFormData({...formData, position: e.target.value})} />
         </div>
         <div className="space-y-2">
-          <Label>الفرع</Label>
+          <Label>الفرع / Branch</Label>
           <Input value={formData.branch} onChange={(e) => setFormData({...formData, branch: e.target.value})} />
         </div>
         <div className="space-y-2">
-          <Label>مدة العقد (سنوات)</Label>
+          <Label>مدة العقد (سنوات) / Contract Duration (Years)</Label>
           <Select value={formData.contractDuration} onValueChange={(value) => setFormData({...formData, contractDuration: value})}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="1">سنة واحدة</SelectItem>
-              <SelectItem value="2">سنتان</SelectItem>
+              <SelectItem value="1">سنة واحدة / 1 Year</SelectItem>
+              <SelectItem value="2">سنتان / 2 Years</SelectItem>
             </SelectContent>
           </Select>
         </div>
       </div>
 
       <div className="border rounded-lg p-4">
-        <h4 className="font-semibold mb-3">الراتب والبدلات (شهرياً)</h4>
+        <h4 className="font-semibold mb-3">الراتب والبدلات (شهرياً) / Salary & Allowances (Monthly)</h4>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="space-y-2">
-            <Label>الراتب الأساسي</Label>
+            <Label>الراتب الأساسي / Basic Salary</Label>
             <Input type="number" value={formData.basicSalary} onChange={(e) => setFormData({...formData, basicSalary: e.target.value})} />
           </div>
           <div className="space-y-2">
-            <Label>بدل السكن</Label>
+            <Label>بدل السكن / Housing Allowance</Label>
             <Input type="number" value={formData.housingAllowance} onChange={(e) => setFormData({...formData, housingAllowance: e.target.value})} />
           </div>
           <div className="space-y-2">
-            <Label>بدل المواصلات</Label>
+            <Label>بدل المواصلات / Transport Allowance</Label>
             <Input type="number" value={formData.transportAllowance} onChange={(e) => setFormData({...formData, transportAllowance: e.target.value})} />
           </div>
         </div>
         <div className="mt-3 p-3 bg-amber-50 rounded text-lg font-bold text-amber-800">
-          الإجمالي: {totalSalary.toLocaleString("en-US")} ريال
+          الإجمالي / Total: {totalSalary.toLocaleString("en-US")} ريال SAR
         </div>
       </div>
 
       <Button onClick={() => handlePrint()} className="w-full gap-2 bg-amber-600 hover:bg-amber-700">
-        <Printer className="h-4 w-4" /> طباعة النموذج
+        <Printer className="h-4 w-4" /> طباعة النموذج / Print
       </Button>
 
       <div className="hidden">
@@ -1715,91 +1713,91 @@ function EmploymentApplicationTemplate() {
   return (
     <div className="space-y-6">
       <div className="border rounded-lg p-4">
-        <h4 className="font-semibold mb-3">الوظيفة المطلوبة</h4>
-        <Input value={formData.positionApplied} onChange={(e) => setFormData({...formData, positionApplied: e.target.value})} placeholder="Position Applied For" />
+        <h4 className="font-semibold mb-3">الوظيفة المطلوبة / Position Applied For</h4>
+        <Input value={formData.positionApplied} onChange={(e) => setFormData({...formData, positionApplied: e.target.value})} placeholder="Position Applied For / الوظيفة المطلوبة" />
       </div>
 
       <div className="border rounded-lg p-4">
-        <h4 className="font-semibold mb-3">البيانات الشخصية</h4>
+        <h4 className="font-semibold mb-3">البيانات الشخصية / Personal Information</h4>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="space-y-2">
-            <Label>الاسم الأول</Label>
+            <Label>الاسم الأول / First Name</Label>
             <Input value={formData.firstName} onChange={(e) => setFormData({...formData, firstName: e.target.value})} />
           </div>
           <div className="space-y-2">
-            <Label>اسم الأب</Label>
+            <Label>اسم الأب / Father Name</Label>
             <Input value={formData.fatherName} onChange={(e) => setFormData({...formData, fatherName: e.target.value})} />
           </div>
           <div className="space-y-2">
-            <Label>اسم الجد</Label>
+            <Label>اسم الجد / Grandfather</Label>
             <Input value={formData.grandFatherName} onChange={(e) => setFormData({...formData, grandFatherName: e.target.value})} />
           </div>
           <div className="space-y-2">
-            <Label>اسم العائلة</Label>
+            <Label>اسم العائلة / Family Name</Label>
             <Input value={formData.familyName} onChange={(e) => setFormData({...formData, familyName: e.target.value})} />
           </div>
           <div className="space-y-2">
-            <Label>تاريخ الميلاد</Label>
+            <Label>تاريخ الميلاد / Date of Birth</Label>
             <Input type="date" value={formData.dob} onChange={(e) => setFormData({...formData, dob: e.target.value})} />
           </div>
           <div className="space-y-2">
-            <Label>مكان الميلاد</Label>
+            <Label>مكان الميلاد / Place of Birth</Label>
             <Input value={formData.birthPlace} onChange={(e) => setFormData({...formData, birthPlace: e.target.value})} />
           </div>
           <div className="space-y-2">
-            <Label>الجنسية</Label>
+            <Label>الجنسية / Nationality</Label>
             <Input value={formData.nationality} onChange={(e) => setFormData({...formData, nationality: e.target.value})} />
           </div>
           <div className="space-y-2">
-            <Label>الديانة</Label>
+            <Label>الديانة / Religion</Label>
             <Input value={formData.religion} onChange={(e) => setFormData({...formData, religion: e.target.value})} />
           </div>
           <div className="space-y-2">
-            <Label>رقم الهوية/الإقامة</Label>
+            <Label>رقم الهوية/الإقامة / ID/Iqama No</Label>
             <Input value={formData.idNumber} onChange={(e) => setFormData({...formData, idNumber: e.target.value})} />
           </div>
           <div className="space-y-2">
-            <Label>مكان الإصدار</Label>
+            <Label>مكان الإصدار / Issue Place</Label>
             <Input value={formData.idPlace} onChange={(e) => setFormData({...formData, idPlace: e.target.value})} />
           </div>
           <div className="space-y-2">
-            <Label>تاريخ الانتهاء</Label>
+            <Label>تاريخ الانتهاء / Expiry Date</Label>
             <Input type="date" value={formData.idExpiry} onChange={(e) => setFormData({...formData, idExpiry: e.target.value})} />
           </div>
           <div className="space-y-2">
-            <Label>رقم الجواز</Label>
+            <Label>رقم الجواز / Passport No</Label>
             <Input value={formData.passportNumber} onChange={(e) => setFormData({...formData, passportNumber: e.target.value})} />
           </div>
         </div>
       </div>
 
       <div className="border rounded-lg p-4">
-        <h4 className="font-semibold mb-3">معلومات الاتصال</h4>
+        <h4 className="font-semibold mb-3">معلومات الاتصال / Contact Information</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label>هاتف المنزل</Label>
+            <Label>هاتف المنزل / Home Phone</Label>
             <Input value={formData.homePhone} onChange={(e) => setFormData({...formData, homePhone: e.target.value})} />
           </div>
           <div className="space-y-2">
-            <Label>الجوال</Label>
+            <Label>الجوال / Mobile</Label>
             <Input value={formData.mobile} onChange={(e) => setFormData({...formData, mobile: e.target.value})} />
           </div>
           <div className="space-y-2">
-            <Label>البريد الإلكتروني</Label>
+            <Label>البريد الإلكتروني / Email</Label>
             <Input type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} />
           </div>
           <div className="space-y-2">
-            <Label>العنوان</Label>
+            <Label>العنوان / Address</Label>
             <Input value={formData.address} onChange={(e) => setFormData({...formData, address: e.target.value})} />
           </div>
         </div>
       </div>
 
       <div className="border rounded-lg p-4">
-        <h4 className="font-semibold mb-3">معلومات إضافية</h4>
+        <h4 className="font-semibold mb-3">معلومات إضافية / Additional Information</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label>الحالة الاجتماعية</Label>
+            <Label>الحالة الاجتماعية / Marital Status</Label>
             <Select value={formData.maritalStatus} onValueChange={(value) => setFormData({...formData, maritalStatus: value})}>
               <SelectTrigger>
                 <SelectValue />
@@ -1811,34 +1809,34 @@ function EmploymentApplicationTemplate() {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label>فصيلة الدم</Label>
+            <Label>فصيلة الدم / Blood Group</Label>
             <Input value={formData.bloodGroup} onChange={(e) => setFormData({...formData, bloodGroup: e.target.value})} />
           </div>
           <div className="space-y-2">
-            <Label>نوع رخصة القيادة</Label>
+            <Label>نوع رخصة القيادة / License Type</Label>
             <Input value={formData.licenseType} onChange={(e) => setFormData({...formData, licenseType: e.target.value})} />
           </div>
           <div className="space-y-2">
-            <Label>رقم الرخصة</Label>
+            <Label>رقم الرخصة / License No</Label>
             <Input value={formData.licenseNumber} onChange={(e) => setFormData({...formData, licenseNumber: e.target.value})} />
           </div>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
           <div className="flex items-center gap-2">
             <Checkbox checked={formData.hasDependents} onCheckedChange={(checked) => setFormData({...formData, hasDependents: checked as boolean})} />
-            <Label>لدي معالين</Label>
+            <Label>لدي معالين / Dependents</Label>
           </div>
           <div className="flex items-center gap-2">
             <Checkbox checked={formData.hasDiseases} onCheckedChange={(checked) => setFormData({...formData, hasDiseases: checked as boolean})} />
-            <Label>أمراض مزمنة</Label>
+            <Label>أمراض مزمنة / Chronic Diseases</Label>
           </div>
           <div className="flex items-center gap-2">
             <Checkbox checked={formData.workedBefore} onCheckedChange={(checked) => setFormData({...formData, workedBefore: checked as boolean})} />
-            <Label>عملت سابقاً في الشركة</Label>
+            <Label>عملت سابقاً في الشركة / Prev. Employed</Label>
           </div>
           <div className="flex items-center gap-2">
             <Checkbox checked={formData.currentlyEmployed} onCheckedChange={(checked) => setFormData({...formData, currentlyEmployed: checked as boolean})} />
-            <Label>أعمل حالياً</Label>
+            <Label>أعمل حالياً / Currently Employed</Label>
           </div>
         </div>
       </div>
