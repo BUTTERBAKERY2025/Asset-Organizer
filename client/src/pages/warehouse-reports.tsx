@@ -367,6 +367,7 @@ export default function WarehouseReportsPage() {
                 <Select value={selectedBranch} onValueChange={setSelectedBranch}>
                   <SelectTrigger className="h-11 sm:h-10" data-testid="select-branch">
                     <SelectValue placeholder={isRTL ? "جميع الفروع" : "All Branches"} />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">{isRTL ? "جميع الفروع" : "All Branches"}</SelectItem>
                     {branches?.map(branch => (
