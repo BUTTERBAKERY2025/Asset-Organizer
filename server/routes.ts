@@ -5110,11 +5110,27 @@ export async function registerRoutes(
   app.get("/api/targets/monthly", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
       const { branchId, yearMonth } = req.query;
+      
+      // SECURITY: Apply branch filter based on user permissions
+      const queryBranchId = branchId as string | undefined;
+      const branchFilter = getEffectiveBranchFilter(req, queryBranchId);
+      
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      }
+      
       let targets = await storage.getAllBranchMonthlyTargets();
       
-      if (branchId) {
-        targets = targets.filter(t => t.branchId === branchId);
+      // Filter by allowed branches first (security)
+      if (branchFilter.branchIds) {
+        targets = targets.filter(t => branchFilter.branchIds!.includes(t.branchId));
       }
+      
+      // Then apply specific branchId filter if requested (functionality)
+      if (queryBranchId && queryBranchId !== 'all') {
+        targets = targets.filter(t => t.branchId === queryBranchId);
+      }
+      
       if (yearMonth) {
         targets = targets.filter(t => t.yearMonth === yearMonth);
       }
@@ -5133,6 +5149,13 @@ export async function registerRoutes(
       if (!target) {
         return res.status(404).json({ error: "Target not found" });
       }
+      
+      // SECURITY: Verify user has access to this branch
+      const branchFilter = getEffectiveBranchFilter(req, target.branchId);
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بالوصول لهذا الهدف" });
+      }
+      
       res.json(target);
     } catch (error) {
       console.error("Error fetching target:", error);
@@ -5150,6 +5173,12 @@ export async function registerRoutes(
       }
       if (!yearMonth || !/^\d{4}-\d{2}$/.test(yearMonth)) {
         return res.status(400).json({ error: "الشهر مطلوب بصيغة YYYY-MM" });
+      }
+      
+      // SECURITY: Verify user has access to create target for this branch
+      const branchFilter = getEffectiveBranchFilter(req, branchId);
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بإنشاء هدف لهذا الفرع" });
       }
       
       // Parse and validate targetAmount
@@ -5194,10 +5223,20 @@ export async function registerRoutes(
   app.patch("/api/targets/monthly/:id", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
-      const target = await storage.updateBranchMonthlyTarget(id, req.body);
-      if (!target) {
+      
+      // SECURITY: First fetch the target to check branch access
+      const existingTarget = await storage.getBranchMonthlyTarget(id);
+      if (!existingTarget) {
         return res.status(404).json({ error: "Target not found" });
       }
+      
+      // Verify user has access to this branch
+      const branchFilter = getEffectiveBranchFilter(req, existingTarget.branchId);
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بتعديل هدف هذا الفرع" });
+      }
+      
+      const target = await storage.updateBranchMonthlyTarget(id, req.body);
       res.json(target);
     } catch (error) {
       console.error("Error updating target:", error);
@@ -5208,6 +5247,19 @@ export async function registerRoutes(
   app.delete("/api/targets/monthly/:id", isAuthenticated, requirePermission("operations", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
+      
+      // SECURITY: First fetch the target to check branch access
+      const existingTarget = await storage.getBranchMonthlyTarget(id);
+      if (!existingTarget) {
+        return res.status(404).json({ error: "Target not found" });
+      }
+      
+      // Verify user has access to this branch
+      const branchFilter = getEffectiveBranchFilter(req, existingTarget.branchId);
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بحذف هدف هذا الفرع" });
+      }
+      
       await storage.deleteBranchMonthlyTarget(id);
       res.json({ success: true });
     } catch (error) {
@@ -5224,6 +5276,12 @@ export async function registerRoutes(
       
       if (!target) {
         return res.status(404).json({ error: "Target not found" });
+      }
+      
+      // SECURITY: Verify user has access to this branch
+      const branchFilter = getEffectiveBranchFilter(req, target.branchId);
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بتعديل توزيع هدف هذا الفرع" });
       }
       
       // Get weight profile
@@ -5338,6 +5396,18 @@ export async function registerRoutes(
   app.get("/api/targets/monthly/:id/allocations", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
+      
+      // SECURITY: First fetch the target to check branch access
+      const target = await storage.getBranchMonthlyTarget(id);
+      if (!target) {
+        return res.status(404).json({ error: "Target not found" });
+      }
+      
+      const branchFilter = getEffectiveBranchFilter(req, target.branchId);
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بالوصول لتوزيع هدف هذا الفرع" });
+      }
+      
       const allocations = await storage.getTargetDailyAllocationsByMonth(id);
       res.json(allocations);
     } catch (error) {
@@ -5351,6 +5421,22 @@ export async function registerRoutes(
     try {
       const id = parseInt(req.params.id, 10);
       const { dailyTarget, isHoliday, overrideReason } = req.body;
+      
+      // SECURITY: Fetch allocation and check branch access via monthly target
+      const existingAllocation = await storage.getTargetDailyAllocation(id);
+      if (!existingAllocation) {
+        return res.status(404).json({ error: "Allocation not found" });
+      }
+      
+      const target = await storage.getBranchMonthlyTarget(existingAllocation.monthlyTargetId);
+      if (!target) {
+        return res.status(404).json({ error: "Target not found" });
+      }
+      
+      const branchFilter = getEffectiveBranchFilter(req, target.branchId);
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بتعديل توزيع هدف هذا الفرع" });
+      }
       
       const allocation = await storage.updateTargetDailyAllocation(id, {
         dailyTarget,
