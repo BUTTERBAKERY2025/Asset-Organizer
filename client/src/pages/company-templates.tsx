@@ -153,41 +153,57 @@ const templates: Template[] = [
 
 function CompanyHeader({ templateTitle, templateTitleEn }: { templateTitle?: string; templateTitleEn?: string }) {
   return (
-    <div className="mb-6">
-      {/* Main Header with Logo */}
-      <div className="flex items-center justify-between border-b-2 border-[#1a3a2f] pb-4 mb-4">
-        {/* Arabic Side - Right */}
-        <div className="text-right flex-1">
-          <h1 className="text-lg font-bold text-[#1a3a2f]">{COMPANY_INFO.name}</h1>
-          <p className="text-xs text-slate-600 mt-1">سجل تجاري / C.R: {COMPANY_INFO.cr}</p>
-          <p className="text-xs text-slate-500">{COMPANY_INFO.address}</p>
-        </div>
-        
-        {/* Logo - Center */}
-        <div className="mx-4 flex-shrink-0">
+    <div className="mb-6 relative">
+      {/* Watermark Background */}
+      <div 
+        className="absolute inset-0 flex items-center justify-center pointer-events-none z-0"
+        style={{
+          position: 'fixed',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: '400px',
+          height: '400px',
+        }}
+      >
+        <img 
+          src={COMPANY_INFO.logo} 
+          alt="" 
+          className="w-full h-full object-contain"
+          style={{ opacity: 0.04 }}
+        />
+      </div>
+
+      {/* Main Header with Logo on Left */}
+      <div className="flex items-start justify-between border-b-2 border-[#1a3a2f] pb-4 mb-4 relative z-10">
+        {/* Logo - Left Side */}
+        <div className="flex-shrink-0">
           <img 
             src={COMPANY_INFO.logo} 
             alt="Company Logo" 
-            className="h-20 w-auto object-contain"
+            className="h-24 w-auto object-contain"
             onError={(e) => {
               e.currentTarget.style.display = 'none';
             }}
           />
         </div>
         
-        {/* English Side - Left */}
-        <div className="text-left flex-1">
-          <h1 className="text-lg font-bold text-[#1a3a2f]">{COMPANY_INFO.nameEn}</h1>
-          <p className="text-xs text-slate-600 mt-1">Commercial Registration: {COMPANY_INFO.cr}</p>
-          <p className="text-xs text-slate-500">{COMPANY_INFO.addressEn}</p>
+        {/* Company Info - Center & Right */}
+        <div className="flex-1 text-center px-4">
+          <h1 className="text-xl font-bold text-[#1a3a2f]">{COMPANY_INFO.name}</h1>
+          <h2 className="text-lg font-semibold text-[#1a3a2f] mt-1">{COMPANY_INFO.nameEn}</h2>
+          <div className="flex justify-center gap-6 mt-2 text-xs text-slate-600">
+            <span>سجل تجاري / C.R: {COMPANY_INFO.cr}</span>
+          </div>
+          <p className="text-xs text-slate-500 mt-1">{COMPANY_INFO.address} / {COMPANY_INFO.addressEn}</p>
         </div>
       </div>
       
       {/* Template Title */}
       {templateTitle && (
-        <div className="text-center border-b border-slate-300 pb-3">
+        <div className="text-center border-2 border-[#1a3a2f] rounded-lg py-3 px-4 bg-slate-50 relative z-10">
           <h2 className="text-xl font-bold text-[#1a3a2f]">{templateTitle}</h2>
-          {templateTitleEn && <p className="text-base text-slate-600">{templateTitleEn}</p>}
+          {templateTitleEn && <p className="text-base font-medium text-slate-600">{templateTitleEn}</p>}
         </div>
       )}
     </div>
@@ -196,11 +212,11 @@ function CompanyHeader({ templateTitle, templateTitleEn }: { templateTitle?: str
 
 function CompanyFooter() {
   return (
-    <div className="mt-8 pt-4 border-t border-slate-300 text-center text-xs text-slate-500">
+    <div className="mt-8 pt-4 border-t-2 border-[#1a3a2f] text-center text-xs text-slate-600 relative z-10">
       <div className="flex justify-between items-center">
-        <p>{COMPANY_INFO.address}</p>
-        <p>{COMPANY_INFO.name} - C.R: {COMPANY_INFO.cr}</p>
-        <p>{COMPANY_INFO.addressEn}</p>
+        <p className="font-semibold">{COMPANY_INFO.name}</p>
+        <p>C.R: {COMPANY_INFO.cr}</p>
+        <p className="font-semibold">{COMPANY_INFO.nameEn}</p>
       </div>
     </div>
   );
