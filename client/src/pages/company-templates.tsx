@@ -580,6 +580,12 @@ function FinalSettlementTemplate() {
             </div>
           </div>
 
+          {showStamp && (
+            <div className="flex justify-end mt-2">
+              <HRStamp date={(formData as any).endDate || (formData as any).date || (formData as any).evaluationDate || format(new Date(), "yyyy-MM-dd")} />
+            </div>
+          )}
+
           <CompanyFooter />
         </div>
       </div>
@@ -751,6 +757,12 @@ function PaymentOrderTemplate() {
             </ul>
           </div>
 
+          {showStamp && (
+            <div className="flex justify-end mt-2">
+              <HRStamp date={(formData as any).endDate || (formData as any).date || (formData as any).evaluationDate || format(new Date(), "yyyy-MM-dd")} />
+            </div>
+          )}
+
           <CompanyFooter />
         </div>
       </div>
@@ -886,6 +898,12 @@ function ClearanceTemplate() {
               ))}
             </div>
           </div>
+
+          {showStamp && (
+            <div className="flex justify-end mt-2">
+              <HRStamp date={(formData as any).endDate || (formData as any).date || (formData as any).evaluationDate || format(new Date(), "yyyy-MM-dd")} />
+            </div>
+          )}
 
           <CompanyFooter />
         </div>
@@ -1025,6 +1043,12 @@ function PenaltyTemplate() {
               <p className="mt-1">التوقيع: ____________  التاريخ: ___/___/___</p>
             </div>
           </div>
+
+          {showStamp && (
+            <div className="flex justify-end mt-2">
+              <HRStamp date={(formData as any).endDate || (formData as any).date || (formData as any).evaluationDate || format(new Date(), "yyyy-MM-dd")} />
+            </div>
+          )}
 
           <CompanyFooter />
         </div>
@@ -1261,6 +1285,12 @@ function AssetHandoverTemplate() {
             </div>
           </div>
 
+          {showStamp && (
+            <div className="flex justify-end mt-2">
+              <HRStamp date={(formData as any).endDate || (formData as any).date || (formData as any).evaluationDate || format(new Date(), "yyyy-MM-dd")} />
+            </div>
+          )}
+
           <CompanyFooter />
         </div>
       </div>
@@ -1443,6 +1473,12 @@ function EmployeeStatusChangeTemplate() {
             <p className="font-semibold text-xs">المدير التنفيذي / CEO</p>
             <p className="mt-1">التوقيع: __________</p>
           </div>
+
+          {showStamp && (
+            <div className="flex justify-end mt-2">
+              <HRStamp date={(formData as any).endDate || (formData as any).date || (formData as any).evaluationDate || format(new Date(), "yyyy-MM-dd")} />
+            </div>
+          )}
 
           <CompanyFooter />
         </div>
@@ -1687,6 +1723,12 @@ function ProbationEvaluationTemplate() {
             <p className="mt-1 text-xs">التوقيع: __________  التاريخ: ___/___/___</p>
           </div>
 
+          {showStamp && (
+            <div className="flex justify-end mt-2">
+              <HRStamp date={(formData as any).endDate || (formData as any).date || (formData as any).evaluationDate || format(new Date(), "yyyy-MM-dd")} />
+            </div>
+          )}
+
           <CompanyFooter />
         </div>
       </div>
@@ -1917,6 +1959,12 @@ function JobOfferTemplate() {
               <div><span className="font-semibold">التاريخ / Date:</span> ___________________</div>
             </div>
           </div>
+
+          {showStamp && (
+            <div className="flex justify-end mt-2">
+              <HRStamp date={(formData as any).endDate || (formData as any).date || (formData as any).evaluationDate || format(new Date(), "yyyy-MM-dd")} />
+            </div>
+          )}
 
           <CompanyFooter />
         </div>
@@ -2173,6 +2221,12 @@ function EmploymentApplicationTemplate() {
               <div>التاريخ / Date: ___________________</div>
             </div>
           </div>
+
+          {showStamp && (
+            <div className="flex justify-end mt-2">
+              <HRStamp date={(formData as any).endDate || (formData as any).date || (formData as any).evaluationDate || format(new Date(), "yyyy-MM-dd")} />
+            </div>
+          )}
 
           <CompanyFooter />
         </div>
