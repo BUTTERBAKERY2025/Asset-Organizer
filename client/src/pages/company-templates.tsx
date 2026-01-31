@@ -1469,6 +1469,7 @@ function JobOfferTemplate() {
     basicSalary: "",
     housingAllowance: "",
     transportAllowance: "",
+    otherAllowances: "",
     contractDuration: "1",
   });
 
@@ -1477,7 +1478,7 @@ function JobOfferTemplate() {
     documentTitle: "عرض العمل",
   });
 
-  const totalSalary = Number(formData.basicSalary || 0) + Number(formData.housingAllowance || 0) + Number(formData.transportAllowance || 0);
+  const totalSalary = Number(formData.basicSalary || 0) + Number(formData.housingAllowance || 0) + Number(formData.transportAllowance || 0) + Number(formData.otherAllowances || 0);
 
   return (
     <div className="space-y-6">
@@ -1538,7 +1539,7 @@ function JobOfferTemplate() {
 
       <div className="border rounded-lg p-4">
         <h4 className="font-semibold mb-3">الراتب والبدلات (شهرياً) / Salary & Allowances (Monthly)</h4>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="space-y-2">
             <Label>الراتب الأساسي / Basic Salary</Label>
             <Input type="number" value={formData.basicSalary} onChange={(e) => setFormData({...formData, basicSalary: e.target.value})} />
@@ -1550,6 +1551,10 @@ function JobOfferTemplate() {
           <div className="space-y-2">
             <Label>بدل المواصلات / Transport Allowance</Label>
             <Input type="number" value={formData.transportAllowance} onChange={(e) => setFormData({...formData, transportAllowance: e.target.value})} />
+          </div>
+          <div className="space-y-2">
+            <Label>بدلات أخرى / Other Allowances</Label>
+            <Input type="number" value={formData.otherAllowances} onChange={(e) => setFormData({...formData, otherAllowances: e.target.value})} />
           </div>
         </div>
         <div className="mt-3 p-3 bg-amber-50 rounded text-lg font-bold text-amber-800">
@@ -1621,6 +1626,10 @@ function JobOfferTemplate() {
               <tr>
                 <td className="border p-2" colSpan={2}>بدل المواصلات / Transport Allowance</td>
                 <td className="border p-2 text-center font-semibold">SR {Number(formData.transportAllowance).toLocaleString("en-US")}</td>
+              </tr>
+              <tr>
+                <td className="border p-2" colSpan={2}>بدلات أخرى / Other Allowances</td>
+                <td className="border p-2 text-center font-semibold">SR {Number(formData.otherAllowances).toLocaleString("en-US")}</td>
               </tr>
               <tr className="bg-amber-100">
                 <td className="border p-2 font-bold" colSpan={2}>الإجمالي / Total</td>
