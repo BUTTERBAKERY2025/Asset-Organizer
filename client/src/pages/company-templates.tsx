@@ -618,22 +618,19 @@ function PaymentOrderTemplate() {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4 text-sm text-center">
-            <div className="border rounded p-3">
-              <p className="font-semibold">توقيع مدير الإدارة الطالبة</p>
-              <p className="text-xs text-slate-500">Requesting Dept. Manager</p>
-              <p className="mt-2">{formData.departmentManager}</p>
-              <p className="mt-4">___________________</p>
+          <div className="grid grid-cols-3 gap-2 text-xs text-center">
+            <div className="border rounded p-1.5">
+              <p className="font-semibold text-xs">مدير الإدارة / Dept Manager</p>
+              <p className="text-xs">{formData.departmentManager}</p>
+              <p className="mt-1 text-xs">____________</p>
             </div>
-            <div className="border rounded p-3">
-              <p className="font-semibold">تدقيق المالية</p>
-              <p className="text-xs text-slate-500">Finance Audit</p>
-              <p className="mt-6">___________________</p>
+            <div className="border rounded p-1.5">
+              <p className="font-semibold text-xs">المالية / Finance</p>
+              <p className="mt-2 text-xs">____________</p>
             </div>
-            <div className="border rounded p-3">
-              <p className="font-semibold">اعتماد المدير التنفيذي</p>
-              <p className="text-xs text-slate-500">CEO Approval</p>
-              <p className="mt-6">___________________</p>
+            <div className="border rounded p-1.5">
+              <p className="font-semibold text-xs">المدير التنفيذي / CEO</p>
+              <p className="mt-2 text-xs">____________</p>
             </div>
           </div>
 
@@ -898,16 +895,14 @@ function PenaltyTemplate() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-1 text-xs">
-            <div className="border rounded p-3">
-              <p className="font-semibold">توقيع الموظف / Employee Signature</p>
-              <p className="mt-4">التوقيع / Signature: ___________________</p>
-              <p className="mt-2">التاريخ / Date: ___/___/______</p>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="border rounded p-1.5">
+              <p className="font-semibold text-xs">الموظف / Employee</p>
+              <p className="mt-1">التوقيع: ____________  التاريخ: ___/___/___</p>
             </div>
-            <div className="border rounded p-3">
-              <p className="font-semibold">مدير الموارد البشرية / HR Manager</p>
-              <p className="mt-4">التوقيع / Signature: ___________________</p>
-              <p className="mt-2">التاريخ / Date: ___/___/______</p>
+            <div className="border rounded p-1.5">
+              <p className="font-semibold text-xs">الموارد البشرية / HR</p>
+              <p className="mt-1">التوقيع: ____________  التاريخ: ___/___/___</p>
             </div>
           </div>
 
@@ -1012,18 +1007,14 @@ function AssetHandoverTemplate() {
             </tbody>
           </table>
 
-          <div className="mt-6 grid grid-cols-2 gap-1 text-xs">
-            <div className="border rounded p-3">
-              <p className="font-semibold">التوقيع بالاستلام / Received By</p>
-              <p className="mt-2"><span className="font-semibold">الاسم / Name:</span> ___________________</p>
-              <p className="mt-2"><span className="font-semibold">التوقيع / Signature:</span> ___________________</p>
-              <p className="mt-2"><span className="font-semibold">التاريخ / Date:</span> ___________________</p>
+          <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+            <div className="border rounded p-1.5">
+              <p className="font-semibold text-xs">المستلم / Received By</p>
+              <p className="text-xs">الاسم: __________ التوقيع: __________ التاريخ: ___/___/___</p>
             </div>
-            <div className="border rounded p-3">
-              <p className="font-semibold">المسلم / Delivered By</p>
-              <p className="mt-2"><span className="font-semibold">الاسم / Name:</span> ___________________</p>
-              <p className="mt-2"><span className="font-semibold">التوقيع / Signature:</span> ___________________</p>
-              <p className="mt-2"><span className="font-semibold">التاريخ / Date:</span> ___________________</p>
+            <div className="border rounded p-1.5">
+              <p className="font-semibold text-xs">المسلم / Delivered By</p>
+              <p className="text-xs">الاسم: __________ التوقيع: __________ التاريخ: ___/___/___</p>
             </div>
           </div>
 
@@ -1187,23 +1178,21 @@ function EmployeeStatusChangeTemplate() {
           </div>
 
           <div className="grid grid-cols-2 gap-1 text-xs">
-            <div className="border rounded p-3">
-              <p className="font-semibold">مدير الإدارة (طالب النقل) / Dept Manager (Requester)</p>
-              <p className="mt-2">الاسم / Name: ___________________</p>
-              <p className="mt-2">القرار / Decision: ___________________</p>
-              <p className="mt-2">التوقيع / Signature: ___________________</p>
+            <div className="border rounded p-1.5">
+              <p className="font-semibold text-xs">مدير الإدارة / Dept Manager</p>
+              <p className="text-xs">الاسم: __________ القرار: __________</p>
+              <p className="text-xs">التوقيع: __________</p>
             </div>
-            <div className="border rounded p-3">
-              <p className="font-semibold">مدير الموارد البشرية / HR Manager</p>
-              <p className="mt-2">الاسم / Name: ___________________</p>
-              <p className="mt-2">القرار / Decision: ___________________</p>
-              <p className="mt-2">التوقيع / Signature: ___________________</p>
+            <div className="border rounded p-1.5">
+              <p className="font-semibold text-xs">الموارد البشرية / HR</p>
+              <p className="text-xs">الاسم: __________ القرار: __________</p>
+              <p className="text-xs">التوقيع: __________</p>
             </div>
           </div>
 
-          <div className="mt-4 border rounded p-3 text-sm text-center">
-            <p className="font-semibold">اعتماد المدير التنفيذي / CEO Approval</p>
-            <p className="mt-4">التوقيع / Signature: ___________________</p>
+          <div className="mt-2 border rounded p-1.5 text-xs text-center">
+            <p className="font-semibold text-xs">المدير التنفيذي / CEO</p>
+            <p className="mt-1">التوقيع: __________</p>
           </div>
 
           <CompanyFooter />
@@ -1422,28 +1411,25 @@ function ProbationEvaluationTemplate() {
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-1 text-xs">
-            <div className="border rounded p-3">
-              <p className="font-semibold">المسؤول المباشر / Direct Supervisor</p>
-              <p className="mt-2">التوقيع / Signature: ___________________</p>
-              <p className="mt-2">التاريخ / Date: ___/___/______</p>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="border rounded p-1.5">
+              <p className="font-semibold text-xs">المسؤول المباشر / Supervisor</p>
+              <p className="text-xs">التوقيع: __________ التاريخ: ___/___/___</p>
             </div>
-            <div className="border rounded p-3">
-              <p className="font-semibold">توقيع الموظف / Employee Signature</p>
-              <p className="text-xs mt-1">لقد اطلعت على التقييم وتمت المناقشة / I have reviewed and discussed</p>
-              <p className="mt-2">التوقيع / Signature: ___________________</p>
-              <p className="mt-2">التاريخ / Date: ___/___/______</p>
+            <div className="border rounded p-1.5">
+              <p className="font-semibold text-xs">الموظف / Employee</p>
+              <p className="text-xs">التوقيع: __________ التاريخ: ___/___/___</p>
             </div>
           </div>
 
-          <div className="mt-4 border rounded p-3 text-sm">
-            <p className="font-semibold">قرار مدير الموارد البشرية / HR Manager Decision:</p>
-            <div className="flex gap-6 mt-2 flex-wrap">
-              <div className="flex items-center gap-2">□ تثبيت / Confirm</div>
-              <div className="flex items-center gap-2">□ تمديد فترة التجربة / Extend</div>
-              <div className="flex items-center gap-2">□ الاستغناء عن الخدمة / Terminate</div>
+          <div className="mt-2 border rounded p-1.5 text-xs">
+            <p className="font-semibold text-xs">قرار الموارد البشرية / HR Decision:</p>
+            <div className="flex gap-4 mt-1 flex-wrap text-xs">
+              <span>□ تثبيت</span>
+              <span>□ تمديد</span>
+              <span>□ إنهاء</span>
             </div>
-            <p className="mt-3">التوقيع / Signature: ___________________     التاريخ / Date: ___/___/______</p>
+            <p className="mt-1 text-xs">التوقيع: __________  التاريخ: ___/___/___</p>
           </div>
 
           <CompanyFooter />
@@ -1650,16 +1636,15 @@ function JobOfferTemplate() {
             </ul>
           </div>
 
-          <div className="grid grid-cols-3 gap-4 text-sm mb-4">
-            <div className="border rounded p-3 text-center">
-              <p className="font-semibold">مدير الموارد البشرية / HR Manager</p>
-              <p className="mt-6">___________________</p>
+          <div className="grid grid-cols-2 gap-2 text-xs mb-2">
+            <div className="border rounded p-1.5 text-center">
+              <p className="font-semibold text-xs">الموارد البشرية / HR</p>
+              <p className="mt-1">____________</p>
             </div>
-            <div className="border rounded p-3 text-center">
-              <p className="font-semibold">المدير التنفيذي / CEO</p>
-              <p className="mt-6">___________________</p>
+            <div className="border rounded p-1.5 text-center">
+              <p className="font-semibold text-xs">المدير التنفيذي / CEO</p>
+              <p className="mt-1">____________</p>
             </div>
-            <div></div>
           </div>
 
           <div className="border rounded p-3 text-sm">
