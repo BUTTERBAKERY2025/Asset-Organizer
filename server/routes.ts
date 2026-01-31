@@ -16219,6 +16219,15 @@ export async function registerRoutes(
       if (!parsed.success) {
         return res.status(400).json({ error: "بيانات الموظف غير صحيحة", details: parsed.error.errors });
       }
+      
+      // SECURITY: Verify branch access for non-admin users
+      if (!isUserAdmin(req) && parsed.data.branchId) {
+        const hasAccess = await canAccessBranch(req, parsed.data.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بإضافة موظف لهذا الفرع" });
+        }
+      }
+      
       const employee = await storage.createBranchEmployee(parsed.data);
       res.status(201).json(employee);
     } catch (error) {
@@ -16233,16 +16242,35 @@ export async function registerRoutes(
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
       
+      // SECURITY: First fetch employee to check branch access
+      const existingEmployee = await storage.getBranchEmployee(id);
+      if (!existingEmployee) {
+        return res.status(404).json({ error: "الموظف غير موجود" });
+      }
+      
+      // Verify user has access to this employee's current branch
+      if (!isUserAdmin(req) && existingEmployee.branchId) {
+        const hasAccess = await canAccessBranch(req, existingEmployee.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بتعديل بيانات موظف هذا الفرع" });
+        }
+      }
+      
       const { insertBranchEmployeeSchema } = await import("@shared/schema");
       const parsed = insertBranchEmployeeSchema.partial().safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ error: "بيانات الموظف غير صحيحة", details: parsed.error.errors });
       }
       
-      const employee = await storage.updateBranchEmployee(id, parsed.data);
-      if (!employee) {
-        return res.status(404).json({ error: "الموظف غير موجود" });
+      // SECURITY: If changing branch, verify access to new branch too
+      if (!isUserAdmin(req) && parsed.data.branchId && parsed.data.branchId !== existingEmployee.branchId) {
+        const hasNewBranchAccess = await canAccessBranch(req, parsed.data.branchId);
+        if (!hasNewBranchAccess) {
+          return res.status(403).json({ error: "غير مصرح بنقل الموظف لهذا الفرع" });
+        }
       }
+      
+      const employee = await storage.updateBranchEmployee(id, parsed.data);
       res.json(employee);
     } catch (error) {
       console.error("Error updating branch employee:", error);
