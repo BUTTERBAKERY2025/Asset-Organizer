@@ -305,6 +305,7 @@ function HRStamp({ approverName, date }: { approverName?: string; date?: string 
 
 function WorkStartTemplate() {
   const printRef = useRef<HTMLDivElement>(null);
+  const [showStamp, setShowStamp] = useState(false);
   const [formData, setFormData] = useState({
     employeeName: "",
     employeeNo: "",
@@ -374,9 +375,14 @@ function WorkStartTemplate() {
         </div>
       </div>
 
-      <Button onClick={() => handlePrint()} className="w-full gap-2 bg-amber-600 hover:bg-amber-700">
-        <Printer className="h-4 w-4" /> طباعة النموذج
-      </Button>
+      <div className="flex gap-2">
+        <Button onClick={() => handlePrint()} className="flex-1 gap-2 bg-amber-600 hover:bg-amber-700">
+          <Printer className="h-4 w-4" /> طباعة النموذج
+        </Button>
+        <Button onClick={() => setShowStamp(!showStamp)} className={`gap-2 ${showStamp ? 'bg-[#1a3a2f]' : 'bg-slate-600'} hover:bg-[#2d5a47]`}>
+          <Award className="h-4 w-4" /> {showStamp ? 'إخفاء الختم' : 'ختم النموذج'}
+        </Button>
+      </div>
 
       <div className="hidden">
         <div ref={printRef} className="p-4 bg-white print:block text-sm" dir="rtl">
@@ -433,6 +439,12 @@ function WorkStartTemplate() {
             </div>
           </div>
 
+          {showStamp && (
+            <div className="flex justify-end mt-2">
+              <HRStamp date={formData.startDate} />
+            </div>
+          )}
+
           <CompanyFooter />
         </div>
       </div>
@@ -442,6 +454,7 @@ function WorkStartTemplate() {
 
 function FinalSettlementTemplate() {
   const printRef = useRef<HTMLDivElement>(null);
+  const [showStamp, setShowStamp] = useState(false);
   const [formData, setFormData] = useState({
     employeeName: "",
     employeeNo: "",
@@ -510,9 +523,14 @@ function FinalSettlementTemplate() {
         </div>
       </div>
 
-      <Button onClick={() => handlePrint()} className="w-full gap-2 bg-green-600 hover:bg-green-700">
-        <Printer className="h-4 w-4" /> طباعة النموذج / Print
-      </Button>
+      <div className="flex gap-2">
+        <Button onClick={() => handlePrint()} className="flex-1 gap-2 bg-green-600 hover:bg-green-700">
+          <Printer className="h-4 w-4" /> طباعة النموذج / Print
+        </Button>
+        <Button onClick={() => setShowStamp(!showStamp)} className={`gap-2 ${showStamp ? 'bg-[#1a3a2f]' : 'bg-slate-600'} hover:bg-[#2d5a47]`}>
+          <Award className="h-4 w-4" /> {showStamp ? 'إخفاء الختم' : 'ختم'}
+        </Button>
+      </div>
 
       <div className="hidden">
         <div ref={printRef} className="p-4 bg-white print:block text-sm" dir="rtl">
@@ -571,6 +589,7 @@ function FinalSettlementTemplate() {
 
 function PaymentOrderTemplate() {
   const printRef = useRef<HTMLDivElement>(null);
+  const [showStamp, setShowStamp] = useState(false);
   const [formData, setFormData] = useState({
     date: format(new Date(), "yyyy-MM-dd"),
     beneficiaryName: "",
@@ -652,9 +671,14 @@ function PaymentOrderTemplate() {
         </div>
       </div>
 
-      <Button onClick={() => handlePrint()} className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700">
-        <Printer className="h-4 w-4" /> طباعة النموذج / Print
-      </Button>
+      <div className="flex gap-2">
+        <Button onClick={() => handlePrint()} className="flex-1 gap-2 bg-emerald-600 hover:bg-emerald-700">
+          <Printer className="h-4 w-4" /> طباعة النموذج / Print
+        </Button>
+        <Button onClick={() => setShowStamp(!showStamp)} className={`gap-2 ${showStamp ? 'bg-[#1a3a2f]' : 'bg-slate-600'} hover:bg-[#2d5a47]`}>
+          <Award className="h-4 w-4" /> {showStamp ? 'إخفاء الختم' : 'ختم'}
+        </Button>
+      </div>
 
       <div className="hidden">
         <div ref={printRef} className="p-4 bg-white print:block text-sm" dir="rtl">
@@ -736,6 +760,7 @@ function PaymentOrderTemplate() {
 
 function ClearanceTemplate() {
   const printRef = useRef<HTMLDivElement>(null);
+  const [showStamp, setShowStamp] = useState(false);
   const [formData, setFormData] = useState({
     employeeName: "",
     employeeNo: "",
@@ -801,9 +826,14 @@ function ClearanceTemplate() {
         </div>
       </div>
 
-      <Button onClick={() => handlePrint()} className="w-full gap-2 bg-slate-600 hover:bg-slate-700">
-        <Printer className="h-4 w-4" /> طباعة النموذج / Print
-      </Button>
+      <div className="flex gap-2">
+        <Button onClick={() => handlePrint()} className="flex-1 gap-2 bg-slate-600 hover:bg-slate-700">
+          <Printer className="h-4 w-4" /> طباعة النموذج / Print
+        </Button>
+        <Button onClick={() => setShowStamp(!showStamp)} className={`gap-2 ${showStamp ? 'bg-[#1a3a2f]' : 'bg-slate-500'} hover:bg-[#2d5a47]`}>
+          <Award className="h-4 w-4" /> {showStamp ? 'إخفاء الختم' : 'ختم'}
+        </Button>
+      </div>
 
       <div className="hidden">
         <div ref={printRef} className="p-4 bg-white print:block text-sm" dir="rtl">
@@ -866,6 +896,7 @@ function ClearanceTemplate() {
 
 function PenaltyTemplate() {
   const printRef = useRef<HTMLDivElement>(null);
+  const [showStamp, setShowStamp] = useState(false);
   const [formData, setFormData] = useState({
     employeeName: "",
     employeeNo: "",
@@ -941,9 +972,14 @@ function PenaltyTemplate() {
         </div>
       </div>
 
-      <Button onClick={() => handlePrint()} className="w-full gap-2 bg-red-600 hover:bg-red-700">
-        <Printer className="h-4 w-4" /> طباعة النموذج / Print
-      </Button>
+      <div className="flex gap-2">
+        <Button onClick={() => handlePrint()} className="flex-1 gap-2 bg-red-600 hover:bg-red-700">
+          <Printer className="h-4 w-4" /> طباعة النموذج / Print
+        </Button>
+        <Button onClick={() => setShowStamp(!showStamp)} className={`gap-2 ${showStamp ? 'bg-[#1a3a2f]' : 'bg-slate-600'} hover:bg-[#2d5a47]`}>
+          <Award className="h-4 w-4" /> {showStamp ? 'إخفاء الختم' : 'ختم'}
+        </Button>
+      </div>
 
       <div className="hidden">
         <div ref={printRef} className="p-4 bg-white print:block text-sm" dir="rtl">
@@ -1116,6 +1152,7 @@ function HRStampTemplate() {
 
 function AssetHandoverTemplate() {
   const printRef = useRef<HTMLDivElement>(null);
+  const [showStamp, setShowStamp] = useState(false);
   const [formData, setFormData] = useState({
     employeeName: "",
     position: "",
@@ -1171,9 +1208,14 @@ function AssetHandoverTemplate() {
         </div>
       </div>
 
-      <Button onClick={() => handlePrint()} className="w-full gap-2 bg-orange-600 hover:bg-orange-700">
-        <Printer className="h-4 w-4" /> طباعة النموذج / Print
-      </Button>
+      <div className="flex gap-2">
+        <Button onClick={() => handlePrint()} className="flex-1 gap-2 bg-orange-600 hover:bg-orange-700">
+          <Printer className="h-4 w-4" /> طباعة النموذج / Print
+        </Button>
+        <Button onClick={() => setShowStamp(!showStamp)} className={`gap-2 ${showStamp ? 'bg-[#1a3a2f]' : 'bg-slate-600'} hover:bg-[#2d5a47]`}>
+          <Award className="h-4 w-4" /> {showStamp ? 'إخفاء الختم' : 'ختم'}
+        </Button>
+      </div>
 
       <div className="hidden">
         <div ref={printRef} className="p-4 bg-white print:block text-sm" dir="rtl">
@@ -1228,6 +1270,7 @@ function AssetHandoverTemplate() {
 
 function EmployeeStatusChangeTemplate() {
   const printRef = useRef<HTMLDivElement>(null);
+  const [showStamp, setShowStamp] = useState(false);
   const [formData, setFormData] = useState({
     date: format(new Date(), "yyyy-MM-dd"),
     employeeName: "",
@@ -1313,9 +1356,14 @@ function EmployeeStatusChangeTemplate() {
         </div>
       </div>
 
-      <Button onClick={() => handlePrint()} className="w-full gap-2 bg-indigo-600 hover:bg-indigo-700">
-        <Printer className="h-4 w-4" /> طباعة النموذج / Print
-      </Button>
+      <div className="flex gap-2">
+        <Button onClick={() => handlePrint()} className="flex-1 gap-2 bg-indigo-600 hover:bg-indigo-700">
+          <Printer className="h-4 w-4" /> طباعة النموذج / Print
+        </Button>
+        <Button onClick={() => setShowStamp(!showStamp)} className={`gap-2 ${showStamp ? 'bg-[#1a3a2f]' : 'bg-slate-600'} hover:bg-[#2d5a47]`}>
+          <Award className="h-4 w-4" /> {showStamp ? 'إخفاء الختم' : 'ختم'}
+        </Button>
+      </div>
 
       <div className="hidden">
         <div ref={printRef} className="p-4 bg-white print:block text-sm" dir="rtl">
@@ -1405,6 +1453,7 @@ function EmployeeStatusChangeTemplate() {
 
 function ProbationEvaluationTemplate() {
   const printRef = useRef<HTMLDivElement>(null);
+  const [showStamp, setShowStamp] = useState(false);
   const [formData, setFormData] = useState({
     employeeName: "",
     position: "",
@@ -1537,9 +1586,14 @@ function ProbationEvaluationTemplate() {
         <Textarea value={formData.notes} onChange={(e) => setFormData({...formData, notes: e.target.value})} rows={3} />
       </div>
 
-      <Button onClick={() => handlePrint()} className="w-full gap-2 bg-teal-600 hover:bg-teal-700">
-        <Printer className="h-4 w-4" /> طباعة النموذج
-      </Button>
+      <div className="flex gap-2">
+        <Button onClick={() => handlePrint()} className="flex-1 gap-2 bg-teal-600 hover:bg-teal-700">
+          <Printer className="h-4 w-4" /> طباعة النموذج
+        </Button>
+        <Button onClick={() => setShowStamp(!showStamp)} className={`gap-2 ${showStamp ? 'bg-[#1a3a2f]' : 'bg-slate-600'} hover:bg-[#2d5a47]`}>
+          <Award className="h-4 w-4" /> {showStamp ? 'إخفاء الختم' : 'ختم'}
+        </Button>
+      </div>
 
       <div className="hidden">
         <div ref={printRef} className="p-4 bg-white print:block text-sm" dir="rtl">
@@ -1642,6 +1696,7 @@ function ProbationEvaluationTemplate() {
 
 function JobOfferTemplate() {
   const printRef = useRef<HTMLDivElement>(null);
+  const [showStamp, setShowStamp] = useState(false);
   const [formData, setFormData] = useState({
     date: format(new Date(), "yyyy-MM-dd"),
     employeeName: "",
@@ -1749,9 +1804,14 @@ function JobOfferTemplate() {
         </div>
       </div>
 
-      <Button onClick={() => handlePrint()} className="w-full gap-2 bg-amber-600 hover:bg-amber-700">
-        <Printer className="h-4 w-4" /> طباعة النموذج / Print
-      </Button>
+      <div className="flex gap-2">
+        <Button onClick={() => handlePrint()} className="flex-1 gap-2 bg-amber-600 hover:bg-amber-700">
+          <Printer className="h-4 w-4" /> طباعة النموذج / Print
+        </Button>
+        <Button onClick={() => setShowStamp(!showStamp)} className={`gap-2 ${showStamp ? 'bg-[#1a3a2f]' : 'bg-slate-600'} hover:bg-[#2d5a47]`}>
+          <Award className="h-4 w-4" /> {showStamp ? 'إخفاء الختم' : 'ختم'}
+        </Button>
+      </div>
 
       <div className="hidden">
         <div ref={printRef} className="p-4 bg-white print:block text-sm" dir="rtl">
@@ -1867,6 +1927,7 @@ function JobOfferTemplate() {
 
 function EmploymentApplicationTemplate() {
   const printRef = useRef<HTMLDivElement>(null);
+  const [showStamp, setShowStamp] = useState(false);
   const [formData, setFormData] = useState({
     positionApplied: "",
     firstName: "",
@@ -2033,9 +2094,14 @@ function EmploymentApplicationTemplate() {
         </div>
       </div>
 
-      <Button onClick={() => handlePrint()} className="w-full gap-2 bg-purple-600 hover:bg-purple-700">
-        <Printer className="h-4 w-4" /> طباعة النموذج
-      </Button>
+      <div className="flex gap-2">
+        <Button onClick={() => handlePrint()} className="flex-1 gap-2 bg-purple-600 hover:bg-purple-700">
+          <Printer className="h-4 w-4" /> طباعة النموذج
+        </Button>
+        <Button onClick={() => setShowStamp(!showStamp)} className={`gap-2 ${showStamp ? 'bg-[#1a3a2f]' : 'bg-slate-600'} hover:bg-[#2d5a47]`}>
+          <Award className="h-4 w-4" /> {showStamp ? 'إخفاء الختم' : 'ختم'}
+        </Button>
+      </div>
 
       <div className="hidden">
         <div ref={printRef} className="p-6 bg-white print:block text-sm" dir="rtl">
