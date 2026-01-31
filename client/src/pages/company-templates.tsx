@@ -305,11 +305,11 @@ function WorkStartTemplate() {
             <h3 className="font-bold text-slate-700 mb-3 border-b pb-2">1. بيانات الموظف / Employee Data</h3>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div><span className="font-semibold">الاسم / Name:</span> {formData.employeeName}</div>
-              <div><span className="font-semibold">رقم الموظف / No:</span> {formData.employeeNo}</div>
-              <div><span className="font-semibold">الوظيفة / Title:</span> {formData.position}</div>
-              <div><span className="font-semibold">الإدارة / Dept:</span> {formData.department}</div>
+              <div><span className="font-semibold">رقم الموظف / Employee No:</span> {formData.employeeNo}</div>
+              <div><span className="font-semibold">الوظيفة / Job Title:</span> {formData.position}</div>
+              <div><span className="font-semibold">الإدارة / Department:</span> {formData.department}</div>
               <div><span className="font-semibold">القسم / Section:</span> {formData.section}</div>
-              <div><span className="font-semibold">تاريخ المباشرة:</span> {formData.startDate}</div>
+              <div><span className="font-semibold">تاريخ المباشرة / Start Date:</span> {formData.startDate}</div>
             </div>
             <div className="mt-4 pt-2 border-t">
               <span className="font-semibold">توقيع الموظف / Employee Signature:</span> ___________________
@@ -318,21 +318,21 @@ function WorkStartTemplate() {
 
           <div className="border-2 border-slate-300 rounded-lg p-4 mb-4">
             <h3 className="font-bold text-slate-700 mb-3 border-b pb-2">2. إلى: الموارد البشرية / To: HR Department</h3>
-            <p className="text-sm mb-2">نأمل اعتماد مباشرة العمل للموظف:</p>
-            <div className="flex gap-4 text-sm">
+            <p className="text-sm mb-2">نأمل اعتماد مباشرة العمل للموظف / Please approve work commencement for employee:</p>
+            <div className="flex gap-4 text-sm flex-wrap">
               <div className="flex items-center gap-2">
                 <span className={`w-4 h-4 border ${formData.isFirstTime ? 'bg-slate-800' : ''}`}></span>
-                التحق بالعمل لأول مرة
+                التحق بالعمل لأول مرة / First time joining
               </div>
               <div className="flex items-center gap-2">
                 <span className={`w-4 h-4 border ${!formData.isFirstTime ? 'bg-slate-800' : ''}`}></span>
-                التحق بالعمل بعد العودة من: {formData.returnedFrom}
+                التحق بالعمل بعد العودة من / Returned from: {formData.returnedFrom}
               </div>
             </div>
             <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
-              <div><span className="font-semibold">المدير المباشر:</span> {formData.managerName}</div>
-              <div><span className="font-semibold">التوقيع:</span> ___________________</div>
-              <div><span className="font-semibold">التاريخ:</span> ___/___/______</div>
+              <div><span className="font-semibold">المدير المباشر / Direct Manager:</span> {formData.managerName}</div>
+              <div><span className="font-semibold">التوقيع / Signature:</span> ___________________</div>
+              <div><span className="font-semibold">التاريخ / Date:</span> ___/___/______</div>
             </div>
           </div>
 
@@ -340,19 +340,19 @@ function WorkStartTemplate() {
             <h3 className="font-bold text-slate-700 mb-3 border-b pb-2">3. لاستخدام الموارد البشرية فقط / HR Use Only</h3>
             <div className="space-y-2 text-sm">
               <p>□ المذكور باشر في التاريخ المحدد ويدرج اسمه بكشوفات الرواتب اعتباراً من: ___/___/______</p>
+              <p className="text-xs text-slate-500 mr-6">The employee started on the specified date and will be added to payroll from: ___/___/______</p>
               <p>□ المذكور باشر العمل متأخراً _____ يوم ويدرج اسمه بكشوفات الرواتب اعتباراً من: ___/___/______</p>
+              <p className="text-xs text-slate-500 mr-6">The employee started late by _____ days and will be added to payroll from: ___/___/______</p>
             </div>
             <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
-              <div><span className="font-semibold">الموظف المختص:</span> {formData.hrSpecialist}</div>
-              <div><span className="font-semibold">التوقيع:</span> ___________________</div>
-              <div><span className="font-semibold">محاسب الرواتب:</span> ___________________</div>
-              <div><span className="font-semibold">التاريخ:</span> ___/___/______</div>
+              <div><span className="font-semibold">الموظف المختص / HR Specialist:</span> {formData.hrSpecialist}</div>
+              <div><span className="font-semibold">التوقيع / Signature:</span> ___________________</div>
+              <div><span className="font-semibold">محاسب الرواتب / Payroll Accountant:</span> ___________________</div>
+              <div><span className="font-semibold">التاريخ / Date:</span> ___/___/______</div>
             </div>
           </div>
 
-          <div className="mt-6 text-center text-xs text-slate-500">
-            <p>{COMPANY_INFO.name} - سجل تجاري: {COMPANY_INFO.cr}</p>
-          </div>
+          <CompanyFooter />
         </div>
       </div>
     </div>
@@ -509,11 +509,11 @@ function PaymentOrderTemplate() {
   });
 
   const purposes = [
-    { value: "supplier_payment", label: "سداد دفعة من الحساب / موردين" },
-    { value: "advance_payment", label: "دفعات مقدمة / موردين" },
-    { value: "fixed_assets", label: "دفعات لشراء أصول ثابتة" },
-    { value: "housing", label: "بدل سكن / إيجارات" },
-    { value: "other", label: "أخرى" },
+    { value: "supplier_payment", label: "سداد دفعة من الحساب / موردين", labelEn: "Supplier Payment" },
+    { value: "advance_payment", label: "دفعات مقدمة / موردين", labelEn: "Advance Payment" },
+    { value: "fixed_assets", label: "دفعات لشراء أصول ثابتة", labelEn: "Fixed Assets Purchase" },
+    { value: "housing", label: "بدل سكن / إيجارات", labelEn: "Housing Allowance / Rent" },
+    { value: "other", label: "أخرى", labelEn: "Other" },
   ];
 
   return (
@@ -585,39 +585,39 @@ function PaymentOrderTemplate() {
           </div>
 
           <div className="mb-4">
-            <p className="font-semibold">السيد المدير التنفيذي المحترم</p>
-            <p>تحية طيبة وبعد...</p>
+            <p className="font-semibold">السيد المدير التنفيذي المحترم / Dear CEO</p>
+            <p>تحية طيبة وبعد... / Greetings</p>
           </div>
 
           <div className="border-2 border-slate-300 rounded-lg p-4 mb-4">
-            <p className="mb-3">الرجاء الموافقة على تحويل / صرف لأمر السيد / <span className="font-bold">{formData.beneficiaryName}</span></p>
-            <p className="text-lg font-bold">مبلغ ({formData.amount}) ريال - ({formData.amountWords})</p>
+            <p className="mb-3">الرجاء الموافقة على تحويل / صرف لأمر السيد / Please approve transfer/payment to: <span className="font-bold">{formData.beneficiaryName}</span></p>
+            <p className="text-lg font-bold">المبلغ / Amount: ({formData.amount}) ريال SAR - ({formData.amountWords})</p>
             
             <div className="mt-4 space-y-2">
-              <p className="font-semibold">وذلك عن:</p>
+              <p className="font-semibold">وذلك عن / Purpose:</p>
               {purposes.map((p) => (
                 <div key={p.value} className="flex items-center gap-2">
                   <span className={`w-4 h-4 border ${formData.purpose === p.value ? 'bg-slate-800' : ''}`}></span>
-                  <span>{p.label}</span>
+                  <span>{p.label} / {p.labelEn}</span>
                   {p.value === "other" && formData.purpose === "other" && <span>: {formData.customPurpose}</span>}
                 </div>
               ))}
             </div>
 
             <div className="mt-4 pt-4 border-t">
-              <p className="font-semibold mb-2">طريقة الدفع:</p>
+              <p className="font-semibold mb-2">طريقة الدفع / Payment Method:</p>
               <div className="flex gap-6">
                 <div className="flex items-center gap-2">
                   <span className={`w-4 h-4 border ${formData.paymentMethod === 'cash' ? 'bg-slate-800' : ''}`}></span>
-                  نقدي
+                  نقدي / Cash
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={`w-4 h-4 border ${formData.paymentMethod === 'check' ? 'bg-slate-800' : ''}`}></span>
-                  شيك
+                  شيك / Cheque
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={`w-4 h-4 border ${formData.paymentMethod === 'transfer' ? 'bg-slate-800' : ''}`}></span>
-                  تحويل بنكي
+                  تحويل بنكي / Bank Transfer
                 </div>
               </div>
             </div>
@@ -626,31 +626,32 @@ function PaymentOrderTemplate() {
           <div className="grid grid-cols-3 gap-4 text-sm text-center">
             <div className="border rounded p-3">
               <p className="font-semibold">توقيع مدير الإدارة الطالبة</p>
+              <p className="text-xs text-slate-500">Requesting Dept. Manager</p>
               <p className="mt-2">{formData.departmentManager}</p>
               <p className="mt-4">___________________</p>
             </div>
             <div className="border rounded p-3">
               <p className="font-semibold">تدقيق المالية</p>
+              <p className="text-xs text-slate-500">Finance Audit</p>
               <p className="mt-6">___________________</p>
             </div>
             <div className="border rounded p-3">
               <p className="font-semibold">اعتماد المدير التنفيذي</p>
+              <p className="text-xs text-slate-500">CEO Approval</p>
               <p className="mt-6">___________________</p>
             </div>
           </div>
 
           <div className="mt-4 text-xs text-slate-600">
-            <p>المرفقات المطلوبة:</p>
+            <p className="font-semibold">المرفقات المطلوبة / Required Attachments:</p>
             <ul className="list-disc mr-4 mt-1">
-              <li>صورة من رقم أيبان المستفيد</li>
-              <li>صورة من الفاتورة أو العقد أو بيان تفصيلي بالسداد</li>
-              <li>صورة من عقد الإيجار أو السكن (إن وجد)</li>
+              <li>صورة من رقم أيبان المستفيد / Copy of beneficiary IBAN</li>
+              <li>صورة من الفاتورة أو العقد أو بيان تفصيلي بالسداد / Copy of invoice, contract, or payment details</li>
+              <li>صورة من عقد الإيجار أو السكن (إن وجد) / Copy of rent/housing contract (if applicable)</li>
             </ul>
           </div>
 
-          <div className="mt-6 text-center text-xs text-slate-500">
-            <p>{COMPANY_INFO.name} - سجل تجاري: {COMPANY_INFO.cr}</p>
-          </div>
+          <CompanyFooter />
         </div>
       </div>
     </div>
@@ -773,16 +774,14 @@ function ClearanceTemplate() {
                       <span className="w-4 h-4 border"></span>
                       لا يخلى طرفه / Not Clear
                     </div>
-                    <div>السبب: ___________________</div>
+                    <div>السبب / Reason: ___________________</div>
                   </div>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="mt-6 text-center text-xs text-slate-500">
-            <p>{COMPANY_INFO.name} - سجل تجاري: {COMPANY_INFO.cr}</p>
-          </div>
+          <CompanyFooter />
         </div>
       </div>
     </div>
@@ -884,13 +883,13 @@ function PenaltyTemplate() {
               <div><span className="font-semibold">مسمى الوظيفة / Job Title:</span> {formData.position}</div>
             </div>
             <div className="mt-3">
-              <span className="font-semibold">المخالفة:</span>
+              <span className="font-semibold">المخالفة / Violation:</span>
               <p className="mt-1 p-2 bg-slate-50 rounded">{formData.violation}</p>
             </div>
           </div>
 
           <div className="border-2 border-slate-300 rounded-lg p-4 mb-4">
-            <h3 className="font-bold text-slate-700 mb-3 border-b pb-2">2. الإجراء الجزائي</h3>
+            <h3 className="font-bold text-slate-700 mb-3 border-b pb-2">2. الإجراء الجزائي / Penalty Action</h3>
             <div className="grid grid-cols-2 gap-3 text-sm">
               {penalties.map((p) => (
                 <div key={p.value} className="flex items-center gap-2">
@@ -907,19 +906,17 @@ function PenaltyTemplate() {
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div className="border rounded p-3">
               <p className="font-semibold">توقيع الموظف / Employee Signature</p>
-              <p className="mt-4">التوقيع: ___________________</p>
-              <p className="mt-2">التاريخ: ___/___/______</p>
+              <p className="mt-4">التوقيع / Signature: ___________________</p>
+              <p className="mt-2">التاريخ / Date: ___/___/______</p>
             </div>
             <div className="border rounded p-3">
               <p className="font-semibold">مدير الموارد البشرية / HR Manager</p>
-              <p className="mt-4">التوقيع: ___________________</p>
-              <p className="mt-2">التاريخ: ___/___/______</p>
+              <p className="mt-4">التوقيع / Signature: ___________________</p>
+              <p className="mt-2">التاريخ / Date: ___/___/______</p>
             </div>
           </div>
 
-          <div className="mt-6 text-center text-xs text-slate-500">
-            <p>{COMPANY_INFO.name} - سجل تجاري: {COMPANY_INFO.cr}</p>
-          </div>
+          <CompanyFooter />
         </div>
       </div>
     </div>
@@ -1022,22 +1019,20 @@ function AssetHandoverTemplate() {
 
           <div className="mt-6 grid grid-cols-2 gap-4 text-sm">
             <div className="border rounded p-3">
-              <p className="font-semibold">التوقيع بالاستلام / Signature</p>
-              <p className="mt-2"><span className="font-semibold">الاسم:</span> ___________________</p>
-              <p className="mt-2"><span className="font-semibold">التوقيع:</span> ___________________</p>
-              <p className="mt-2"><span className="font-semibold">التاريخ:</span> ___________________</p>
+              <p className="font-semibold">التوقيع بالاستلام / Received By</p>
+              <p className="mt-2"><span className="font-semibold">الاسم / Name:</span> ___________________</p>
+              <p className="mt-2"><span className="font-semibold">التوقيع / Signature:</span> ___________________</p>
+              <p className="mt-2"><span className="font-semibold">التاريخ / Date:</span> ___________________</p>
             </div>
             <div className="border rounded p-3">
               <p className="font-semibold">المسلم / Delivered By</p>
-              <p className="mt-2"><span className="font-semibold">الاسم:</span> ___________________</p>
-              <p className="mt-2"><span className="font-semibold">التوقيع:</span> ___________________</p>
-              <p className="mt-2"><span className="font-semibold">التاريخ:</span> ___________________</p>
+              <p className="mt-2"><span className="font-semibold">الاسم / Name:</span> ___________________</p>
+              <p className="mt-2"><span className="font-semibold">التوقيع / Signature:</span> ___________________</p>
+              <p className="mt-2"><span className="font-semibold">التاريخ / Date:</span> ___________________</p>
             </div>
           </div>
 
-          <div className="mt-6 text-center text-xs text-slate-500">
-            <p>{COMPANY_INFO.name} - سجل تجاري: {COMPANY_INFO.cr}</p>
-          </div>
+          <CompanyFooter />
         </div>
       </div>
     </div>
@@ -1143,7 +1138,7 @@ function EmployeeStatusChangeTemplate() {
           </div>
 
           <div className="mb-4">
-            <p className="font-semibold">إلى: سعادة المدير التنفيذي المحترم</p>
+            <p className="font-semibold">إلى: سعادة المدير التنفيذي المحترم / To: CEO</p>
           </div>
 
           <div className="border-2 border-slate-300 rounded-lg p-4 mb-4">
@@ -1152,12 +1147,12 @@ function EmployeeStatusChangeTemplate() {
               <div><span className="font-semibold">رقم الموظف / Employee No:</span> {formData.employeeNo}</div>
               <div><span className="font-semibold">الإدارة/القسم / Dept/Section:</span> {formData.department}</div>
               <div><span className="font-semibold">تاريخ التعيين / Date of Hire:</span> {formData.hireDate}</div>
-              <div><span className="font-semibold">الراتب الأساسي الحالي:</span> {formData.currentSalary}</div>
+              <div><span className="font-semibold">الراتب الأساسي الحالي / Current Basic Salary:</span> {formData.currentSalary}</div>
               <div><span className="font-semibold">الموقع / Location:</span> {formData.location}</div>
             </div>
           </div>
 
-          <p className="mb-3 text-sm">نأمل من سعادتكم الموافقة على نقل الموظف/ة الواردة بياناته على النحو التالي:</p>
+          <p className="mb-3 text-sm">نأمل من سعادتكم الموافقة على نقل الموظف/ة الواردة بياناته على النحو التالي: / We request your approval to transfer the employee as follows:</p>
 
           <table className="w-full border-collapse border text-sm mb-4">
             <thead>
@@ -1192,33 +1187,31 @@ function EmployeeStatusChangeTemplate() {
           </table>
 
           <div className="grid grid-cols-2 gap-4 text-sm mb-4">
-            <div><span className="font-semibold">وذلك من تاريخ:</span> {formData.effectiveDate}</div>
-            <div><span className="font-semibold">سبب تقديم الطلب:</span> {formData.reason}</div>
+            <div><span className="font-semibold">وذلك من تاريخ / Effective Date:</span> {formData.effectiveDate}</div>
+            <div><span className="font-semibold">سبب تقديم الطلب / Reason:</span> {formData.reason}</div>
           </div>
 
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div className="border rounded p-3">
-              <p className="font-semibold">مدير الإدارة (طالب النقل)</p>
-              <p className="mt-2">الاسم: ___________________</p>
-              <p className="mt-2">القرار: ___________________</p>
-              <p className="mt-2">التوقيع: ___________________</p>
+              <p className="font-semibold">مدير الإدارة (طالب النقل) / Dept Manager (Requester)</p>
+              <p className="mt-2">الاسم / Name: ___________________</p>
+              <p className="mt-2">القرار / Decision: ___________________</p>
+              <p className="mt-2">التوقيع / Signature: ___________________</p>
             </div>
             <div className="border rounded p-3">
-              <p className="font-semibold">مدير الموارد البشرية</p>
-              <p className="mt-2">الاسم: ___________________</p>
-              <p className="mt-2">القرار: ___________________</p>
-              <p className="mt-2">التوقيع: ___________________</p>
+              <p className="font-semibold">مدير الموارد البشرية / HR Manager</p>
+              <p className="mt-2">الاسم / Name: ___________________</p>
+              <p className="mt-2">القرار / Decision: ___________________</p>
+              <p className="mt-2">التوقيع / Signature: ___________________</p>
             </div>
           </div>
 
           <div className="mt-4 border rounded p-3 text-sm text-center">
-            <p className="font-semibold">اعتماد المدير التنفيذي</p>
-            <p className="mt-4">التوقيع: ___________________</p>
+            <p className="font-semibold">اعتماد المدير التنفيذي / CEO Approval</p>
+            <p className="mt-4">التوقيع / Signature: ___________________</p>
           </div>
 
-          <div className="mt-6 text-center text-xs text-slate-500">
-            <p>{COMPANY_INFO.name} - سجل تجاري: {COMPANY_INFO.cr}</p>
-          </div>
+          <CompanyFooter />
         </div>
       </div>
     </div>
@@ -1256,26 +1249,26 @@ function ProbationEvaluationTemplate() {
   });
 
   const evaluationItems = [
-    { key: "attendance", label: "الحفاظ على مواعيد العمل" },
-    { key: "productionQuality", label: "نوعية الإنتاج" },
-    { key: "productionQuantity", label: "كمية الإنتاج" },
-    { key: "learningAbility", label: "القدرة على التعلم" },
-    { key: "workProgress", label: "التقدم في العمل" },
-    { key: "followInstructions", label: "الالتزام بتعليمات المسؤول المباشر" },
-    { key: "initiative", label: "المبادرة وسرعة البديهة" },
-    { key: "colleagueRelations", label: "العلاقة مع الزملاء" },
-    { key: "workOrganization", label: "القدرة على تنظيم العمل" },
-    { key: "timeUtilization", label: "الإفادة من وقت العمل" },
+    { key: "attendance", label: "الحفاظ على مواعيد العمل", labelEn: "Punctuality" },
+    { key: "productionQuality", label: "نوعية الإنتاج", labelEn: "Quality of Work" },
+    { key: "productionQuantity", label: "كمية الإنتاج", labelEn: "Quantity of Work" },
+    { key: "learningAbility", label: "القدرة على التعلم", labelEn: "Learning Ability" },
+    { key: "workProgress", label: "التقدم في العمل", labelEn: "Work Progress" },
+    { key: "followInstructions", label: "الالتزام بتعليمات المسؤول المباشر", labelEn: "Following Instructions" },
+    { key: "initiative", label: "المبادرة وسرعة البديهة", labelEn: "Initiative" },
+    { key: "colleagueRelations", label: "العلاقة مع الزملاء", labelEn: "Colleague Relations" },
+    { key: "workOrganization", label: "القدرة على تنظيم العمل", labelEn: "Work Organization" },
+    { key: "timeUtilization", label: "الإفادة من وقت العمل", labelEn: "Time Utilization" },
   ];
 
   const totalScore = Object.values(formData.scores).reduce((a, b) => a + b, 0);
 
   const getGrade = (score: number) => {
-    if (score >= 90) return "ممتاز";
-    if (score >= 80) return "جيد جداً";
-    if (score >= 70) return "جيد";
-    if (score >= 60) return "متوسط";
-    return "ضعيف";
+    if (score >= 90) return "ممتاز / Excellent";
+    if (score >= 80) return "جيد جداً / Very Good";
+    if (score >= 70) return "جيد / Good";
+    if (score >= 60) return "متوسط / Average";
+    return "ضعيف / Poor";
   };
 
   return (
@@ -1368,24 +1361,24 @@ function ProbationEvaluationTemplate() {
           <CompanyHeader templateTitle="نموذج تقييم أداء لموظفين تحت التجربة" templateTitleEn="Probation Period Performance Evaluation" />
 
           <div className="grid grid-cols-2 gap-4 text-sm mb-4">
-            <div><span className="font-semibold">اسم الموظف:</span> {formData.employeeName}</div>
-            <div><span className="font-semibold">الوظيفة:</span> {formData.position}</div>
-            <div><span className="font-semibold">الإدارة:</span> {formData.department}</div>
-            <div><span className="font-semibold">تاريخ التعيين:</span> {formData.hireDate}</div>
-            <div><span className="font-semibold">اسم المسؤول المباشر:</span> {formData.supervisorName}</div>
-            <div><span className="font-semibold">تاريخ تقييم الأداء:</span> {formData.evaluationDate}</div>
+            <div><span className="font-semibold">اسم الموظف / Employee Name:</span> {formData.employeeName}</div>
+            <div><span className="font-semibold">الوظيفة / Position:</span> {formData.position}</div>
+            <div><span className="font-semibold">الإدارة / Department:</span> {formData.department}</div>
+            <div><span className="font-semibold">تاريخ التعيين / Date of Hire:</span> {formData.hireDate}</div>
+            <div><span className="font-semibold">اسم المسؤول المباشر / Supervisor Name:</span> {formData.supervisorName}</div>
+            <div><span className="font-semibold">تاريخ تقييم الأداء / Evaluation Date:</span> {formData.evaluationDate}</div>
           </div>
 
           <table className="w-full border-collapse border text-sm mb-4">
             <thead>
               <tr className="bg-slate-100">
-                <th className="border p-2">الرقم</th>
-                <th className="border p-2">عناصر التقويم</th>
-                <th className="border p-2">ممتاز (10)</th>
-                <th className="border p-2">جيد جداً (8)</th>
-                <th className="border p-2">جيد (6)</th>
-                <th className="border p-2">متوسط (4)</th>
-                <th className="border p-2">ضعيف (2)</th>
+                <th className="border p-2">No.</th>
+                <th className="border p-2">عناصر التقويم / Evaluation Criteria</th>
+                <th className="border p-2">ممتاز<br/>Excellent (10)</th>
+                <th className="border p-2">جيد جداً<br/>V.Good (8)</th>
+                <th className="border p-2">جيد<br/>Good (6)</th>
+                <th className="border p-2">متوسط<br/>Average (4)</th>
+                <th className="border p-2">ضعيف<br/>Poor (2)</th>
               </tr>
             </thead>
             <tbody>
@@ -1394,7 +1387,7 @@ function ProbationEvaluationTemplate() {
                 return (
                   <tr key={item.key}>
                     <td className="border p-2 text-center">{index + 1}</td>
-                    <td className="border p-2">{item.label}</td>
+                    <td className="border p-2">{item.label}<br/><span className="text-xs text-slate-500">{item.labelEn}</span></td>
                     <td className="border p-2 text-center">{score === 10 ? "✓" : ""}</td>
                     <td className="border p-2 text-center">{score === 8 ? "✓" : ""}</td>
                     <td className="border p-2 text-center">{score === 6 ? "✓" : ""}</td>
@@ -1404,31 +1397,31 @@ function ProbationEvaluationTemplate() {
                 );
               })}
               <tr className="bg-slate-50 font-semibold">
-                <td className="border p-2" colSpan={2}>المجموع</td>
+                <td className="border p-2" colSpan={2}>المجموع / Total</td>
                 <td className="border p-2 text-center" colSpan={5}>{totalScore} / 100 - {getGrade(totalScore)}</td>
               </tr>
             </tbody>
           </table>
 
           <div className="border rounded p-3 mb-4">
-            <p className="font-semibold mb-2">توصية المسؤول المباشر:</p>
-            <div className="flex gap-6">
+            <p className="font-semibold mb-2">توصية المسؤول المباشر / Supervisor Recommendation:</p>
+            <div className="flex gap-6 flex-wrap">
               <div className="flex items-center gap-2">
                 <span className={`w-4 h-4 border ${formData.recommendation === 'confirm' ? 'bg-slate-800' : ''}`}></span>
-                تثبيت
+                تثبيت / Confirm
               </div>
               <div className="flex items-center gap-2">
                 <span className={`w-4 h-4 border ${formData.recommendation === 'extend' ? 'bg-slate-800' : ''}`}></span>
-                تمديد فترة التجربة
+                تمديد فترة التجربة / Extend Probation
               </div>
               <div className="flex items-center gap-2">
                 <span className={`w-4 h-4 border ${formData.recommendation === 'terminate' ? 'bg-slate-800' : ''}`}></span>
-                الاستغناء عن الخدمة
+                الاستغناء عن الخدمة / Terminate
               </div>
             </div>
             {formData.notes && (
               <div className="mt-2">
-                <p className="font-semibold">ملاحظات:</p>
+                <p className="font-semibold">ملاحظات / Notes:</p>
                 <p>{formData.notes}</p>
               </div>
             )}
@@ -1436,31 +1429,29 @@ function ProbationEvaluationTemplate() {
 
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div className="border rounded p-3">
-              <p className="font-semibold">المسؤول المباشر</p>
-              <p className="mt-2">التوقيع: ___________________</p>
-              <p className="mt-2">التاريخ: ___/___/______ م</p>
+              <p className="font-semibold">المسؤول المباشر / Direct Supervisor</p>
+              <p className="mt-2">التوقيع / Signature: ___________________</p>
+              <p className="mt-2">التاريخ / Date: ___/___/______</p>
             </div>
             <div className="border rounded p-3">
-              <p className="font-semibold">توقيع الموظف</p>
-              <p className="text-xs mt-1">لقد اطلعت على التقييم وتمت المناقشة مع المسؤول المباشر</p>
-              <p className="mt-2">التوقيع: ___________________</p>
-              <p className="mt-2">التاريخ: ___/___/______ م</p>
+              <p className="font-semibold">توقيع الموظف / Employee Signature</p>
+              <p className="text-xs mt-1">لقد اطلعت على التقييم وتمت المناقشة / I have reviewed and discussed</p>
+              <p className="mt-2">التوقيع / Signature: ___________________</p>
+              <p className="mt-2">التاريخ / Date: ___/___/______</p>
             </div>
           </div>
 
           <div className="mt-4 border rounded p-3 text-sm">
-            <p className="font-semibold">قرار مدير الموارد البشرية:</p>
-            <div className="flex gap-6 mt-2">
-              <div className="flex items-center gap-2">□ تثبيت</div>
-              <div className="flex items-center gap-2">□ تمديد فترة التجربة</div>
-              <div className="flex items-center gap-2">□ الاستغناء عن الخدمة</div>
+            <p className="font-semibold">قرار مدير الموارد البشرية / HR Manager Decision:</p>
+            <div className="flex gap-6 mt-2 flex-wrap">
+              <div className="flex items-center gap-2">□ تثبيت / Confirm</div>
+              <div className="flex items-center gap-2">□ تمديد فترة التجربة / Extend</div>
+              <div className="flex items-center gap-2">□ الاستغناء عن الخدمة / Terminate</div>
             </div>
-            <p className="mt-3">التوقيع: ___________________     التاريخ: ___/___/______ م</p>
+            <p className="mt-3">التوقيع / Signature: ___________________     التاريخ / Date: ___/___/______</p>
           </div>
 
-          <div className="mt-6 text-center text-xs text-slate-500">
-            <p>{COMPANY_INFO.name} - سجل تجاري: {COMPANY_INFO.cr}</p>
-          </div>
+          <CompanyFooter />
         </div>
       </div>
     </div>
@@ -1644,24 +1635,24 @@ function JobOfferTemplate() {
           </table>
 
           <div className="border rounded p-3 text-xs mb-4">
-            <h4 className="font-semibold mb-2">مميزات وشروط أخرى:</h4>
+            <h4 className="font-semibold mb-2">مميزات وشروط أخرى / Other Benefits & Conditions:</h4>
             <ul className="space-y-1">
-              <li>• الإجازة السنوية فقط (21) يوماً مدفوعة الأجر عن كل سنة ميلادية خدمة.</li>
-              <li>• تذاكر سفر للموظف الأجنبي (حسب نظام الشركة).</li>
-              <li>• العلاج: يتم إدراج الموظف في قائمة التأمين الطبي للشركة داخل المملكة العربية السعودية (حسب نظام الشركة).</li>
-              <li>• فترة التجربة: (180) يوماً حسب نظام العمل والعمال السعودي اعتباراً من تاريخ مباشرة العمل.</li>
-              <li>• يعتبر هذا العرض لاغياً في حالة عدم مباشرة العمل في التاريخ المحدد.</li>
-              <li>• يحق للشركة نقل الموظف لأي فرع حسب حاجة العمل.</li>
+              <li>• الإجازة السنوية فقط (21) يوماً مدفوعة الأجر عن كل سنة ميلادية خدمة. / Annual leave: 21 paid days per year.</li>
+              <li>• تذاكر سفر للموظف الأجنبي (حسب نظام الشركة). / Travel tickets for foreign employees (per company policy).</li>
+              <li>• العلاج: يتم إدراج الموظف في قائمة التأمين الطبي للشركة. / Medical: Employee included in company medical insurance.</li>
+              <li>• فترة التجربة: (180) يوماً حسب نظام العمل والعمال السعودي. / Probation: 180 days per Saudi Labor Law.</li>
+              <li>• يعتبر هذا العرض لاغياً في حالة عدم مباشرة العمل في التاريخ المحدد. / Offer void if not joined on specified date.</li>
+              <li>• يحق للشركة نقل الموظف لأي فرع حسب حاجة العمل. / Company may transfer employee as needed.</li>
             </ul>
           </div>
 
           <div className="grid grid-cols-3 gap-4 text-sm mb-4">
             <div className="border rounded p-3 text-center">
-              <p className="font-semibold">مدير الموارد البشرية</p>
+              <p className="font-semibold">مدير الموارد البشرية / HR Manager</p>
               <p className="mt-6">___________________</p>
             </div>
             <div className="border rounded p-3 text-center">
-              <p className="font-semibold">المدير التنفيذي</p>
+              <p className="font-semibold">المدير التنفيذي / CEO</p>
               <p className="mt-6">___________________</p>
             </div>
             <div></div>
@@ -1669,16 +1660,15 @@ function JobOfferTemplate() {
 
           <div className="border rounded p-3 text-sm">
             <p>أوافق على ما جاء في تفاصيل هذا العرض، وأؤكد بأنني على استعداد لمباشرة العمل والالتزام بالبنود المدونة أعلاه.</p>
+            <p className="text-xs text-slate-500 mt-1">I agree to the above job offer details and confirm my readiness to start work.</p>
             <div className="grid grid-cols-3 gap-4 mt-3">
-              <div><span className="font-semibold">الاسم:</span> ___________________</div>
-              <div><span className="font-semibold">التوقيع:</span> ___________________</div>
-              <div><span className="font-semibold">التاريخ:</span> ___________________</div>
+              <div><span className="font-semibold">الاسم / Name:</span> ___________________</div>
+              <div><span className="font-semibold">التوقيع / Signature:</span> ___________________</div>
+              <div><span className="font-semibold">التاريخ / Date:</span> ___________________</div>
             </div>
           </div>
 
-          <div className="mt-6 text-center text-xs text-slate-500">
-            <p>{COMPANY_INFO.name} - سجل تجاري: {COMPANY_INFO.cr}</p>
-          </div>
+          <CompanyFooter />
         </div>
       </div>
     </div>
@@ -1868,68 +1858,67 @@ function EmploymentApplicationTemplate() {
           <table className="w-full border-collapse border text-xs mb-3">
             <tbody>
               <tr>
-                <td className="border p-1.5 font-semibold bg-slate-50 w-24">الاسم الأول</td>
+                <td className="border p-1.5 font-semibold bg-slate-50 w-24">الاسم الأول<br/><span className="font-normal text-slate-500">First Name</span></td>
                 <td className="border p-1.5">{formData.firstName}</td>
-                <td className="border p-1.5 font-semibold bg-slate-50 w-24">اسم الأب</td>
+                <td className="border p-1.5 font-semibold bg-slate-50 w-24">اسم الأب<br/><span className="font-normal text-slate-500">Father</span></td>
                 <td className="border p-1.5">{formData.fatherName}</td>
-                <td className="border p-1.5 font-semibold bg-slate-50 w-24">اسم الجد</td>
+                <td className="border p-1.5 font-semibold bg-slate-50 w-24">اسم الجد<br/><span className="font-normal text-slate-500">Grandfather</span></td>
                 <td className="border p-1.5">{formData.grandFatherName}</td>
-                <td className="border p-1.5 font-semibold bg-slate-50 w-24">العائلة</td>
+                <td className="border p-1.5 font-semibold bg-slate-50 w-24">العائلة<br/><span className="font-normal text-slate-500">Family</span></td>
                 <td className="border p-1.5">{formData.familyName}</td>
               </tr>
               <tr>
-                <td className="border p-1.5 font-semibold bg-slate-50">تاريخ الميلاد</td>
+                <td className="border p-1.5 font-semibold bg-slate-50">تاريخ الميلاد<br/><span className="font-normal text-slate-500">DOB</span></td>
                 <td className="border p-1.5">{formData.dob}</td>
-                <td className="border p-1.5 font-semibold bg-slate-50">مكان الميلاد</td>
+                <td className="border p-1.5 font-semibold bg-slate-50">مكان الميلاد<br/><span className="font-normal text-slate-500">Birth Place</span></td>
                 <td className="border p-1.5">{formData.birthPlace}</td>
-                <td className="border p-1.5 font-semibold bg-slate-50">الجنسية</td>
+                <td className="border p-1.5 font-semibold bg-slate-50">الجنسية<br/><span className="font-normal text-slate-500">Nationality</span></td>
                 <td className="border p-1.5">{formData.nationality}</td>
-                <td className="border p-1.5 font-semibold bg-slate-50">الديانة</td>
+                <td className="border p-1.5 font-semibold bg-slate-50">الديانة<br/><span className="font-normal text-slate-500">Religion</span></td>
                 <td className="border p-1.5">{formData.religion}</td>
               </tr>
               <tr>
-                <td className="border p-1.5 font-semibold bg-slate-50">رقم الهوية</td>
+                <td className="border p-1.5 font-semibold bg-slate-50">رقم الهوية<br/><span className="font-normal text-slate-500">ID No</span></td>
                 <td className="border p-1.5" colSpan={3}>{formData.idNumber}</td>
-                <td className="border p-1.5 font-semibold bg-slate-50">مكان الإصدار</td>
+                <td className="border p-1.5 font-semibold bg-slate-50">مكان الإصدار<br/><span className="font-normal text-slate-500">Issue Place</span></td>
                 <td className="border p-1.5">{formData.idPlace}</td>
-                <td className="border p-1.5 font-semibold bg-slate-50">تاريخ الانتهاء</td>
+                <td className="border p-1.5 font-semibold bg-slate-50">تاريخ الانتهاء<br/><span className="font-normal text-slate-500">Expiry</span></td>
                 <td className="border p-1.5">{formData.idExpiry}</td>
               </tr>
             </tbody>
           </table>
 
           <div className="grid grid-cols-2 gap-2 text-xs mb-3">
-            <div>هاتف المنزل: {formData.homePhone}</div>
-            <div>الجوال: {formData.mobile}</div>
-            <div>البريد الإلكتروني: {formData.email}</div>
-            <div>العنوان: {formData.address}</div>
+            <div>هاتف المنزل / Home Phone: {formData.homePhone}</div>
+            <div>الجوال / Mobile: {formData.mobile}</div>
+            <div>البريد الإلكتروني / Email: {formData.email}</div>
+            <div>العنوان / Address: {formData.address}</div>
           </div>
 
           <div className="flex gap-4 text-xs mb-3">
-            <div>الحالة الاجتماعية: {formData.maritalStatus === 'married' ? 'متزوج □' : 'أعزب □'}</div>
-            <div>فصيلة الدم: {formData.bloodGroup}</div>
+            <div>الحالة الاجتماعية / Marital Status: {formData.maritalStatus === 'married' ? 'متزوج / Married □' : 'أعزب / Single □'}</div>
+            <div>فصيلة الدم / Blood Group: {formData.bloodGroup}</div>
           </div>
 
           <div className="border rounded p-3 mb-3 text-xs">
             <p className="font-semibold mb-2">رخصة القيادة / Driving License:</p>
             <div className="grid grid-cols-4 gap-2">
-              <div>نوعها: {formData.licenseType}</div>
-              <div>رقمها: {formData.licenseNumber}</div>
+              <div>نوعها / Type: {formData.licenseType}</div>
+              <div>رقمها / No: {formData.licenseNumber}</div>
             </div>
           </div>
 
           <div className="border-t pt-3 mt-3 text-xs">
             <p className="mb-2">أقر بصحة المعلومات المذكورة أعلاه وأتحمل المسؤولية الكاملة في حال ثبوت عدم صحتها.</p>
+            <p className="text-slate-500 mb-2">I certify the above information is correct and accept full responsibility for any inaccuracies.</p>
             <div className="grid grid-cols-3 gap-4 mt-3">
-              <div>الاسم: ___________________</div>
-              <div>التوقيع: ___________________</div>
-              <div>التاريخ: ___________________</div>
+              <div>الاسم / Name: ___________________</div>
+              <div>التوقيع / Signature: ___________________</div>
+              <div>التاريخ / Date: ___________________</div>
             </div>
           </div>
 
-          <div className="mt-4 text-center text-xs text-slate-500">
-            <p>{COMPANY_INFO.name} - سجل تجاري: {COMPANY_INFO.cr}</p>
-          </div>
+          <CompanyFooter />
         </div>
       </div>
     </div>
