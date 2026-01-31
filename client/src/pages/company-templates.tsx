@@ -57,7 +57,8 @@ type TemplateType =
   | "asset_handover" 
   | "payment_order" 
   | "clearance" 
-  | "penalty";
+  | "penalty"
+  | "hr_stamp";
 
 interface Template {
   id: TemplateType;
@@ -149,6 +150,14 @@ const templates: Template[] = [
     description: "نموذج الإجراء الجزائي والمخالفات",
     color: "bg-red-600",
   },
+  {
+    id: "hr_stamp",
+    title: "الختم الإلكتروني",
+    titleEn: "Electronic Stamp",
+    icon: <Award className="h-5 w-5" />,
+    description: "ختم إلكتروني لقسم الموارد البشرية",
+    color: "bg-[#1a3a2f]",
+  },
 ];
 
 function CompanyHeader({ templateTitle, templateTitleEn }: { templateTitle?: string; templateTitleEn?: string }) {
@@ -221,6 +230,75 @@ function CompanyFooter() {
         <p className="text-xs">C.R: {COMPANY_INFO.cr}</p>
         <p className="font-semibold text-xs">{COMPANY_INFO.nameEn}</p>
       </div>
+    </div>
+  );
+}
+
+// Electronic HR Stamp Component
+function HRStamp({ approverName, date }: { approverName?: string; date?: string }) {
+  const stampDate = date || format(new Date(), "yyyy/MM/dd");
+  return (
+    <div className="flex flex-col items-center">
+      <svg width="120" height="120" viewBox="0 0 120 120" className="stamp-svg">
+        {/* Outer Circle with double border */}
+        <circle cx="60" cy="60" r="56" fill="none" stroke="#1a3a2f" strokeWidth="2" />
+        <circle cx="60" cy="60" r="52" fill="none" stroke="#1a3a2f" strokeWidth="1" />
+        
+        {/* Decorative dots around the circle */}
+        {[...Array(24)].map((_, i) => {
+          const angle = (i * 15) * (Math.PI / 180);
+          const x = 60 + 49 * Math.cos(angle);
+          const y = 60 + 49 * Math.sin(angle);
+          return <circle key={i} cx={x} cy={y} r="1" fill="#1a3a2f" />;
+        })}
+        
+        {/* Inner decorative circle */}
+        <circle cx="60" cy="60" r="38" fill="none" stroke="#1a3a2f" strokeWidth="0.5" strokeDasharray="3,2" />
+        
+        {/* Top Arc Text - Company Name Arabic */}
+        <defs>
+          <path id="topArc" d="M 20,60 A 40,40 0 0,1 100,60" fill="none" />
+          <path id="bottomArc" d="M 100,60 A 40,40 0 0,1 20,60" fill="none" />
+        </defs>
+        
+        {/* Company Name - Top */}
+        <text className="text-[6px]" fill="#1a3a2f" fontWeight="bold">
+          <textPath href="#topArc" startOffset="50%" textAnchor="middle">
+            شركة الزبد الأفضل التجارية
+          </textPath>
+        </text>
+        
+        {/* Company Name English - Bottom */}
+        <text className="text-[5px]" fill="#1a3a2f" fontWeight="bold">
+          <textPath href="#bottomArc" startOffset="50%" textAnchor="middle">
+            AL-ZUBD AL-AFDAL TRADING CO.
+          </textPath>
+        </text>
+        
+        {/* Center Content */}
+        <text x="60" y="48" textAnchor="middle" fill="#1a3a2f" fontSize="7" fontWeight="bold">
+          إدارة الموارد البشرية
+        </text>
+        <text x="60" y="58" textAnchor="middle" fill="#1a3a2f" fontSize="6" fontWeight="bold">
+          HR DEPARTMENT
+        </text>
+        
+        {/* Horizontal Lines */}
+        <line x1="30" y1="64" x2="90" y2="64" stroke="#1a3a2f" strokeWidth="0.5" />
+        
+        {/* Approved Text */}
+        <text x="60" y="74" textAnchor="middle" fill="#1a3a2f" fontSize="6" fontWeight="bold">
+          معتمد / APPROVED
+        </text>
+        
+        {/* Date */}
+        <text x="60" y="84" textAnchor="middle" fill="#1a3a2f" fontSize="5">
+          {stampDate}
+        </text>
+      </svg>
+      {approverName && (
+        <p className="text-xs text-[#1a3a2f] mt-1 font-semibold">{approverName}</p>
+      )}
     </div>
   );
 }
@@ -913,6 +991,123 @@ function PenaltyTemplate() {
           </div>
 
           <CompanyFooter />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HRStampTemplate() {
+  const printRef = useRef<HTMLDivElement>(null);
+  const [formData, setFormData] = useState({
+    approverName: "",
+    approverTitle: "",
+    date: format(new Date(), "yyyy-MM-dd"),
+  });
+
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+    documentTitle: "الختم الإلكتروني",
+  });
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="space-y-2">
+          <Label>اسم المعتمد / Approver Name</Label>
+          <Input value={formData.approverName} onChange={(e) => setFormData({...formData, approverName: e.target.value})} />
+        </div>
+        <div className="space-y-2">
+          <Label>المسمى الوظيفي / Job Title</Label>
+          <Input value={formData.approverTitle} onChange={(e) => setFormData({...formData, approverTitle: e.target.value})} />
+        </div>
+        <div className="space-y-2">
+          <Label>التاريخ / Date</Label>
+          <Input type="date" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} />
+        </div>
+      </div>
+
+      <Button onClick={() => handlePrint()} className="w-full gap-2 bg-[#1a3a2f] hover:bg-[#2d5a47]">
+        <Printer className="h-4 w-4" /> طباعة الختم / Print Stamp
+      </Button>
+
+      <div ref={printRef} className="p-8 bg-white print:p-4">
+        <div className="flex flex-col items-center justify-center min-h-[400px] space-y-8">
+          <h2 className="text-xl font-bold text-[#1a3a2f]">الختم الإلكتروني لقسم الموارد البشرية</h2>
+          <h3 className="text-lg font-semibold text-[#1a3a2f]">HR Department Electronic Stamp</h3>
+          
+          <div className="flex flex-col items-center">
+            <svg width="200" height="200" viewBox="0 0 120 120" className="stamp-svg">
+              {/* Outer Circle with double border */}
+              <circle cx="60" cy="60" r="56" fill="none" stroke="#1a3a2f" strokeWidth="3" />
+              <circle cx="60" cy="60" r="52" fill="none" stroke="#1a3a2f" strokeWidth="1.5" />
+              
+              {/* Decorative dots around the circle */}
+              {[...Array(24)].map((_, i) => {
+                const angle = (i * 15) * (Math.PI / 180);
+                const x = 60 + 49 * Math.cos(angle);
+                const y = 60 + 49 * Math.sin(angle);
+                return <circle key={i} cx={x} cy={y} r="1.5" fill="#1a3a2f" />;
+              })}
+              
+              {/* Inner decorative circle */}
+              <circle cx="60" cy="60" r="38" fill="none" stroke="#1a3a2f" strokeWidth="0.8" strokeDasharray="4,3" />
+              
+              {/* Top Arc Text - Company Name Arabic */}
+              <defs>
+                <path id="topArcLarge" d="M 18,60 A 42,42 0 0,1 102,60" fill="none" />
+                <path id="bottomArcLarge" d="M 102,60 A 42,42 0 0,1 18,60" fill="none" />
+              </defs>
+              
+              {/* Company Name - Top */}
+              <text fill="#1a3a2f" fontWeight="bold" fontSize="6">
+                <textPath href="#topArcLarge" startOffset="50%" textAnchor="middle">
+                  شركة الزبد الأفضل التجارية
+                </textPath>
+              </text>
+              
+              {/* Company Name English - Bottom */}
+              <text fill="#1a3a2f" fontWeight="bold" fontSize="5">
+                <textPath href="#bottomArcLarge" startOffset="50%" textAnchor="middle">
+                  AL-ZUBD AL-AFDAL TRADING CO.
+                </textPath>
+              </text>
+              
+              {/* Center Content */}
+              <text x="60" y="46" textAnchor="middle" fill="#1a3a2f" fontSize="7" fontWeight="bold">
+                إدارة الموارد البشرية
+              </text>
+              <text x="60" y="56" textAnchor="middle" fill="#1a3a2f" fontSize="6" fontWeight="bold">
+                HR DEPARTMENT
+              </text>
+              
+              {/* Horizontal Lines */}
+              <line x1="28" y1="62" x2="92" y2="62" stroke="#1a3a2f" strokeWidth="0.8" />
+              
+              {/* Approved Text */}
+              <text x="60" y="72" textAnchor="middle" fill="#1a3a2f" fontSize="6" fontWeight="bold">
+                معتمد / APPROVED
+              </text>
+              
+              {/* Date */}
+              <text x="60" y="84" textAnchor="middle" fill="#1a3a2f" fontSize="5">
+                {formData.date.split("-").reverse().join("/")}
+              </text>
+            </svg>
+          </div>
+
+          {formData.approverName && (
+            <div className="text-center space-y-1">
+              <p className="font-bold text-[#1a3a2f] text-lg">{formData.approverName}</p>
+              {formData.approverTitle && <p className="text-[#1a3a2f]">{formData.approverTitle}</p>}
+            </div>
+          )}
+
+          <div className="mt-8 text-center text-sm text-slate-600 border-t pt-4">
+            <p className="font-semibold">{COMPANY_INFO.name}</p>
+            <p>{COMPANY_INFO.nameEn}</p>
+            <p className="mt-1">سجل تجاري / C.R: {COMPANY_INFO.cr}</p>
+          </div>
         </div>
       </div>
     </div>
@@ -1946,6 +2141,8 @@ export default function CompanyTemplates() {
         return <ClearanceTemplate />;
       case "penalty":
         return <PenaltyTemplate />;
+      case "hr_stamp":
+        return <HRStampTemplate />;
       default:
         return null;
     }
