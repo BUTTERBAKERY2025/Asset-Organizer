@@ -431,19 +431,18 @@ function WorkStartTemplate() {
               <p>□ المذكور باشر العمل متأخراً _____ يوم ويدرج اسمه بكشوفات الرواتب اعتباراً من: ___/___/______</p>
               <p className="text-xs text-slate-500 mr-6">The employee started late by _____ days and will be added to payroll from: ___/___/______</p>
             </div>
-            <div className="mt-4 grid grid-cols-2 gap-1 text-xs">
+            <div className="mt-4 grid grid-cols-2 gap-1 text-xs relative">
+              {showStamp && (
+                <div className="absolute -top-14 left-0">
+                  <HRStamp date={formData.startDate} />
+                </div>
+              )}
               <div><span className="font-semibold">الموظف المختص / HR Specialist:</span> {formData.hrSpecialist}</div>
               <div><span className="font-semibold">التوقيع / Signature:</span> ___________________</div>
               <div><span className="font-semibold">محاسب الرواتب / Payroll Accountant:</span> ___________________</div>
               <div><span className="font-semibold">التاريخ / Date:</span> ___/___/______</div>
             </div>
           </div>
-
-          {showStamp && (
-            <div className="flex justify-end mt-2">
-              <HRStamp date={formData.startDate} />
-            </div>
-          )}
 
           <CompanyFooter />
         </div>
@@ -579,12 +578,6 @@ function FinalSettlementTemplate() {
               </div>
             </div>
           </div>
-
-          {showStamp && (
-            <div className="flex justify-end mt-2">
-              <HRStamp date={(formData as any).endDate || (formData as any).date || (formData as any).evaluationDate || format(new Date(), "yyyy-MM-dd")} />
-            </div>
-          )}
 
           <CompanyFooter />
         </div>
@@ -757,12 +750,6 @@ function PaymentOrderTemplate() {
             </ul>
           </div>
 
-          {showStamp && (
-            <div className="flex justify-end mt-2">
-              <HRStamp date={(formData as any).endDate || (formData as any).date || (formData as any).evaluationDate || format(new Date(), "yyyy-MM-dd")} />
-            </div>
-          )}
-
           <CompanyFooter />
         </div>
       </div>
@@ -899,12 +886,6 @@ function ClearanceTemplate() {
             </div>
           </div>
 
-          {showStamp && (
-            <div className="flex justify-end mt-2">
-              <HRStamp date={(formData as any).endDate || (formData as any).date || (formData as any).evaluationDate || format(new Date(), "yyyy-MM-dd")} />
-            </div>
-          )}
-
           <CompanyFooter />
         </div>
       </div>
@@ -1038,17 +1019,16 @@ function PenaltyTemplate() {
               <p className="font-semibold text-xs">الموظف / Employee</p>
               <p className="mt-1">التوقيع: ____________  التاريخ: ___/___/___</p>
             </div>
-            <div className="border rounded p-1.5">
+            <div className="border rounded p-1.5 relative">
+              {showStamp && (
+                <div className="absolute -top-14 right-1">
+                  <HRStamp date={format(new Date(), "yyyy-MM-dd")} />
+                </div>
+              )}
               <p className="font-semibold text-xs">الموارد البشرية / HR</p>
               <p className="mt-1">التوقيع: ____________  التاريخ: ___/___/___</p>
             </div>
           </div>
-
-          {showStamp && (
-            <div className="flex justify-end mt-2">
-              <HRStamp date={(formData as any).endDate || (formData as any).date || (formData as any).evaluationDate || format(new Date(), "yyyy-MM-dd")} />
-            </div>
-          )}
 
           <CompanyFooter />
         </div>
@@ -1285,12 +1265,6 @@ function AssetHandoverTemplate() {
             </div>
           </div>
 
-          {showStamp && (
-            <div className="flex justify-end mt-2">
-              <HRStamp date={(formData as any).endDate || (formData as any).date || (formData as any).evaluationDate || format(new Date(), "yyyy-MM-dd")} />
-            </div>
-          )}
-
           <CompanyFooter />
         </div>
       </div>
@@ -1462,7 +1436,12 @@ function EmployeeStatusChangeTemplate() {
               <p className="text-xs">الاسم: __________ القرار: __________</p>
               <p className="text-xs">التوقيع: __________</p>
             </div>
-            <div className="border rounded p-1.5">
+            <div className="border rounded p-1.5 relative">
+              {showStamp && (
+                <div className="absolute -top-14 right-1">
+                  <HRStamp date={formData.date} />
+                </div>
+              )}
               <p className="font-semibold text-xs">الموارد البشرية / HR</p>
               <p className="text-xs">الاسم: __________ القرار: __________</p>
               <p className="text-xs">التوقيع: __________</p>
@@ -1473,12 +1452,6 @@ function EmployeeStatusChangeTemplate() {
             <p className="font-semibold text-xs">المدير التنفيذي / CEO</p>
             <p className="mt-1">التوقيع: __________</p>
           </div>
-
-          {showStamp && (
-            <div className="flex justify-end mt-2">
-              <HRStamp date={(formData as any).endDate || (formData as any).date || (formData as any).evaluationDate || format(new Date(), "yyyy-MM-dd")} />
-            </div>
-          )}
 
           <CompanyFooter />
         </div>
@@ -1713,7 +1686,12 @@ function ProbationEvaluationTemplate() {
             </div>
           </div>
 
-          <div className="mt-2 border rounded p-1.5 text-xs">
+          <div className="mt-2 border rounded p-1.5 text-xs relative">
+            {showStamp && (
+              <div className="absolute -top-14 right-1">
+                <HRStamp date={formData.evaluationDate} />
+              </div>
+            )}
             <p className="font-semibold text-xs">قرار الموارد البشرية / HR Decision:</p>
             <div className="flex gap-4 mt-1 flex-wrap text-xs">
               <span>□ تثبيت</span>
@@ -1722,12 +1700,6 @@ function ProbationEvaluationTemplate() {
             </div>
             <p className="mt-1 text-xs">التوقيع: __________  التاريخ: ___/___/___</p>
           </div>
-
-          {showStamp && (
-            <div className="flex justify-end mt-2">
-              <HRStamp date={(formData as any).endDate || (formData as any).date || (formData as any).evaluationDate || format(new Date(), "yyyy-MM-dd")} />
-            </div>
-          )}
 
           <CompanyFooter />
         </div>
@@ -1940,7 +1912,12 @@ function JobOfferTemplate() {
           </div>
 
           <div className="grid grid-cols-2 gap-2 text-xs mb-2">
-            <div className="border rounded p-1.5 text-center">
+            <div className="border rounded p-1.5 text-center relative">
+              {showStamp && (
+                <div className="absolute -top-14 right-1">
+                  <HRStamp date={formData.date} />
+                </div>
+              )}
               <p className="font-semibold text-xs">الموارد البشرية / HR</p>
               <p className="mt-1">____________</p>
             </div>
@@ -1959,12 +1936,6 @@ function JobOfferTemplate() {
               <div><span className="font-semibold">التاريخ / Date:</span> ___________________</div>
             </div>
           </div>
-
-          {showStamp && (
-            <div className="flex justify-end mt-2">
-              <HRStamp date={(formData as any).endDate || (formData as any).date || (formData as any).evaluationDate || format(new Date(), "yyyy-MM-dd")} />
-            </div>
-          )}
 
           <CompanyFooter />
         </div>
@@ -2221,12 +2192,6 @@ function EmploymentApplicationTemplate() {
               <div>التاريخ / Date: ___________________</div>
             </div>
           </div>
-
-          {showStamp && (
-            <div className="flex justify-end mt-2">
-              <HRStamp date={(formData as any).endDate || (formData as any).date || (formData as any).evaluationDate || format(new Date(), "yyyy-MM-dd")} />
-            </div>
-          )}
 
           <CompanyFooter />
         </div>
