@@ -174,14 +174,17 @@ function CompanyHeader({ templateTitle, templateTitleEn }: { templateTitle?: str
         />
       </div>
 
-      {/* Main Header with Logo on Left - Compact */}
-      <div className="flex items-start justify-between border-b-2 border-[#1a3a2f] pb-2 mb-2 relative z-10">
-        {/* Logo - Left Side */}
+      {/* Top Decorative Line */}
+      <div className="w-full h-1 mb-2 relative z-10" style={{ background: 'linear-gradient(90deg, #1a3a2f 0%, #2d5a47 50%, #1a3a2f 100%)' }}></div>
+
+      {/* Main Header with Logo on Left */}
+      <div className="flex items-center justify-between pb-2 mb-1 relative z-10">
+        {/* Logo - Left Side - Larger */}
         <div className="flex-shrink-0">
           <img 
             src={COMPANY_INFO.logo} 
             alt="Company Logo" 
-            className="h-14 w-auto object-contain"
+            className="h-20 w-auto object-contain"
             onError={(e) => {
               e.currentTarget.style.display = 'none';
             }}
@@ -189,12 +192,15 @@ function CompanyHeader({ templateTitle, templateTitleEn }: { templateTitle?: str
         </div>
         
         {/* Company Info - Center & Right */}
-        <div className="flex-1 text-center px-2">
-          <h1 className="text-base font-bold text-[#1a3a2f]">{COMPANY_INFO.name}</h1>
+        <div className="flex-1 text-center px-4">
+          <h1 className="text-lg font-bold text-[#1a3a2f]">{COMPANY_INFO.name}</h1>
           <h2 className="text-sm font-semibold text-[#1a3a2f]">{COMPANY_INFO.nameEn}</h2>
           <span className="text-xs text-slate-600">سجل تجاري / C.R: {COMPANY_INFO.cr}</span>
         </div>
       </div>
+
+      {/* Bottom Decorative Line */}
+      <div className="w-full h-0.5 mb-2 relative z-10" style={{ background: 'linear-gradient(90deg, transparent 0%, #1a3a2f 20%, #1a3a2f 80%, transparent 100%)' }}></div>
       
       {/* Template Title - Compact */}
       {templateTitle && (
