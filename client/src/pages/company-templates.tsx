@@ -32,6 +32,7 @@ import {
   Hash,
   MapPin,
   X,
+  Download,
 } from "lucide-react";
 import { Layout } from "@/components/layout";
 import { useReactToPrint } from "react-to-print";
@@ -377,10 +378,13 @@ function WorkStartTemplate() {
 
       <div className="flex gap-2">
         <Button onClick={() => handlePrint()} className="flex-1 gap-2 bg-amber-600 hover:bg-amber-700">
-          <Printer className="h-4 w-4" /> طباعة النموذج
+          <Printer className="h-4 w-4" /> طباعة
+        </Button>
+        <Button onClick={() => handlePrint()} className="gap-2 bg-blue-600 hover:bg-blue-700">
+          <Download className="h-4 w-4" /> PDF
         </Button>
         <Button onClick={() => setShowStamp(!showStamp)} className={`gap-2 ${showStamp ? 'bg-[#1a3a2f]' : 'bg-slate-600'} hover:bg-[#2d5a47]`}>
-          <Award className="h-4 w-4" /> {showStamp ? 'إخفاء الختم' : 'ختم النموذج'}
+          <Award className="h-4 w-4" /> {showStamp ? 'إخفاء الختم' : 'ختم'}
         </Button>
       </div>
 
@@ -524,7 +528,10 @@ function FinalSettlementTemplate() {
 
       <div className="flex gap-2">
         <Button onClick={() => handlePrint()} className="flex-1 gap-2 bg-green-600 hover:bg-green-700">
-          <Printer className="h-4 w-4" /> طباعة النموذج / Print
+          <Printer className="h-4 w-4" /> طباعة
+        </Button>
+        <Button onClick={() => handlePrint()} className="gap-2 bg-blue-600 hover:bg-blue-700">
+          <Download className="h-4 w-4" /> PDF
         </Button>
         <Button onClick={() => setShowStamp(!showStamp)} className={`gap-2 ${showStamp ? 'bg-[#1a3a2f]' : 'bg-slate-600'} hover:bg-[#2d5a47]`}>
           <Award className="h-4 w-4" /> {showStamp ? 'إخفاء الختم' : 'ختم'}
@@ -672,7 +679,10 @@ function PaymentOrderTemplate() {
 
       <div className="flex gap-2">
         <Button onClick={() => handlePrint()} className="flex-1 gap-2 bg-emerald-600 hover:bg-emerald-700">
-          <Printer className="h-4 w-4" /> طباعة النموذج / Print
+          <Printer className="h-4 w-4" /> طباعة
+        </Button>
+        <Button onClick={() => handlePrint()} className="gap-2 bg-blue-600 hover:bg-blue-700">
+          <Download className="h-4 w-4" /> PDF
         </Button>
         <Button onClick={() => setShowStamp(!showStamp)} className={`gap-2 ${showStamp ? 'bg-[#1a3a2f]' : 'bg-slate-600'} hover:bg-[#2d5a47]`}>
           <Award className="h-4 w-4" /> {showStamp ? 'إخفاء الختم' : 'ختم'}
@@ -827,7 +837,10 @@ function ClearanceTemplate() {
 
       <div className="flex gap-2">
         <Button onClick={() => handlePrint()} className="flex-1 gap-2 bg-slate-600 hover:bg-slate-700">
-          <Printer className="h-4 w-4" /> طباعة النموذج / Print
+          <Printer className="h-4 w-4" /> طباعة
+        </Button>
+        <Button onClick={() => handlePrint()} className="gap-2 bg-blue-600 hover:bg-blue-700">
+          <Download className="h-4 w-4" /> PDF
         </Button>
         <Button onClick={() => setShowStamp(!showStamp)} className={`gap-2 ${showStamp ? 'bg-[#1a3a2f]' : 'bg-slate-500'} hover:bg-[#2d5a47]`}>
           <Award className="h-4 w-4" /> {showStamp ? 'إخفاء الختم' : 'ختم'}
@@ -973,7 +986,10 @@ function PenaltyTemplate() {
 
       <div className="flex gap-2">
         <Button onClick={() => handlePrint()} className="flex-1 gap-2 bg-red-600 hover:bg-red-700">
-          <Printer className="h-4 w-4" /> طباعة النموذج / Print
+          <Printer className="h-4 w-4" /> طباعة
+        </Button>
+        <Button onClick={() => handlePrint()} className="gap-2 bg-blue-600 hover:bg-blue-700">
+          <Download className="h-4 w-4" /> PDF
         </Button>
         <Button onClick={() => setShowStamp(!showStamp)} className={`gap-2 ${showStamp ? 'bg-[#1a3a2f]' : 'bg-slate-600'} hover:bg-[#2d5a47]`}>
           <Award className="h-4 w-4" /> {showStamp ? 'إخفاء الختم' : 'ختم'}
@@ -1214,7 +1230,10 @@ function AssetHandoverTemplate() {
 
       <div className="flex gap-2">
         <Button onClick={() => handlePrint()} className="flex-1 gap-2 bg-orange-600 hover:bg-orange-700">
-          <Printer className="h-4 w-4" /> طباعة النموذج / Print
+          <Printer className="h-4 w-4" /> طباعة
+        </Button>
+        <Button onClick={() => handlePrint()} className="gap-2 bg-blue-600 hover:bg-blue-700">
+          <Download className="h-4 w-4" /> PDF
         </Button>
         <Button onClick={() => setShowStamp(!showStamp)} className={`gap-2 ${showStamp ? 'bg-[#1a3a2f]' : 'bg-slate-600'} hover:bg-[#2d5a47]`}>
           <Award className="h-4 w-4" /> {showStamp ? 'إخفاء الختم' : 'ختم'}
@@ -1362,7 +1381,10 @@ function EmployeeStatusChangeTemplate() {
 
       <div className="flex gap-2">
         <Button onClick={() => handlePrint()} className="flex-1 gap-2 bg-indigo-600 hover:bg-indigo-700">
-          <Printer className="h-4 w-4" /> طباعة النموذج / Print
+          <Printer className="h-4 w-4" /> طباعة
+        </Button>
+        <Button onClick={() => handlePrint()} className="gap-2 bg-blue-600 hover:bg-blue-700">
+          <Download className="h-4 w-4" /> PDF
         </Button>
         <Button onClick={() => setShowStamp(!showStamp)} className={`gap-2 ${showStamp ? 'bg-[#1a3a2f]' : 'bg-slate-600'} hover:bg-[#2d5a47]`}>
           <Award className="h-4 w-4" /> {showStamp ? 'إخفاء الختم' : 'ختم'}
@@ -1597,7 +1619,10 @@ function ProbationEvaluationTemplate() {
 
       <div className="flex gap-2">
         <Button onClick={() => handlePrint()} className="flex-1 gap-2 bg-teal-600 hover:bg-teal-700">
-          <Printer className="h-4 w-4" /> طباعة النموذج
+          <Printer className="h-4 w-4" /> طباعة
+        </Button>
+        <Button onClick={() => handlePrint()} className="gap-2 bg-blue-600 hover:bg-blue-700">
+          <Download className="h-4 w-4" /> PDF
         </Button>
         <Button onClick={() => setShowStamp(!showStamp)} className={`gap-2 ${showStamp ? 'bg-[#1a3a2f]' : 'bg-slate-600'} hover:bg-[#2d5a47]`}>
           <Award className="h-4 w-4" /> {showStamp ? 'إخفاء الختم' : 'ختم'}
@@ -1820,7 +1845,10 @@ function JobOfferTemplate() {
 
       <div className="flex gap-2">
         <Button onClick={() => handlePrint()} className="flex-1 gap-2 bg-amber-600 hover:bg-amber-700">
-          <Printer className="h-4 w-4" /> طباعة النموذج / Print
+          <Printer className="h-4 w-4" /> طباعة
+        </Button>
+        <Button onClick={() => handlePrint()} className="gap-2 bg-blue-600 hover:bg-blue-700">
+          <Download className="h-4 w-4" /> PDF
         </Button>
         <Button onClick={() => setShowStamp(!showStamp)} className={`gap-2 ${showStamp ? 'bg-[#1a3a2f]' : 'bg-slate-600'} hover:bg-[#2d5a47]`}>
           <Award className="h-4 w-4" /> {showStamp ? 'إخفاء الختم' : 'ختم'}
@@ -2115,7 +2143,10 @@ function EmploymentApplicationTemplate() {
 
       <div className="flex gap-2">
         <Button onClick={() => handlePrint()} className="flex-1 gap-2 bg-purple-600 hover:bg-purple-700">
-          <Printer className="h-4 w-4" /> طباعة النموذج
+          <Printer className="h-4 w-4" /> طباعة
+        </Button>
+        <Button onClick={() => handlePrint()} className="gap-2 bg-blue-600 hover:bg-blue-700">
+          <Download className="h-4 w-4" /> PDF
         </Button>
         <Button onClick={() => setShowStamp(!showStamp)} className={`gap-2 ${showStamp ? 'bg-[#1a3a2f]' : 'bg-slate-600'} hover:bg-[#2d5a47]`}>
           <Award className="h-4 w-4" /> {showStamp ? 'إخفاء الختم' : 'ختم'}
