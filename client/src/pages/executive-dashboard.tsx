@@ -161,8 +161,23 @@ export default function ExecutiveDashboard() {
             </Link>
           </div>
 
-          {/* Quick Access - Two columns */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4">
+          {/* Quick Access - Three columns */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4">
+            <Link href="/executive/templates" className="block">
+              <Card className="border-0 bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 transition-colors">
+                <CardContent className="p-3 sm:p-4 flex items-center gap-2 sm:gap-3">
+                  <div className="p-1.5 sm:p-2 bg-purple-500 rounded-lg">
+                    <FileText className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs sm:text-sm font-semibold text-white">النماذج الجاهزة</p>
+                    <p className="text-[10px] sm:text-xs text-purple-100">قوالب رسمية للطباعة</p>
+                  </div>
+                  <ArrowLeft className="h-3 w-3 sm:h-4 sm:w-4 text-purple-200" />
+                </CardContent>
+              </Card>
+            </Link>
+
             <Link href="/governance" className="block">
               <Card className="border-0 bg-slate-800 hover:bg-slate-700 transition-colors">
                 <CardContent className="p-3 sm:p-4 flex items-center gap-2 sm:gap-3">

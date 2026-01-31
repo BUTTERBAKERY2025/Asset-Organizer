@@ -130,6 +130,7 @@ const VisitorsPage = lazy(() => import("@/pages/visitors"));
 const TravelRequestsPage = lazy(() => import("@/pages/travel-requests"));
 const ExecutiveReportsPage = lazy(() => import("@/pages/executive-reports"));
 const ExecutiveCalendarPage = lazy(() => import("@/pages/executive-calendar"));
+const CompanyTemplatesPage = lazy(() => import("@/pages/company-templates"));
 
 function AppLoadingFallback() {
   return (
@@ -317,6 +318,7 @@ function Router() {
       <Route path="/travel-requests">{() => <ModulePage component={TravelRequestsPage} module="executive_travel" />}</Route>
       <Route path="/executive/reports">{() => <ModulePage component={ExecutiveReportsPage} module="executive_reports" />}</Route>
       <Route path="/executive/calendar">{() => <ModulePage component={ExecutiveCalendarPage} module="executive_calendar" />}</Route>
+      <Route path="/executive/templates">{() => <ModulePage component={CompanyTemplatesPage} module="executive_dashboard" />}</Route>
       
       {/* Documents - إدارة الوثائق */}
       <Route path="/documents">{() => <ModulePage component={DocumentsPage} module="documents" />}</Route>
