@@ -40,25 +40,25 @@ const PAYMENT_CATEGORIES = {
 
 // Payment methods ordered by most commonly used first
 const PAYMENT_METHODS = [
-  { value: "cash", label: "نقداً", icon: Wallet, category: "cash", color: { bg: "bg-amber-100", border: "border-amber-300", icon: "bg-amber-200", iconText: "text-amber-700", badge: "bg-amber-500" } },
-  { value: "mada", label: "مدى", icon: CreditCard, category: "cards", color: { bg: "bg-emerald-50", border: "border-emerald-300", icon: "bg-emerald-200", iconText: "text-emerald-700", badge: "bg-emerald-500" } },
-  { value: "visa", label: "فيزا", icon: CreditCard, category: "cards", color: { bg: "bg-blue-50", border: "border-blue-300", icon: "bg-blue-200", iconText: "text-blue-700", badge: "bg-blue-600" } },
-  { value: "mastercard", label: "ماستركارد", icon: CreditCard, category: "cards", color: { bg: "bg-orange-50", border: "border-orange-300", icon: "bg-orange-200", iconText: "text-orange-700", badge: "bg-orange-500" } },
-  { value: "amex", label: "أمريكان إكسبريس", icon: CreditCard, category: "cards", color: { bg: "bg-sky-50", border: "border-sky-300", icon: "bg-sky-200", iconText: "text-sky-700", badge: "bg-sky-500" } },
-  { value: "card_other", label: "بطاقة أخرى", icon: CreditCard, category: "cards", color: { bg: "bg-slate-50", border: "border-slate-300", icon: "bg-slate-200", iconText: "text-slate-700", badge: "bg-slate-500" } },
+  { value: "cash", label: "نقداً", icon: Wallet, category: "cash", color: { bg: "bg-amber-50/50", border: "border-amber-200", icon: "bg-amber-100", iconText: "text-amber-600", badge: "bg-amber-400" } },
+  { value: "mada", label: "مدى", icon: CreditCard, category: "cards", color: { bg: "bg-green-50/50", border: "border-green-200", icon: "bg-green-100", iconText: "text-green-600", badge: "bg-green-400" } },
+  { value: "visa", label: "فيزا", icon: CreditCard, category: "cards", color: { bg: "bg-blue-50/50", border: "border-blue-200", icon: "bg-blue-100", iconText: "text-blue-600", badge: "bg-blue-400" } },
+  { value: "mastercard", label: "ماستركارد", icon: CreditCard, category: "cards", color: { bg: "bg-orange-50/50", border: "border-orange-200", icon: "bg-orange-100", iconText: "text-orange-600", badge: "bg-orange-400" } },
+  { value: "amex", label: "أمريكان إكسبريس", icon: CreditCard, category: "cards", color: { bg: "bg-sky-50/50", border: "border-sky-200", icon: "bg-sky-100", iconText: "text-sky-600", badge: "bg-sky-400" } },
+  { value: "card_other", label: "بطاقة أخرى", icon: CreditCard, category: "cards", color: { bg: "bg-slate-50/50", border: "border-slate-200", icon: "bg-slate-100", iconText: "text-slate-600", badge: "bg-slate-400" } },
   // Legacy bank payment methods (for backward compatibility)
-  { value: "card", label: "بطاقة ائتمان (قديم)", icon: CreditCard, category: "cards", color: { bg: "bg-gray-50", border: "border-gray-300", icon: "bg-gray-200", iconText: "text-gray-700", badge: "bg-gray-500" } },
-  { value: "apple_pay", label: "Apple Pay", icon: Smartphone, category: "cards", color: { bg: "bg-zinc-50", border: "border-zinc-400", icon: "bg-zinc-300", iconText: "text-zinc-800", badge: "bg-zinc-700" } },
-  { value: "stc_pay", label: "STC Pay", icon: Smartphone, category: "cards", color: { bg: "bg-violet-50", border: "border-violet-300", icon: "bg-violet-200", iconText: "text-violet-700", badge: "bg-violet-600" } },
-  // Delivery apps
-  { value: "hunger_station", label: "هنقرستيشن", icon: Truck, category: "apps", color: { bg: "bg-pink-50", border: "border-pink-200", icon: "bg-pink-200", iconText: "text-pink-700", badge: "bg-pink-500" } },
-  { value: "jahez", label: "جاهز", icon: Truck, category: "apps", color: { bg: "bg-purple-50", border: "border-purple-200", icon: "bg-purple-200", iconText: "text-purple-700", badge: "bg-purple-500" } },
-  { value: "toyou", label: "ToYou", icon: Truck, category: "apps", color: { bg: "bg-fuchsia-50", border: "border-fuchsia-200", icon: "bg-fuchsia-200", iconText: "text-fuchsia-700", badge: "bg-fuchsia-500" } },
-  { value: "marsool", label: "مرسول", icon: Truck, category: "apps", color: { bg: "bg-rose-50", border: "border-rose-200", icon: "bg-rose-200", iconText: "text-rose-700", badge: "bg-rose-500" } },
-  { value: "keeta", label: "كيتا", icon: Truck, category: "apps", color: { bg: "bg-indigo-50", border: "border-indigo-200", icon: "bg-indigo-200", iconText: "text-indigo-700", badge: "bg-indigo-500" } },
-  { value: "the_chefs", label: "ذا شيفز", icon: Truck, category: "apps", color: { bg: "bg-teal-50", border: "border-teal-200", icon: "bg-teal-200", iconText: "text-teal-700", badge: "bg-teal-500" } },
-  { value: "talabat", label: "طلبات", icon: Truck, category: "apps", color: { bg: "bg-cyan-50", border: "border-cyan-200", icon: "bg-cyan-200", iconText: "text-cyan-700", badge: "bg-cyan-500" } },
-  { value: "other", label: "أخرى", icon: Wallet, category: "cash", color: { bg: "bg-gray-50", border: "border-gray-200", icon: "bg-gray-200", iconText: "text-gray-600", badge: "bg-gray-500" } },
+  { value: "card", label: "بطاقة ائتمان (قديم)", icon: CreditCard, category: "cards", color: { bg: "bg-gray-50/50", border: "border-gray-200", icon: "bg-gray-100", iconText: "text-gray-600", badge: "bg-gray-400" } },
+  { value: "apple_pay", label: "Apple Pay", icon: Smartphone, category: "cards", color: { bg: "bg-zinc-50/50", border: "border-zinc-200", icon: "bg-zinc-100", iconText: "text-zinc-600", badge: "bg-zinc-500" } },
+  { value: "stc_pay", label: "STC Pay", icon: Smartphone, category: "cards", color: { bg: "bg-violet-50/50", border: "border-violet-200", icon: "bg-violet-100", iconText: "text-violet-600", badge: "bg-violet-400" } },
+  // Delivery apps - neutral gray with subtle accent
+  { value: "hunger_station", label: "هنقرستيشن", icon: Truck, category: "apps", color: { bg: "bg-gray-50/50", border: "border-gray-200", icon: "bg-gray-100", iconText: "text-gray-600", badge: "bg-pink-300" } },
+  { value: "jahez", label: "جاهز", icon: Truck, category: "apps", color: { bg: "bg-gray-50/50", border: "border-gray-200", icon: "bg-gray-100", iconText: "text-gray-600", badge: "bg-purple-300" } },
+  { value: "toyou", label: "ToYou", icon: Truck, category: "apps", color: { bg: "bg-gray-50/50", border: "border-gray-200", icon: "bg-gray-100", iconText: "text-gray-600", badge: "bg-fuchsia-300" } },
+  { value: "marsool", label: "مرسول", icon: Truck, category: "apps", color: { bg: "bg-gray-50/50", border: "border-gray-200", icon: "bg-gray-100", iconText: "text-gray-600", badge: "bg-yellow-300" } },
+  { value: "keeta", label: "كيتا", icon: Truck, category: "apps", color: { bg: "bg-gray-50/50", border: "border-gray-200", icon: "bg-gray-100", iconText: "text-gray-600", badge: "bg-indigo-300" } },
+  { value: "the_chefs", label: "ذا شيفز", icon: Truck, category: "apps", color: { bg: "bg-gray-50/50", border: "border-gray-200", icon: "bg-gray-100", iconText: "text-gray-600", badge: "bg-teal-300" } },
+  { value: "talabat", label: "طلبات", icon: Truck, category: "apps", color: { bg: "bg-gray-50/50", border: "border-gray-200", icon: "bg-gray-100", iconText: "text-gray-600", badge: "bg-red-300" } },
+  { value: "other", label: "أخرى", icon: Wallet, category: "cash", color: { bg: "bg-gray-50/50", border: "border-gray-200", icon: "bg-gray-100", iconText: "text-gray-600", badge: "bg-gray-300" } },
 ];
 
 const SHIFT_TYPES = [
@@ -1352,12 +1352,12 @@ export default function CashierJournalFormPage() {
                   const iconColor = methodColor.iconText;
 
                   return (
-                    <div key={index} className={`p-2 border-2 rounded-lg ${rowStyle}`} data-testid={`payment-row-${index}`}>
-                      {/* Compact Header Row with color badge */}
-                      <div className="flex items-center gap-1 mb-1">
-                        <div className={`w-1 h-6 rounded-full ${methodColor.badge}`} />
+                    <div key={index} className={`p-1.5 border rounded ${rowStyle}`} data-testid={`payment-row-${index}`}>
+                      {/* Ultra Compact Header Row with subtle color badge */}
+                      <div className="flex items-center gap-0.5 mb-0.5">
+                        <div className={`w-0.5 h-4 rounded-full ${methodColor.badge}`} />
                         <div className={`p-0.5 rounded ${iconBg}`}>
-                          <Icon className={`w-3 h-3 ${iconColor}`} />
+                          <Icon className={`w-2.5 h-2.5 ${iconColor}`} />
                         </div>
                         <Select
                           value={breakdown.paymentMethod}
@@ -1394,13 +1394,13 @@ export default function CashierJournalFormPage() {
                         )}
                       </div>
                       
-                      {/* Compact Input Grid - Bank Methods: POS vs Terminal side by side */}
+                      {/* Ultra Compact Input Grid - Bank Methods */}
                       {isBank ? (
-                        <div className="space-y-1.5">
+                        <div className="space-y-1">
                           {/* POS & Terminal Amounts - Side by Side */}
-                          <div className="grid grid-cols-2 gap-1.5">
-                            <div className="space-y-0.5">
-                              <Label className="text-[10px] text-blue-700 font-medium">POS (الكاشير)</Label>
+                          <div className="grid grid-cols-2 gap-1">
+                            <div className="space-y-0">
+                              <Label className="text-[9px] text-gray-500">POS (الكاشير)</Label>
                               <Input
                                 type="number"
                                 inputMode="decimal"
@@ -1412,22 +1412,22 @@ export default function CashierJournalFormPage() {
                                 }}
                                 onWheel={preventWheelChange}
                                 disabled={isReadOnly}
-                                className="h-8 text-sm font-bold text-center"
+                                className="h-7 text-xs font-bold text-center"
                                 data-testid={`input-payment-amount-${index}`}
                               />
                             </div>
-                            <div className="space-y-0.5">
+                            <div className="space-y-0">
                               <div className="flex items-center justify-between">
-                                <Label className="text-[10px] text-blue-700 font-medium">Terminal</Label>
+                                <Label className="text-[9px] text-gray-500">Terminal</Label>
                                 {!isReadOnly && (
                                   <Button
                                     type="button"
                                     variant="ghost"
                                     size="sm"
-                                    className="h-4 px-1 text-[10px] text-blue-600 hover:text-blue-800 p-0"
+                                    className="h-3 px-0.5 text-[9px] text-gray-500 hover:text-gray-700 p-0"
                                     onClick={() => updatePaymentBreakdown(index, "terminalAmount", breakdown.amount || 0)}
                                   >
-                                    <Copy className="w-2.5 h-2.5 ml-0.5" />
+                                    <Copy className="w-2 h-2 ml-0.5" />
                                     نسخ
                                   </Button>
                                 )}
@@ -1440,22 +1440,22 @@ export default function CashierJournalFormPage() {
                                 onChange={(e) => updatePaymentBreakdown(index, "terminalAmount", parseNumericValue(e.target.value))}
                                 onWheel={preventWheelChange}
                                 disabled={isReadOnly}
-                                className="h-8 text-sm font-bold text-center bg-white"
+                                className="h-7 text-xs font-bold text-center bg-white"
                                 data-testid={`input-terminal-amount-${index}`}
                               />
                             </div>
                           </div>
-                          {/* Discrepancy & Transaction Counts - Compact Row */}
-                          <div className="flex items-center gap-1.5 text-[10px]">
-                            <div className={`flex-1 px-1.5 py-1 rounded flex items-center justify-between ${bankDiscType === 'surplus' ? 'bg-emerald-100 text-emerald-700' : bankDiscType === 'shortage' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}>
+                          {/* Discrepancy & Transaction Counts - Ultra Compact Row */}
+                          <div className="flex items-center gap-1 text-[9px]">
+                            <div className={`flex-1 px-1 py-0.5 rounded flex items-center justify-between ${bankDiscType === 'surplus' ? 'bg-emerald-50 text-emerald-600' : bankDiscType === 'shortage' ? 'bg-red-50 text-red-600' : 'bg-gray-50 text-gray-500'}`}>
                               <span>الفرق:</span>
                               <span className="font-bold">
                                 {bankDisc >= 0 ? '+' : ''}{bankDisc.toFixed(2)} {bankDiscType === 'surplus' ? '⬆️' : bankDiscType === 'shortage' ? '⬇️' : '✓'}
                               </span>
                             </div>
-                            <div className="flex items-center gap-1.5 bg-gray-100 px-1.5 py-0.5 rounded">
+                            <div className="flex items-center gap-1 bg-gray-50 px-1 py-0.5 rounded">
                               <div className="flex items-center gap-0.5">
-                                <span className="text-gray-500">POS:</span>
+                                <span className="text-gray-400">POS:</span>
                                 <Input
                                   type="number"
                                   inputMode="numeric"
@@ -1464,12 +1464,12 @@ export default function CashierJournalFormPage() {
                                   onChange={(e) => updatePaymentBreakdown(index, "transactionCount", parseNumericValue(e.target.value, false))}
                                   onWheel={preventWheelChange}
                                   disabled={isReadOnly}
-                                  className="h-5 w-8 text-[10px] font-bold text-center p-0"
+                                  className="h-4 w-7 text-[9px] font-bold text-center p-0"
                                   data-testid={`input-payment-count-${index}`}
                                 />
                               </div>
                               <div className="flex items-center gap-0.5">
-                                <span className="text-gray-500">جهاز:</span>
+                                <span className="text-gray-400">جهاز:</span>
                                 <Input
                                   type="number"
                                   inputMode="numeric"
@@ -1478,7 +1478,7 @@ export default function CashierJournalFormPage() {
                                   onChange={(e) => updatePaymentBreakdown(index, "terminalTransactionCount", parseNumericValue(e.target.value, false))}
                                   onWheel={preventWheelChange}
                                   disabled={isReadOnly}
-                                  className="h-5 w-8 text-[10px] font-bold text-center p-0"
+                                  className="h-4 w-7 text-[9px] font-bold text-center p-0"
                                   data-testid={`input-terminal-count-${index}`}
                                 />
                               </div>
@@ -1486,18 +1486,18 @@ export default function CashierJournalFormPage() {
                           </div>
                         </div>
                       ) : breakdown.paymentMethod === 'cash' ? (
-                        /* Cash: POS Amount vs Actual Drawer - Special Layout */
+                        /* Cash: POS Amount vs Actual Drawer - Ultra Compact */
                         (() => {
                           const expectedCash = getExpectedCashInDrawer();
                           const actualCash = formData.actualCashDrawer ?? 0;
                           const cashDisc = actualCash - expectedCash;
                           const cashDiscType = cashDisc > 0.5 ? 'surplus' : cashDisc < -0.5 ? 'shortage' : 'balanced';
                           return (
-                            <div className="space-y-1.5">
+                            <div className="space-y-1">
                               {/* Cash POS & Actual Drawer - Side by Side */}
-                              <div className="grid grid-cols-2 gap-1.5">
-                                <div className="space-y-0.5">
-                                  <Label className="text-[10px] text-amber-700 font-medium">النقد المسجل (POS)</Label>
+                              <div className="grid grid-cols-2 gap-1">
+                                <div className="space-y-0">
+                                  <Label className="text-[9px] text-gray-500">النقد المسجل (POS)</Label>
                                   <Input
                                     type="number"
                                     inputMode="decimal"
@@ -1506,12 +1506,12 @@ export default function CashierJournalFormPage() {
                                     onChange={(e) => updatePaymentBreakdown(index, "amount", parseNumericValue(e.target.value))}
                                     onWheel={preventWheelChange}
                                     disabled={isReadOnly}
-                                    className="h-8 text-sm font-bold text-center"
+                                    className="h-7 text-xs font-bold text-center"
                                     data-testid={`input-payment-amount-${index}`}
                                   />
                                 </div>
-                                <div className="space-y-0.5">
-                                  <Label className="text-[10px] text-amber-700 font-medium">الفعلي في الصندوق</Label>
+                                <div className="space-y-0">
+                                  <Label className="text-[9px] text-gray-500">الفعلي في الصندوق</Label>
                                   <Input
                                     type="number"
                                     inputMode="decimal"
@@ -1520,21 +1520,21 @@ export default function CashierJournalFormPage() {
                                     onChange={(e) => setFormData({ ...formData, actualCashDrawer: parseNumericValue(e.target.value) })}
                                     onWheel={preventWheelChange}
                                     disabled={isReadOnly}
-                                    className="h-8 text-sm font-bold text-center bg-white"
+                                    className="h-7 text-xs font-bold text-center bg-white"
                                     data-testid="input-actual-cash-inline"
                                   />
                                 </div>
                               </div>
-                              {/* Cash Discrepancy & Transaction Count - Compact Row */}
-                              <div className="flex items-center gap-1.5 text-[10px]">
-                                <div className={`flex-1 px-1.5 py-1 rounded flex items-center justify-between ${cashDiscType === 'surplus' ? 'bg-emerald-100 text-emerald-700' : cashDiscType === 'shortage' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}>
+                              {/* Cash Discrepancy & Transaction Count - Ultra Compact Row */}
+                              <div className="flex items-center gap-1 text-[9px]">
+                                <div className={`flex-1 px-1 py-0.5 rounded flex items-center justify-between ${cashDiscType === 'surplus' ? 'bg-emerald-50 text-emerald-600' : cashDiscType === 'shortage' ? 'bg-red-50 text-red-600' : 'bg-gray-50 text-gray-500'}`}>
                                   <span>الفرق:</span>
                                   <span className="font-bold">
                                     {cashDisc >= 0 ? '+' : ''}{cashDisc.toFixed(2)} {cashDiscType === 'surplus' ? '⬆️' : cashDiscType === 'shortage' ? '⬇️' : '✓'}
                                   </span>
                                 </div>
-                                <div className="flex items-center gap-0.5 bg-gray-100 px-1.5 py-0.5 rounded">
-                                  <span className="text-gray-500">عمليات:</span>
+                                <div className="flex items-center gap-0.5 bg-gray-50 px-1 py-0.5 rounded">
+                                  <span className="text-gray-400">عمليات:</span>
                                   <Input
                                     type="number"
                                     inputMode="numeric"
@@ -1543,7 +1543,7 @@ export default function CashierJournalFormPage() {
                                     onChange={(e) => updatePaymentBreakdown(index, "transactionCount", parseNumericValue(e.target.value, false))}
                                     onWheel={preventWheelChange}
                                     disabled={isReadOnly}
-                                    className="h-5 w-8 text-[10px] font-bold text-center p-0"
+                                    className="h-4 w-7 text-[9px] font-bold text-center p-0"
                                     data-testid={`input-payment-count-${index}`}
                                   />
                                 </div>
@@ -1572,9 +1572,9 @@ export default function CashierJournalFormPage() {
                         })()
                       ) : (
                         /* Other Non-Bank: Simple Amount + Transaction Count */
-                        <div className="flex items-end gap-1.5">
-                          <div className="flex-1 space-y-0.5">
-                            <Label className="text-[10px] font-medium">المبلغ</Label>
+                        <div className="flex items-end gap-1">
+                          <div className="flex-1 space-y-0">
+                            <Label className="text-[9px] text-gray-500">المبلغ</Label>
                             <Input
                               type="number"
                               inputMode="decimal"
@@ -1583,12 +1583,12 @@ export default function CashierJournalFormPage() {
                               onChange={(e) => updatePaymentBreakdown(index, "amount", parseNumericValue(e.target.value))}
                               onWheel={preventWheelChange}
                               disabled={isReadOnly}
-                              className="h-8 text-sm font-bold text-center"
+                              className="h-7 text-xs font-bold text-center"
                               data-testid={`input-payment-amount-${index}`}
                             />
                           </div>
-                          <div className="w-16 space-y-0.5">
-                            <Label className="text-[10px] font-medium text-gray-500">عمليات</Label>
+                          <div className="w-14 space-y-0">
+                            <Label className="text-[9px] text-gray-400">عمليات</Label>
                             <Input
                               type="number"
                               inputMode="numeric"
@@ -1597,7 +1597,7 @@ export default function CashierJournalFormPage() {
                               onChange={(e) => updatePaymentBreakdown(index, "transactionCount", parseNumericValue(e.target.value, false))}
                               onWheel={preventWheelChange}
                               disabled={isReadOnly}
-                              className="h-8 text-xs font-medium text-center"
+                              className="h-7 text-[10px] font-medium text-center"
                               data-testid={`input-payment-count-${index}`}
                             />
                           </div>
