@@ -323,6 +323,12 @@ export async function registerRoutes(
     try {
       const { permissions, templateApplied } = req.body;
       const currentUser = getCurrentUser(req);
+      const targetUserId = req.params.id;
+      
+      // SECURITY: Prevent users from modifying their own permissions
+      if (currentUser.id === targetUserId && currentUser.role !== "admin") {
+        return res.status(403).json({ error: "لا يمكنك تعديل صلاحياتك الخاصة" });
+      }
       
       if (!Array.isArray(permissions)) {
         return res.status(400).json({ error: "Invalid permissions format" });
@@ -11652,8 +11658,14 @@ export async function registerRoutes(
 
   app.post("/api/rbac/users/:userId/assignments", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
     try {
+      const currentUser = getCurrentUser(req);
       const userId = req.params.userId;
       const { roleId, branchId, departmentId, scopeType, isPrimary, startDate, endDate } = req.body;
+      
+      // SECURITY: Prevent users from modifying their own role assignments
+      if (currentUser.id === userId && currentUser.role !== "admin") {
+        return res.status(403).json({ error: "لا يمكنك تعديل تعييناتك الخاصة" });
+      }
       
       console.log("Creating assignment:", { userId, roleId, branchId, departmentId, scopeType });
       
@@ -11708,6 +11720,14 @@ export async function registerRoutes(
 
   app.patch("/api/rbac/users/:userId/assignments/:assignmentId", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
     try {
+      const currentUser = getCurrentUser(req);
+      const userId = req.params.userId;
+      
+      // SECURITY: Prevent users from modifying their own role assignments
+      if (currentUser.id === userId && currentUser.role !== "admin") {
+        return res.status(403).json({ error: "لا يمكنك تعديل تعييناتك الخاصة" });
+      }
+      
       const assignmentId = parseInt(req.params.assignmentId);
       const assignment = await storage.updateUserAssignment(assignmentId, req.body);
       if (!assignment) {
@@ -11722,6 +11742,14 @@ export async function registerRoutes(
 
   app.delete("/api/rbac/users/:userId/assignments/:assignmentId", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
     try {
+      const currentUser = getCurrentUser(req);
+      const userId = req.params.userId;
+      
+      // SECURITY: Prevent users from deleting their own role assignments
+      if (currentUser.id === userId && currentUser.role !== "admin") {
+        return res.status(403).json({ error: "لا يمكنك حذف تعييناتك الخاصة" });
+      }
+      
       const assignmentId = parseInt(req.params.assignmentId);
       await storage.deleteUserAssignment(assignmentId);
       res.status(204).send();
@@ -11755,9 +11783,15 @@ export async function registerRoutes(
 
   app.post("/api/rbac/users/:userId/overrides", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
     try {
+      const currentUser = getCurrentUser(req);
       const userId = req.params.userId;
       const { permissionId, allow, reason, expiresAt } = req.body;
-      const grantedBy = getCurrentUser(req).id;
+      const grantedBy = currentUser.id;
+      
+      // SECURITY: Prevent users from modifying their own permission overrides
+      if (currentUser.id === userId && currentUser.role !== "admin") {
+        return res.status(403).json({ error: "لا يمكنك تعديل استثناءات صلاحياتك الخاصة" });
+      }
       
       if (permissionId === undefined || allow === undefined) {
         return res.status(400).json({ error: "معرف الصلاحية وحالة السماح مطلوبان" });
@@ -11781,6 +11815,14 @@ export async function registerRoutes(
 
   app.delete("/api/rbac/users/:userId/overrides/:overrideId", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
     try {
+      const currentUser = getCurrentUser(req);
+      const userId = req.params.userId;
+      
+      // SECURITY: Prevent users from deleting their own permission overrides
+      if (currentUser.id === userId && currentUser.role !== "admin") {
+        return res.status(403).json({ error: "لا يمكنك حذف استثناءات صلاحياتك الخاصة" });
+      }
+      
       const overrideId = parseInt(req.params.overrideId);
       await storage.deleteUserPermissionOverride(overrideId);
       res.status(204).send();
@@ -11814,8 +11856,14 @@ export async function registerRoutes(
 
   app.post("/api/rbac/users/:userId/branches", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
     try {
+      const currentUser = getCurrentUser(req);
       const userId = req.params.userId;
       const { branchId, isDefault, accessLevel } = req.body;
+      
+      // SECURITY: Prevent users from modifying their own branch access
+      if (currentUser.id === userId && currentUser.role !== "admin") {
+        return res.status(403).json({ error: "لا يمكنك تعديل صلاحيات فروعك الخاصة" });
+      }
       
       if (!branchId) {
         return res.status(400).json({ error: "معرف الفرع مطلوب" });
@@ -11837,8 +11885,15 @@ export async function registerRoutes(
 
   app.delete("/api/rbac/users/:userId/branches/:branchId", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
     try {
+      const currentUser = getCurrentUser(req);
       const userId = req.params.userId;
       const branchId = req.params.branchId;
+      
+      // SECURITY: Prevent users from deleting their own branch access
+      if (currentUser.id === userId && currentUser.role !== "admin") {
+        return res.status(403).json({ error: "لا يمكنك حذف صلاحيات فروعك الخاصة" });
+      }
+      
       await storage.removeUserBranchAccess(userId, branchId);
       res.status(204).send();
     } catch (error) {
@@ -11849,8 +11904,15 @@ export async function registerRoutes(
 
   app.patch("/api/rbac/users/:userId/branches/:branchId/default", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
     try {
+      const currentUser = getCurrentUser(req);
       const userId = req.params.userId;
       const branchId = req.params.branchId;
+      
+      // SECURITY: Prevent users from modifying their own default branch (except admin)
+      if (currentUser.id === userId && currentUser.role !== "admin") {
+        return res.status(403).json({ error: "لا يمكنك تعديل الفرع الافتراضي الخاص بك" });
+      }
+      
       await storage.setUserDefaultBranch(userId, branchId);
       res.json({ success: true });
     } catch (error) {
