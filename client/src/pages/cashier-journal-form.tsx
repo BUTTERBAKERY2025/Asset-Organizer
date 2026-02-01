@@ -40,25 +40,25 @@ const PAYMENT_CATEGORIES = {
 
 // Payment methods ordered by most commonly used first
 const PAYMENT_METHODS = [
-  { value: "cash", label: "نقداً", icon: Wallet, category: "cash" },
-  { value: "mada", label: "مدى", icon: CreditCard, category: "cards" },
-  { value: "visa", label: "فيزا", icon: CreditCard, category: "cards" },
-  { value: "mastercard", label: "ماستركارد", icon: CreditCard, category: "cards" },
-  { value: "amex", label: "أمريكان إكسبريس", icon: CreditCard, category: "cards" },
-  { value: "card_other", label: "بطاقة أخرى", icon: CreditCard, category: "cards" },
+  { value: "cash", label: "نقداً", icon: Wallet, category: "cash", color: { bg: "bg-amber-100", border: "border-amber-300", icon: "bg-amber-200", iconText: "text-amber-700", badge: "bg-amber-500" } },
+  { value: "mada", label: "مدى", icon: CreditCard, category: "cards", color: { bg: "bg-emerald-50", border: "border-emerald-300", icon: "bg-emerald-200", iconText: "text-emerald-700", badge: "bg-emerald-500" } },
+  { value: "visa", label: "فيزا", icon: CreditCard, category: "cards", color: { bg: "bg-blue-50", border: "border-blue-300", icon: "bg-blue-200", iconText: "text-blue-700", badge: "bg-blue-600" } },
+  { value: "mastercard", label: "ماستركارد", icon: CreditCard, category: "cards", color: { bg: "bg-orange-50", border: "border-orange-300", icon: "bg-orange-200", iconText: "text-orange-700", badge: "bg-orange-500" } },
+  { value: "amex", label: "أمريكان إكسبريس", icon: CreditCard, category: "cards", color: { bg: "bg-sky-50", border: "border-sky-300", icon: "bg-sky-200", iconText: "text-sky-700", badge: "bg-sky-500" } },
+  { value: "card_other", label: "بطاقة أخرى", icon: CreditCard, category: "cards", color: { bg: "bg-slate-50", border: "border-slate-300", icon: "bg-slate-200", iconText: "text-slate-700", badge: "bg-slate-500" } },
   // Legacy bank payment methods (for backward compatibility)
-  { value: "card", label: "بطاقة ائتمان (قديم)", icon: CreditCard, category: "cards" },
-  { value: "apple_pay", label: "Apple Pay", icon: Smartphone, category: "cards" },
-  { value: "stc_pay", label: "STC Pay", icon: Smartphone, category: "cards" },
+  { value: "card", label: "بطاقة ائتمان (قديم)", icon: CreditCard, category: "cards", color: { bg: "bg-gray-50", border: "border-gray-300", icon: "bg-gray-200", iconText: "text-gray-700", badge: "bg-gray-500" } },
+  { value: "apple_pay", label: "Apple Pay", icon: Smartphone, category: "cards", color: { bg: "bg-zinc-50", border: "border-zinc-400", icon: "bg-zinc-300", iconText: "text-zinc-800", badge: "bg-zinc-700" } },
+  { value: "stc_pay", label: "STC Pay", icon: Smartphone, category: "cards", color: { bg: "bg-violet-50", border: "border-violet-300", icon: "bg-violet-200", iconText: "text-violet-700", badge: "bg-violet-600" } },
   // Delivery apps
-  { value: "hunger_station", label: "هنقرستيشن", icon: Truck, category: "apps" },
-  { value: "jahez", label: "جاهز", icon: Truck, category: "apps" },
-  { value: "toyou", label: "ToYou", icon: Truck, category: "apps" },
-  { value: "marsool", label: "مرسول", icon: Truck, category: "apps" },
-  { value: "keeta", label: "كيتا", icon: Truck, category: "apps" },
-  { value: "the_chefs", label: "ذا شيفز", icon: Truck, category: "apps" },
-  { value: "talabat", label: "طلبات", icon: Truck, category: "apps" },
-  { value: "other", label: "أخرى", icon: Wallet, category: "cash" },
+  { value: "hunger_station", label: "هنقرستيشن", icon: Truck, category: "apps", color: { bg: "bg-pink-50", border: "border-pink-200", icon: "bg-pink-200", iconText: "text-pink-700", badge: "bg-pink-500" } },
+  { value: "jahez", label: "جاهز", icon: Truck, category: "apps", color: { bg: "bg-purple-50", border: "border-purple-200", icon: "bg-purple-200", iconText: "text-purple-700", badge: "bg-purple-500" } },
+  { value: "toyou", label: "ToYou", icon: Truck, category: "apps", color: { bg: "bg-fuchsia-50", border: "border-fuchsia-200", icon: "bg-fuchsia-200", iconText: "text-fuchsia-700", badge: "bg-fuchsia-500" } },
+  { value: "marsool", label: "مرسول", icon: Truck, category: "apps", color: { bg: "bg-rose-50", border: "border-rose-200", icon: "bg-rose-200", iconText: "text-rose-700", badge: "bg-rose-500" } },
+  { value: "keeta", label: "كيتا", icon: Truck, category: "apps", color: { bg: "bg-indigo-50", border: "border-indigo-200", icon: "bg-indigo-200", iconText: "text-indigo-700", badge: "bg-indigo-500" } },
+  { value: "the_chefs", label: "ذا شيفز", icon: Truck, category: "apps", color: { bg: "bg-teal-50", border: "border-teal-200", icon: "bg-teal-200", iconText: "text-teal-700", badge: "bg-teal-500" } },
+  { value: "talabat", label: "طلبات", icon: Truck, category: "apps", color: { bg: "bg-cyan-50", border: "border-cyan-200", icon: "bg-cyan-200", iconText: "text-cyan-700", badge: "bg-cyan-500" } },
+  { value: "other", label: "أخرى", icon: Wallet, category: "cash", color: { bg: "bg-gray-50", border: "border-gray-200", icon: "bg-gray-200", iconText: "text-gray-600", badge: "bg-gray-500" } },
 ];
 
 const SHIFT_TYPES = [
@@ -1345,19 +1345,17 @@ export default function CashierJournalFormPage() {
                   const bankDisc = (breakdown.terminalAmount || 0) - (breakdown.posAmount || breakdown.amount || 0);
                   const bankDiscType = bankDisc > 0.5 ? 'surplus' : bankDisc < -0.5 ? 'shortage' : 'balanced';
                   
-                  // Row styling based on payment type
-                  const rowStyle = isBank 
-                    ? 'border-blue-200 bg-blue-50/50' 
-                    : isCash 
-                      ? 'border-amber-200 bg-amber-50/50' 
-                      : 'border-gray-200 bg-gray-50/30';
-                  const iconBg = isBank ? 'bg-blue-200' : isCash ? 'bg-amber-200' : 'bg-gray-200';
-                  const iconColor = isBank ? 'text-blue-700' : isCash ? 'text-amber-700' : 'text-gray-600';
+                  // Use individual method colors for distinct visual identification
+                  const methodColor = method?.color || { bg: "bg-gray-50", border: "border-gray-200", icon: "bg-gray-200", iconText: "text-gray-600", badge: "bg-gray-500" };
+                  const rowStyle = `${methodColor.border} ${methodColor.bg}`;
+                  const iconBg = methodColor.icon;
+                  const iconColor = methodColor.iconText;
 
                   return (
-                    <div key={index} className={`p-2 border rounded ${rowStyle}`} data-testid={`payment-row-${index}`}>
-                      {/* Compact Header Row */}
+                    <div key={index} className={`p-2 border-2 rounded-lg ${rowStyle}`} data-testid={`payment-row-${index}`}>
+                      {/* Compact Header Row with color badge */}
                       <div className="flex items-center gap-1 mb-1">
+                        <div className={`w-1 h-6 rounded-full ${methodColor.badge}`} />
                         <div className={`p-0.5 rounded ${iconBg}`}>
                           <Icon className={`w-3 h-3 ${iconColor}`} />
                         </div>
