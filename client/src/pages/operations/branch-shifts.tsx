@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useToast } from "@/hooks/use-toast";
+import { usePermissions } from "@/hooks/usePermissions";
 import {
   DoorOpen,
   DoorClosed,
@@ -137,6 +138,17 @@ const clearLocalStorage = (key: string) => {
 };
 
 export default function BranchShiftsPage() {
+  const [, setLocation] = useLocation();
+  const { canView, canCreate, canEdit, hasPermission, isLoading: permissionsLoading } = usePermissions();
+  const canSign = hasPermission("branch_closure", "sign");
+  
+  // فحص الصلاحية للوصول للصفحة
+  useEffect(() => {
+    if (!permissionsLoading && !canView("branch_closure")) {
+      setLocation("/");
+    }
+  }, [permissionsLoading, canView, setLocation]);
+  
   const [activeTab, setActiveTab] = useState<"opening" | "closing">("opening");
   const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [selectedShiftType, setSelectedShiftType] = useState<string>("morning");

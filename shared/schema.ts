@@ -515,6 +515,7 @@ export const SYSTEM_MODULES = [
   "shifts",
   "attendance",
   "timesheet",
+  "branch_closure",
   
   // الموظفين والموارد البشرية
   "users",
@@ -678,6 +679,7 @@ export const MODULE_LABELS: Record<SystemModule, string> = {
   shifts: "الورديات",
   attendance: "الحضور والانصراف",
   timesheet: "كشوف الدوام",
+  branch_closure: "فتح وإغلاق الفروع",
   
   // الموظفين والموارد البشرية
   users: "إدارة المستخدمين",
@@ -812,7 +814,7 @@ export const MODULE_GROUPS: { label: string; modules: SystemModule[] }[] = [
   },
   {
     label: "الورديات والحضور",
-    modules: ["shifts", "attendance", "timesheet"],
+    modules: ["shifts", "attendance", "timesheet", "branch_closure"],
   },
   {
     label: "الموظفين والموارد البشرية",

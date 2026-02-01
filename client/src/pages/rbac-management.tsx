@@ -180,6 +180,9 @@ const MODULE_LABELS: Record<string, string> = {
   backups: "النسخ الاحتياطي",
   integrations: "التكاملات",
   reports: "التقارير",
+  
+  // فتح وإغلاق الفروع
+  branch_closure: "نظام فتح وإغلاق الفروع",
 };
 
 const ACTION_CATEGORIES: Record<string, { label: string; color: string; actions: string[] }> = {

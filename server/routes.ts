@@ -21886,7 +21886,7 @@ export async function registerRoutes(
   // ==================== نظام فتح وإغلاق الفروع ====================
 
   // Get checklist templates
-  app.get("/api/branch-shifts/templates", isAuthenticated, async (req, res) => {
+  app.get("/api/branch-shifts/templates", isAuthenticated, requirePermission("branch_closure", "view"), async (req, res) => {
     try {
       const { type } = req.query;
       let query = db.select().from(checklistTemplates).where(eq(checklistTemplates.isActive, true));
@@ -21902,7 +21902,7 @@ export async function registerRoutes(
   });
 
   // Get checklist items by template
-  app.get("/api/branch-shifts/templates/:templateId/items", isAuthenticated, async (req, res) => {
+  app.get("/api/branch-shifts/templates/:templateId/items", isAuthenticated, requirePermission("branch_closure", "view"), async (req, res) => {
     try {
       const templateId = parseInt(req.params.templateId);
       const items = await db.select().from(checklistItems)
@@ -21916,7 +21916,7 @@ export async function registerRoutes(
   });
 
   // Get all checklist items grouped by template
-  app.get("/api/branch-shifts/all-items", isAuthenticated, async (req, res) => {
+  app.get("/api/branch-shifts/all-items", isAuthenticated, requirePermission("branch_closure", "view"), async (req, res) => {
     try {
       const { type } = req.query;
       let templatesQuery = db.select().from(checklistTemplates).where(eq(checklistTemplates.isActive, true));
@@ -21940,7 +21940,7 @@ export async function registerRoutes(
   });
 
   // Get branch shifts
-  app.get("/api/branch-shifts", isAuthenticated, async (req, res) => {
+  app.get("/api/branch-shifts", isAuthenticated, requirePermission("branch_closure", "view"), async (req, res) => {
     try {
       const { branchId, date, status } = req.query;
       let conditions = [];
@@ -21972,7 +21972,7 @@ export async function registerRoutes(
   });
 
   // Get single branch shift with details
-  app.get("/api/branch-shifts/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/branch-shifts/:id", isAuthenticated, requirePermission("branch_closure", "view"), async (req, res) => {
     try {
       const shiftId = parseInt(req.params.id);
       const [shift] = await db.select().from(branchShifts).where(eq(branchShifts.id, shiftId));
@@ -22001,7 +22001,7 @@ export async function registerRoutes(
   });
 
   // Create new branch shift
-  app.post("/api/branch-shifts", isAuthenticated, async (req, res) => {
+  app.post("/api/branch-shifts", isAuthenticated, requirePermission("branch_closure", "create"), async (req, res) => {
     try {
       const user = getCurrentUser(req);
       
@@ -22047,7 +22047,7 @@ export async function registerRoutes(
   });
 
   // Update branch shift
-  app.patch("/api/branch-shifts/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/branch-shifts/:id", isAuthenticated, requirePermission("branch_closure", "edit"), async (req, res) => {
     try {
       const shiftId = parseInt(req.params.id);
       
@@ -22089,7 +22089,7 @@ export async function registerRoutes(
   });
 
   // Get shift responses
-  app.get("/api/branch-shifts/:id/responses", isAuthenticated, async (req, res) => {
+  app.get("/api/branch-shifts/:id/responses", isAuthenticated, requirePermission("branch_closure", "view"), async (req, res) => {
     try {
       const shiftId = parseInt(req.params.id);
       
@@ -22113,7 +22113,7 @@ export async function registerRoutes(
   });
 
   // Get shift signatures
-  app.get("/api/branch-shifts/:id/signatures", isAuthenticated, async (req, res) => {
+  app.get("/api/branch-shifts/:id/signatures", isAuthenticated, requirePermission("branch_closure", "view"), async (req, res) => {
     try {
       const shiftId = parseInt(req.params.id);
       
@@ -22137,7 +22137,7 @@ export async function registerRoutes(
   });
 
   // Save checklist response
-  app.post("/api/branch-shifts/:id/responses", isAuthenticated, async (req, res) => {
+  app.post("/api/branch-shifts/:id/responses", isAuthenticated, requirePermission("branch_closure", "edit"), async (req, res) => {
     try {
       const shiftId = parseInt(req.params.id);
       
@@ -22175,7 +22175,7 @@ export async function registerRoutes(
   });
 
   // Update checklist response
-  app.patch("/api/branch-shifts/responses/:responseId", isAuthenticated, async (req, res) => {
+  app.patch("/api/branch-shifts/responses/:responseId", isAuthenticated, requirePermission("branch_closure", "edit"), async (req, res) => {
     try {
       const responseId = parseInt(req.params.responseId);
       const [updated] = await db.update(shiftChecklistResponses)
@@ -22190,7 +22190,7 @@ export async function registerRoutes(
   });
 
   // Upload shift photo
-  app.post("/api/branch-shifts/:id/photos", isAuthenticated, async (req, res) => {
+  app.post("/api/branch-shifts/:id/photos", isAuthenticated, requirePermission("branch_closure", "edit"), async (req, res) => {
     try {
       const shiftId = parseInt(req.params.id);
       
@@ -22216,7 +22216,7 @@ export async function registerRoutes(
   });
 
   // Save signature
-  app.post("/api/branch-shifts/:id/signatures", isAuthenticated, async (req, res) => {
+  app.post("/api/branch-shifts/:id/signatures", isAuthenticated, requirePermission("branch_closure", "sign"), async (req, res) => {
     try {
       const shiftId = parseInt(req.params.id);
       
@@ -22242,7 +22242,7 @@ export async function registerRoutes(
   });
 
   // Add waste log entry
-  app.post("/api/branch-shifts/:id/waste", isAuthenticated, async (req, res) => {
+  app.post("/api/branch-shifts/:id/waste", isAuthenticated, requirePermission("branch_closure", "edit"), async (req, res) => {
     try {
       const shiftId = parseInt(req.params.id);
       
@@ -22268,7 +22268,7 @@ export async function registerRoutes(
   });
 
   // Get today's shift status for all branches (dashboard)
-  app.get("/api/branch-shifts/dashboard/today", isAuthenticated, async (req, res) => {
+  app.get("/api/branch-shifts/dashboard/today", isAuthenticated, requirePermission("branch_closure", "view"), async (req, res) => {
     try {
       const dateParam = req.query.date as string | undefined;
       const targetDate = dateParam || new Date().toISOString().split('T')[0];
