@@ -117,7 +117,7 @@ export default function DashboardPage() {
           <p className="text-muted-foreground mt-1 text-sm sm:text-base">نظام إدارة مخبز باتر - CEO Command</p>
         </div>
 
-        {/* أقسام النظام - بنفس نمط الصورة */}
+        {/* أقسام النظام - تصميم محسّن */}
         <div className="bg-gray-50 rounded-2xl p-3 sm:p-4 md:p-6">
           <h2 className="text-base sm:text-lg font-semibold text-gray-700 mb-3 sm:mb-4">أقسام النظام</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
@@ -127,21 +127,38 @@ export default function DashboardPage() {
                 <div
                   key={module.id}
                   onClick={() => setLocation(module.path)}
-                  className="bg-white rounded-xl p-3 sm:p-4 md:p-6 flex flex-col items-center justify-center gap-2 sm:gap-3 cursor-pointer transition-all duration-200 hover:shadow-lg hover:-translate-y-1"
+                  className="group bg-white rounded-xl overflow-hidden flex flex-col items-center justify-center gap-2 sm:gap-3 cursor-pointer transition-all duration-300 hover:shadow-xl hover:-translate-y-2"
                   style={{ 
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-                    minHeight: '90px'
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                    minHeight: '110px'
                   }}
                   data-testid={`module-card-${module.id}`}
                 >
-                  <IconComponent 
-                    className="w-6 h-6 sm:w-8 sm:h-8" 
-                    style={{ color: module.color }}
-                    strokeWidth={1.5}
+                  {/* شريط ملون علوي */}
+                  <div 
+                    className="w-full h-1.5 transition-all duration-300 group-hover:h-2"
+                    style={{ backgroundColor: module.color }}
                   />
-                  <span className="text-xs sm:text-sm font-medium text-gray-600 text-center">
-                    {module.name}
-                  </span>
+                  
+                  {/* محتوى الكارت */}
+                  <div className="flex flex-col items-center justify-center gap-2 sm:gap-3 p-3 sm:p-4 pt-1">
+                    {/* خلفية متدرجة للأيقونة */}
+                    <div 
+                      className="p-2.5 sm:p-3 rounded-xl transition-all duration-300 group-hover:scale-110"
+                      style={{ 
+                        background: `linear-gradient(135deg, ${module.color}15 0%, ${module.color}25 100%)`,
+                      }}
+                    >
+                      <IconComponent 
+                        className="w-7 h-7 sm:w-9 sm:h-9" 
+                        style={{ color: module.color }}
+                        strokeWidth={1.5}
+                      />
+                    </div>
+                    <span className="text-sm sm:text-base font-semibold text-gray-700 text-center group-hover:text-gray-900 transition-colors">
+                      {module.name}
+                    </span>
+                  </div>
                 </div>
               );
             })}
