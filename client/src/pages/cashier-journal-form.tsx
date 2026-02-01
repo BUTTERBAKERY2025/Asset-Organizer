@@ -50,14 +50,14 @@ const PAYMENT_METHODS = [
   { value: "card", label: "بطاقة ائتمان (قديم)", icon: CreditCard, category: "cards", color: { bg: "bg-gray-50/50", border: "border-gray-200", icon: "bg-gray-100", iconText: "text-gray-600", badge: "bg-gray-400" } },
   { value: "apple_pay", label: "Apple Pay", icon: Smartphone, category: "cards", color: { bg: "bg-zinc-50/50", border: "border-zinc-200", icon: "bg-zinc-100", iconText: "text-zinc-600", badge: "bg-zinc-500" } },
   { value: "stc_pay", label: "STC Pay", icon: Smartphone, category: "cards", color: { bg: "bg-violet-50/50", border: "border-violet-200", icon: "bg-violet-100", iconText: "text-violet-600", badge: "bg-violet-400" } },
-  // Delivery apps - neutral gray with subtle accent
-  { value: "hunger_station", label: "هنقرستيشن", icon: Truck, category: "apps", color: { bg: "bg-gray-50/50", border: "border-gray-200", icon: "bg-gray-100", iconText: "text-gray-600", badge: "bg-pink-300" } },
-  { value: "jahez", label: "جاهز", icon: Truck, category: "apps", color: { bg: "bg-gray-50/50", border: "border-gray-200", icon: "bg-gray-100", iconText: "text-gray-600", badge: "bg-purple-300" } },
-  { value: "toyou", label: "ToYou", icon: Truck, category: "apps", color: { bg: "bg-gray-50/50", border: "border-gray-200", icon: "bg-gray-100", iconText: "text-gray-600", badge: "bg-fuchsia-300" } },
-  { value: "marsool", label: "مرسول", icon: Truck, category: "apps", color: { bg: "bg-gray-50/50", border: "border-gray-200", icon: "bg-gray-100", iconText: "text-gray-600", badge: "bg-yellow-300" } },
-  { value: "keeta", label: "كيتا", icon: Truck, category: "apps", color: { bg: "bg-gray-50/50", border: "border-gray-200", icon: "bg-gray-100", iconText: "text-gray-600", badge: "bg-indigo-300" } },
-  { value: "the_chefs", label: "ذا شيفز", icon: Truck, category: "apps", color: { bg: "bg-gray-50/50", border: "border-gray-200", icon: "bg-gray-100", iconText: "text-gray-600", badge: "bg-teal-300" } },
-  { value: "talabat", label: "طلبات", icon: Truck, category: "apps", color: { bg: "bg-gray-50/50", border: "border-gray-200", icon: "bg-gray-100", iconText: "text-gray-600", badge: "bg-red-300" } },
+  // Delivery apps - distinct text colors for each app
+  { value: "hunger_station", label: "هنقرستيشن", icon: Truck, category: "apps", color: { bg: "bg-gray-50/50", border: "border-gray-200", icon: "bg-pink-100", iconText: "text-pink-600", badge: "bg-pink-400" } },
+  { value: "jahez", label: "جاهز", icon: Truck, category: "apps", color: { bg: "bg-gray-50/50", border: "border-gray-200", icon: "bg-purple-100", iconText: "text-purple-600", badge: "bg-purple-400" } },
+  { value: "toyou", label: "ToYou", icon: Truck, category: "apps", color: { bg: "bg-gray-50/50", border: "border-gray-200", icon: "bg-fuchsia-100", iconText: "text-fuchsia-600", badge: "bg-fuchsia-400" } },
+  { value: "marsool", label: "مرسول", icon: Truck, category: "apps", color: { bg: "bg-gray-50/50", border: "border-gray-200", icon: "bg-yellow-100", iconText: "text-yellow-600", badge: "bg-yellow-400" } },
+  { value: "keeta", label: "كيتا", icon: Truck, category: "apps", color: { bg: "bg-gray-50/50", border: "border-gray-200", icon: "bg-indigo-100", iconText: "text-indigo-600", badge: "bg-indigo-400" } },
+  { value: "the_chefs", label: "ذا شيفز", icon: Truck, category: "apps", color: { bg: "bg-gray-50/50", border: "border-gray-200", icon: "bg-teal-100", iconText: "text-teal-600", badge: "bg-teal-400" } },
+  { value: "talabat", label: "طلبات", icon: Truck, category: "apps", color: { bg: "bg-gray-50/50", border: "border-gray-200", icon: "bg-red-100", iconText: "text-red-600", badge: "bg-red-400" } },
   { value: "other", label: "أخرى", icon: Wallet, category: "cash", color: { bg: "bg-gray-50/50", border: "border-gray-200", icon: "bg-gray-100", iconText: "text-gray-600", badge: "bg-gray-300" } },
 ];
 
