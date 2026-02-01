@@ -2261,6 +2261,32 @@ export async function registerRoutes(
     }
   });
 
+  // Get online users (active sessions)
+  app.get("/api/online-users", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
+    try {
+      const activeSessions = await storage.getAllActiveSessions();
+      const users = await storage.getAllUsers();
+      
+      const onlineUsers = activeSessions.map(session => {
+        const user = users.find(u => u.id === session.userId);
+        return {
+          sessionId: session.sessionId,
+          userId: session.userId,
+          userName: user ? [user.firstName, user.lastName].filter(Boolean).join(' ') || user.username : 'غير معروف',
+          deviceInfo: session.deviceInfo,
+          ipAddress: session.ipAddress,
+          lastActivityAt: session.lastActivityAt,
+          createdAt: session.createdAt,
+        };
+      });
+      
+      res.json(onlineUsers);
+    } catch (error) {
+      console.error("Error fetching online users:", error);
+      res.status(500).json({ error: "Failed to fetch online users" });
+    }
+  });
+
   // Backups
   app.get("/api/backups", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
     try {

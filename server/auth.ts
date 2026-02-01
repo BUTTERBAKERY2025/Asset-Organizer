@@ -16,6 +16,36 @@ declare module "express-session" {
 
 const isProduction = process.env.NODE_ENV === "production";
 
+// Parse User-Agent to extract device info
+function parseUserAgent(ua: string): { browser: string; os: string; device: string } {
+  let browser = "Unknown";
+  let os = "Unknown";
+  let device = "Desktop";
+
+  // Detect Browser
+  if (ua.includes("Firefox")) browser = "Firefox";
+  else if (ua.includes("Edg")) browser = "Edge";
+  else if (ua.includes("Chrome")) browser = "Chrome";
+  else if (ua.includes("Safari")) browser = "Safari";
+  else if (ua.includes("Opera") || ua.includes("OPR")) browser = "Opera";
+
+  // Detect OS
+  if (ua.includes("Windows")) os = "Windows";
+  else if (ua.includes("Mac OS")) os = "macOS";
+  else if (ua.includes("Linux")) os = "Linux";
+  else if (ua.includes("Android")) os = "Android";
+  else if (ua.includes("iPhone") || ua.includes("iPad")) os = "iOS";
+
+  // Detect Device Type
+  if (ua.includes("Mobile") || ua.includes("Android") || ua.includes("iPhone")) {
+    device = "Mobile";
+  } else if (ua.includes("iPad") || ua.includes("Tablet")) {
+    device = "Tablet";
+  }
+
+  return { browser, os, device };
+}
+
 export const loginRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
@@ -198,6 +228,24 @@ export async function setupAuth(app: Express) {
                   ipAddress: req.ip || req.socket?.remoteAddress,
                   userAgent: req.headers['user-agent'],
                 });
+                
+                // Create user session record with device info
+                const userAgentStr = req.headers['user-agent'] || '';
+                const deviceInfo = parseUserAgent(userAgentStr);
+                const sessionExpiry = rememberMe 
+                  ? new Date(Date.now() + 24 * 60 * 60 * 1000) 
+                  : new Date(Date.now() + 8 * 60 * 60 * 1000);
+                
+                await storage.createUserSession({
+                  sessionId: req.sessionID,
+                  userId: user.id,
+                  deviceInfo,
+                  ipAddress: req.ip || req.socket?.remoteAddress || null,
+                  userAgent: userAgentStr,
+                  isActive: true,
+                  lastActivityAt: new Date(),
+                  expiresAt: sessionExpiry,
+                });
               } catch (logError) {
                 console.error("Failed to create audit log for login:", logError);
               }
@@ -340,6 +388,10 @@ export async function setupAuth(app: Express) {
           ipAddress: req.ip || req.socket?.remoteAddress,
           userAgent: req.headers['user-agent'],
         });
+        // Invalidate user session for online tracking
+        if (req.sessionID) {
+          await storage.invalidateSession(req.sessionID);
+        }
       } catch (logError) {
         console.error("Failed to create audit log for logout:", logError);
       }
@@ -396,6 +448,12 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
   (req as any).currentUser = user;
   (req as any).userBranchAccess = branchAccess;
   (req as any).hasAllBranchesAccess = branchAccess.length > 0; // User has explicit branch access
+  
+  // Update session activity for online tracking (async, don't wait)
+  if (req.sessionID) {
+    storage.updateSessionActivity(req.sessionID).catch(() => {});
+  }
+  
   next();
 };
 

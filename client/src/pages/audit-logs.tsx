@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Search, Loader2, FileText, RefreshCw, Filter, History, ArrowRight, Users, Activity, TrendingUp, Clock, Plus, Edit, Trash2, Eye, LogIn } from "lucide-react";
+import { Search, Loader2, FileText, RefreshCw, Filter, History, ArrowRight, Users, Activity, TrendingUp, Clock, Plus, Edit, Trash2, Eye, LogIn, Wifi, Monitor, Smartphone, Tablet, Globe } from "lucide-react";
 import { Link } from "wouter";
 import { SettingsBreadcrumb } from "@/components/settings-breadcrumb";
 import { format } from "date-fns";
@@ -84,6 +84,16 @@ interface UserStats {
   topModule: string | null;
 }
 
+interface OnlineUser {
+  sessionId: string;
+  userId: string;
+  userName: string;
+  deviceInfo: { browser: string; os: string; device: string } | null;
+  ipAddress: string | null;
+  lastActivityAt: string;
+  createdAt: string;
+}
+
 export default function AuditLogsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedModule, setSelectedModule] = useState("all");
@@ -100,6 +110,12 @@ export default function AuditLogsPage() {
   // Fetch user statistics
   const { data: userStats = [], isLoading: statsLoading, refetch: refetchStats } = useQuery<UserStats[]>({
     queryKey: ["/api/system-audit-logs/user-stats"],
+  });
+
+  // Fetch online users
+  const { data: onlineUsers = [], isLoading: onlineLoading, refetch: refetchOnline } = useQuery<OnlineUser[]>({
+    queryKey: ["/api/online-users"],
+    refetchInterval: 30000, // Refresh every 30 seconds
   });
 
   // Fetch logs based on filters
@@ -140,6 +156,15 @@ export default function AuditLogsPage() {
   const handleRefresh = () => {
     refetch();
     refetchStats();
+    refetchOnline();
+  };
+
+  const getDeviceIcon = (device: string) => {
+    switch (device) {
+      case "Mobile": return <Smartphone className="w-4 h-4" />;
+      case "Tablet": return <Tablet className="w-4 h-4" />;
+      default: return <Monitor className="w-4 h-4" />;
+    }
   };
 
   const getActionBadge = (action: string) => {
@@ -269,7 +294,7 @@ export default function AuditLogsPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 h-11">
+          <TabsList className="grid w-full grid-cols-3 h-11">
             <TabsTrigger value="logs" className="flex items-center gap-2">
               <FileText className="w-4 h-4" />
               سجل العمليات
@@ -277,6 +302,15 @@ export default function AuditLogsPage() {
             <TabsTrigger value="users" className="flex items-center gap-2">
               <Users className="w-4 h-4" />
               تقرير المستخدمين
+            </TabsTrigger>
+            <TabsTrigger value="online" className="flex items-center gap-2">
+              <Wifi className="w-4 h-4" />
+              المتصلين الآن
+              {onlineUsers.length > 0 && (
+                <Badge variant="secondary" className="h-5 px-1.5 text-[10px] bg-green-100 text-green-700">
+                  {onlineUsers.length}
+                </Badge>
+              )}
             </TabsTrigger>
           </TabsList>
 
@@ -536,6 +570,87 @@ export default function AuditLogsPage() {
                         ))}
                       </TableBody>
                     </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="online" className="space-y-4 mt-4">
+            {/* Online Users */}
+            <Card>
+              <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 sm:p-4 md:p-6">
+                <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                  <Wifi className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" />
+                  المستخدمون المتصلون حالياً
+                  <Badge variant="secondary" className="mr-2 text-xs bg-green-100 text-green-700">{onlineUsers.length} متصل</Badge>
+                </CardTitle>
+                <Button onClick={() => refetchOnline()} variant="outline" size="sm">
+                  <RefreshCw className="w-4 h-4 ml-2" />
+                  تحديث
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {onlineLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : onlineUsers.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <Wifi className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>لا يوجد مستخدمون متصلون حالياً</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {onlineUsers.map((user) => (
+                      <Card 
+                        key={user.sessionId} 
+                        className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200 hover:shadow-md transition-shadow"
+                        data-testid={`card-online-user-${user.userId}`}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <div className="relative">
+                                <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center text-white font-bold">
+                                  {user.userName?.charAt(0) || "?"}
+                                </div>
+                                <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-400 rounded-full border-2 border-white animate-pulse" />
+                              </div>
+                              <div>
+                                <p className="font-semibold text-green-800">{user.userName}</p>
+                                <p className="text-xs text-green-600">متصل الآن</p>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="space-y-2 text-sm">
+                            {user.deviceInfo && (
+                              <div className="flex items-center gap-2 text-green-700">
+                                {getDeviceIcon(user.deviceInfo.device)}
+                                <span>{user.deviceInfo.device} - {user.deviceInfo.browser}</span>
+                              </div>
+                            )}
+                            {user.deviceInfo && (
+                              <div className="flex items-center gap-2 text-green-600">
+                                <Globe className="w-4 h-4" />
+                                <span>{user.deviceInfo.os}</span>
+                              </div>
+                            )}
+                            {user.ipAddress && (
+                              <div className="flex items-center gap-2 text-green-600">
+                                <Activity className="w-4 h-4" />
+                                <span className="font-mono text-xs">{user.ipAddress}</span>
+                              </div>
+                            )}
+                            <div className="flex items-center gap-2 text-green-600">
+                              <Clock className="w-4 h-4" />
+                              <span className="text-xs">آخر نشاط: {formatShortDate(user.lastActivityAt)}</span>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
                   </div>
                 )}
               </CardContent>

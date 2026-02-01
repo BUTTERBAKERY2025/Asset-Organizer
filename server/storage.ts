@@ -5803,6 +5803,16 @@ export class DatabaseStorage implements IStorage {
     return result.length;
   }
 
+  async getAllActiveSessions(): Promise<UserSession[]> {
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    return await db.select().from(userSessions)
+      .where(and(
+        eq(userSessions.isActive, true),
+        gte(userSessions.lastActivityAt, fiveMinutesAgo)
+      ))
+      .orderBy(desc(userSessions.lastActivityAt));
+  }
+
   // ==========================================
   // Security Violation Alerts - تنبيهات الانتهاكات
   // ==========================================
