@@ -2169,6 +2169,98 @@ export async function registerRoutes(
     }
   });
 
+  // Get audit logs by user
+  app.get("/api/system-audit-logs/user/:userId", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
+    try {
+      const logs = await storage.getSystemAuditLogsByUser(req.params.userId);
+      res.json(logs);
+    } catch (error) {
+      console.error("Error fetching audit logs by user:", error);
+      res.status(500).json({ error: "Failed to fetch audit logs" });
+    }
+  });
+
+  // Get user activity statistics with caching
+  let userStatsCache: { data: any; timestamp: number } | null = null;
+  const STATS_CACHE_TTL = 60000; // 1 minute cache
+  
+  app.get("/api/system-audit-logs/user-stats", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
+    try {
+      // Check cache validity
+      const now = Date.now();
+      if (userStatsCache && (now - userStatsCache.timestamp) < STATS_CACHE_TTL) {
+        return res.json(userStatsCache.data);
+      }
+      
+      // Limit to last 5000 records for performance
+      const logs = await storage.getAllSystemAuditLogs(5000);
+      
+      const userStatsMap: Record<string, {
+        userId: string;
+        userName: string;
+        totalActions: number;
+        creates: number;
+        updates: number;
+        deletes: number;
+        views: number;
+        logins: number;
+        lastActivity: Date | null;
+        topModules: Record<string, number>;
+      }> = {};
+      
+      logs.forEach(log => {
+        const uId = log.userId || 'unknown';
+        if (!userStatsMap[uId]) {
+          userStatsMap[uId] = {
+            userId: uId,
+            userName: log.userName || 'غير معروف',
+            totalActions: 0,
+            creates: 0,
+            updates: 0,
+            deletes: 0,
+            views: 0,
+            logins: 0,
+            lastActivity: null,
+            topModules: {},
+          };
+        }
+        
+        const stat = userStatsMap[uId];
+        stat.totalActions++;
+        
+        if (log.action === 'create') stat.creates++;
+        else if (log.action === 'update') stat.updates++;
+        else if (log.action === 'delete') stat.deletes++;
+        else if (log.action === 'view') stat.views++;
+        else if (log.action === 'login') stat.logins++;
+        
+        stat.topModules[log.module] = (stat.topModules[log.module] || 0) + 1;
+        
+        const logDate = new Date(log.createdAt);
+        if (!stat.lastActivity || logDate > stat.lastActivity) {
+          stat.lastActivity = logDate;
+        }
+      });
+      
+      const userStats = Object.values(userStatsMap)
+        .filter(s => s.userId !== 'unknown') // Exclude unknown users
+        .sort((a, b) => b.totalActions - a.totalActions)
+        .map(stat => ({
+          ...stat,
+          topModule: Object.entries(stat.topModules)
+            .sort((a, b) => b[1] - a[1])[0]?.[0] || null,
+        }));
+      
+      // Update cache
+      userStatsCache = { data: userStats, timestamp: now };
+      
+      res.json(userStats);
+    } catch (error) {
+      console.error("Error fetching user stats:", error);
+      res.status(500).json({ error: "Failed to fetch user stats" });
+    }
+  });
+
   // Backups
   app.get("/api/backups", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
     try {
