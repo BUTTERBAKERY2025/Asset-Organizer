@@ -1375,12 +1375,12 @@ export default function CashierJournalFormPage() {
                           }}
                           disabled={isReadOnly}
                         >
-                          <SelectTrigger className="w-24 h-6 text-[10px] font-medium">
+                          <SelectTrigger className={`w-24 h-5 text-[10px] font-bold ${methodColor.iconText}`}>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent className="max-h-60 overflow-y-auto">
                             {PAYMENT_METHODS.map((m) => (
-                              <SelectItem key={m.value} value={m.value} className="py-1 text-xs">
+                              <SelectItem key={m.value} value={m.value} className={`py-1 text-xs font-semibold ${m.color.iconText}`}>
                                 {m.label}
                               </SelectItem>
                             ))}
