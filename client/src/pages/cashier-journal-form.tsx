@@ -118,6 +118,115 @@ const parseNumericValue = (value: string, isDecimal: boolean = true): number => 
   return isDecimal ? parseFloat(cleaned) || 0 : parseInt(cleaned) || 0;
 };
 
+// Stable Numeric Input Component - prevents value jumping during decimal input
+interface StableNumericInputProps {
+  value: number | undefined | null;
+  onChange: (value: number) => void;
+  isDecimal?: boolean;
+  placeholder?: string;
+  disabled?: boolean;
+  className?: string;
+  "data-testid"?: string;
+}
+
+function StableNumericInput({ 
+  value, 
+  onChange, 
+  isDecimal = true, 
+  placeholder = "0",
+  disabled = false,
+  className = "",
+  "data-testid": testId
+}: StableNumericInputProps) {
+  const [localValue, setLocalValue] = useState<string>(() => {
+    if (value === null || value === undefined || value === 0) return '';
+    return String(value);
+  });
+  const [isFocused, setIsFocused] = useState(false);
+  
+  // Sync local value with external value when not focused
+  useEffect(() => {
+    if (!isFocused) {
+      if (value === null || value === undefined || value === 0) {
+        setLocalValue('');
+      } else {
+        setLocalValue(String(value));
+      }
+    }
+  }, [value, isFocused]);
+  
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = e.target.value;
+    
+    // Allow empty input
+    if (rawValue === '') {
+      setLocalValue('');
+      onChange(0);
+      return;
+    }
+    
+    // Clean the input but preserve trailing decimal point and zeros
+    let cleaned = rawValue.replace(/[^\d.]/g, '');
+    
+    // Handle multiple decimal points - keep only first
+    const parts = cleaned.split('.');
+    if (parts.length > 2) {
+      cleaned = parts[0] + '.' + parts.slice(1).join('');
+    }
+    
+    // For integers, limit decimal places
+    if (!isDecimal) {
+      cleaned = cleaned.split('.')[0];
+    }
+    
+    // Remove leading zeros but keep "0" or "0."
+    if (cleaned.length > 1 && cleaned[0] === '0' && cleaned[1] !== '.') {
+      cleaned = cleaned.replace(/^0+/, '');
+    }
+    
+    setLocalValue(cleaned);
+    
+    // Parse and update parent - but don't remove trailing decimal point from local
+    const numericValue = isDecimal ? parseFloat(cleaned) || 0 : parseInt(cleaned) || 0;
+    onChange(numericValue);
+  };
+  
+  const handleFocus = () => {
+    setIsFocused(true);
+  };
+  
+  const handleBlur = () => {
+    setIsFocused(false);
+    // Format on blur
+    if (localValue === '' || localValue === '.') {
+      setLocalValue('');
+    } else {
+      const numericValue = isDecimal ? parseFloat(localValue) || 0 : parseInt(localValue) || 0;
+      if (numericValue === 0) {
+        setLocalValue('');
+      } else {
+        setLocalValue(String(numericValue));
+      }
+    }
+  };
+  
+  return (
+    <Input
+      type="text"
+      inputMode={isDecimal ? "decimal" : "numeric"}
+      value={localValue}
+      onChange={handleChange}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
+      onWheel={preventWheelChange}
+      placeholder={placeholder}
+      disabled={disabled}
+      className={className}
+      data-testid={testId}
+    />
+  );
+}
+
 export default function CashierJournalFormPage() {
   const { id } = useParams();
   const [, setLocation] = useLocation();
@@ -1265,12 +1374,10 @@ export default function CashierJournalFormPage() {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                   <div className="space-y-0.5">
                     <Label className="text-[11px] font-semibold text-primary">المبيعات (ر.س) *</Label>
-                    <Input
-                      type="number"
-                      inputMode="decimal"
-                      value={formData.totalSales ?? ""}
-                      onChange={(e) => setFormData({ ...formData, totalSales: parseNumericValue(e.target.value) })}
-                      onWheel={preventWheelChange}
+                    <StableNumericInput
+                      value={formData.totalSales}
+                      onChange={(val) => setFormData({ ...formData, totalSales: val })}
+                      isDecimal={true}
                       className="text-sm font-bold h-9"
                       placeholder="0.00"
                       disabled={isReadOnly}
@@ -1282,12 +1389,10 @@ export default function CashierJournalFormPage() {
                       <Users className="w-2.5 h-2.5" />
                       الفواتير *
                     </Label>
-                    <Input
-                      type="number"
-                      inputMode="numeric"
-                      value={formData.transactionCount ?? ""}
-                      onChange={(e) => setFormData({ ...formData, transactionCount: parseNumericValue(e.target.value, false) })}
-                      onWheel={preventWheelChange}
+                    <StableNumericInput
+                      value={formData.transactionCount}
+                      onChange={(val) => setFormData({ ...formData, transactionCount: val })}
+                      isDecimal={false}
                       className="h-9 text-xs"
                       placeholder="0"
                       disabled={isReadOnly}
@@ -1307,12 +1412,10 @@ export default function CashierJournalFormPage() {
                   </div>
                   <div className="space-y-0.5">
                     <Label className="text-[11px] text-muted-foreground">العهدة</Label>
-                    <Input
-                      type="number"
-                      inputMode="decimal"
-                      value={formData.openingBalance ?? ""}
-                      onChange={(e) => setFormData({ ...formData, openingBalance: parseNumericValue(e.target.value) })}
-                      onWheel={preventWheelChange}
+                    <StableNumericInput
+                      value={formData.openingBalance}
+                      onChange={(val) => setFormData({ ...formData, openingBalance: val })}
+                      isDecimal={true}
                       placeholder="0.00"
                       disabled={isReadOnly}
                       className="h-9 text-xs"
@@ -1401,16 +1504,11 @@ export default function CashierJournalFormPage() {
                           <div className="grid grid-cols-2 gap-1">
                             <div className="space-y-0">
                               <Label className="text-[9px] text-gray-500">POS (الكاشير)</Label>
-                              <Input
-                                type="number"
-                                inputMode="decimal"
+                              <StableNumericInput
                                 placeholder="0.00"
-                                value={breakdown.amount ?? ""}
-                                onChange={(e) => {
-                                  const val = parseNumericValue(e.target.value);
-                                  updatePaymentBreakdownMultiple(index, { amount: val, posAmount: val });
-                                }}
-                                onWheel={preventWheelChange}
+                                value={breakdown.amount}
+                                onChange={(val) => updatePaymentBreakdownMultiple(index, { amount: val, posAmount: val })}
+                                isDecimal={true}
                                 disabled={isReadOnly}
                                 className="h-7 text-xs font-bold text-center"
                                 data-testid={`input-payment-amount-${index}`}
@@ -1432,13 +1530,11 @@ export default function CashierJournalFormPage() {
                                   </Button>
                                 )}
                               </div>
-                              <Input
-                                type="number"
-                                inputMode="decimal"
+                              <StableNumericInput
                                 placeholder="0.00"
-                                value={breakdown.terminalAmount ?? ""}
-                                onChange={(e) => updatePaymentBreakdown(index, "terminalAmount", parseNumericValue(e.target.value))}
-                                onWheel={preventWheelChange}
+                                value={breakdown.terminalAmount}
+                                onChange={(val) => updatePaymentBreakdown(index, "terminalAmount", val)}
+                                isDecimal={true}
                                 disabled={isReadOnly}
                                 className="h-7 text-xs font-bold text-center bg-white"
                                 data-testid={`input-terminal-amount-${index}`}
@@ -1456,13 +1552,11 @@ export default function CashierJournalFormPage() {
                             <div className="flex items-center gap-1 bg-gray-50 px-1 py-0.5 rounded">
                               <div className="flex items-center gap-0.5">
                                 <span className="text-gray-400">POS:</span>
-                                <Input
-                                  type="number"
-                                  inputMode="numeric"
+                                <StableNumericInput
                                   placeholder="0"
-                                  value={breakdown.transactionCount ?? ""}
-                                  onChange={(e) => updatePaymentBreakdown(index, "transactionCount", parseNumericValue(e.target.value, false))}
-                                  onWheel={preventWheelChange}
+                                  value={breakdown.transactionCount}
+                                  onChange={(val) => updatePaymentBreakdown(index, "transactionCount", val)}
+                                  isDecimal={false}
                                   disabled={isReadOnly}
                                   className="h-4 w-7 text-[9px] font-bold text-center p-0"
                                   data-testid={`input-payment-count-${index}`}
@@ -1470,13 +1564,11 @@ export default function CashierJournalFormPage() {
                               </div>
                               <div className="flex items-center gap-0.5">
                                 <span className="text-gray-400">جهاز:</span>
-                                <Input
-                                  type="number"
-                                  inputMode="numeric"
+                                <StableNumericInput
                                   placeholder="0"
-                                  value={breakdown.terminalTransactionCount ?? ""}
-                                  onChange={(e) => updatePaymentBreakdown(index, "terminalTransactionCount", parseNumericValue(e.target.value, false))}
-                                  onWheel={preventWheelChange}
+                                  value={breakdown.terminalTransactionCount}
+                                  onChange={(val) => updatePaymentBreakdown(index, "terminalTransactionCount", val)}
+                                  isDecimal={false}
                                   disabled={isReadOnly}
                                   className="h-4 w-7 text-[9px] font-bold text-center p-0"
                                   data-testid={`input-terminal-count-${index}`}
@@ -1498,13 +1590,11 @@ export default function CashierJournalFormPage() {
                               <div className="grid grid-cols-2 gap-1">
                                 <div className="space-y-0">
                                   <Label className="text-[9px] text-gray-500">النقد المسجل (POS)</Label>
-                                  <Input
-                                    type="number"
-                                    inputMode="decimal"
+                                  <StableNumericInput
                                     placeholder="0.00"
-                                    value={breakdown.amount ?? ""}
-                                    onChange={(e) => updatePaymentBreakdown(index, "amount", parseNumericValue(e.target.value))}
-                                    onWheel={preventWheelChange}
+                                    value={breakdown.amount}
+                                    onChange={(val) => updatePaymentBreakdown(index, "amount", val)}
+                                    isDecimal={true}
                                     disabled={isReadOnly}
                                     className="h-7 text-xs font-bold text-center"
                                     data-testid={`input-payment-amount-${index}`}
@@ -1512,13 +1602,11 @@ export default function CashierJournalFormPage() {
                                 </div>
                                 <div className="space-y-0">
                                   <Label className="text-[9px] text-gray-500">الفعلي في الصندوق</Label>
-                                  <Input
-                                    type="number"
-                                    inputMode="decimal"
+                                  <StableNumericInput
                                     placeholder="0.00"
-                                    value={formData.actualCashDrawer ?? ""}
-                                    onChange={(e) => setFormData({ ...formData, actualCashDrawer: parseNumericValue(e.target.value) })}
-                                    onWheel={preventWheelChange}
+                                    value={formData.actualCashDrawer}
+                                    onChange={(val) => setFormData({ ...formData, actualCashDrawer: val })}
+                                    isDecimal={true}
                                     disabled={isReadOnly}
                                     className="h-7 text-xs font-bold text-center bg-white"
                                     data-testid="input-actual-cash-inline"
@@ -1535,13 +1623,11 @@ export default function CashierJournalFormPage() {
                                 </div>
                                 <div className="flex items-center gap-0.5 bg-gray-50 px-1 py-0.5 rounded">
                                   <span className="text-gray-400">عمليات:</span>
-                                  <Input
-                                    type="number"
-                                    inputMode="numeric"
+                                  <StableNumericInput
                                     placeholder="0"
-                                    value={breakdown.transactionCount ?? ""}
-                                    onChange={(e) => updatePaymentBreakdown(index, "transactionCount", parseNumericValue(e.target.value, false))}
-                                    onWheel={preventWheelChange}
+                                    value={breakdown.transactionCount}
+                                    onChange={(val) => updatePaymentBreakdown(index, "transactionCount", val)}
+                                    isDecimal={false}
                                     disabled={isReadOnly}
                                     className="h-4 w-7 text-[9px] font-bold text-center p-0"
                                     data-testid={`input-payment-count-${index}`}
@@ -1575,13 +1661,11 @@ export default function CashierJournalFormPage() {
                         <div className="flex items-end gap-1">
                           <div className="flex-1 space-y-0">
                             <Label className="text-[9px] text-gray-500">المبلغ</Label>
-                            <Input
-                              type="number"
-                              inputMode="decimal"
+                            <StableNumericInput
                               placeholder="0.00"
-                              value={breakdown.amount ?? ""}
-                              onChange={(e) => updatePaymentBreakdown(index, "amount", parseNumericValue(e.target.value))}
-                              onWheel={preventWheelChange}
+                              value={breakdown.amount}
+                              onChange={(val) => updatePaymentBreakdown(index, "amount", val)}
+                              isDecimal={true}
                               disabled={isReadOnly}
                               className="h-7 text-xs font-bold text-center"
                               data-testid={`input-payment-amount-${index}`}
@@ -1589,13 +1673,11 @@ export default function CashierJournalFormPage() {
                           </div>
                           <div className="w-14 space-y-0">
                             <Label className="text-[9px] text-gray-400">عمليات</Label>
-                            <Input
-                              type="number"
-                              inputMode="numeric"
+                            <StableNumericInput
                               placeholder="0"
-                              value={breakdown.transactionCount ?? ""}
-                              onChange={(e) => updatePaymentBreakdown(index, "transactionCount", parseNumericValue(e.target.value, false))}
-                              onWheel={preventWheelChange}
+                              value={breakdown.transactionCount}
+                              onChange={(val) => updatePaymentBreakdown(index, "transactionCount", val)}
+                              isDecimal={false}
                               disabled={isReadOnly}
                               className="h-7 text-[10px] font-medium text-center"
                               data-testid={`input-payment-count-${index}`}
@@ -1771,11 +1853,10 @@ export default function CashierJournalFormPage() {
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                     <div className="space-y-0.5">
                       <Label className="text-[10px] text-red-700 font-medium">المبلغ</Label>
-                      <Input
-                        type="number"
-                        value={returnData.returnAmount || ""}
-                        onChange={(e) => setReturnData(prev => ({ ...prev, returnAmount: parseNumericValue(e.target.value) }))}
-                        onWheel={preventWheelChange}
+                      <StableNumericInput
+                        value={returnData.returnAmount}
+                        onChange={(val) => setReturnData(prev => ({ ...prev, returnAmount: val }))}
+                        isDecimal={true}
                         className="h-7 border-red-200 text-xs font-bold text-center"
                         placeholder="0.00"
                         disabled={isReadOnly}
