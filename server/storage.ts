@@ -1750,58 +1750,86 @@ export class DatabaseStorage implements IStorage {
       return cached.data;
     }
     
-    // 1. Get direct user permissions
+    // Build a map of module -> actions from all sources
+    // Key format: "module:action" -> boolean (true = granted, false = denied)
+    const permissionState = new Map<string, boolean>();
+    
+    // 1. Get direct user permissions (base layer)
     const directPerms = await db
       .select()
       .from(userPermissions)
       .where(eq(userPermissions.userId, userId));
     
-    // 2. Get permissions from assigned roles
-    const userAssignmentsList = await db
-      .select()
+    for (const perm of directPerms) {
+      for (const action of perm.actions) {
+        permissionState.set(`${perm.module}:${action}`, true);
+      }
+    }
+    
+    // 2. Get permissions from assigned roles (single optimized query)
+    const rolePermsFromAssignments = await db
+      .select({
+        module: permissions.module,
+        action: permissions.action,
+      })
       .from(userAssignments)
+      .innerJoin(rolePermissions, eq(userAssignments.roleId, rolePermissions.roleId))
+      .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
       .where(and(
         eq(userAssignments.userId, userId),
         eq(userAssignments.isActive, true)
       ));
     
-    // Build a map of module -> actions from all sources
-    const permMap = new Map<string, Set<string>>();
-    
-    // Add direct permissions
-    for (const perm of directPerms) {
-      if (!permMap.has(perm.module)) {
-        permMap.set(perm.module, new Set());
-      }
-      for (const action of perm.actions) {
-        permMap.get(perm.module)!.add(action);
-      }
+    for (const rp of rolePermsFromAssignments) {
+      permissionState.set(`${rp.module}:${rp.action}`, true);
     }
     
-    // Add permissions from roles
-    for (const assignment of userAssignmentsList) {
-      const rolePerms = await db
-        .select({
-          module: permissions.module,
-          action: permissions.action,
-        })
-        .from(rolePermissions)
-        .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
-        .where(eq(rolePermissions.roleId, assignment.roleId));
+    // 3. Apply permission overrides (highest priority - can grant or deny)
+    const overrides = await db
+      .select({
+        module: permissions.module,
+        action: permissions.action,
+        allow: userPermissionOverrides.allow,
+        expiresAt: userPermissionOverrides.expiresAt,
+      })
+      .from(userPermissionOverrides)
+      .innerJoin(permissions, eq(userPermissionOverrides.permissionId, permissions.id))
+      .where(eq(userPermissionOverrides.userId, userId));
+    
+    for (const override of overrides) {
+      // Check if override has expired
+      if (override.expiresAt && new Date(override.expiresAt) < now) {
+        continue; // Skip expired overrides
+      }
       
-      for (const rp of rolePerms) {
-        if (!permMap.has(rp.module)) {
-          permMap.set(rp.module, new Set());
-        }
-        permMap.get(rp.module)!.add(rp.action);
+      const key = `${override.module}:${override.action}`;
+      if (override.allow) {
+        // Grant permission
+        permissionState.set(key, true);
+      } else {
+        // Deny permission - remove it
+        permissionState.delete(key);
       }
     }
     
-    // Convert map to UserPermission format
+    // 4. Convert to module -> actions format
+    const moduleActionsMap = new Map<string, Set<string>>();
+    Array.from(permissionState.entries()).forEach(([key, granted]) => {
+      if (granted) {
+        const [module, action] = key.split(':');
+        if (!moduleActionsMap.has(module)) {
+          moduleActionsMap.set(module, new Set());
+        }
+        moduleActionsMap.get(module)!.add(action);
+      }
+    });
+    
+    // 5. Convert map to UserPermission format with unique IDs
     const mergedPerms: UserPermission[] = [];
-    Array.from(permMap.entries()).forEach(([module, actions]) => {
+    let virtualId = -1; // Use negative IDs to distinguish from real DB IDs
+    Array.from(moduleActionsMap.entries()).forEach(([module, actions]) => {
       mergedPerms.push({
-        id: 0, // Virtual ID for merged permissions
+        id: virtualId--,
         userId,
         module,
         actions: Array.from(actions),
@@ -1811,7 +1839,7 @@ export class DatabaseStorage implements IStorage {
     });
     
     console.log(`[Storage] Fetched ${mergedPerms.length} merged permissions for user ${userId}:`, 
-      mergedPerms.map(p => p.module).join(', '));
+      mergedPerms.map(p => `${p.module}(${p.actions.length})`).join(', '));
     
     this.permissionsCache.set(userId, { data: mergedPerms, timestamp: now });
     return mergedPerms;
