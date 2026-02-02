@@ -1750,16 +1750,71 @@ export class DatabaseStorage implements IStorage {
       return cached.data;
     }
     
-    const perms = await db
+    // 1. Get direct user permissions
+    const directPerms = await db
       .select()
       .from(userPermissions)
       .where(eq(userPermissions.userId, userId));
     
-    console.log(`[Storage] Fetched ${perms.length} permissions from DB for user ${userId}:`, 
-      perms.map(p => p.module).join(', '));
+    // 2. Get permissions from assigned roles
+    const userAssignmentsList = await db
+      .select()
+      .from(userAssignments)
+      .where(and(
+        eq(userAssignments.userId, userId),
+        eq(userAssignments.isActive, true)
+      ));
     
-    this.permissionsCache.set(userId, { data: perms, timestamp: now });
-    return perms;
+    // Build a map of module -> actions from all sources
+    const permMap = new Map<string, Set<string>>();
+    
+    // Add direct permissions
+    for (const perm of directPerms) {
+      if (!permMap.has(perm.module)) {
+        permMap.set(perm.module, new Set());
+      }
+      for (const action of perm.actions) {
+        permMap.get(perm.module)!.add(action);
+      }
+    }
+    
+    // Add permissions from roles
+    for (const assignment of userAssignmentsList) {
+      const rolePerms = await db
+        .select({
+          module: permissions.module,
+          action: permissions.action,
+        })
+        .from(rolePermissions)
+        .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
+        .where(eq(rolePermissions.roleId, assignment.roleId));
+      
+      for (const rp of rolePerms) {
+        if (!permMap.has(rp.module)) {
+          permMap.set(rp.module, new Set());
+        }
+        permMap.get(rp.module)!.add(rp.action);
+      }
+    }
+    
+    // Convert map to UserPermission format
+    const mergedPerms: UserPermission[] = [];
+    Array.from(permMap.entries()).forEach(([module, actions]) => {
+      mergedPerms.push({
+        id: 0, // Virtual ID for merged permissions
+        userId,
+        module,
+        actions: Array.from(actions),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    });
+    
+    console.log(`[Storage] Fetched ${mergedPerms.length} merged permissions for user ${userId}:`, 
+      mergedPerms.map(p => p.module).join(', '));
+    
+    this.permissionsCache.set(userId, { data: mergedPerms, timestamp: now });
+    return mergedPerms;
   }
 
   invalidatePermissionsCache(userId?: string) {
