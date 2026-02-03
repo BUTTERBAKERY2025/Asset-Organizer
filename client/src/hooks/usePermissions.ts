@@ -47,8 +47,8 @@ export function usePermissions() {
 
   const canView = (module: SystemModule): boolean => {
     const result = hasPermission(module, "view");
-    if (module === "documents") {
-      console.log("[Permissions] canView documents:", result, "permissions:", permissions.find(p => p.module === "documents"));
+    if (module === "documents" || module === "branch_closure") {
+      console.log(`[Permissions] canView ${module}:`, result, "isAdmin:", isAdmin, "permissions:", permissions.find(p => p.module === module));
     }
     return result;
   };
