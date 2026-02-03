@@ -507,6 +507,7 @@ export const SYSTEM_MODULES = [
   "daily_production",
   "advanced_production",
   "quality_control",
+  "quality", // اسم مختصر للتوافق
   "products",
   "operations",
   "ai_production_planner",
@@ -529,6 +530,7 @@ export const SYSTEM_MODULES = [
   // المالية
   "cashier_journal",
   "cashier_performance",
+  "cashier", // اسم مختصر للتوافق
   "pnl_dashboard",
   "incentives",
   "sales_analytics",
@@ -538,11 +540,13 @@ export const SYSTEM_MODULES = [
   "targets",
   "targets_planning",
   "waste_tracking",
+  "waste", // اسم مختصر للتوافق
   
   // مشاريع الإنشاء
   "construction_projects",
   "construction_work_items",
   "construction_reports",
+  "construction", // اسم مختصر للتوافق
   "contractors",
   "contracts",
   "budget_planning",
