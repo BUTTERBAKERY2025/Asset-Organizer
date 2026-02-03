@@ -44,6 +44,7 @@ interface NavItem {
   module?: SystemModule;
   isHeader?: boolean;
   indent?: boolean;
+  hideIfNoPermission?: boolean; // Hide header items if no permission (don't block group visibility)
 }
 
 interface NavGroup {
@@ -175,7 +176,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         label: t("sidebar.operations"),
         icon: Factory,
         items: [
-          { href: "/operations", label: t("sidebar.operationsDashboard"), icon: LayoutDashboard, module: "operations", isHeader: true },
+          { href: "/operations", label: t("sidebar.operationsDashboard"), icon: LayoutDashboard, module: "operations", isHeader: true, hideIfNoPermission: true },
           { href: "/branch-shifts", label: "فتح وإغلاق الفروع", icon: DoorOpen, module: "branch_closure", indent: true },
           { href: "/products", label: t("sidebar.products"), icon: Package, module: "products", indent: true },
           { href: "/quality-control", label: t("sidebar.qualityControl"), icon: CheckCircle, module: "quality_control", indent: true },
@@ -315,6 +316,17 @@ export function Layout({ children }: { children: React.ReactNode }) {
     });
   };
 
+  // For groups: filter items but keep group visible if ANY non-header item has permission
+  const filterGroupItems = (items: NavItem[]): NavItem[] => {
+    return items.filter(item => {
+      if (!item.module) return true;
+      // If hideIfNoPermission is set (for headers), hide if no permission
+      if (item.hideIfNoPermission && !canView(item.module)) return false;
+      // For regular items, check permission normally
+      return canView(item.module);
+    });
+  };
+
   const standaloneItems = filterItemsByPermission(allStandaloneItems);
   
   const navGroups = allNavGroups
@@ -322,7 +334,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       key,
       group: {
         ...group,
-        items: filterItemsByPermission(group.items),
+        items: filterGroupItems(group.items),
       },
     }))
     .filter(({ group }) => group.items.length > 0);
