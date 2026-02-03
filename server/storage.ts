@@ -431,6 +431,17 @@ import { db } from "./db";
 import { eq, and, gte, lte, desc, or, inArray, sql, isNull, ilike } from "drizzle-orm";
 import bcrypt from "bcrypt";
 
+export type PermissionSource = 'direct' | 'role' | 'override_grant' | 'override_deny';
+
+export interface PermissionWithSource {
+  module: string;
+  action: string;
+  source: PermissionSource;
+  roleName?: string;
+  isActive: boolean;
+  permissionId?: number;
+}
+
 export interface IStorage {
   // Users
   getUser(id: string): Promise<User | undefined>;
@@ -534,9 +545,12 @@ export interface IStorage {
   
   // User Permissions
   getUserPermissions(userId: string): Promise<UserPermission[]>;
+  getUserPermissionsWithSources(userId: string): Promise<PermissionWithSource[]>;
   setUserPermission(permission: InsertUserPermission): Promise<UserPermission>;
   deleteUserPermissions(userId: string): Promise<boolean>;
   hasPermission(userId: string, module: string, action: string): Promise<boolean>;
+  setPermissionOverride(userId: string, permissionId: number, allow: boolean, changedByUserId: string, reason?: string): Promise<void>;
+  removePermissionOverride(userId: string, permissionId: number): Promise<void>;
   
   // Permission Audit Logs
   createPermissionAuditLog(log: InsertPermissionAuditLog): Promise<PermissionAuditLog>;
@@ -1798,7 +1812,7 @@ export class DatabaseStorage implements IStorage {
     
     for (const override of overrides) {
       // Check if override has expired
-      if (override.expiresAt && new Date(override.expiresAt) < now) {
+      if (override.expiresAt && new Date(override.expiresAt).getTime() < now) {
         continue; // Skip expired overrides
       }
       
@@ -1851,6 +1865,143 @@ export class DatabaseStorage implements IStorage {
     } else {
       this.permissionsCache.clear();
     }
+  }
+
+  async getUserPermissionsWithSources(userId: string): Promise<PermissionWithSource[]> {
+    const result: PermissionWithSource[] = [];
+    const now = Date.now();
+    
+    const directPerms = await db
+      .select()
+      .from(userPermissions)
+      .where(eq(userPermissions.userId, userId));
+    
+    for (const perm of directPerms) {
+      for (const action of perm.actions) {
+        result.push({
+          module: perm.module,
+          action,
+          source: 'direct',
+          isActive: true,
+        });
+      }
+    }
+    
+    const rolePermsFromAssignments = await db
+      .select({
+        module: permissions.module,
+        action: permissions.action,
+        permissionId: permissions.id,
+        roleName: roles.name,
+      })
+      .from(userAssignments)
+      .innerJoin(rolePermissions, eq(userAssignments.roleId, rolePermissions.roleId))
+      .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
+      .innerJoin(roles, eq(userAssignments.roleId, roles.id))
+      .where(and(
+        eq(userAssignments.userId, userId),
+        eq(userAssignments.isActive, true)
+      ));
+    
+    for (const rp of rolePermsFromAssignments) {
+      const existingDirect = result.find(r => r.module === rp.module && r.action === rp.action && r.source === 'direct');
+      if (!existingDirect) {
+        result.push({
+          module: rp.module,
+          action: rp.action,
+          source: 'role',
+          roleName: rp.roleName,
+          isActive: true,
+          permissionId: rp.permissionId,
+        });
+      }
+    }
+    
+    const overrides = await db
+      .select({
+        module: permissions.module,
+        action: permissions.action,
+        permissionId: permissions.id,
+        allow: userPermissionOverrides.allow,
+        expiresAt: userPermissionOverrides.expiresAt,
+      })
+      .from(userPermissionOverrides)
+      .innerJoin(permissions, eq(userPermissionOverrides.permissionId, permissions.id))
+      .where(eq(userPermissionOverrides.userId, userId));
+    
+    for (const override of overrides) {
+      if (override.expiresAt && new Date(override.expiresAt).getTime() < now) {
+        continue;
+      }
+      
+      const existingIdx = result.findIndex(r => r.module === override.module && r.action === override.action);
+      if (existingIdx >= 0) {
+        result[existingIdx].source = override.allow ? 'override_grant' : 'override_deny';
+        result[existingIdx].isActive = override.allow;
+        result[existingIdx].permissionId = override.permissionId;
+      } else if (override.allow) {
+        result.push({
+          module: override.module,
+          action: override.action,
+          source: 'override_grant',
+          isActive: true,
+          permissionId: override.permissionId,
+        });
+      }
+    }
+    
+    return result;
+  }
+
+  async setPermissionOverride(userId: string, permissionId: number, allow: boolean, changedByUserId: string, reason?: string): Promise<void> {
+    this.invalidatePermissionsCache(userId);
+    
+    const [existing] = await db
+      .select()
+      .from(userPermissionOverrides)
+      .where(and(
+        eq(userPermissionOverrides.userId, userId),
+        eq(userPermissionOverrides.permissionId, permissionId)
+      ));
+    
+    if (existing) {
+      await db
+        .update(userPermissionOverrides)
+        .set({ allow, reason: reason || null, grantedBy: changedByUserId })
+        .where(eq(userPermissionOverrides.id, existing.id));
+    } else {
+      await db.insert(userPermissionOverrides).values({
+        userId,
+        permissionId,
+        allow,
+        reason: reason || null,
+        grantedBy: changedByUserId,
+      });
+    }
+    
+    const [perm] = await db.select().from(permissions).where(eq(permissions.id, permissionId));
+    if (perm) {
+      await this.createPermissionAuditLog({
+        targetUserId: userId,
+        changedByUserId,
+        action: allow ? 'grant' : 'revoke',
+        module: perm.module,
+        oldActions: [],
+        newActions: allow ? [perm.action] : [],
+        templateApplied: reason || `Override ${allow ? 'granted' : 'denied'} via management UI`,
+      });
+    }
+  }
+
+  async removePermissionOverride(userId: string, permissionId: number): Promise<void> {
+    this.invalidatePermissionsCache(userId);
+    
+    await db
+      .delete(userPermissionOverrides)
+      .where(and(
+        eq(userPermissionOverrides.userId, userId),
+        eq(userPermissionOverrides.permissionId, permissionId)
+      ));
   }
 
   async setUserPermission(permission: InsertUserPermission): Promise<UserPermission> {

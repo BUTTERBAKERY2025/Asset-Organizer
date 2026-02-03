@@ -40,6 +40,7 @@ import {
   wasteRiskAlerts,
   users,
   branches,
+  permissions,
   COMPARISON_STATUS,
   RISK_SEVERITY,
   ALERT_STATUS,
@@ -362,6 +363,65 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error updating user permissions:", error);
       res.status(500).json({ error: "Failed to update permissions" });
+    }
+  });
+
+  app.get("/api/users/:id/permissions-with-sources", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
+    try {
+      const permsWithSources = await storage.getUserPermissionsWithSources(req.params.id);
+      res.json(permsWithSources);
+    } catch (error) {
+      console.error("Error fetching user permissions with sources:", error);
+      res.status(500).json({ error: "Failed to fetch permissions" });
+    }
+  });
+
+  app.post("/api/users/:id/permission-override", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
+    try {
+      const { permissionId, allow, reason } = req.body;
+      const currentUser = getCurrentUser(req);
+      const targetUserId = req.params.id;
+      
+      if (currentUser.id === targetUserId && currentUser.role !== "admin") {
+        return res.status(403).json({ error: "لا يمكنك تعديل صلاحياتك الخاصة" });
+      }
+      
+      if (typeof permissionId !== 'number' || typeof allow !== 'boolean') {
+        return res.status(400).json({ error: "Invalid request format" });
+      }
+      
+      const permExists = await db.select().from(permissions).where(eq(permissions.id, permissionId));
+      if (permExists.length === 0) {
+        return res.status(400).json({ error: "Permission not found" });
+      }
+      
+      await storage.setPermissionOverride(targetUserId, permissionId, allow, currentUser.id, reason);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error setting permission override:", error);
+      res.status(500).json({ error: "Failed to set permission override" });
+    }
+  });
+
+  app.delete("/api/users/:id/permission-override/:permissionId", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
+    try {
+      const currentUser = getCurrentUser(req);
+      const targetUserId = req.params.id;
+      const permissionId = parseInt(req.params.permissionId, 10);
+      
+      if (currentUser.id === targetUserId && currentUser.role !== "admin") {
+        return res.status(403).json({ error: "لا يمكنك تعديل صلاحياتك الخاصة" });
+      }
+      
+      if (isNaN(permissionId)) {
+        return res.status(400).json({ error: "Invalid permission ID" });
+      }
+      
+      await storage.removePermissionOverride(targetUserId, permissionId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error removing permission override:", error);
+      res.status(500).json({ error: "Failed to remove permission override" });
     }
   });
 

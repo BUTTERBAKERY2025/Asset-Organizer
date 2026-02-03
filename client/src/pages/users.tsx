@@ -22,6 +22,19 @@ import { SettingsBreadcrumb } from "@/components/settings-breadcrumb";
 import type { User, UserPermission, Branch } from "@shared/schema";
 import { SYSTEM_MODULES, MODULE_ACTIONS, MODULE_LABELS, ACTION_LABELS, ROLE_PERMISSION_TEMPLATES, MODULE_GROUPS } from "@shared/schema";
 import React, { useEffect, useState } from "react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Info, Lock, Unlock } from "lucide-react";
+
+type PermissionSource = 'direct' | 'role' | 'override_grant' | 'override_deny';
+
+interface PermissionWithSource {
+  module: string;
+  action: string;
+  source: PermissionSource;
+  roleName?: string;
+  isActive: boolean;
+  permissionId?: number;
+}
 
 const ROLES = [
   { value: "admin", label: "مدير", icon: Shield, description: "صلاحيات كاملة" },
@@ -52,6 +65,7 @@ export default function UsersPage() {
   const [isPermissionsDialogOpen, setIsPermissionsDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<SafeUser | null>(null);
   const [permissionState, setPermissionState] = useState<PermissionState>({});
+  const [permissionSources, setPermissionSources] = useState<Map<string, PermissionWithSource>>(new Map());
   const [appliedTemplate, setAppliedTemplate] = useState<string | null>(null);
   const [newUser, setNewUser] = useState({
     username: "",
@@ -200,7 +214,7 @@ export default function UsersPage() {
     },
   });
 
-  const { data: userPermissions = [] } = useQuery<UserPermission[]>({
+  const { data: userPermissions = [], refetch: refetchPermissions } = useQuery<UserPermission[]>({
     queryKey: ["/api/users", selectedUser?.id, "permissions"],
     queryFn: async () => {
       if (!selectedUser) return [];
@@ -212,6 +226,24 @@ export default function UsersPage() {
         state[perm.module] = perm.actions;
       }
       setPermissionState(state);
+      return data;
+    },
+    enabled: !!selectedUser && isPermissionsDialogOpen,
+    staleTime: 0,
+  });
+
+  const { data: permissionsWithSources = [], refetch: refetchPermissionSources } = useQuery<PermissionWithSource[]>({
+    queryKey: ["/api/users", selectedUser?.id, "permissions-with-sources"],
+    queryFn: async () => {
+      if (!selectedUser) return [];
+      const res = await fetch(`/api/users/${selectedUser.id}/permissions-with-sources`);
+      if (!res.ok) return [];
+      const data: PermissionWithSource[] = await res.json();
+      const sourcesMap = new Map<string, PermissionWithSource>();
+      for (const perm of data) {
+        sourcesMap.set(`${perm.module}:${perm.action}`, perm);
+      }
+      setPermissionSources(sourcesMap);
       return data;
     },
     enabled: !!selectedUser && isPermissionsDialogOpen,
@@ -231,6 +263,8 @@ export default function UsersPage() {
     },
     onSuccess: () => {
       toast({ title: "تم حفظ الصلاحيات بنجاح" });
+      queryClient.invalidateQueries({ queryKey: ["/api/users", selectedUser?.id, "permissions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/users", selectedUser?.id, "permissions-with-sources"] });
       setIsPermissionsDialogOpen(false);
       setSelectedUser(null);
       setAppliedTemplate(null);
@@ -240,9 +274,50 @@ export default function UsersPage() {
     },
   });
 
+  const setPermissionOverrideMutation = useMutation({
+    mutationFn: async ({ permissionId, allow, reason }: { permissionId: number; allow: boolean; reason?: string }) => {
+      if (!selectedUser) return;
+      const res = await fetch(`/api/users/${selectedUser.id}/permission-override`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ permissionId, allow, reason }),
+      });
+      if (!res.ok) throw new Error("Failed to set permission override");
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "تم تحديث تجاوز الصلاحية بنجاح" });
+      queryClient.invalidateQueries({ queryKey: ["/api/users", selectedUser?.id, "permissions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/users", selectedUser?.id, "permissions-with-sources"] });
+    },
+    onError: () => {
+      toast({ title: "فشل تحديث تجاوز الصلاحية", variant: "destructive" });
+    },
+  });
+
+  const removePermissionOverrideMutation = useMutation({
+    mutationFn: async ({ permissionId }: { permissionId: number }) => {
+      if (!selectedUser) return;
+      const res = await fetch(`/api/users/${selectedUser.id}/permission-override/${permissionId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to remove permission override");
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "تم إزالة تجاوز الصلاحية" });
+      queryClient.invalidateQueries({ queryKey: ["/api/users", selectedUser?.id, "permissions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/users", selectedUser?.id, "permissions-with-sources"] });
+    },
+    onError: () => {
+      toast({ title: "فشل إزالة تجاوز الصلاحية", variant: "destructive" });
+    },
+  });
+
   const openPermissionsDialog = (user: SafeUser) => {
     setSelectedUser(user);
     setPermissionState({});
+    setPermissionSources(new Map());
     setAppliedTemplate(null);
     setIsPermissionsDialogOpen(true);
   };
@@ -406,6 +481,30 @@ export default function UsersPage() {
       count += actions.length;
     }
     return count;
+  };
+
+  const getPermissionSource = (module: string, action: string): PermissionWithSource | null => {
+    return permissionSources.get(`${module}:${action}`) || null;
+  };
+
+  const getSourceInfo = (source: PermissionSource | undefined) => {
+    switch (source) {
+      case 'direct':
+        return { color: 'bg-green-500', label: 'صلاحية مباشرة', icon: null };
+      case 'role':
+        return { color: 'bg-blue-500', label: 'موروثة من الدور', icon: Lock };
+      case 'override_grant':
+        return { color: 'bg-amber-500', label: 'منحت بتجاوز', icon: Unlock };
+      case 'override_deny':
+        return { color: 'bg-red-500', label: 'محظورة بتجاوز', icon: Lock };
+      default:
+        return { color: 'bg-gray-300', label: 'غير محددة', icon: null };
+    }
+  };
+
+  const isInheritedPermission = (module: string, action: string): boolean => {
+    const source = getPermissionSource(module, action);
+    return source?.source === 'role';
   };
 
   const ROLE_TEMPLATES = [
@@ -1086,6 +1185,30 @@ export default function UsersPage() {
                   ))}
                 </div>
               </div>
+              
+              <div className="flex flex-wrap items-center gap-4 text-xs bg-muted/50 p-2 rounded-md">
+                <span className="font-medium text-muted-foreground">دليل الألوان:</span>
+                <div className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                  <span>صلاحية مباشرة</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                  <Lock className="w-3 h-3 text-blue-500" />
+                  <span>موروثة من الدور</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                  <Unlock className="w-3 h-3 text-amber-500" />
+                  <span>منحت بتجاوز</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                  <Lock className="w-3 h-3 text-red-500" />
+                  <span>محظورة بتجاوز</span>
+                </div>
+              </div>
+
               <div className="rounded-md border">
                 <Table>
                   <TableHeader>
@@ -1173,22 +1296,70 @@ export default function UsersPage() {
                               </TableCell>
                               {selectedUser?.role === "viewer" ? (
                                 <TableCell className="text-center">
-                                  <Checkbox
-                                    checked={currentActions.includes("view")}
-                                    onCheckedChange={() => toggleAction(module, "view")}
-                                    data-testid={`checkbox-${module}-view`}
-                                  />
+                                  {(() => {
+                                    const source = getPermissionSource(module, "view");
+                                    const sourceInfo = getSourceInfo(source?.source);
+                                    const isChecked = currentActions.includes("view");
+                                    return (
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <div className="relative inline-flex items-center justify-center">
+                                              <Checkbox
+                                                checked={isChecked}
+                                                onCheckedChange={() => toggleAction(module, "view")}
+                                                data-testid={`checkbox-${module}-view`}
+                                              />
+                                              {source && isChecked && (
+                                                <span className={`absolute -top-1 -right-1 w-2 h-2 rounded-full ${sourceInfo.color}`} />
+                                              )}
+                                            </div>
+                                          </TooltipTrigger>
+                                          <TooltipContent side="top" className="text-xs">
+                                            <div className="flex items-center gap-1">
+                                              {sourceInfo.icon && <sourceInfo.icon className="w-3 h-3" />}
+                                              <span>{sourceInfo.label}</span>
+                                              {source?.roleName && <span>({source.roleName})</span>}
+                                            </div>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    );
+                                  })()}
                                 </TableCell>
                               ) : (
-                                MODULE_ACTIONS.map(action => (
-                                  <TableCell key={action} className="text-center">
-                                    <Checkbox
-                                      checked={currentActions.includes(action)}
-                                      onCheckedChange={() => toggleAction(module, action)}
-                                      data-testid={`checkbox-${module}-${action}`}
-                                    />
-                                  </TableCell>
-                                ))
+                                MODULE_ACTIONS.map(action => {
+                                  const source = getPermissionSource(module, action);
+                                  const sourceInfo = getSourceInfo(source?.source);
+                                  const isChecked = currentActions.includes(action);
+                                  return (
+                                    <TableCell key={action} className="text-center">
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <div className="relative inline-flex items-center justify-center">
+                                              <Checkbox
+                                                checked={isChecked}
+                                                onCheckedChange={() => toggleAction(module, action)}
+                                                data-testid={`checkbox-${module}-${action}`}
+                                              />
+                                              {source && isChecked && (
+                                                <span className={`absolute -top-1 -right-1 w-2 h-2 rounded-full ${sourceInfo.color}`} />
+                                              )}
+                                            </div>
+                                          </TooltipTrigger>
+                                          <TooltipContent side="top" className="text-xs">
+                                            <div className="flex items-center gap-1">
+                                              {sourceInfo.icon && <sourceInfo.icon className="w-3 h-3" />}
+                                              <span>{sourceInfo.label}</span>
+                                              {source?.roleName && <span>({source.roleName})</span>}
+                                            </div>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    </TableCell>
+                                  );
+                                })
                               )}
                               {selectedUser?.role !== "viewer" && (
                                 <TableCell className="text-center">
