@@ -360,12 +360,39 @@ export async function registerRoutes(
       
       console.log("[Permissions] Validated permissions:", JSON.stringify(validatedPermissions, null, 2));
       
-      // Use transactional update for atomicity
+      // Build a set of requested module:action pairs
+      const requestedPerms = new Set<string>();
+      for (const perm of validatedPermissions) {
+        for (const action of perm.actions) {
+          requestedPerms.add(`${perm.module}:${action}`);
+        }
+      }
+      
+      // Get inherited permissions from roles
+      const inheritedPerms = await storage.getInheritedPermissions(targetUserId);
+      console.log("[Permissions] Inherited permissions count:", inheritedPerms.length);
+      
+      // Build inherited permission overrides for atomic transaction
+      const inheritedOverrides: { permissionId: number; deny: boolean }[] = [];
+      for (const inherited of inheritedPerms) {
+        const key = `${inherited.module}:${inherited.action}`;
+        if (!requestedPerms.has(key)) {
+          // User wants to remove this inherited permission - mark for deny override
+          console.log(`[Permissions] Marking for deny override: ${key}`);
+          inheritedOverrides.push({ permissionId: inherited.permissionId, deny: true });
+        } else {
+          // User wants to keep this inherited permission - mark to remove deny override
+          inheritedOverrides.push({ permissionId: inherited.permissionId, deny: false });
+        }
+      }
+      
+      // Use transactional update for atomicity (includes both direct permissions and inherited overrides)
       const savedPermissions = await storage.updateUserPermissionsWithAudit(
         req.params.id,
         validatedPermissions,
         currentUser.id,
-        templateApplied || null
+        templateApplied || null,
+        inheritedOverrides
       );
       
       res.json(savedPermissions);

@@ -546,11 +546,14 @@ export interface IStorage {
   // User Permissions
   getUserPermissions(userId: string): Promise<UserPermission[]>;
   getUserPermissionsWithSources(userId: string): Promise<PermissionWithSource[]>;
+  getInheritedPermissions(userId: string): Promise<{ module: string; action: string; permissionId: number }[]>;
   setUserPermission(permission: InsertUserPermission): Promise<UserPermission>;
   deleteUserPermissions(userId: string): Promise<boolean>;
   hasPermission(userId: string, module: string, action: string): Promise<boolean>;
   setPermissionOverride(userId: string, permissionId: number, allow: boolean, changedByUserId: string, reason?: string): Promise<void>;
   removePermissionOverride(userId: string, permissionId: number): Promise<void>;
+  removeDenyOverride(userId: string, permissionId: number): Promise<void>;
+  removeAllPermissionOverrides(userId: string): Promise<void>;
   
   // Permission Audit Logs
   createPermissionAuditLog(log: InsertPermissionAuditLog): Promise<PermissionAuditLog>;
@@ -561,7 +564,8 @@ export interface IStorage {
     userId: string,
     permissions: { module: string; actions: string[] }[],
     changedByUserId: string,
-    templateApplied: string | null
+    templateApplied: string | null,
+    inheritedOverrides?: { permissionId: number; deny: boolean }[]
   ): Promise<UserPermission[]>;
   
   // Apply job role permissions to user
@@ -2009,6 +2013,44 @@ export class DatabaseStorage implements IStorage {
       ));
   }
 
+  async removeDenyOverride(userId: string, permissionId: number): Promise<void> {
+    this.invalidatePermissionsCache(userId);
+    
+    await db
+      .delete(userPermissionOverrides)
+      .where(and(
+        eq(userPermissionOverrides.userId, userId),
+        eq(userPermissionOverrides.permissionId, permissionId),
+        eq(userPermissionOverrides.allow, false)
+      ));
+  }
+
+  async removeAllPermissionOverrides(userId: string): Promise<void> {
+    this.invalidatePermissionsCache(userId);
+    
+    await db
+      .delete(userPermissionOverrides)
+      .where(eq(userPermissionOverrides.userId, userId));
+  }
+
+  async getInheritedPermissions(userId: string): Promise<{ module: string; action: string; permissionId: number }[]> {
+    const rolePerms = await db
+      .select({
+        module: permissions.module,
+        action: permissions.action,
+        permissionId: permissions.id,
+      })
+      .from(userAssignments)
+      .innerJoin(rolePermissions, eq(userAssignments.roleId, rolePermissions.roleId))
+      .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
+      .where(and(
+        eq(userAssignments.userId, userId),
+        eq(userAssignments.isActive, true)
+      ));
+    
+    return rolePerms;
+  }
+
   async setUserPermission(permission: InsertUserPermission): Promise<UserPermission> {
     // Invalidate cache immediately for security
     this.invalidatePermissionsCache(permission.userId);
@@ -2100,12 +2142,137 @@ export class DatabaseStorage implements IStorage {
     userId: string,
     permissions: { module: string; actions: string[] }[],
     changedByUserId: string,
-    templateApplied: string | null
+    templateApplied: string | null,
+    inheritedOverrides?: { permissionId: number; deny: boolean }[]
   ): Promise<UserPermission[]> {
     // Invalidate cache immediately for security
     this.invalidatePermissionsCache(userId);
     
     return await db.transaction(async (tx) => {
+      // Get current inherited permission IDs for cleanup (always run cleanup)
+      const currentInheritedIds = new Set((inheritedOverrides || []).map(o => o.permissionId));
+      
+      // Clean up stale deny overrides (for permissions no longer inherited)
+      const existingDenyOverrides = await tx
+        .select({
+          id: userPermissionOverrides.id,
+          permissionId: userPermissionOverrides.permissionId,
+        })
+        .from(userPermissionOverrides)
+        .where(and(
+          eq(userPermissionOverrides.userId, userId),
+          eq(userPermissionOverrides.allow, false)
+        ));
+      
+      for (const staleOverride of existingDenyOverrides) {
+        if (!currentInheritedIds.has(staleOverride.permissionId)) {
+          // This deny override is for a permission no longer inherited - remove it with audit
+          const [perm] = await tx.select().from(permissions).where(eq(permissions.id, staleOverride.permissionId));
+          
+          await tx
+            .delete(userPermissionOverrides)
+            .where(eq(userPermissionOverrides.id, staleOverride.id));
+          
+          // Audit log for stale override cleanup (using 'modify' action to indicate cleanup)
+          if (perm) {
+            await tx.insert(permissionAuditLogs).values({
+              targetUserId: userId,
+              changedByUserId,
+              action: 'modify',
+              module: perm.module,
+              oldActions: ['override_deny'],
+              newActions: [],
+              templateApplied: 'تنظيف تجاوز قديم - الصلاحية لم تعد موروثة',
+            });
+          }
+        }
+      }
+      
+      // Handle inherited permission overrides atomically with audit logging
+      if (inheritedOverrides && inheritedOverrides.length > 0) {
+        for (const override of inheritedOverrides) {
+          // Get permission details for audit logging
+          const [perm] = await tx.select().from(permissions).where(eq(permissions.id, override.permissionId));
+          
+          if (override.deny) {
+            // Create deny override for inherited permission
+            const [existing] = await tx
+              .select()
+              .from(userPermissionOverrides)
+              .where(and(
+                eq(userPermissionOverrides.userId, userId),
+                eq(userPermissionOverrides.permissionId, override.permissionId)
+              ));
+            
+            if (existing) {
+              if (existing.allow !== false) {
+                await tx
+                  .update(userPermissionOverrides)
+                  .set({ allow: false, reason: "إلغاء صلاحية موروثة", grantedBy: changedByUserId })
+                  .where(eq(userPermissionOverrides.id, existing.id));
+                
+                // Audit log for override change
+                if (perm) {
+                  await tx.insert(permissionAuditLogs).values({
+                    targetUserId: userId,
+                    changedByUserId,
+                    action: 'revoke',
+                    module: perm.module,
+                    oldActions: [perm.action],
+                    newActions: [],
+                    templateApplied: 'تجاوز صلاحية موروثة',
+                  });
+                }
+              }
+            } else {
+              await tx.insert(userPermissionOverrides).values({
+                userId,
+                permissionId: override.permissionId,
+                allow: false,
+                reason: "إلغاء صلاحية موروثة",
+                grantedBy: changedByUserId,
+              });
+              
+              // Audit log for new deny override
+              if (perm) {
+                await tx.insert(permissionAuditLogs).values({
+                  targetUserId: userId,
+                  changedByUserId,
+                  action: 'revoke',
+                  module: perm.module,
+                  oldActions: [perm.action],
+                  newActions: [],
+                  templateApplied: 'تجاوز صلاحية موروثة',
+                });
+              }
+            }
+          } else {
+            // Remove deny override only (preserve grants)
+            const [removed] = await tx
+              .delete(userPermissionOverrides)
+              .where(and(
+                eq(userPermissionOverrides.userId, userId),
+                eq(userPermissionOverrides.permissionId, override.permissionId),
+                eq(userPermissionOverrides.allow, false)
+              ))
+              .returning();
+            
+            // Audit log for removed deny override
+            if (removed && perm) {
+              await tx.insert(permissionAuditLogs).values({
+                targetUserId: userId,
+                changedByUserId,
+                action: 'grant',
+                module: perm.module,
+                oldActions: [],
+                newActions: [perm.action],
+                templateApplied: 'إعادة تفعيل صلاحية موروثة',
+              });
+            }
+          }
+        }
+      }
+      
       // Get old permissions for audit logging
       const oldPermissions = await tx
         .select()
