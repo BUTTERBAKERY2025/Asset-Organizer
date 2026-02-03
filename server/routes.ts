@@ -327,6 +327,9 @@ export async function registerRoutes(
       const currentUser = getCurrentUser(req);
       const targetUserId = req.params.id;
       
+      console.log("[Permissions] Received permissions to save:", JSON.stringify(permissions, null, 2));
+      console.log("[Permissions] Target user:", targetUserId);
+      
       // SECURITY: Prevent users from modifying their own permissions
       if (currentUser.id === targetUserId && currentUser.role !== "admin") {
         return res.status(403).json({ error: "لا يمكنك تعديل صلاحياتك الخاصة" });
@@ -338,11 +341,15 @@ export async function registerRoutes(
       
       // Validate and filter permissions
       const validatedPermissions = permissions
-        .filter((perm: any) => 
-          perm.module && 
-          Array.isArray(perm.actions) && 
-          SYSTEM_MODULES.includes(perm.module)
-        )
+        .filter((perm: any) => {
+          const isValid = perm.module && 
+            Array.isArray(perm.actions) && 
+            SYSTEM_MODULES.includes(perm.module);
+          if (!isValid && perm.module) {
+            console.log(`[Permissions] Filtered out module: ${perm.module} (not in SYSTEM_MODULES)`);
+          }
+          return isValid;
+        })
         .map((perm: any) => ({
           module: perm.module,
           actions: perm.actions.filter((a: string) => 
@@ -350,6 +357,8 @@ export async function registerRoutes(
           ),
         }))
         .filter((perm: any) => perm.actions.length > 0);
+      
+      console.log("[Permissions] Validated permissions:", JSON.stringify(validatedPermissions, null, 2));
       
       // Use transactional update for atomicity
       const savedPermissions = await storage.updateUserPermissionsWithAudit(
