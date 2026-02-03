@@ -562,7 +562,7 @@ export interface IStorage {
   // Transactional permission update
   updateUserPermissionsWithAudit(
     userId: string,
-    permissions: { module: string; actions: string[] }[],
+    permissionsList: { module: string; actions: string[] }[],
     changedByUserId: string,
     templateApplied: string | null,
     inheritedOverrides?: { permissionId: number; deny: boolean }[]
@@ -2140,7 +2140,7 @@ export class DatabaseStorage implements IStorage {
 
   async updateUserPermissionsWithAudit(
     userId: string,
-    permissions: { module: string; actions: string[] }[],
+    permissionsList: { module: string; actions: string[] }[],
     changedByUserId: string,
     templateApplied: string | null,
     inheritedOverrides?: { permissionId: number; deny: boolean }[]
@@ -2287,7 +2287,7 @@ export class DatabaseStorage implements IStorage {
 
       // Add new permissions
       const savedPermissions: UserPermission[] = [];
-      for (const perm of permissions) {
+      for (const perm of permissionsList) {
         if (!perm.module || !Array.isArray(perm.actions) || perm.actions.length === 0) {
           continue;
         }
