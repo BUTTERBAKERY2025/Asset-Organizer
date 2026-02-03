@@ -1774,6 +1774,8 @@ export class DatabaseStorage implements IStorage {
       .from(userPermissions)
       .where(eq(userPermissions.userId, userId));
     
+    console.log(`[Storage] Direct permissions for user ${userId}: ${directPerms.length} records`);
+    
     for (const perm of directPerms) {
       for (const action of perm.actions) {
         permissionState.set(`${perm.module}:${action}`, true);
@@ -1794,11 +1796,14 @@ export class DatabaseStorage implements IStorage {
         eq(userAssignments.isActive, true)
       ));
     
+    console.log(`[Storage] Role assignments permissions for user ${userId}: ${rolePermsFromAssignments.length} records`);
+    
     for (const rp of rolePermsFromAssignments) {
       permissionState.set(`${rp.module}:${rp.action}`, true);
     }
     
     // 3. Apply permission overrides (highest priority - can grant or deny)
+    console.log(`[Storage] Permission state size after direct+role: ${permissionState.size}`);
     const overrides = await db
       .select({
         module: permissions.module,
