@@ -233,8 +233,8 @@ function Router() {
       
       {/* Operations - التشغيل */}
       <Route path="/operations">{() => <ModulePage component={OperationsDashboardPage} module="operations" />}</Route>
-      <Route path="/branch-shifts">{() => <ModulePage component={BranchShiftsPage} module="operations" />}</Route>
-      <Route path="/shift-reports">{() => <ModulePage component={ShiftReportsPage} module="operations" />}</Route>
+      <Route path="/branch-shifts">{() => <ModulePage component={BranchShiftsPage} module="branch_closure" />}</Route>
+      <Route path="/shift-reports">{() => <ModulePage component={ShiftReportsPage} module="branch_closure" />}</Route>
       <Route path="/products">{() => <ModulePage component={ProductsPage} module="products" />}</Route>
       <Route path="/quality-control">{() => <ModulePage component={QualityControlPage} module="quality_control" />}</Route>
       <Route path="/display-bar-waste">{() => <ModulePage component={DisplayBarWastePage} module="waste_tracking" />}</Route>
