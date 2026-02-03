@@ -143,11 +143,7 @@ export default function BranchShiftsPage() {
   const canSign = hasPermission("branch_closure", "sign");
   
   // فحص الصلاحية للوصول للصفحة
-  useEffect(() => {
-    if (!permissionsLoading && !canView("branch_closure")) {
-      setLocation("/");
-    }
-  }, [permissionsLoading, canView, setLocation]);
+  const hasAccess = canView("branch_closure");
   
   const [activeTab, setActiveTab] = useState<"opening" | "closing">("opening");
   const [selectedBranch, setSelectedBranch] = useState<string>("");
@@ -170,6 +166,12 @@ export default function BranchShiftsPage() {
   const [supervisorNotes, setSupervisorNotes] = useState<string>("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  
+  useEffect(() => {
+    if (!permissionsLoading && !hasAccess) {
+      setLocation("/");
+    }
+  }, [permissionsLoading, hasAccess, setLocation]);
 
   // مراقبة حالة الاتصال
   useEffect(() => {
@@ -620,6 +622,30 @@ export default function BranchShiftsPage() {
         : { closingCompleted: true, closingCompletedAt: new Date(), closingTime: new Date(), supervisorNotes }
     );
   };
+
+  // انتظار تحميل الصلاحيات
+  if (permissionsLoading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-[50vh]">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      </Layout>
+    );
+  }
+  
+  // إذا لا توجد صلاحية، لا تعرض الصفحة
+  if (!hasAccess) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-[50vh]">
+          <div className="text-center">
+            <p className="text-lg text-gray-500">غير مصرح لك بالوصول لهذه الصفحة</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
