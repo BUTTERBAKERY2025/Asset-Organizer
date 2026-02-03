@@ -120,10 +120,11 @@ export async function registerRoutes(
     return users.map(({ password, ...user }) => user);
   }, { promise: true, maxAge: 30000 }); // Cache for 30 seconds
 
-  // Per-user permissions cache
-  const getCachedPermissions = memoize(async (userId: string) => {
+  // Per-user permissions - use storage's built-in cache (no extra memoize layer)
+  // This ensures cache invalidation works correctly when permissions are updated
+  const getCachedPermissions = async (userId: string) => {
     return await storage.getUserPermissions(userId);
-  }, { promise: true, maxAge: 30000, length: 1 }); // Cache per-user permissions for 30s
+  };
   
 
   // Admin routes for user management

@@ -5642,16 +5642,33 @@ export class DatabaseStorage implements IStorage {
 
   async createUserAssignment(assignment: InsertUserAssignment): Promise<UserAssignment> {
     const [created] = await db.insert(userAssignments).values(assignment).returning();
+    // Invalidate permissions cache - role assignment affects user permissions
+    this.invalidatePermissionsCache(assignment.userId);
     return created;
   }
 
   async updateUserAssignment(id: number, assignment: Partial<InsertUserAssignment>): Promise<UserAssignment | undefined> {
+    // Get the assignment to find userId before update
+    const [existing] = await db.select().from(userAssignments).where(eq(userAssignments.id, id));
     const [updated] = await db.update(userAssignments).set({ ...assignment, updatedAt: new Date() }).where(eq(userAssignments.id, id)).returning();
+    // Invalidate permissions cache for both old and new user if changed
+    if (existing) {
+      this.invalidatePermissionsCache(existing.userId);
+    }
+    if (updated && assignment.userId && assignment.userId !== existing?.userId) {
+      this.invalidatePermissionsCache(assignment.userId);
+    }
     return updated;
   }
 
   async deleteUserAssignment(id: number): Promise<boolean> {
+    // Get the assignment to find userId before delete
+    const [existing] = await db.select().from(userAssignments).where(eq(userAssignments.id, id));
     await db.delete(userAssignments).where(eq(userAssignments.id, id));
+    // Invalidate permissions cache - role removal affects user permissions
+    if (existing) {
+      this.invalidatePermissionsCache(existing.userId);
+    }
     return true;
   }
 
