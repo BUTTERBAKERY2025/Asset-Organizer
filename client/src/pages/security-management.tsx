@@ -299,7 +299,7 @@ export default function SecurityManagementPage() {
               <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">التنبيهات</span>
               <span className="sm:hidden">تنبيه</span>
-              {alerts && alerts.filter(a => !a.isResolved).length > 0 && (
+              {Array.isArray(alerts) && alerts.filter(a => !a.isResolved).length > 0 && (
                 <Badge variant="destructive" className="mr-1 text-[10px] sm:text-xs" data-testid="badge-unresolved-alerts-count">
                   {alerts.filter(a => !a.isResolved).length}
                 </Badge>
@@ -551,7 +551,7 @@ export default function SecurityManagementPage() {
                       عرض وإدارة جميع الجلسات النشطة لحسابك
                     </CardDescription>
                   </div>
-                  {sessions && sessions.length > 1 && (
+                  {Array.isArray(sessions) && sessions.length > 1 && (
                     <Button 
                       variant="destructive" 
                       size="sm"
@@ -571,7 +571,7 @@ export default function SecurityManagementPage() {
                   <div className="flex items-center justify-center py-12">
                     <Loader2 className="h-8 w-8 animate-spin" />
                   </div>
-                ) : !sessions || sessions.length === 0 ? (
+                ) : !Array.isArray(sessions) || sessions.length === 0 ? (
                   <p className="text-center text-muted-foreground py-8" data-testid="text-no-sessions">
                     لا توجد جلسات نشطة
                   </p>
@@ -645,7 +645,7 @@ export default function SecurityManagementPage() {
                   <div className="flex items-center justify-center py-12">
                     <Loader2 className="h-8 w-8 animate-spin" />
                   </div>
-                ) : !alerts || alerts.length === 0 ? (
+                ) : !Array.isArray(alerts) || alerts.length === 0 ? (
                   <div className="text-center py-12" data-testid="container-no-alerts">
                     <CheckCircle className="h-16 w-16 mx-auto text-green-500 mb-4" />
                     <p className="text-xl font-medium" data-testid="text-no-alerts-title">لا توجد تنبيهات أمنية</p>
@@ -727,7 +727,7 @@ export default function SecurityManagementPage() {
                   <div className="flex items-center justify-center py-12">
                     <Loader2 className="h-8 w-8 animate-spin" />
                   </div>
-                ) : !roleTemplates || roleTemplates.length === 0 ? (
+                ) : !Array.isArray(roleTemplates) || roleTemplates.length === 0 ? (
                   <p className="text-center text-muted-foreground py-8" data-testid="text-no-templates">
                     لا توجد قوالب أدوار متاحة
                   </p>
