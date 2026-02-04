@@ -4509,14 +4509,14 @@ export async function registerRoutes(
         const startDate = `${yearNum}-${String(monthNum).padStart(2, '0')}-01`;
         const endDate = `${yearNum}-${String(monthNum).padStart(2, '0')}-${new Date(yearNum, monthNum, 0).getDate()}`;
         
-        const journals = await storage.getCashierJournalsFiltered({
+        const journalsResult = await storage.getCashierJournalsFiltered({
           branchId: bId,
           status: 'approved'
         });
         
         // Filter by date range
-        const monthJournals = journals.filter((j: any) => {
-          const jDate = new Date(j.salesDate);
+        const monthJournals = journalsResult.journals.filter((j: any) => {
+          const jDate = new Date(j.journalDate);
           return jDate.getFullYear() === yearNum && (jDate.getMonth() + 1) === monthNum;
         });
         
