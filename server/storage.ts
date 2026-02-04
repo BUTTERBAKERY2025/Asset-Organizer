@@ -7565,6 +7565,40 @@ export class DatabaseStorage implements IStorage {
       })
     );
 
+    // If no schedules found for today, fallback to branch employees with default shift times
+    if (employeesWithAttendance.length === 0) {
+      const branchEmps = await this.getBranchEmployeesByBranch(branchId);
+      const activeEmployees = branchEmps.filter(emp => emp.status === 'active');
+      
+      // Define default shift times
+      const shiftTimes: Record<string, { start: string; end: string }> = {
+        morning: { start: "06:00", end: "14:00" },
+        evening: { start: "14:00", end: "22:00" },
+        night: { start: "22:00", end: "06:00" }
+      };
+      
+      const defaultTimes = shiftTimes[shiftType] || shiftTimes.morning;
+      
+      const fallbackEmployees = await Promise.all(
+        activeEmployees.map(async (emp) => {
+          const employeeId = `branch_emp_${emp.id}`;
+          const attendance = await this.getAttendanceByEmployeeAndDate(employeeId, date);
+          return {
+            id: emp.id,
+            employeeId,
+            employeeName: emp.employeeName,
+            startTime: defaultTimes.start,
+            endTime: defaultTimes.end,
+            shiftType,
+            scheduleDate: date,
+            attendance: attendance || null
+          };
+        })
+      );
+      
+      return fallbackEmployees;
+    }
+
     return employeesWithAttendance;
   }
 
