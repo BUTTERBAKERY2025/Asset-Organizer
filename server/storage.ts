@@ -7522,25 +7522,23 @@ export class DatabaseStorage implements IStorage {
         // Always resolve employee name from authoritative source
         let resolvedName = schedule.employeeName;
         
-        console.log(`[DEBUG] Processing employee: ${schedule.employeeId}, scheduleName: ${schedule.employeeName}`);
-        
         // For branch employees (format: branch_emp_XX), always fetch fresh name from branch_employees table
         if (schedule.employeeId.startsWith('branch_emp_')) {
           try {
             const branchEmpId = parseInt(schedule.employeeId.replace('branch_emp_', ''), 10);
-            console.log(`[DEBUG] Parsed branchEmpId: ${branchEmpId}`);
             if (!isNaN(branchEmpId)) {
               const [branchEmp] = await db.select()
                 .from(branchEmployees)
                 .where(eq(branchEmployees.id, branchEmpId))
                 .limit(1);
-              console.log(`[DEBUG] Found branchEmp: ${branchEmp?.employeeName || 'NOT FOUND'}`);
               if (branchEmp?.employeeName) {
                 resolvedName = branchEmp.employeeName;
+              } else {
+                console.log(`[WARN] Branch employee ID ${branchEmpId} not found in branch_employees table for employeeId: ${schedule.employeeId}`);
               }
             }
           } catch (e) {
-            console.log(`[DEBUG] Error fetching branch employee: ${e}`);
+            console.log(`[ERROR] Error fetching branch employee ${schedule.employeeId}: ${e}`);
             // Continue with schedule name
           }
         } else if (!resolvedName || resolvedName === 'Unknown' || resolvedName === 'غير معروف') {
