@@ -12,7 +12,7 @@ import { useBranches } from "@/hooks/useBranches";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "react-i18next";
-import { Clock, LogIn, LogOut, Check, Pencil, RotateCcw, Building2, User, Timer, ArrowRight, Users, Calendar, Sun, Moon, Sunrise, Loader2 } from "lucide-react";
+import { Clock, LogIn, LogOut, Check, Pencil, RotateCcw, Building2, User, Timer, ArrowRight, Users, Calendar, Sun, Moon, Sunrise, Loader2, MapPin, AlertTriangle } from "lucide-react";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
@@ -38,6 +38,10 @@ export default function AttendanceCheckPage() {
   const [selectedEmployee, setSelectedEmployee] = useState<ScheduledEmployee | null>(null);
   const [signatureMode, setSignatureMode] = useState<"check_in" | "check_out" | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [locationStatus, setLocationStatus] = useState<"idle" | "checking" | "valid" | "invalid" | "error" | "no_location">("idle");
+  const [locationDistance, setLocationDistance] = useState<number | null>(null);
+  const [isCheckingLocation, setIsCheckingLocation] = useState(false);
+  const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(null);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -95,7 +99,7 @@ export default function AttendanceCheckPage() {
   }, [selectedEmployee, signatureMode]);
 
   const checkInMutation = useMutation({
-    mutationFn: async (data: { employeeId: string; branchId: string; signature: string; scheduleId: number; scheduledStartTime?: string; scheduledEndTime?: string; employeeName?: string }) => {
+    mutationFn: async (data: { employeeId: string; branchId: string; signature: string; scheduleId: number; scheduledStartTime?: string; scheduledEndTime?: string; employeeName?: string; userLatitude?: number; userLongitude?: number }) => {
       return apiRequest("POST", "/api/attendance/check-in-employee", data);
     },
     onSuccess: () => {
@@ -173,10 +177,62 @@ export default function AttendanceCheckPage() {
     return canvasRef.current?.toDataURL("image/png") || "";
   };
 
+  const checkLocationValidity = async () => {
+    if (!selectedBranch) return;
+    
+    const branch = branches.find(b => b.id === selectedBranch);
+    if (!branch?.latitude || !branch?.longitude) {
+      setLocationStatus("no_location");
+      return;
+    }
+    
+    setIsCheckingLocation(true);
+    setLocationStatus("checking");
+    
+    if (!navigator.geolocation) {
+      setLocationStatus("error");
+      setIsCheckingLocation(false);
+      toast({ title: t("attendanceCheck.error"), description: "المتصفح لا يدعم تحديد الموقع", variant: "destructive" });
+      return;
+    }
+    
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const coords = { latitude: position.coords.latitude, longitude: position.coords.longitude };
+        setUserCoords(coords);
+        try {
+          const res = await apiRequest("POST", `/api/branches/${selectedBranch}/validate-location`, {
+            userLatitude: coords.latitude,
+            userLongitude: coords.longitude,
+          });
+          const data = await res.json();
+          setLocationDistance(data.distance);
+          if (data.valid) {
+            setLocationStatus("valid");
+          } else {
+            setLocationStatus("invalid");
+          }
+        } catch (error) {
+          setLocationStatus("error");
+        }
+        setIsCheckingLocation(false);
+      },
+      (error) => {
+        setIsCheckingLocation(false);
+        setLocationStatus("error");
+        toast({ title: t("attendanceCheck.error"), description: "فشل في تحديد الموقع الجغرافي", variant: "destructive" });
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
   const openSignatureDialog = (employee: ScheduledEmployee, mode: "check_in" | "check_out") => {
     setSelectedEmployee(employee);
     setSignatureMode(mode);
     setHasSignature(false);
+    setLocationStatus("idle");
+    setLocationDistance(null);
+    checkLocationValidity();
   };
 
   const closeSignatureDialog = () => {
@@ -190,6 +246,34 @@ export default function AttendanceCheckPage() {
       toast({ title: t("attendanceCheck.pleaseSign"), variant: "destructive" });
       return;
     }
+    
+    // التحقق من الموقع - منع التسجيل إذا كان الموقع غير صحيح
+    if (locationStatus === "invalid") {
+      toast({ 
+        title: "تسجيل الحضور مرفوض", 
+        description: "يجب أن تكون داخل نطاق موقع الفرع لتسجيل الحضور", 
+        variant: "destructive" 
+      });
+      return;
+    }
+    
+    if (locationStatus === "checking") {
+      toast({ 
+        title: "انتظر", 
+        description: "جاري التحقق من الموقع...", 
+        variant: "destructive" 
+      });
+      return;
+    }
+    
+    if (locationStatus === "error") {
+      toast({ 
+        title: "فشل التحقق من الموقع", 
+        description: "يرجى تفعيل خدمات الموقع والمحاولة مرة أخرى", 
+        variant: "destructive" 
+      });
+      return;
+    }
 
     if (signatureMode === "check_in") {
       checkInMutation.mutate({
@@ -200,6 +284,8 @@ export default function AttendanceCheckPage() {
         scheduledStartTime: selectedEmployee.startTime,
         scheduledEndTime: selectedEmployee.endTime,
         employeeName: selectedEmployee.employeeName,
+        userLatitude: userCoords?.latitude,
+        userLongitude: userCoords?.longitude,
       });
     } else {
       checkOutMutation.mutate({
@@ -444,6 +530,73 @@ export default function AttendanceCheckPage() {
             </DialogHeader>
 
             <div className="space-y-4">
+              {/* Location Verification Status */}
+              <div className={`p-3 rounded-lg flex items-center gap-3 ${
+                locationStatus === "checking" ? "bg-blue-50 border border-blue-200" :
+                locationStatus === "valid" ? "bg-green-50 border border-green-200" :
+                locationStatus === "invalid" ? "bg-red-50 border border-red-200" :
+                locationStatus === "error" ? "bg-orange-50 border border-orange-200" :
+                locationStatus === "no_location" ? "bg-gray-50 border border-gray-200" :
+                "bg-muted"
+              }`}>
+                {locationStatus === "checking" && (
+                  <>
+                    <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
+                    <div>
+                      <p className="text-sm font-medium text-blue-700">جاري التحقق من الموقع...</p>
+                    </div>
+                  </>
+                )}
+                {locationStatus === "valid" && (
+                  <>
+                    <MapPin className="w-5 h-5 text-green-600" />
+                    <div>
+                      <p className="text-sm font-medium text-green-700">الموقع صحيح ✓</p>
+                      {locationDistance !== null && (
+                        <p className="text-xs text-green-600">المسافة: {locationDistance.toLocaleString('en-US')} متر من الفرع</p>
+                      )}
+                    </div>
+                  </>
+                )}
+                {locationStatus === "invalid" && (
+                  <>
+                    <AlertTriangle className="w-5 h-5 text-red-600" />
+                    <div>
+                      <p className="text-sm font-medium text-red-700">الموقع خارج النطاق المسموح</p>
+                      {locationDistance !== null && (
+                        <p className="text-xs text-red-600">المسافة: {locationDistance.toLocaleString('en-US')} متر (يجب أن تكون داخل نطاق الفرع)</p>
+                      )}
+                    </div>
+                  </>
+                )}
+                {locationStatus === "error" && (
+                  <>
+                    <AlertTriangle className="w-5 h-5 text-orange-600" />
+                    <div>
+                      <p className="text-sm font-medium text-orange-700">فشل في تحديد الموقع</p>
+                      <p className="text-xs text-orange-600">تأكد من تفعيل خدمات الموقع</p>
+                    </div>
+                  </>
+                )}
+                {locationStatus === "no_location" && (
+                  <>
+                    <MapPin className="w-5 h-5 text-gray-500" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-700">لم يتم تحديد موقع الفرع</p>
+                      <p className="text-xs text-gray-500">التحقق من الموقع غير مفعل لهذا الفرع</p>
+                    </div>
+                  </>
+                )}
+                {locationStatus === "idle" && (
+                  <>
+                    <MapPin className="w-5 h-5 text-muted-foreground" />
+                    <div>
+                      <p className="text-sm text-muted-foreground">في انتظار التحقق من الموقع</p>
+                    </div>
+                  </>
+                )}
+              </div>
+
               <div className="text-center p-4 bg-muted rounded-lg">
                 <div className="text-3xl font-mono font-bold text-primary">
                   {format(currentTime, "hh:mm:ss", { locale: dateLocale })}

@@ -67,6 +67,10 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 export const branches = pgTable("branches", {
   id: varchar("id").primaryKey(),
   name: text("name").notNull(),
+  latitude: doublePrecision("latitude"),
+  longitude: doublePrecision("longitude"),
+  locationRadius: integer("location_radius").default(200),
+  address: text("address"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

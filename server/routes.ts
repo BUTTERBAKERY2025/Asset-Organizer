@@ -574,6 +574,77 @@ export async function registerRoutes(
     }
   });
 
+  // Update branch location
+  app.patch("/api/branches/:id/location", isAuthenticated, requirePermission("settings", "edit"), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { latitude, longitude, locationRadius, address } = req.body;
+      
+      await db.update(branches)
+        .set({ 
+          latitude: latitude !== undefined ? Number(latitude) : undefined,
+          longitude: longitude !== undefined ? Number(longitude) : undefined,
+          locationRadius: locationRadius !== undefined ? Number(locationRadius) : undefined,
+          address: address !== undefined ? address : undefined,
+        })
+        .where(eq(branches.id, id));
+      
+      const [updated] = await db.select().from(branches).where(eq(branches.id, id));
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating branch location:", error);
+      res.status(500).json({ error: "Failed to update branch location" });
+    }
+  });
+
+  // Validate attendance location
+  app.post("/api/branches/:id/validate-location", isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { userLatitude, userLongitude } = req.body;
+      
+      if (!userLatitude || !userLongitude) {
+        return res.status(400).json({ error: "User location required", valid: false });
+      }
+      
+      const [branch] = await db.select().from(branches).where(eq(branches.id, id));
+      
+      if (!branch) {
+        return res.status(404).json({ error: "Branch not found", valid: false });
+      }
+      
+      if (!branch.latitude || !branch.longitude) {
+        return res.json({ valid: true, message: "Branch location not configured", distance: null });
+      }
+      
+      // Calculate distance using Haversine formula
+      const R = 6371e3; // Earth radius in meters
+      const lat1 = branch.latitude * Math.PI / 180;
+      const lat2 = userLatitude * Math.PI / 180;
+      const deltaLat = (userLatitude - branch.latitude) * Math.PI / 180;
+      const deltaLon = (userLongitude - branch.longitude) * Math.PI / 180;
+      
+      const a = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+                Math.cos(lat1) * Math.cos(lat2) *
+                Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      const distance = R * c; // Distance in meters
+      
+      const allowedRadius = branch.locationRadius || 200;
+      const valid = distance <= allowedRadius;
+      
+      res.json({ 
+        valid, 
+        distance: Math.round(distance),
+        allowedRadius,
+        message: valid ? "الموظف ضمن نطاق الفرع" : `الموظف خارج نطاق الفرع (${Math.round(distance)} متر من الفرع)`
+      });
+    } catch (error) {
+      console.error("Error validating location:", error);
+      res.status(500).json({ error: "Failed to validate location", valid: false });
+    }
+  });
+
   // Inventory Items
   app.get("/api/inventory", isAuthenticated, requirePermission("inventory", "view"), async (req, res) => {
     try {
@@ -15727,7 +15798,7 @@ export async function registerRoutes(
   // Check-in employee by manager
   app.post("/api/attendance/check-in-employee", isAuthenticated, async (req, res) => {
     try {
-      const { employeeId, branchId, signature, scheduleId, scheduledStartTime, scheduledEndTime, employeeName } = req.body;
+      const { employeeId, branchId, signature, scheduleId, scheduledStartTime, scheduledEndTime, employeeName, userLatitude, userLongitude } = req.body;
       
       if (!employeeId || !branchId) {
         return res.status(400).json({ error: "معرف الموظف والفرع مطلوبين" });
@@ -15738,6 +15809,34 @@ export async function registerRoutes(
         const hasAccess = await canAccessBranch(req, branchId);
         if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بتسجيل حضور موظفي هذا الفرع" });
+        }
+      }
+      
+      // SECURITY: Server-side geolocation verification
+      const [branch] = await db.select().from(branches).where(eq(branches.id, branchId));
+      if (branch && branch.latitude && branch.longitude) {
+        if (!userLatitude || !userLongitude) {
+          return res.status(400).json({ error: "الموقع الجغرافي مطلوب للتحقق من موقع الفرع" });
+        }
+        
+        // Calculate distance using Haversine formula
+        const R = 6371e3; // Earth radius in meters
+        const lat1 = branch.latitude * Math.PI / 180;
+        const lat2 = userLatitude * Math.PI / 180;
+        const deltaLat = (userLatitude - branch.latitude) * Math.PI / 180;
+        const deltaLon = (userLongitude - branch.longitude) * Math.PI / 180;
+        
+        const a = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+                  Math.cos(lat1) * Math.cos(lat2) *
+                  Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        const distance = R * c; // Distance in meters
+        
+        const allowedRadius = branch.locationRadius || 200;
+        if (distance > allowedRadius) {
+          return res.status(403).json({ 
+            error: `الموقع خارج النطاق المسموح (${Math.round(distance)} متر من الفرع، المسموح: ${allowedRadius} متر)` 
+          });
         }
       }
 

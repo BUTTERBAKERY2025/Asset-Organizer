@@ -27,9 +27,11 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Loader2, Building2, ArrowRight } from "lucide-react";
+import { Plus, Loader2, Building2, ArrowRight, MapPin, Settings } from "lucide-react";
 import { Link } from "wouter";
+import { Textarea } from "@/components/ui/textarea";
 import type { Branch, InventoryItem } from "@shared/schema";
+import { apiRequest } from "@/lib/queryClient";
 
 const branchFormSchema = z.object({
   id: z.string().min(1, "معرف الفرع مطلوب").regex(/^[a-zA-Z0-9_-]+$/, "المعرف يجب أن يكون بالإنجليزية (أحرف/أرقام/شرطات)"),
@@ -40,6 +42,15 @@ type BranchFormData = z.infer<typeof branchFormSchema>;
 
 export default function BranchesPage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
+  const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
+  const [locationData, setLocationData] = useState({
+    latitude: "",
+    longitude: "",
+    locationRadius: "200",
+    address: "",
+  });
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -84,6 +95,62 @@ export default function BranchesPage() {
       toast({ title: "خطأ", description: error.message, variant: "destructive" });
     },
   });
+
+  const updateLocationMutation = useMutation({
+    mutationFn: async ({ branchId, data }: { branchId: string; data: typeof locationData }) => {
+      const res = await apiRequest("PATCH", `/api/branches/${branchId}/location`, {
+        latitude: data.latitude ? parseFloat(data.latitude) : null,
+        longitude: data.longitude ? parseFloat(data.longitude) : null,
+        locationRadius: parseInt(data.locationRadius) || 200,
+        address: data.address || null,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/branches"] });
+      toast({ title: "تم حفظ موقع الفرع بنجاح" });
+      setIsLocationDialogOpen(false);
+      setSelectedBranch(null);
+    },
+    onError: (error: Error) => {
+      toast({ title: "خطأ", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const getCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      toast({ title: "خطأ", description: "المتصفح لا يدعم تحديد الموقع", variant: "destructive" });
+      return;
+    }
+    setIsGettingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLocationData(prev => ({
+          ...prev,
+          latitude: position.coords.latitude.toFixed(6),
+          longitude: position.coords.longitude.toFixed(6),
+        }));
+        setIsGettingLocation(false);
+        toast({ title: "تم تحديد الموقع الحالي" });
+      },
+      (error) => {
+        setIsGettingLocation(false);
+        toast({ title: "خطأ", description: "فشل في تحديد الموقع", variant: "destructive" });
+      },
+      { enableHighAccuracy: true }
+    );
+  };
+
+  const openLocationDialog = (branch: Branch) => {
+    setSelectedBranch(branch);
+    setLocationData({
+      latitude: branch.latitude?.toString() || "",
+      longitude: branch.longitude?.toString() || "",
+      locationRadius: (branch.locationRadius || 200).toString(),
+      address: branch.address || "",
+    });
+    setIsLocationDialogOpen(true);
+  };
 
   const form = useForm<BranchFormData>({
     resolver: zodResolver(branchFormSchema),
@@ -194,20 +261,23 @@ export default function BranchesPage() {
                   <TableRow>
                     <TableHead className="text-right w-[100px] hidden sm:table-cell">المعرف</TableHead>
                     <TableHead className="text-right">اسم الفرع</TableHead>
+                    <TableHead className="text-right w-[120px]">الموقع</TableHead>
                     <TableHead className="text-right w-[120px]">عدد الأصناف</TableHead>
                     <TableHead className="text-right w-[150px]">إجمالي القيمة</TableHead>
+                    <TableHead className="text-right w-[80px]">إعدادات</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {branches.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center py-8 text-muted-foreground text-xs sm:text-sm">
+                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground text-xs sm:text-sm">
                         لا توجد فروع مسجلة
                       </TableCell>
                     </TableRow>
                   ) : (
                     branches.map((branch) => {
                       const stats = getBranchStats(branch.id);
+                      const hasLocation = branch.latitude && branch.longitude;
                       return (
                         <TableRow key={branch.id} data-testid={`row-branch-${branch.id}`}>
                           <TableCell className="font-mono text-xs sm:text-sm hidden sm:table-cell">{branch.id}</TableCell>
@@ -218,10 +288,33 @@ export default function BranchesPage() {
                             </div>
                           </TableCell>
                           <TableCell>
+                            {hasLocation ? (
+                              <Badge variant="default" className="text-[10px] sm:text-xs bg-green-100 text-green-700 hover:bg-green-100">
+                                <MapPin className="w-3 h-3 ml-1" />
+                                {branch.locationRadius || 200}م
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-[10px] sm:text-xs text-orange-600 border-orange-300">
+                                غير محدد
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
                             <Badge variant="outline" className="text-[10px] sm:text-xs">{stats.itemCount} صنف</Badge>
                           </TableCell>
                           <TableCell className="font-medium text-green-600 text-xs sm:text-sm">
                             {stats.totalValue.toLocaleString('en-US')} ريال
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openLocationDialog(branch)}
+                              className="h-8 w-8 p-0"
+                              data-testid={`btn-location-${branch.id}`}
+                            >
+                              <Settings className="w-4 h-4" />
+                            </Button>
                           </TableCell>
                         </TableRow>
                       );
@@ -232,6 +325,123 @@ export default function BranchesPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Location Settings Dialog */}
+        <Dialog open={isLocationDialogOpen} onOpenChange={setIsLocationDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <MapPin className="w-5 h-5" />
+                إعدادات موقع الفرع
+              </DialogTitle>
+              <DialogDescription>
+                {selectedBranch?.name} - تحديد الموقع الجغرافي للتحقق من حضور الموظفين
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={getCurrentLocation}
+                  disabled={isGettingLocation}
+                  className="flex-1 h-11"
+                >
+                  {isGettingLocation ? (
+                    <Loader2 className="w-4 h-4 animate-spin ml-2" />
+                  ) : (
+                    <MapPin className="w-4 h-4 ml-2" />
+                  )}
+                  تحديد الموقع الحالي
+                </Button>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>خط العرض (Latitude)</Label>
+                  <Input
+                    type="number"
+                    step="any"
+                    placeholder="مثال: 21.485811"
+                    value={locationData.latitude}
+                    onChange={(e) => setLocationData(prev => ({ ...prev, latitude: e.target.value }))}
+                    className="h-11"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>خط الطول (Longitude)</Label>
+                  <Input
+                    type="number"
+                    step="any"
+                    placeholder="مثال: 39.192505"
+                    value={locationData.longitude}
+                    onChange={(e) => setLocationData(prev => ({ ...prev, longitude: e.target.value }))}
+                    className="h-11"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>نطاق السماح (بالمتر)</Label>
+                <Input
+                  type="number"
+                  placeholder="200"
+                  value={locationData.locationRadius}
+                  onChange={(e) => setLocationData(prev => ({ ...prev, locationRadius: e.target.value }))}
+                  className="h-11"
+                />
+                <p className="text-xs text-muted-foreground">
+                  المسافة المسموحة للموظف من موقع الفرع لتسجيل الحضور
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>العنوان (اختياري)</Label>
+                <Textarea
+                  placeholder="مثال: شارع الملك فهد، حي الروضة، جدة"
+                  value={locationData.address}
+                  onChange={(e) => setLocationData(prev => ({ ...prev, address: e.target.value }))}
+                  rows={2}
+                />
+              </div>
+
+              {locationData.latitude && locationData.longitude && (
+                <div className="p-3 bg-muted rounded-lg">
+                  <a
+                    href={`https://www.google.com/maps?q=${locationData.latitude},${locationData.longitude}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-primary hover:underline flex items-center gap-1"
+                  >
+                    <MapPin className="w-3 h-3" />
+                    عرض على خرائط جوجل
+                  </a>
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setIsLocationDialogOpen(false)}
+                className="h-11"
+              >
+                إلغاء
+              </Button>
+              <Button
+                onClick={() => {
+                  if (selectedBranch) {
+                    updateLocationMutation.mutate({ branchId: selectedBranch.id, data: locationData });
+                  }
+                }}
+                disabled={updateLocationMutation.isPending}
+                className="h-11"
+              >
+                {updateLocationMutation.isPending && <Loader2 className="w-4 h-4 animate-spin ml-2" />}
+                حفظ الموقع
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );
