@@ -2307,18 +2307,18 @@ export default function BranchEmployeesPage() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-              <Table className="min-w-[600px]">
-                <TableHeader>
+              <Table className="min-w-[600px] table-fixed">
+                <TableHeader className="bg-muted/50 sticky top-0 z-10">
                   <TableRow>
-                    <TableHead className={`${isRTL ? "text-right" : "text-left"} hidden md:table-cell`}>{isRTL ? "الرقم الوظيفي" : "Employee ID"}</TableHead>
-                    <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "الاسم" : "Name"}</TableHead>
-                    <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "الفرع" : "Branch"}</TableHead>
-                    <TableHead className={`${isRTL ? "text-right" : "text-left"} hidden md:table-cell`}>{t("branchEmployees.jobTitle")}</TableHead>
-                    <TableHead className={`${isRTL ? "text-right" : "text-left"} hidden md:table-cell`}>{t("branchEmployees.nationality")}</TableHead>
-                    <TableHead className={`${isRTL ? "text-right" : "text-left"} hidden lg:table-cell`}>{t("branchEmployees.totalPackage")}</TableHead>
-                    <TableHead className={`${isRTL ? "text-right" : "text-left"} hidden lg:table-cell`}>{isRTL ? "الشهادة الصحية" : "Health Cert."}</TableHead>
-                    <TableHead className={isRTL ? "text-right" : "text-left"}>{t("branchEmployees.status")}</TableHead>
-                    <TableHead className={isRTL ? "text-right" : "text-left"}>{t("branchEmployees.actions")}</TableHead>
+                    <TableHead className={`${isRTL ? "text-right" : "text-left"} hidden md:table-cell w-28`}>{isRTL ? "الرقم الوظيفي" : "Employee ID"}</TableHead>
+                    <TableHead className={`${isRTL ? "text-right" : "text-left"} w-40`}>{isRTL ? "الاسم" : "Name"}</TableHead>
+                    <TableHead className={`${isRTL ? "text-right" : "text-left"} w-28`}>{isRTL ? "الفرع" : "Branch"}</TableHead>
+                    <TableHead className={`${isRTL ? "text-right" : "text-left"} hidden md:table-cell w-28`}>{t("branchEmployees.jobTitle")}</TableHead>
+                    <TableHead className={`${isRTL ? "text-right" : "text-left"} hidden md:table-cell w-24`}>{t("branchEmployees.nationality")}</TableHead>
+                    <TableHead className={`${isRTL ? "text-right" : "text-left"} hidden lg:table-cell w-28`}>{t("branchEmployees.totalPackage")}</TableHead>
+                    <TableHead className={`${isRTL ? "text-right" : "text-left"} hidden lg:table-cell w-28`}>{isRTL ? "الشهادة الصحية" : "Health Cert."}</TableHead>
+                    <TableHead className={`${isRTL ? "text-right" : "text-left"} w-24`}>{t("branchEmployees.status")}</TableHead>
+                    <TableHead className={`${isRTL ? "text-right" : "text-left"} w-28`}>{t("branchEmployees.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
