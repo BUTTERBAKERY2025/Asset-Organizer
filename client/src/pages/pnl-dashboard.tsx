@@ -976,6 +976,25 @@ export default function PnLDashboard() {
     enabled: !!selectedPeriodId && !!completePnL?.metrics,
   });
 
+  // Enhanced P&L Summary (automatic from cashier journals + employees)
+  const { data: enhancedPnL, isLoading: loadingEnhancedPnL, refetch: refetchEnhancedPnL } = useQuery<{
+    branches: any[];
+    totals: any;
+  }>({
+    queryKey: ["/api/pnl/enhanced-summary", { branchId: selectedBranchId, year: selectedYear, month: selectedMonth }],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        year: selectedYear.toString(),
+        month: selectedMonth.toString(),
+      });
+      if (selectedBranchId) params.append("branchId", selectedBranchId);
+      const res = await fetch(`/api/pnl/enhanced-summary?${params}`);
+      if (!res.ok) throw new Error("Failed to fetch enhanced P&L");
+      return res.json();
+    },
+    enabled: !!selectedYear && !!selectedMonth,
+  });
+
   // Import Excel data
   const importExcelMutation = useMutation({
     mutationFn: async (data: { periodId: number; excelData: any }) => {
@@ -1431,6 +1450,161 @@ export default function PnLDashboard() {
             )}
           </CardContent>
         </Card>
+
+        {/* Enhanced Automatic P&L Summary - الملخص التلقائي للأرباح والخسائر */}
+        {enhancedPnL && enhancedPnL.totals && (
+          <Card className="bg-gradient-to-br from-amber-50 to-white border-amber-200">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-amber-800">
+                  <Calculator className="h-5 w-5" />
+                  الملخص التلقائي - {MONTHS_AR[selectedMonth - 1]} {selectedYear}
+                </CardTitle>
+                <Button variant="ghost" size="sm" onClick={() => refetchEnhancedPnL()}>
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+              </div>
+              <CardDescription>
+                بيانات محسوبة تلقائياً من يوميات الصندوق وبيانات الموظفين (شاملة ضريبة القيمة المضافة 15%)
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loadingEnhancedPnL ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-amber-600" />
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Main Metrics Row */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="p-3 rounded-lg bg-white border">
+                      <div className="text-xs text-muted-foreground">إجمالي المبيعات (شامل الضريبة)</div>
+                      <div className="text-lg font-bold text-blue-600">{formatCurrency(enhancedPnL.totals.grossSales)}</div>
+                      <div className="text-xs text-muted-foreground">({enhancedPnL.totals.journalCount} يومية)</div>
+                    </div>
+                    <div className="p-3 rounded-lg bg-white border">
+                      <div className="text-xs text-muted-foreground">ضريبة القيمة المضافة 15%</div>
+                      <div className="text-lg font-bold text-red-500">- {formatCurrency(enhancedPnL.totals.vatAmount)}</div>
+                    </div>
+                    <div className="p-3 rounded-lg bg-white border">
+                      <div className="text-xs text-muted-foreground">صافي المبيعات (بعد الضريبة)</div>
+                      <div className="text-lg font-bold text-green-600">{formatCurrency(enhancedPnL.totals.netSales)}</div>
+                    </div>
+                    <div className="p-3 rounded-lg bg-white border">
+                      <div className="text-xs text-muted-foreground">صافي الربح</div>
+                      <div className={`text-lg font-bold ${enhancedPnL.totals.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {enhancedPnL.totals.netProfit >= 0 ? '' : '-'}{formatCurrency(Math.abs(enhancedPnL.totals.netProfit))}
+                      </div>
+                      <div className="text-xs text-muted-foreground">({formatPercent(enhancedPnL.totals.netMargin)} هامش)</div>
+                    </div>
+                  </div>
+
+                  {/* Costs Breakdown */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {/* Employee Costs */}
+                    <div className="p-3 rounded-lg bg-red-50 border border-red-100">
+                      <div className="flex items-center gap-2 text-sm font-medium text-red-800 mb-2">
+                        <Users className="h-4 w-4" />
+                        تكاليف الموظفين ({enhancedPnL.totals.employeeCount} موظف)
+                      </div>
+                      <div className="space-y-1 text-sm">
+                        <div className="flex justify-between">
+                          <span>الرواتب والبدلات</span>
+                          <span>{formatCurrency(enhancedPnL.totals.employeeCosts.salaries)}</span>
+                        </div>
+                        <div className="flex justify-between text-muted-foreground">
+                          <span>التأمينات الاجتماعية (GOSI)</span>
+                          <span>{formatCurrency(enhancedPnL.totals.employeeCosts.gosi)}</span>
+                        </div>
+                        <div className="flex justify-between text-muted-foreground">
+                          <span>رسوم غير السعوديين</span>
+                          <span>{formatCurrency(enhancedPnL.totals.employeeCosts.nonSaudiCosts)}</span>
+                        </div>
+                        <Separator className="my-1" />
+                        <div className="flex justify-between font-bold">
+                          <span>الإجمالي</span>
+                          <span className="text-red-600">{formatCurrency(enhancedPnL.totals.employeeCosts.total)}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Fixed & Utilities */}
+                    <div className="p-3 rounded-lg bg-orange-50 border border-orange-100">
+                      <div className="flex items-center gap-2 text-sm font-medium text-orange-800 mb-2">
+                        <Home className="h-4 w-4" />
+                        المصروفات الثابتة والمرافق
+                      </div>
+                      <div className="space-y-1 text-sm">
+                        <div className="flex justify-between">
+                          <span>الإيجار</span>
+                          <span>{formatCurrency(enhancedPnL.totals.rent)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>الكهرباء</span>
+                          <span>{formatCurrency(enhancedPnL.totals.utilities.electricity)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>المياه</span>
+                          <span>{formatCurrency(enhancedPnL.totals.utilities.water)}</span>
+                        </div>
+                        <div className="flex justify-between text-muted-foreground">
+                          <span>مرافق أخرى</span>
+                          <span>{formatCurrency(enhancedPnL.totals.utilities.other)}</span>
+                        </div>
+                        <Separator className="my-1" />
+                        <div className="flex justify-between font-bold">
+                          <span>الإجمالي</span>
+                          <span className="text-orange-600">{formatCurrency(enhancedPnL.totals.rent + enhancedPnL.totals.utilities.total)}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Operating Costs */}
+                    <div className="p-3 rounded-lg bg-purple-50 border border-purple-100">
+                      <div className="flex items-center gap-2 text-sm font-medium text-purple-800 mb-2">
+                        <Package className="h-4 w-4" />
+                        تكاليف التشغيل
+                      </div>
+                      <div className="space-y-1 text-sm">
+                        <div className="flex justify-between">
+                          <span>تكلفة البضاعة (COGS)</span>
+                          <span>{formatCurrency(enhancedPnL.totals.cogsCost)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>الصيانة</span>
+                          <span>{formatCurrency(enhancedPnL.totals.operatingCosts.maintenance)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>التسويق</span>
+                          <span>{formatCurrency(enhancedPnL.totals.operatingCosts.marketing)}</span>
+                        </div>
+                        <div className="flex justify-between text-muted-foreground">
+                          <span>مستلزمات وأخرى</span>
+                          <span>{formatCurrency(enhancedPnL.totals.operatingCosts.supplies + enhancedPnL.totals.operatingCosts.other)}</span>
+                        </div>
+                        <Separator className="my-1" />
+                        <div className="flex justify-between font-bold">
+                          <span>إجمالي التكاليف</span>
+                          <span className="text-purple-600">{formatCurrency(enhancedPnL.totals.totalOperatingCosts + enhancedPnL.totals.cogsCost)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Data Entry Note */}
+                  {!enhancedPnL.totals.hasMonthlyInputs && (
+                    <div className="p-3 rounded-lg bg-yellow-50 border border-yellow-200 flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                      <span className="text-sm text-yellow-800">
+                        لم يتم إدخال بيانات الإيجار والمرافق والتكاليف لهذا الشهر. استخدم زر "إدخال البيانات" لإضافتها.
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {selectedPeriodId && (
           <>

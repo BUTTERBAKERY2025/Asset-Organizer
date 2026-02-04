@@ -4509,18 +4509,18 @@ export async function registerRoutes(
         const startDate = `${yearNum}-${String(monthNum).padStart(2, '0')}-01`;
         const endDate = `${yearNum}-${String(monthNum).padStart(2, '0')}-${new Date(yearNum, monthNum, 0).getDate()}`;
         
-        const journals = await storage.getCashierJournals({
+        const journals = await storage.getCashierJournalsFiltered({
           branchId: bId,
           status: 'approved'
         });
         
         // Filter by date range
-        const monthJournals = journals.filter(j => {
+        const monthJournals = journals.filter((j: any) => {
           const jDate = new Date(j.salesDate);
           return jDate.getFullYear() === yearNum && (jDate.getMonth() + 1) === monthNum;
         });
         
-        const grossSales = monthJournals.reduce((sum, j) => sum + (j.totalAmount || 0), 0);
+        const grossSales = monthJournals.reduce((sum: number, j: any) => sum + (j.totalAmount || 0), 0);
         
         // 3. Calculate VAT (15%) - صافي المبيعات = الإجمالي ÷ 1.15
         const netSales = grossSales / 1.15;
@@ -4542,7 +4542,7 @@ export async function registerRoutes(
         const otherCosts = inputs?.otherCosts || 0;
         
         // 6. Get employee costs from branch_employees
-        const employees = await storage.getBranchEmployees(bId);
+        const employees = await storage.getBranchEmployeesByBranch(bId);
         let totalSalaries = 0;
         let totalGosi = 0; // Saudi GOSI 12%
         let totalNonSaudiCosts = 0; // Work permit 800, Expat levy 800, Residency 54, Insurance 2%
@@ -4586,7 +4586,7 @@ export async function registerRoutes(
         results.push({
           branchId: bId,
           branchName: branch.name,
-          branchNameEn: branch.nameEn,
+          branchNameEn: branch.name, // Use Arabic name for now
           year: yearNum,
           month: monthNum,
           
