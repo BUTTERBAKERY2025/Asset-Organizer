@@ -424,6 +424,12 @@ import {
   notifications,
   type Notification,
   type InsertNotification,
+  pnlBranchSettings,
+  type PnlBranchSettings,
+  type InsertPnlBranchSettings,
+  pnlMonthlyInputs,
+  type PnlMonthlyInputs,
+  type InsertPnlMonthlyInputs,
 } from "@shared/schema";
 
 type TransferHistory = typeof transferHistory.$inferSelect;
@@ -1089,6 +1095,18 @@ export interface IStorage {
   // Production Inventory Logs
   getProductionInventoryLogs(filters?: { branchId?: string; productId?: number; movementType?: string }): Promise<ProductionInventoryLog[]>;
   createProductionInventoryLog(log: InsertProductionInventoryLog): Promise<ProductionInventoryLog>;
+  
+  // ==========================================
+  // Enhanced P&L System - نظام الأرباح والخسائر المحسن
+  // ==========================================
+  
+  // P&L Branch Settings (Fixed rent per branch)
+  getPnlBranchSettings(branchId: string): Promise<PnlBranchSettings | undefined>;
+  upsertPnlBranchSettings(settings: InsertPnlBranchSettings): Promise<PnlBranchSettings>;
+  
+  // P&L Monthly Inputs (Variable monthly costs)
+  getPnlMonthlyInputs(branchId: string, year: number, month: number): Promise<PnlMonthlyInputs | undefined>;
+  upsertPnlMonthlyInputs(inputs: InsertPnlMonthlyInputs): Promise<PnlMonthlyInputs>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -11713,6 +11731,72 @@ export class DatabaseStorage implements IStorage {
     } catch (error: any) {
       if (error?.code === '42P01') return { total: 0, unread: 0, urgent: 0 };
       throw error;
+    }
+  }
+
+  // ==========================================
+  // Enhanced P&L System - نظام الأرباح والخسائر المحسن
+  // ==========================================
+
+  async getPnlBranchSettings(branchId: string): Promise<PnlBranchSettings | undefined> {
+    try {
+      const [settings] = await db.select().from(pnlBranchSettings)
+        .where(eq(pnlBranchSettings.branchId, branchId));
+      return settings || undefined;
+    } catch (error: any) {
+      if (error?.code === '42P01') return undefined;
+      throw error;
+    }
+  }
+
+  async upsertPnlBranchSettings(settings: InsertPnlBranchSettings): Promise<PnlBranchSettings> {
+    const existing = await this.getPnlBranchSettings(settings.branchId);
+    if (existing) {
+      const [updated] = await db.update(pnlBranchSettings)
+        .set({ ...settings, updatedAt: new Date() })
+        .where(eq(pnlBranchSettings.branchId, settings.branchId))
+        .returning();
+      return updated;
+    } else {
+      const [inserted] = await db.insert(pnlBranchSettings)
+        .values(settings)
+        .returning();
+      return inserted;
+    }
+  }
+
+  async getPnlMonthlyInputs(branchId: string, year: number, month: number): Promise<PnlMonthlyInputs | undefined> {
+    try {
+      const [inputs] = await db.select().from(pnlMonthlyInputs)
+        .where(and(
+          eq(pnlMonthlyInputs.branchId, branchId),
+          eq(pnlMonthlyInputs.year, year),
+          eq(pnlMonthlyInputs.month, month)
+        ));
+      return inputs || undefined;
+    } catch (error: any) {
+      if (error?.code === '42P01') return undefined;
+      throw error;
+    }
+  }
+
+  async upsertPnlMonthlyInputs(inputs: InsertPnlMonthlyInputs): Promise<PnlMonthlyInputs> {
+    const existing = await this.getPnlMonthlyInputs(inputs.branchId, inputs.year, inputs.month);
+    if (existing) {
+      const [updated] = await db.update(pnlMonthlyInputs)
+        .set({ ...inputs, updatedAt: new Date() })
+        .where(and(
+          eq(pnlMonthlyInputs.branchId, inputs.branchId),
+          eq(pnlMonthlyInputs.year, inputs.year),
+          eq(pnlMonthlyInputs.month, inputs.month)
+        ))
+        .returning();
+      return updated;
+    } else {
+      const [inserted] = await db.insert(pnlMonthlyInputs)
+        .values(inputs)
+        .returning();
+      return inserted;
     }
   }
 }
