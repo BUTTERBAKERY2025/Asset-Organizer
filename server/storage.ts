@@ -7524,16 +7524,22 @@ export class DatabaseStorage implements IStorage {
         
         if (!resolvedName || resolvedName === 'Unknown' || resolvedName === 'غير معروف') {
           // Try to get from branch employees table
-          try {
-            const [branchEmp] = await db.select()
-              .from(branchEmployees)
-              .where(eq(branchEmployees.employeeId, schedule.employeeId))
-              .limit(1);
-            if (branchEmp?.employeeName) {
-              resolvedName = branchEmp.employeeName;
+          // employeeId format is "branch_emp_44" where 44 is the branchEmployees.id
+          if (schedule.employeeId.startsWith('branch_emp_')) {
+            try {
+              const branchEmpId = parseInt(schedule.employeeId.replace('branch_emp_', ''), 10);
+              if (!isNaN(branchEmpId)) {
+                const [branchEmp] = await db.select()
+                  .from(branchEmployees)
+                  .where(eq(branchEmployees.id, branchEmpId))
+                  .limit(1);
+                if (branchEmp?.employeeName) {
+                  resolvedName = branchEmp.employeeName;
+                }
+              }
+            } catch (e) {
+              // Continue
             }
-          } catch (e) {
-            // Continue
           }
         }
         
