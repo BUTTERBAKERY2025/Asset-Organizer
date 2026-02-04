@@ -31,7 +31,13 @@ import {
   Trash2,
   Eye,
   EyeOff,
-  ArrowRight
+  ArrowRight,
+  QrCode,
+  Download,
+  RefreshCw,
+  History,
+  MapPin,
+  FileDown
 } from "lucide-react";
 import { Link } from "wouter";
 import { formatDistanceToNow } from "date-fns";
@@ -107,6 +113,30 @@ const VIOLATION_LABELS: Record<string, string> = {
   permission_denied: "صلاحية مرفوضة",
 };
 
+interface TwoFactorSetup {
+  secret: string;
+  qrCode: string;
+  otpAuthUrl: string;
+}
+
+interface TwoFactorStatus {
+  enabled: boolean;
+  hasBackupCodes: boolean;
+  backupCodesCount: number;
+}
+
+interface ActivityLog {
+  id: number;
+  module: string;
+  moduleLabel: string;
+  action: string;
+  actionLabel: string;
+  description: string;
+  details: string | null;
+  ipAddress: string | null;
+  createdAt: string;
+}
+
 export default function SecurityManagementPage() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -116,6 +146,15 @@ export default function SecurityManagementPage() {
   const [newIp, setNewIp] = useState("");
   const [resolveAlertId, setResolveAlertId] = useState<number | null>(null);
   const [resolutionNotes, setResolutionNotes] = useState("");
+  
+  // 2FA States
+  const [show2FASetup, setShow2FASetup] = useState(false);
+  const [twoFactorSetupData, setTwoFactorSetupData] = useState<TwoFactorSetup | null>(null);
+  const [verificationCode, setVerificationCode] = useState("");
+  const [backupCodes, setBackupCodes] = useState<string[]>([]);
+  const [showBackupCodes, setShowBackupCodes] = useState(false);
+  const [showDisable2FA, setShowDisable2FA] = useState(false);
+  const [disableCode, setDisableCode] = useState("");
 
   const { data: securitySettings, isLoading: loadingSettings } = useQuery<UserSecuritySettings>({
     queryKey: ["/api/security/users", user?.id, "settings"],
@@ -152,6 +191,104 @@ export default function SecurityManagementPage() {
       const res = await fetch("/api/rbac/role-templates", { credentials: "include" });
       if (!res.ok) return [];
       return res.json();
+    },
+  });
+
+  // 2FA Status
+  const { data: twoFactorStatus, refetch: refetch2FAStatus } = useQuery<TwoFactorStatus>({
+    queryKey: ["/api/security/2fa/status"],
+    queryFn: async () => {
+      const res = await fetch("/api/security/2fa/status", { credentials: "include" });
+      if (!res.ok) return { enabled: false, hasBackupCodes: false, backupCodesCount: 0 };
+      return res.json();
+    },
+  });
+
+  // Activity Log
+  const { data: activityLogData, isLoading: loadingActivityLog } = useQuery<{ logs: ActivityLog[]; total: number }>({
+    queryKey: ["/api/security/activity-log"],
+    queryFn: async () => {
+      const res = await fetch("/api/security/activity-log?limit=50", { credentials: "include" });
+      if (!res.ok) return { logs: [], total: 0 };
+      return res.json();
+    },
+  });
+
+  // 2FA Setup Mutation
+  const setup2FAMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/security/2fa/setup", {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "فشل في إعداد المصادقة الثنائية");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setTwoFactorSetupData(data);
+      setShow2FASetup(true);
+    },
+    onError: (error: Error) => {
+      toast({ title: error.message, variant: "destructive" });
+    },
+  });
+
+  // 2FA Verify Mutation
+  const verify2FAMutation = useMutation({
+    mutationFn: async (token: string) => {
+      const res = await fetch("/api/security/2fa/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ token }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "فشل في التحقق");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setBackupCodes(data.backupCodes);
+      setShowBackupCodes(true);
+      setShow2FASetup(false);
+      setVerificationCode("");
+      refetch2FAStatus();
+      queryClient.invalidateQueries({ queryKey: ["/api/security/users", user?.id, "settings"] });
+      toast({ title: "تم تفعيل المصادقة الثنائية بنجاح" });
+    },
+    onError: (error: Error) => {
+      toast({ title: error.message, variant: "destructive" });
+    },
+  });
+
+  // 2FA Disable Mutation
+  const disable2FAMutation = useMutation({
+    mutationFn: async (token: string) => {
+      const res = await fetch("/api/security/2fa/disable", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ token }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "فشل في إيقاف المصادقة الثنائية");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      setShowDisable2FA(false);
+      setDisableCode("");
+      refetch2FAStatus();
+      queryClient.invalidateQueries({ queryKey: ["/api/security/users", user?.id, "settings"] });
+      toast({ title: "تم إيقاف المصادقة الثنائية بنجاح" });
+    },
+    onError: (error: Error) => {
+      toast({ title: error.message, variant: "destructive" });
     },
   });
 
@@ -285,7 +422,7 @@ export default function SecurityManagementPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 mb-4 sm:mb-6 h-auto">
+          <TabsList className="grid w-full grid-cols-3 sm:grid-cols-5 mb-4 sm:mb-6 h-auto">
             <TabsTrigger value="settings" className="flex items-center gap-1 sm:gap-2 h-11 sm:h-10 text-xs sm:text-sm" data-testid="tab-security-settings">
               <Key className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">الإعدادات</span>
@@ -294,6 +431,11 @@ export default function SecurityManagementPage() {
             <TabsTrigger value="sessions" className="flex items-center gap-1 sm:gap-2 h-11 sm:h-10 text-xs sm:text-sm" data-testid="tab-security-sessions">
               <Monitor className="h-3 w-3 sm:h-4 sm:w-4" />
               الجلسات
+            </TabsTrigger>
+            <TabsTrigger value="activity" className="flex items-center gap-1 sm:gap-2 h-11 sm:h-10 text-xs sm:text-sm" data-testid="tab-activity-log">
+              <History className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">سجل الأنشطة</span>
+              <span className="sm:hidden">أنشطة</span>
             </TabsTrigger>
             <TabsTrigger value="alerts" className="flex items-center gap-1 sm:gap-2 h-11 sm:h-10 text-xs sm:text-sm" data-testid="tab-security-alerts">
               <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4" />
@@ -329,23 +471,58 @@ export default function SecurityManagementPage() {
                       تفعيل المصادقة الثنائية لحماية إضافية عند تسجيل الدخول
                     </CardDescription>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="space-y-4">
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="font-medium">المصادقة الثنائية</p>
                         <p className="text-sm text-muted-foreground">
-                          {securitySettings?.twoFactorEnabled ? "مفعّلة" : "غير مفعّلة"}
+                          {twoFactorStatus?.enabled ? (
+                            <span className="text-green-600 flex items-center gap-1">
+                              <CheckCircle className="h-4 w-4" />
+                              مفعّلة
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">غير مفعّلة</span>
+                          )}
                         </p>
                       </div>
-                      <Switch
-                        checked={securitySettings?.twoFactorEnabled || false}
-                        onCheckedChange={(checked) => 
-                          updateSettingsMutation.mutate({ twoFactorEnabled: checked })
-                        }
-                        disabled={updateSettingsMutation.isPending}
-                        data-testid="switch-two-factor"
-                      />
+                      {twoFactorStatus?.enabled ? (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => setShowDisable2FA(true)}
+                          data-testid="button-disable-2fa"
+                        >
+                          إيقاف
+                        </Button>
+                      ) : (
+                        <Button
+                          onClick={() => setup2FAMutation.mutate()}
+                          disabled={setup2FAMutation.isPending}
+                          data-testid="button-setup-2fa"
+                        >
+                          {setup2FAMutation.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                          ) : (
+                            <QrCode className="h-4 w-4 ml-2" />
+                          )}
+                          إعداد المصادقة الثنائية
+                        </Button>
+                      )}
                     </div>
+                    
+                    {twoFactorStatus?.enabled && (
+                      <div className="border-t pt-4">
+                        <p className="text-sm text-muted-foreground mb-2">
+                          أكواد الاسترداد المتبقية: {twoFactorStatus.backupCodesCount || 0}
+                        </p>
+                        {twoFactorStatus.backupCodesCount < 3 && (
+                          <p className="text-sm text-amber-600">
+                            تحذير: أكواد الاسترداد منخفضة. يُنصح بإعادة توليدها.
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
 
@@ -581,6 +758,7 @@ export default function SecurityManagementPage() {
                       <TableRow>
                         <TableHead>الجهاز</TableHead>
                         <TableHead>عنوان IP</TableHead>
+                        <TableHead>الموقع</TableHead>
                         <TableHead>آخر نشاط</TableHead>
                         <TableHead>تنتهي في</TableHead>
                         <TableHead></TableHead>
@@ -603,6 +781,12 @@ export default function SecurityManagementPage() {
                             </div>
                           </TableCell>
                           <TableCell data-testid={`text-session-ip-${session.id}`}>{session.ipAddress || "-"}</TableCell>
+                          <TableCell data-testid={`text-session-location-${session.id}`}>
+                            <div className="flex items-center gap-1">
+                              <MapPin className="h-3 w-3 text-muted-foreground" />
+                              <span>{session.location || "غير محدد"}</span>
+                            </div>
+                          </TableCell>
                           <TableCell>
                             {session.lastActivityAt ? formatDistanceToNow(new Date(session.lastActivityAt), { 
                               addSuffix: true, 
@@ -771,7 +955,263 @@ export default function SecurityManagementPage() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          <TabsContent value="activity">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <History className="h-5 w-5" />
+                      سجل الأنشطة الأمنية
+                    </CardTitle>
+                    <CardDescription>
+                      عرض جميع الأنشطة الأمنية المتعلقة بحسابك
+                    </CardDescription>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.open("/api/security/export-report?format=csv&type=all", "_blank")}
+                      data-testid="button-export-csv"
+                    >
+                      <FileDown className="h-4 w-4 ml-2" />
+                      CSV
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.open("/api/security/export-report?format=json&type=all", "_blank")}
+                      data-testid="button-export-json"
+                    >
+                      <Download className="h-4 w-4 ml-2" />
+                      JSON
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {loadingActivityLog ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin" />
+                  </div>
+                ) : !activityLogData?.logs || activityLogData.logs.length === 0 ? (
+                  <div className="text-center py-12" data-testid="container-no-activity">
+                    <History className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
+                    <p className="text-xl font-medium">لا توجد أنشطة مسجلة</p>
+                    <p className="text-muted-foreground">ستظهر هنا جميع أنشطتك الأمنية</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>النوع</TableHead>
+                        <TableHead>الوصف</TableHead>
+                        <TableHead>عنوان IP</TableHead>
+                        <TableHead>التاريخ</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {activityLogData.logs.map((log) => (
+                        <TableRow key={log.id} data-testid={`row-activity-${log.id}`}>
+                          <TableCell>
+                            <Badge variant="outline" data-testid={`badge-activity-action-${log.id}`}>
+                              {log.actionLabel}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="max-w-xs truncate" data-testid={`text-activity-description-${log.id}`}>
+                            {log.description}
+                          </TableCell>
+                          <TableCell data-testid={`text-activity-ip-${log.id}`}>
+                            <div className="flex items-center gap-1">
+                              <MapPin className="h-3 w-3 text-muted-foreground" />
+                              {log.ipAddress || "-"}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {log.createdAt ? new Date(log.createdAt).toLocaleString("en-GB") : "-"}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
+
+        {/* 2FA Setup Dialog */}
+        <Dialog open={show2FASetup} onOpenChange={(open) => {
+          setShow2FASetup(open);
+          if (!open) {
+            setVerificationCode("");
+            setTwoFactorSetupData(null);
+          }
+        }}>
+          <DialogContent className="max-w-md" data-testid="dialog-2fa-setup">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <QrCode className="h-5 w-5" />
+                إعداد المصادقة الثنائية
+              </DialogTitle>
+              <DialogDescription>
+                امسح رمز QR باستخدام تطبيق المصادقة (مثل Google Authenticator أو Authy)
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              {twoFactorSetupData?.qrCode && (
+                <div className="flex justify-center">
+                  <img 
+                    src={twoFactorSetupData.qrCode} 
+                    alt="QR Code" 
+                    className="w-48 h-48 border rounded-lg"
+                    data-testid="img-2fa-qrcode"
+                  />
+                </div>
+              )}
+              <div className="text-center text-sm text-muted-foreground">
+                <p>أو أدخل الرمز يدوياً:</p>
+                <div className="flex items-center justify-center gap-2 mt-2">
+                  <code className="bg-muted px-2 py-1 rounded text-xs font-mono" data-testid="text-2fa-secret">
+                    {twoFactorSetupData?.secret}
+                  </code>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => {
+                      navigator.clipboard.writeText(twoFactorSetupData?.secret || "");
+                      toast({ title: "تم نسخ الرمز" });
+                    }}
+                    data-testid="button-copy-secret"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>أدخل رمز التحقق من التطبيق</Label>
+                <Input
+                  placeholder="000000"
+                  value={verificationCode}
+                  onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  className="text-center text-2xl tracking-widest"
+                  maxLength={6}
+                  data-testid="input-2fa-verification-code"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShow2FASetup(false)} data-testid="button-cancel-2fa-setup">
+                إلغاء
+              </Button>
+              <Button 
+                onClick={() => verify2FAMutation.mutate(verificationCode)}
+                disabled={verificationCode.length !== 6 || verify2FAMutation.isPending}
+                data-testid="button-verify-2fa"
+              >
+                {verify2FAMutation.isPending && <Loader2 className="h-4 w-4 ml-2 animate-spin" />}
+                تفعيل
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Backup Codes Dialog */}
+        <Dialog open={showBackupCodes} onOpenChange={setShowBackupCodes}>
+          <DialogContent className="max-w-md" data-testid="dialog-backup-codes">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-green-600">
+                <CheckCircle className="h-5 w-5" />
+                تم تفعيل المصادقة الثنائية!
+              </DialogTitle>
+              <DialogDescription>
+                احفظ أكواد الاسترداد هذه في مكان آمن. يمكنك استخدامها للدخول إذا فقدت الوصول لتطبيق المصادقة.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="bg-muted rounded-lg p-4">
+                <div className="grid grid-cols-2 gap-2">
+                  {backupCodes.map((code, idx) => (
+                    <code 
+                      key={idx} 
+                      className="bg-background px-3 py-2 rounded text-center font-mono text-sm"
+                      data-testid={`text-backup-code-${idx}`}
+                    >
+                      {code}
+                    </code>
+                  ))}
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => {
+                  navigator.clipboard.writeText(backupCodes.join("\n"));
+                  toast({ title: "تم نسخ جميع الأكواد" });
+                }}
+                data-testid="button-copy-backup-codes"
+              >
+                <Copy className="h-4 w-4 ml-2" />
+                نسخ جميع الأكواد
+              </Button>
+              <p className="text-xs text-amber-600 text-center">
+                تحذير: هذه الأكواد لن تظهر مرة أخرى!
+              </p>
+            </div>
+            <DialogFooter>
+              <Button onClick={() => setShowBackupCodes(false)} data-testid="button-close-backup-codes">
+                تم، لقد حفظت الأكواد
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Disable 2FA Dialog */}
+        <Dialog open={showDisable2FA} onOpenChange={(open) => {
+          setShowDisable2FA(open);
+          if (!open) setDisableCode("");
+        }}>
+          <DialogContent className="max-w-md" data-testid="dialog-disable-2fa">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-destructive">
+                <AlertTriangle className="h-5 w-5" />
+                إيقاف المصادقة الثنائية
+              </DialogTitle>
+              <DialogDescription>
+                أدخل رمز التحقق من تطبيق المصادقة أو أحد أكواد الاسترداد لإيقاف المصادقة الثنائية.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>رمز التحقق</Label>
+                <Input
+                  placeholder="000000 أو كود استرداد"
+                  value={disableCode}
+                  onChange={(e) => setDisableCode(e.target.value.toUpperCase())}
+                  className="text-center text-xl tracking-widest"
+                  data-testid="input-disable-2fa-code"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowDisable2FA(false)} data-testid="button-cancel-disable-2fa">
+                إلغاء
+              </Button>
+              <Button 
+                variant="destructive"
+                onClick={() => disable2FAMutation.mutate(disableCode)}
+                disabled={disableCode.length < 6 || disable2FAMutation.isPending}
+                data-testid="button-confirm-disable-2fa"
+              >
+                {disable2FAMutation.isPending && <Loader2 className="h-4 w-4 ml-2 animate-spin" />}
+                إيقاف المصادقة الثنائية
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <Dialog open={showIpDialog} onOpenChange={setShowIpDialog}>
           <DialogContent data-testid="dialog-add-ip">

@@ -9,7 +9,11 @@ import {
   userPermissions,
   systemAuditLogs,
   branches,
+  userSecuritySettings,
 } from "@shared/schema";
+import { generateSecret, generateURI, verify } from "otplib";
+import QRCode from "qrcode";
+import crypto from "crypto";
 
 interface SecurityAlert {
   id: number;
@@ -96,7 +100,7 @@ export function registerSecurityRoutes(app: Express) {
           branchId: userBranchAccess.branchId,
           branchName: branches.name,
           isDefault: userBranchAccess.isDefault,
-          accessType: userBranchAccess.accessType,
+          accessLevel: userBranchAccess.accessLevel,
         })
           .from(userBranchAccess)
           .leftJoin(branches, eq(branches.id, userBranchAccess.branchId))
@@ -139,7 +143,7 @@ export function registerSecurityRoutes(app: Express) {
             branchId: b.branchId,
             branchName: b.branchName,
             isDefault: b.isDefault,
-            accessType: b.accessType,
+            accessLevel: b.accessLevel,
           })),
           permissions: permissionsByModule,
           permissionsCount: permissions.length,
@@ -491,6 +495,482 @@ export function registerSecurityRoutes(app: Express) {
       res.status(500).json({ error: "فشل في جلب صلاحياتك" });
     }
   });
+
+  // =====================================================
+  // Two-Factor Authentication (2FA) APIs
+  // =====================================================
+
+  // Setup 2FA - Generate secret and QR code
+  app.post("/api/security/2fa/setup", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.currentUser!;
+      
+      // Check if 2FA is already enabled
+      const existingSettings = await db.select()
+        .from(userSecuritySettings)
+        .where(eq(userSecuritySettings.userId, user.id))
+        .limit(1);
+      
+      if (existingSettings.length > 0 && existingSettings[0].twoFactorEnabled) {
+        return res.status(400).json({ error: "المصادقة الثنائية مفعّلة مسبقاً" });
+      }
+      
+      // Generate a new secret
+      const secret = generateSecret();
+      
+      // Create the OTP auth URL
+      const otpAuthUrl = generateURI({
+        secret,
+        label: user.email || user.username || "user",
+        issuer: "باتر - Butter Bakery",
+        algorithm: "sha1",
+        digits: 6,
+        period: 30,
+      });
+      
+      // Generate QR code as data URL
+      const qrCodeDataUrl = await QRCode.toDataURL(otpAuthUrl);
+      
+      // Store the secret temporarily (not enabled yet until verified)
+      await db.insert(userSecuritySettings)
+        .values({
+          userId: user.id,
+          twoFactorSecret: secret,
+          twoFactorEnabled: false,
+        })
+        .onConflictDoUpdate({
+          target: userSecuritySettings.userId,
+          set: {
+            twoFactorSecret: secret,
+            updatedAt: new Date(),
+          },
+        });
+      
+      res.json({
+        secret,
+        qrCode: qrCodeDataUrl,
+        otpAuthUrl,
+      });
+    } catch (error) {
+      console.error("Error setting up 2FA:", error);
+      res.status(500).json({ error: "فشل في إعداد المصادقة الثنائية" });
+    }
+  });
+
+  // Verify 2FA token and enable
+  app.post("/api/security/2fa/verify", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.currentUser!;
+      const { token } = req.body;
+      
+      if (!token || typeof token !== 'string') {
+        return res.status(400).json({ error: "يرجى إدخال رمز التحقق" });
+      }
+      
+      // Get user's 2FA secret
+      const settings = await db.select()
+        .from(userSecuritySettings)
+        .where(eq(userSecuritySettings.userId, user.id))
+        .limit(1);
+      
+      if (settings.length === 0 || !settings[0].twoFactorSecret) {
+        return res.status(400).json({ error: "يرجى إعداد المصادقة الثنائية أولاً" });
+      }
+      
+      const secret = settings[0].twoFactorSecret;
+      
+      // Verify the token
+      const isValid = await verify({ token, secret });
+      
+      if (!isValid) {
+        return res.status(400).json({ error: "رمز التحقق غير صحيح" });
+      }
+      
+      // Generate backup codes
+      const backupCodes = Array.from({ length: 10 }, () => 
+        crypto.randomBytes(4).toString('hex').toUpperCase()
+      );
+      
+      // Enable 2FA and store backup codes
+      await db.update(userSecuritySettings)
+        .set({
+          twoFactorEnabled: true,
+          twoFactorBackupCodes: backupCodes,
+          updatedAt: new Date(),
+        })
+        .where(eq(userSecuritySettings.userId, user.id));
+      
+      // Audit log
+      await db.insert(systemAuditLogs).values({
+        module: 'security',
+        entityId: user.id,
+        entityName: user.username,
+        action: '2fa_enabled',
+        userId: user.id,
+        userName: user.firstName && user.lastName 
+          ? `${user.firstName} ${user.lastName}` 
+          : user.username,
+        description: 'تم تفعيل المصادقة الثنائية',
+        ipAddress: req.ip,
+      });
+      
+      res.json({
+        success: true,
+        backupCodes,
+        message: "تم تفعيل المصادقة الثنائية بنجاح",
+      });
+    } catch (error) {
+      console.error("Error verifying 2FA:", error);
+      res.status(500).json({ error: "فشل في التحقق من المصادقة الثنائية" });
+    }
+  });
+
+  // Disable 2FA
+  app.post("/api/security/2fa/disable", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.currentUser!;
+      const { token, password } = req.body;
+      
+      // Get user's 2FA settings
+      const settings = await db.select()
+        .from(userSecuritySettings)
+        .where(eq(userSecuritySettings.userId, user.id))
+        .limit(1);
+      
+      if (settings.length === 0 || !settings[0].twoFactorEnabled) {
+        return res.status(400).json({ error: "المصادقة الثنائية غير مفعّلة" });
+      }
+      
+      // Verify the token
+      const secret = settings[0].twoFactorSecret!;
+      const isValid = await verify({ token, secret });
+      
+      // Also check backup codes
+      const backupCodes = settings[0].twoFactorBackupCodes || [];
+      const isBackupCode = backupCodes.includes(token?.toUpperCase());
+      
+      if (!isValid && !isBackupCode) {
+        return res.status(400).json({ error: "رمز التحقق غير صحيح" });
+      }
+      
+      // If backup code was used, remove it from the list
+      if (isBackupCode) {
+        const updatedCodes = backupCodes.filter(code => code !== token?.toUpperCase());
+        await db.update(userSecuritySettings)
+          .set({
+            twoFactorBackupCodes: updatedCodes,
+          })
+          .where(eq(userSecuritySettings.userId, user.id));
+      }
+      
+      // Disable 2FA
+      await db.update(userSecuritySettings)
+        .set({
+          twoFactorEnabled: false,
+          twoFactorSecret: null,
+          twoFactorBackupCodes: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(userSecuritySettings.userId, user.id));
+      
+      // Audit log
+      await db.insert(systemAuditLogs).values({
+        module: 'security',
+        entityId: user.id,
+        entityName: user.username,
+        action: '2fa_disabled',
+        userId: user.id,
+        userName: user.firstName && user.lastName 
+          ? `${user.firstName} ${user.lastName}` 
+          : user.username,
+        description: 'تم إيقاف المصادقة الثنائية',
+        ipAddress: req.ip,
+      });
+      
+      res.json({
+        success: true,
+        message: "تم إيقاف المصادقة الثنائية بنجاح",
+      });
+    } catch (error) {
+      console.error("Error disabling 2FA:", error);
+      res.status(500).json({ error: "فشل في إيقاف المصادقة الثنائية" });
+    }
+  });
+
+  // Get 2FA status
+  app.get("/api/security/2fa/status", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.currentUser!;
+      
+      const settings = await db.select({
+        twoFactorEnabled: userSecuritySettings.twoFactorEnabled,
+        hasBackupCodes: sql<boolean>`${userSecuritySettings.twoFactorBackupCodes} IS NOT NULL AND array_length(${userSecuritySettings.twoFactorBackupCodes}, 1) > 0`,
+      })
+        .from(userSecuritySettings)
+        .where(eq(userSecuritySettings.userId, user.id))
+        .limit(1);
+      
+      if (settings.length === 0) {
+        return res.json({
+          enabled: false,
+          hasBackupCodes: false,
+          backupCodesCount: 0,
+        });
+      }
+      
+      const backupCodes = await db.select({
+        codes: userSecuritySettings.twoFactorBackupCodes,
+      })
+        .from(userSecuritySettings)
+        .where(eq(userSecuritySettings.userId, user.id))
+        .limit(1);
+      
+      res.json({
+        enabled: settings[0].twoFactorEnabled,
+        hasBackupCodes: settings[0].hasBackupCodes,
+        backupCodesCount: backupCodes[0]?.codes?.length || 0,
+      });
+    } catch (error) {
+      console.error("Error getting 2FA status:", error);
+      res.status(500).json({ error: "فشل في جلب حالة المصادقة الثنائية" });
+    }
+  });
+
+  // Regenerate backup codes
+  app.post("/api/security/2fa/regenerate-backup-codes", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.currentUser!;
+      const { token } = req.body;
+      
+      // Get user's 2FA settings
+      const settings = await db.select()
+        .from(userSecuritySettings)
+        .where(eq(userSecuritySettings.userId, user.id))
+        .limit(1);
+      
+      if (settings.length === 0 || !settings[0].twoFactorEnabled) {
+        return res.status(400).json({ error: "المصادقة الثنائية غير مفعّلة" });
+      }
+      
+      // Verify the token
+      const secret = settings[0].twoFactorSecret!;
+      const isValid = await verify({ token, secret });
+      
+      if (!isValid) {
+        return res.status(400).json({ error: "رمز التحقق غير صحيح" });
+      }
+      
+      // Generate new backup codes
+      const backupCodes = Array.from({ length: 10 }, () => 
+        crypto.randomBytes(4).toString('hex').toUpperCase()
+      );
+      
+      await db.update(userSecuritySettings)
+        .set({
+          twoFactorBackupCodes: backupCodes,
+          updatedAt: new Date(),
+        })
+        .where(eq(userSecuritySettings.userId, user.id));
+      
+      res.json({
+        success: true,
+        backupCodes,
+        message: "تم إعادة توليد أكواد الاسترداد بنجاح",
+      });
+    } catch (error) {
+      console.error("Error regenerating backup codes:", error);
+      res.status(500).json({ error: "فشل في إعادة توليد أكواد الاسترداد" });
+    }
+  });
+
+  // =====================================================
+  // Security Activity Log API
+  // =====================================================
+  
+  app.get("/api/security/activity-log", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.currentUser!;
+      const { limit = "50", offset = "0" } = req.query;
+      
+      const limitNum = Math.min(parseInt(limit as string) || 50, 100);
+      const offsetNum = parseInt(offset as string) || 0;
+      
+      // Get security-related audit logs for this user
+      const logs = await db.select({
+        id: systemAuditLogs.id,
+        module: systemAuditLogs.module,
+        action: systemAuditLogs.action,
+        description: systemAuditLogs.description,
+        details: systemAuditLogs.details,
+        ipAddress: systemAuditLogs.ipAddress,
+        createdAt: systemAuditLogs.createdAt,
+      })
+        .from(systemAuditLogs)
+        .where(
+          and(
+            eq(systemAuditLogs.userId, user.id),
+            or(
+              eq(systemAuditLogs.module, 'security'),
+              eq(systemAuditLogs.module, 'auth'),
+              eq(systemAuditLogs.action, 'login'),
+              eq(systemAuditLogs.action, 'logout'),
+              eq(systemAuditLogs.action, 'login_failed'),
+              eq(systemAuditLogs.action, 'permission_denied'),
+            )
+          )
+        )
+        .orderBy(desc(systemAuditLogs.createdAt))
+        .limit(limitNum)
+        .offset(offsetNum);
+      
+      // Get total count
+      const countResult = await db.select({ count: count() })
+        .from(systemAuditLogs)
+        .where(
+          and(
+            eq(systemAuditLogs.userId, user.id),
+            or(
+              eq(systemAuditLogs.module, 'security'),
+              eq(systemAuditLogs.module, 'auth'),
+              eq(systemAuditLogs.action, 'login'),
+              eq(systemAuditLogs.action, 'logout'),
+              eq(systemAuditLogs.action, 'login_failed'),
+              eq(systemAuditLogs.action, 'permission_denied'),
+            )
+          )
+        );
+      
+      res.json({
+        logs: logs.map(log => ({
+          ...log,
+          moduleLabel: getModuleLabel(log.module),
+          actionLabel: getActionLabel(log.action),
+        })),
+        total: countResult[0]?.count || 0,
+        limit: limitNum,
+        offset: offsetNum,
+      });
+    } catch (error) {
+      console.error("Error fetching activity log:", error);
+      res.status(500).json({ error: "فشل في جلب سجل الأنشطة" });
+    }
+  });
+
+  // Export security report
+  app.get("/api/security/export-report", isAuthenticated, async (req, res) => {
+    try {
+      const user = req.currentUser!;
+      const format = req.query.format as string || "json";
+      const type = req.query.type as string || "activity"; // activity, sessions, all
+      
+      // Log export action
+      await db.insert(systemAuditLogs).values({
+        userId: user.id,
+        module: 'security',
+        action: 'export',
+        description: `تصدير تقرير أمني بصيغة ${format}`,
+        ipAddress: req.ip,
+      });
+      
+      const data: any = {};
+      
+      // Fetch activity logs
+      if (type === "activity" || type === "all") {
+        const logs = await db.select({
+          id: systemAuditLogs.id,
+          module: systemAuditLogs.module,
+          action: systemAuditLogs.action,
+          description: systemAuditLogs.description,
+          ipAddress: systemAuditLogs.ipAddress,
+          createdAt: systemAuditLogs.createdAt,
+        })
+          .from(systemAuditLogs)
+          .where(
+            and(
+              eq(systemAuditLogs.userId, user.id),
+              or(
+                eq(systemAuditLogs.module, 'security'),
+                eq(systemAuditLogs.module, 'auth'),
+                eq(systemAuditLogs.action, 'login'),
+                eq(systemAuditLogs.action, 'logout'),
+                eq(systemAuditLogs.action, 'login_failed'),
+              )
+            )
+          )
+          .orderBy(desc(systemAuditLogs.createdAt))
+          .limit(1000);
+        
+        data.activityLogs = logs.map(log => ({
+          ...log,
+          moduleLabel: getModuleLabel(log.module),
+          actionLabel: getActionLabel(log.action),
+          createdAt: log.createdAt?.toISOString(),
+        }));
+      }
+      
+      // Fetch sessions
+      if (type === "sessions" || type === "all") {
+        const sessions = await db.select({
+          id: userSessions.id,
+          deviceType: userSessions.deviceType,
+          browser: userSessions.browser,
+          os: userSessions.os,
+          ipAddress: userSessions.ipAddress,
+          location: userSessions.location,
+          createdAt: userSessions.createdAt,
+          lastActivityAt: userSessions.lastActivityAt,
+          isActive: userSessions.isActive,
+        })
+          .from(userSessions)
+          .where(eq(userSessions.userId, user.id))
+          .orderBy(desc(userSessions.lastActivityAt))
+          .limit(100);
+        
+        data.sessions = sessions.map(s => ({
+          ...s,
+          createdAt: s.createdAt?.toISOString(),
+          lastActivityAt: s.lastActivityAt?.toISOString(),
+        }));
+      }
+      
+      // Export format
+      if (format === "csv") {
+        let csv = "";
+        
+        if (data.activityLogs && data.activityLogs.length > 0) {
+          csv += "سجل الأنشطة الأمنية\n";
+          csv += "التاريخ,الوحدة,الإجراء,الوصف,عنوان IP\n";
+          data.activityLogs.forEach((log: any) => {
+            csv += `"${log.createdAt || ''}","${log.moduleLabel}","${log.actionLabel}","${log.description || ''}","${log.ipAddress || ''}"\n`;
+          });
+        }
+        
+        if (data.sessions && data.sessions.length > 0) {
+          csv += "\nالجلسات\n";
+          csv += "التاريخ,نوع الجهاز,المتصفح,النظام,عنوان IP,الموقع,الحالة\n";
+          data.sessions.forEach((s: any) => {
+            csv += `"${s.createdAt || ''}","${s.deviceType || ''}","${s.browser || ''}","${s.os || ''}","${s.ipAddress || ''}","${s.location || ''}","${s.isActive ? 'نشط' : 'منتهية'}"\n`;
+          });
+        }
+        
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        res.setHeader("Content-Disposition", `attachment; filename="security-report-${Date.now()}.csv"`);
+        res.send("\ufeff" + csv); // BOM for Excel UTF-8
+      } else {
+        res.setHeader("Content-Type", "application/json");
+        res.setHeader("Content-Disposition", `attachment; filename="security-report-${Date.now()}.json"`);
+        res.json({
+          exportDate: new Date().toISOString(),
+          userId: user.id,
+          username: user.username,
+          ...data,
+        });
+      }
+    } catch (error) {
+      console.error("Error exporting security report:", error);
+      res.status(500).json({ error: "فشل في تصدير التقرير الأمني" });
+    }
+  });
 }
 
 // Helper functions
@@ -535,6 +1015,8 @@ function getActionLabel(action: string): string {
     'security_alert': 'تنبيه أمني',
     'send_invitations': 'إرسال دعوات',
     'vote': 'تصويت',
+    '2fa_enabled': 'تفعيل المصادقة الثنائية',
+    '2fa_disabled': 'إيقاف المصادقة الثنائية',
   };
   return labels[action] || action;
 }
