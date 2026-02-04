@@ -4553,9 +4553,10 @@ export async function registerRoutes(
         let totalNonSaudiCosts = 0; // Work permit 800, Expat levy 800, Residency 54, Insurance 2%
         
         for (const emp of employees) {
-          const baseSalary = emp.basicSalary || 0;
-          const housingAllowance = emp.housingAllowance || 0;
-          const transportAllowance = emp.transportAllowance || 0;
+          // استخدام أسماء الأعمدة الصحيحة من قاعدة البيانات
+          const baseSalary = (emp as any).salary || 0;
+          const housingAllowance = (emp as any).housingAllowance || (emp as any).housing_allowance || 0;
+          const transportAllowance = (emp as any).transportAllowance || (emp as any).transport_allowance || 0;
           const totalCompensation = baseSalary + housingAllowance + transportAllowance;
           
           totalSalaries += totalCompensation;
