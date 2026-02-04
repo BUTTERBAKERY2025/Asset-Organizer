@@ -34,6 +34,7 @@ const ROLE_KEYS: Record<string, string> = {
   admin: "roles.admin",
   employee: "roles.employee",
   viewer: "roles.viewer",
+  attendance_clerk: "roles.attendanceClerk",
 };
 
 interface NavItem {
@@ -55,7 +56,7 @@ interface NavGroup {
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
-  const { user, isLoading, isAuthenticated, isAdmin, logout, isLoggingOut, activeBranch, allowedBranches, switchBranch, isSwitchingBranch } = useAuth();
+  const { user, isLoading, isAuthenticated, isAdmin, isAttendanceClerk, logout, isLoggingOut, activeBranch, allowedBranches, switchBranch, isSwitchingBranch } = useAuth();
   const { canView } = usePermissions();
   const { t, i18n } = useTranslation("platformHome");
   const currentLang = i18n.language;
@@ -147,7 +148,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { href: "/organizational-structure", label: t("sidebar.orgStructure"), icon: Building, module: "organizational_structure", indent: true },
           { href: "/attendance-dashboard", label: t("sidebar.attendanceDashboard"), icon: UserCheck, module: "shifts", indent: true },
           { href: "/shift-management", label: t("sidebar.shiftManagement"), icon: Calendar, module: "shifts", indent: true },
-          { href: "/attendance-check", label: t("sidebar.attendanceCheck"), icon: Clock, module: "shifts", indent: true },
+          { href: "/attendance-check", label: t("sidebar.attendanceCheck"), icon: Clock, module: "attendance_check", indent: true },
           { href: "/timesheet", label: t("sidebar.timesheet"), icon: FileText, module: "shifts", indent: true },
           { href: "/employee-reports", label: t("sidebar.employeeReports"), icon: FileBarChart, module: "employee_reports", indent: true },
         ],

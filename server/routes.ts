@@ -227,7 +227,7 @@ export async function registerRoutes(
       }
       
       if (role !== undefined) {
-        if (!["admin", "employee", "viewer"].includes(role)) {
+        if (!["admin", "employee", "viewer", "attendance_clerk"].includes(role)) {
           return res.status(400).json({ error: "Invalid role" });
         }
         updateData.role = role;
@@ -487,6 +487,16 @@ export async function registerRoutes(
           actions: [...MODULE_ACTIONS],
         }));
         return res.json(allPermissions);
+      }
+      
+      // Attendance clerk has ONLY attendance_check permissions
+      if (currentUser.role === "attendance_clerk") {
+        const attendancePermissions = [{
+          module: "attendance_check",
+          actions: ["view", "create", "edit"],
+        }];
+        console.log(`[Permissions] Attendance clerk ${currentUser.username} has limited permissions: attendance_check only`);
+        return res.json(attendancePermissions);
       }
       
       // Use cached permissions for better performance

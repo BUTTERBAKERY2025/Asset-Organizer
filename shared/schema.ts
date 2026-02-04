@@ -42,7 +42,7 @@ export const users = pgTable("users", {
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
-  role: varchar("role").default("viewer").notNull(), // admin, employee, viewer
+  role: varchar("role").default("viewer").notNull(), // admin, employee, viewer, attendance_clerk
   branchId: varchar("branch_id").references(() => branches.id),
   jobTitle: varchar("job_title"),
   isActive: text("is_active").default("active"), // active, inactive
@@ -519,6 +519,7 @@ export const SYSTEM_MODULES = [
   // الورديات والحضور
   "shifts",
   "attendance",
+  "attendance_check", // صفحة تسجيل الحضور والانصراف فقط
   "timesheet",
   "branch_closure",
   
@@ -679,6 +680,7 @@ export const MODULE_LABELS: Record<SystemModule, string> = {
   daily_production: "الإنتاج اليومي",
   advanced_production: "أوامر الإنتاج المتقدمة",
   quality_control: "مراقبة الجودة",
+  quality: "الجودة",
   products: "المنتجات",
   operations: "التشغيل",
   ai_production_planner: "مخطط الإنتاج الذكي",
@@ -686,6 +688,7 @@ export const MODULE_LABELS: Record<SystemModule, string> = {
   // الورديات والحضور
   shifts: "الورديات",
   attendance: "الحضور والانصراف",
+  attendance_check: "تسجيل الحضور والانصراف",
   timesheet: "كشوف الدوام",
   branch_closure: "فتح وإغلاق الفروع",
   
@@ -699,6 +702,7 @@ export const MODULE_LABELS: Record<SystemModule, string> = {
   hr_management: "إدارة الموارد البشرية",
   
   // المالية
+  cashier: "الكاشير",
   cashier_journal: "يومية الكاشير",
   cashier_performance: "أداء الكاشير",
   pnl_dashboard: "لوحة الأرباح والخسائر",
@@ -710,8 +714,10 @@ export const MODULE_LABELS: Record<SystemModule, string> = {
   targets: "الأهداف",
   targets_planning: "تخطيط الأهداف",
   waste_tracking: "تتبع الهدر",
+  waste: "الهدر",
   
   // مشاريع الإنشاء
+  construction: "الإنشاءات",
   construction_projects: "مشاريع الإنشاءات",
   construction_work_items: "بنود الأعمال",
   construction_reports: "تقارير المشاريع",

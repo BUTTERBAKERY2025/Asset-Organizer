@@ -40,6 +40,7 @@ const ROLES = [
   { value: "admin", label: "مدير", icon: Shield, description: "صلاحيات كاملة" },
   { value: "employee", label: "موظف", icon: UserCog, description: "حسب الصلاحيات المحددة" },
   { value: "viewer", label: "مشاهد", icon: Eye, description: "حسب الصلاحيات المحددة" },
+  { value: "attendance_clerk", label: "مسجل الحضور", icon: UserCog, description: "تسجيل الحضور والانصراف فقط" },
 ];
 
 const exportColumns = [

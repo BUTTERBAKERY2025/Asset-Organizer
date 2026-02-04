@@ -124,6 +124,7 @@ const MODULE_LABELS: Record<string, string> = {
   // الورديات والحضور
   shifts: "الورديات",
   attendance: "الحضور والانصراف",
+  attendance_check: "تسجيل الحضور والانصراف",
   timesheet: "سجل الدوام",
   
   // الموظفين والموارد البشرية

@@ -142,7 +142,7 @@ function QuickActionButton({
 }
 
 export default function PlatformHomePage() {
-  const { user, isAuthenticated, activeBranch } = useAuth();
+  const { user, isAuthenticated, activeBranch, isAttendanceClerk } = useAuth();
   const { canView } = usePermissions();
   const { t, i18n } = useTranslation('platformHome');
   const currentLang = i18n.language as 'ar' | 'en';
@@ -152,6 +152,12 @@ export default function PlatformHomePage() {
     changeLanguage(newLang);
   };
   const [, navigate] = useLocation();
+  
+  // Redirect attendance_clerk to attendance-check page
+  if (isAttendanceClerk) {
+    navigate("/attendance-check");
+    return null;
+  }
 
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ["/api/dashboard/stats", activeBranch?.id],

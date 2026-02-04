@@ -35,8 +35,13 @@ export default function LoginPage() {
     setError("");
     
     try {
-      await login({ username, password, rememberMe });
-      setLocation("/");
+      const userData = await login({ username, password, rememberMe });
+      // Redirect attendance_clerk directly to attendance-check page
+      if (userData?.role === "attendance_clerk") {
+        setLocation("/attendance-check");
+      } else {
+        setLocation("/");
+      }
     } catch (err: any) {
       setError(err.message || "فشل تسجيل الدخول");
     }

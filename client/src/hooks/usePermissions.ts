@@ -8,7 +8,7 @@ interface Permission {
 }
 
 export function usePermissions() {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, isAttendanceClerk } = useAuth();
   const isViewer = user?.role === "viewer";
   const isEmployee = user?.role === "employee";
 
@@ -29,6 +29,14 @@ export function usePermissions() {
   const hasPermission = (module: SystemModule, action: ModuleAction): boolean => {
     // Admin has full access
     if (isAdmin) return true;
+    
+    // Attendance clerk has access ONLY to attendance_check module
+    if (isAttendanceClerk) {
+      if (module === "attendance_check") {
+        return action === "view" || action === "create" || action === "edit";
+      }
+      return false;
+    }
     
     // Viewer can ONLY view - nothing else (regardless of stored permissions)
     if (isViewer) {
@@ -70,5 +78,6 @@ export function usePermissions() {
     canExport,
     isViewer,
     isEmployee,
+    isAttendanceClerk,
   };
 }

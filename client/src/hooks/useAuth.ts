@@ -101,6 +101,7 @@ export function useAuth() {
     isAdmin: user?.role === "admin",
     isEmployee: user?.role === "employee" || user?.role === "admin",
     isViewer: !!user,
+    isAttendanceClerk: user?.role === "attendance_clerk",
     activeBranchId: user?.activeBranchId || null,
     activeBranch: user?.activeBranch || null,
     allowedBranches: user?.allowedBranches || [],

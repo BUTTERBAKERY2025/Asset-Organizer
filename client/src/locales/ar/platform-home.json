@@ -134,7 +134,8 @@
   "roles": {
     "admin": "مدير",
     "employee": "موظف",
-    "viewer": "مشاهد"
+    "viewer": "مشاهد",
+    "attendanceClerk": "مسجل الحضور"
   },
   "subItems": {
     "branchEmployees": "موظفو الفروع",

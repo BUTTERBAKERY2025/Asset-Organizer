@@ -134,7 +134,8 @@
   "roles": {
     "admin": "Admin",
     "employee": "Employee",
-    "viewer": "Viewer"
+    "viewer": "Viewer",
+    "attendanceClerk": "Attendance Clerk"
   },
   "subItems": {
     "branchEmployees": "Branch Employees",
