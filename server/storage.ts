@@ -7519,41 +7519,34 @@ export class DatabaseStorage implements IStorage {
       filteredSchedules.map(async (schedule) => {
         const attendance = await this.getAttendanceByEmployeeAndDate(schedule.employeeId, date);
         
-        // Resolve employee name from multiple sources if needed
+        // Always resolve employee name from authoritative source
         let resolvedName = schedule.employeeName;
         
-        if (!resolvedName || resolvedName === 'Unknown' || resolvedName === 'غير معروف') {
-          // Try to get from branch employees table
-          // employeeId format is "branch_emp_44" where 44 is the branchEmployees.id
-          if (schedule.employeeId.startsWith('branch_emp_')) {
-            try {
-              const branchEmpId = parseInt(schedule.employeeId.replace('branch_emp_', ''), 10);
-              if (!isNaN(branchEmpId)) {
-                const [branchEmp] = await db.select()
-                  .from(branchEmployees)
-                  .where(eq(branchEmployees.id, branchEmpId))
-                  .limit(1);
-                if (branchEmp?.employeeName) {
-                  resolvedName = branchEmp.employeeName;
-                }
+        // For branch employees (format: branch_emp_XX), always fetch fresh name from branch_employees table
+        if (schedule.employeeId.startsWith('branch_emp_')) {
+          try {
+            const branchEmpId = parseInt(schedule.employeeId.replace('branch_emp_', ''), 10);
+            if (!isNaN(branchEmpId)) {
+              const [branchEmp] = await db.select()
+                .from(branchEmployees)
+                .where(eq(branchEmployees.id, branchEmpId))
+                .limit(1);
+              if (branchEmp?.employeeName) {
+                resolvedName = branchEmp.employeeName;
               }
-            } catch (e) {
-              // Continue
             }
+          } catch (e) {
+            // Continue with schedule name
           }
-        }
-        
-        if (!resolvedName || resolvedName === 'Unknown' || resolvedName === 'غير معروف') {
-          // Try to get from users table
-          if (!schedule.employeeId.startsWith('branch_emp_')) {
-            try {
-              const employee = await this.getUser(schedule.employeeId);
-              if (employee) {
-                resolvedName = `${employee.firstName || ''} ${employee.lastName || ''}`.trim() || employee.username;
-              }
-            } catch (e) {
-              // Continue
+        } else if (!resolvedName || resolvedName === 'Unknown' || resolvedName === 'غير معروف') {
+          // For system users, try to get from users table
+          try {
+            const employee = await this.getUser(schedule.employeeId);
+            if (employee) {
+              resolvedName = `${employee.firstName || ''} ${employee.lastName || ''}`.trim() || employee.username;
             }
+          } catch (e) {
+            // Continue
           }
         }
         
