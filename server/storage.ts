@@ -7514,12 +7514,46 @@ export class DatabaseStorage implements IStorage {
       return false;
     });
 
-    // Get attendance for these employees today
+    // Get attendance for these employees today and resolve names
     const employeesWithAttendance = await Promise.all(
       filteredSchedules.map(async (schedule) => {
         const attendance = await this.getAttendanceByEmployeeAndDate(schedule.employeeId, date);
+        
+        // Resolve employee name from multiple sources if needed
+        let resolvedName = schedule.employeeName;
+        
+        if (!resolvedName || resolvedName === 'Unknown' || resolvedName === 'غير معروف') {
+          // Try to get from branch employees table
+          try {
+            const [branchEmp] = await db.select()
+              .from(branchEmployees)
+              .where(eq(branchEmployees.employeeId, schedule.employeeId))
+              .limit(1);
+            if (branchEmp?.employeeName) {
+              resolvedName = branchEmp.employeeName;
+            }
+          } catch (e) {
+            // Continue
+          }
+        }
+        
+        if (!resolvedName || resolvedName === 'Unknown' || resolvedName === 'غير معروف') {
+          // Try to get from users table
+          if (!schedule.employeeId.startsWith('branch_emp_')) {
+            try {
+              const employee = await this.getUser(schedule.employeeId);
+              if (employee) {
+                resolvedName = `${employee.firstName || ''} ${employee.lastName || ''}`.trim() || employee.username;
+              }
+            } catch (e) {
+              // Continue
+            }
+          }
+        }
+        
         return {
           ...schedule,
+          employeeName: resolvedName || 'غير معروف',
           attendance: attendance || null
         };
       })
