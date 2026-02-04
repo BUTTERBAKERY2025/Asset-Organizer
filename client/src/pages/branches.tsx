@@ -27,6 +27,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { Plus, Loader2, Building2, ArrowRight, MapPin, Settings } from "lucide-react";
 import { Link } from "wouter";
 import { Textarea } from "@/components/ui/textarea";
@@ -53,6 +54,10 @@ export default function BranchesPage() {
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  
+  // فقط المدير (admin) يمكنه إدارة الفروع
+  const isAdmin = user?.role === "admin";
 
   const { data: branches = [], isLoading: branchesLoading } = useQuery<Branch[]>({
     queryKey: ["/api/branches"],
@@ -198,6 +203,7 @@ export default function BranchesPage() {
               <p className="text-muted-foreground mt-1 text-sm sm:text-base">إضافة ومتابعة فروع المخبز</p>
             </div>
           </div>
+          {isAdmin && (
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
               <Button className="gap-2 h-11 sm:h-9" data-testid="button-add-branch">
@@ -247,6 +253,7 @@ export default function BranchesPage() {
               </form>
             </DialogContent>
           </Dialog>
+          )}
         </div>
 
         <Card>
@@ -264,13 +271,13 @@ export default function BranchesPage() {
                     <TableHead className="text-right w-[120px]">الموقع</TableHead>
                     <TableHead className="text-right w-[120px]">عدد الأصناف</TableHead>
                     <TableHead className="text-right w-[150px]">إجمالي القيمة</TableHead>
-                    <TableHead className="text-right w-[80px]">إعدادات</TableHead>
+                    {isAdmin && <TableHead className="text-right w-[80px]">إعدادات</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {branches.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground text-xs sm:text-sm">
+                      <TableCell colSpan={isAdmin ? 6 : 5} className="text-center py-8 text-muted-foreground text-xs sm:text-sm">
                         لا توجد فروع مسجلة
                       </TableCell>
                     </TableRow>
@@ -305,6 +312,7 @@ export default function BranchesPage() {
                           <TableCell className="font-medium text-green-600 text-xs sm:text-sm">
                             {stats.totalValue.toLocaleString('en-US')} ريال
                           </TableCell>
+                          {isAdmin && (
                           <TableCell>
                             <Button
                               variant="ghost"
@@ -316,6 +324,7 @@ export default function BranchesPage() {
                               <Settings className="w-4 h-4" />
                             </Button>
                           </TableCell>
+                          )}
                         </TableRow>
                       );
                     })
