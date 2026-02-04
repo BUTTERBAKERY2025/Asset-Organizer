@@ -212,7 +212,7 @@ function Router() {
       <Route path="/organizational-structure">{() => <ModulePage component={OrganizationalStructurePage} module="organizational_structure" />}</Route>
       <Route path="/attendance-dashboard">{() => <ModulePage component={AttendanceDashboardPage} module="shifts" />}</Route>
       <Route path="/shift-management">{() => <ModulePage component={ShiftManagementPage} module="shifts" />}</Route>
-      <Route path="/attendance-check">{() => <ModulePage component={AttendanceCheckPage} module="shifts" />}</Route>
+      <Route path="/attendance-check">{() => <ModulePage component={AttendanceCheckPage} module="attendance_check" />}</Route>
       <Route path="/timesheet">{() => <ModulePage component={TimesheetPage} module="shifts" />}</Route>
       <Route path="/employee-reports">{() => <ModulePage component={EmployeeReportsDashboardPage} module="employee_reports" />}</Route>
       

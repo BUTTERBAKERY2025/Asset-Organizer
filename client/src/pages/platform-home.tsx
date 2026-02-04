@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -154,8 +155,13 @@ export default function PlatformHomePage() {
   const [, navigate] = useLocation();
   
   // Redirect attendance_clerk to attendance-check page
+  useEffect(() => {
+    if (isAttendanceClerk) {
+      navigate("/attendance-check");
+    }
+  }, [isAttendanceClerk, navigate]);
+  
   if (isAttendanceClerk) {
-    navigate("/attendance-check");
     return null;
   }
 
