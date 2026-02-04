@@ -4552,6 +4552,9 @@ export async function registerRoutes(
         let totalGosi = 0; // Saudi GOSI 12%
         let totalNonSaudiCosts = 0; // Work permit 800, Expat levy 800, Residency 54, Insurance 2%
         
+        // قائمة الجنسيات السعودية (بالعربية والإنجليزية)
+        const saudiNationalities = ['Saudi', 'saudi', 'سعودي', 'سعودية', 'Saudi Arabia', 'SA'];
+        
         for (const emp of employees) {
           // استخدام أسماء الأعمدة الصحيحة من قاعدة البيانات
           const baseSalary = (emp as any).salary || 0;
@@ -4561,16 +4564,28 @@ export async function registerRoutes(
           
           totalSalaries += totalCompensation;
           
-          if (emp.nationality === 'Saudi') {
-            // Saudi GOSI contribution (employer 12%)
-            totalGosi += totalCompensation * 0.12;
+          const nationality = (emp.nationality || '').trim();
+          const isSaudi = saudiNationalities.some(n => 
+            nationality.toLowerCase().includes(n.toLowerCase()) || n.toLowerCase().includes(nationality.toLowerCase())
+          );
+          
+          if (isSaudi) {
+            // Saudi GOSI contribution (employer 12% of basic salary + housing)
+            // GOSI is calculated on basic salary + housing allowance only (not transport)
+            const gosiBase = baseSalary + housingAllowance;
+            totalGosi += gosiBase * 0.12;
           } else {
-            // Non-Saudi costs (large companies)
-            // Work permit: 800 SAR/month
-            // Expat levy: 800 SAR/month
-            // Residency: 54 SAR/month
-            // Insurance: 2% of salary
-            totalNonSaudiCosts += 800 + 800 + 54 + (totalCompensation * 0.02);
+            // Non-Saudi costs (المنشآت الكبيرة - أكثر من 9 موظفين)
+            // رسوم رخصة العمل: 800 ريال/شهر (9,600 سنوياً)
+            // رسوم المقابل المالي: 800 ريال/شهر (9,600 سنوياً)
+            // رسوم تجديد الإقامة: 650 ريال/سنة = 54 ريال/شهر
+            // التأمين الطبي: حوالي 2% من الراتب
+            const workPermitMonthly = 800;  // رخصة العمل
+            const expatLevyMonthly = 800;   // المقابل المالي
+            const residencyMonthly = 54;    // الإقامة (650/12)
+            const insuranceRate = 0.02;     // التأمين الطبي 2%
+            
+            totalNonSaudiCosts += workPermitMonthly + expatLevyMonthly + residencyMonthly + (totalCompensation * insuranceRate);
           }
         }
         
