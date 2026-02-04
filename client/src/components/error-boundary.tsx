@@ -23,7 +23,9 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('Application error:', error, errorInfo);
+    console.error('Application error:', error);
+    console.error('Error stack:', error.stack);
+    console.error('Component stack:', errorInfo.componentStack);
   }
 
   private handleReload = () => {
@@ -55,9 +57,15 @@ export class ErrorBoundary extends Component<Props, State> {
             <h1 className="text-xl font-bold text-[#1a3a2f] mb-2">
               حدث خطأ غير متوقع
             </h1>
-            <p className="text-[#1a3a2f]/70 text-sm mb-6">
+            <p className="text-[#1a3a2f]/70 text-sm mb-4">
               نعتذر عن هذا الخطأ. يرجى المحاولة مرة أخرى.
             </p>
+            {process.env.NODE_ENV === 'development' && this.state.error && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 text-left text-xs max-h-32 overflow-auto">
+                <p className="font-mono text-red-700">{this.state.error.message}</p>
+                <pre className="text-red-600 mt-1 whitespace-pre-wrap">{this.state.error.stack?.split('\n').slice(0, 5).join('\n')}</pre>
+              </div>
+            )}
             <div className="flex gap-3 justify-center">
               {canRetry && (
                 <Button 
