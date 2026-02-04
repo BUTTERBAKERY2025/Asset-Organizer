@@ -1274,7 +1274,75 @@ export default function PnLDashboard() {
     }
   };
 
-  const metrics = completePnL?.metrics;
+  // Merge metrics from both sources - prefer enhancedPnL (real-time) over completePnL (manual)
+  const metrics = useMemo(() => {
+    const enhanced = enhancedPnL?.totals;
+    const manual = completePnL?.metrics;
+    
+    if (enhanced) {
+      // Calculate additional metrics from enhanced data
+      const totalOperatingExpenses = enhanced.totalOperatingCosts || 0;
+      const depreciation = 0; // Could be added later
+      const ebitda = (enhanced.operatingProfit || 0) + depreciation;
+      const contributionMargin = (enhanced.netSales || 0) - (enhanced.cogsCost || 0);
+      
+      const netMargin = enhanced.netMargin || 0;
+      const salaryToSales = enhanced.netSales > 0 ? ((enhanced.employeeCosts?.total || 0) / enhanced.netSales) * 100 : 0;
+      const rentToRevenue = enhanced.netSales > 0 ? ((enhanced.rent || 0) / enhanced.netSales) * 100 : 0;
+      
+      // Generate rating reasons
+      const ratingReasons: string[] = [];
+      if (netMargin >= 15) ratingReasons.push("هامش ربح صافي ممتاز (أعلى من 15%)");
+      else if (netMargin >= 10) ratingReasons.push("هامش ربح صافي جيد (10-15%)");
+      else if (netMargin >= 5) ratingReasons.push("هامش ربح صافي متوسط (5-10%)");
+      else ratingReasons.push("هامش ربح صافي ضعيف (أقل من 5%)");
+      
+      if (salaryToSales <= 25) ratingReasons.push("نسبة الرواتب للمبيعات ممتازة (أقل من 25%)");
+      if (rentToRevenue <= 10) ratingReasons.push("نسبة الإيجار للإيرادات مقبولة");
+      
+      // Generate recommendations
+      const recommendations: string[] = [];
+      if (netMargin < 10) recommendations.push("زيادة هامش الربح عبر تخفيض التكاليف أو رفع الأسعار");
+      if (salaryToSales > 30) recommendations.push("مراجعة تكاليف الموظفين وتحسين الإنتاجية");
+      if (rentToRevenue > 15) recommendations.push("مراجعة تكاليف الإيجار مقارنة بالإيرادات");
+      
+      return {
+        totalRevenue: enhanced.grossSales || 0,
+        netRevenue: enhanced.netSales || 0,
+        totalCOGS: enhanced.cogsCost || 0,
+        grossProfit: enhanced.grossProfit || 0,
+        grossMarginPct: enhanced.grossMargin || 0,
+        totalOperatingExpenses,
+        operatingProfit: enhanced.operatingProfit || 0,
+        operatingMarginPct: enhanced.netSales > 0 ? ((enhanced.operatingProfit || 0) / enhanced.netSales) * 100 : 0,
+        totalFixedCosts: (enhanced.rent || 0) + (enhanced.utilities?.total || 0),
+        netProfit: enhanced.netProfit || 0,
+        netMarginPct: enhanced.netMargin || 0,
+        ebitda,
+        ebitdaMarginPct: enhanced.netSales > 0 ? (ebitda / enhanced.netSales) * 100 : 0,
+        contributionMargin,
+        contributionMarginPct: enhanced.netSales > 0 ? (contributionMargin / enhanced.netSales) * 100 : 0,
+        breakEvenPoint: contributionMargin > 0 ? ((enhanced.rent || 0) + (enhanced.utilities?.total || 0)) / (contributionMargin / (enhanced.netSales || 1)) : 0,
+        breakEvenSales: contributionMargin > 0 ? ((enhanced.rent || 0) + (enhanced.utilities?.total || 0)) / (contributionMargin / (enhanced.netSales || 1)) : 0,
+        revenuePerEmployee: enhanced.employeeCount > 0 ? (enhanced.grossSales || 0) / enhanced.employeeCount : 0,
+        employeeCount: enhanced.employeeCount || 0,
+        rating: netMargin >= 15 ? "excellent" : netMargin >= 10 ? "good" : netMargin >= 5 ? "average" : "poor",
+        wastePercentage: 0,
+        wastePct: 0,
+        rentToRevenuePct: rentToRevenue,
+        salaryToRevenuePct: salaryToSales,
+        salaryToSalesPct: salaryToSales,
+        laborProductivity: enhanced.employeeCount > 0 ? (enhanced.grossSales || 0) / enhanced.employeeCount : 0,
+        invoiceCount: enhanced.journalCount || 0,
+        avgInvoiceValue: enhanced.journalCount > 0 ? (enhanced.grossSales || 0) / enhanced.journalCount : 0,
+        ratingReasons,
+        recommendations,
+      };
+    }
+    
+    return manual;
+  }, [enhancedPnL?.totals, completePnL?.metrics]);
+  
   const selectedBranch = branches.find(b => b.id === selectedBranchId);
 
   const salesByChannelData = useMemo(() => {
