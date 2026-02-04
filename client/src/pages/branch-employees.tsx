@@ -2307,37 +2307,37 @@ export default function BranchEmployeesPage() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-              <Table className="min-w-[600px] table-fixed">
-                <TableHeader className="bg-muted/50 sticky top-0 z-10">
+              <Table>
+                <TableHeader className="bg-muted/50">
                   <TableRow>
-                    <TableHead className={`${isRTL ? "text-right" : "text-left"} hidden md:table-cell w-28`}>{isRTL ? "الرقم الوظيفي" : "Employee ID"}</TableHead>
-                    <TableHead className={`${isRTL ? "text-right" : "text-left"} w-40`}>{isRTL ? "الاسم" : "Name"}</TableHead>
-                    <TableHead className={`${isRTL ? "text-right" : "text-left"} w-28`}>{isRTL ? "الفرع" : "Branch"}</TableHead>
-                    <TableHead className={`${isRTL ? "text-right" : "text-left"} hidden md:table-cell w-28`}>{t("branchEmployees.jobTitle")}</TableHead>
-                    <TableHead className={`${isRTL ? "text-right" : "text-left"} hidden md:table-cell w-24`}>{t("branchEmployees.nationality")}</TableHead>
-                    <TableHead className={`${isRTL ? "text-right" : "text-left"} hidden lg:table-cell w-28`}>{t("branchEmployees.totalPackage")}</TableHead>
-                    <TableHead className={`${isRTL ? "text-right" : "text-left"} hidden lg:table-cell w-28`}>{isRTL ? "الشهادة الصحية" : "Health Cert."}</TableHead>
-                    <TableHead className={`${isRTL ? "text-right" : "text-left"} w-24`}>{t("branchEmployees.status")}</TableHead>
-                    <TableHead className={`${isRTL ? "text-right" : "text-left"} w-28`}>{t("branchEmployees.actions")}</TableHead>
+                    <TableHead className={`${isRTL ? "text-right" : "text-left"} hidden md:table-cell whitespace-nowrap`}>{isRTL ? "الرقم الوظيفي" : "Employee ID"}</TableHead>
+                    <TableHead className={`${isRTL ? "text-right" : "text-left"} whitespace-nowrap`}>{isRTL ? "الاسم" : "Name"}</TableHead>
+                    <TableHead className={`${isRTL ? "text-right" : "text-left"} whitespace-nowrap`}>{isRTL ? "الفرع" : "Branch"}</TableHead>
+                    <TableHead className={`${isRTL ? "text-right" : "text-left"} hidden md:table-cell whitespace-nowrap`}>{t("branchEmployees.jobTitle")}</TableHead>
+                    <TableHead className={`${isRTL ? "text-right" : "text-left"} hidden md:table-cell whitespace-nowrap`}>{t("branchEmployees.nationality")}</TableHead>
+                    <TableHead className={`${isRTL ? "text-right" : "text-left"} hidden lg:table-cell whitespace-nowrap`}>{t("branchEmployees.totalPackage")}</TableHead>
+                    <TableHead className={`${isRTL ? "text-right" : "text-left"} hidden lg:table-cell whitespace-nowrap`}>{isRTL ? "الشهادة الصحية" : "Health Cert."}</TableHead>
+                    <TableHead className={`${isRTL ? "text-right" : "text-left"} whitespace-nowrap`}>{t("branchEmployees.status")}</TableHead>
+                    <TableHead className={`${isRTL ? "text-right" : "text-left"} whitespace-nowrap`}>{t("branchEmployees.actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {paginatedEmployees.map((emp: BranchEmployee) => (
                     <TableRow key={emp.id} data-testid={`row-employee-${emp.id}`}>
-                      <TableCell className="font-mono text-xs sm:text-sm text-amber-700 hidden md:table-cell">{emp.employeeNumber || "--"}</TableCell>
-                      <TableCell>
+                      <TableCell className={`font-mono text-xs sm:text-sm text-amber-700 hidden md:table-cell ${isRTL ? "text-right" : "text-left"}`}>{emp.employeeNumber || "--"}</TableCell>
+                      <TableCell className={isRTL ? "text-right" : "text-left"}>
                         <div>
                           <p className="font-medium text-xs sm:text-sm">{emp.employeeName}</p>
                           {emp.employeeNameEn && <p className="text-xs text-gray-500 hidden sm:block" dir="ltr">{emp.employeeNameEn}</p>}
                         </div>
                       </TableCell>
-                      <TableCell className="text-xs sm:text-sm">{getBranchName(emp.branchId)}</TableCell>
-                      <TableCell className="text-xs sm:text-sm hidden md:table-cell">{emp.jobTitle}</TableCell>
-                      <TableCell className="text-xs sm:text-sm hidden md:table-cell">{emp.nationality}</TableCell>
-                      <TableCell className="font-medium text-xs sm:text-sm hidden lg:table-cell">{formatCurrency(emp.totalSalary || emp.salary, isRTL)}</TableCell>
-                      <TableCell className="hidden lg:table-cell">{getHealthBadge(emp.healthCertificate || "none", isRTL)}</TableCell>
-                      <TableCell>{getStatusBadge(emp.status, isRTL)}</TableCell>
-                      <TableCell>
+                      <TableCell className={`text-xs sm:text-sm ${isRTL ? "text-right" : "text-left"}`}>{getBranchName(emp.branchId)}</TableCell>
+                      <TableCell className={`text-xs sm:text-sm hidden md:table-cell ${isRTL ? "text-right" : "text-left"}`}>{emp.jobTitle}</TableCell>
+                      <TableCell className={`text-xs sm:text-sm hidden md:table-cell ${isRTL ? "text-right" : "text-left"}`}>{emp.nationality}</TableCell>
+                      <TableCell className={`font-medium text-xs sm:text-sm hidden lg:table-cell ${isRTL ? "text-right" : "text-left"}`}>{formatCurrency(emp.totalSalary || emp.salary, isRTL)}</TableCell>
+                      <TableCell className={`hidden lg:table-cell ${isRTL ? "text-right" : "text-left"}`}>{getHealthBadge(emp.healthCertificate || "none", isRTL)}</TableCell>
+                      <TableCell className={isRTL ? "text-right" : "text-left"}>{getStatusBadge(emp.status, isRTL)}</TableCell>
+                      <TableCell className={isRTL ? "text-right" : "text-left"}>
                         <div className="flex gap-1">
                           <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" onClick={() => handleViewDetails(emp)} data-testid={`button-view-${emp.id}`} title={t("branchEmployees.view")}>
                             <Eye className="w-4 h-4" />
