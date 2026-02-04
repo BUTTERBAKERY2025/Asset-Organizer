@@ -1674,8 +1674,10 @@ export default function EmployeeReportsDashboardPage() {
     const totalGosiEmployer = gosiReport.reduce((sum, r) => sum + r.employerContribution, 0);
 
     // تحليل تكاليف غير السعوديين (2% تأمين إصابات عمل + رسوم)
-    const WORK_PERMIT_MONTHLY = 66; // 800 ريال/سنة
-    const IQAMA_FEES_MONTHLY = 54; // 650 ريال/سنة
+    // القيم محدثة حسب نظام وزارة الموارد البشرية للشركات الكبيرة
+    const WORK_PERMIT_MONTHLY = 800; // 9,600 ريال/سنة (رسوم رخصة العمل للشركات الكبيرة)
+    const IQAMA_FEES_MONTHLY = 54; // 650 ريال/سنة (رسوم الإقامة)
+    const EXPAT_LEVY_MONTHLY = 800; // 9,600 ريال/سنة (المقابل المالي للشركات الكبيرة)
     const NON_SAUDI_INSURANCE_RATE = 0.02; // 2% تأمين إصابات العمل
 
     const nonSaudiByNationality = new Map<string, { 
@@ -1685,6 +1687,7 @@ export default function EmployeeReportsDashboardPage() {
       insurableSalary: number;
       insuranceCost: number;
       workPermitCost: number;
+      expatLevyCost: number;
       iqamaCost: number;
       totalMonthlyCost: number;
     }>();
@@ -1698,6 +1701,7 @@ export default function EmployeeReportsDashboardPage() {
         insurableSalary: 0,
         insuranceCost: 0,
         workPermitCost: 0,
+        expatLevyCost: 0,
         iqamaCost: 0,
         totalMonthlyCost: 0,
       };
@@ -1712,8 +1716,9 @@ export default function EmployeeReportsDashboardPage() {
       existing.insurableSalary += insurableSalary;
       existing.insuranceCost += insuranceCost;
       existing.workPermitCost += WORK_PERMIT_MONTHLY;
+      existing.expatLevyCost += EXPAT_LEVY_MONTHLY;
       existing.iqamaCost += IQAMA_FEES_MONTHLY;
-      existing.totalMonthlyCost += insuranceCost + WORK_PERMIT_MONTHLY + IQAMA_FEES_MONTHLY;
+      existing.totalMonthlyCost += insuranceCost + WORK_PERMIT_MONTHLY + EXPAT_LEVY_MONTHLY + IQAMA_FEES_MONTHLY;
       nonSaudiByNationality.set(nat, existing);
     });
 
@@ -1725,6 +1730,7 @@ export default function EmployeeReportsDashboardPage() {
     const totalNonSaudiCount = nonSaudiCostAnalysis.reduce((sum, n) => sum + n.count, 0);
     const totalNonSaudiInsurance = nonSaudiCostAnalysis.reduce((sum, n) => sum + n.insuranceCost, 0);
     const totalNonSaudiWorkPermit = nonSaudiCostAnalysis.reduce((sum, n) => sum + n.workPermitCost, 0);
+    const totalNonSaudiExpatLevy = nonSaudiCostAnalysis.reduce((sum, n) => sum + n.expatLevyCost, 0);
     const totalNonSaudiIqama = nonSaudiCostAnalysis.reduce((sum, n) => sum + n.iqamaCost, 0);
     const totalNonSaudiMonthlyCost = nonSaudiCostAnalysis.reduce((sum, n) => sum + n.totalMonthlyCost, 0);
     const totalNonSaudiInsurableSalary = nonSaudiCostAnalysis.reduce((sum, n) => sum + n.insurableSalary, 0);
@@ -1785,7 +1791,7 @@ export default function EmployeeReportsDashboardPage() {
     const excessWorkers = Math.max(0, activeNonSaudis - Math.floor(saudiEmployees.length * (100 / requiredSaudization - 1)));
     
     // تكاليف صاحب العمل فقط (لا تشمل حصة الموظف)
-    const laborFeesOnly = totalNonSaudiWorkPermit + totalNonSaudiIqama; // رسوم العمالة بدون التأمين (لتجنب الازدواجية)
+    const laborFeesOnly = totalNonSaudiWorkPermit + totalNonSaudiExpatLevy + totalNonSaudiIqama; // رسوم العمالة بدون التأمين
     const muqabilMaliMonthly = excessWorkers * MUQABIL_MALI_MONTHLY;
     
     const governmentCosts = {
@@ -1796,6 +1802,7 @@ export default function EmployeeReportsDashboardPage() {
       totalGosiEmployerOnly: totalGosiEmployer + totalNonSaudiInsurance, // إجمالي التأمينات على صاحب العمل
       // رسوم العمالة (منفصلة عن التأمين)
       workPermitTotal: totalNonSaudiWorkPermit,
+      expatLevyTotal: totalNonSaudiExpatLevy,
       iqamaFeesTotal: totalNonSaudiIqama,
       laborFeesTotal: laborFeesOnly,
       // المقابل المالي
@@ -1899,6 +1906,7 @@ export default function EmployeeReportsDashboardPage() {
       totalNonSaudiCount,
       totalNonSaudiInsurance,
       totalNonSaudiWorkPermit,
+      totalNonSaudiExpatLevy,
       totalNonSaudiIqama,
       totalNonSaudiMonthlyCost,
       totalNonSaudiInsurableSalary,
@@ -3267,13 +3275,13 @@ export default function EmployeeReportsDashboardPage() {
                   </CardTitle>
                   <CardDescription>
                     {isRTL 
-                      ? "تأمين إصابات العمل (2%) + رسوم رخصة العمل (66 ريال/شهر) + رسوم الإقامة (54 ريال/شهر)" 
-                      : "Work injury insurance (2%) + Work permit fees (66 SAR/month) + Residency fees (54 SAR/month)"}
+                      ? "تأمين إصابات العمل (2%) + رسوم رخصة العمل (800 ريال/شهر) + المقابل المالي (800 ريال/شهر) + رسوم الإقامة (54 ريال/شهر)" 
+                      : "Work injury insurance (2%) + Work permit (800 SAR/mo) + Expat levy (800 SAR/mo) + Residency (54 SAR/mo)"}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   {/* ملخص التكاليف */}
-                  <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-3 mb-4 sm:mb-6">
+                  <div className="grid grid-cols-2 lg:grid-cols-6 gap-2 sm:gap-3 mb-4 sm:mb-6">
                     <div className="text-center p-2 sm:p-3 bg-orange-50 rounded-lg">
                       <p className="text-lg sm:text-xl md:text-2xl font-bold text-orange-600">{formatNumber(complianceMetrics.totalNonSaudiCount)}</p>
                       <p className="text-[10px] sm:text-xs text-gray-600">{isRTL ? "غير سعودي" : "Non-Saudi"}</p>
@@ -3285,6 +3293,10 @@ export default function EmployeeReportsDashboardPage() {
                     <div className="text-center p-2 sm:p-3 bg-purple-50 rounded-lg">
                       <p className="text-base sm:text-lg md:text-xl font-bold text-purple-600">{formatCurrency(complianceMetrics.totalNonSaudiWorkPermit, isRTL)}</p>
                       <p className="text-[10px] sm:text-xs text-gray-600">{isRTL ? "رخصة العمل" : "Work Permit"}</p>
+                    </div>
+                    <div className="text-center p-2 sm:p-3 bg-amber-50 rounded-lg">
+                      <p className="text-base sm:text-lg md:text-xl font-bold text-amber-600">{formatCurrency(complianceMetrics.totalNonSaudiExpatLevy, isRTL)}</p>
+                      <p className="text-[10px] sm:text-xs text-gray-600">{isRTL ? "المقابل المالي" : "Expat Levy"}</p>
                     </div>
                     <div className="text-center p-2 sm:p-3 bg-teal-50 rounded-lg">
                       <p className="text-base sm:text-lg md:text-xl font-bold text-teal-600">{formatCurrency(complianceMetrics.totalNonSaudiIqama, isRTL)}</p>
@@ -3299,16 +3311,17 @@ export default function EmployeeReportsDashboardPage() {
                   {/* جدول التفاصيل حسب الجنسية */}
                   {complianceMetrics.nonSaudiCostAnalysis.length > 0 && (
                     <div className="overflow-x-auto">
-                      <Table className="table-fixed w-full">
+                      <Table className="w-full">
                         <TableHeader>
                           <TableRow>
-                            <TableHead className={`${isRTL ? "text-right" : "text-left"} w-[100px]`}>{isRTL ? "الجنسية" : "Nationality"}</TableHead>
-                            <TableHead className="text-center w-[60px]">{isRTL ? "العدد" : "Count"}</TableHead>
-                            <TableHead className="text-center w-[100px]">{isRTL ? "الراتب+السكن" : "Salary+Housing"}</TableHead>
-                            <TableHead className="text-center w-[80px]">{isRTL ? "تأمين 2%" : "Insurance 2%"}</TableHead>
-                            <TableHead className="text-center w-[80px]">{isRTL ? "رخصة العمل" : "Work Permit"}</TableHead>
-                            <TableHead className="text-center w-[80px]">{isRTL ? "الإقامة" : "Residency"}</TableHead>
-                            <TableHead className="text-center w-[100px]">{isRTL ? "إجمالي التكلفة" : "Total Cost"}</TableHead>
+                            <TableHead className={`${isRTL ? "text-right" : "text-left"} min-w-[80px]`}>{isRTL ? "الجنسية" : "Nationality"}</TableHead>
+                            <TableHead className="text-center min-w-[50px]">{isRTL ? "العدد" : "Count"}</TableHead>
+                            <TableHead className="text-center min-w-[90px]">{isRTL ? "الراتب+السكن" : "Salary+Housing"}</TableHead>
+                            <TableHead className="text-center min-w-[70px]">{isRTL ? "تأمين 2%" : "Ins. 2%"}</TableHead>
+                            <TableHead className="text-center min-w-[70px]">{isRTL ? "رخصة العمل" : "Work Permit"}</TableHead>
+                            <TableHead className="text-center min-w-[70px]">{isRTL ? "المقابل المالي" : "Expat Levy"}</TableHead>
+                            <TableHead className="text-center min-w-[60px]">{isRTL ? "الإقامة" : "Residency"}</TableHead>
+                            <TableHead className="text-center min-w-[90px]">{isRTL ? "إجمالي التكلفة" : "Total Cost"}</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -3319,6 +3332,7 @@ export default function EmployeeReportsDashboardPage() {
                               <TableCell className="text-center">{formatCurrency(nat.insurableSalary, isRTL)}</TableCell>
                               <TableCell className="text-center text-blue-600">{formatCurrency(nat.insuranceCost, isRTL)}</TableCell>
                               <TableCell className="text-center text-purple-600">{formatCurrency(nat.workPermitCost, isRTL)}</TableCell>
+                              <TableCell className="text-center text-amber-600">{formatCurrency(nat.expatLevyCost, isRTL)}</TableCell>
                               <TableCell className="text-center text-teal-600">{formatCurrency(nat.iqamaCost, isRTL)}</TableCell>
                               <TableCell className="text-center font-bold text-red-600">{formatCurrency(nat.totalMonthlyCost, isRTL)}</TableCell>
                             </TableRow>
