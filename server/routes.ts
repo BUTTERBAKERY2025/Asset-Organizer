@@ -4420,6 +4420,280 @@ export async function registerRoutes(
     }
   });
 
+  // ==================== Enhanced P&L System - نظام الأرباح والخسائر المحسن ====================
+
+  // Get P&L branch settings (fixed rent)
+  app.get("/api/pnl/branch-settings/:branchId", isAuthenticated, requirePermission("pnl", "view"), async (req, res) => {
+    try {
+      const settings = await storage.getPnlBranchSettings(req.params.branchId);
+      res.json(settings || { branchId: req.params.branchId, monthlyRent: 0 });
+    } catch (error) {
+      console.error("Error getting P&L branch settings:", error);
+      res.status(500).json({ error: "Failed to get P&L branch settings" });
+    }
+  });
+
+  // Update P&L branch settings
+  app.post("/api/pnl/branch-settings", isAuthenticated, requirePermission("pnl", "edit"), async (req, res) => {
+    try {
+      const settings = await storage.upsertPnlBranchSettings(req.body);
+      res.json(settings);
+    } catch (error) {
+      console.error("Error saving P&L branch settings:", error);
+      res.status(500).json({ error: "Failed to save P&L branch settings" });
+    }
+  });
+
+  // Get P&L monthly inputs
+  app.get("/api/pnl/monthly-inputs/:branchId/:year/:month", isAuthenticated, requirePermission("pnl", "view"), async (req, res) => {
+    try {
+      const { branchId, year, month } = req.params;
+      const inputs = await storage.getPnlMonthlyInputs(branchId, parseInt(year), parseInt(month));
+      res.json(inputs || { 
+        branchId,
+        year: parseInt(year),
+        month: parseInt(month),
+        electricityCost: 0,
+        waterCost: 0,
+        utilitiesOther: 0,
+        cogsCost: 0,
+        maintenanceCost: 0,
+        marketingCost: 0,
+        suppliesCost: 0,
+        otherCosts: 0
+      });
+    } catch (error) {
+      console.error("Error getting P&L monthly inputs:", error);
+      res.status(500).json({ error: "Failed to get P&L monthly inputs" });
+    }
+  });
+
+  // Update P&L monthly inputs
+  app.post("/api/pnl/monthly-inputs", isAuthenticated, requirePermission("pnl", "edit"), async (req, res) => {
+    try {
+      const inputs = await storage.upsertPnlMonthlyInputs({
+        ...req.body,
+        createdBy: (req as any).user?.id
+      });
+      res.json(inputs);
+    } catch (error) {
+      console.error("Error saving P&L monthly inputs:", error);
+      res.status(500).json({ error: "Failed to save P&L monthly inputs" });
+    }
+  });
+
+  // Enhanced P&L Summary - ملخص الأرباح والخسائر المحسن
+  app.get("/api/pnl/enhanced-summary", isAuthenticated, requirePermission("pnl", "view"), async (req, res) => {
+    try {
+      const { branchId, year, month } = req.query;
+      const yearNum = parseInt(year as string) || new Date().getFullYear();
+      const monthNum = parseInt(month as string) || new Date().getMonth() + 1;
+      
+      // Get all branches or specific branch
+      let branchIds: string[] = [];
+      if (branchId && branchId !== 'all') {
+        branchIds = [branchId as string];
+      } else {
+        const branches = await storage.getAllBranches();
+        branchIds = branches.map(b => b.id);
+      }
+      
+      const results = [];
+      
+      for (const bId of branchIds) {
+        // 1. Get branch info
+        const branch = await storage.getBranch(bId);
+        if (!branch) continue;
+        
+        // 2. Get sales from cashier_journals
+        const startDate = `${yearNum}-${String(monthNum).padStart(2, '0')}-01`;
+        const endDate = `${yearNum}-${String(monthNum).padStart(2, '0')}-${new Date(yearNum, monthNum, 0).getDate()}`;
+        
+        const journals = await storage.getCashierJournals({
+          branchId: bId,
+          status: 'approved'
+        });
+        
+        // Filter by date range
+        const monthJournals = journals.filter(j => {
+          const jDate = new Date(j.salesDate);
+          return jDate.getFullYear() === yearNum && (jDate.getMonth() + 1) === monthNum;
+        });
+        
+        const grossSales = monthJournals.reduce((sum, j) => sum + (j.totalAmount || 0), 0);
+        
+        // 3. Calculate VAT (15%) - صافي المبيعات = الإجمالي ÷ 1.15
+        const netSales = grossSales / 1.15;
+        const vatAmount = grossSales - netSales;
+        
+        // 4. Get P&L settings (fixed rent)
+        const settings = await storage.getPnlBranchSettings(bId);
+        const monthlyRent = settings?.monthlyRent || 0;
+        
+        // 5. Get monthly inputs (variable costs)
+        const inputs = await storage.getPnlMonthlyInputs(bId, yearNum, monthNum);
+        const electricityCost = inputs?.electricityCost || 0;
+        const waterCost = inputs?.waterCost || 0;
+        const utilitiesOther = inputs?.utilitiesOther || 0;
+        const cogsCost = inputs?.cogsCost || 0;
+        const maintenanceCost = inputs?.maintenanceCost || 0;
+        const marketingCost = inputs?.marketingCost || 0;
+        const suppliesCost = inputs?.suppliesCost || 0;
+        const otherCosts = inputs?.otherCosts || 0;
+        
+        // 6. Get employee costs from branch_employees
+        const employees = await storage.getBranchEmployees(bId);
+        let totalSalaries = 0;
+        let totalGosi = 0; // Saudi GOSI 12%
+        let totalNonSaudiCosts = 0; // Work permit 800, Expat levy 800, Residency 54, Insurance 2%
+        
+        for (const emp of employees) {
+          const baseSalary = emp.basicSalary || 0;
+          const housingAllowance = emp.housingAllowance || 0;
+          const transportAllowance = emp.transportAllowance || 0;
+          const totalCompensation = baseSalary + housingAllowance + transportAllowance;
+          
+          totalSalaries += totalCompensation;
+          
+          if (emp.nationality === 'Saudi') {
+            // Saudi GOSI contribution (employer 12%)
+            totalGosi += totalCompensation * 0.12;
+          } else {
+            // Non-Saudi costs (large companies)
+            // Work permit: 800 SAR/month
+            // Expat levy: 800 SAR/month
+            // Residency: 54 SAR/month
+            // Insurance: 2% of salary
+            totalNonSaudiCosts += 800 + 800 + 54 + (totalCompensation * 0.02);
+          }
+        }
+        
+        const totalEmployeeCosts = totalSalaries + totalGosi + totalNonSaudiCosts;
+        
+        // 7. Calculate totals
+        const totalUtilities = electricityCost + waterCost + utilitiesOther;
+        const totalOperatingCosts = totalEmployeeCosts + monthlyRent + totalUtilities + maintenanceCost + marketingCost + suppliesCost + otherCosts;
+        
+        // 8. Calculate profit
+        const grossProfit = netSales - cogsCost;
+        const operatingProfit = grossProfit - totalOperatingCosts;
+        const netProfit = operatingProfit;
+        
+        // 9. Calculate percentages
+        const grossMargin = netSales > 0 ? (grossProfit / netSales) * 100 : 0;
+        const netMargin = netSales > 0 ? (netProfit / netSales) * 100 : 0;
+        
+        results.push({
+          branchId: bId,
+          branchName: branch.name,
+          branchNameEn: branch.nameEn,
+          year: yearNum,
+          month: monthNum,
+          
+          // Sales
+          grossSales,
+          vatAmount,
+          netSales,
+          
+          // COGS
+          cogsCost,
+          grossProfit,
+          grossMargin,
+          
+          // Employee costs breakdown
+          employeeCosts: {
+            salaries: totalSalaries,
+            gosi: totalGosi,
+            nonSaudiCosts: totalNonSaudiCosts,
+            total: totalEmployeeCosts
+          },
+          
+          // Fixed costs
+          rent: monthlyRent,
+          
+          // Variable costs
+          utilities: {
+            electricity: electricityCost,
+            water: waterCost,
+            other: utilitiesOther,
+            total: totalUtilities
+          },
+          
+          // Other operating costs
+          operatingCosts: {
+            maintenance: maintenanceCost,
+            marketing: marketingCost,
+            supplies: suppliesCost,
+            other: otherCosts
+          },
+          
+          totalOperatingCosts,
+          operatingProfit,
+          netProfit,
+          netMargin,
+          
+          // Metadata
+          journalCount: monthJournals.length,
+          employeeCount: employees.length,
+          hasMonthlyInputs: !!inputs
+        });
+      }
+      
+      // Calculate company-wide totals if multiple branches
+      if (results.length > 1) {
+        const totals = {
+          branchId: 'all',
+          branchName: 'جميع الفروع',
+          branchNameEn: 'All Branches',
+          year: yearNum,
+          month: monthNum,
+          grossSales: results.reduce((s, r) => s + r.grossSales, 0),
+          vatAmount: results.reduce((s, r) => s + r.vatAmount, 0),
+          netSales: results.reduce((s, r) => s + r.netSales, 0),
+          cogsCost: results.reduce((s, r) => s + r.cogsCost, 0),
+          grossProfit: results.reduce((s, r) => s + r.grossProfit, 0),
+          grossMargin: 0,
+          employeeCosts: {
+            salaries: results.reduce((s, r) => s + r.employeeCosts.salaries, 0),
+            gosi: results.reduce((s, r) => s + r.employeeCosts.gosi, 0),
+            nonSaudiCosts: results.reduce((s, r) => s + r.employeeCosts.nonSaudiCosts, 0),
+            total: results.reduce((s, r) => s + r.employeeCosts.total, 0)
+          },
+          rent: results.reduce((s, r) => s + r.rent, 0),
+          utilities: {
+            electricity: results.reduce((s, r) => s + r.utilities.electricity, 0),
+            water: results.reduce((s, r) => s + r.utilities.water, 0),
+            other: results.reduce((s, r) => s + r.utilities.other, 0),
+            total: results.reduce((s, r) => s + r.utilities.total, 0)
+          },
+          operatingCosts: {
+            maintenance: results.reduce((s, r) => s + r.operatingCosts.maintenance, 0),
+            marketing: results.reduce((s, r) => s + r.operatingCosts.marketing, 0),
+            supplies: results.reduce((s, r) => s + r.operatingCosts.supplies, 0),
+            other: results.reduce((s, r) => s + r.operatingCosts.other, 0)
+          },
+          totalOperatingCosts: results.reduce((s, r) => s + r.totalOperatingCosts, 0),
+          operatingProfit: results.reduce((s, r) => s + r.operatingProfit, 0),
+          netProfit: results.reduce((s, r) => s + r.netProfit, 0),
+          netMargin: 0,
+          journalCount: results.reduce((s, r) => s + r.journalCount, 0),
+          employeeCount: results.reduce((s, r) => s + r.employeeCount, 0),
+          hasMonthlyInputs: results.some(r => r.hasMonthlyInputs)
+        };
+        
+        totals.grossMargin = totals.netSales > 0 ? (totals.grossProfit / totals.netSales) * 100 : 0;
+        totals.netMargin = totals.netSales > 0 ? (totals.netProfit / totals.netSales) * 100 : 0;
+        
+        return res.json({ branches: results, totals });
+      }
+      
+      res.json({ branches: results, totals: results[0] || null });
+    } catch (error) {
+      console.error("Error getting enhanced P&L summary:", error);
+      res.status(500).json({ error: "Failed to get enhanced P&L summary" });
+    }
+  });
+
   // ==================== Branch Daily Closures Module ====================
 
   // Get all branch daily closures
