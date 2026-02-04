@@ -574,9 +574,14 @@ export async function registerRoutes(
     }
   });
 
-  // Update branch location
-  app.patch("/api/branches/:id/location", isAuthenticated, requirePermission("settings", "edit"), async (req, res) => {
+  // Update branch location - Admin only
+  app.patch("/api/branches/:id/location", isAuthenticated, async (req, res) => {
     try {
+      // فقط المدير يمكنه تعديل موقع الفرع
+      if (!isUserAdmin(req)) {
+        return res.status(403).json({ error: "غير مصرح - هذه الميزة متاحة للمدير فقط" });
+      }
+      
       const { id } = req.params;
       const { latitude, longitude, locationRadius, address } = req.body;
       
