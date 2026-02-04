@@ -4509,18 +4509,23 @@ export async function registerRoutes(
         const startDate = `${yearNum}-${String(monthNum).padStart(2, '0')}-01`;
         const endDate = `${yearNum}-${String(monthNum).padStart(2, '0')}-${new Date(yearNum, monthNum, 0).getDate()}`;
         
+        // جلب اليوميات المعتمدة (posted أو approved)
         const journalsResult = await storage.getCashierJournalsFiltered({
-          branchId: bId,
-          status: 'approved'
+          branchId: bId
         });
         
-        // Filter by date range
-        const monthJournals = journalsResult.journals.filter((j: any) => {
+        // فلترة اليوميات المعتمدة فقط (posted أو approved)
+        const approvedJournals = journalsResult.journals.filter((j: any) => 
+          j.status === 'posted' || j.status === 'approved'
+        );
+        
+        // Filter by date range from approved journals
+        const monthJournals = approvedJournals.filter((j: any) => {
           const jDate = new Date(j.journalDate);
           return jDate.getFullYear() === yearNum && (jDate.getMonth() + 1) === monthNum;
         });
         
-        const grossSales = monthJournals.reduce((sum: number, j: any) => sum + (j.totalAmount || 0), 0);
+        const grossSales = monthJournals.reduce((sum: number, j: any) => sum + (j.totalSales || 0), 0);
         
         // 3. Calculate VAT (15%) - صافي المبيعات = الإجمالي ÷ 1.15
         const netSales = grossSales / 1.15;
