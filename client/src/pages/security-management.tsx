@@ -519,7 +519,7 @@ export default function SecurityManagementPage() {
                       <div className="grid gap-2 text-sm">
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">التاريخ:</span>
-                          <span data-testid="text-last-login-date">{new Date(securitySettings.lastLoginAt).toLocaleString("en-GB")}</span>
+                          <span data-testid="text-last-login-date">{securitySettings.lastLoginAt ? new Date(securitySettings.lastLoginAt).toLocaleString("en-GB") : "-"}</span>
                         </div>
                         {securitySettings.lastLoginIp && (
                           <div className="flex justify-between">
@@ -604,13 +604,13 @@ export default function SecurityManagementPage() {
                           </TableCell>
                           <TableCell data-testid={`text-session-ip-${session.id}`}>{session.ipAddress || "-"}</TableCell>
                           <TableCell>
-                            {formatDistanceToNow(new Date(session.lastActivityAt), { 
+                            {session.lastActivityAt ? formatDistanceToNow(new Date(session.lastActivityAt), { 
                               addSuffix: true, 
                               locale: ar 
-                            })}
+                            }) : "-"}
                           </TableCell>
                           <TableCell>
-                            {new Date(session.expiresAt).toLocaleString("en-GB")}
+                            {session.expiresAt ? new Date(session.expiresAt).toLocaleString("en-GB") : "-"}
                           </TableCell>
                           <TableCell>
                             <Button
@@ -678,7 +678,7 @@ export default function SecurityManagementPage() {
                             {alert.description}
                           </TableCell>
                           <TableCell>
-                            {new Date(alert.createdAt).toLocaleString("en-GB")}
+                            {alert.createdAt ? new Date(alert.createdAt).toLocaleString("en-GB") : "-"}
                           </TableCell>
                           <TableCell>
                             {alert.isResolved ? (
