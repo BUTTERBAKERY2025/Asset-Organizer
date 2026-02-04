@@ -7523,6 +7523,7 @@ export class DatabaseStorage implements IStorage {
         let resolvedName = schedule.employeeName;
         
         // For branch employees (format: branch_emp_XX), always fetch fresh name from branch_employees table
+        let resolvedNameEn = '';
         if (schedule.employeeId.startsWith('branch_emp_')) {
           try {
             const branchEmpId = parseInt(schedule.employeeId.replace('branch_emp_', ''), 10);
@@ -7533,6 +7534,7 @@ export class DatabaseStorage implements IStorage {
                 .limit(1);
               if (branchEmp?.employeeName) {
                 resolvedName = branchEmp.employeeName;
+                resolvedNameEn = branchEmp.employeeNameEn || '';
               } else {
                 console.log(`[WARN] Branch employee ID ${branchEmpId} not found in branch_employees table for employeeId: ${schedule.employeeId}`);
               }
@@ -7556,6 +7558,7 @@ export class DatabaseStorage implements IStorage {
         return {
           ...schedule,
           employeeName: resolvedName || 'غير معروف',
+          employeeNameEn: resolvedNameEn || '',
           attendance: attendance || null
         };
       })
@@ -7583,6 +7586,7 @@ export class DatabaseStorage implements IStorage {
             id: emp.id,
             employeeId,
             employeeName: emp.employeeName,
+            employeeNameEn: emp.employeeNameEn || '',
             startTime: defaultTimes.start,
             endTime: defaultTimes.end,
             shiftType,

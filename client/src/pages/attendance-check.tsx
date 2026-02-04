@@ -22,6 +22,7 @@ interface ScheduledEmployee {
   id: number;
   employeeId: string;
   employeeName: string;
+  employeeNameEn?: string;
   startTime?: string;
   endTime?: string;
   shiftType?: string;
@@ -447,7 +448,12 @@ export default function AttendanceCheckPage() {
                                 <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
                                   <User className="w-4 h-4 text-primary" />
                                 </div>
-                                {emp.employeeName}
+                                <div className="flex flex-col">
+                                  <span>{emp.employeeName}</span>
+                                  {emp.employeeNameEn && (
+                                    <span className="text-xs text-muted-foreground">{emp.employeeNameEn}</span>
+                                  )}
+                                </div>
                               </div>
                             </TableCell>
                             <TableCell className="text-center font-mono text-xs sm:text-sm">{emp.startTime || "-"}</TableCell>
@@ -515,12 +521,22 @@ export default function AttendanceCheckPage() {
                 {signatureMode === "check_in" ? (
                   <>
                     <LogIn className="w-5 h-5 text-green-600" />
-                    {t("attendanceCheck.checkInTitle")} - {selectedEmployee?.employeeName}
+                    <div className="flex flex-col">
+                      <span>{t("attendanceCheck.checkInTitle")} - {selectedEmployee?.employeeName}</span>
+                      {selectedEmployee?.employeeNameEn && (
+                        <span className="text-sm font-normal text-muted-foreground">{selectedEmployee.employeeNameEn}</span>
+                      )}
+                    </div>
                   </>
                 ) : (
                   <>
                     <LogOut className="w-5 h-5 text-red-600" />
-                    {t("attendanceCheck.checkOutTitle")} - {selectedEmployee?.employeeName}
+                    <div className="flex flex-col">
+                      <span>{t("attendanceCheck.checkOutTitle")} - {selectedEmployee?.employeeName}</span>
+                      {selectedEmployee?.employeeNameEn && (
+                        <span className="text-sm font-normal text-muted-foreground">{selectedEmployee.employeeNameEn}</span>
+                      )}
+                    </div>
                   </>
                 )}
               </DialogTitle>
