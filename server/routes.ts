@@ -15777,8 +15777,8 @@ export async function registerRoutes(
     }
   });
 
-  // Get scheduled employees for attendance (branch manager tool)
-  app.get("/api/scheduled-employees-for-attendance", isAuthenticated, async (req, res) => {
+  // Get scheduled employees for attendance (branch manager or attendance clerk tool)
+  app.get("/api/scheduled-employees-for-attendance", isAuthenticated, requirePermission("attendance_check", "view"), async (req, res) => {
     try {
       const { branchId, shiftType, date } = req.query;
       
@@ -15810,8 +15810,8 @@ export async function registerRoutes(
     }
   });
 
-  // Check-in employee by manager
-  app.post("/api/attendance/check-in-employee", isAuthenticated, async (req, res) => {
+  // Check-in employee by manager or attendance clerk
+  app.post("/api/attendance/check-in-employee", isAuthenticated, requirePermission("attendance_check", "create"), async (req, res) => {
     try {
       const { employeeId, branchId, signature, scheduleId, scheduledStartTime, scheduledEndTime, employeeName, userLatitude, userLongitude } = req.body;
       
@@ -15873,8 +15873,8 @@ export async function registerRoutes(
     }
   });
 
-  // Check-out employee by manager
-  app.post("/api/attendance/check-out-employee", isAuthenticated, async (req, res) => {
+  // Check-out employee by manager or attendance clerk
+  app.post("/api/attendance/check-out-employee", isAuthenticated, requirePermission("attendance_check", "edit"), async (req, res) => {
     try {
       const { employeeId, scheduleId, signature } = req.body;
       

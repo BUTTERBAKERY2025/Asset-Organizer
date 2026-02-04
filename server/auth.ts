@@ -485,6 +485,27 @@ export const requirePermission = (module: string, action: string): RequestHandle
       return next();
     }
     
+    // SECURITY: Attendance clerk has ONLY attendance_check permissions
+    if (user.role === "attendance_clerk") {
+      if (module === "attendance_check" && ["view", "create", "edit"].includes(action)) {
+        console.log(`[Auth] ALLOWED: Attendance clerk ${user.username} accessing ${module}:${action}`);
+        return next();
+      }
+      console.log(`[Auth] DENIED: Attendance clerk ${user.username} attempted ${module}:${action}`);
+      logSecurityAlert({
+        alertType: 'permission_denied',
+        severity: 'high',
+        userId: user.id,
+        userName: user.username,
+        module,
+        action,
+        attemptedResource: req.originalUrl,
+        ipAddress: req.ip || req.headers['x-forwarded-for'] as string,
+        userAgent: req.headers['user-agent'],
+      });
+      return res.status(403).json({ message: "غير مسموح - مسجل الحضور لديه صلاحية تسجيل الحضور فقط" });
+    }
+    
     // Viewer can only view
     if (user.role === "viewer") {
       if (action !== "view") {
@@ -563,6 +584,26 @@ export const requireAnyPermission = (module: string, actions: string[]): Request
     // Admin has full access
     if (user.role === "admin") {
       return next();
+    }
+    
+    // SECURITY: Attendance clerk has ONLY attendance_check permissions
+    if (user.role === "attendance_clerk") {
+      const allowedActions = ["view", "create", "edit"];
+      if (module === "attendance_check" && actions.some(a => allowedActions.includes(a))) {
+        return next();
+      }
+      logSecurityAlert({
+        alertType: 'permission_denied',
+        severity: 'high',
+        userId: user.id,
+        userName: user.username,
+        module,
+        action: actions.join(','),
+        attemptedResource: req.originalUrl,
+        ipAddress: req.ip || req.headers['x-forwarded-for'] as string,
+        userAgent: req.headers['user-agent'],
+      });
+      return res.status(403).json({ message: "غير مسموح - مسجل الحضور لديه صلاحية تسجيل الحضور فقط" });
     }
     
     // Viewer can only view
