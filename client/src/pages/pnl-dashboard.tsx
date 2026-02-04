@@ -976,6 +976,127 @@ export default function PnLDashboard() {
     enabled: !!selectedPeriodId && !!completePnL?.metrics,
   });
 
+  // P&L Monthly Inputs (rent, utilities, COGS, etc.)
+  const [showMonthlyInputs, setShowMonthlyInputs] = useState(false);
+  const [monthlyInputsForm, setMonthlyInputsForm] = useState({
+    electricityCost: 0,
+    waterCost: 0,
+    utilitiesOther: 0,
+    cogsCost: 0,
+    maintenanceCost: 0,
+    marketingCost: 0,
+    suppliesCost: 0,
+    otherCosts: 0,
+  });
+  const [branchRentForm, setBranchRentForm] = useState(0);
+
+  // Fetch branch settings (fixed rent)
+  const { data: branchSettings, refetch: refetchBranchSettings } = useQuery({
+    queryKey: ["/api/pnl/branch-settings", selectedBranchId],
+    queryFn: async () => {
+      if (!selectedBranchId) return null;
+      const res = await fetch(`/api/pnl/branch-settings/${selectedBranchId}`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !!selectedBranchId,
+  });
+
+  // Fetch monthly inputs
+  const { data: monthlyInputs, refetch: refetchMonthlyInputs } = useQuery({
+    queryKey: ["/api/pnl/monthly-inputs", selectedBranchId, selectedYear, selectedMonth],
+    queryFn: async () => {
+      if (!selectedBranchId) return null;
+      const res = await fetch(`/api/pnl/monthly-inputs/${selectedBranchId}/${selectedYear}/${selectedMonth}`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !!selectedBranchId && !!selectedYear && !!selectedMonth,
+  });
+
+  // Update form when data loads
+  useEffect(() => {
+    if (branchSettings) {
+      setBranchRentForm(branchSettings.monthlyRent || 0);
+    }
+  }, [branchSettings]);
+
+  useEffect(() => {
+    if (monthlyInputs) {
+      setMonthlyInputsForm({
+        electricityCost: monthlyInputs.electricityCost || 0,
+        waterCost: monthlyInputs.waterCost || 0,
+        utilitiesOther: monthlyInputs.utilitiesOther || 0,
+        cogsCost: monthlyInputs.cogsCost || 0,
+        maintenanceCost: monthlyInputs.maintenanceCost || 0,
+        marketingCost: monthlyInputs.marketingCost || 0,
+        suppliesCost: monthlyInputs.suppliesCost || 0,
+        otherCosts: monthlyInputs.otherCosts || 0,
+      });
+    }
+  }, [monthlyInputs]);
+
+  // Save branch settings mutation
+  const saveBranchSettingsMutation = useMutation({
+    mutationFn: async (data: { branchId: string; monthlyRent: number }) => {
+      const res = await fetch("/api/pnl/branch-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to save branch settings");
+      return res.json();
+    },
+    onSuccess: () => {
+      refetchBranchSettings();
+      refetchEnhancedPnL();
+      toast({ title: "تم حفظ إعدادات الإيجار" });
+    },
+    onError: () => {
+      toast({ title: "فشل في حفظ إعدادات الإيجار", variant: "destructive" });
+    },
+  });
+
+  // Save monthly inputs mutation
+  const saveMonthlyInputsMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetch("/api/pnl/monthly-inputs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to save monthly inputs");
+      return res.json();
+    },
+    onSuccess: () => {
+      refetchMonthlyInputs();
+      refetchEnhancedPnL();
+      toast({ title: "تم حفظ البيانات الشهرية" });
+      setShowMonthlyInputs(false);
+    },
+    onError: () => {
+      toast({ title: "فشل في حفظ البيانات الشهرية", variant: "destructive" });
+    },
+  });
+
+  const handleSaveMonthlyData = () => {
+    if (!selectedBranchId) return;
+    
+    // Save branch settings (rent)
+    saveBranchSettingsMutation.mutate({
+      branchId: selectedBranchId,
+      monthlyRent: branchRentForm,
+    });
+    
+    // Save monthly inputs
+    saveMonthlyInputsMutation.mutate({
+      branchId: selectedBranchId,
+      year: selectedYear,
+      month: selectedMonth,
+      ...monthlyInputsForm,
+    });
+  };
+
   // Enhanced P&L Summary (automatic from cashier journals + employees)
   const { data: enhancedPnL, isLoading: loadingEnhancedPnL, refetch: refetchEnhancedPnL } = useQuery<{
     branches: any[];
@@ -1591,12 +1712,25 @@ export default function PnLDashboard() {
                     </div>
                   </div>
 
+                  {/* Data Entry Button */}
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowMonthlyInputs(true)}
+                      className="gap-2"
+                    >
+                      <Plus className="h-4 w-4" />
+                      إدخال بيانات التكاليف الشهرية
+                    </Button>
+                  </div>
+
                   {/* Data Entry Note */}
                   {!enhancedPnL.totals.hasMonthlyInputs && (
                     <div className="p-3 rounded-lg bg-yellow-50 border border-yellow-200 flex items-center gap-2">
                       <AlertTriangle className="h-4 w-4 text-yellow-600" />
                       <span className="text-sm text-yellow-800">
-                        لم يتم إدخال بيانات الإيجار والمرافق والتكاليف لهذا الشهر. استخدم زر "إدخال البيانات" لإضافتها.
+                        لم يتم إدخال بيانات الإيجار والمرافق والتكاليف لهذا الشهر. اضغط على "إدخال بيانات التكاليف الشهرية" لإضافتها.
                       </span>
                     </div>
                   )}
@@ -2634,6 +2768,169 @@ export default function PnLDashboard() {
                   <Loader2 className="h-4 w-4 animate-spin ml-2" />
                 )}
                 حفظ وحساب المؤشرات
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Monthly Inputs Dialog - نموذج إدخال التكاليف الشهرية */}
+        <Dialog open={showMonthlyInputs} onOpenChange={setShowMonthlyInputs}>
+          <DialogContent className="max-w-2xl" dir="rtl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-xl">
+                <Calculator className="h-5 w-5 text-amber-600" />
+                إدخال بيانات التكاليف الشهرية - {MONTHS_AR[selectedMonth - 1]} {selectedYear}
+              </DialogTitle>
+              <CardDescription>
+                أدخل بيانات الإيجار والمرافق وتكلفة البضاعة المباعة والتكاليف الأخرى
+              </CardDescription>
+            </DialogHeader>
+            
+            <div className="space-y-6 max-h-[60vh] overflow-y-auto py-4">
+              {/* Branch Rent - Fixed */}
+              <div className="p-4 rounded-lg bg-blue-50 border border-blue-200">
+                <div className="flex items-center gap-2 text-base font-medium text-blue-800 mb-3">
+                  <Home className="h-5 w-5" />
+                  الإيجار الشهري الثابت للفرع
+                </div>
+                <div className="flex items-center gap-3">
+                  <Label className="w-32">الإيجار الشهري</Label>
+                  <Input
+                    type="number"
+                    placeholder="0"
+                    value={branchRentForm || ""}
+                    onChange={(e) => setBranchRentForm(parseFloat(e.target.value) || 0)}
+                    className="flex-1"
+                    data-testid="input-monthly-rent"
+                  />
+                  <span className="text-muted-foreground">ريال</span>
+                </div>
+              </div>
+
+              {/* Utilities - Variable */}
+              <div className="p-4 rounded-lg bg-orange-50 border border-orange-200">
+                <div className="flex items-center gap-2 text-base font-medium text-orange-800 mb-3">
+                  <Lightbulb className="h-5 w-5" />
+                  المرافق (متغيرة شهرياً)
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label>الكهرباء</Label>
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      value={monthlyInputsForm.electricityCost || ""}
+                      onChange={(e) => setMonthlyInputsForm({...monthlyInputsForm, electricityCost: parseFloat(e.target.value) || 0})}
+                      data-testid="input-electricity"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>المياه</Label>
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      value={monthlyInputsForm.waterCost || ""}
+                      onChange={(e) => setMonthlyInputsForm({...monthlyInputsForm, waterCost: parseFloat(e.target.value) || 0})}
+                      data-testid="input-water"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>مرافق أخرى</Label>
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      value={monthlyInputsForm.utilitiesOther || ""}
+                      onChange={(e) => setMonthlyInputsForm({...monthlyInputsForm, utilitiesOther: parseFloat(e.target.value) || 0})}
+                      data-testid="input-utilities-other"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* COGS - Cost of Goods Sold */}
+              <div className="p-4 rounded-lg bg-red-50 border border-red-200">
+                <div className="flex items-center gap-2 text-base font-medium text-red-800 mb-3">
+                  <Package className="h-5 w-5" />
+                  تكلفة البضاعة المباعة (COGS)
+                </div>
+                <div className="flex items-center gap-3">
+                  <Label className="w-32">إجمالي COGS</Label>
+                  <Input
+                    type="number"
+                    placeholder="0"
+                    value={monthlyInputsForm.cogsCost || ""}
+                    onChange={(e) => setMonthlyInputsForm({...monthlyInputsForm, cogsCost: parseFloat(e.target.value) || 0})}
+                    className="flex-1"
+                    data-testid="input-cogs"
+                  />
+                  <span className="text-muted-foreground">ريال</span>
+                </div>
+              </div>
+
+              {/* Other Operating Costs */}
+              <div className="p-4 rounded-lg bg-purple-50 border border-purple-200">
+                <div className="flex items-center gap-2 text-base font-medium text-purple-800 mb-3">
+                  <Receipt className="h-5 w-5" />
+                  تكاليف تشغيلية أخرى
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>الصيانة</Label>
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      value={monthlyInputsForm.maintenanceCost || ""}
+                      onChange={(e) => setMonthlyInputsForm({...monthlyInputsForm, maintenanceCost: parseFloat(e.target.value) || 0})}
+                      data-testid="input-maintenance"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>التسويق</Label>
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      value={monthlyInputsForm.marketingCost || ""}
+                      onChange={(e) => setMonthlyInputsForm({...monthlyInputsForm, marketingCost: parseFloat(e.target.value) || 0})}
+                      data-testid="input-marketing"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>المستلزمات</Label>
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      value={monthlyInputsForm.suppliesCost || ""}
+                      onChange={(e) => setMonthlyInputsForm({...monthlyInputsForm, suppliesCost: parseFloat(e.target.value) || 0})}
+                      data-testid="input-supplies"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>تكاليف أخرى</Label>
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      value={monthlyInputsForm.otherCosts || ""}
+                      onChange={(e) => setMonthlyInputsForm({...monthlyInputsForm, otherCosts: parseFloat(e.target.value) || 0})}
+                      data-testid="input-other-costs"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter className="mt-4">
+              <Button variant="outline" onClick={() => setShowMonthlyInputs(false)}>
+                إلغاء
+              </Button>
+              <Button
+                onClick={handleSaveMonthlyData}
+                disabled={saveBranchSettingsMutation.isPending || saveMonthlyInputsMutation.isPending || !selectedBranchId}
+                className="gap-2"
+              >
+                {(saveBranchSettingsMutation.isPending || saveMonthlyInputsMutation.isPending) && (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                )}
+                حفظ البيانات
               </Button>
             </DialogFooter>
           </DialogContent>
