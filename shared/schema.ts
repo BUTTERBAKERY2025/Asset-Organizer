@@ -4865,6 +4865,68 @@ export const PNL_LABELS = {
   },
 } as const;
 
+// ==================== Enhanced P&L System - إعدادات الأرباح والخسائر المحسنة ====================
+
+// Branch Fixed Settings for P&L - إعدادات ثابتة لكل فرع
+export const pnlBranchSettings = pgTable("pnl_branch_settings", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  monthlyRent: real("monthly_rent").default(0), // الإيجار الشهري الثابت
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_pnl_branch_settings_branch").on(table.branchId),
+]);
+
+export const insertPnlBranchSettingsSchema = createInsertSchema(pnlBranchSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type PnlBranchSettings = typeof pnlBranchSettings.$inferSelect;
+export type InsertPnlBranchSettings = z.infer<typeof insertPnlBranchSettingsSchema>;
+
+// Monthly variable inputs for P&L - الإدخالات الشهرية المتغيرة
+export const pnlMonthlyInputs = pgTable("pnl_monthly_inputs", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  year: integer("year").notNull(),
+  month: integer("month").notNull(), // 1-12
+  // المرافق والخدمات
+  electricityCost: real("electricity_cost").default(0), // تكلفة الكهرباء
+  waterCost: real("water_cost").default(0), // تكلفة المياه
+  utilitiesOther: real("utilities_other").default(0), // مصاريف خدمات أخرى
+  // تكلفة البضاعة المباعة
+  cogsCost: real("cogs_cost").default(0), // تكلفة البضاعة المباعة
+  cogsNotes: text("cogs_notes"),
+  // تكاليف أخرى متنوعة
+  maintenanceCost: real("maintenance_cost").default(0), // صيانة
+  marketingCost: real("marketing_cost").default(0), // تسويق
+  suppliesCost: real("supplies_cost").default(0), // مستلزمات
+  otherCosts: real("other_costs").default(0), // تكاليف أخرى
+  otherCostsDetails: text("other_costs_details"), // تفاصيل التكاليف الأخرى (JSON)
+  // ملاحظات وتتبع
+  notes: text("notes"),
+  createdBy: varchar("created_by"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_pnl_monthly_inputs_branch").on(table.branchId),
+  index("idx_pnl_monthly_inputs_period").on(table.year, table.month),
+  index("idx_pnl_monthly_inputs_branch_period").on(table.branchId, table.year, table.month),
+]);
+
+export const insertPnlMonthlyInputsSchema = createInsertSchema(pnlMonthlyInputs).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type PnlMonthlyInputs = typeof pnlMonthlyInputs.$inferSelect;
+export type InsertPnlMonthlyInputs = z.infer<typeof insertPnlMonthlyInputsSchema>;
+
 // ==================== Production vs Sales Comparison System ====================
 
 // Daily Sales Data for Comparison - بيانات المبيعات اليومية للمقارنة
