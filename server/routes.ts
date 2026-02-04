@@ -18318,7 +18318,7 @@ export async function registerRoutes(
     }
   });
 
-  // Get branch ranking
+  // Get branch ranking - يستخدم البيانات المحسوبة تلقائياً من enhanced-summary
   app.get("/api/financials/ranking", isAuthenticated, async (req, res) => {
     try {
       const { year, month, metric } = req.query;
@@ -18333,25 +18333,101 @@ export async function registerRoutes(
         return res.status(403).json({ error: "غير مصرح بالوصول" });
       }
       
-      const allRanking = await storage.getBranchRanking(yearNum, monthNum, metricType);
-      const ranking = branchFilter.branchIds 
-        ? allRanking.filter(r => branchFilter.branchIds!.includes(r.branchId))
-        : allRanking;
-      
-      // Enrich with branch names
+      // جلب جميع الفروع
       const allBranches = await storage.getAllBranches();
       const branches = branchFilter.branchIds 
         ? allBranches.filter(b => branchFilter.branchIds!.includes(b.id))
         : allBranches;
-      const branchMap = new Map(branches.map(b => [b.id, b.name]));
       
-      const enrichedRanking = ranking.map((r, index) => ({
-        ...r,
-        branchName: branchMap.get(r.branchId) || r.branchId,
-        rank: index + 1,
-      }));
+      // قائمة الجنسيات السعودية
+      const saudiNationalities = ['Saudi', 'saudi', 'سعودي', 'سعودية', 'Saudi Arabia', 'SA'];
       
-      res.json(enrichedRanking);
+      // حساب البيانات لكل فرع من المصادر الحقيقية
+      const rankings: Array<{ branchId: string; branchName: string; value: number; rank: number }> = [];
+      
+      for (const branch of branches) {
+        // 1. جلب المبيعات من يوميات الصندوق
+        const journalsResult = await storage.getCashierJournalsFiltered({ branchId: branch.id });
+        const approvedJournals = journalsResult.journals.filter((j: any) => 
+          j.status === 'posted' || j.status === 'approved'
+        );
+        const monthJournals = approvedJournals.filter((j: any) => {
+          const jDate = new Date(j.journalDate);
+          return jDate.getFullYear() === yearNum && (jDate.getMonth() + 1) === monthNum;
+        });
+        const grossSales = monthJournals.reduce((sum: number, j: any) => sum + (j.totalSales || 0), 0);
+        const netSales = grossSales / 1.15;
+        
+        // 2. جلب التكاليف الشهرية
+        const settings = await storage.getPnlBranchSettings(branch.id);
+        const monthlyRent = settings?.monthlyRent || 0;
+        const inputs = await storage.getPnlMonthlyInputs(branch.id, yearNum, monthNum);
+        const electricityCost = inputs?.electricityCost || 0;
+        const waterCost = inputs?.waterCost || 0;
+        const utilitiesOther = inputs?.utilitiesOther || 0;
+        const cogsCost = inputs?.cogsCost || 0;
+        const maintenanceCost = inputs?.maintenanceCost || 0;
+        const marketingCost = inputs?.marketingCost || 0;
+        const suppliesCost = inputs?.suppliesCost || 0;
+        const otherCosts = inputs?.otherCosts || 0;
+        
+        // 3. حساب تكاليف الموظفين
+        const employees = await storage.getBranchEmployeesByBranch(branch.id);
+        let totalSalaries = 0;
+        let totalGosi = 0;
+        let totalNonSaudiCosts = 0;
+        
+        for (const emp of employees) {
+          const baseSalary = (emp as any).salary || 0;
+          const housingAllowance = (emp as any).housingAllowance || (emp as any).housing_allowance || 0;
+          const transportAllowance = (emp as any).transportAllowance || (emp as any).transport_allowance || 0;
+          const totalCompensation = baseSalary + housingAllowance + transportAllowance;
+          totalSalaries += totalCompensation;
+          
+          const nationality = ((emp as any).nationality || '').trim();
+          const isSaudi = saudiNationalities.some(n => 
+            nationality.toLowerCase().includes(n.toLowerCase()) || n.toLowerCase().includes(nationality.toLowerCase())
+          );
+          
+          if (isSaudi) {
+            const gosiBase = baseSalary + housingAllowance;
+            totalGosi += gosiBase * 0.12;
+          } else {
+            totalNonSaudiCosts += 800 + 800 + 54 + (totalCompensation * 0.02);
+          }
+        }
+        
+        const totalEmployeeCosts = totalSalaries + totalGosi + totalNonSaudiCosts;
+        const totalUtilities = electricityCost + waterCost + utilitiesOther;
+        const totalOperatingCosts = totalEmployeeCosts + monthlyRent + totalUtilities + maintenanceCost + marketingCost + suppliesCost + otherCosts;
+        
+        // 4. حساب الأرباح
+        const grossProfit = netSales - cogsCost;
+        const netProfit = grossProfit - totalOperatingCosts;
+        const netMargin = netSales > 0 ? (netProfit / netSales) * 100 : 0;
+        
+        // 5. تحديد القيمة حسب المقياس المطلوب
+        let value = 0;
+        switch (metricType) {
+          case 'profit':
+            value = netProfit;
+            break;
+          case 'revenue':
+            value = grossSales;
+            break;
+          case 'margin':
+            value = netMargin;
+            break;
+        }
+        
+        rankings.push({ branchId: branch.id, branchName: branch.name, value, rank: 0 });
+      }
+      
+      // ترتيب الفروع تنازلياً
+      rankings.sort((a, b) => b.value - a.value);
+      rankings.forEach((r, index) => { r.rank = index + 1; });
+      
+      res.json(rankings);
     } catch (error) {
       console.error("Error fetching branch ranking:", error);
       res.status(500).json({ error: "فشل في جلب ترتيب الفروع" });
