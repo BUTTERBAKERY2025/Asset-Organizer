@@ -13273,7 +13273,7 @@ export async function registerRoutes(
   // Security: Non-admin/manager users can only see their own journals
   app.get("/api/cashier-journals-report", isAuthenticated, async (req, res) => {
     try {
-      const user = req.user as User;
+      const user = (req as any).currentUser as User;
       if (!user) {
         return res.status(401).json({ error: "غير مسجل الدخول" });
       }
@@ -13288,10 +13288,9 @@ export async function registerRoutes(
       let canViewAllCashiers = user.role === 'admin' || user.role === 'manager';
       
       if (!canViewAllCashiers) {
-        // Check if user has cashier_performance view permission with appropriate actions
         const permissions = await storage.getUserPermissions(user.id);
         const perfPerms = permissions.find(p => p.module === 'cashier_performance' || p.module === 'cashier_journal');
-        canViewAllCashiers = perfPerms?.actions.includes('approve') || perfPerms?.actions.includes('create') || perfPerms?.actions.includes('edit');
+        canViewAllCashiers = !!(perfPerms?.actions.includes('approve') || perfPerms?.actions.includes('create') || perfPerms?.actions.includes('edit'));
       }
       
       console.log("[cashier-journals-report] User:", user.id, "Role:", user.role, "CanViewAll:", canViewAllCashiers);
