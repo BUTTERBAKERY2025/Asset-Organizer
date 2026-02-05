@@ -4190,6 +4190,14 @@ export async function registerRoutes(
 
   // Get cashier journal stats
   app.get("/api/cashier-journals/stats/summary", isAuthenticated, requirePermission("cashier_journal", "view"), async (req, res) => {
+    // Disable caching to ensure fresh data with filters
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'Surrogate-Control': 'no-store'
+    });
+    
     try {
       const { branchId, status, cashierId, dateFrom, dateTo } = req.query;
       const user = getCurrentUser(req);
