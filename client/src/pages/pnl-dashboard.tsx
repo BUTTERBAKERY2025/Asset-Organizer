@@ -2331,6 +2331,14 @@ export default function PnLDashboard() {
                               <Badge className="bg-red-100 text-red-800 text-[10px] sm:text-xs">مرتفع</Badge>
                             )}
                           </div>
+                          <div className="mt-2 pt-2 border-t border-dashed">
+                            <p className="text-[9px] sm:text-[10px] text-muted-foreground leading-relaxed">
+                              <span className="font-semibold">طريقة الحساب:</span> (إجمالي تكاليف الموظفين ÷ صافي المبيعات) × 100
+                            </p>
+                            <p className="text-[9px] sm:text-[10px] text-muted-foreground mt-1">
+                              <span className="text-green-600">≤25% ممتاز</span> • <span className="text-yellow-600">25-35% مقبول</span> • <span className="text-red-600">&gt;35% مرتفع</span>
+                            </p>
+                          </div>
                         </CardContent>
                       </Card>
 
@@ -2349,6 +2357,14 @@ export default function PnLDashboard() {
                             ) : (
                               <Badge className="bg-red-100 text-red-800 text-[10px] sm:text-xs">مرتفع</Badge>
                             )}
+                          </div>
+                          <div className="mt-2 pt-2 border-t border-dashed">
+                            <p className="text-[9px] sm:text-[10px] text-muted-foreground leading-relaxed">
+                              <span className="font-semibold">طريقة الحساب:</span> (الإيجار الشهري ÷ صافي المبيعات) × 100
+                            </p>
+                            <p className="text-[9px] sm:text-[10px] text-muted-foreground mt-1">
+                              <span className="text-green-600">≤10% ممتاز</span> • <span className="text-yellow-600">10-15% مقبول</span> • <span className="text-red-600">&gt;15% مرتفع</span>
+                            </p>
                           </div>
                         </CardContent>
                       </Card>
@@ -2369,6 +2385,14 @@ export default function PnLDashboard() {
                               <Badge className="bg-red-100 text-red-800 text-[10px] sm:text-xs">مرتفع</Badge>
                             )}
                           </div>
+                          <div className="mt-2 pt-2 border-t border-dashed">
+                            <p className="text-[9px] sm:text-[10px] text-muted-foreground leading-relaxed">
+                              <span className="font-semibold">طريقة الحساب:</span> (قيمة الهدر ÷ إجمالي المبيعات) × 100
+                            </p>
+                            <p className="text-[9px] sm:text-[10px] text-muted-foreground mt-1">
+                              <span className="text-green-600">≤3% ممتاز</span> • <span className="text-yellow-600">3-5% مقبول</span> • <span className="text-red-600">&gt;5% مرتفع</span>
+                            </p>
+                          </div>
                         </CardContent>
                       </Card>
                     </div>
@@ -2386,6 +2410,14 @@ export default function PnLDashboard() {
                             <Badge variant="secondary" className="text-[10px] sm:text-xs">{formatPercent(metrics.ebitdaMarginPct || 0)}</Badge>
                             <span className="text-[10px] sm:text-xs text-muted-foreground">هامش EBITDA</span>
                           </div>
+                          <div className="mt-2 pt-2 border-t border-dashed">
+                            <p className="text-[9px] sm:text-[10px] text-muted-foreground leading-relaxed">
+                              <span className="font-semibold">طريقة الحساب:</span> صافي الربح + الإهلاك + الفوائد + الضرائب
+                            </p>
+                            <p className="text-[9px] sm:text-[10px] text-muted-foreground mt-1">
+                              <span className="font-semibold">هامش EBITDA:</span> (EBITDA ÷ صافي المبيعات) × 100
+                            </p>
+                          </div>
                         </CardContent>
                       </Card>
 
@@ -2399,6 +2431,14 @@ export default function PnLDashboard() {
                           <div className="mt-2 flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2">
                             <Badge variant="secondary" className="text-[10px] sm:text-xs">{formatPercent(metrics.contributionMarginPct || 0)}</Badge>
                             <span className="text-[10px] sm:text-xs text-muted-foreground">من الإيرادات</span>
+                          </div>
+                          <div className="mt-2 pt-2 border-t border-dashed">
+                            <p className="text-[9px] sm:text-[10px] text-muted-foreground leading-relaxed">
+                              <span className="font-semibold">طريقة الحساب:</span> صافي المبيعات - التكاليف المتغيرة
+                            </p>
+                            <p className="text-[9px] sm:text-[10px] text-muted-foreground mt-1">
+                              <span className="font-semibold">النسبة:</span> (هامش المساهمة ÷ صافي المبيعات) × 100
+                            </p>
                           </div>
                         </CardContent>
                       </Card>
@@ -2417,6 +2457,14 @@ export default function PnLDashboard() {
                               {formatPercent(metrics.operatingMarginPct || 0)}
                             </Badge>
                             <span className="text-[10px] sm:text-xs text-muted-foreground">هامش تشغيلي</span>
+                          </div>
+                          <div className="mt-2 pt-2 border-t border-dashed">
+                            <p className="text-[9px] sm:text-[10px] text-muted-foreground leading-relaxed">
+                              <span className="font-semibold">طريقة الحساب:</span> إجمالي الربح - المصروفات التشغيلية
+                            </p>
+                            <p className="text-[9px] sm:text-[10px] text-muted-foreground mt-1">
+                              <span className="font-semibold">الهامش:</span> (الربح التشغيلي ÷ صافي المبيعات) × 100
+                            </p>
                           </div>
                         </CardContent>
                       </Card>
@@ -2440,6 +2488,14 @@ export default function PnLDashboard() {
                               </Badge>
                             </div>
                           )}
+                          <div className="mt-2 pt-2 border-t border-dashed">
+                            <p className="text-[9px] sm:text-[10px] text-muted-foreground leading-relaxed">
+                              <span className="font-semibold">طريقة الحساب:</span> إجمالي المبيعات ÷ عدد الموظفين
+                            </p>
+                            <p className="text-[9px] sm:text-[10px] text-muted-foreground mt-1">
+                              <span className="font-semibold">عائد الراتب:</span> (إجمالي المبيعات ÷ إجمالي الرواتب) × 100
+                            </p>
+                          </div>
                         </CardContent>
                       </Card>
                     </div>
