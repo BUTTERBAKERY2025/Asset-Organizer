@@ -13266,6 +13266,60 @@ export async function registerRoutes(
     }
   });
 
+  // API for detailed cashier journals report with date range
+  app.get("/api/cashier-journals-report", isAuthenticated, async (req, res) => {
+    try {
+      const { branchId, startDate, endDate, cashierId } = req.query;
+      
+      const branchFilter = getEffectiveBranchFilter(req, branchId as string);
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بالوصول" });
+      }
+
+      const filters: any = {};
+      if (startDate) filters.startDate = startDate as string;
+      if (endDate) filters.endDate = endDate as string;
+      if (branchFilter.singleBranchId) {
+        filters.branchId = branchFilter.singleBranchId;
+      } else if (branchId && branchId !== 'all') {
+        filters.branchId = branchId as string;
+      }
+
+      let journals = await storage.getCashierSalesJournals(filters);
+      
+      // Filter by cashier if specified
+      if (cashierId && cashierId !== 'all') {
+        journals = journals.filter(j => j.cashierId === cashierId);
+      }
+
+      // Get user and branch names
+      const users = await storage.getUsers();
+      const branches = await storage.getBranches();
+      const userMap = new Map(users.map(u => [u.id, `${u.firstName || ''} ${u.lastName || ''}`]));
+      const branchMap = new Map(branches.map(b => [b.id, b.name]));
+
+      const result = journals.map(j => ({
+        id: j.id,
+        cashierId: j.cashierId,
+        cashierName: userMap.get(j.cashierId || '') || 'غير معروف',
+        branchId: j.branchId,
+        branchName: branchMap.get(j.branchId || '') || 'غير معروف',
+        date: j.journalDate,
+        shiftType: j.shiftType,
+        totalSales: Number(j.totalSales) || 0,
+        cashSales: Number(j.cashSales) || 0,
+        cardSales: Number(j.cardSales) || 0,
+        transactionCount: j.transactionCount || 0,
+        averageTicket: j.transactionCount ? (Number(j.totalSales) / j.transactionCount) : 0,
+      }));
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching cashier journals report:", error);
+      res.status(500).json({ error: "فشل في جلب تقرير اليوميات" });
+    }
+  });
+
   // ==========================================
   // Average Ticket Targets API - أهداف متوسط الفاتورة
   // ==========================================

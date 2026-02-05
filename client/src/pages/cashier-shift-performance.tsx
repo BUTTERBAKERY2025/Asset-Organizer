@@ -63,6 +63,15 @@ export default function CashierShiftPerformance() {
   const [selectedShift, setSelectedShift] = useState<string>("all");
   const [showTargetDialog, setShowTargetDialog] = useState(false);
   const [editingTarget, setEditingTarget] = useState<CashierShiftTarget | null>(null);
+  
+  // Report filters
+  const [reportStartDate, setReportStartDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    return d.toISOString().split('T')[0];
+  });
+  const [reportEndDate, setReportEndDate] = useState(today);
+  const [reportCashierId, setReportCashierId] = useState<string>("all");
   const [newTarget, setNewTarget] = useState({
     cashierId: "",
     branchId: "",
@@ -219,6 +228,83 @@ export default function CashierShiftPerformance() {
     const sale = cashierSales.find(s => s.cashierId === cashierId && s.shiftType === shiftType);
     return sale || { totalSales: 0, transactionCount: 0, averageTicket: 0 };
   };
+
+  // Fetch cashier journals for detailed report
+  interface CashierJournalReport {
+    id: number;
+    cashierId: string;
+    cashierName: string;
+    branchId: string;
+    branchName: string;
+    date: string;
+    shiftType: string;
+    totalSales: number;
+    cashSales: number;
+    cardSales: number;
+    transactionCount: number;
+    averageTicket: number;
+  }
+
+  const { data: cashierJournals = [] } = useQuery<CashierJournalReport[]>({
+    queryKey: ["/api/cashier-journals-report", selectedBranch, reportStartDate, reportEndDate, reportCashierId],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (selectedBranch !== "all") params.append("branchId", selectedBranch);
+      params.append("startDate", reportStartDate);
+      params.append("endDate", reportEndDate);
+      if (reportCashierId !== "all") params.append("cashierId", reportCashierId);
+      const res = await fetch(`/api/cashier-journals-report?${params}`);
+      if (!res.ok) return [];
+      return res.json();
+    }
+  });
+
+  // Calculate contribution analysis
+  const contributionData = useMemo(() => {
+    if (!cashierJournals.length) return [];
+    
+    // Group by cashier
+    const cashierTotals = new Map<string, { 
+      cashierId: string;
+      cashierName: string;
+      totalSales: number;
+      transactionCount: number;
+      daysWorked: number;
+      shifts: { morning: number; evening: number };
+    }>();
+    
+    const branchTotal = cashierJournals.reduce((sum, j) => sum + j.totalSales, 0);
+    const uniqueDates = new Set(cashierJournals.map(j => j.date));
+    
+    cashierJournals.forEach(j => {
+      const existing = cashierTotals.get(j.cashierId);
+      if (existing) {
+        existing.totalSales += j.totalSales;
+        existing.transactionCount += j.transactionCount;
+        if (j.shiftType === 'morning') existing.shifts.morning += j.totalSales;
+        else existing.shifts.evening += j.totalSales;
+      } else {
+        cashierTotals.set(j.cashierId, {
+          cashierId: j.cashierId,
+          cashierName: j.cashierName,
+          totalSales: j.totalSales,
+          transactionCount: j.transactionCount,
+          daysWorked: 1,
+          shifts: {
+            morning: j.shiftType === 'morning' ? j.totalSales : 0,
+            evening: j.shiftType === 'evening' ? j.totalSales : 0,
+          }
+        });
+      }
+    });
+    
+    return Array.from(cashierTotals.values()).map(c => ({
+      ...c,
+      branchTotal,
+      contributionPercent: branchTotal > 0 ? (c.totalSales / branchTotal) * 100 : 0,
+      avgDailySales: c.totalSales / (uniqueDates.size || 1),
+    })).sort((a, b) => b.contributionPercent - a.contributionPercent);
+  }, [cashierJournals]);
 
   const createTargetMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -797,20 +883,28 @@ export default function CashierShiftPerformance() {
         </div>
 
         <Tabs defaultValue="targets" className="space-y-4">
-          <TabsList data-testid="tabs-main">
-            <TabsTrigger value="targets" data-testid="tab-targets">
-              <Target className="h-4 w-4 ml-2" />
+          <TabsList data-testid="tabs-main" className="flex-wrap h-auto gap-1">
+            <TabsTrigger value="targets" data-testid="tab-targets" className="text-xs sm:text-sm">
+              <Target className="h-3 w-3 sm:h-4 sm:w-4 ml-1" />
               الأهداف
             </TabsTrigger>
-            <TabsTrigger value="performance" data-testid="tab-performance">
-              <TrendingUp className="h-4 w-4 ml-2" />
+            <TabsTrigger value="performance" data-testid="tab-performance" className="text-xs sm:text-sm">
+              <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4 ml-1" />
               الأداء
             </TabsTrigger>
-            <TabsTrigger value="alerts" data-testid="tab-alerts">
-              <Bell className="h-4 w-4 ml-2" />
+            <TabsTrigger value="cashier-report" data-testid="tab-cashier-report" className="text-xs sm:text-sm">
+              <Receipt className="h-3 w-3 sm:h-4 sm:w-4 ml-1" />
+              تقرير الكاشير
+            </TabsTrigger>
+            <TabsTrigger value="contribution" data-testid="tab-contribution" className="text-xs sm:text-sm">
+              <Users className="h-3 w-3 sm:h-4 sm:w-4 ml-1" />
+              نسبة المساهمة
+            </TabsTrigger>
+            <TabsTrigger value="alerts" data-testid="tab-alerts" className="text-xs sm:text-sm">
+              <Bell className="h-3 w-3 sm:h-4 sm:w-4 ml-1" />
               التنبيهات
               {summaryStats.alertCount > 0 && (
-                <Badge className="mr-2 bg-red-500 text-white">{summaryStats.alertCount}</Badge>
+                <Badge className="mr-1 bg-red-500 text-white text-xs">{summaryStats.alertCount}</Badge>
               )}
             </TabsTrigger>
           </TabsList>
@@ -1238,6 +1332,220 @@ export default function CashierShiftPerformance() {
                         </div>
                       );
                     })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* تقرير الكاشير التفصيلي */}
+          <TabsContent value="cashier-report" className="space-y-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Receipt className="h-5 w-5" />
+                  تقرير الكاشير التفصيلي
+                </CardTitle>
+                <CardDescription>عرض يوميات كل كاشير حسب الفترة المختارة</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {/* Filters */}
+                <div className="flex flex-wrap items-center gap-3 mb-4 p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <Label className="text-xs">من:</Label>
+                    <Input 
+                      type="date" 
+                      value={reportStartDate}
+                      onChange={(e) => setReportStartDate(e.target.value)}
+                      className="w-32 h-9 text-sm"
+                      data-testid="input-report-start"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label className="text-xs">إلى:</Label>
+                    <Input 
+                      type="date" 
+                      value={reportEndDate}
+                      onChange={(e) => setReportEndDate(e.target.value)}
+                      className="w-32 h-9 text-sm"
+                      data-testid="input-report-end"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label className="text-xs">الكاشير:</Label>
+                    <Select value={reportCashierId} onValueChange={setReportCashierId}>
+                      <SelectTrigger className="w-40 h-9 text-sm" data-testid="select-report-cashier">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">جميع الكاشيرين</SelectItem>
+                        {branchCashiers.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.firstName || c.username} {c.lastName || ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Report Table */}
+                {cashierJournals.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Receipt className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                    <p>لا توجد بيانات للفترة المختارة</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-right">التاريخ</TableHead>
+                          <TableHead className="text-right">الكاشير</TableHead>
+                          <TableHead className="text-right">الشفت</TableHead>
+                          <TableHead className="text-right">المبيعات</TableHead>
+                          <TableHead className="text-right">نقدي</TableHead>
+                          <TableHead className="text-right">بطاقات</TableHead>
+                          <TableHead className="text-right">الحركات</TableHead>
+                          <TableHead className="text-right">م. الفاتورة</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {cashierJournals.map((j) => (
+                          <TableRow key={j.id} data-testid={`journal-row-${j.id}`}>
+                            <TableCell className="font-medium">{j.date}</TableCell>
+                            <TableCell>{j.cashierName}</TableCell>
+                            <TableCell>
+                              <Badge variant={j.shiftType === 'morning' ? 'default' : 'secondary'} className="text-xs">
+                                {j.shiftType === 'morning' ? 'صباحي' : 'مسائي'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="font-bold text-green-600">{formatCurrency(j.totalSales)}</TableCell>
+                            <TableCell>{formatCurrency(j.cashSales)}</TableCell>
+                            <TableCell>{formatCurrency(j.cardSales)}</TableCell>
+                            <TableCell>{j.transactionCount}</TableCell>
+                            <TableCell>{formatCurrency(j.averageTicket)}</TableCell>
+                          </TableRow>
+                        ))}
+                        {/* Totals Row */}
+                        <TableRow className="bg-amber-50 font-bold">
+                          <TableCell colSpan={3}>الإجمالي</TableCell>
+                          <TableCell className="text-green-700">{formatCurrency(cashierJournals.reduce((s, j) => s + j.totalSales, 0))}</TableCell>
+                          <TableCell>{formatCurrency(cashierJournals.reduce((s, j) => s + j.cashSales, 0))}</TableCell>
+                          <TableCell>{formatCurrency(cashierJournals.reduce((s, j) => s + j.cardSales, 0))}</TableCell>
+                          <TableCell>{cashierJournals.reduce((s, j) => s + j.transactionCount, 0)}</TableCell>
+                          <TableCell>-</TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* نسبة مساهمة الكاشير */}
+          <TabsContent value="contribution" className="space-y-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Users className="h-5 w-5" />
+                  نسبة مساهمة الكاشير من المبيعات
+                </CardTitle>
+                <CardDescription>قياس مساهمة كل كاشير من إجمالي مبيعات الفرع للفترة المختارة</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {/* Summary Cards */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                  <div className="bg-blue-50 p-3 rounded-lg text-center">
+                    <p className="text-xs text-blue-600">إجمالي المبيعات</p>
+                    <p className="text-lg font-bold text-blue-700">
+                      {formatCurrency(contributionData.reduce((s, c) => s + c.totalSales, 0))}
+                    </p>
+                  </div>
+                  <div className="bg-green-50 p-3 rounded-lg text-center">
+                    <p className="text-xs text-green-600">عدد الكاشيرين</p>
+                    <p className="text-lg font-bold text-green-700">{contributionData.length}</p>
+                  </div>
+                  <div className="bg-amber-50 p-3 rounded-lg text-center">
+                    <p className="text-xs text-amber-600">عدد الحركات</p>
+                    <p className="text-lg font-bold text-amber-700">
+                      {contributionData.reduce((s, c) => s + c.transactionCount, 0)}
+                    </p>
+                  </div>
+                  <div className="bg-purple-50 p-3 rounded-lg text-center">
+                    <p className="text-xs text-purple-600">الفترة</p>
+                    <p className="text-sm font-bold text-purple-700">{reportStartDate} - {reportEndDate}</p>
+                  </div>
+                </div>
+
+                {/* Contribution Chart & Table */}
+                {contributionData.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Users className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                    <p>لا توجد بيانات للفترة المختارة</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {/* Pie Chart */}
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={contributionData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={40}
+                            outerRadius={80}
+                            paddingAngle={2}
+                            dataKey="contributionPercent"
+                            nameKey="cashierName"
+                            label={({ name, percent }) => `${name}: ${percent.toFixed(0)}%`}
+                          >
+                            {contributionData.map((_, i) => (
+                              <Cell key={i} fill={['#8B4513', '#D4A574', '#F5DEB3', '#DEB887', '#CD853F', '#A0522D'][i % 6]} />
+                            ))}
+                          </Pie>
+                          <RechartsTooltip formatter={(value: number) => `${value.toFixed(1)}%`} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    {/* Table */}
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-right">#</TableHead>
+                            <TableHead className="text-right">الكاشير</TableHead>
+                            <TableHead className="text-right">المبيعات</TableHead>
+                            <TableHead className="text-right">نسبة المساهمة</TableHead>
+                            <TableHead className="text-right">صباحي</TableHead>
+                            <TableHead className="text-right">مسائي</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {contributionData.map((c, i) => (
+                            <TableRow key={c.cashierId} data-testid={`contribution-row-${c.cashierId}`}>
+                              <TableCell>
+                                {i === 0 && <Trophy className="h-4 w-4 text-amber-500" />}
+                                {i > 0 && (i + 1)}
+                              </TableCell>
+                              <TableCell className="font-medium">{c.cashierName}</TableCell>
+                              <TableCell className="font-bold text-green-600">{formatCurrency(c.totalSales)}</TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <Progress value={c.contributionPercent} className="h-2 w-16" />
+                                  <span className="font-bold text-amber-700">{c.contributionPercent.toFixed(1)}%</span>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-xs">{formatCurrency(c.shifts.morning)}</TableCell>
+                              <TableCell className="text-xs">{formatCurrency(c.shifts.evening)}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
                   </div>
                 )}
               </CardContent>
