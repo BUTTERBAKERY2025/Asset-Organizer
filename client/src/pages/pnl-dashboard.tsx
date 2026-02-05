@@ -1713,19 +1713,24 @@ export default function PnLDashboard() {
                     <Button
                       variant="default"
                       className="h-11 sm:h-9 bg-amber-600 hover:bg-amber-700"
-                      onClick={() => {
+                      onClick={async () => {
                         if (!enhancedPnL?.totals?.grossSales && enhancedPnL?.totals?.grossSales !== 0) {
                           toast({ title: "لا توجد بيانات", description: "لا توجد يوميات صندوق معتمدة لهذه الفترة", variant: "destructive" });
                           return;
                         }
-                        const branchLabel = selectedBranch?.name || "جميع الفروع";
-                        const period = `${MONTHS_AR[selectedMonth - 1]} ${selectedYear}`;
-                        const docDef = generateEnhancedPnLPdfReport(
-                          branchLabel,
-                          period,
-                          enhancedPnL
-                        );
-                        downloadArabicPdf(docDef, `تقرير_PnL_المحسن_${branchLabel}_${period}.pdf`);
+                        try {
+                          const branchLabel = selectedBranch?.name || "جميع الفروع";
+                          const period = `${MONTHS_AR[selectedMonth - 1]} ${selectedYear}`;
+                          const docDef = generateEnhancedPnLPdfReport(
+                            branchLabel,
+                            period,
+                            enhancedPnL
+                          );
+                          await downloadArabicPdf(docDef, `تقرير_PnL_المحسن_${branchLabel}_${period}.pdf`);
+                        } catch (error) {
+                          console.error('PDF export error:', error);
+                          toast({ title: "خطأ", description: "فشل في تصدير PDF", variant: "destructive" });
+                        }
                       }}
                       data-testid="button-export-enhanced-pdf"
                     >
@@ -1760,19 +1765,24 @@ export default function PnLDashboard() {
                     <Button
                       variant="outline"
                       className="h-11 sm:h-9"
-                      onClick={() => {
+                      onClick={async () => {
                         if (selectedBranch && completePnL) {
-                          const period = `${MONTHS_AR[selectedMonth - 1]} ${selectedYear}`;
-                          const docDef = generatePnLPdfReport(
-                            selectedBranch.name,
-                            period,
-                            completePnL.metrics,
-                            completePnL.sales,
-                            completePnL.cogs,
-                            completePnL.operatingExpenses,
-                            completePnL.fixedCosts
-                          );
-                          downloadArabicPdf(docDef, `تقرير_PnL_${selectedBranch.name}_${period}.pdf`);
+                          try {
+                            const period = `${MONTHS_AR[selectedMonth - 1]} ${selectedYear}`;
+                            const docDef = generatePnLPdfReport(
+                              selectedBranch.name,
+                              period,
+                              completePnL.metrics,
+                              completePnL.sales,
+                              completePnL.cogs,
+                              completePnL.operatingExpenses,
+                              completePnL.fixedCosts
+                            );
+                            await downloadArabicPdf(docDef, `تقرير_PnL_${selectedBranch.name}_${period}.pdf`);
+                          } catch (error) {
+                            console.error('PDF export error:', error);
+                            toast({ title: "خطأ", description: "فشل في تصدير PDF", variant: "destructive" });
+                          }
                         }
                       }}
                       data-testid="button-export-pdf"
