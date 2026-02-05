@@ -95,6 +95,12 @@ export default function CashierShiftPerformance() {
   const { branches, userBranchId, canSelectBranch } = useBranches();
   const { canCreate, canEdit, canDelete } = usePermissions();
 
+  // Check if user can view all cashiers' data (admin/manager or has edit/create permission)
+  const canViewAllCashiers = useMemo(() => {
+    if (!user) return false;
+    return user.role === 'admin' || user.role === 'manager' || canEdit("cashier_performance") || canCreate("cashier_performance");
+  }, [user, canEdit, canCreate]);
+
   const selectedBranchData = useMemo(() => {
     if (selectedBranch === "all") return null;
     return branches.find(b => b.id === selectedBranch);
@@ -966,22 +972,25 @@ export default function CashierShiftPerformance() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Label className="text-xs text-gray-600">الكاشير:</Label>
-                      <Select value={targetCashierId} onValueChange={setTargetCashierId}>
-                        <SelectTrigger className="w-40 h-9 text-sm bg-white" data-testid="select-targets-cashier">
-                          <SelectValue placeholder="جميع الكاشيرين" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">جميع الكاشيرين</SelectItem>
-                          {reportBranchCashiers.map((c) => (
-                            <SelectItem key={c.id} value={c.id}>
-                              {c.firstName || c.username} {c.lastName || ''}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    {/* Only show cashier filter for users who can view all cashiers */}
+                    {canViewAllCashiers && (
+                      <div className="flex items-center gap-2">
+                        <Label className="text-xs text-gray-600">الكاشير:</Label>
+                        <Select value={targetCashierId} onValueChange={setTargetCashierId}>
+                          <SelectTrigger className="w-40 h-9 text-sm bg-white" data-testid="select-targets-cashier">
+                            <SelectValue placeholder="جميع الكاشيرين" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">جميع الكاشيرين</SelectItem>
+                            {reportBranchCashiers.map((c) => (
+                              <SelectItem key={c.id} value={c.id}>
+                                {c.firstName || c.username} {c.lastName || ''}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                   </div>
                   {selectedBranch && selectedBranch !== "all" && (
                     <Badge variant="secondary" className="bg-amber-100 text-amber-700">
@@ -1479,22 +1488,25 @@ export default function CashierShiftPerformance() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Label className="text-xs text-gray-600">الكاشير:</Label>
-                    <Select value={reportCashierId} onValueChange={setReportCashierId}>
-                      <SelectTrigger className="w-40 h-9 text-sm bg-white" data-testid="select-report-cashier">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">جميع الكاشيرين</SelectItem>
-                        {reportBranchCashiers.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.firstName || c.username} {c.lastName || ''}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {/* Only show cashier filter for users who can view all cashiers */}
+                  {canViewAllCashiers && (
+                    <div className="flex items-center gap-2">
+                      <Label className="text-xs text-gray-600">الكاشير:</Label>
+                      <Select value={reportCashierId} onValueChange={setReportCashierId}>
+                        <SelectTrigger className="w-40 h-9 text-sm bg-white" data-testid="select-report-cashier">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">جميع الكاشيرين</SelectItem>
+                          {reportBranchCashiers.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.firstName || c.username} {c.lastName || ''}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   {journalsLoading && (
                     <RefreshCw className="h-4 w-4 text-blue-500 animate-spin" />
                   )}

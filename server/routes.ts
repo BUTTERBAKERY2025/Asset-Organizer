@@ -13270,14 +13270,28 @@ export async function registerRoutes(
   });
 
   // API for detailed cashier journals report with date range
+  // Security: Non-admin/manager users can only see their own journals
   app.get("/api/cashier-journals-report", isAuthenticated, async (req, res) => {
     try {
+      const user = req.user as User;
       const { branchId, startDate, endDate, cashierId } = req.query;
       
       const branchFilter = getEffectiveBranchFilter(req, branchId as string);
       if (!branchFilter.hasAccess) {
         return res.status(403).json({ error: "غير مصرح بالوصول" });
       }
+
+      // Security check: Determine if user can view all cashiers or only their own
+      let canViewAllCashiers = user.role === 'admin' || user.role === 'manager';
+      
+      if (!canViewAllCashiers) {
+        // Check if user has cashier_performance view permission with appropriate actions
+        const permissions = await storage.getUserPermissions(user.id);
+        const perfPerms = permissions.find(p => p.module === 'cashier_performance' || p.module === 'cashier_journal');
+        canViewAllCashiers = perfPerms?.actions.includes('approve') || perfPerms?.actions.includes('create') || perfPerms?.actions.includes('edit');
+      }
+      
+      console.log("[cashier-journals-report] User:", user.id, "Role:", user.role, "CanViewAll:", canViewAllCashiers);
 
       const filters: any = {};
       if (startDate) filters.startDate = startDate as string;
@@ -13290,8 +13304,12 @@ export async function registerRoutes(
 
       let journals = await storage.getCashierSalesJournals(filters);
       
-      // Filter by cashier if specified
-      if (cashierId && cashierId !== 'all') {
+      // Security: If user cannot view all cashiers, restrict to their own data only
+      if (!canViewAllCashiers) {
+        console.log("[cashier-journals-report] Restricting to user's own journals");
+        journals = journals.filter(j => j.cashierId === user.id);
+      } else if (cashierId && cashierId !== 'all') {
+        // Filter by selected cashier if user has permission to view all
         journals = journals.filter(j => j.cashierId === cashierId);
       }
 
@@ -13316,6 +13334,7 @@ export async function registerRoutes(
         averageTicket: j.transactionCount ? (Number(j.totalSales) / j.transactionCount) : 0,
       }));
 
+      console.log("[cashier-journals-report] Returning:", result.length, "records");
       res.json(result);
     } catch (error) {
       console.error("Error fetching cashier journals report:", error);
