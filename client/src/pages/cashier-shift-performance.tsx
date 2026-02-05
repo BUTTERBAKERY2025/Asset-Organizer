@@ -560,7 +560,7 @@ export default function CashierShiftPerformance() {
               <span className="hidden sm:inline">تحديث</span>
             </Button>
             {/* Only show add target button if user has create permission */}
-            {canCreate("sales") && (
+            {canCreate("cashier_performance") && (
             <Dialog open={showTargetDialog} onOpenChange={(open) => {
               setShowTargetDialog(open);
               if (!open) {
@@ -966,7 +966,7 @@ export default function CashierShiftPerformance() {
                                 <Badge className={ALERT_COLORS[getAlertLevel(percent)].badge}>
                                   {percent.toFixed(0)}%
                                 </Badge>
-                                {canEdit("sales") && (
+                                {canEdit("cashier_performance") && (
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -1104,7 +1104,7 @@ export default function CashierShiftPerformance() {
                                 <Badge className={ALERT_COLORS[getAlertLevel(percent)].badge}>
                                   {percent.toFixed(0)}%
                                 </Badge>
-                                {canEdit("sales") && (
+                                {canEdit("cashier_performance") && (
                                 <Button
                                   variant="ghost"
                                   size="icon"
