@@ -1602,7 +1602,7 @@ export default function PnLDashboard() {
         breakEvenSales: contributionMargin > 0 ? ((enhanced.rent || 0) + (enhanced.utilities?.total || 0)) / (contributionMargin / (enhanced.netSales || 1)) : 0,
         revenuePerEmployee: enhanced.employeeCount > 0 ? (enhanced.grossSales || 0) / enhanced.employeeCount : 0,
         employeeCount: enhanced.employeeCount || 0,
-        rating: netMargin >= 15 ? "excellent" : netMargin >= 10 ? "good" : netMargin >= 5 ? "average" : "poor",
+        rating: netMargin >= 20 ? "excellent" : netMargin >= 15 ? "good" : netMargin >= 10 ? "average" : "poor",
         wastePercentage: 0,
         wastePct: 0,
         rentToRevenuePct: rentToRevenue,
@@ -2265,7 +2265,7 @@ export default function PnLDashboard() {
                         </CardContent>
                       </Card>
 
-                      <Card className={`border-l-4 ${metrics.netProfit >= 0 ? "border-l-emerald-500" : "border-l-red-500"}`}>
+                      <Card className={`border-l-4 ${metrics.netMarginPct >= 20 ? "border-l-emerald-500" : metrics.netMarginPct >= 15 ? "border-l-blue-500" : metrics.netMarginPct >= 10 ? "border-l-yellow-500" : "border-l-red-500"}`}>
                         <CardContent className="p-3 sm:p-4 md:p-6">
                           <div className="flex items-center justify-between">
                             <div className="min-w-0">
@@ -2280,11 +2280,27 @@ export default function PnLDashboard() {
                               <TrendingDown className="h-8 w-8 sm:h-10 sm:w-10 text-red-500 opacity-50 shrink-0" />
                             )}
                           </div>
-                          <div className="mt-2 flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2">
-                            <Badge variant={metrics.netProfit >= 0 ? "default" : "destructive"} className="text-[10px] sm:text-xs">
-                              {formatPercent(metrics.netMarginPct)}
-                            </Badge>
-                            <span className="text-[10px] sm:text-xs text-muted-foreground">هامش صافي</span>
+                          <div className="mt-2 flex flex-col gap-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] sm:text-xs text-muted-foreground">هامش صافي الربح:</span>
+                              <Badge 
+                                className={`text-[10px] sm:text-xs ${
+                                  metrics.netMarginPct >= 20 ? "bg-green-100 text-green-800" : 
+                                  metrics.netMarginPct >= 15 ? "bg-blue-100 text-blue-800" : 
+                                  metrics.netMarginPct >= 10 ? "bg-yellow-100 text-yellow-800" : 
+                                  "bg-red-100 text-red-800"
+                                }`}
+                              >
+                                {formatPercent(metrics.netMarginPct)}
+                              </Badge>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              {metrics.netMarginPct >= 20 ? (
+                                <Badge className="bg-green-500 text-white text-[9px]">✓ ضمن الهدف (20-25%)</Badge>
+                              ) : (
+                                <Badge className="bg-orange-500 text-white text-[9px]">الهدف: 20-25%</Badge>
+                              )}
+                            </div>
                           </div>
                         </CardContent>
                       </Card>
