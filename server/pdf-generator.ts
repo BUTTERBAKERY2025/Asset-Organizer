@@ -2573,6 +2573,255 @@ export interface TodayAttendancePdfData {
   employees: TodayAttendanceEmployee[];
 }
 
+// Employee Attendance Report with Signatures - تقرير حضور الموظف مع التوقيع
+export interface EmployeeAttendanceReportRecord {
+  date: string;
+  dayName: string;
+  scheduledTime: string;
+  actualCheckIn: string;
+  actualCheckOut: string;
+  workHours: string;
+  status: string;
+  checkInSignature?: string | null;
+  checkOutSignature?: string | null;
+}
+
+export interface EmployeeAttendanceReportPdfData {
+  employeeName: string;
+  branchName: string;
+  periodStart: string;
+  periodEnd: string;
+  summary: {
+    totalDays: number;
+    completeDays: number;
+    signedDays: number;
+    totalWorkHours: string;
+  };
+  records: EmployeeAttendanceReportRecord[];
+}
+
+export async function generateEmployeeAttendanceReportPdf(data: EmployeeAttendanceReportPdfData): Promise<Buffer> {
+  const statusColors: Record<string, { bg: string; text: string }> = {
+    'مكتمل': { bg: '#dcfce7', text: '#166534' },
+    'حاضر': { bg: '#fef3c7', text: '#92400e' },
+    'غائب': { bg: '#fee2e2', text: '#991b1b' }
+  };
+
+  const recordRows = data.records.map((record, index) => {
+    const colors = statusColors[record.status] || statusColors['غائب'];
+    
+    // Signature display - show actual signature image if available
+    let checkInSigHtml = '-';
+    let checkOutSigHtml = '-';
+    
+    if (record.checkInSignature && record.checkInSignature.startsWith('data:image')) {
+      checkInSigHtml = `<img src="${record.checkInSignature}" style="max-width: 60px; max-height: 30px; border: 1px solid #e5e7eb; border-radius: 4px;" />`;
+    } else if (record.checkInSignature) {
+      checkInSigHtml = '<span style="color: #166534;">✓</span>';
+    }
+    
+    if (record.checkOutSignature && record.checkOutSignature.startsWith('data:image')) {
+      checkOutSigHtml = `<img src="${record.checkOutSignature}" style="max-width: 60px; max-height: 30px; border: 1px solid #e5e7eb; border-radius: 4px;" />`;
+    } else if (record.checkOutSignature) {
+      checkOutSigHtml = '<span style="color: #166534;">✓</span>';
+    }
+
+    return `
+      <tr style="background: ${index % 2 === 0 ? '#ffffff' : '#f9fafb'};">
+        <td style="text-align: center; padding: 8px; border-bottom: 1px solid #e5e7eb;">${index + 1}</td>
+        <td style="text-align: center; padding: 8px; border-bottom: 1px solid #e5e7eb; font-weight: 500;">${record.date}</td>
+        <td style="text-align: center; padding: 8px; border-bottom: 1px solid #e5e7eb; font-size: 11px;">${record.dayName}</td>
+        <td style="text-align: center; padding: 8px; border-bottom: 1px solid #e5e7eb; font-size: 11px;">${record.scheduledTime}</td>
+        <td style="text-align: center; padding: 8px; border-bottom: 1px solid #e5e7eb; color: #166534; font-weight: 500;">${record.actualCheckIn}</td>
+        <td style="text-align: center; padding: 8px; border-bottom: 1px solid #e5e7eb; color: #2563eb; font-weight: 500;">${record.actualCheckOut}</td>
+        <td style="text-align: center; padding: 8px; border-bottom: 1px solid #e5e7eb;">${record.workHours}</td>
+        <td style="text-align: center; padding: 8px; border-bottom: 1px solid #e5e7eb;">
+          <span style="background: ${colors.bg}; color: ${colors.text}; padding: 3px 12px; border-radius: 4px; font-size: 10px; font-weight: 600;">${record.status}</span>
+        </td>
+        <td style="text-align: center; padding: 8px; border-bottom: 1px solid #e5e7eb;">${checkInSigHtml}</td>
+        <td style="text-align: center; padding: 8px; border-bottom: 1px solid #e5e7eb;">${checkOutSigHtml}</td>
+      </tr>
+    `;
+  }).join('');
+
+  const html = `
+    <!DOCTYPE html>
+    <html dir="rtl" lang="ar">
+    <head>
+      <meta charset="UTF-8">
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+          font-family: 'Cairo', Arial, sans-serif;
+          direction: rtl;
+          padding: 20px;
+          color: #1f2937;
+        }
+        .header {
+          text-align: center;
+          margin-bottom: 30px;
+          padding-bottom: 20px;
+          border-bottom: 2px solid #0d9488;
+        }
+        .header h1 {
+          font-size: 22px;
+          color: #0d9488;
+          margin-bottom: 10px;
+        }
+        .header .subtitle {
+          font-size: 14px;
+          color: #6b7280;
+        }
+        .employee-info {
+          background: #f0fdfa;
+          border: 1px solid #99f6e4;
+          border-radius: 8px;
+          padding: 15px;
+          margin-bottom: 20px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+        .employee-name {
+          font-size: 18px;
+          font-weight: 700;
+          color: #0f766e;
+        }
+        .period {
+          font-size: 12px;
+          color: #6b7280;
+        }
+        .summary {
+          display: flex;
+          justify-content: space-around;
+          margin-bottom: 20px;
+          gap: 15px;
+        }
+        .summary-item {
+          flex: 1;
+          text-align: center;
+          padding: 15px;
+          background: #f9fafb;
+          border-radius: 8px;
+          border: 1px solid #e5e7eb;
+        }
+        .summary-value {
+          font-size: 24px;
+          font-weight: 700;
+          color: #0d9488;
+        }
+        .summary-label {
+          font-size: 11px;
+          color: #6b7280;
+          margin-top: 5px;
+        }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 11px;
+        }
+        th {
+          background: #0d9488;
+          color: white;
+          padding: 10px 6px;
+          text-align: center;
+          font-weight: 600;
+        }
+        .footer {
+          margin-top: 30px;
+          text-align: center;
+          font-size: 10px;
+          color: #9ca3af;
+          padding-top: 15px;
+          border-top: 1px solid #e5e7eb;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <h1>تقرير حضور الموظف التفصيلي</h1>
+        <div class="subtitle">شركة الزبد الأفضل التجارية - ${data.branchName}</div>
+      </div>
+
+      <div class="employee-info">
+        <div>
+          <div class="employee-name">${data.employeeName}</div>
+          <div class="period">الفترة: ${data.periodStart} إلى ${data.periodEnd}</div>
+        </div>
+        <div style="background: #ccfbf1; color: #0f766e; padding: 8px 16px; border-radius: 8px; font-weight: 600;">
+          ${data.records.length} سجل
+        </div>
+      </div>
+
+      <div class="summary">
+        <div class="summary-item">
+          <div class="summary-value">${data.summary.totalDays}</div>
+          <div class="summary-label">إجمالي الأيام</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-value">${data.summary.completeDays}</div>
+          <div class="summary-label">أيام مكتملة</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-value">${data.summary.totalWorkHours}</div>
+          <div class="summary-label">ساعات العمل</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-value">${data.summary.signedDays}</div>
+          <div class="summary-label">أيام موقعة</div>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 30px;">#</th>
+            <th>التاريخ</th>
+            <th>اليوم</th>
+            <th>الدوام المحدد</th>
+            <th>الحضور</th>
+            <th>الانصراف</th>
+            <th>ساعات العمل</th>
+            <th>الحالة</th>
+            <th>توقيع الحضور</th>
+            <th>توقيع الانصراف</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${recordRows}
+        </tbody>
+      </table>
+
+      <div class="footer">
+        تم إنشاء هذا التقرير بتاريخ ${formatPrintDate()} - نظام باتر لإدارة الموارد البشرية
+      </div>
+    </body>
+    </html>
+  `;
+
+  const browser = await puppeteer.launch({
+    args: chromium.args,
+    defaultViewport: chromium.defaultViewport,
+    executablePath: await chromium.executablePath(),
+    headless: true,
+  });
+
+  try {
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: "networkidle0" });
+    const pdfBuffer = await page.pdf({
+      format: "A4",
+      landscape: true,
+      printBackground: true,
+      margin: { top: "15mm", right: "10mm", bottom: "15mm", left: "10mm" },
+    });
+    return Buffer.from(pdfBuffer);
+  } finally {
+    await browser.close();
+  }
+}
+
 export async function generateTodayAttendancePdf(data: TodayAttendancePdfData): Promise<Buffer> {
   const statusColors: Record<string, { bg: string; text: string }> = {
     'حاضر': { bg: '#dcfce7', text: '#166534' },

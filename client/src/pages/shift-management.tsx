@@ -2811,51 +2811,144 @@ export default function ShiftManagementPage() {
                             })()}
                           </div>
 
-                          {/* Export Button */}
-                          <Button 
-                            variant="outline" 
-                            className="w-full gap-2"
-                            onClick={() => {
-                              try {
-                                const selectedEmp = filteredEmployees.find(e => String(e.id) === reportSelectedEmployee);
-                                const reportData = employeeReportData.map(record => {
-                                  let workMinutes = 0;
-                                  if (record.actualCheckIn && record.actualCheckOut) {
-                                    const [inH, inM] = record.actualCheckIn.split(':').map(Number);
-                                    const [outH, outM] = record.actualCheckOut.split(':').map(Number);
-                                    workMinutes = (outH * 60 + outM) - (inH * 60 + inM);
-                                    if (workMinutes < 0) workMinutes += 24 * 60;
-                                  }
-                                  const workHours = Math.floor(workMinutes / 60);
-                                  const workMins = workMinutes % 60;
+                          {/* Export Buttons */}
+                          <div className="flex gap-2">
+                            <Button 
+                              variant="outline" 
+                              className="flex-1 gap-2"
+                              onClick={() => {
+                                try {
+                                  const selectedEmp = filteredEmployees.find(e => String(e.id) === reportSelectedEmployee);
+                                  const reportData = employeeReportData.map(record => {
+                                    let workMinutes = 0;
+                                    if (record.actualCheckIn && record.actualCheckOut) {
+                                      const [inH, inM] = record.actualCheckIn.split(':').map(Number);
+                                      const [outH, outM] = record.actualCheckOut.split(':').map(Number);
+                                      workMinutes = (outH * 60 + outM) - (inH * 60 + inM);
+                                      if (workMinutes < 0) workMinutes += 24 * 60;
+                                    }
+                                    const workHours = Math.floor(workMinutes / 60);
+                                    const workMins = workMinutes % 60;
 
-                                  return {
-                                    "التاريخ": format(parseISO(record.attendanceDate), "dd/MM/yyyy"),
-                                    "اليوم": format(parseISO(record.attendanceDate), "EEEE", { locale: ar }),
-                                    "الدوام المحدد": record.scheduledStartTime && record.scheduledEndTime 
-                                      ? `${record.scheduledStartTime} - ${record.scheduledEndTime}` 
-                                      : "-",
-                                    "وقت الحضور": record.actualCheckIn || "-",
-                                    "وقت الانصراف": record.actualCheckOut || "-",
-                                    "ساعات العمل": workMinutes > 0 ? `${workHours}:${workMins.toString().padStart(2, '0')}` : "-",
-                                    "الحالة": record.actualCheckIn && record.actualCheckOut ? "مكتمل" : record.actualCheckIn ? "حاضر" : "غائب",
-                                    "التوقيع": record.checkInSignature || record.checkOutSignature ? "موقع" : "غير موقع"
-                                  };
-                                });
-                                const ws = XLSX.utils.json_to_sheet(reportData);
-                                const wb = XLSX.utils.book_new();
-                                XLSX.utils.book_append_sheet(wb, ws, "تقرير الموظف");
-                                XLSX.writeFile(wb, `تقرير_${selectedEmp?.employeeName}_${reportStartDate}_${reportEndDate}.xlsx`);
-                                toast({ title: "تم تصدير التقرير بنجاح" });
-                              } catch (error) {
-                                toast({ title: "خطأ", description: "فشل في تصدير التقرير", variant: "destructive" });
-                              }
-                            }}
-                            data-testid="btn-export-employee-report-excel"
-                          >
-                            <FileSpreadsheet className="w-4 h-4 text-green-600" />
-                            تصدير تقرير الموظف Excel
-                          </Button>
+                                    return {
+                                      "التاريخ": format(parseISO(record.attendanceDate), "dd/MM/yyyy"),
+                                      "اليوم": format(parseISO(record.attendanceDate), "EEEE", { locale: ar }),
+                                      "الدوام المحدد": record.scheduledStartTime && record.scheduledEndTime 
+                                        ? `${record.scheduledStartTime} - ${record.scheduledEndTime}` 
+                                        : "-",
+                                      "وقت الحضور": record.actualCheckIn || "-",
+                                      "وقت الانصراف": record.actualCheckOut || "-",
+                                      "ساعات العمل": workMinutes > 0 ? `${workHours}:${workMins.toString().padStart(2, '0')}` : "-",
+                                      "الحالة": record.actualCheckIn && record.actualCheckOut ? "مكتمل" : record.actualCheckIn ? "حاضر" : "غائب",
+                                      "التوقيع": record.checkInSignature || record.checkOutSignature ? "موقع" : "غير موقع"
+                                    };
+                                  });
+                                  const ws = XLSX.utils.json_to_sheet(reportData);
+                                  const wb = XLSX.utils.book_new();
+                                  XLSX.utils.book_append_sheet(wb, ws, "تقرير الموظف");
+                                  XLSX.writeFile(wb, `تقرير_${selectedEmp?.employeeName}_${reportStartDate}_${reportEndDate}.xlsx`);
+                                  toast({ title: "تم تصدير التقرير بنجاح" });
+                                } catch (error) {
+                                  toast({ title: "خطأ", description: "فشل في تصدير التقرير", variant: "destructive" });
+                                }
+                              }}
+                              data-testid="btn-export-employee-report-excel"
+                            >
+                              <FileSpreadsheet className="w-4 h-4 text-green-600" />
+                              Excel
+                            </Button>
+                            
+                            <Button 
+                              variant="outline" 
+                              className="flex-1 gap-2"
+                              onClick={async () => {
+                                try {
+                                  const selectedEmp = filteredEmployees.find(e => String(e.id) === reportSelectedEmployee);
+                                  if (!selectedEmp || !employeeReportData) return;
+                                  
+                                  // Calculate summary
+                                  const totalDays = employeeReportData.length;
+                                  const completeDays = employeeReportData.filter(r => r.actualCheckIn && r.actualCheckOut).length;
+                                  const signedDays = employeeReportData.filter(r => r.checkInSignature || r.checkOutSignature).length;
+                                  
+                                  let totalWorkMinutes = 0;
+                                  employeeReportData.forEach(record => {
+                                    if (record.actualCheckIn && record.actualCheckOut) {
+                                      const [inH, inM] = record.actualCheckIn.split(':').map(Number);
+                                      const [outH, outM] = record.actualCheckOut.split(':').map(Number);
+                                      let mins = (outH * 60 + outM) - (inH * 60 + inM);
+                                      if (mins < 0) mins += 24 * 60;
+                                      totalWorkMinutes += mins;
+                                    }
+                                  });
+                                  const totalHours = Math.floor(totalWorkMinutes / 60);
+                                  const totalMins = totalWorkMinutes % 60;
+                                  
+                                  // Prepare records for PDF
+                                  const records = employeeReportData.map(record => {
+                                    let workMinutes = 0;
+                                    if (record.actualCheckIn && record.actualCheckOut) {
+                                      const [inH, inM] = record.actualCheckIn.split(':').map(Number);
+                                      const [outH, outM] = record.actualCheckOut.split(':').map(Number);
+                                      workMinutes = (outH * 60 + outM) - (inH * 60 + inM);
+                                      if (workMinutes < 0) workMinutes += 24 * 60;
+                                    }
+                                    const workHours = Math.floor(workMinutes / 60);
+                                    const workMins = workMinutes % 60;
+                                    
+                                    return {
+                                      date: format(parseISO(record.attendanceDate), "dd/MM/yyyy"),
+                                      dayName: format(parseISO(record.attendanceDate), "EEEE", { locale: ar }),
+                                      scheduledTime: record.scheduledStartTime && record.scheduledEndTime 
+                                        ? `${record.scheduledStartTime} - ${record.scheduledEndTime}` 
+                                        : "-",
+                                      actualCheckIn: record.actualCheckIn || "-",
+                                      actualCheckOut: record.actualCheckOut || "-",
+                                      workHours: workMinutes > 0 ? `${workHours}س ${workMins}د` : "-",
+                                      status: record.actualCheckIn && record.actualCheckOut ? "مكتمل" : record.actualCheckIn ? "حاضر" : "غائب",
+                                      checkInSignature: record.checkInSignature,
+                                      checkOutSignature: record.checkOutSignature
+                                    };
+                                  });
+                                  
+                                  toast({ title: "جاري إنشاء PDF...", description: "يرجى الانتظار" });
+                                  
+                                  const res = await apiRequest("POST", "/api/reports/employee-attendance-pdf", {
+                                    employeeName: selectedEmp.employeeName,
+                                    branchName: getBranchName(selectedBranch),
+                                    periodStart: format(parseISO(reportStartDate), "dd/MM/yyyy"),
+                                    periodEnd: format(parseISO(reportEndDate), "dd/MM/yyyy"),
+                                    summary: {
+                                      totalDays,
+                                      completeDays,
+                                      signedDays,
+                                      totalWorkHours: `${totalHours}س ${totalMins}د`
+                                    },
+                                    records
+                                  });
+                                  
+                                  const blob = await res.blob();
+                                  const url = window.URL.createObjectURL(blob);
+                                  const a = document.createElement("a");
+                                  a.href = url;
+                                  a.download = `تقرير_حضور_${selectedEmp.employeeName}_${reportStartDate}_${reportEndDate}.pdf`;
+                                  document.body.appendChild(a);
+                                  a.click();
+                                  document.body.removeChild(a);
+                                  window.URL.revokeObjectURL(url);
+                                  
+                                  toast({ title: "تم تصدير PDF بنجاح" });
+                                } catch (error) {
+                                  console.error("Error generating PDF:", error);
+                                  toast({ title: "خطأ", description: "فشل في إنشاء ملف PDF", variant: "destructive" });
+                                }
+                              }}
+                              data-testid="btn-export-employee-report-pdf"
+                            >
+                              <FileText className="w-4 h-4 text-red-600" />
+                              PDF مع التوقيع
+                            </Button>
+                          </div>
                         </>
                       ) : (
                         <div className="text-center py-8 text-muted-foreground">
