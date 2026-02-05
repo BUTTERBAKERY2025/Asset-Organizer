@@ -382,7 +382,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <h1 className="text-base font-bold text-amber-700 leading-tight">{t("platformName")}</h1>
               <p className="text-[10px] text-amber-600/70 font-medium">{t("systemSubtitle")}</p>
             </div>
-            {isAuthenticated && <NotificationsDropdown />}
+            {isAuthenticated && isAdmin && <NotificationsDropdown />}
           </div>
           {isAuthenticated && <GlobalSearch />}
         </div>
@@ -624,7 +624,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <img src={logo} alt="Butter Bakery" className="h-8 object-contain" />
           
           <div className="flex items-center gap-2">
-            {isAuthenticated && <NotificationsDropdown />}
+            {isAuthenticated && isAdmin && <NotificationsDropdown />}
           </div>
         </header>
 
