@@ -345,7 +345,13 @@ export default function CashierShiftPerformance() {
                     <Input 
                       type="number" 
                       value={newTarget.targetAmount} 
-                      onChange={(e) => setNewTarget({...newTarget, targetAmount: Number(e.target.value)})}
+                      onChange={(e) => {
+                        const amount = Number(e.target.value);
+                        const ticketValue = newTarget.targetTransactions > 0 
+                          ? Math.round((amount / newTarget.targetTransactions) * 100) / 100 
+                          : 0;
+                        setNewTarget({...newTarget, targetAmount: amount, targetTicketValue: ticketValue});
+                      }}
                       data-testid="input-target-amount"
                       className="h-11 sm:h-10"
                     />
@@ -355,19 +361,25 @@ export default function CashierShiftPerformance() {
                     <Input 
                       type="number" 
                       value={newTarget.targetTransactions} 
-                      onChange={(e) => setNewTarget({...newTarget, targetTransactions: Number(e.target.value)})}
+                      onChange={(e) => {
+                        const transactions = Number(e.target.value);
+                        const ticketValue = transactions > 0 
+                          ? Math.round((newTarget.targetAmount / transactions) * 100) / 100 
+                          : 0;
+                        setNewTarget({...newTarget, targetTransactions: transactions, targetTicketValue: ticketValue});
+                      }}
                       data-testid="input-target-transactions"
                       className="h-11 sm:h-10"
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label>هدف متوسط الفاتورة (ريال)</Label>
+                    <Label>هدف متوسط الفاتورة (ريال) <span className="text-xs text-gray-500">(يُحسب تلقائياً)</span></Label>
                     <Input 
                       type="number" 
                       value={newTarget.targetTicketValue} 
-                      onChange={(e) => setNewTarget({...newTarget, targetTicketValue: Number(e.target.value)})}
+                      readOnly
+                      className="h-11 sm:h-10 bg-gray-50 cursor-not-allowed"
                       data-testid="input-target-ticket-value"
-                      className="h-11 sm:h-10"
                     />
                   </div>
                 </div>
