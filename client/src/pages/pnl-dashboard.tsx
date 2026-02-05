@@ -1556,19 +1556,29 @@ export default function PnLDashboard() {
       const salaryToSales = enhanced.netSales > 0 ? ((enhanced.employeeCosts?.total || 0) / enhanced.netSales) * 100 : 0;
       const rentToRevenue = enhanced.netSales > 0 ? ((enhanced.rent || 0) / enhanced.netSales) * 100 : 0;
       
-      // Generate rating reasons
+      // Generate rating reasons - Target net profit margin: 20-25%
       const ratingReasons: string[] = [];
-      if (netMargin >= 15) ratingReasons.push("هامش ربح صافي ممتاز (أعلى من 15%)");
-      else if (netMargin >= 10) ratingReasons.push("هامش ربح صافي جيد (10-15%)");
-      else if (netMargin >= 5) ratingReasons.push("هامش ربح صافي متوسط (5-10%)");
-      else ratingReasons.push("هامش ربح صافي ضعيف (أقل من 5%)");
+      if (netMargin >= 25) ratingReasons.push("هامش ربح صافي متميز (أعلى من 25%) - فوق الهدف");
+      else if (netMargin >= 20) ratingReasons.push("هامش ربح صافي ممتاز (20-25%) - ضمن الهدف المستهدف");
+      else if (netMargin >= 15) ratingReasons.push("هامش ربح صافي جيد (15-20%) - قريب من الهدف");
+      else if (netMargin >= 10) ratingReasons.push("هامش ربح صافي مقبول (10-15%) - أقل من الهدف");
+      else if (netMargin >= 5) ratingReasons.push("هامش ربح صافي ضعيف (5-10%) - يحتاج تحسين");
+      else ratingReasons.push("هامش ربح صافي منخفض جداً (أقل من 5%) - يحتاج مراجعة عاجلة");
       
       if (salaryToSales <= 25) ratingReasons.push("نسبة الرواتب للمبيعات ممتازة (أقل من 25%)");
-      if (rentToRevenue <= 10) ratingReasons.push("نسبة الإيجار للإيرادات مقبولة");
+      else if (salaryToSales <= 30) ratingReasons.push("نسبة الرواتب للمبيعات مقبولة (25-30%)");
+      else if (salaryToSales <= 35) ratingReasons.push("نسبة الرواتب للمبيعات مرتفعة (30-35%)");
+      else ratingReasons.push("نسبة الرواتب للمبيعات مرتفعة جداً (أكثر من 35%)");
       
-      // Generate recommendations
+      if (rentToRevenue <= 8) ratingReasons.push("نسبة الإيجار للإيرادات ممتازة (أقل من 8%)");
+      else if (rentToRevenue <= 12) ratingReasons.push("نسبة الإيجار للإيرادات مقبولة (8-12%)");
+      else if (rentToRevenue <= 15) ratingReasons.push("نسبة الإيجار للإيرادات مرتفعة (12-15%)");
+      else ratingReasons.push("نسبة الإيجار للإيرادات مرتفعة جداً (أكثر من 15%)");
+      
+      // Generate recommendations - based on target 20-25%
       const recommendations: string[] = [];
-      if (netMargin < 10) recommendations.push("زيادة هامش الربح عبر تخفيض التكاليف أو رفع الأسعار");
+      if (netMargin < 20) recommendations.push("العمل على رفع هامش الربح للوصول للهدف المستهدف (20-25%)");
+      if (netMargin < 15) recommendations.push("مراجعة هيكل التكاليف وتحسين الكفاءة التشغيلية");
       if (salaryToSales > 30) recommendations.push("مراجعة تكاليف الموظفين وتحسين الإنتاجية");
       if (rentToRevenue > 15) recommendations.push("مراجعة تكاليف الإيجار مقارنة بالإيرادات");
       
