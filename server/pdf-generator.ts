@@ -2547,3 +2547,255 @@ export async function generatePdfFromHtml(html: string, options: PdfOptions = {}
     console.log("[PDF] Browser closed");
   }
 }
+
+// ==================== Today's Attendance Report PDF ====================
+
+export interface TodayAttendanceEmployee {
+  employeeName: string;
+  scheduledTime: string;
+  actualCheckIn: string;
+  actualCheckOut: string;
+  hasSigned: boolean;
+  status: string;
+}
+
+export interface TodayAttendancePdfData {
+  branchName: string;
+  date: string;
+  dateArabic: string;
+  summary: {
+    present: number;
+    absent: number;
+    off: number;
+    total: number;
+    attendanceRate: number;
+  };
+  employees: TodayAttendanceEmployee[];
+}
+
+export async function generateTodayAttendancePdf(data: TodayAttendancePdfData): Promise<Buffer> {
+  const statusColors: Record<string, { bg: string; text: string }> = {
+    'حاضر': { bg: '#dcfce7', text: '#166534' },
+    'غائب': { bg: '#fee2e2', text: '#991b1b' },
+    'إجازة': { bg: '#f3f4f6', text: '#4b5563' }
+  };
+
+  const employeeRows = data.employees.map((emp, index) => {
+    const colors = statusColors[emp.status] || statusColors['إجازة'];
+    const signedBadge = emp.hasSigned 
+      ? '<span style="background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 4px; font-size: 9px;">✓ موقّع</span>'
+      : emp.status === 'حاضر'
+        ? '<span style="background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 4px; font-size: 9px;">بدون توقيع</span>'
+        : '-';
+
+    return `
+      <tr style="background: ${index % 2 === 0 ? '#ffffff' : '#f9fafb'};">
+        <td style="text-align: center; padding: 8px; border-bottom: 1px solid #e5e7eb;">${index + 1}</td>
+        <td style="text-align: right; padding: 8px; border-bottom: 1px solid #e5e7eb; font-weight: 500;">${emp.employeeName}</td>
+        <td style="text-align: center; padding: 8px; border-bottom: 1px solid #e5e7eb; font-size: 11px;">${emp.scheduledTime}</td>
+        <td style="text-align: center; padding: 8px; border-bottom: 1px solid #e5e7eb; color: ${emp.actualCheckIn !== '-' ? '#166534' : '#991b1b'}; font-weight: 500;">${emp.actualCheckIn}</td>
+        <td style="text-align: center; padding: 8px; border-bottom: 1px solid #e5e7eb; color: #2563eb;">${emp.actualCheckOut}</td>
+        <td style="text-align: center; padding: 8px; border-bottom: 1px solid #e5e7eb;">${signedBadge}</td>
+        <td style="text-align: center; padding: 8px; border-bottom: 1px solid #e5e7eb;">
+          <span style="background: ${colors.bg}; color: ${colors.text}; padding: 3px 12px; border-radius: 4px; font-size: 10px; font-weight: 600;">${emp.status}</span>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  const html = `
+    <!DOCTYPE html>
+    <html dir="rtl" lang="ar">
+    <head>
+      <meta charset="UTF-8">
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+          font-family: 'Cairo', Arial, sans-serif;
+          direction: rtl;
+          padding: 20px;
+          background: #fff;
+          font-size: 12px;
+        }
+        .header {
+          text-align: center;
+          margin-bottom: 25px;
+          padding-bottom: 15px;
+          border-bottom: 3px solid #d4a853;
+        }
+        .company-name {
+          font-size: 18px;
+          font-weight: 700;
+          color: #1e3a5f;
+          margin-bottom: 5px;
+        }
+        .report-title {
+          font-size: 16px;
+          font-weight: 600;
+          color: #d4a853;
+          margin-bottom: 5px;
+        }
+        .report-info {
+          font-size: 12px;
+          color: #666;
+        }
+        .summary-grid {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 15px;
+          margin-bottom: 25px;
+        }
+        .summary-card {
+          padding: 15px;
+          border-radius: 8px;
+          text-align: center;
+        }
+        .summary-card.present { background: #dcfce7; }
+        .summary-card.absent { background: #fee2e2; }
+        .summary-card.off { background: #f3f4f6; }
+        .summary-card.rate { background: #dbeafe; }
+        .summary-value {
+          font-size: 28px;
+          font-weight: 700;
+        }
+        .summary-card.present .summary-value { color: #166534; }
+        .summary-card.absent .summary-value { color: #991b1b; }
+        .summary-card.off .summary-value { color: #4b5563; }
+        .summary-card.rate .summary-value { color: #1d4ed8; }
+        .summary-label {
+          font-size: 11px;
+          margin-top: 4px;
+        }
+        .summary-card.present .summary-label { color: #166534; }
+        .summary-card.absent .summary-label { color: #991b1b; }
+        .summary-card.off .summary-label { color: #4b5563; }
+        .summary-card.rate .summary-label { color: #1d4ed8; }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-top: 15px;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        thead {
+          background: #1e3a5f;
+          color: white;
+        }
+        th {
+          padding: 10px 8px;
+          text-align: center;
+          font-size: 11px;
+          font-weight: 600;
+        }
+        th:nth-child(2) {
+          text-align: right;
+        }
+        .footer-note {
+          margin-top: 20px;
+          padding: 10px;
+          background: #fffbeb;
+          border: 1px solid #fbbf24;
+          border-radius: 6px;
+          font-size: 10px;
+          color: #92400e;
+          text-align: center;
+        }
+        .signature-section {
+          display: flex;
+          justify-content: space-between;
+          margin-top: 40px;
+          padding-top: 20px;
+        }
+        .signature-box {
+          text-align: center;
+          width: 200px;
+        }
+        .signature-line {
+          border-top: 1px solid #333;
+          margin-top: 40px;
+          padding-top: 5px;
+          font-size: 11px;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <div class="company-name">شركة الزبد الأفضل التجارية</div>
+        <div class="report-title">تقرير الحضور اليومي</div>
+        <div class="report-info">
+          الفرع: <strong>${data.branchName}</strong> | التاريخ: <strong>${data.dateArabic}</strong>
+        </div>
+      </div>
+
+      <div class="summary-grid">
+        <div class="summary-card present">
+          <div class="summary-value">${data.summary.present}</div>
+          <div class="summary-label">حاضر</div>
+        </div>
+        <div class="summary-card absent">
+          <div class="summary-value">${data.summary.absent}</div>
+          <div class="summary-label">غائب</div>
+        </div>
+        <div class="summary-card off">
+          <div class="summary-value">${data.summary.off}</div>
+          <div class="summary-label">إجازة</div>
+        </div>
+        <div class="summary-card rate">
+          <div class="summary-value">${data.summary.attendanceRate}%</div>
+          <div class="summary-label">نسبة الحضور</div>
+        </div>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 35px;">#</th>
+            <th>اسم الموظف</th>
+            <th style="width: 100px;">الوردية</th>
+            <th style="width: 80px;">وقت الحضور</th>
+            <th style="width: 80px;">وقت الانصراف</th>
+            <th style="width: 80px;">التوقيع</th>
+            <th style="width: 70px;">الحالة</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${employeeRows}
+        </tbody>
+      </table>
+
+      <div class="footer-note">
+        إجمالي الموظفين: ${data.summary.total} | المُجدولين للعمل: ${data.summary.present + data.summary.absent} | في إجازة: ${data.summary.off}
+      </div>
+
+      <div class="signature-section">
+        <div class="signature-box">
+          <div class="signature-line">مدير الفرع</div>
+        </div>
+        <div class="signature-box">
+          <div class="signature-line">مسؤول الموارد البشرية</div>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
+  });
+
+  try {
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: 'networkidle0' });
+    
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: { top: '15mm', right: '10mm', bottom: '15mm', left: '10mm' }
+    });
+
+    return Buffer.from(pdfBuffer);
+  } finally {
+    await browser.close();
+  }
+}

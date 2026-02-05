@@ -898,6 +898,74 @@ export default function ShiftManagementPage() {
     }
   };
 
+  const exportTodayAttendancePdf = async (
+    todaySchedules: Array<{
+      employee: any;
+      isScheduledToday: boolean;
+      scheduledTime: string | null;
+      actualCheckIn: string | undefined;
+      actualCheckOut: string | undefined;
+      signature: string | undefined;
+      status: string;
+    }>,
+    presentCount: number,
+    absentCount: number,
+    offCount: number
+  ) => {
+    if (selectedBranch === "all") {
+      toast({ title: "تنبيه", description: "يرجى اختيار فرع محدد أولاً", variant: "destructive" });
+      return;
+    }
+    
+    setIsExportingPdf(true);
+    try {
+      const today = format(new Date(), "yyyy-MM-dd");
+      const todayArabic = format(new Date(), "EEEE dd MMMM yyyy", { locale: ar });
+      const scheduledCount = presentCount + absentCount;
+      const attendanceRate = scheduledCount > 0 ? Math.round((presentCount / scheduledCount) * 100) : 0;
+      
+      const employeesData = todaySchedules.map(item => ({
+        employeeName: item.employee.employeeName,
+        scheduledTime: item.status === 'off' ? 'إجازة' : (item.scheduledTime || '-'),
+        actualCheckIn: item.actualCheckIn || '-',
+        actualCheckOut: item.actualCheckOut || '-',
+        hasSigned: !!item.signature,
+        status: item.status === 'present' ? 'حاضر' : item.status === 'absent' ? 'غائب' : 'إجازة'
+      }));
+
+      const res = await apiRequest("POST", "/api/reports/today-attendance-pdf", {
+        branchName: getBranchName(selectedBranch),
+        date: today,
+        dateArabic: todayArabic,
+        summary: {
+          present: presentCount,
+          absent: absentCount,
+          off: offCount,
+          total: filteredEmployees.length,
+          attendanceRate
+        },
+        employees: employeesData,
+      });
+      
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `تقرير_الحضور_اليومي_${today}_${getBranchName(selectedBranch)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      
+      toast({ title: "تم تصدير تقرير الحضور اليومي بنجاح" });
+    } catch (error) {
+      console.error("Error exporting today attendance PDF:", error);
+      toast({ title: "خطأ", description: "فشل في تصدير تقرير الحضور اليومي", variant: "destructive" });
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
   const [, navigate] = useLocation();
 
   // Download Excel template for importing schedules
@@ -1625,6 +1693,147 @@ export default function ShiftManagementPage() {
                   </CardContent>
                 </Card>
               </div>
+
+              {/* Today's Attendance Report */}
+              <Card className="border-2 border-primary/20">
+                <CardHeader className="bg-primary/5">
+                  <CardTitle className="flex items-center gap-2 text-primary">
+                    <UserCheck className="w-5 h-5" />
+                    تقرير الحضور اليوم
+                  </CardTitle>
+                  <CardDescription>
+                    عرض سريع لمن حضر اليوم في الفرع المحدد - {format(new Date(), "EEEE dd MMMM yyyy", { locale: ar })}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  {(() => {
+                    const today = format(new Date(), "yyyy-MM-dd");
+                    const todaySchedules = filteredEmployees.map(emp => {
+                      const empIdStr = String(emp.id);
+                      const linkedUserId = emp.linkedUserId || empIdStr;
+                      const empSchedule = scheduleData[empIdStr]?.[today];
+                      const todayAttendance = attendanceRecords?.find(
+                        r => r.employeeId === linkedUserId && r.attendanceDate === today
+                      );
+                      const isScheduledToday = empSchedule && !empSchedule.isOff;
+                      
+                      return {
+                        employee: emp,
+                        isScheduledToday,
+                        scheduledTime: empSchedule ? `${empSchedule.startTime} - ${empSchedule.endTime}` : null,
+                        actualCheckIn: todayAttendance?.actualCheckIn || undefined,
+                        actualCheckOut: todayAttendance?.actualCheckOut || undefined,
+                        signature: (todayAttendance as any)?.signatureData || undefined,
+                        status: !isScheduledToday ? 'off' : 
+                                todayAttendance?.actualCheckIn ? 'present' : 'absent'
+                      };
+                    });
+                    
+                    const presentCount = todaySchedules.filter(s => s.status === 'present').length;
+                    const absentCount = todaySchedules.filter(s => s.status === 'absent').length;
+                    const offCount = todaySchedules.filter(s => s.status === 'off').length;
+                    const scheduledCount = presentCount + absentCount;
+
+                    return (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          <div className="bg-green-50 p-3 rounded-lg text-center">
+                            <div className="text-2xl font-bold text-green-600">{presentCount}</div>
+                            <div className="text-sm text-green-700">حاضر</div>
+                          </div>
+                          <div className="bg-red-50 p-3 rounded-lg text-center">
+                            <div className="text-2xl font-bold text-red-600">{absentCount}</div>
+                            <div className="text-sm text-red-700">غائب</div>
+                          </div>
+                          <div className="bg-gray-50 p-3 rounded-lg text-center">
+                            <div className="text-2xl font-bold text-gray-600">{offCount}</div>
+                            <div className="text-sm text-gray-700">إجازة</div>
+                          </div>
+                          <div className="bg-blue-50 p-3 rounded-lg text-center">
+                            <div className="text-2xl font-bold text-blue-600">
+                              {scheduledCount > 0 ? Math.round((presentCount / scheduledCount) * 100) : 0}%
+                            </div>
+                            <div className="text-sm text-blue-700">نسبة الحضور</div>
+                          </div>
+                        </div>
+
+                        <div className="rounded-md border max-h-[400px] overflow-y-auto">
+                          <Table>
+                            <TableHeader className="sticky top-0 bg-background">
+                              <TableRow>
+                                <TableHead className="text-right">الموظف</TableHead>
+                                <TableHead className="text-center">الوردية المحددة</TableHead>
+                                <TableHead className="text-center">وقت الحضور</TableHead>
+                                <TableHead className="text-center">وقت الانصراف</TableHead>
+                                <TableHead className="text-center">التوقيع</TableHead>
+                                <TableHead className="text-center">الحالة</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {todaySchedules.map(item => (
+                                <TableRow key={item.employee.id} className={
+                                  item.status === 'present' ? 'bg-green-50/50' :
+                                  item.status === 'absent' ? 'bg-red-50/50' : ''
+                                }>
+                                  <TableCell className="font-medium">{item.employee.employeeName}</TableCell>
+                                  <TableCell className="text-center text-sm">
+                                    {item.status === 'off' ? (
+                                      <span className="text-gray-500">إجازة</span>
+                                    ) : item.scheduledTime || '-'}
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    {item.actualCheckIn ? (
+                                      <span className="text-green-600 font-medium">{item.actualCheckIn}</span>
+                                    ) : item.status !== 'off' ? (
+                                      <span className="text-red-500">-</span>
+                                    ) : '-'}
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    {item.actualCheckOut ? (
+                                      <span className="text-blue-600 font-medium">{item.actualCheckOut}</span>
+                                    ) : '-'}
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    {item.signature ? (
+                                      <Badge variant="outline" className="bg-green-50 text-green-700">
+                                        <Check className="w-3 h-3 ml-1" /> موقّع
+                                      </Badge>
+                                    ) : item.status === 'present' ? (
+                                      <Badge variant="outline" className="bg-amber-50 text-amber-700">
+                                        بدون توقيع
+                                      </Badge>
+                                    ) : '-'}
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <Badge className={
+                                      item.status === 'present' ? 'bg-green-100 text-green-700' :
+                                      item.status === 'absent' ? 'bg-red-100 text-red-700' :
+                                      'bg-gray-100 text-gray-700'
+                                    }>
+                                      {item.status === 'present' ? 'حاضر' :
+                                       item.status === 'absent' ? 'غائب' : 'إجازة'}
+                                    </Badge>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+
+                        <Button 
+                          variant="default" 
+                          className="w-full gap-2"
+                          onClick={() => exportTodayAttendancePdf(todaySchedules, presentCount, absentCount, offCount)}
+                          data-testid="btn-export-today-pdf"
+                        >
+                          <File className="w-4 h-4" />
+                          تصدير تقرير اليوم PDF
+                        </Button>
+                      </div>
+                    );
+                  })()}
+                </CardContent>
+              </Card>
 
               <Card id="printable-report">
                 <CardHeader>

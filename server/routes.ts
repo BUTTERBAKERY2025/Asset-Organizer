@@ -68,7 +68,8 @@ import {
   generateProductionOrderPdf, type ProductionOrderPdfData,
   generateShiftSchedulePdf, type ShiftSchedulePdfData,
   generateWeeklySchedulePdf, type WeeklySchedulePdfData,
-  generateInventoryCountPdf, type InventoryCountPdfData
+  generateInventoryCountPdf, type InventoryCountPdfData,
+  generateTodayAttendancePdf, type TodayAttendancePdfData
 } from "./pdf-generator";
 import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertInfluencerContractSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema, isMadeToOrderCategory, suggestCategoryFromProductName, userBranchAccess } from "@shared/schema";
 import { z } from "zod";
@@ -17918,6 +17919,33 @@ export async function registerRoutes(
       res.send(pdfBuffer);
     } catch (error) {
       console.error("Error generating weekly schedule PDF:", error);
+      res.status(500).json({ error: "فشل في إنشاء ملف PDF" });
+    }
+  });
+
+  // PDF Generation endpoint for today's attendance report
+  app.post("/api/reports/today-attendance-pdf", isAuthenticated, async (req, res) => {
+    try {
+      const { branchName, date, dateArabic, summary, employees } = req.body;
+      if (!branchName || !date || !summary || !employees || !Array.isArray(employees)) {
+        return res.status(400).json({ error: "بيانات غير صالحة" });
+      }
+      
+      const pdfBuffer = await generateTodayAttendancePdf({
+        branchName,
+        date,
+        dateArabic,
+        summary,
+        employees
+      });
+      
+      const safeFilename = `today_attendance_${date}.pdf`;
+      const encodedFilename = encodeURIComponent(`تقرير_الحضور_اليومي_${branchName}_${date}.pdf`);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${safeFilename}"; filename*=UTF-8''${encodedFilename}`);
+      res.send(pdfBuffer);
+    } catch (error) {
+      console.error("Error generating today attendance PDF:", error);
       res.status(500).json({ error: "فشل في إنشاء ملف PDF" });
     }
   });
