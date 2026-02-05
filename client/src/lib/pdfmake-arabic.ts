@@ -14,16 +14,16 @@ export function getArabicTableHeaderStyle() {
   };
 }
 
-// Format currency
+// Format currency with English numerals
 function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('ar-SA', { 
+  return new Intl.NumberFormat('en-US', { 
     style: 'decimal',
     minimumFractionDigits: 0,
     maximumFractionDigits: 0
   }).format(value) + ' ريال';
 }
 
-// Format percentage
+// Format percentage with English numerals
 function formatPercent(value: number): string {
   return value.toFixed(1) + '%';
 }
