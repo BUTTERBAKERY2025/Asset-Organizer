@@ -1712,10 +1712,23 @@ export default function ShiftManagementPage() {
                       const empIdStr = String(emp.id);
                       const linkedUserId = emp.linkedUserId || empIdStr;
                       const empSchedule = scheduleData[empIdStr]?.[today];
-                      const todayAttendance = attendanceRecords?.find(
-                        r => r.employeeId === linkedUserId && r.attendanceDate === today
-                      );
+                      
+                      // Match attendance by multiple criteria
+                      const todayAttendance = attendanceRecords?.find(r => {
+                        if (r.attendanceDate !== today) return false;
+                        // Match by branchEmployeeId first (most reliable)
+                        if (r.branchEmployeeId && r.branchEmployeeId === emp.id) return true;
+                        // Match by linkedUserId
+                        if (r.employeeId === linkedUserId) return true;
+                        // Match by employee id as string
+                        if (r.employeeId === empIdStr) return true;
+                        // Match by employee name as fallback
+                        if (r.employeeName === emp.employeeName) return true;
+                        return false;
+                      });
+                      
                       const isScheduledToday = empSchedule && !empSchedule.isOff;
+                      const hasSignature = todayAttendance?.checkInSignature || todayAttendance?.checkOutSignature;
                       
                       return {
                         employee: emp,
@@ -1723,7 +1736,7 @@ export default function ShiftManagementPage() {
                         scheduledTime: empSchedule ? `${empSchedule.startTime} - ${empSchedule.endTime}` : null,
                         actualCheckIn: todayAttendance?.actualCheckIn || undefined,
                         actualCheckOut: todayAttendance?.actualCheckOut || undefined,
-                        signature: (todayAttendance as any)?.signatureData || undefined,
+                        signature: hasSignature || undefined,
                         status: !isScheduledToday ? 'off' : 
                                 todayAttendance?.actualCheckIn ? 'present' : 'absent'
                       };
