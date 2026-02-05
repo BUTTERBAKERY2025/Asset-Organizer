@@ -2551,30 +2551,94 @@ export default function PnLDashboard() {
               </TabsContent>
 
               <TabsContent value="details" className="space-y-6">
-                {completePnL && (
+                {enhancedPnL && enhancedPnL.totals ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <Card>
                       <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                           <Wallet className="h-5 w-5 text-blue-500" />
-                          المبيعات حسب القناة
+                          الإيرادات من يوميات الصندوق المعتمدة
                         </CardTitle>
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-3">
-                          {completePnL.sales.length > 0 ? (
-                            completePnL.sales.map((sale, index) => (
-                              <div key={index} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                                <span>{SALES_CHANNELS.find(c => c.id === sale.channel)?.label || sale.channel}</span>
-                                <div className="text-left">
-                                  <div className="font-semibold">{formatCurrency(sale.totalAmount)}</div>
-                                  <div className="text-xs text-muted-foreground">{sale.invoiceCount} فاتورة</div>
-                                </div>
-                              </div>
-                            ))
-                          ) : (
-                            <p className="text-center text-muted-foreground py-4">لا توجد بيانات مبيعات</p>
-                          )}
+                          <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                            <span>إجمالي المبيعات (شامل الضريبة)</span>
+                            <div className="font-semibold text-green-600">{formatCurrency(enhancedPnL.totals.grossSales)}</div>
+                          </div>
+                          <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
+                            <span>ضريبة القيمة المضافة (15%)</span>
+                            <div className="font-semibold text-red-600">- {formatCurrency(enhancedPnL.totals.vatAmount)}</div>
+                          </div>
+                          <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border-2 border-blue-200">
+                            <span className="font-bold">صافي المبيعات</span>
+                            <div className="font-bold text-blue-600">{formatCurrency(enhancedPnL.totals.netSales)}</div>
+                          </div>
+                          <div className="text-xs text-muted-foreground text-center mt-2">
+                            عدد اليوميات المعتمدة: {enhancedPnL.totals.journalCount}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <Users className="h-5 w-5 text-purple-500" />
+                          تكاليف الموظفين ({enhancedPnL.totals.employeeCount} موظف)
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                            <span>الرواتب والبدلات</span>
+                            <div className="font-semibold">{formatCurrency(enhancedPnL.totals.employeeCosts.salaries)}</div>
+                          </div>
+                          <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                            <span>التأمينات الاجتماعية (GOSI 12%)</span>
+                            <div className="font-semibold">{formatCurrency(enhancedPnL.totals.employeeCosts.gosi)}</div>
+                          </div>
+                          <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                            <span>رسوم غير السعوديين</span>
+                            <div className="font-semibold">{formatCurrency(enhancedPnL.totals.employeeCosts.nonSaudiCosts)}</div>
+                          </div>
+                          <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg border-2 border-purple-200">
+                            <span className="font-bold">إجمالي تكاليف الموظفين</span>
+                            <div className="font-bold text-purple-600">{formatCurrency(enhancedPnL.totals.employeeCosts.total)}</div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <Home className="h-5 w-5 text-orange-500" />
+                          المصروفات الثابتة والمرافق
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                            <span>الإيجار الشهري</span>
+                            <div className="font-semibold">{formatCurrency(enhancedPnL.totals.rent)}</div>
+                          </div>
+                          <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                            <span>الكهرباء</span>
+                            <div className="font-semibold">{formatCurrency(enhancedPnL.totals.utilities.electricity)}</div>
+                          </div>
+                          <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                            <span>المياه</span>
+                            <div className="font-semibold">{formatCurrency(enhancedPnL.totals.utilities.water)}</div>
+                          </div>
+                          <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                            <span>مرافق أخرى</span>
+                            <div className="font-semibold">{formatCurrency(enhancedPnL.totals.utilities.other)}</div>
+                          </div>
+                          <div className="flex items-center justify-between p-3 bg-orange-50 rounded-lg border-2 border-orange-200">
+                            <span className="font-bold">إجمالي المصروفات الثابتة</span>
+                            <div className="font-bold text-orange-600">{formatCurrency(enhancedPnL.totals.rent + enhancedPnL.totals.utilities.total)}</div>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
@@ -2583,85 +2647,45 @@ export default function PnLDashboard() {
                       <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                           <ShoppingCart className="h-5 w-5 text-red-500" />
-                          تكاليف المبيعات (COGS)
+                          التكاليف التشغيلية
                         </CardTitle>
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-3">
-                          {completePnL.cogs.length > 0 ? (
-                            completePnL.cogs.map((cog, index) => (
-                              <div key={index} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                                <div>
-                                  <span>{COGS_CATEGORIES.find(c => c.id === cog.itemType)?.label || cog.itemType}</span>
-                                  {cog.notes && <p className="text-xs text-muted-foreground">{cog.notes}</p>}
-                                </div>
-                                <div className="text-left">
-                                  <div className="font-semibold">{formatCurrency(cog.amount)}</div>
-                                  {(cog.wasteAmount || 0) > 0 && (
-                                    <div className="text-xs text-red-500">هدر: {formatCurrency(cog.wasteAmount || 0)}</div>
-                                  )}
-                                </div>
-                              </div>
-                            ))
-                          ) : (
-                            <p className="text-center text-muted-foreground py-4">لا توجد بيانات تكاليف</p>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                          <Receipt className="h-5 w-5 text-orange-500" />
-                          المصروفات التشغيلية
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-3">
-                          {completePnL.operatingExpenses.length > 0 ? (
-                            completePnL.operatingExpenses.map((expense, index) => (
-                              <div key={index} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                                <div>
-                                  <span>{OPERATING_EXPENSE_TYPES.find(e => e.id === expense.expenseType)?.label || expense.expenseType}</span>
-                                  {expense.notes && <p className="text-xs text-muted-foreground">{expense.notes}</p>}
-                                </div>
-                                <div className="font-semibold">{formatCurrency(expense.amount)}</div>
-                              </div>
-                            ))
-                          ) : (
-                            <p className="text-center text-muted-foreground py-4">لا توجد مصروفات تشغيلية</p>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                          <Home className="h-5 w-5 text-purple-500" />
-                          التكاليف الثابتة
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-3">
-                          {completePnL.fixedCosts.length > 0 ? (
-                            completePnL.fixedCosts.map((cost, index) => (
-                              <div key={index} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                                <div>
-                                  <span>{FIXED_COST_TYPES.find(c => c.id === cost.costType)?.label || cost.costType}</span>
-                                  {cost.notes && <p className="text-xs text-muted-foreground">{cost.notes}</p>}
-                                </div>
-                                <div className="font-semibold">{formatCurrency(cost.amount)}</div>
-                              </div>
-                            ))
-                          ) : (
-                            <p className="text-center text-muted-foreground py-4">لا توجد تكاليف ثابتة</p>
-                          )}
+                          <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                            <span>تكلفة البضاعة المباعة (COGS)</span>
+                            <div className="font-semibold">{formatCurrency(enhancedPnL.totals.cogsCost)}</div>
+                          </div>
+                          <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                            <span>الصيانة</span>
+                            <div className="font-semibold">{formatCurrency(enhancedPnL.totals.operatingCosts.maintenance)}</div>
+                          </div>
+                          <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                            <span>التسويق</span>
+                            <div className="font-semibold">{formatCurrency(enhancedPnL.totals.operatingCosts.marketing)}</div>
+                          </div>
+                          <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                            <span>المستلزمات والأخرى</span>
+                            <div className="font-semibold">{formatCurrency(enhancedPnL.totals.operatingCosts.supplies + enhancedPnL.totals.operatingCosts.other)}</div>
+                          </div>
+                          <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg border-2 border-red-200">
+                            <span className="font-bold">إجمالي التكاليف التشغيلية</span>
+                            <div className="font-bold text-red-600">{formatCurrency(enhancedPnL.totals.totalOperatingCosts + enhancedPnL.totals.cogsCost)}</div>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
                   </div>
+                ) : (
+                  <Card>
+                    <CardContent className="p-12 text-center">
+                      <FileText className="h-16 w-16 mx-auto text-muted-foreground opacity-50 mb-4" />
+                      <h3 className="text-xl font-semibold mb-2">لا توجد بيانات متاحة</h3>
+                      <p className="text-muted-foreground mb-4">
+                        يرجى التأكد من وجود يوميات صندوق معتمدة لهذه الفترة
+                      </p>
+                    </CardContent>
+                  </Card>
                 )}
               </TabsContent>
 
