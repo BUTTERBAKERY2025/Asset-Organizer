@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -1660,110 +1661,103 @@ export default function ShiftManagementPage() {
               </Card>
             </TabsContent>
 
-            <TabsContent value="reports" className="space-y-4 mt-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <FileText className="w-5 h-5" />
-                      التقرير الأسبوعي
-                    </CardTitle>
-                    <CardDescription>
-                      ملخص دوام الموظفين للأسبوع الحالي
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between text-sm">
-                        <span>عدد الموظفين:</span>
-                        <span className="font-bold">{filteredEmployees.length}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span>إجمالي أيام العمل المخططة:</span>
-                        <span className="font-bold">
-                          {Object.values(scheduleData).reduce((total, emp) => {
-                            return total + Object.values(emp).filter(d => !d.isOff).length;
-                          }, 0)}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span>إجمالي أيام الإجازات:</span>
-                        <span className="font-bold">
-                          {Object.values(scheduleData).reduce((total, emp) => {
-                            return total + Object.values(emp).filter(d => d.isOff).length;
-                          }, 0)}
-                        </span>
-                      </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="outline" className="w-full gap-2 h-11 sm:h-9" disabled={isExporting || isExportingPdf} data-testid="btn-export-weekly">
-                            {(isExporting || isExportingPdf) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                            {isExporting ? "جاري التصدير Excel..." : isExportingPdf ? "جاري التصدير PDF..." : "تصدير التقرير"}
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48">
-                          <DropdownMenuItem onClick={exportWeeklyReport} className="gap-2 cursor-pointer" data-testid="btn-export-excel">
-                            <FileSpreadsheet className="w-4 h-4 text-green-600" />
-                            تصدير Excel
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={exportToPdf} className="gap-2 cursor-pointer" data-testid="btn-export-pdf">
-                            <File className="w-4 h-4 text-red-600" />
-                            تصدير PDF
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={printReport} className="gap-2 cursor-pointer" data-testid="btn-print-weekly">
-                            <Printer className="w-4 h-4 text-blue-600" />
-                            طباعة
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Calendar className="w-5 h-5" />
-                      التقرير الشهري
-                    </CardTitle>
-                    <CardDescription>
-                      ملخص شامل لدوام الموظفين خلال الشهر
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
+            <TabsContent value="reports" className="space-y-6 mt-4">
+              {/* ═══════════════════════════════════════════════════════════════════════════
+                  القسم الأول: رأس التقارير والإحصائيات السريعة
+                  ═══════════════════════════════════════════════════════════════════════════ */}
+              <div className="bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5 rounded-xl p-6 border border-primary/20">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
+                  <div>
+                    <h2 className="text-2xl font-bold text-primary flex items-center gap-2">
+                      <FileText className="w-7 h-7" />
+                      مركز التقارير
+                    </h2>
+                    <p className="text-muted-foreground mt-1">
+                      {getBranchName(selectedBranch)} • {format(currentWeekStart, "dd MMMM yyyy", { locale: ar })} - {format(addDays(currentWeekStart, 6), "dd MMMM yyyy", { locale: ar })}
+                    </p>
+                  </div>
+                  
+                  {/* أزرار التصدير السريع */}
+                  <div className="flex flex-wrap gap-2">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" className="gap-2" disabled={isExporting || isExportingPdf} data-testid="btn-export-weekly">
+                          {(isExporting || isExportingPdf) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                          تصدير أسبوعي
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuItem onClick={exportWeeklyReport} className="gap-2 cursor-pointer" data-testid="btn-export-excel">
+                          <FileSpreadsheet className="w-4 h-4 text-green-600" />
+                          Excel
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={exportToPdf} className="gap-2 cursor-pointer" data-testid="btn-export-pdf">
+                          <File className="w-4 h-4 text-red-600" />
+                          PDF
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={printReport} className="gap-2 cursor-pointer" data-testid="btn-print-weekly">
+                          <Printer className="w-4 h-4 text-blue-600" />
+                          طباعة
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    
+                    <div className="flex items-center gap-2">
                       <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="اختر الشهر" />
+                        <SelectTrigger className="w-[140px]">
+                          <SelectValue placeholder="الشهر" />
                         </SelectTrigger>
-                        <SelectContent className="max-h-60 overflow-y-auto">
+                        <SelectContent>
                           <SelectItem value={format(new Date(), "yyyy-MM")}>
-                            {format(new Date(), "MMMM yyyy", { locale: ar })}
+                            {format(new Date(), "MMM yyyy", { locale: ar })}
                           </SelectItem>
                           <SelectItem value={format(subMonths(new Date(), 1), "yyyy-MM")}>
-                            {format(subMonths(new Date(), 1), "MMMM yyyy", { locale: ar })}
+                            {format(subMonths(new Date(), 1), "MMM yyyy", { locale: ar })}
                           </SelectItem>
                           <SelectItem value={format(subMonths(new Date(), 2), "yyyy-MM")}>
-                            {format(subMonths(new Date(), 2), "MMMM yyyy", { locale: ar })}
+                            {format(subMonths(new Date(), 2), "MMM yyyy", { locale: ar })}
                           </SelectItem>
                         </SelectContent>
                       </Select>
-                      <Button variant="outline" className="w-full gap-2" onClick={generateMonthlyReport} disabled={isGeneratingMonthly} data-testid="btn-generate-monthly">
-                        {isGeneratingMonthly ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-                        {isGeneratingMonthly ? "جاري الإنشاء..." : "إنشاء التقرير"}
-                      </Button>
-                      <Button variant="outline" className="w-full gap-2" onClick={printReport} data-testid="btn-print-report">
-                        <Printer className="w-4 h-4" />
-                        طباعة التقرير
+                      <Button variant="outline" onClick={generateMonthlyReport} disabled={isGeneratingMonthly} data-testid="btn-generate-monthly">
+                        {isGeneratingMonthly ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
                       </Button>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
+                
+                {/* إحصائيات سريعة */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="bg-white/80 backdrop-blur rounded-lg p-3 text-center shadow-sm">
+                    <div className="text-2xl font-bold text-primary">{filteredEmployees.length}</div>
+                    <div className="text-xs text-muted-foreground">الموظفين</div>
+                  </div>
+                  <div className="bg-white/80 backdrop-blur rounded-lg p-3 text-center shadow-sm">
+                    <div className="text-2xl font-bold text-green-600">
+                      {Object.values(scheduleData).reduce((t, e) => t + Object.values(e).filter(d => !d.isOff).length, 0)}
+                    </div>
+                    <div className="text-xs text-muted-foreground">أيام العمل</div>
+                  </div>
+                  <div className="bg-white/80 backdrop-blur rounded-lg p-3 text-center shadow-sm">
+                    <div className="text-2xl font-bold text-gray-600">
+                      {Object.values(scheduleData).reduce((t, e) => t + Object.values(e).filter(d => d.isOff).length, 0)}
+                    </div>
+                    <div className="text-xs text-muted-foreground">أيام الإجازات</div>
+                  </div>
+                  <div className="bg-white/80 backdrop-blur rounded-lg p-3 text-center shadow-sm">
+                    <div className="text-2xl font-bold text-blue-600">
+                      {attendanceRecords?.filter(r => r.actualCheckIn && (selectedBranch === "all" || r.branchId === selectedBranch)).length || 0}
+                    </div>
+                    <div className="text-xs text-muted-foreground">سجلات الحضور</div>
+                  </div>
+                </div>
               </div>
 
-              {/* Today's Attendance Report */}
-              <Card className="border-2 border-primary/20">
+              {/* ═══════════════════════════════════════════════════════════════════════════
+                  القسم الثاني: تقرير حضور اليوم (مميز)
+                  ═══════════════════════════════════════════════════════════════════════════ */}
+              <Card className="border-2 border-primary/20 shadow-lg">
                 <CardHeader className="bg-primary/5">
                   <CardTitle className="flex items-center gap-2 text-primary">
                     <UserCheck className="w-5 h-5" />
@@ -2046,28 +2040,38 @@ export default function ShiftManagementPage() {
                 </CardContent>
               </Card>
 
-              {/* Work Hours Report - تقرير ساعات العمل */}
-              <Card className="border-2 border-blue-200">
-                <CardHeader className="bg-blue-50/50">
-                  <CardTitle className="flex items-center gap-2 text-blue-700">
-                    <Clock className="w-5 h-5" />
-                    تقرير ساعات العمل الفعلية
-                  </CardTitle>
-                  <CardDescription>
-                    إجمالي ساعات العمل والتأخير والعمل الإضافي لكل موظف
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  <div className="rounded-md border max-h-[500px] overflow-y-auto">
-                    <Table>
-                      <TableHeader className="sticky top-0 bg-background">
-                        <TableRow>
-                          <TableHead className="text-right">الموظف</TableHead>
-                          <TableHead className="text-center">ساعات العمل المطلوبة</TableHead>
-                          <TableHead className="text-center">ساعات العمل الفعلية</TableHead>
-                          <TableHead className="text-center">ساعات التأخير</TableHead>
-                          <TableHead className="text-center">ساعات الخروج المبكر</TableHead>
-                          <TableHead className="text-center">ساعات إضافية</TableHead>
+              {/* ═══════════════════════════════════════════════════════════════════════════
+                  القسم الثالث: التقارير التفصيلية (قابلة للطي)
+                  ═══════════════════════════════════════════════════════════════════════════ */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-px flex-1 bg-border"></div>
+                  <h3 className="text-lg font-semibold text-muted-foreground">التقارير التفصيلية</h3>
+                  <div className="h-px flex-1 bg-border"></div>
+                </div>
+                
+                <Accordion type="multiple" className="space-y-3">
+                  {/* تقرير ساعات العمل */}
+                  <AccordionItem value="work-hours" className="border-2 border-blue-200 rounded-lg overflow-hidden">
+                    <AccordionTrigger className="bg-blue-50/50 px-4 hover:bg-blue-100/50 hover:no-underline">
+                      <div className="flex items-center gap-2 text-blue-700">
+                        <Clock className="w-5 h-5" />
+                        <span className="font-semibold">تقرير ساعات العمل الفعلية</span>
+                        <Badge variant="outline" className="mr-2 text-xs">تفصيلي</Badge>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="pt-4 px-4 pb-4">
+                      <p className="text-sm text-muted-foreground mb-4">إجمالي ساعات العمل والتأخير والعمل الإضافي لكل موظف</p>
+                      <div className="rounded-md border max-h-[400px] overflow-y-auto">
+                        <Table>
+                          <TableHeader className="sticky top-0 bg-background">
+                            <TableRow>
+                              <TableHead className="text-right">الموظف</TableHead>
+                              <TableHead className="text-center">المطلوبة</TableHead>
+                              <TableHead className="text-center">الفعلية</TableHead>
+                              <TableHead className="text-center">التأخير</TableHead>
+                              <TableHead className="text-center">خروج مبكر</TableHead>
+                              <TableHead className="text-center">إضافي</TableHead>
                           <TableHead className="text-center">الفرق</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -2262,25 +2266,24 @@ export default function ShiftManagementPage() {
                     }}
                     data-testid="btn-export-hours-excel"
                   >
-                    <FileSpreadsheet className="w-4 h-4 text-green-600" />
-                    تصدير تقرير ساعات العمل Excel
-                  </Button>
-                </CardContent>
-              </Card>
+                        <FileSpreadsheet className="w-4 h-4 text-green-600" />
+                        تصدير Excel
+                      </Button>
+                    </AccordionContent>
+                  </AccordionItem>
 
-              {/* Discipline Report - تقرير الانضباط */}
-              <Card className="border-2 border-amber-200">
-                <CardHeader className="bg-amber-50/50">
-                  <CardTitle className="flex items-center gap-2 text-amber-700">
-                    <UserCheck className="w-5 h-5" />
-                    تقرير الانضباط والالتزام
-                  </CardTitle>
-                  <CardDescription>
-                    عدد مرات التأخر ومتوسط أوقات الحضور والانصراف
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  <div className="rounded-md border max-h-[500px] overflow-y-auto">
+                  {/* تقرير الانضباط */}
+                  <AccordionItem value="discipline" className="border-2 border-amber-200 rounded-lg overflow-hidden">
+                    <AccordionTrigger className="bg-amber-50/50 px-4 hover:bg-amber-100/50 hover:no-underline">
+                      <div className="flex items-center gap-2 text-amber-700">
+                        <UserCheck className="w-5 h-5" />
+                        <span className="font-semibold">تقرير الانضباط والالتزام</span>
+                        <Badge variant="outline" className="mr-2 text-xs">تفصيلي</Badge>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="pt-4 px-4 pb-4">
+                      <p className="text-sm text-muted-foreground mb-4">عدد مرات التأخر ومتوسط أوقات الحضور والانصراف</p>
+                      <div className="rounded-md border max-h-[400px] overflow-y-auto">
                     <Table>
                       <TableHeader className="sticky top-0 bg-background">
                         <TableRow>
@@ -2465,30 +2468,29 @@ export default function ShiftManagementPage() {
                     }}
                     data-testid="btn-export-discipline-excel"
                   >
-                    <FileSpreadsheet className="w-4 h-4 text-green-600" />
-                    تصدير تقرير الانضباط Excel
-                  </Button>
-                </CardContent>
-              </Card>
+                        <FileSpreadsheet className="w-4 h-4 text-green-600" />
+                        تصدير Excel
+                      </Button>
+                    </AccordionContent>
+                  </AccordionItem>
 
-              {/* Absence Details Report - تقرير الغياب التفصيلي */}
-              <Card className="border-2 border-red-200">
-                <CardHeader className="bg-red-50/50">
-                  <CardTitle className="flex items-center gap-2 text-red-700">
-                    <X className="w-5 h-5" />
-                    تقرير الغياب التفصيلي
-                  </CardTitle>
-                  <CardDescription>
-                    قائمة بأيام الغياب لكل موظف مع التواريخ
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  <div className="rounded-md border max-h-[500px] overflow-y-auto">
-                    <Table>
-                      <TableHeader className="sticky top-0 bg-background">
-                        <TableRow>
-                          <TableHead className="text-right">الموظف</TableHead>
-                          <TableHead className="text-center">عدد أيام الغياب</TableHead>
+                  {/* تقرير الغياب */}
+                  <AccordionItem value="absence" className="border-2 border-red-200 rounded-lg overflow-hidden">
+                    <AccordionTrigger className="bg-red-50/50 px-4 hover:bg-red-100/50 hover:no-underline">
+                      <div className="flex items-center gap-2 text-red-700">
+                        <X className="w-5 h-5" />
+                        <span className="font-semibold">تقرير الغياب التفصيلي</span>
+                        <Badge variant="outline" className="mr-2 text-xs">تفصيلي</Badge>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="pt-4 px-4 pb-4">
+                      <p className="text-sm text-muted-foreground mb-4">قائمة بأيام الغياب لكل موظف مع التواريخ</p>
+                      <div className="rounded-md border max-h-[400px] overflow-y-auto">
+                        <Table>
+                          <TableHeader className="sticky top-0 bg-background">
+                            <TableRow>
+                              <TableHead className="text-right">الموظف</TableHead>
+                              <TableHead className="text-center">عدد أيام الغياب</TableHead>
                           <TableHead className="text-right">تواريخ الغياب</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -2595,21 +2597,28 @@ export default function ShiftManagementPage() {
                     }}
                     data-testid="btn-export-absence-excel"
                   >
-                    <FileSpreadsheet className="w-4 h-4 text-green-600" />
-                    تصدير تقرير الغياب Excel
-                  </Button>
-                </CardContent>
-              </Card>
+                        <FileSpreadsheet className="w-4 h-4 text-green-600" />
+                        تصدير Excel
+                      </Button>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+              </div>
 
-              {/* Employee Detailed Report - تقرير الموظف التفصيلي */}
-              <Card className="border-2 border-teal-200">
-                <CardHeader className="bg-teal-50/50">
-                  <CardTitle className="flex items-center gap-2 text-teal-700">
-                    <UserCheck className="w-5 h-5" />
-                    تقرير حضور الموظف التفصيلي
-                  </CardTitle>
+              {/* ═══════════════════════════════════════════════════════════════════════════
+                  القسم الرابع: تقرير حضور الموظف بالتوقيع (مميز)
+                  ═══════════════════════════════════════════════════════════════════════════ */}
+              <Card className="border-2 border-teal-300 shadow-lg bg-gradient-to-br from-teal-50/30 to-white">
+                <CardHeader className="bg-teal-50/50 border-b border-teal-100">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-2 text-teal-700">
+                      <UserCheck className="w-5 h-5" />
+                      تقرير حضور الموظف التفصيلي
+                      <Badge className="bg-teal-100 text-teal-700 text-xs">مع التوقيع</Badge>
+                    </CardTitle>
+                  </div>
                   <CardDescription>
-                    اختر التاريخ والموظف لعرض تقرير الحضور والانصراف مع التوقيع
+                    اختر التاريخ والموظف لعرض تقرير الحضور والانصراف مع التوقيع الإلكتروني
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="pt-4 space-y-4">
@@ -2968,17 +2977,27 @@ export default function ShiftManagementPage() {
                 </CardContent>
               </Card>
 
-              {/* Branch Summary - ملخص الفرع */}
-              <Card className="border-2 border-purple-200">
-                <CardHeader className="bg-purple-50/50">
-                  <CardTitle className="flex items-center gap-2 text-purple-700">
-                    <Building2 className="w-5 h-5" />
-                    ملخص أداء الفرع
-                  </CardTitle>
-                  <CardDescription>
-                    إحصائيات شاملة لأداء الفرع خلال الفترة المحددة
-                  </CardDescription>
-                </CardHeader>
+              {/* ═══════════════════════════════════════════════════════════════════════════
+                  القسم الخامس: الملخص والرسوم البيانية
+                  ═══════════════════════════════════════════════════════════════════════════ */}
+              <div className="flex items-center gap-3 mt-6">
+                <div className="h-px flex-1 bg-border"></div>
+                <h3 className="text-lg font-semibold text-muted-foreground flex items-center gap-2">
+                  <CalendarDays className="w-5 h-5" />
+                  الملخص والإحصائيات البيانية
+                </h3>
+                <div className="h-px flex-1 bg-border"></div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* ملخص أداء الفرع */}
+                <Card className="border-2 border-purple-200">
+                  <CardHeader className="bg-purple-50/50 py-3">
+                    <CardTitle className="flex items-center gap-2 text-purple-700 text-base">
+                      <Building2 className="w-5 h-5" />
+                      ملخص أداء الفرع
+                    </CardTitle>
+                  </CardHeader>
                 <CardContent className="pt-4">
                   {(() => {
                     let totalScheduledMinutes = 0;
@@ -3067,22 +3086,19 @@ export default function ShiftManagementPage() {
                       </div>
                     );
                   })()}
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
 
-              {/* Attendance Charts - رسوم بيانية */}
-              <Card className="border-2 border-indigo-200">
-                <CardHeader className="bg-indigo-50/50">
-                  <CardTitle className="flex items-center gap-2 text-indigo-700">
-                    <CalendarDays className="w-5 h-5" />
-                    الإحصائيات البيانية
-                  </CardTitle>
-                  <CardDescription>
-                    رسوم بيانية توضيحية لأداء الحضور والالتزام
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* الإحصائيات البيانية */}
+                <Card className="border-2 border-indigo-200">
+                  <CardHeader className="bg-indigo-50/50 py-3">
+                    <CardTitle className="flex items-center gap-2 text-indigo-700 text-base">
+                      <CalendarDays className="w-5 h-5" />
+                      الإحصائيات البيانية
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <div className="space-y-4">
                     {/* Pie Chart - نسبة الحضور/الغياب */}
                     <div className="bg-white p-4 rounded-lg border">
                       <h4 className="text-center font-semibold mb-4">توزيع الحضور والغياب</h4>
@@ -3195,9 +3211,10 @@ export default function ShiftManagementPage() {
                         );
                       })()}
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
             </TabsContent>
 
             <TabsContent value="settings" className="space-y-4 mt-4">
