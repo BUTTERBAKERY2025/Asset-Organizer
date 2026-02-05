@@ -1048,8 +1048,7 @@ export default function PnLDashboard() {
   const [selectedMonth, setSelectedMonth] = useState<number>(currentMonth);
   const [selectedPeriodId, setSelectedPeriodId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState("overview");
-  const [showDataEntry, setShowDataEntry] = useState(false);
-  const [rankingMetric, setRankingMetric] = useState<"profit" | "revenue" | "margin">("profit");
+    const [rankingMetric, setRankingMetric] = useState<"profit" | "revenue" | "margin">("profit");
   
   const [salesEntries, setSalesEntries] = useState<Array<{ channel: string; totalAmount: number; invoiceCount: number }>>([]);
   const [cogsEntries, setCogsEntries] = useState<Array<{ itemType: string; notes: string; amount: number; wasteAmount: number }>>([]);
@@ -1406,7 +1405,6 @@ export default function PnLDashboard() {
         title: "تم استيراد البيانات بنجاح", 
         description: `تم استيراد ${data.imported.sales} مبيعات، ${data.imported.cogs} تكاليف، ${data.imported.operatingExpenses} مصروفات، ${data.imported.fixedCosts} تكاليف ثابتة` 
       });
-      setShowDataEntry(false);
     },
     onError: (error: Error) => {
       toast({ title: error.message || "فشل في استيراد البيانات من الملف", variant: "destructive" });
@@ -1511,7 +1509,6 @@ export default function PnLDashboard() {
       }
       
       await calculateMetricsMutation.mutateAsync(selectedPeriodId);
-      setShowDataEntry(false);
     } catch (error) {
       toast({ title: "فشل في حفظ البيانات", variant: "destructive" });
     }
@@ -1950,18 +1947,6 @@ export default function PnLDashboard() {
                 <span className="text-xs sm:text-sm">
                   الفترة الحالية: <strong>{selectedBranch.name}</strong> - {MONTHS_AR[selectedMonth - 1]} {selectedYear}
                 </span>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    loadExistingData();
-                    setShowDataEntry(true);
-                  }}
-                  className="h-11 sm:h-9"
-                  data-testid="button-enter-data"
-                >
-                  <FileText className="h-4 w-4 sm:ml-2" />
-                  <span className="hidden sm:inline">إدخال البيانات</span>
-                </Button>
               </div>
             )}
           </CardContent>
@@ -2552,16 +2537,13 @@ export default function PnLDashboard() {
                       <FileText className="h-16 w-16 mx-auto text-muted-foreground opacity-50 mb-4" />
                       <h3 className="text-xl font-semibold mb-2">لا توجد بيانات متاحة</h3>
                       <p className="text-muted-foreground mb-4">
-                        يرجى إدخال البيانات المالية للفترة المحددة
+                        يرجى إدخال بيانات التكاليف الشهرية للفترة المحددة
                       </p>
                       <Button
-                        onClick={() => {
-                          loadExistingData();
-                          setShowDataEntry(true);
-                        }}
+                        onClick={() => setShowMonthlyInputs(true)}
                       >
                         <Plus className="h-4 w-4 ml-2" />
-                        إدخال البيانات
+                        إدخال بيانات التكاليف الشهرية
                       </Button>
                     </CardContent>
                   </Card>
@@ -2830,399 +2812,6 @@ export default function PnLDashboard() {
             </Tabs>
           </>
         )}
-
-        <Dialog open={showDataEntry} onOpenChange={setShowDataEntry}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                إدخال البيانات المالية
-                {selectedBranch && (
-                  <Badge variant="outline" className="mr-2">
-                    {selectedBranch.name} - {MONTHS_AR[selectedMonth - 1]} {selectedYear}
-                  </Badge>
-                )}
-              </DialogTitle>
-            </DialogHeader>
-
-            {/* Summary Bar */}
-            <div className="flex gap-4 p-3 bg-muted/50 rounded-lg text-sm">
-              <div className="flex items-center gap-2">
-                <span className="text-muted-foreground">المبيعات:</span>
-                <span className="font-bold text-green-600">
-                  {formatCurrency(salesEntries.reduce((sum, e) => sum + (e.totalAmount || 0), 0))}
-                </span>
-              </div>
-              <Separator orientation="vertical" className="h-5" />
-              <div className="flex items-center gap-2">
-                <span className="text-muted-foreground">التكاليف:</span>
-                <span className="font-bold text-red-600">
-                  {formatCurrency(cogsEntries.reduce((sum, e) => sum + (e.amount || 0), 0))}
-                </span>
-              </div>
-              <Separator orientation="vertical" className="h-5" />
-              <div className="flex items-center gap-2">
-                <span className="text-muted-foreground">المصروفات:</span>
-                <span className="font-bold text-orange-600">
-                  {formatCurrency(operatingExpensesEntries.reduce((sum, e) => sum + (e.amount || 0), 0))}
-                </span>
-              </div>
-              <Separator orientation="vertical" className="h-5" />
-              <div className="flex items-center gap-2">
-                <span className="text-muted-foreground">الثابتة:</span>
-                <span className="font-bold text-blue-600">
-                  {formatCurrency(fixedCostsEntries.reduce((sum, e) => sum + (e.amount || 0), 0))}
-                </span>
-              </div>
-            </div>
-
-            <Tabs defaultValue="sales" className="w-full">
-              <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="sales" className="flex items-center gap-2" data-testid="tab-data-sales">
-                  <Wallet className="h-4 w-4" />
-                  المبيعات ({salesEntries.length})
-                </TabsTrigger>
-                <TabsTrigger value="cogs" className="flex items-center gap-2" data-testid="tab-data-cogs">
-                  <ShoppingCart className="h-4 w-4" />
-                  التكاليف ({cogsEntries.length})
-                </TabsTrigger>
-                <TabsTrigger value="opex" className="flex items-center gap-2" data-testid="tab-data-opex">
-                  <Receipt className="h-4 w-4" />
-                  المصروفات ({operatingExpensesEntries.length})
-                </TabsTrigger>
-                <TabsTrigger value="fixed" className="flex items-center gap-2" data-testid="tab-data-fixed">
-                  <Home className="h-4 w-4" />
-                  الثابتة ({fixedCostsEntries.length})
-                </TabsTrigger>
-              </TabsList>
-
-              <ScrollArea className="h-[50vh] mt-4 pl-4">
-                <TabsContent value="sales" className="mt-0">
-                  <Card>
-                    <CardHeader className="py-3">
-                      <CardTitle className="flex items-center justify-between text-base">
-                        <div className="flex items-center gap-2">
-                          <Wallet className="h-5 w-5 text-green-500" />
-                          المبيعات حسب القناة
-                        </div>
-                        {cashierSummary && cashierSummary.summary.journalsCount > 0 && (
-                          <Button 
-                            size="sm" 
-                            variant="outline"
-                            onClick={() => importSalesMutation.mutate(selectedPeriodId!)}
-                            disabled={importSalesMutation.isPending}
-                          >
-                            {importSalesMutation.isPending ? (
-                              <Loader2 className="h-4 w-4 animate-spin ml-2" />
-                            ) : (
-                              <Download className="h-4 w-4 ml-2" />
-                            )}
-                            استيراد من الكاشير
-                          </Button>
-                        )}
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      {salesEntries.map((entry, index) => (
-                        <div key={index} className="flex items-center gap-3 p-3 border rounded-lg hover:border-primary/50 transition-colors">
-                          <Select
-                            value={entry.channel}
-                            onValueChange={(v) => {
-                              const updated = [...salesEntries];
-                              updated[index].channel = v;
-                              setSalesEntries(updated);
-                            }}
-                          >
-                            <SelectTrigger className="w-40">
-                              <SelectValue placeholder="القناة" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {SALES_CHANNELS.map((c) => (
-                                <SelectItem key={c.id} value={c.id}>{c.label}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <Input
-                            type="number"
-                            placeholder="المبلغ"
-                            value={entry.totalAmount || ""}
-                            onChange={(e) => {
-                              const updated = [...salesEntries];
-                              updated[index].totalAmount = parseFloat(e.target.value) || 0;
-                              setSalesEntries(updated);
-                            }}
-                            className="flex-1"
-                          />
-                          <Input
-                            type="number"
-                            placeholder="عدد الفواتير"
-                            value={entry.invoiceCount || ""}
-                            onChange={(e) => {
-                              const updated = [...salesEntries];
-                              updated[index].invoiceCount = parseInt(e.target.value) || 0;
-                              setSalesEntries(updated);
-                            }}
-                            className="w-32"
-                          />
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setSalesEntries(salesEntries.filter((_, i) => i !== index))}
-                          >
-                            <Trash2 className="h-4 w-4 text-red-500" />
-                          </Button>
-                        </div>
-                      ))}
-                      <Button
-                        variant="outline"
-                        onClick={() => setSalesEntries([...salesEntries, { channel: "", totalAmount: 0, invoiceCount: 0 }])}
-                        className="w-full"
-                      >
-                        <Plus className="h-4 w-4 ml-2" />
-                        إضافة قناة مبيعات
-                      </Button>
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-
-                <TabsContent value="cogs" className="mt-0">
-                  <Card>
-                    <CardHeader className="py-3">
-                      <CardTitle className="flex items-center gap-2 text-base">
-                        <ShoppingCart className="h-5 w-5 text-red-500" />
-                        تكاليف المبيعات (COGS)
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      {cogsEntries.map((entry, index) => (
-                        <div key={index} className="flex items-center gap-3 p-3 border rounded-lg hover:border-primary/50 transition-colors">
-                          <Select
-                            value={entry.itemType}
-                            onValueChange={(v) => {
-                              const updated = [...cogsEntries];
-                              updated[index].itemType = v;
-                              setCogsEntries(updated);
-                            }}
-                          >
-                            <SelectTrigger className="w-40">
-                              <SelectValue placeholder="التصنيف" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {COGS_CATEGORIES.map((c) => (
-                                <SelectItem key={c.id} value={c.id}>{c.label}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <Input
-                            placeholder="الوصف"
-                            value={entry.notes}
-                            onChange={(e) => {
-                              const updated = [...cogsEntries];
-                              updated[index].notes = e.target.value;
-                              setCogsEntries(updated);
-                            }}
-                            className="flex-1"
-                          />
-                          <Input
-                            type="number"
-                            placeholder="المبلغ"
-                            value={entry.amount || ""}
-                            onChange={(e) => {
-                              const updated = [...cogsEntries];
-                              updated[index].amount = parseFloat(e.target.value) || 0;
-                              setCogsEntries(updated);
-                            }}
-                            className="w-32"
-                          />
-                          <Input
-                            type="number"
-                            placeholder="الهدر"
-                            value={entry.wasteAmount || ""}
-                            onChange={(e) => {
-                              const updated = [...cogsEntries];
-                              updated[index].wasteAmount = parseFloat(e.target.value) || 0;
-                              setCogsEntries(updated);
-                            }}
-                            className="w-28"
-                          />
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setCogsEntries(cogsEntries.filter((_, i) => i !== index))}
-                          >
-                            <Trash2 className="h-4 w-4 text-red-500" />
-                          </Button>
-                        </div>
-                      ))}
-                      <Button
-                        variant="outline"
-                        onClick={() => setCogsEntries([...cogsEntries, { itemType: "", notes: "", amount: 0, wasteAmount: 0 }])}
-                        className="w-full"
-                      >
-                        <Plus className="h-4 w-4 ml-2" />
-                        إضافة بند تكلفة
-                      </Button>
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-
-                <TabsContent value="opex" className="mt-0">
-                  <Card>
-                    <CardHeader className="py-3">
-                      <CardTitle className="flex items-center gap-2 text-base">
-                        <Receipt className="h-5 w-5 text-orange-500" />
-                        المصروفات التشغيلية
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      {operatingExpensesEntries.map((entry, index) => (
-                        <div key={index} className="flex items-center gap-3 p-3 border rounded-lg hover:border-primary/50 transition-colors">
-                          <Select
-                            value={entry.expenseType}
-                            onValueChange={(v) => {
-                              const updated = [...operatingExpensesEntries];
-                              updated[index].expenseType = v;
-                              setOperatingExpensesEntries(updated);
-                            }}
-                          >
-                            <SelectTrigger className="w-40">
-                              <SelectValue placeholder="النوع" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {OPERATING_EXPENSE_TYPES.map((e) => (
-                                <SelectItem key={e.id} value={e.id}>{e.label}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <Input
-                            placeholder="الوصف"
-                            value={entry.notes}
-                            onChange={(e) => {
-                              const updated = [...operatingExpensesEntries];
-                              updated[index].notes = e.target.value;
-                              setOperatingExpensesEntries(updated);
-                            }}
-                            className="flex-1"
-                          />
-                          <Input
-                            type="number"
-                            placeholder="المبلغ"
-                            value={entry.amount || ""}
-                            onChange={(e) => {
-                              const updated = [...operatingExpensesEntries];
-                              updated[index].amount = parseFloat(e.target.value) || 0;
-                              setOperatingExpensesEntries(updated);
-                            }}
-                            className="w-32"
-                          />
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setOperatingExpensesEntries(operatingExpensesEntries.filter((_, i) => i !== index))}
-                          >
-                            <Trash2 className="h-4 w-4 text-red-500" />
-                          </Button>
-                        </div>
-                      ))}
-                      <Button
-                        variant="outline"
-                        onClick={() => setOperatingExpensesEntries([...operatingExpensesEntries, { expenseType: "", notes: "", amount: 0 }])}
-                        className="w-full"
-                      >
-                        <Plus className="h-4 w-4 ml-2" />
-                        إضافة مصروف تشغيلي
-                      </Button>
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-
-                <TabsContent value="fixed" className="mt-0">
-                  <Card>
-                    <CardHeader className="py-3">
-                      <CardTitle className="flex items-center gap-2 text-base">
-                        <Home className="h-5 w-5 text-blue-500" />
-                        التكاليف الثابتة
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      {fixedCostsEntries.map((entry, index) => (
-                        <div key={index} className="flex items-center gap-3 p-3 border rounded-lg hover:border-primary/50 transition-colors">
-                          <Select
-                            value={entry.costType}
-                            onValueChange={(v) => {
-                              const updated = [...fixedCostsEntries];
-                              updated[index].costType = v;
-                              setFixedCostsEntries(updated);
-                            }}
-                          >
-                            <SelectTrigger className="w-40">
-                              <SelectValue placeholder="النوع" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {FIXED_COST_TYPES.map((c) => (
-                                <SelectItem key={c.id} value={c.id}>{c.label}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <Input
-                            placeholder="الوصف"
-                            value={entry.notes}
-                            onChange={(e) => {
-                              const updated = [...fixedCostsEntries];
-                              updated[index].notes = e.target.value;
-                              setFixedCostsEntries(updated);
-                            }}
-                            className="flex-1"
-                          />
-                          <Input
-                            type="number"
-                            placeholder="المبلغ"
-                            value={entry.amount || ""}
-                            onChange={(e) => {
-                              const updated = [...fixedCostsEntries];
-                              updated[index].amount = parseFloat(e.target.value) || 0;
-                              setFixedCostsEntries(updated);
-                            }}
-                            className="w-32"
-                          />
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setFixedCostsEntries(fixedCostsEntries.filter((_, i) => i !== index))}
-                          >
-                            <Trash2 className="h-4 w-4 text-red-500" />
-                          </Button>
-                        </div>
-                      ))}
-                      <Button
-                        variant="outline"
-                        onClick={() => setFixedCostsEntries([...fixedCostsEntries, { costType: "", notes: "", amount: 0 }])}
-                        className="w-full"
-                      >
-                        <Plus className="h-4 w-4 ml-2" />
-                        إضافة تكلفة ثابتة
-                      </Button>
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-              </ScrollArea>
-            </Tabs>
-            <DialogFooter className="mt-4">
-              <Button variant="outline" onClick={() => setShowDataEntry(false)}>
-                إلغاء
-              </Button>
-              <Button
-                onClick={handleSaveAllData}
-                disabled={saveSalesMutation.isPending || calculateMetricsMutation.isPending}
-              >
-                {(saveSalesMutation.isPending || calculateMetricsMutation.isPending) && (
-                  <Loader2 className="h-4 w-4 animate-spin ml-2" />
-                )}
-                حفظ وحساب المؤشرات
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
 
         {/* Monthly Inputs Dialog - نموذج إدخال التكاليف الشهرية */}
         <Dialog open={showMonthlyInputs} onOpenChange={setShowMonthlyInputs}>
