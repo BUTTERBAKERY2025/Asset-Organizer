@@ -6428,13 +6428,19 @@ export class DatabaseStorage implements IStorage {
   async getAllCashierShiftTargets(filters?: { branchId?: string; date?: string; shiftType?: string }): Promise<CashierShiftTarget[]> {
     const conditions = [];
     if (filters?.branchId) conditions.push(eq(cashierShiftTargets.branchId, filters.branchId));
-    if (filters?.date) conditions.push(eq(cashierShiftTargets.targetDate, filters.date));
     if (filters?.shiftType) conditions.push(eq(cashierShiftTargets.shiftType, filters.shiftType));
     
-    if (conditions.length > 0) {
-      return await db.select().from(cashierShiftTargets).where(and(...conditions)).orderBy(desc(cashierShiftTargets.targetDate));
+    // For date filter, check if date falls within startDate-endDate range
+    // This supports period-based targets (weekly/monthly)
+    if (filters?.date) {
+      conditions.push(lte(cashierShiftTargets.startDate, filters.date));
+      conditions.push(gte(cashierShiftTargets.endDate, filters.date));
     }
-    return await db.select().from(cashierShiftTargets).orderBy(desc(cashierShiftTargets.targetDate));
+    
+    if (conditions.length > 0) {
+      return await db.select().from(cashierShiftTargets).where(and(...conditions)).orderBy(desc(cashierShiftTargets.startDate));
+    }
+    return await db.select().from(cashierShiftTargets).orderBy(desc(cashierShiftTargets.startDate));
   }
 
   async getCashierShiftTarget(id: number): Promise<CashierShiftTarget | undefined> {
@@ -6443,8 +6449,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getCashierShiftTargetsByBranch(branchId: string, date: string): Promise<CashierShiftTarget[]> {
+    // Query targets where the date falls within startDate-endDate range
     return await db.select().from(cashierShiftTargets).where(
-      and(eq(cashierShiftTargets.branchId, branchId), eq(cashierShiftTargets.targetDate, date))
+      and(
+        eq(cashierShiftTargets.branchId, branchId), 
+        lte(cashierShiftTargets.startDate, date),
+        gte(cashierShiftTargets.endDate, date)
+      )
     );
   }
 

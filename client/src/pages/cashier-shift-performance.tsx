@@ -68,8 +68,13 @@ export default function CashierShiftPerformance() {
     branchId: "",
     shiftType: "morning",
     cashierRole: "main",
-    targetAmount: 0,
-    targetTransactions: 0,
+    periodType: "weekly" as "daily" | "weekly" | "monthly",
+    startDate: today,
+    endDate: "",
+    totalTargetAmount: 0,
+    totalTargetTransactions: 0,
+    targetAmount: 0, // Daily distributed
+    targetTransactions: 0, // Daily distributed
     targetTicketValue: 0,
   });
 
@@ -135,6 +140,55 @@ export default function CashierShiftPerformance() {
       return res.json();
     }
   });
+
+  // Fetch incentive tiers for calculating rewards
+  interface IncentiveTier {
+    id: number;
+    name: string;
+    description: string | null;
+    minAchievementPercent: number;
+    maxAchievementPercent: number | null;
+    rewardType: string;
+    fixedAmount: number | null;
+    percentageRate: number | null;
+    isActive: boolean;
+    sortOrder: number;
+  }
+
+  const { data: incentiveTiers = [] } = useQuery<IncentiveTier[]>({
+    queryKey: ["/api/incentive-tiers"],
+    queryFn: async () => {
+      const res = await fetch("/api/incentive-tiers");
+      if (!res.ok) return [];
+      const data = await res.json();
+      return data.filter((t: IncentiveTier) => t.isActive).sort((a: IncentiveTier, b: IncentiveTier) => (a.sortOrder || 0) - (b.sortOrder || 0));
+    }
+  });
+
+  // Calculate incentive based on achievement percentage
+  const calculateIncentive = (achievementPercent: number, excessSales: number = 0): { tier: IncentiveTier | null; reward: number } => {
+    if (!incentiveTiers.length) return { tier: null, reward: 0 };
+    
+    // Find the matching tier
+    const matchingTier = incentiveTiers.find(tier => {
+      const minMatch = achievementPercent >= tier.minAchievementPercent;
+      const maxMatch = tier.maxAchievementPercent === null || achievementPercent <= tier.maxAchievementPercent;
+      return minMatch && maxMatch;
+    });
+    
+    if (!matchingTier) return { tier: null, reward: 0 };
+    
+    let reward = 0;
+    if (matchingTier.rewardType === 'fixed' && matchingTier.fixedAmount) {
+      reward = matchingTier.fixedAmount;
+    } else if (matchingTier.rewardType === 'percentage' && matchingTier.percentageRate) {
+      reward = excessSales * (matchingTier.percentageRate / 100);
+    } else if (matchingTier.rewardType === 'both') {
+      reward = (matchingTier.fixedAmount || 0) + (excessSales * ((matchingTier.percentageRate || 0) / 100));
+    }
+    
+    return { tier: matchingTier, reward: Math.round(reward * 100) / 100 };
+  };
 
   // Fetch actual cashier sales from journals
   interface CashierSalesData {
@@ -205,6 +259,11 @@ export default function CashierShiftPerformance() {
       branchId: target.branchId || "",
       shiftType: target.shiftType || "morning",
       cashierRole: target.cashierRole || "main",
+      periodType: (target as any).periodType || "daily",
+      startDate: (target as any).startDate || target.targetDate || today,
+      endDate: (target as any).endDate || target.targetDate || today,
+      totalTargetAmount: Number((target as any).totalTargetAmount) || Number(target.targetAmount) || 0,
+      totalTargetTransactions: Number((target as any).totalTargetTransactions) || Number(target.targetTransactions) || 0,
       targetAmount: Number(target.targetAmount) || 0,
       targetTransactions: Number(target.targetTransactions) || 0,
       targetTicketValue: Number(target.targetTicketValue) || 0,
@@ -212,22 +271,73 @@ export default function CashierShiftPerformance() {
     setShowTargetDialog(true);
   };
 
+  // Calculate number of days in period
+  const calculateDaysInPeriod = (start: string, end: string) => {
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    return Math.max(diffDays, 1);
+  };
+
+  // Auto-calculate end date based on period type
+  const calculateEndDate = (startDate: string, periodType: string) => {
+    const start = new Date(startDate);
+    let end: Date;
+    
+    if (periodType === "weekly") {
+      end = new Date(start);
+      end.setDate(end.getDate() + 6); // 7 days including start
+    } else if (periodType === "monthly") {
+      end = new Date(start);
+      end.setMonth(end.getMonth() + 1);
+      end.setDate(end.getDate() - 1); // End of month
+    } else {
+      end = start; // daily
+    }
+    
+    return end.toISOString().split('T')[0];
+  };
+
+  // Calculate daily targets from total
+  const calculateDailyTargets = (totalAmount: number, totalTransactions: number, days: number) => {
+    const dailyAmount = Math.round((totalAmount / days) * 100) / 100;
+    const dailyTransactions = Math.round(totalTransactions / days);
+    const ticketValue = dailyTransactions > 0 ? Math.round((dailyAmount / dailyTransactions) * 100) / 100 : 0;
+    return { dailyAmount, dailyTransactions, ticketValue };
+  };
+
   const handleSaveTarget = () => {
+    const days = calculateDaysInPeriod(newTarget.startDate, newTarget.endDate);
+    const { dailyAmount, dailyTransactions, ticketValue } = calculateDailyTargets(
+      newTarget.totalTargetAmount, 
+      newTarget.totalTargetTransactions, 
+      days
+    );
+
+    const targetData = {
+      cashierId: newTarget.cashierId,
+      branchId: newTarget.branchId,
+      shiftType: newTarget.shiftType,
+      cashierRole: newTarget.cashierRole,
+      periodType: newTarget.periodType,
+      startDate: newTarget.startDate,
+      endDate: newTarget.endDate,
+      totalTargetAmount: newTarget.totalTargetAmount,
+      totalTargetTransactions: newTarget.totalTargetTransactions,
+      targetAmount: dailyAmount,
+      targetTransactions: dailyTransactions,
+      targetTicketValue: ticketValue,
+      targetDate: newTarget.startDate, // Legacy field
+    };
+
     if (editingTarget) {
       updateTargetMutation.mutate({
         id: editingTarget.id,
-        data: {
-          targetAmount: newTarget.targetAmount,
-          targetTransactions: newTarget.targetTransactions,
-          targetTicketValue: newTarget.targetTicketValue,
-          cashierRole: newTarget.cashierRole,
-        }
+        data: targetData
       });
     } else {
-      createTargetMutation.mutate({
-        ...newTarget,
-        targetDate: selectedDate,
-      });
+      createTargetMutation.mutate(targetData);
     }
   };
 
@@ -246,6 +356,11 @@ export default function CashierShiftPerformance() {
       branchId: "",
       shiftType: "morning",
       cashierRole: "main",
+      periodType: "weekly",
+      startDate: today,
+      endDate: calculateEndDate(today, "weekly"),
+      totalTargetAmount: 0,
+      totalTargetTransactions: 0,
       targetAmount: 0,
       targetTransactions: 0,
       targetTicketValue: 0,
@@ -440,48 +555,122 @@ export default function CashierShiftPerformance() {
                       </SelectContent>
                     </Select>
                   </div>
+                  
+                  {/* Period Type Selection */}
                   <div className="grid gap-2">
-                    <Label>هدف المبيعات (ريال)</Label>
-                    <Input 
-                      type="number" 
-                      value={newTarget.targetAmount} 
-                      onChange={(e) => {
-                        const amount = Number(e.target.value);
-                        const ticketValue = newTarget.targetTransactions > 0 
-                          ? Math.round((amount / newTarget.targetTransactions) * 100) / 100 
-                          : 0;
-                        setNewTarget({...newTarget, targetAmount: amount, targetTicketValue: ticketValue});
+                    <Label>نوع الفترة</Label>
+                    <Select 
+                      value={newTarget.periodType} 
+                      onValueChange={(v: "daily" | "weekly" | "monthly") => {
+                        const endDate = calculateEndDate(newTarget.startDate, v);
+                        setNewTarget({...newTarget, periodType: v, endDate});
                       }}
-                      data-testid="input-target-amount"
-                      className="h-11 sm:h-10"
-                    />
+                    >
+                      <SelectTrigger data-testid="select-period-type" className="h-11 sm:h-10">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="daily">يومي</SelectItem>
+                        <SelectItem value="weekly">أسبوعي</SelectItem>
+                        <SelectItem value="monthly">شهري</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
+                  
+                  {/* Date Range */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="grid gap-2">
+                      <Label>تاريخ البداية</Label>
+                      <Input 
+                        type="date" 
+                        value={newTarget.startDate}
+                        onChange={(e) => {
+                          const startDate = e.target.value;
+                          const endDate = calculateEndDate(startDate, newTarget.periodType);
+                          setNewTarget({...newTarget, startDate, endDate});
+                        }}
+                        data-testid="input-start-date"
+                        className="h-11 sm:h-10"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label>تاريخ النهاية</Label>
+                      <Input 
+                        type="date" 
+                        value={newTarget.endDate}
+                        onChange={(e) => setNewTarget({...newTarget, endDate: e.target.value})}
+                        data-testid="input-end-date"
+                        className="h-11 sm:h-10"
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* Period days info */}
+                  {newTarget.startDate && newTarget.endDate && (
+                    <div className="text-sm text-muted-foreground bg-gray-50 p-2 rounded">
+                      عدد الأيام: {calculateDaysInPeriod(newTarget.startDate, newTarget.endDate)} يوم
+                    </div>
+                  )}
+
+                  {/* Total Target for Period */}
                   <div className="grid gap-2">
-                    <Label>عدد المعاملات المستهدف</Label>
+                    <Label>إجمالي هدف المبيعات للفترة (ريال)</Label>
                     <Input 
                       type="number" 
-                      value={newTarget.targetTransactions} 
+                      value={newTarget.totalTargetAmount} 
                       onChange={(e) => {
-                        const transactions = Number(e.target.value);
-                        const ticketValue = transactions > 0 
-                          ? Math.round((newTarget.targetAmount / transactions) * 100) / 100 
-                          : 0;
-                        setNewTarget({...newTarget, targetTransactions: transactions, targetTicketValue: ticketValue});
+                        const totalAmount = Number(e.target.value);
+                        setNewTarget({...newTarget, totalTargetAmount: totalAmount});
                       }}
-                      data-testid="input-target-transactions"
+                      data-testid="input-total-target-amount"
                       className="h-11 sm:h-10"
+                      placeholder="مثال: 70000 ريال للأسبوع"
                     />
                   </div>
+                  
                   <div className="grid gap-2">
-                    <Label>هدف متوسط الفاتورة (ريال) <span className="text-xs text-gray-500">(يُحسب تلقائياً)</span></Label>
+                    <Label>إجمالي الحركات المستهدفة للفترة</Label>
                     <Input 
                       type="number" 
-                      value={newTarget.targetTicketValue} 
-                      readOnly
-                      className="h-11 sm:h-10 bg-gray-50 cursor-not-allowed"
-                      data-testid="input-target-ticket-value"
+                      value={newTarget.totalTargetTransactions} 
+                      onChange={(e) => {
+                        const totalTransactions = Number(e.target.value);
+                        setNewTarget({...newTarget, totalTargetTransactions: totalTransactions});
+                      }}
+                      data-testid="input-total-target-transactions"
+                      className="h-11 sm:h-10"
+                      placeholder="مثال: 700 حركة للأسبوع"
                     />
                   </div>
+                  
+                  {/* Calculated Daily Targets Display */}
+                  {newTarget.totalTargetAmount > 0 && newTarget.startDate && newTarget.endDate && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-2">
+                      <h4 className="font-semibold text-amber-800 text-sm">الأهداف اليومية الموزعة (تُحسب تلقائياً)</h4>
+                      <div className="grid grid-cols-3 gap-2 text-sm">
+                        <div>
+                          <span className="text-gray-600">المبيعات اليومية:</span>
+                          <div className="font-bold text-amber-700">
+                            {formatCurrency(Math.round(newTarget.totalTargetAmount / calculateDaysInPeriod(newTarget.startDate, newTarget.endDate)))}
+                          </div>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">الحركات اليومية:</span>
+                          <div className="font-bold text-amber-700">
+                            {Math.round(newTarget.totalTargetTransactions / calculateDaysInPeriod(newTarget.startDate, newTarget.endDate))}
+                          </div>
+                        </div>
+                        <div>
+                          <span className="text-gray-600">متوسط الفاتورة:</span>
+                          <div className="font-bold text-amber-700">
+                            {newTarget.totalTargetTransactions > 0 
+                              ? formatCurrency(Math.round(newTarget.totalTargetAmount / newTarget.totalTargetTransactions))
+                              : "0 ر.س"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => {
@@ -495,7 +684,7 @@ export default function CashierShiftPerformance() {
                     onClick={handleSaveTarget} 
                     disabled={(createTargetMutation.isPending || updateTargetMutation.isPending) || 
                       (!editingTarget && (!newTarget.branchId || !newTarget.cashierId)) || 
-                      !newTarget.targetAmount}
+                      !newTarget.totalTargetAmount || !newTarget.startDate || !newTarget.endDate}
                     data-testid="button-save-target"
                     className="h-11 sm:h-9"
                   >
@@ -658,7 +847,17 @@ export default function CashierShiftPerformance() {
                       {shiftTargets.filter(t => t.shiftType === 'morning').map((target) => {
                         const actualSales = getCashierActualSales(target.cashierId || '', 'morning');
                         const achieved = actualSales.totalSales;
-                        const percent = target.targetAmount ? (achieved / Number(target.targetAmount)) * 100 : 0;
+                        const dailyTarget = Number(target.targetAmount);
+                        const dailyTransactions = Number(target.targetTransactions) || 0;
+                        const targetTicket = Number(target.targetTicketValue) || 0;
+                        const percent = dailyTarget ? (achieved / dailyTarget) * 100 : 0;
+                        const transactionsPercent = dailyTransactions ? (actualSales.transactionCount / dailyTransactions) * 100 : 0;
+                        const ticketPercent = targetTicket ? (actualSales.averageTicket / targetTicket) * 100 : 0;
+                        const periodType = (target as any).periodType || 'daily';
+                        const startDate = (target as any).startDate || target.targetDate;
+                        const endDate = (target as any).endDate || target.targetDate;
+                        const periodLabel = periodType === 'weekly' ? 'أسبوعي' : periodType === 'monthly' ? 'شهري' : 'يومي';
+                        
                         return (
                           <div key={target.id} className="border rounded-lg p-4" data-testid={`target-morning-${target.id}`}>
                             <div className="flex items-center justify-between mb-2">
@@ -666,6 +865,7 @@ export default function CashierShiftPerformance() {
                                 <UserIcon className="h-4 w-4" />
                                 <span className="font-medium">{getCashierName(target.cashierId)}</span>
                                 <Badge variant="outline">{CASHIER_ROLES.find(r => r.value === target.cashierRole)?.label}</Badge>
+                                <Badge variant="secondary" className="text-xs">{periodLabel}</Badge>
                               </div>
                               <div className="flex items-center gap-2">
                                 <Badge className={ALERT_COLORS[getAlertLevel(percent)].badge}>
@@ -682,16 +882,80 @@ export default function CashierShiftPerformance() {
                                 </Button>
                               </div>
                             </div>
-                            <div className="space-y-2">
-                              <Progress value={Math.min(percent, 100)} className="h-2" />
-                              <div className="flex justify-between text-sm text-muted-foreground">
-                                <span>الهدف: {formatCurrency(Number(target.targetAmount))}</span>
-                                <span>المحقق: {formatCurrency(achieved)}</span>
+                            
+                            {/* Period info */}
+                            {periodType !== 'daily' && (
+                              <div className="text-xs text-gray-400 mb-2">
+                                الفترة: {startDate} إلى {endDate}
                               </div>
-                              <div className="flex justify-between text-xs text-gray-400">
-                                <span>المعاملات: {actualSales.transactionCount}</span>
-                                <span>متوسط الفاتورة: {formatCurrency(actualSales.averageTicket)}</span>
+                            )}
+                            
+                            <div className="space-y-3">
+                              {/* Sales Progress */}
+                              <div>
+                                <div className="flex justify-between text-sm mb-1">
+                                  <span className="text-muted-foreground">المبيعات اليومية</span>
+                                  <span className={getPercentColor(percent)}>{percent.toFixed(0)}%</span>
+                                </div>
+                                <Progress value={Math.min(percent, 100)} className="h-2" />
+                                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                                  <span>الهدف: {formatCurrency(dailyTarget)}</span>
+                                  <span>المحقق: {formatCurrency(achieved)}</span>
+                                </div>
                               </div>
+                              
+                              {/* Transactions Progress */}
+                              {dailyTransactions > 0 && (
+                                <div>
+                                  <div className="flex justify-between text-sm mb-1">
+                                    <span className="text-muted-foreground">عدد الحركات</span>
+                                    <span className={getPercentColor(transactionsPercent)}>{transactionsPercent.toFixed(0)}%</span>
+                                  </div>
+                                  <Progress value={Math.min(transactionsPercent, 100)} className="h-1.5" />
+                                  <div className="flex justify-between text-xs text-gray-500 mt-1">
+                                    <span>الهدف: {dailyTransactions}</span>
+                                    <span>المحقق: {actualSales.transactionCount}</span>
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {/* Average Ticket Progress */}
+                              {targetTicket > 0 && (
+                                <div>
+                                  <div className="flex justify-between text-sm mb-1">
+                                    <span className="text-muted-foreground">متوسط الفاتورة</span>
+                                    <span className={getPercentColor(ticketPercent)}>{ticketPercent.toFixed(0)}%</span>
+                                  </div>
+                                  <Progress value={Math.min(ticketPercent, 100)} className="h-1.5" />
+                                  <div className="flex justify-between text-xs text-gray-500 mt-1">
+                                    <span>الهدف: {formatCurrency(targetTicket)}</span>
+                                    <span>الفعلي: {formatCurrency(actualSales.averageTicket)}</span>
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {/* Incentive Calculation */}
+                              {(() => {
+                                const excessSales = Math.max(0, achieved - dailyTarget);
+                                const { tier, reward } = calculateIncentive(percent, excessSales);
+                                if (!tier) return null;
+                                return (
+                                  <div className="mt-3 pt-3 border-t border-dashed">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-2">
+                                        <Trophy className="h-4 w-4 text-amber-500" />
+                                        <span className="text-sm font-medium text-amber-700">{tier.name}</span>
+                                      </div>
+                                      <Badge className="bg-green-500 text-white">
+                                        حافز: {formatCurrency(reward)}
+                                      </Badge>
+                                    </div>
+                                    {tier.description && (
+                                      <p className="text-xs text-gray-500 mt-1">{tier.description}</p>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </div>
                         );
@@ -719,7 +983,17 @@ export default function CashierShiftPerformance() {
                       {shiftTargets.filter(t => t.shiftType === 'evening').map((target) => {
                         const actualSales = getCashierActualSales(target.cashierId || '', 'evening');
                         const achieved = actualSales.totalSales;
-                        const percent = target.targetAmount ? (achieved / Number(target.targetAmount)) * 100 : 0;
+                        const dailyTarget = Number(target.targetAmount);
+                        const dailyTransactions = Number(target.targetTransactions) || 0;
+                        const targetTicket = Number(target.targetTicketValue) || 0;
+                        const percent = dailyTarget ? (achieved / dailyTarget) * 100 : 0;
+                        const transactionsPercent = dailyTransactions ? (actualSales.transactionCount / dailyTransactions) * 100 : 0;
+                        const ticketPercent = targetTicket ? (actualSales.averageTicket / targetTicket) * 100 : 0;
+                        const periodType = (target as any).periodType || 'daily';
+                        const startDate = (target as any).startDate || target.targetDate;
+                        const endDate = (target as any).endDate || target.targetDate;
+                        const periodLabel = periodType === 'weekly' ? 'أسبوعي' : periodType === 'monthly' ? 'شهري' : 'يومي';
+                        
                         return (
                           <div key={target.id} className="border rounded-lg p-4" data-testid={`target-evening-${target.id}`}>
                             <div className="flex items-center justify-between mb-2">
@@ -727,6 +1001,7 @@ export default function CashierShiftPerformance() {
                                 <UserIcon className="h-4 w-4" />
                                 <span className="font-medium">{getCashierName(target.cashierId)}</span>
                                 <Badge variant="outline">{CASHIER_ROLES.find(r => r.value === target.cashierRole)?.label}</Badge>
+                                <Badge variant="secondary" className="text-xs">{periodLabel}</Badge>
                               </div>
                               <div className="flex items-center gap-2">
                                 <Badge className={ALERT_COLORS[getAlertLevel(percent)].badge}>
@@ -743,16 +1018,80 @@ export default function CashierShiftPerformance() {
                                 </Button>
                               </div>
                             </div>
-                            <div className="space-y-2">
-                              <Progress value={Math.min(percent, 100)} className="h-2" />
-                              <div className="flex justify-between text-sm text-muted-foreground">
-                                <span>الهدف: {formatCurrency(Number(target.targetAmount))}</span>
-                                <span>المحقق: {formatCurrency(achieved)}</span>
+                            
+                            {/* Period info */}
+                            {periodType !== 'daily' && (
+                              <div className="text-xs text-gray-400 mb-2">
+                                الفترة: {startDate} إلى {endDate}
                               </div>
-                              <div className="flex justify-between text-xs text-gray-400">
-                                <span>المعاملات: {actualSales.transactionCount}</span>
-                                <span>متوسط الفاتورة: {formatCurrency(actualSales.averageTicket)}</span>
+                            )}
+                            
+                            <div className="space-y-3">
+                              {/* Sales Progress */}
+                              <div>
+                                <div className="flex justify-between text-sm mb-1">
+                                  <span className="text-muted-foreground">المبيعات اليومية</span>
+                                  <span className={getPercentColor(percent)}>{percent.toFixed(0)}%</span>
+                                </div>
+                                <Progress value={Math.min(percent, 100)} className="h-2" />
+                                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                                  <span>الهدف: {formatCurrency(dailyTarget)}</span>
+                                  <span>المحقق: {formatCurrency(achieved)}</span>
+                                </div>
                               </div>
+                              
+                              {/* Transactions Progress */}
+                              {dailyTransactions > 0 && (
+                                <div>
+                                  <div className="flex justify-between text-sm mb-1">
+                                    <span className="text-muted-foreground">عدد الحركات</span>
+                                    <span className={getPercentColor(transactionsPercent)}>{transactionsPercent.toFixed(0)}%</span>
+                                  </div>
+                                  <Progress value={Math.min(transactionsPercent, 100)} className="h-1.5" />
+                                  <div className="flex justify-between text-xs text-gray-500 mt-1">
+                                    <span>الهدف: {dailyTransactions}</span>
+                                    <span>المحقق: {actualSales.transactionCount}</span>
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {/* Average Ticket Progress */}
+                              {targetTicket > 0 && (
+                                <div>
+                                  <div className="flex justify-between text-sm mb-1">
+                                    <span className="text-muted-foreground">متوسط الفاتورة</span>
+                                    <span className={getPercentColor(ticketPercent)}>{ticketPercent.toFixed(0)}%</span>
+                                  </div>
+                                  <Progress value={Math.min(ticketPercent, 100)} className="h-1.5" />
+                                  <div className="flex justify-between text-xs text-gray-500 mt-1">
+                                    <span>الهدف: {formatCurrency(targetTicket)}</span>
+                                    <span>الفعلي: {formatCurrency(actualSales.averageTicket)}</span>
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {/* Incentive Calculation */}
+                              {(() => {
+                                const excessSales = Math.max(0, achieved - dailyTarget);
+                                const { tier, reward } = calculateIncentive(percent, excessSales);
+                                if (!tier) return null;
+                                return (
+                                  <div className="mt-3 pt-3 border-t border-dashed">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-2">
+                                        <Trophy className="h-4 w-4 text-amber-500" />
+                                        <span className="text-sm font-medium text-amber-700">{tier.name}</span>
+                                      </div>
+                                      <Badge className="bg-green-500 text-white">
+                                        حافز: {formatCurrency(reward)}
+                                      </Badge>
+                                    </div>
+                                    {tier.description && (
+                                      <p className="text-xs text-gray-500 mt-1">{tier.description}</p>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </div>
                         );

@@ -3216,10 +3216,24 @@ export const cashierShiftTargets = pgTable("cashier_shift_targets", {
     .references(() => branches.id),
   shiftType: varchar("shift_type").notNull(), // morning, evening
   cashierRole: varchar("cashier_role").default("main").notNull(), // main, assistant, trainee
-  targetAmount: numeric("target_amount").notNull(), // هدف المبيعات
-  targetTransactions: integer("target_transactions"), // عدد المعاملات المستهدف
-  targetTicketValue: numeric("target_ticket_value"), // هدف متوسط الفاتورة
-  targetDate: date("target_date").notNull(), // YYYY-MM-DD
+  
+  // Period settings - إعدادات الفترة
+  periodType: varchar("period_type").default("daily").notNull(), // daily, weekly, monthly
+  startDate: date("start_date").notNull(), // تاريخ بداية الفترة
+  endDate: date("end_date").notNull(), // تاريخ نهاية الفترة
+  
+  // Total targets for the period - إجمالي الأهداف للفترة
+  totalTargetAmount: numeric("total_target_amount").notNull(), // إجمالي هدف المبيعات للفترة
+  totalTargetTransactions: integer("total_target_transactions"), // إجمالي الحركات المستهدفة للفترة
+  
+  // Daily distributed targets (auto-calculated) - الأهداف اليومية الموزعة
+  targetAmount: numeric("target_amount").notNull(), // هدف المبيعات اليومي الموزع
+  targetTransactions: integer("target_transactions"), // عدد المعاملات اليومي المستهدف
+  targetTicketValue: numeric("target_ticket_value"), // هدف متوسط الفاتورة (محسوب تلقائياً)
+  
+  // Legacy field for backward compatibility
+  targetDate: date("target_date").notNull(), // YYYY-MM-DD (same as startDate for daily)
+  
   isActive: boolean("is_active").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
