@@ -382,6 +382,275 @@ function exportPnLToExcel(
   XLSX.writeFile(wb, `تقرير_الأرباح_والخسائر_${branchName}_${period}.xlsx`);
 }
 
+// دالة تصدير التقرير المحسن من البيانات الفعلية (enhanced-summary)
+function exportEnhancedPnLToExcel(
+  branchName: string,
+  period: string,
+  enhancedData: any
+) {
+  const wb = XLSX.utils.book_new();
+  const totals = enhancedData.totals;
+  
+  // ورقة الملخص الرئيسي
+  const summaryData = [
+    ["تقرير الأرباح والخسائر المحسن"],
+    [`الفرع: ${branchName}`],
+    [`الفترة: ${period}`],
+    [`تاريخ التقرير: ${new Date().toLocaleDateString('ar-SA')}`],
+    [""],
+    ["المؤشر", "القيمة", "النسبة", "الملاحظات"],
+    ["إجمالي المبيعات (شامل الضريبة)", totals.grossSales || 0, "", `${totals.journalCount || 0} يومية صندوق`],
+    ["ضريبة القيمة المضافة (15%)", totals.vatAmount || 0, "15%", "محتسبة تلقائياً"],
+    ["صافي المبيعات (بدون الضريبة)", totals.netSales || 0, "", ""],
+    [""],
+    ["تكلفة البضاعة المباعة (COGS)", totals.cogsCost || 0, totals.netSales > 0 ? `${((totals.cogsCost / totals.netSales) * 100).toFixed(1)}%` : "0%", ""],
+    ["إجمالي الربح", totals.grossProfit || 0, `${(totals.grossMargin || 0).toFixed(1)}%`, ""],
+    [""],
+    ["تكاليف الموظفين", "", "", `${totals.employeeCount || 0} موظف`],
+    ["  - الرواتب والبدلات", totals.employeeCosts?.salaries || 0, "", ""],
+    ["  - التأمينات الاجتماعية (GOSI)", totals.employeeCosts?.gosi || 0, "12%", "للسعوديين"],
+    ["  - رسوم غير السعوديين", totals.employeeCosts?.nonSaudiCosts || 0, "", "رخصة عمل + مقابل مالي + إقامة + تأمين"],
+    ["  - إجمالي تكاليف الموظفين", totals.employeeCosts?.total || 0, totals.netSales > 0 ? `${((totals.employeeCosts?.total / totals.netSales) * 100).toFixed(1)}%` : "0%", ""],
+    [""],
+    ["المصروفات الثابتة والمرافق", "", "", ""],
+    ["  - الإيجار", totals.rent || 0, totals.netSales > 0 ? `${((totals.rent / totals.netSales) * 100).toFixed(1)}%` : "0%", ""],
+    ["  - الكهرباء", totals.utilities?.electricity || 0, "", ""],
+    ["  - المياه", totals.utilities?.water || 0, "", ""],
+    ["  - مرافق أخرى", totals.utilities?.other || 0, "", ""],
+    ["  - إجمالي المرافق", totals.utilities?.total || 0, "", ""],
+    [""],
+    ["تكاليف التشغيل الأخرى", "", "", ""],
+    ["  - الصيانة", totals.operatingCosts?.maintenance || 0, "", ""],
+    ["  - التسويق", totals.operatingCosts?.marketing || 0, "", ""],
+    ["  - المستلزمات", totals.operatingCosts?.supplies || 0, "", ""],
+    ["  - تكاليف أخرى", totals.operatingCosts?.other || 0, "", ""],
+    [""],
+    ["إجمالي تكاليف التشغيل", totals.totalOperatingCosts || 0, "", ""],
+    [""],
+    ["الربح التشغيلي", totals.operatingProfit || 0, totals.netSales > 0 ? `${((totals.operatingProfit / totals.netSales) * 100).toFixed(1)}%` : "0%", ""],
+    ["صافي الربح", totals.netProfit || 0, `${(totals.netMargin || 0).toFixed(1)}%`, ""],
+    [""],
+    ["المؤشرات الإضافية", "", "", ""],
+    ["  - نقطة التعادل", totals.rent && totals.utilities?.total && totals.grossMargin > 0 ? ((totals.rent + totals.utilities.total) / (totals.grossMargin / 100)).toFixed(0) : 0, "", "المبيعات اللازمة لتغطية التكاليف الثابتة"],
+    ["  - الإيراد لكل موظف", totals.employeeCount > 0 ? (totals.grossSales / totals.employeeCount).toFixed(0) : 0, "", ""],
+  ];
+  
+  const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
+  wsSummary["!cols"] = [{ wch: 35 }, { wch: 20 }, { wch: 15 }, { wch: 40 }];
+  XLSX.utils.book_append_sheet(wb, wsSummary, "التقرير الشامل");
+  
+  // ورقة تفاصيل الفروع (إذا كان هناك أكثر من فرع)
+  if (enhancedData.branches && enhancedData.branches.length > 0) {
+    const branchesData = [
+      ["مقارنة أداء الفروع"],
+      [""],
+      ["الفرع", "المبيعات", "صافي الربح", "الهامش %", "الموظفين", "الإيجار", "المرافق"],
+      ...enhancedData.branches.map((b: any) => [
+        b.branchName,
+        b.grossSales || 0,
+        b.netProfit || 0,
+        `${(b.netMargin || 0).toFixed(1)}%`,
+        b.employeeCount || 0,
+        b.rent || 0,
+        b.utilities?.total || 0
+      ])
+    ];
+    
+    const wsBranches = XLSX.utils.aoa_to_sheet(branchesData);
+    wsBranches["!cols"] = [{ wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }];
+    XLSX.utils.book_append_sheet(wb, wsBranches, "مقارنة الفروع");
+  }
+  
+  // ورقة التحليل المالي - مع حماية من القسمة على صفر
+  const salaryRatio = (totals.netSales || 0) > 0 ? ((totals.employeeCosts?.total || 0) / totals.netSales) * 100 : 0;
+  const rentRatio = (totals.netSales || 0) > 0 ? ((totals.rent || 0) / totals.netSales) * 100 : 0;
+  const cogsRatio = (totals.netSales || 0) > 0 ? ((totals.cogsCost || 0) / totals.netSales) * 100 : 0;
+  
+  const analysisData = [
+    ["التحليل المالي"],
+    [""],
+    ["نسب الربحية", "", ""],
+    ["هامش إجمالي الربح", `${(totals.grossMargin || 0).toFixed(2)}%`, totals.grossMargin >= 30 ? "ممتاز" : totals.grossMargin >= 20 ? "جيد" : "يحتاج تحسين"],
+    ["هامش صافي الربح", `${(totals.netMargin || 0).toFixed(2)}%`, totals.netMargin >= 15 ? "ممتاز" : totals.netMargin >= 10 ? "جيد" : totals.netMargin >= 5 ? "متوسط" : "ضعيف"],
+    [""],
+    ["نسب التكاليف", "", ""],
+    ["نسبة الرواتب للمبيعات", `${salaryRatio.toFixed(2)}%`, salaryRatio <= 25 ? "ممتاز" : salaryRatio <= 35 ? "مقبول" : "مرتفعة"],
+    ["نسبة الإيجار للإيرادات", `${rentRatio.toFixed(2)}%`, rentRatio <= 10 ? "ممتاز" : rentRatio <= 15 ? "مقبول" : "مرتفعة"],
+    ["نسبة COGS", `${cogsRatio.toFixed(2)}%`, cogsRatio <= 40 ? "ممتاز" : cogsRatio <= 50 ? "مقبول" : "مرتفعة"],
+    [""],
+    ["مؤشرات الإنتاجية", "", ""],
+    ["عدد الموظفين", totals.employeeCount || 0, ""],
+    ["الإيراد لكل موظف", (totals.employeeCount || 0) > 0 ? `${((totals.grossSales || 0) / totals.employeeCount).toFixed(0)} ريال` : "0", ""],
+    ["عدد اليوميات", totals.journalCount || 0, ""],
+  ];
+  
+  const wsAnalysis = XLSX.utils.aoa_to_sheet(analysisData);
+  wsAnalysis["!cols"] = [{ wch: 30 }, { wch: 20 }, { wch: 20 }];
+  XLSX.utils.book_append_sheet(wb, wsAnalysis, "التحليل المالي");
+  
+  XLSX.writeFile(wb, `تقرير_PnL_المحسن_${branchName}_${period}.xlsx`);
+}
+
+// دالة تصدير PDF المحسن
+function generateEnhancedPnLPdfReport(
+  branchName: string,
+  period: string,
+  enhancedData: any
+) {
+  const totals = enhancedData.totals;
+  const getRatingLabel = (margin: number) => {
+    if (margin >= 15) return "ممتاز";
+    if (margin >= 10) return "جيد";
+    if (margin >= 5) return "متوسط";
+    return "ضعيف";
+  };
+  
+  const docDefinition = {
+    pageSize: "A4",
+    pageOrientation: "portrait",
+    pageMargins: [40, 60, 40, 60],
+    defaultStyle: getArabicDefaultStyle(),
+    content: [
+      {
+        columns: [
+          {
+            width: "*",
+            stack: [
+              { text: "شركة الزبد الأفضل التجارية", style: "companyName", alignment: "right" },
+              { text: "Best Butter Trading Co.", style: "companyNameEn", alignment: "right" },
+              { text: "سجل تجاري: 7026155296", style: "subText", alignment: "right" },
+            ],
+          },
+          {
+            width: "auto",
+            stack: [
+              { text: "تقرير الأرباح والخسائر", style: "reportTitle", alignment: "left" },
+              { text: `الفرع: ${branchName}`, alignment: "left" },
+              { text: `الفترة: ${period}`, alignment: "left" },
+              { text: `تاريخ التقرير: ${new Date().toLocaleDateString('ar-SA')}`, alignment: "left", style: "subText" },
+            ],
+          },
+        ],
+      },
+      { canvas: [{ type: "line", x1: 0, y1: 10, x2: 515, y2: 10, lineWidth: 2, lineColor: "#D4AF37" }] },
+      { text: "", margin: [0, 15, 0, 0] },
+      
+      // ملخص الأداء
+      { text: "ملخص الأداء المالي", style: "sectionHeader" },
+      {
+        table: {
+          widths: ["*", "*", "*", "*"],
+          body: [
+            [
+              { text: "التقييم", style: "tableHeader" },
+              { text: "صافي الربح", style: "tableHeader" },
+              { text: "صافي المبيعات", style: "tableHeader" },
+              { text: "إجمالي المبيعات", style: "tableHeader" },
+            ],
+            [
+              { text: getRatingLabel(totals.netMargin || 0), alignment: "center", fillColor: totals.netMargin >= 15 ? '#d4edda' : totals.netMargin >= 10 ? '#cce5ff' : totals.netMargin >= 5 ? '#fff3cd' : '#f8d7da' },
+              { text: formatCurrency(totals.netProfit || 0), alignment: "center", color: totals.netProfit >= 0 ? '#28a745' : '#dc3545' },
+              { text: formatCurrency(totals.netSales || 0), alignment: "center" },
+              { text: formatCurrency(totals.grossSales || 0), alignment: "center" },
+            ],
+          ],
+        },
+        margin: [0, 10, 0, 15],
+      },
+      
+      // تفاصيل الإيرادات
+      { text: "تفاصيل الإيرادات", style: "sectionHeader" },
+      {
+        table: {
+          widths: ["*", "*"],
+          body: [
+            [{ text: "القيمة", style: "tableHeader" }, { text: "البند", style: "tableHeader" }],
+            [{ text: formatCurrency(totals.grossSales || 0), alignment: "center" }, { text: "إجمالي المبيعات (شامل الضريبة)", alignment: "right" }],
+            [{ text: `- ${formatCurrency(totals.vatAmount || 0)}`, alignment: "center", color: "#dc3545" }, { text: "ضريبة القيمة المضافة (15%)", alignment: "right" }],
+            [{ text: formatCurrency(totals.netSales || 0), alignment: "center", bold: true }, { text: "صافي المبيعات", alignment: "right", bold: true }],
+          ],
+        },
+        margin: [0, 10, 0, 15],
+      },
+      
+      // تكاليف الموظفين
+      { text: `تكاليف الموظفين (${totals.employeeCount || 0} موظف)`, style: "sectionHeader" },
+      {
+        table: {
+          widths: ["*", "*"],
+          body: [
+            [{ text: "القيمة", style: "tableHeader" }, { text: "البند", style: "tableHeader" }],
+            [{ text: formatCurrency(totals.employeeCosts?.salaries || 0), alignment: "center" }, { text: "الرواتب والبدلات", alignment: "right" }],
+            [{ text: formatCurrency(totals.employeeCosts?.gosi || 0), alignment: "center" }, { text: "التأمينات الاجتماعية (GOSI) - 12%", alignment: "right" }],
+            [{ text: formatCurrency(totals.employeeCosts?.nonSaudiCosts || 0), alignment: "center" }, { text: "رسوم غير السعوديين", alignment: "right" }],
+            [{ text: formatCurrency(totals.employeeCosts?.total || 0), alignment: "center", bold: true, color: "#dc3545" }, { text: "إجمالي تكاليف الموظفين", alignment: "right", bold: true }],
+          ],
+        },
+        margin: [0, 10, 0, 15],
+      },
+      
+      // المصروفات الثابتة
+      { text: "المصروفات الثابتة والمرافق", style: "sectionHeader" },
+      {
+        table: {
+          widths: ["*", "*"],
+          body: [
+            [{ text: "القيمة", style: "tableHeader" }, { text: "البند", style: "tableHeader" }],
+            [{ text: formatCurrency(totals.rent || 0), alignment: "center" }, { text: "الإيجار الشهري", alignment: "right" }],
+            [{ text: formatCurrency(totals.utilities?.electricity || 0), alignment: "center" }, { text: "الكهرباء", alignment: "right" }],
+            [{ text: formatCurrency(totals.utilities?.water || 0), alignment: "center" }, { text: "المياه", alignment: "right" }],
+            [{ text: formatCurrency(totals.utilities?.other || 0), alignment: "center" }, { text: "مرافق أخرى", alignment: "right" }],
+            [{ text: formatCurrency((totals.rent || 0) + (totals.utilities?.total || 0)), alignment: "center", bold: true, color: "#fd7e14" }, { text: "الإجمالي", alignment: "right", bold: true }],
+          ],
+        },
+        margin: [0, 10, 0, 15],
+      },
+      
+      // تكاليف التشغيل
+      { text: "تكاليف التشغيل", style: "sectionHeader" },
+      {
+        table: {
+          widths: ["*", "*"],
+          body: [
+            [{ text: "القيمة", style: "tableHeader" }, { text: "البند", style: "tableHeader" }],
+            [{ text: formatCurrency(totals.cogsCost || 0), alignment: "center" }, { text: "تكلفة البضاعة المباعة (COGS)", alignment: "right" }],
+            [{ text: formatCurrency(totals.operatingCosts?.maintenance || 0), alignment: "center" }, { text: "الصيانة", alignment: "right" }],
+            [{ text: formatCurrency(totals.operatingCosts?.marketing || 0), alignment: "center" }, { text: "التسويق", alignment: "right" }],
+            [{ text: formatCurrency((totals.operatingCosts?.supplies || 0) + (totals.operatingCosts?.other || 0)), alignment: "center" }, { text: "مستلزمات وأخرى", alignment: "right" }],
+            [{ text: formatCurrency(totals.totalOperatingCosts || 0), alignment: "center", bold: true, color: "#6f42c1" }, { text: "إجمالي تكاليف التشغيل (بدون COGS)", alignment: "right", bold: true }],
+          ],
+        },
+        margin: [0, 10, 0, 15],
+      },
+      
+      // صافي النتائج
+      { text: "صافي النتائج", style: "sectionHeader" },
+      {
+        table: {
+          widths: ["*", "*", "*"],
+          body: [
+            [{ text: "النسبة", style: "tableHeader" }, { text: "القيمة", style: "tableHeader" }, { text: "البند", style: "tableHeader" }],
+            [{ text: formatPercent(totals.grossMargin || 0), alignment: "center" }, { text: formatCurrency(totals.grossProfit || 0), alignment: "center" }, { text: "إجمالي الربح", alignment: "right" }],
+            [{ text: totals.netSales > 0 ? formatPercent((totals.operatingProfit / totals.netSales) * 100) : "0%", alignment: "center" }, { text: formatCurrency(totals.operatingProfit || 0), alignment: "center" }, { text: "الربح التشغيلي", alignment: "right" }],
+            [{ text: formatPercent(totals.netMargin || 0), alignment: "center", bold: true }, { text: formatCurrency(totals.netProfit || 0), alignment: "center", bold: true, color: totals.netProfit >= 0 ? '#28a745' : '#dc3545' }, { text: "صافي الربح", alignment: "right", bold: true }],
+          ],
+        },
+        margin: [0, 10, 0, 15],
+      },
+    ],
+    styles: {
+      companyName: { fontSize: 14, bold: true, color: "#D4AF37" },
+      companyNameEn: { fontSize: 10, color: "#666" },
+      subText: { fontSize: 8, color: "#888" },
+      reportTitle: { fontSize: 16, bold: true },
+      sectionHeader: { fontSize: 12, bold: true, margin: [0, 10, 0, 5], fillColor: "#f8f9fa" },
+      tableHeader: { bold: true, fontSize: 9, fillColor: "#f3f4f6", alignment: "center" as const },
+    },
+  };
+  
+  return docDefinition;
+}
+
 function generatePnLExcelTemplate() {
   const wb = XLSX.utils.book_new();
 
@@ -1439,6 +1708,45 @@ export default function PnLDashboard() {
                   )}
                   <span className="hidden sm:inline">حساب المؤشرات</span>
                 </Button>
+                {enhancedPnL?.totals && (
+                  <>
+                    <Button
+                      variant="default"
+                      className="h-11 sm:h-9 bg-amber-600 hover:bg-amber-700"
+                      onClick={() => {
+                        const branchLabel = selectedBranch?.name || "جميع الفروع";
+                        const period = `${MONTHS_AR[selectedMonth - 1]} ${selectedYear}`;
+                        const docDef = generateEnhancedPnLPdfReport(
+                          branchLabel,
+                          period,
+                          enhancedPnL
+                        );
+                        downloadArabicPdf(docDef, `تقرير_PnL_المحسن_${branchLabel}_${period}.pdf`);
+                      }}
+                      data-testid="button-export-enhanced-pdf"
+                    >
+                      <Printer className="h-4 w-4 sm:ml-2" />
+                      <span className="hidden sm:inline">PDF محسن</span>
+                    </Button>
+                    <Button
+                      variant="default"
+                      className="h-11 sm:h-9 bg-green-600 hover:bg-green-700"
+                      onClick={() => {
+                        const branchLabel = selectedBranch?.name || "جميع الفروع";
+                        const period = `${MONTHS_AR[selectedMonth - 1]} ${selectedYear}`;
+                        exportEnhancedPnLToExcel(
+                          branchLabel,
+                          period,
+                          enhancedPnL
+                        );
+                      }}
+                      data-testid="button-export-enhanced-excel"
+                    >
+                      <FileSpreadsheet className="h-4 w-4 sm:ml-2" />
+                      <span className="hidden sm:inline">Excel محسن</span>
+                    </Button>
+                  </>
+                )}
                 {completePnL?.metrics && (
                   <>
                     <Button
