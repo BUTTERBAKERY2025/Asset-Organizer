@@ -478,7 +478,16 @@ export default function ShiftManagementPage() {
         
         const empSchedule = scheduleData[empIdStr] || {};
         const workDays = Object.values(empSchedule).filter(d => !d.isOff).length;
-        const attendedDays = attendanceRecords?.filter(r => r.employeeId === linkedUserId && r.actualCheckIn).length || 0;
+        // تحسين منطق المطابقة للحضور
+        const normalizedEmpName = employee.employeeName?.trim().toLowerCase() || '';
+        const attendedDays = attendanceRecords?.filter(r => {
+          if (!r.actualCheckIn) return false;
+          if (r.branchEmployeeId && String(r.branchEmployeeId) === empIdStr) return true;
+          if (r.employeeId === linkedUserId || r.employeeId === empIdStr) return true;
+          const recordName = r.employeeName?.trim().toLowerCase() || '';
+          if (normalizedEmpName && recordName && normalizedEmpName === recordName) return true;
+          return false;
+        }).length || 0;
         const rate = workDays > 0 ? Math.round((attendedDays / workDays) * 100) : 0;
         
         row["أيام العمل"] = workDays;
@@ -612,7 +621,16 @@ export default function ShiftManagementPage() {
                     const empSchedule = scheduleData[empIdStr] || {};
                     const workDays = Object.values(empSchedule).filter(d => !d.isOff).length;
                     const offDays = Object.values(empSchedule).filter(d => d.isOff).length;
-                    const attendedDays = attendanceRecords?.filter(r => r.employeeId === linkedUserId && r.actualCheckIn).length || 0;
+                    // تحسين منطق المطابقة للحضور
+                    const normalizedEmpName = employee.employeeName?.trim().toLowerCase() || '';
+                    const attendedDays = attendanceRecords?.filter(r => {
+                      if (!r.actualCheckIn) return false;
+                      if (r.branchEmployeeId && String(r.branchEmployeeId) === empIdStr) return true;
+                      if (r.employeeId === linkedUserId || r.employeeId === empIdStr) return true;
+                      const recordName = r.employeeName?.trim().toLowerCase() || '';
+                      if (normalizedEmpName && recordName && normalizedEmpName === recordName) return true;
+                      return false;
+                    }).length || 0;
                     const absentDays = workDays - attendedDays;
                     const rate = workDays > 0 ? Math.round((attendedDays / workDays) * 100) : 0;
                     const badgeClass = rate >= 80 ? "badge-green" : rate >= 50 ? "badge-amber" : "badge-red";
@@ -867,7 +885,16 @@ export default function ShiftManagementPage() {
         const empSchedule = scheduleData[empIdStr] || {};
         const workDays = Object.values(empSchedule).filter(d => !d.isOff).length;
         const offDays = Object.values(empSchedule).filter(d => d.isOff).length;
-        const attendedDays = attendanceRecords?.filter(r => r.employeeId === linkedUserId && r.actualCheckIn).length || 0;
+        // تحسين منطق المطابقة للحضور
+        const normalizedEmpName = employee.employeeName?.trim().toLowerCase() || '';
+        const attendedDays = attendanceRecords?.filter(r => {
+          if (!r.actualCheckIn) return false;
+          if (r.branchEmployeeId && String(r.branchEmployeeId) === empIdStr) return true;
+          if (r.employeeId === linkedUserId || r.employeeId === empIdStr) return true;
+          const recordName = r.employeeName?.trim().toLowerCase() || '';
+          if (normalizedEmpName && recordName && normalizedEmpName === recordName) return true;
+          return false;
+        }).length || 0;
         const absentDays = workDays - attendedDays;
         const rate = workDays > 0 ? Math.round((attendedDays / workDays) * 100) : 0;
         return { employeeName: employee.employeeName, workDays, offDays, attendedDays, absentDays: Math.max(absentDays, 0), rate };
@@ -1873,7 +1900,21 @@ export default function ShiftManagementPage() {
                           const empSchedule = scheduleData[empIdStr] || {};
                           const workDays = Object.values(empSchedule).filter(d => !d.isOff).length;
                           const offDays = Object.values(empSchedule).filter(d => d.isOff).length;
-                          const attendedDays = attendanceRecords?.filter(r => r.employeeId === linkedUserId && r.actualCheckIn).length || 0;
+                          
+                          // تحسين منطق المطابقة للحضور - البحث بعدة معايير
+                          const normalizedEmpName = employee.employeeName?.trim().toLowerCase() || '';
+                          const attendedDays = attendanceRecords?.filter(r => {
+                            if (!r.actualCheckIn) return false;
+                            // المطابقة بـ branchEmployeeId أولاً
+                            if (r.branchEmployeeId && String(r.branchEmployeeId) === empIdStr) return true;
+                            // المطابقة بـ employeeId
+                            if (r.employeeId === linkedUserId || r.employeeId === empIdStr) return true;
+                            // المطابقة بالاسم كخيار أخير
+                            const recordName = r.employeeName?.trim().toLowerCase() || '';
+                            if (normalizedEmpName && recordName && normalizedEmpName === recordName) return true;
+                            return false;
+                          }).length || 0;
+                          
                           const absentDays = workDays - attendedDays;
                           const rate = workDays > 0 ? Math.round((attendedDays / workDays) * 100) : 0;
                           
