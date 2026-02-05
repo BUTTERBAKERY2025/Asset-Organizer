@@ -1708,12 +1708,16 @@ export default function PnLDashboard() {
                   )}
                   <span className="hidden sm:inline">حساب المؤشرات</span>
                 </Button>
-                {enhancedPnL?.totals && (
+                {enhancedPnL && (
                   <>
                     <Button
                       variant="default"
                       className="h-11 sm:h-9 bg-amber-600 hover:bg-amber-700"
                       onClick={() => {
+                        if (!enhancedPnL?.totals?.grossSales && enhancedPnL?.totals?.grossSales !== 0) {
+                          toast({ title: "لا توجد بيانات", description: "لا توجد يوميات صندوق معتمدة لهذه الفترة", variant: "destructive" });
+                          return;
+                        }
                         const branchLabel = selectedBranch?.name || "جميع الفروع";
                         const period = `${MONTHS_AR[selectedMonth - 1]} ${selectedYear}`;
                         const docDef = generateEnhancedPnLPdfReport(
@@ -1732,6 +1736,10 @@ export default function PnLDashboard() {
                       variant="default"
                       className="h-11 sm:h-9 bg-green-600 hover:bg-green-700"
                       onClick={() => {
+                        if (!enhancedPnL?.totals?.grossSales && enhancedPnL?.totals?.grossSales !== 0) {
+                          toast({ title: "لا توجد بيانات", description: "لا توجد يوميات صندوق معتمدة لهذه الفترة", variant: "destructive" });
+                          return;
+                        }
                         const branchLabel = selectedBranch?.name || "جميع الفروع";
                         const period = `${MONTHS_AR[selectedMonth - 1]} ${selectedYear}`;
                         exportEnhancedPnLToExcel(
