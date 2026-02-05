@@ -3,12 +3,27 @@ import memoize from "memoizee";
 // Helper function to get Saudi Arabia time (UTC+3)
 function getSaudiArabiaTime(): { date: string; time: string; timeShort: string } {
   const now = new Date();
-  // Create a date string in Saudi Arabia timezone
-  const saudiTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Riyadh' }));
-  const date = saudiTime.toISOString().split('T')[0];
-  const hours = saudiTime.getHours().toString().padStart(2, '0');
-  const minutes = saudiTime.getMinutes().toString().padStart(2, '0');
-  const seconds = saudiTime.getSeconds().toString().padStart(2, '0');
+  // Format date and time components directly in Saudi Arabia timezone
+  const formatter = new Intl.DateTimeFormat('en-CA', { 
+    timeZone: 'Asia/Riyadh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+  const timeFormatter = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Riyadh',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+  
+  const date = formatter.format(now); // Returns YYYY-MM-DD format
+  const timeParts = timeFormatter.format(now).split(':');
+  const hours = timeParts[0];
+  const minutes = timeParts[1];
+  const seconds = timeParts[2];
+  
   return {
     date,
     time: `${hours}:${minutes}:${seconds}`,
