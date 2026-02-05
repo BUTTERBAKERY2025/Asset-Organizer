@@ -80,6 +80,8 @@
     "html2pdf.js": "^0.14.0",
     "i18next": "^25.7.4",
     "input-otp": "^1.4.2",
+    "jspdf": "^4.1.0",
+    "jspdf-autotable": "^5.0.7",
     "lucide-react": "^0.545.0",
     "memoizee": "^0.4.17",
     "memorystore": "^1.6.7",
