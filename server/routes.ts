@@ -13187,6 +13187,86 @@ export async function registerRoutes(
   });
 
   // ==========================================
+  // Cashier Performance Sales Data API - بيانات مبيعات أداء الكاشير
+  // ==========================================
+
+  app.get("/api/cashier-performance-sales", isAuthenticated, async (req, res) => {
+    try {
+      const { branchId, date, shiftType } = req.query;
+      
+      console.log("[cashier-performance-sales] Request:", { branchId, date, shiftType });
+      
+      // SECURITY: Apply branch filter
+      const branchFilter = getEffectiveBranchFilter(req, branchId as string);
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بالوصول" });
+      }
+
+      // Get cashier sales journals for the date
+      const filters: any = {};
+      if (date) {
+        filters.startDate = date as string;
+        filters.endDate = date as string;
+      }
+      if (branchFilter.singleBranchId) {
+        filters.branchId = branchFilter.singleBranchId;
+      } else if (branchId && branchId !== 'all') {
+        filters.branchId = branchId as string;
+      }
+
+      let journals = await storage.getCashierSalesJournals(filters);
+      
+      // Filter by shiftType if specified
+      if (shiftType && shiftType !== 'all') {
+        journals = journals.filter(j => j.shiftType === shiftType);
+      }
+      
+      // Group sales by cashier and shift
+      const salesByCashier: Record<string, {
+        cashierId: string;
+        cashierName: string;
+        branchId: string;
+        shiftType: string;
+        totalSales: number;
+        transactionCount: number;
+        averageTicket: number;
+      }> = {};
+
+      for (const journal of journals) {
+        const key = `${journal.cashierId}-${journal.shiftType}`;
+        if (!salesByCashier[key]) {
+          salesByCashier[key] = {
+            cashierId: journal.cashierId || '',
+            cashierName: journal.cashierName || '',
+            branchId: journal.branchId || '',
+            shiftType: journal.shiftType || '',
+            totalSales: 0,
+            transactionCount: 0,
+            averageTicket: 0,
+          };
+        }
+        salesByCashier[key].totalSales += Number(journal.totalSales || 0);
+        salesByCashier[key].transactionCount += Number(journal.transactionCount || 0);
+      }
+
+      // Calculate average ticket
+      for (const key in salesByCashier) {
+        const data = salesByCashier[key];
+        data.averageTicket = data.transactionCount > 0 
+          ? Math.round((data.totalSales / data.transactionCount) * 100) / 100 
+          : 0;
+      }
+
+      const result = Object.values(salesByCashier);
+      console.log("[cashier-performance-sales] Result:", result.length, "records");
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching cashier performance sales:", error);
+      res.status(500).json({ error: "فشل في جلب بيانات المبيعات" });
+    }
+  });
+
+  // ==========================================
   // Average Ticket Targets API - أهداف متوسط الفاتورة
   // ==========================================
 

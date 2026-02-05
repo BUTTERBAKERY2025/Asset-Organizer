@@ -18,7 +18,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { 
   Target, TrendingUp, TrendingDown, Users, Trophy, ChevronLeft, Calendar, 
   Award, AlertTriangle, Bell, Clock, CheckCircle2, Plus, Settings, 
-  Sun, Moon, DollarSign, Receipt, User as UserIcon, RefreshCw, BarChart as BarChartIcon
+  Sun, Moon, DollarSign, Receipt, User as UserIcon, RefreshCw, BarChart as BarChartIcon,
+  Pencil
 } from "lucide-react";
 import { Link } from "wouter";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line, Legend, PieChart, Pie, Cell } from "recharts";
@@ -61,6 +62,7 @@ export default function CashierShiftPerformance() {
   const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [selectedShift, setSelectedShift] = useState<string>("all");
   const [showTargetDialog, setShowTargetDialog] = useState(false);
+  const [editingTarget, setEditingTarget] = useState<CashierShiftTarget | null>(null);
   const [newTarget, setNewTarget] = useState({
     cashierId: "",
     branchId: "",
@@ -134,6 +136,36 @@ export default function CashierShiftPerformance() {
     }
   });
 
+  // Fetch actual cashier sales from journals
+  interface CashierSalesData {
+    cashierId: string;
+    cashierName: string;
+    branchId: string;
+    shiftType: string;
+    totalSales: number;
+    transactionCount: number;
+    averageTicket: number;
+  }
+
+  const { data: cashierSales = [], refetch: refetchSales } = useQuery<CashierSalesData[]>({
+    queryKey: ["/api/cashier-performance-sales", selectedBranch, selectedDate, selectedShift],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (selectedBranch !== "all") params.append("branchId", selectedBranch);
+      if (selectedDate) params.append("date", selectedDate);
+      if (selectedShift !== "all") params.append("shiftType", selectedShift);
+      const res = await fetch(`/api/cashier-performance-sales?${params}`);
+      if (!res.ok) return [];
+      return res.json();
+    }
+  });
+
+  // Get actual sales for a specific cashier and shift
+  const getCashierActualSales = (cashierId: string, shiftType: string) => {
+    const sale = cashierSales.find(s => s.cashierId === cashierId && s.shiftType === shiftType);
+    return sale || { totalSales: 0, transactionCount: 0, averageTicket: 0 };
+  };
+
   const createTargetMutation = useMutation({
     mutationFn: async (data: any) => {
       return apiRequest("POST", "/api/cashier-shift-targets", data);
@@ -149,6 +181,55 @@ export default function CashierShiftPerformance() {
       toast.error(error?.message || "فشل في حفظ الهدف. تحقق من الصلاحيات أو البيانات.");
     }
   });
+
+  const updateTargetMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      return apiRequest("PATCH", `/api/cashier-shift-targets/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/cashier-shift-targets"] });
+      setEditingTarget(null);
+      resetNewTarget();
+      toast.success("تم تحديث الهدف بنجاح");
+    },
+    onError: (error: any) => {
+      console.error("Error updating target:", error);
+      toast.error(error?.message || "فشل في تحديث الهدف. تحقق من الصلاحيات.");
+    }
+  });
+
+  const openEditDialog = (target: CashierShiftTarget) => {
+    setEditingTarget(target);
+    setNewTarget({
+      cashierId: target.cashierId || "",
+      branchId: target.branchId || "",
+      shiftType: target.shiftType || "morning",
+      cashierRole: target.cashierRole || "main",
+      targetAmount: Number(target.targetAmount) || 0,
+      targetTransactions: Number(target.targetTransactions) || 0,
+      targetTicketValue: Number(target.targetTicketValue) || 0,
+    });
+    setShowTargetDialog(true);
+  };
+
+  const handleSaveTarget = () => {
+    if (editingTarget) {
+      updateTargetMutation.mutate({
+        id: editingTarget.id,
+        data: {
+          targetAmount: newTarget.targetAmount,
+          targetTransactions: newTarget.targetTransactions,
+          targetTicketValue: newTarget.targetTicketValue,
+          cashierRole: newTarget.cashierRole,
+        }
+      });
+    } else {
+      createTargetMutation.mutate({
+        ...newTarget,
+        targetDate: selectedDate,
+      });
+    }
+  };
 
   const markAlertReadMutation = useMutation({
     mutationFn: async (id: number) => {
@@ -209,37 +290,40 @@ export default function CashierShiftPerformance() {
     if (!shiftTargets.length) return { totalTarget: 0, totalAchieved: 0, avgPercent: 0, alertCount: 0 };
     
     const totalTarget = shiftTargets.reduce((sum, t) => sum + (Number(t.targetAmount) || 0), 0);
-    const totalAchieved = shiftTracking.reduce((sum, t) => sum + (Number(t.totalSales) || 0), 0);
+    // Use actual cashier sales instead of shiftTracking
+    const totalAchieved = cashierSales.reduce((sum, s) => sum + (s.totalSales || 0), 0);
     const avgPercent = totalTarget > 0 ? (totalAchieved / totalTarget) * 100 : 0;
     const alertCount = performanceAlerts.filter(a => !a.isRead).length;
     
     return { totalTarget, totalAchieved, avgPercent, alertCount };
-  }, [shiftTargets, performanceAlerts, shiftTracking]);
+  }, [shiftTargets, performanceAlerts, cashierSales]);
 
   const shiftChartData = useMemo(() => {
     const morningTargets = shiftTargets.filter(t => t.shiftType === 'morning');
     const eveningTargets = shiftTargets.filter(t => t.shiftType === 'evening');
-    const morningTracking = shiftTracking.filter(t => t.shiftType === 'morning');
-    const eveningTracking = shiftTracking.filter(t => t.shiftType === 'evening');
+    // Use actual cashier sales
+    const morningSales = cashierSales.filter(s => s.shiftType === 'morning');
+    const eveningSales = cashierSales.filter(s => s.shiftType === 'evening');
     
     return [
       {
         name: "الشفت الصباحي",
         target: morningTargets.reduce((sum, t) => sum + (Number(t.targetAmount) || 0), 0),
-        achieved: morningTracking.reduce((sum, t) => sum + (Number(t.totalSales) || 0), 0),
+        achieved: morningSales.reduce((sum, s) => sum + (s.totalSales || 0), 0),
       },
       {
         name: "الشفت المسائي",
         target: eveningTargets.reduce((sum, t) => sum + (Number(t.targetAmount) || 0), 0),
-        achieved: eveningTracking.reduce((sum, t) => sum + (Number(t.totalSales) || 0), 0),
+        achieved: eveningSales.reduce((sum, s) => sum + (s.totalSales || 0), 0),
       }
     ];
-  }, [shiftTargets, shiftTracking]);
+  }, [shiftTargets, cashierSales]);
 
   const handleRefresh = () => {
     refetchTargets();
     refetchAlerts();
     refetchTracking();
+    refetchSales();
   };
 
   return (
@@ -264,7 +348,13 @@ export default function CashierShiftPerformance() {
               <RefreshCw className="h-4 w-4 ml-1 sm:ml-2" />
               <span className="hidden sm:inline">تحديث</span>
             </Button>
-            <Dialog open={showTargetDialog} onOpenChange={setShowTargetDialog}>
+            <Dialog open={showTargetDialog} onOpenChange={(open) => {
+              setShowTargetDialog(open);
+              if (!open) {
+                setEditingTarget(null);
+                resetNewTarget();
+              }
+            }}>
               <DialogTrigger asChild>
                 <Button data-testid="button-add-target" className="h-11 sm:h-9 text-sm">
                   <Plus className="h-4 w-4 ml-1 sm:ml-2" />
@@ -274,13 +364,19 @@ export default function CashierShiftPerformance() {
               </DialogTrigger>
               <DialogContent className="max-w-md">
                 <DialogHeader>
-                  <DialogTitle>إضافة هدف كاشير جديد</DialogTitle>
-                  <DialogDescription>تحديد هدف المبيعات والمعاملات لكاشير معين</DialogDescription>
+                  <DialogTitle>{editingTarget ? "تعديل هدف الكاشير" : "إضافة هدف كاشير جديد"}</DialogTitle>
+                  <DialogDescription>
+                    {editingTarget ? "تعديل هدف المبيعات والمعاملات للكاشير" : "تحديد هدف المبيعات والمعاملات لكاشير معين"}
+                  </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                   <div className="grid gap-2">
                     <Label>الفرع</Label>
-                    <Select value={newTarget.branchId} onValueChange={(v) => setNewTarget({...newTarget, branchId: v, cashierId: ""})}>
+                    <Select 
+                      value={newTarget.branchId} 
+                      onValueChange={(v) => setNewTarget({...newTarget, branchId: v, cashierId: ""})}
+                      disabled={!!editingTarget}
+                    >
                       <SelectTrigger data-testid="select-branch" className="h-11 sm:h-10">
                         <SelectValue placeholder="اختر الفرع" />
                       </SelectTrigger>
@@ -296,7 +392,7 @@ export default function CashierShiftPerformance() {
                     <Select 
                       value={newTarget.cashierId} 
                       onValueChange={(v) => setNewTarget({...newTarget, cashierId: v})}
-                      disabled={!newTarget.branchId}
+                      disabled={!newTarget.branchId || !!editingTarget}
                     >
                       <SelectTrigger data-testid="select-cashier-id" className="h-11 sm:h-10">
                         <SelectValue placeholder={newTarget.branchId ? "اختر الكاشير" : "اختر الفرع أولاً"} />
@@ -316,7 +412,11 @@ export default function CashierShiftPerformance() {
                   </div>
                   <div className="grid gap-2">
                     <Label>نوع الشفت</Label>
-                    <Select value={newTarget.shiftType} onValueChange={(v) => setNewTarget({...newTarget, shiftType: v})}>
+                    <Select 
+                      value={newTarget.shiftType} 
+                      onValueChange={(v) => setNewTarget({...newTarget, shiftType: v})}
+                      disabled={!!editingTarget}
+                    >
                       <SelectTrigger data-testid="select-shift-type" className="h-11 sm:h-10">
                         <SelectValue />
                       </SelectTrigger>
@@ -384,19 +484,24 @@ export default function CashierShiftPerformance() {
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button variant="outline" onClick={() => setShowTargetDialog(false)} data-testid="button-cancel" className="h-11 sm:h-9">
+                  <Button variant="outline" onClick={() => {
+                    setShowTargetDialog(false);
+                    setEditingTarget(null);
+                    resetNewTarget();
+                  }} data-testid="button-cancel" className="h-11 sm:h-9">
                     إلغاء
                   </Button>
                   <Button 
-                    onClick={() => createTargetMutation.mutate({
-                      ...newTarget,
-                      targetDate: selectedDate,
-                    })} 
-                    disabled={createTargetMutation.isPending || !newTarget.branchId || !newTarget.cashierId || !newTarget.targetAmount}
+                    onClick={handleSaveTarget} 
+                    disabled={(createTargetMutation.isPending || updateTargetMutation.isPending) || 
+                      (!editingTarget && (!newTarget.branchId || !newTarget.cashierId)) || 
+                      !newTarget.targetAmount}
                     data-testid="button-save-target"
                     className="h-11 sm:h-9"
                   >
-                    {createTargetMutation.isPending ? "جاري الحفظ..." : "حفظ الهدف"}
+                    {(createTargetMutation.isPending || updateTargetMutation.isPending) 
+                      ? "جاري الحفظ..." 
+                      : editingTarget ? "تحديث الهدف" : "حفظ الهدف"}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -551,8 +656,8 @@ export default function CashierShiftPerformance() {
                   ) : (
                     <div className="space-y-4">
                       {shiftTargets.filter(t => t.shiftType === 'morning').map((target) => {
-                        const tracking = shiftTracking.find(t => t.shiftType === 'morning' && t.branchId === target.branchId);
-                        const achieved = tracking ? Number(tracking.totalSales || 0) : 0;
+                        const actualSales = getCashierActualSales(target.cashierId || '', 'morning');
+                        const achieved = actualSales.totalSales;
                         const percent = target.targetAmount ? (achieved / Number(target.targetAmount)) * 100 : 0;
                         return (
                           <div key={target.id} className="border rounded-lg p-4" data-testid={`target-morning-${target.id}`}>
@@ -562,15 +667,30 @@ export default function CashierShiftPerformance() {
                                 <span className="font-medium">{getCashierName(target.cashierId)}</span>
                                 <Badge variant="outline">{CASHIER_ROLES.find(r => r.value === target.cashierRole)?.label}</Badge>
                               </div>
-                              <Badge className={ALERT_COLORS[getAlertLevel(percent)].badge}>
-                                {percent.toFixed(0)}%
-                              </Badge>
+                              <div className="flex items-center gap-2">
+                                <Badge className={ALERT_COLORS[getAlertLevel(percent)].badge}>
+                                  {percent.toFixed(0)}%
+                                </Badge>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7"
+                                  onClick={() => openEditDialog(target)}
+                                  data-testid={`button-edit-target-${target.id}`}
+                                >
+                                  <Pencil className="h-4 w-4 text-gray-500" />
+                                </Button>
+                              </div>
                             </div>
                             <div className="space-y-2">
                               <Progress value={Math.min(percent, 100)} className="h-2" />
                               <div className="flex justify-between text-sm text-muted-foreground">
                                 <span>الهدف: {formatCurrency(Number(target.targetAmount))}</span>
                                 <span>المحقق: {formatCurrency(achieved)}</span>
+                              </div>
+                              <div className="flex justify-between text-xs text-gray-400">
+                                <span>المعاملات: {actualSales.transactionCount}</span>
+                                <span>متوسط الفاتورة: {formatCurrency(actualSales.averageTicket)}</span>
                               </div>
                             </div>
                           </div>
@@ -597,8 +717,8 @@ export default function CashierShiftPerformance() {
                   ) : (
                     <div className="space-y-4">
                       {shiftTargets.filter(t => t.shiftType === 'evening').map((target) => {
-                        const tracking = shiftTracking.find(t => t.shiftType === 'evening' && t.branchId === target.branchId);
-                        const achieved = tracking ? Number(tracking.totalSales || 0) : 0;
+                        const actualSales = getCashierActualSales(target.cashierId || '', 'evening');
+                        const achieved = actualSales.totalSales;
                         const percent = target.targetAmount ? (achieved / Number(target.targetAmount)) * 100 : 0;
                         return (
                           <div key={target.id} className="border rounded-lg p-4" data-testid={`target-evening-${target.id}`}>
@@ -608,15 +728,30 @@ export default function CashierShiftPerformance() {
                                 <span className="font-medium">{getCashierName(target.cashierId)}</span>
                                 <Badge variant="outline">{CASHIER_ROLES.find(r => r.value === target.cashierRole)?.label}</Badge>
                               </div>
-                              <Badge className={ALERT_COLORS[getAlertLevel(percent)].badge}>
-                                {percent.toFixed(0)}%
-                              </Badge>
+                              <div className="flex items-center gap-2">
+                                <Badge className={ALERT_COLORS[getAlertLevel(percent)].badge}>
+                                  {percent.toFixed(0)}%
+                                </Badge>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7"
+                                  onClick={() => openEditDialog(target)}
+                                  data-testid={`button-edit-target-${target.id}`}
+                                >
+                                  <Pencil className="h-4 w-4 text-gray-500" />
+                                </Button>
+                              </div>
                             </div>
                             <div className="space-y-2">
                               <Progress value={Math.min(percent, 100)} className="h-2" />
                               <div className="flex justify-between text-sm text-muted-foreground">
                                 <span>الهدف: {formatCurrency(Number(target.targetAmount))}</span>
                                 <span>المحقق: {formatCurrency(achieved)}</span>
+                              </div>
+                              <div className="flex justify-between text-xs text-gray-400">
+                                <span>المعاملات: {actualSales.transactionCount}</span>
+                                <span>متوسط الفاتورة: {formatCurrency(actualSales.averageTicket)}</span>
                               </div>
                             </div>
                           </div>
