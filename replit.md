@@ -45,6 +45,8 @@ The system uses a modern web architecture with a React-based frontend and a Node
 - **Executive Secretariat System**: Comprehensive CEO command center with integrated modules for meetings, tasks, correspondence, visitors, and travel management, along with unified PDF reports and real-time notification system.
 - **Social Responsibility Module**: Comprehensive social responsibility and community engagement management system, including beneficiary organizations, social initiatives, community discounts, and usage analytics.
 - **Weekly Schedule Lock System**: Protection mechanism for weekly shift schedules that locks the "Apply to All" button after first use. Features include: automatic locking after initial schedule setup, detailed lock information display (date, time, and user who locked), individual employee schedule modification remains available, and comprehensive audit trail for tracking all schedule changes.
+- **Advanced Attendance Reports**: Comprehensive reporting tab in shift management with 5 detailed reports: (1) تقرير ساعات العمل الفعلية (actual work hours), (2) تقرير الانضباط والالتزام (discipline/punctuality), (3) تقرير الغياب التفصيلي (detailed absence), (4) ملخص أداء الفرع (branch performance summary), and (5) الإحصائيات البيانية (visual statistics with pie and bar charts). All reports support Excel export with Arabic language support.
+- **Secure Branch Data Isolation in Reports**: All attendance matching operations include branchId verification to prevent cross-branch data leakage. 15 security checkpoints ensure strict data isolation when selectedBranch is not "all".
 
 ### Performance Optimization
 - **Tiered Caching Strategy**: Five-tier cache system based on data volatility (STATIC, LONG, MEDIUM, SHORT, DYNAMIC).
