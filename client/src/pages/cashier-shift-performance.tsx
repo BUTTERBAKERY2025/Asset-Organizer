@@ -945,61 +945,31 @@ export default function CashierShiftPerformance() {
           </TabsList>
 
           <TabsContent value="targets" className="space-y-4">
-            {/* فلتر الأهداف */}
-            <Card className="bg-gradient-to-l from-amber-50 to-white border-amber-200">
-              <CardContent className="p-4">
-                <div className="flex flex-wrap items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <Target className="h-4 w-4 text-amber-600" />
-                    <span className="text-sm font-medium text-amber-700">فلترة الأهداف</span>
-                  </div>
-                  <div className="flex items-center gap-2 flex-1 flex-wrap">
-                    <div className="flex items-center gap-2">
-                      <Label className="text-xs text-gray-600">الفرع:</Label>
-                      <Select 
-                        value={selectedBranch} 
-                        onValueChange={setSelectedBranch}
-                        disabled={!canSelectBranch}
-                      >
-                        <SelectTrigger className="w-40 h-9 text-sm bg-white" data-testid="select-targets-branch">
-                          <SelectValue placeholder="اختر الفرع" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {canSelectBranch && <SelectItem value="all">جميع الفروع</SelectItem>}
-                          {branches.map((b) => (
-                            <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    {/* Only show cashier filter for users who can view all cashiers */}
-                    {canViewAllCashiers && (
-                      <div className="flex items-center gap-2">
-                        <Label className="text-xs text-gray-600">الكاشير:</Label>
-                        <Select value={targetCashierId} onValueChange={setTargetCashierId}>
-                          <SelectTrigger className="w-40 h-9 text-sm bg-white" data-testid="select-targets-cashier">
-                            <SelectValue placeholder="جميع الكاشيرين" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">جميع الكاشيرين</SelectItem>
-                            {reportBranchCashiers.map((c) => (
-                              <SelectItem key={c.id} value={c.id}>
-                                {c.firstName || c.username} {c.lastName || ''}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
-                  </div>
-                  {selectedBranch && selectedBranch !== "all" && (
-                    <Badge variant="secondary" className="bg-amber-100 text-amber-700">
-                      {branches.find(b => b.id === selectedBranch)?.name}
-                    </Badge>
-                  )}
+            {/* Cashier filter only - branch filter is in main header */}
+            {canViewAllCashiers && (
+              <div className="flex flex-wrap items-center gap-4 p-3 bg-gradient-to-l from-amber-50 to-gray-50 rounded-lg border border-amber-100">
+                <div className="flex items-center gap-2">
+                  <Target className="h-4 w-4 text-amber-600" />
+                  <span className="text-sm font-medium text-amber-700">تصفية:</span>
                 </div>
-              </CardContent>
-            </Card>
+                <div className="flex items-center gap-2">
+                  <Label className="text-xs text-gray-600">الكاشير:</Label>
+                  <Select value={targetCashierId} onValueChange={setTargetCashierId}>
+                    <SelectTrigger className="w-40 h-9 text-sm bg-white" data-testid="select-targets-cashier">
+                      <SelectValue placeholder="جميع الكاشيرين" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">جميع الكاشيرين</SelectItem>
+                      {reportBranchCashiers.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.firstName || c.username} {c.lastName || ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card className="border-amber-200">
@@ -1444,8 +1414,8 @@ export default function CashierShiftPerformance() {
                 <CardDescription>عرض يوميات كل كاشير حسب الفترة المختارة</CardDescription>
               </CardHeader>
               <CardContent>
-                {/* Filters */}
-                <div className="flex flex-wrap items-center gap-4 mb-4 p-4 bg-gradient-to-l from-blue-50 to-gray-50 rounded-lg border border-blue-100">
+                {/* Filters - date range and cashier only, branch is in main header */}
+                <div className="flex flex-wrap items-center gap-4 mb-4 p-3 bg-gradient-to-l from-blue-50 to-gray-50 rounded-lg border border-blue-100">
                   <div className="flex items-center gap-2">
                     <Calendar className="h-4 w-4 text-blue-500" />
                     <span className="text-sm font-medium text-blue-700">الفترة:</span>
@@ -1469,24 +1439,6 @@ export default function CashierShiftPerformance() {
                       className="w-36 h-9 text-sm bg-white"
                       data-testid="input-report-end"
                     />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Label className="text-xs text-gray-600">الفرع:</Label>
-                    <Select 
-                      value={selectedBranch} 
-                      onValueChange={setSelectedBranch}
-                      disabled={!canSelectBranch}
-                    >
-                      <SelectTrigger className="w-40 h-9 text-sm bg-white" data-testid="select-report-branch">
-                        <SelectValue placeholder="اختر الفرع" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {canSelectBranch && <SelectItem value="all">جميع الفروع</SelectItem>}
-                        {branches.map((b) => (
-                          <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
                   </div>
                   {/* Only show cashier filter for users who can view all cashiers */}
                   {canViewAllCashiers && (
@@ -1587,8 +1539,8 @@ export default function CashierShiftPerformance() {
                 </div>
               </CardHeader>
               <CardContent>
-                {/* Date Filters */}
-                <div className="flex flex-wrap items-center gap-4 mb-4 p-4 bg-gradient-to-l from-purple-50 to-gray-50 rounded-lg border border-purple-100">
+                {/* Date Filters only - branch filter is in main header */}
+                <div className="flex flex-wrap items-center gap-4 mb-4 p-3 bg-gradient-to-l from-purple-50 to-gray-50 rounded-lg border border-purple-100">
                   <div className="flex items-center gap-2">
                     <Calendar className="h-4 w-4 text-purple-500" />
                     <span className="text-sm font-medium text-purple-700">الفترة:</span>
@@ -1613,22 +1565,6 @@ export default function CashierShiftPerformance() {
                       data-testid="input-contribution-end"
                     />
                   </div>
-                  {canSelectBranch && (
-                    <Select 
-                      value={selectedBranch} 
-                      onValueChange={setSelectedBranch}
-                    >
-                      <SelectTrigger className="w-36 h-9 text-sm bg-white" data-testid="select-contribution-branch">
-                        <SelectValue placeholder="الفرع" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">جميع الفروع</SelectItem>
-                        {branches.map((b) => (
-                          <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
                 </div>
 
                 {/* Summary Cards - Different view for regular cashiers */}
