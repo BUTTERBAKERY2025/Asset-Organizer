@@ -104,7 +104,7 @@ export default function CashierJournalsPage() {
   if (dateTo) statsQueryParams.set("dateTo", dateTo);
   const statsQueryString = statsQueryParams.toString();
   
-  const { data: stats } = useQuery<{
+  const { data: stats, refetch: refetchStats } = useQuery<{
     totalJournals: number;
     totalSales: number;
     totalShortages: number;
@@ -113,14 +113,26 @@ export default function CashierJournalsPage() {
     surplusAmount: number;
     averageTicket: number;
   }>({
-    queryKey: [`/api/cashier-journals/stats/summary${statsQueryString ? `?${statsQueryString}` : ""}`],
+    queryKey: ["/api/cashier-journals/stats/summary", { branchFilter, statusFilter, cashierFilter, dateFrom, dateTo }],
+    queryFn: async () => {
+      const url = `/api/cashier-journals/stats/summary${statsQueryString ? `?${statsQueryString}` : ""}`;
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch stats");
+      return res.json();
+    },
+    staleTime: 0,
   });
 
+  const invalidateCashierQueries = () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/cashier-journals"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/cashier-journals/stats/summary"] });
+    refetchStats();
+  };
+  
   const approveMutation = useMutation({
     mutationFn: async (id: number) => apiRequest(`/api/cashier-journals/${id}/approve`, "POST", {}),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/cashier-journals"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/cashier-journals/stats/summary"] });
+      invalidateCashierQueries();
       toast({ title: "تم اعتماد اليومية بنجاح" });
     },
     onError: () => {
@@ -132,7 +144,7 @@ export default function CashierJournalsPage() {
     mutationFn: async ({ id, notes }: { id: number; notes?: string }) =>
       apiRequest(`/api/cashier-journals/${id}/reject`, "POST", { notes }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/cashier-journals"] });
+      invalidateCashierQueries();
       toast({ title: "تم رفض اليومية" });
     },
     onError: () => {
@@ -143,8 +155,7 @@ export default function CashierJournalsPage() {
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => apiRequest("DELETE", `/api/cashier-journals/${id}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/cashier-journals"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/cashier-journals/stats/summary"] });
+      invalidateCashierQueries();
       toast({ title: "تم حذف اليومية بنجاح" });
     },
     onError: (error: any) => {
