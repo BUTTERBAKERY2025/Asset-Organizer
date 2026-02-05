@@ -15,7 +15,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useBranches } from "@/hooks/useBranches";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Calendar, Clock, Users, Plus, Save, Check, X, ChevronRight, ChevronLeft, FileText, UserCheck, Building2, CalendarDays, Download, Printer, Loader2, ArrowRight, FileSpreadsheet, File, Upload, FileUp, AlertCircle, Copy, Lock, History, Info } from "lucide-react";
+import { Calendar, Clock, Users, Plus, Save, Check, X, ChevronRight, ChevronLeft, FileText, UserCheck, Building2, CalendarDays, Download, Printer, Loader2, ArrowRight, FileSpreadsheet, File, Upload, FileUp, AlertCircle, Copy, Lock, History, Info, AlertTriangle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { useLocation } from "wouter";
@@ -62,6 +62,7 @@ export default function ShiftManagementPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showLockedDialog, setShowLockedDialog] = useState(false);
   const [showAuditTrail, setShowAuditTrail] = useState(false);
+  const [showApplyConfirmDialog, setShowApplyConfirmDialog] = useState(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -1230,7 +1231,13 @@ export default function ShiftManagementPage() {
                     </Select>
                     <Button 
                       variant={isScheduleLocked ? "secondary" : "outline"} 
-                      onClick={applyDefaultSchedule} 
+                      onClick={() => {
+                        if (isScheduleLocked) {
+                          setShowLockedDialog(true);
+                        } else {
+                          setShowApplyConfirmDialog(true);
+                        }
+                      }} 
                       className={`gap-2 h-11 sm:h-9 ${isScheduleLocked ? "opacity-70" : ""}`} 
                       data-testid="btn-apply-default"
                     >
@@ -1765,6 +1772,61 @@ export default function ShiftManagementPage() {
       </Dialog>
 
       {/* Locked Schedule Dialog */}
+      {/* Apply to All Confirmation Dialog */}
+      <Dialog open={showApplyConfirmDialog} onOpenChange={setShowApplyConfirmDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-700">
+              <AlertTriangle className="w-5 h-5" />
+              تأكيد تطبيق الجدول على الجميع
+            </DialogTitle>
+            <DialogDescription className="text-right">
+              <div className="space-y-4 mt-3">
+                <Alert className="border-amber-200 bg-amber-50">
+                  <Info className="h-4 w-4 text-amber-600" />
+                  <AlertDescription className="text-amber-800">
+                    <strong>تنبيه مهم:</strong> هذه العملية ستطبق الوردية المحددة على جميع الموظفين في هذا الفرع للأسبوع الحالي.
+                  </AlertDescription>
+                </Alert>
+                
+                <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+                  <h4 className="font-semibold text-foreground">كيف يعمل هذا الزر:</h4>
+                  <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                    <li>سيتم تطبيق الوردية المختارة (<span className="font-semibold text-foreground">{activeShiftProfiles.find(p => p.shiftCode === selectedShiftProfile)?.displayName || selectedShiftProfile}</span>) على جميع الموظفين</li>
+                    <li>يوم <strong>الجمعة</strong> سيكون إجازة تلقائياً لجميع الموظفين</li>
+                    <li>بعد التطبيق، <strong>سيتم قفل هذا الزر</strong> لهذا الأسبوع</li>
+                    <li>يمكنك تعديل جدول كل موظف بشكل فردي بعد القفل</li>
+                  </ul>
+                </div>
+
+                <Alert className="border-blue-200 bg-blue-50">
+                  <Users className="h-4 w-4 text-blue-600" />
+                  <AlertDescription className="text-blue-700">
+                    <strong>سبب القفل:</strong> لحماية الجدول من التعديلات غير المقصودة بعد إعداده. يمكنك دائماً تعديل جدول موظف معين بشكل فردي.
+                  </AlertDescription>
+                </Alert>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setShowApplyConfirmDialog(false)}>
+              إلغاء
+            </Button>
+            <Button 
+              onClick={() => {
+                setShowApplyConfirmDialog(false);
+                applyDefaultSchedule();
+              }}
+              className="bg-amber-600 hover:bg-amber-700"
+            >
+              <Users className="w-4 h-4 ml-2" />
+              نعم، تطبيق على الجميع
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Schedule Locked Dialog */}
       <Dialog open={showLockedDialog} onOpenChange={setShowLockedDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
