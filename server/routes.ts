@@ -13294,7 +13294,7 @@ export async function registerRoutes(
 
       // Get user and branch names
       const users = await storage.getAllUsers();
-      const branches = await storage.getBranches();
+      const branches = await storage.getAllBranches();
       const userMap = new Map(users.map(u => [u.id, `${u.firstName || ''} ${u.lastName || ''}`]));
       const branchMap = new Map(branches.map(b => [b.id, b.name]));
 
