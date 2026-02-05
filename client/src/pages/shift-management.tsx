@@ -15,13 +15,14 @@ import { useAuth } from "@/hooks/useAuth";
 import { useBranches } from "@/hooks/useBranches";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Calendar, Clock, Users, Plus, Save, Check, X, ChevronRight, ChevronLeft, FileText, UserCheck, Building2, CalendarDays, Download, Printer, Loader2, ArrowRight, FileSpreadsheet, File, Upload, FileUp, AlertCircle, Copy } from "lucide-react";
+import { Calendar, Clock, Users, Plus, Save, Check, X, ChevronRight, ChevronLeft, FileText, UserCheck, Building2, CalendarDays, Download, Printer, Loader2, ArrowRight, FileSpreadsheet, File, Upload, FileUp, AlertCircle, Copy, Lock, History, Info } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { useLocation } from "wouter";
 import { format, startOfWeek, endOfWeek, addDays, addWeeks, subWeeks, startOfMonth, endOfMonth, addMonths, subMonths, eachDayOfInterval, isToday, isSameMonth, parseISO, getDaysInMonth } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
 import { useTranslation } from "react-i18next";
-import type { User, Branch, SchedulePeriod, EmployeeSchedule, AttendanceRecord, BranchEmployee } from "@shared/schema";
+import type { User, Branch, SchedulePeriod, EmployeeSchedule, AttendanceRecord, BranchEmployee, WeeklyScheduleLock, ScheduleChangeAudit } from "@shared/schema";
 import * as XLSX from "xlsx";
 
 const DAYS_AR = ["السبت", "الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة"];
@@ -59,6 +60,8 @@ export default function ShiftManagementPage() {
   const [importErrors, setImportErrors] = useState<string[]>([]);
   const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showLockedDialog, setShowLockedDialog] = useState(false);
+  const [showAuditTrail, setShowAuditTrail] = useState(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -105,6 +108,56 @@ export default function ShiftManagementPage() {
       return res.json();
     },
     enabled: selectedBranch !== "all",
+  });
+
+  const { data: weeklyLock } = useQuery<WeeklyScheduleLock[]>({
+    queryKey: ["/api/weekly-schedule-locks", { branchId: selectedBranch, weekStartDate: startDateStr }],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/weekly-schedule-locks?branchId=${selectedBranch}&weekStartDate=${startDateStr}`);
+      return res.json();
+    },
+    enabled: selectedBranch !== "all",
+  });
+
+  const { data: auditTrail } = useQuery<ScheduleChangeAudit[]>({
+    queryKey: ["/api/schedule-change-audit", { branchId: selectedBranch, weekStartDate: startDateStr }],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/schedule-change-audit?branchId=${selectedBranch}&weekStartDate=${startDateStr}`);
+      return res.json();
+    },
+    enabled: selectedBranch !== "all" && showAuditTrail,
+  });
+
+  const isScheduleLocked = weeklyLock && weeklyLock.length > 0;
+  const currentLock = weeklyLock?.[0];
+
+  const createLockMutation = useMutation({
+    mutationFn: async (data: { shiftProfile: string }) => {
+      return apiRequest("POST", "/api/weekly-schedule-locks", {
+        branchId: selectedBranch,
+        weekStartDate: startDateStr,
+        shiftProfile: data.shiftProfile,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/weekly-schedule-locks"] });
+    },
+    onError: (error: any) => {
+      toast({ title: "خطأ", description: "فشل في قفل الجدول", variant: "destructive" });
+    },
+  });
+
+  const logScheduleChangeMutation = useMutation({
+    mutationFn: async (data: { employeeId: string; employeeName: string; changeType: string; scheduleDate?: string; oldValue?: any; newValue?: any }) => {
+      return apiRequest("POST", "/api/schedule-change-audit", {
+        branchId: selectedBranch,
+        weekStartDate: startDateStr,
+        ...data,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/schedule-change-audit"] });
+    },
   });
 
   const filteredEmployees = useMemo(() => {
@@ -241,6 +294,11 @@ export default function ShiftManagementPage() {
   }, [activeShiftProfiles, selectedShiftProfile]);
 
   const applyDefaultSchedule = () => {
+    if (isScheduleLocked) {
+      setShowLockedDialog(true);
+      return;
+    }
+    
     const profile = activeShiftProfiles.find(p => p.shiftCode === selectedShiftProfile);
     if (!profile && activeShiftProfiles.length > 0) {
       toast({ title: "تنبيه", description: "يرجى اختيار وردية صالحة أولاً", variant: "destructive" });
@@ -265,7 +323,10 @@ export default function ShiftManagementPage() {
     });
     setScheduleData(newScheduleData);
     setHasUnsavedChanges(true);
-    toast({ title: "تم تطبيق الجدول", description: `${profileName} (${startTime} - ${endTime})، الجمعة إجازة` });
+    
+    createLockMutation.mutate({ shiftProfile: profileName });
+    
+    toast({ title: "تم تطبيق الجدول وقفله", description: `${profileName} (${startTime} - ${endTime})، الجمعة إجازة - تم قفل خاصية "تطبيق على الجميع"` });
   };
 
   const getEmployeeShiftSelection = (empId: string) => {
@@ -1167,13 +1228,28 @@ export default function ShiftManagementPage() {
                         )}
                       </SelectContent>
                     </Select>
-                    <Button variant="outline" onClick={applyDefaultSchedule} className="gap-2 h-11 sm:h-9" data-testid="btn-apply-default">
-                      <Users className="w-4 h-4" />
+                    <Button 
+                      variant={isScheduleLocked ? "secondary" : "outline"} 
+                      onClick={applyDefaultSchedule} 
+                      className={`gap-2 h-11 sm:h-9 ${isScheduleLocked ? "opacity-70" : ""}`} 
+                      data-testid="btn-apply-default"
+                    >
+                      {isScheduleLocked ? <Lock className="w-4 h-4" /> : <Users className="w-4 h-4" />}
                       {t("shiftManagement.applyAll")}
+                      {isScheduleLocked && <Badge variant="outline" className="mr-1 text-[10px]">مقفل</Badge>}
                     </Button>
                     <Button variant="outline" onClick={copyToNextWeek} className="gap-2 h-11 sm:h-9" data-testid="btn-copy-next-week">
                       <Copy className="w-4 h-4" />
                       {t("shiftManagement.copyToNextWeek")}
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      onClick={() => setShowAuditTrail(!showAuditTrail)} 
+                      className="gap-2 h-11 sm:h-9" 
+                      data-testid="btn-show-audit"
+                    >
+                      <History className="w-4 h-4" />
+                      {isRTL ? "سجل التعديلات" : "Change Log"}
                     </Button>
                     {hasUnsavedChanges && (
                       <Button onClick={() => saveSchedulesMutation.mutate()} disabled={saveSchedulesMutation.isPending} className="gap-2 h-11 sm:h-9" data-testid="btn-save-schedule">
@@ -1182,6 +1258,18 @@ export default function ShiftManagementPage() {
                       </Button>
                     )}
                   </div>
+
+                  {isScheduleLocked && currentLock && (
+                    <Alert className="mb-4 border-amber-200 bg-amber-50">
+                      <Lock className="h-4 w-4 text-amber-600" />
+                      <AlertTitle className="text-amber-800">{isRTL ? "الجدول مقفل" : "Schedule Locked"}</AlertTitle>
+                      <AlertDescription className="text-amber-700">
+                        {isRTL 
+                          ? `تم إعداد هذا الجدول بتاريخ ${format(new Date(currentLock.lockedAt), "yyyy-MM-dd HH:mm", { locale: ar })} بواسطة ${currentLock.lockedByName || "النظام"}. لا يمكن استخدام "تطبيق على الجميع" - يمكنك تعديل جدول كل موظف بشكل فردي.`
+                          : `This schedule was set on ${format(new Date(currentLock.lockedAt), "yyyy-MM-dd HH:mm")} by ${currentLock.lockedByName || "System"}. "Apply to All" is locked - you can modify each employee's schedule individually.`}
+                      </AlertDescription>
+                    </Alert>
+                  )}
 
                   {filteredEmployees.length === 0 ? (
                     <div className="text-center py-12 text-muted-foreground">
@@ -1671,6 +1759,131 @@ export default function ShiftManagementPage() {
             >
               {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
               استيراد {importData.reduce((sum, e) => sum + e.schedules.length, 0)} جدول
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Locked Schedule Dialog */}
+      <Dialog open={showLockedDialog} onOpenChange={setShowLockedDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-700">
+              <Lock className="w-5 h-5" />
+              الجدول مقفل
+            </DialogTitle>
+            <DialogDescription className="text-right">
+              {currentLock && (
+                <div className="space-y-3 mt-2">
+                  <p className="text-base">
+                    تم إعداد هذا الجدول بتاريخ{" "}
+                    <span className="font-semibold">
+                      {format(new Date(currentLock.lockedAt), "yyyy-MM-dd", { locale: ar })}
+                    </span>{" "}
+                    الساعة{" "}
+                    <span className="font-semibold">
+                      {format(new Date(currentLock.lockedAt), "HH:mm", { locale: ar })}
+                    </span>
+                  </p>
+                  <p className="text-base">
+                    بواسطة:{" "}
+                    <span className="font-semibold">{currentLock.lockedByName || "النظام"}</span>
+                  </p>
+                  {currentLock.shiftProfile && (
+                    <p className="text-base">
+                      الوردية المطبقة:{" "}
+                      <Badge variant="secondary">{currentLock.shiftProfile}</Badge>
+                    </p>
+                  )}
+                  <Alert className="mt-4 border-blue-200 bg-blue-50">
+                    <Info className="h-4 w-4 text-blue-600" />
+                    <AlertDescription className="text-blue-700">
+                      لا يمكن استخدام "تطبيق على الجميع" بعد الإعداد الأول. يمكنك تعديل جدول كل موظف بشكل فردي من خلال اختيار الوردية لكل موظف على حدة.
+                    </AlertDescription>
+                  </Alert>
+                </div>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setShowLockedDialog(false)}>
+              حسناً، فهمت
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Audit Trail Dialog */}
+      <Dialog open={showAuditTrail} onOpenChange={setShowAuditTrail}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="w-5 h-5" />
+              سجل تعديلات جدول الدوام
+            </DialogTitle>
+            <DialogDescription>
+              جميع التعديلات التي تمت على جدول الدوام لهذا الأسبوع ({startDateStr} - {endDateStr})
+            </DialogDescription>
+          </DialogHeader>
+
+          {auditTrail && auditTrail.length > 0 ? (
+            <div className="border rounded-lg overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="text-right">التاريخ والوقت</TableHead>
+                    <TableHead className="text-right">نوع التعديل</TableHead>
+                    <TableHead className="text-right">الموظف</TableHead>
+                    <TableHead className="text-right">بواسطة</TableHead>
+                    <TableHead className="text-right">التفاصيل</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {auditTrail.map((audit) => (
+                    <TableRow key={audit.id}>
+                      <TableCell className="text-sm">
+                        {format(new Date(audit.createdAt), "yyyy-MM-dd HH:mm", { locale: ar })}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={audit.changeType === 'apply_all' ? 'default' : 'secondary'}>
+                          {audit.changeType === 'apply_all' ? 'تطبيق على الجميع' : 
+                           audit.changeType === 'individual_change' ? 'تعديل فردي' :
+                           audit.changeType === 'shift_change' ? 'تغيير وردية' : audit.changeType}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        {audit.employeeName || '-'}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {audit.changedByName || 'النظام'}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {audit.scheduleDate && (
+                          <span className="text-muted-foreground">
+                            يوم {audit.scheduleDate}
+                          </span>
+                        )}
+                        {audit.newValue && typeof audit.newValue === 'object' && 'shiftProfile' in (audit.newValue as any) && (
+                          <Badge variant="outline" className="mr-1">
+                            {(audit.newValue as any).shiftProfile}
+                          </Badge>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <div className="text-center py-12 text-muted-foreground">
+              <History className="w-12 h-12 mx-auto mb-4 opacity-50" />
+              <p>لا توجد تعديلات مسجلة لهذا الأسبوع</p>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAuditTrail(false)}>
+              إغلاق
             </Button>
           </DialogFooter>
         </DialogContent>
