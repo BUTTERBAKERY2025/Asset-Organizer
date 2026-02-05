@@ -477,110 +477,112 @@ export default function CashierShiftPerformance() {
                   <span className="sm:hidden">هدف جديد</span>
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-md">
-                <DialogHeader>
-                  <DialogTitle>{editingTarget ? "تعديل هدف الكاشير" : "إضافة هدف كاشير جديد"}</DialogTitle>
-                  <DialogDescription>
-                    {editingTarget ? "تعديل هدف المبيعات والمعاملات للكاشير" : "تحديد هدف المبيعات والمعاملات لكاشير معين"}
-                  </DialogDescription>
+              <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+                <DialogHeader className="pb-2">
+                  <DialogTitle className="text-base">{editingTarget ? "تعديل هدف الكاشير" : "إضافة هدف كاشير جديد"}</DialogTitle>
                 </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="grid gap-2">
-                    <Label>الفرع</Label>
-                    <Select 
-                      value={newTarget.branchId} 
-                      onValueChange={(v) => setNewTarget({...newTarget, branchId: v, cashierId: ""})}
-                      disabled={!!editingTarget}
-                    >
-                      <SelectTrigger data-testid="select-branch" className="h-11 sm:h-10">
-                        <SelectValue placeholder="اختر الفرع" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {branches.map((branch: { id: string; name: string }) => (
-                          <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label>الكاشير</Label>
-                    <Select 
-                      value={newTarget.cashierId} 
-                      onValueChange={(v) => setNewTarget({...newTarget, cashierId: v})}
-                      disabled={!newTarget.branchId || !!editingTarget}
-                    >
-                      <SelectTrigger data-testid="select-cashier-id" className="h-11 sm:h-10">
-                        <SelectValue placeholder={newTarget.branchId ? "اختر الكاشير" : "اختر الفرع أولاً"} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {branchCashiers.length > 0 ? (
-                          branchCashiers.map((user) => (
-                            <SelectItem key={user.id} value={user.id}>
-                              {user.firstName || user.username} {user.lastName || ""}
-                            </SelectItem>
-                          ))
-                        ) : (
-                          <SelectItem value="_empty" disabled>لا يوجد كاشير في هذا الفرع</SelectItem>
-                        )}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label>نوع الشفت</Label>
-                    <Select 
-                      value={newTarget.shiftType} 
-                      onValueChange={(v) => setNewTarget({...newTarget, shiftType: v})}
-                      disabled={!!editingTarget}
-                    >
-                      <SelectTrigger data-testid="select-shift-type" className="h-11 sm:h-10">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {SHIFT_TYPES.map((shift) => (
-                          <SelectItem key={shift.value} value={shift.value}>{shift.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label>دور الكاشير</Label>
-                    <Select value={newTarget.cashierRole} onValueChange={(v) => setNewTarget({...newTarget, cashierRole: v})}>
-                      <SelectTrigger data-testid="select-cashier-role" className="h-11 sm:h-10">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CASHIER_ROLES.map((role) => (
-                          <SelectItem key={role.value} value={role.value}>{role.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  {/* Period Type Selection */}
-                  <div className="grid gap-2">
-                    <Label>نوع الفترة</Label>
-                    <Select 
-                      value={newTarget.periodType} 
-                      onValueChange={(v: "daily" | "weekly" | "monthly") => {
-                        const endDate = calculateEndDate(newTarget.startDate, v);
-                        setNewTarget({...newTarget, periodType: v, endDate});
-                      }}
-                    >
-                      <SelectTrigger data-testid="select-period-type" className="h-11 sm:h-10">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="daily">يومي</SelectItem>
-                        <SelectItem value="weekly">أسبوعي</SelectItem>
-                        <SelectItem value="monthly">شهري</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  {/* Date Range */}
+                <div className="grid gap-3 py-2">
+                  {/* Row 1: Branch & Cashier */}
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="grid gap-2">
-                      <Label>تاريخ البداية</Label>
+                    <div className="grid gap-1">
+                      <Label className="text-xs">الفرع</Label>
+                      <Select 
+                        value={newTarget.branchId} 
+                        onValueChange={(v) => setNewTarget({...newTarget, branchId: v, cashierId: ""})}
+                        disabled={!!editingTarget}
+                      >
+                        <SelectTrigger data-testid="select-branch" className="h-9">
+                          <SelectValue placeholder="اختر الفرع" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {branches.map((branch: { id: string; name: string }) => (
+                            <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid gap-1">
+                      <Label className="text-xs">الكاشير</Label>
+                      <Select 
+                        value={newTarget.cashierId} 
+                        onValueChange={(v) => setNewTarget({...newTarget, cashierId: v})}
+                        disabled={!newTarget.branchId || !!editingTarget}
+                      >
+                        <SelectTrigger data-testid="select-cashier-id" className="h-9">
+                          <SelectValue placeholder={newTarget.branchId ? "اختر" : "الفرع أولاً"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {branchCashiers.length > 0 ? (
+                            branchCashiers.map((user) => (
+                              <SelectItem key={user.id} value={user.id}>
+                                {user.firstName || user.username} {user.lastName || ""}
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <SelectItem value="_empty" disabled>لا يوجد كاشير</SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Row 2: Shift Type & Cashier Role */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="grid gap-1">
+                      <Label className="text-xs">نوع الشفت</Label>
+                      <Select 
+                        value={newTarget.shiftType} 
+                        onValueChange={(v) => setNewTarget({...newTarget, shiftType: v})}
+                        disabled={!!editingTarget}
+                      >
+                        <SelectTrigger data-testid="select-shift-type" className="h-9">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {SHIFT_TYPES.map((shift) => (
+                            <SelectItem key={shift.value} value={shift.value}>{shift.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid gap-1">
+                      <Label className="text-xs">دور الكاشير</Label>
+                      <Select value={newTarget.cashierRole} onValueChange={(v) => setNewTarget({...newTarget, cashierRole: v})}>
+                        <SelectTrigger data-testid="select-cashier-role" className="h-9">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CASHIER_ROLES.map((role) => (
+                            <SelectItem key={role.value} value={role.value}>{role.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  
+                  {/* Row 3: Period Type & Date Range */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="grid gap-1">
+                      <Label className="text-xs">نوع الفترة</Label>
+                      <Select 
+                        value={newTarget.periodType} 
+                        onValueChange={(v: "daily" | "weekly" | "monthly") => {
+                          const endDate = calculateEndDate(newTarget.startDate, v);
+                          setNewTarget({...newTarget, periodType: v, endDate});
+                        }}
+                      >
+                        <SelectTrigger data-testid="select-period-type" className="h-9">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="daily">يومي</SelectItem>
+                          <SelectItem value="weekly">أسبوعي</SelectItem>
+                          <SelectItem value="monthly">شهري</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid gap-1">
+                      <Label className="text-xs">من</Label>
                       <Input 
                         type="date" 
                         value={newTarget.startDate}
@@ -590,84 +592,70 @@ export default function CashierShiftPerformance() {
                           setNewTarget({...newTarget, startDate, endDate});
                         }}
                         data-testid="input-start-date"
-                        className="h-11 sm:h-10"
+                        className="h-9 text-sm"
                       />
                     </div>
-                    <div className="grid gap-2">
-                      <Label>تاريخ النهاية</Label>
+                    <div className="grid gap-1">
+                      <Label className="text-xs">إلى</Label>
                       <Input 
                         type="date" 
                         value={newTarget.endDate}
                         onChange={(e) => setNewTarget({...newTarget, endDate: e.target.value})}
                         data-testid="input-end-date"
-                        className="h-11 sm:h-10"
+                        className="h-9 text-sm"
                       />
                     </div>
                   </div>
                   
-                  {/* Period days info */}
+                  {/* Period days info - inline badge */}
                   {newTarget.startDate && newTarget.endDate && (
-                    <div className="text-sm text-muted-foreground bg-gray-50 p-2 rounded">
-                      عدد الأيام: {calculateDaysInPeriod(newTarget.startDate, newTarget.endDate)} يوم
+                    <div className="flex justify-center">
+                      <span className="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-full">
+                        {calculateDaysInPeriod(newTarget.startDate, newTarget.endDate)} يوم
+                      </span>
                     </div>
                   )}
 
-                  {/* Total Target for Period */}
-                  <div className="grid gap-2">
-                    <Label>إجمالي هدف المبيعات للفترة (ريال)</Label>
-                    <Input 
-                      type="number" 
-                      value={newTarget.totalTargetAmount} 
-                      onChange={(e) => {
-                        const totalAmount = Number(e.target.value);
-                        setNewTarget({...newTarget, totalTargetAmount: totalAmount});
-                      }}
-                      data-testid="input-total-target-amount"
-                      className="h-11 sm:h-10"
-                      placeholder="مثال: 70000 ريال للأسبوع"
-                    />
+                  {/* Row 4: Targets */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="grid gap-1">
+                      <Label className="text-xs">هدف المبيعات للفترة (ر.س)</Label>
+                      <Input 
+                        type="number" 
+                        value={newTarget.totalTargetAmount} 
+                        onChange={(e) => setNewTarget({...newTarget, totalTargetAmount: Number(e.target.value)})}
+                        data-testid="input-total-target-amount"
+                        className="h-9"
+                        placeholder="70000"
+                      />
+                    </div>
+                    <div className="grid gap-1">
+                      <Label className="text-xs">عدد الحركات المستهدفة</Label>
+                      <Input 
+                        type="number" 
+                        value={newTarget.totalTargetTransactions} 
+                        onChange={(e) => setNewTarget({...newTarget, totalTargetTransactions: Number(e.target.value)})}
+                        data-testid="input-total-target-transactions"
+                        className="h-9"
+                        placeholder="700"
+                      />
+                    </div>
                   </div>
                   
-                  <div className="grid gap-2">
-                    <Label>إجمالي الحركات المستهدفة للفترة</Label>
-                    <Input 
-                      type="number" 
-                      value={newTarget.totalTargetTransactions} 
-                      onChange={(e) => {
-                        const totalTransactions = Number(e.target.value);
-                        setNewTarget({...newTarget, totalTargetTransactions: totalTransactions});
-                      }}
-                      data-testid="input-total-target-transactions"
-                      className="h-11 sm:h-10"
-                      placeholder="مثال: 700 حركة للأسبوع"
-                    />
-                  </div>
-                  
-                  {/* Calculated Daily Targets Display */}
+                  {/* Calculated Daily Targets - Compact */}
                   {newTarget.totalTargetAmount > 0 && newTarget.startDate && newTarget.endDate && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-2">
-                      <h4 className="font-semibold text-amber-800 text-sm">الأهداف اليومية الموزعة (تُحسب تلقائياً)</h4>
-                      <div className="grid grid-cols-3 gap-2 text-sm">
-                        <div>
-                          <span className="text-gray-600">المبيعات اليومية:</span>
-                          <div className="font-bold text-amber-700">
-                            {formatCurrency(Math.round(newTarget.totalTargetAmount / calculateDaysInPeriod(newTarget.startDate, newTarget.endDate)))}
-                          </div>
-                        </div>
-                        <div>
-                          <span className="text-gray-600">الحركات اليومية:</span>
-                          <div className="font-bold text-amber-700">
-                            {Math.round(newTarget.totalTargetTransactions / calculateDaysInPeriod(newTarget.startDate, newTarget.endDate))}
-                          </div>
-                        </div>
-                        <div>
-                          <span className="text-gray-600">متوسط الفاتورة:</span>
-                          <div className="font-bold text-amber-700">
-                            {newTarget.totalTargetTransactions > 0 
-                              ? formatCurrency(Math.round(newTarget.totalTargetAmount / newTarget.totalTargetTransactions))
-                              : "0 ر.س"}
-                          </div>
-                        </div>
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-2">
+                      <div className="text-xs font-medium text-amber-800 mb-1">الأهداف اليومية الموزعة:</div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-gray-600">
+                          المبيعات: <strong className="text-amber-700">{formatCurrency(Math.round(newTarget.totalTargetAmount / calculateDaysInPeriod(newTarget.startDate, newTarget.endDate)))}</strong>
+                        </span>
+                        <span className="text-gray-600">
+                          الحركات: <strong className="text-amber-700">{Math.round(newTarget.totalTargetTransactions / calculateDaysInPeriod(newTarget.startDate, newTarget.endDate))}</strong>
+                        </span>
+                        <span className="text-gray-600">
+                          م. الفاتورة: <strong className="text-amber-700">{newTarget.totalTargetTransactions > 0 ? formatCurrency(Math.round(newTarget.totalTargetAmount / newTarget.totalTargetTransactions)) : "0"}</strong>
+                        </span>
                       </div>
                     </div>
                   )}
