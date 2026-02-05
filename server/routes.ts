@@ -4194,9 +4194,15 @@ export async function registerRoutes(
       const { branchId, status, cashierId, dateFrom, dateTo } = req.query;
       const user = getCurrentUser(req);
       
+      // DEBUG: Log query parameters
+      console.log("[STATS DEBUG] Query params:", { branchId, status, cashierId, dateFrom, dateTo });
+      
       // SECURITY: Use getEffectiveBranchFilter for multi-branch support
       const queryBranchId = branchId as string | undefined;
       const branchFilter = getEffectiveBranchFilter(req, queryBranchId);
+      
+      // DEBUG: Log branch filter result
+      console.log("[STATS DEBUG] Branch filter result:", branchFilter);
       
       if (!branchFilter.hasAccess) {
         return res.status(403).json({ error: "غير مصرح بالوصول" });
@@ -4227,6 +4233,9 @@ export async function registerRoutes(
       } else if (branchFilter.singleBranchId) {
         journals = journals.filter(j => j.branchId === branchFilter.singleBranchId);
       }
+      
+      // DEBUG: Log journals count after branch filter
+      console.log("[STATS DEBUG] Journals after branch filter:", journals.length);
       
       // Apply additional filters to match the table view
       if (status && status !== "all") {

@@ -104,6 +104,9 @@ export default function CashierJournalsPage() {
   if (dateTo) statsQueryParams.set("dateTo", dateTo);
   const statsQueryString = statsQueryParams.toString();
   
+  // Wait for branchFilter to be initialized (not empty string)
+  const isBranchFilterReady = branchFilter !== "";
+  
   const { data: stats, refetch: refetchStats } = useQuery<{
     totalJournals: number;
     totalSales: number;
@@ -124,11 +127,13 @@ export default function CashierJournalsPage() {
       if (to) params.set("dateTo", to);
       const queryString = params.toString();
       const url = `/api/cashier-journals/stats/summary${queryString ? `?${queryString}` : ""}`;
+      console.log("[DEBUG] Fetching stats from:", url);
       const res = await fetch(url, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch stats");
       return res.json();
     },
     staleTime: 0,
+    enabled: isBranchFilterReady,
   });
 
   const invalidateCashierQueries = () => {
