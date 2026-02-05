@@ -52,6 +52,8 @@ import {
   shiftSignatures,
   dailyWasteLog,
   shiftEmployees,
+  weeklyScheduleLocks,
+  scheduleChangeAudit,
 } from "@shared/schema";
 import { 
   generateSalaryClosingPdf, type SalaryClosingPdfData,
@@ -15914,6 +15916,157 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error deleting employee schedule:", error);
       res.status(500).json({ error: "فشل في حذف الجدول" });
+    }
+  });
+
+  // Weekly Schedule Locks - قفل جدول الدوام الأسبوعي
+  app.get("/api/weekly-schedule-locks", isAuthenticated, async (req, res) => {
+    try {
+      const { branchId, weekStartDate } = req.query;
+      
+      const branchFilter = getEffectiveBranchFilter(req, branchId as string);
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بالوصول" });
+      }
+      
+      const locks = await db.select()
+        .from(weeklyScheduleLocks)
+        .where(
+          and(
+            branchFilter.singleBranchId ? eq(weeklyScheduleLocks.branchId, branchFilter.singleBranchId) : undefined,
+            weekStartDate ? eq(weeklyScheduleLocks.weekStartDate, weekStartDate as string) : undefined
+          )
+        )
+        .orderBy(desc(weeklyScheduleLocks.lockedAt));
+      
+      res.json(locks);
+    } catch (error) {
+      console.error("Error fetching weekly schedule locks:", error);
+      res.status(500).json({ error: "فشل في جلب قفل الجدول" });
+    }
+  });
+
+  app.post("/api/weekly-schedule-locks", isAuthenticated, async (req, res) => {
+    try {
+      const { branchId, weekStartDate, shiftProfile, notes } = req.body;
+      
+      // SECURITY: Verify branch access
+      if (!isUserAdmin(req) && branchId) {
+        const hasAccess = await canAccessBranch(req, branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بقفل الجدول لهذا الفرع" });
+        }
+      }
+      
+      // Check if already locked
+      const existingLock = await db.select()
+        .from(weeklyScheduleLocks)
+        .where(
+          and(
+            eq(weeklyScheduleLocks.branchId, branchId),
+            eq(weeklyScheduleLocks.weekStartDate, weekStartDate)
+          )
+        )
+        .limit(1);
+      
+      if (existingLock.length > 0) {
+        return res.status(400).json({ 
+          error: "الجدول مقفل مسبقاً",
+          lock: existingLock[0]
+        });
+      }
+      
+      const [lock] = await db.insert(weeklyScheduleLocks)
+        .values({
+          branchId,
+          weekStartDate,
+          lockedBy: req.currentUser?.id,
+          lockedByName: req.currentUser?.firstName ? `${req.currentUser.firstName} ${req.currentUser.lastName || ''}`.trim() : req.currentUser?.username,
+          shiftProfile,
+          notes
+        })
+        .returning();
+      
+      // Log the apply-all action in audit trail
+      await db.insert(scheduleChangeAudit).values({
+        branchId,
+        weekStartDate,
+        changeType: 'apply_all',
+        changedBy: req.currentUser?.id,
+        changedByName: req.currentUser?.firstName ? `${req.currentUser.firstName} ${req.currentUser.lastName || ''}`.trim() : req.currentUser?.username,
+        newValue: { shiftProfile, notes },
+      });
+      
+      res.status(201).json(lock);
+    } catch (error) {
+      console.error("Error creating weekly schedule lock:", error);
+      res.status(500).json({ error: "فشل في قفل الجدول" });
+    }
+  });
+
+  // Schedule Change Audit Trail - سجل تتبع تعديلات الجدول
+  app.get("/api/schedule-change-audit", isAuthenticated, async (req, res) => {
+    try {
+      const { branchId, weekStartDate, employeeId, limit: limitParam } = req.query;
+      
+      const branchFilter = getEffectiveBranchFilter(req, branchId as string);
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بالوصول" });
+      }
+      
+      const queryLimit = parseInt(limitParam as string) || 100;
+      
+      const audits = await db.select()
+        .from(scheduleChangeAudit)
+        .where(
+          and(
+            branchFilter.singleBranchId ? eq(scheduleChangeAudit.branchId, branchFilter.singleBranchId) : undefined,
+            weekStartDate ? eq(scheduleChangeAudit.weekStartDate, weekStartDate as string) : undefined,
+            employeeId ? eq(scheduleChangeAudit.employeeId, employeeId as string) : undefined
+          )
+        )
+        .orderBy(desc(scheduleChangeAudit.createdAt))
+        .limit(queryLimit);
+      
+      res.json(audits);
+    } catch (error) {
+      console.error("Error fetching schedule change audit:", error);
+      res.status(500).json({ error: "فشل في جلب سجل التعديلات" });
+    }
+  });
+
+  app.post("/api/schedule-change-audit", isAuthenticated, async (req, res) => {
+    try {
+      const { branchId, weekStartDate, employeeId, employeeName, changeType, scheduleDate, oldValue, newValue, changeReason } = req.body;
+      
+      // SECURITY: Verify branch access
+      if (!isUserAdmin(req) && branchId) {
+        const hasAccess = await canAccessBranch(req, branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بتسجيل التعديلات لهذا الفرع" });
+        }
+      }
+      
+      const [audit] = await db.insert(scheduleChangeAudit)
+        .values({
+          branchId,
+          weekStartDate,
+          employeeId,
+          employeeName,
+          changeType,
+          scheduleDate,
+          oldValue,
+          newValue,
+          changedBy: req.currentUser?.id,
+          changedByName: req.currentUser?.firstName ? `${req.currentUser.firstName} ${req.currentUser.lastName || ''}`.trim() : req.currentUser?.username,
+          changeReason
+        })
+        .returning();
+      
+      res.status(201).json(audit);
+    } catch (error) {
+      console.error("Error creating schedule change audit:", error);
+      res.status(500).json({ error: "فشل في تسجيل التعديل" });
     }
   });
 
