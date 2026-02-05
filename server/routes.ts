@@ -13274,6 +13274,9 @@ export async function registerRoutes(
   app.get("/api/cashier-journals-report", isAuthenticated, async (req, res) => {
     try {
       const user = req.user as User;
+      if (!user) {
+        return res.status(401).json({ error: "غير مسجل الدخول" });
+      }
       const { branchId, startDate, endDate, cashierId } = req.query;
       
       const branchFilter = getEffectiveBranchFilter(req, branchId as string);
