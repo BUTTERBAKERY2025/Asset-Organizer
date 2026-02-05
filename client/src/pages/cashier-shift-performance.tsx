@@ -1575,67 +1575,129 @@ export default function CashierShiftPerformance() {
                   <div>
                     <CardTitle className="flex items-center gap-2 text-base">
                       <Trophy className="h-5 w-5 text-purple-600" />
-                      نسبة مساهمة الكاشير من المبيعات
+                      {canViewAllCashiers ? 'نسبة مساهمة الكاشير من المبيعات' : 'نسبة مساهمتي من المبيعات'}
                     </CardTitle>
-                    <CardDescription>قياس مساهمة كل كاشير من إجمالي مبيعات الفرع للفترة المختارة</CardDescription>
+                    <CardDescription>
+                      {canViewAllCashiers 
+                        ? 'قياس مساهمة كل كاشير من إجمالي مبيعات الفرع للفترة المختارة'
+                        : 'نسبة مساهمتك في إجمالي مبيعات الفرع للفترة المختارة'
+                      }
+                    </CardDescription>
                   </div>
-                  {/* Filters inline */}
-                  <div className="flex items-center gap-3">
+                </div>
+              </CardHeader>
+              <CardContent>
+                {/* Date Filters */}
+                <div className="flex flex-wrap items-center gap-4 mb-4 p-4 bg-gradient-to-l from-purple-50 to-gray-50 rounded-lg border border-purple-100">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-purple-500" />
+                    <span className="text-sm font-medium text-purple-700">الفترة:</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label className="text-xs text-gray-600">من:</Label>
+                    <Input 
+                      type="date" 
+                      value={reportStartDate}
+                      onChange={(e) => setReportStartDate(e.target.value)}
+                      className="w-36 h-9 text-sm bg-white"
+                      data-testid="input-contribution-start"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label className="text-xs text-gray-600">إلى:</Label>
+                    <Input 
+                      type="date" 
+                      value={reportEndDate}
+                      onChange={(e) => setReportEndDate(e.target.value)}
+                      className="w-36 h-9 text-sm bg-white"
+                      data-testid="input-contribution-end"
+                    />
+                  </div>
+                  {canSelectBranch && (
                     <Select 
                       value={selectedBranch} 
                       onValueChange={setSelectedBranch}
-                      disabled={!canSelectBranch}
                     >
-                      <SelectTrigger className="w-36 h-8 text-xs bg-white" data-testid="select-contribution-branch">
+                      <SelectTrigger className="w-36 h-9 text-sm bg-white" data-testid="select-contribution-branch">
                         <SelectValue placeholder="الفرع" />
                       </SelectTrigger>
                       <SelectContent>
-                        {canSelectBranch && <SelectItem value="all">جميع الفروع</SelectItem>}
+                        <SelectItem value="all">جميع الفروع</SelectItem>
                         {branches.map((b) => (
                           <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {/* Summary Cards */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-xl text-center border border-blue-200 shadow-sm">
-                    <DollarSign className="h-6 w-6 text-blue-600 mx-auto mb-1" />
-                    <p className="text-xs text-blue-600 font-medium">إجمالي المبيعات</p>
-                    <p className="text-xl font-bold text-blue-700">
-                      {formatCurrency(contributionData.reduce((s, c) => s + c.totalSales, 0))}
-                    </p>
-                  </div>
-                  <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-xl text-center border border-green-200 shadow-sm">
-                    <Users className="h-6 w-6 text-green-600 mx-auto mb-1" />
-                    <p className="text-xs text-green-600 font-medium">عدد الكاشيرين</p>
-                    <p className="text-xl font-bold text-green-700">{contributionData.length}</p>
-                  </div>
-                  <div className="bg-gradient-to-br from-amber-50 to-amber-100 p-4 rounded-xl text-center border border-amber-200 shadow-sm">
-                    <Receipt className="h-6 w-6 text-amber-600 mx-auto mb-1" />
-                    <p className="text-xs text-amber-600 font-medium">عدد الحركات</p>
-                    <p className="text-xl font-bold text-amber-700">
-                      {contributionData.reduce((s, c) => s + c.transactionCount, 0)}
-                    </p>
-                  </div>
-                  <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-xl text-center border border-purple-200 shadow-sm">
-                    <Calendar className="h-6 w-6 text-purple-600 mx-auto mb-1" />
-                    <p className="text-xs text-purple-600 font-medium">الفترة</p>
-                    <p className="text-sm font-bold text-purple-700">{reportStartDate}</p>
-                    <p className="text-sm font-bold text-purple-700">{reportEndDate}</p>
-                  </div>
+                  )}
                 </div>
 
-                {/* Contribution Chart & Table */}
+                {/* Summary Cards - Different view for regular cashiers */}
+                {canViewAllCashiers ? (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+                    <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-xl text-center border border-blue-200 shadow-sm">
+                      <DollarSign className="h-6 w-6 text-blue-600 mx-auto mb-1" />
+                      <p className="text-xs text-blue-600 font-medium">إجمالي المبيعات</p>
+                      <p className="text-xl font-bold text-blue-700">
+                        {formatCurrency(contributionData.reduce((s, c) => s + c.totalSales, 0))}
+                      </p>
+                    </div>
+                    <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-xl text-center border border-green-200 shadow-sm">
+                      <Users className="h-6 w-6 text-green-600 mx-auto mb-1" />
+                      <p className="text-xs text-green-600 font-medium">عدد الكاشيرين</p>
+                      <p className="text-xl font-bold text-green-700">{contributionData.length}</p>
+                    </div>
+                    <div className="bg-gradient-to-br from-amber-50 to-amber-100 p-4 rounded-xl text-center border border-amber-200 shadow-sm">
+                      <Receipt className="h-6 w-6 text-amber-600 mx-auto mb-1" />
+                      <p className="text-xs text-amber-600 font-medium">عدد الحركات</p>
+                      <p className="text-xl font-bold text-amber-700">
+                        {contributionData.reduce((s, c) => s + c.transactionCount, 0)}
+                      </p>
+                    </div>
+                    <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-xl text-center border border-purple-200 shadow-sm">
+                      <Calendar className="h-6 w-6 text-purple-600 mx-auto mb-1" />
+                      <p className="text-xs text-purple-600 font-medium">الفترة</p>
+                      <p className="text-sm font-bold text-purple-700">{reportStartDate}</p>
+                      <p className="text-sm font-bold text-purple-700">{reportEndDate}</p>
+                    </div>
+                  </div>
+                ) : (
+                  /* For regular cashiers - only show their own stats */
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    {contributionData.length > 0 && (
+                      <>
+                        <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-xl text-center border border-blue-200 shadow-sm">
+                          <DollarSign className="h-6 w-6 text-blue-600 mx-auto mb-1" />
+                          <p className="text-xs text-blue-600 font-medium">مبيعاتي</p>
+                          <p className="text-xl font-bold text-blue-700">
+                            {formatCurrency(contributionData[0]?.totalSales || 0)}
+                          </p>
+                        </div>
+                        <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-xl text-center border border-purple-200 shadow-sm">
+                          <Trophy className="h-6 w-6 text-purple-600 mx-auto mb-1" />
+                          <p className="text-xs text-purple-600 font-medium">نسبة مساهمتي</p>
+                          <p className="text-xl font-bold text-purple-700">
+                            {contributionData[0]?.contributionPercent?.toFixed(1) || 0}%
+                          </p>
+                        </div>
+                        <div className="bg-gradient-to-br from-amber-50 to-amber-100 p-4 rounded-xl text-center border border-amber-200 shadow-sm">
+                          <Receipt className="h-6 w-6 text-amber-600 mx-auto mb-1" />
+                          <p className="text-xs text-amber-600 font-medium">عدد حركاتي</p>
+                          <p className="text-xl font-bold text-amber-700">
+                            {contributionData[0]?.transactionCount || 0}
+                          </p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* Contribution Chart & Table - Only for managers */}
                 {contributionData.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <Users className="h-10 w-10 mx-auto mb-2 opacity-50" />
                     <p>لا توجد بيانات للفترة المختارة</p>
                   </div>
-                ) : (
+                ) : canViewAllCashiers ? (
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     {/* Pie Chart */}
                     <div className="h-64">
@@ -1696,6 +1758,41 @@ export default function CashierShiftPerformance() {
                         </TableBody>
                       </Table>
                     </div>
+                  </div>
+                ) : (
+                  /* Simple view for regular cashiers - just their contribution visualization */
+                  <div className="flex flex-col items-center justify-center py-6">
+                    <div className="relative w-40 h-40 mb-4">
+                      <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                        <circle
+                          cx="50"
+                          cy="50"
+                          r="40"
+                          stroke="#e5e7eb"
+                          strokeWidth="12"
+                          fill="none"
+                        />
+                        <circle
+                          cx="50"
+                          cy="50"
+                          r="40"
+                          stroke="#8B4513"
+                          strokeWidth="12"
+                          fill="none"
+                          strokeLinecap="round"
+                          strokeDasharray={`${(contributionData[0]?.contributionPercent || 0) * 2.51} 251`}
+                        />
+                      </svg>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="text-3xl font-bold text-amber-700">
+                          {contributionData[0]?.contributionPercent?.toFixed(1) || 0}%
+                        </span>
+                        <span className="text-xs text-gray-500">نسبة مساهمتي</span>
+                      </div>
+                    </div>
+                    <p className="text-sm text-muted-foreground text-center">
+                      مساهمتك في إجمالي مبيعات الفرع للفترة المحددة
+                    </p>
                   </div>
                 )}
               </CardContent>
