@@ -4119,6 +4119,60 @@ export const insertEmployeeScheduleSchema = createInsertSchema(employeeSchedules
 export type EmployeeSchedule = typeof employeeSchedules.$inferSelect;
 export type InsertEmployeeSchedule = z.infer<typeof insertEmployeeScheduleSchema>;
 
+// Weekly Schedule Locks - قفل جدول الدوام الأسبوعي
+export const weeklyScheduleLocks = pgTable("weekly_schedule_locks", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  weekStartDate: text("week_start_date").notNull(),
+  lockedAt: timestamp("locked_at").defaultNow().notNull(),
+  lockedBy: varchar("locked_by").references(() => users.id),
+  lockedByName: text("locked_by_name"),
+  shiftProfile: text("shift_profile"),
+  notes: text("notes"),
+}, (table) => [
+  index("idx_weekly_locks_branch").on(table.branchId),
+  index("idx_weekly_locks_week").on(table.weekStartDate),
+  uniqueIndex("idx_weekly_locks_unique").on(table.branchId, table.weekStartDate),
+]);
+
+export const insertWeeklyScheduleLockSchema = createInsertSchema(weeklyScheduleLocks).omit({
+  id: true,
+  lockedAt: true,
+});
+
+export type WeeklyScheduleLock = typeof weeklyScheduleLocks.$inferSelect;
+export type InsertWeeklyScheduleLock = z.infer<typeof insertWeeklyScheduleLockSchema>;
+
+// Schedule Change Audit Trail - سجل تتبع تعديلات الجدول
+export const scheduleChangeAudit = pgTable("schedule_change_audit", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  weekStartDate: text("week_start_date").notNull(),
+  employeeId: varchar("employee_id"),
+  employeeName: text("employee_name"),
+  changeType: text("change_type").notNull(),
+  scheduleDate: text("schedule_date"),
+  oldValue: jsonb("old_value"),
+  newValue: jsonb("new_value"),
+  changedBy: varchar("changed_by").references(() => users.id),
+  changedByName: text("changed_by_name"),
+  changeReason: text("change_reason"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_schedule_audit_branch").on(table.branchId),
+  index("idx_schedule_audit_week").on(table.weekStartDate),
+  index("idx_schedule_audit_employee").on(table.employeeId),
+  index("idx_schedule_audit_date").on(table.createdAt),
+]);
+
+export const insertScheduleChangeAuditSchema = createInsertSchema(scheduleChangeAudit).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ScheduleChangeAudit = typeof scheduleChangeAudit.$inferSelect;
+export type InsertScheduleChangeAudit = z.infer<typeof insertScheduleChangeAuditSchema>;
+
 // Attendance Records - سجلات الحضور والانصراف
 export const attendanceRecords = pgTable("attendance_records", {
   id: serial("id").primaryKey(),
