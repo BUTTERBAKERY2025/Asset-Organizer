@@ -12990,22 +12990,25 @@ export async function registerRoutes(
         return res.status(403).json({ error: "غير مصرح بالوصول" });
       }
 
-      // Enforce branch and user filtering
+      // Enforce branch filtering for non-admins
       if (branchFilter.branchIds) {
         // Filter by branch
         targets = targets.filter(t => branchFilter.branchIds!.includes(t.branchId || ''));
         console.log("[cashier-shift-targets] After branch filter:", targets.length, "targets");
         
-        // Check if user is a manager (can view all in branch)
-        const permissions = await storage.getUserPermissions(user.id);
-        const salesPerms = permissions.find(p => p.module === 'sales' || p.module === 'cashier_journal');
-        const isManager = salesPerms?.actions.includes('approve') || salesPerms?.actions.includes('create');
-        
-        if (!isManager) {
-          // Cashier only sees their own targets
-          console.log("[cashier-shift-targets] Filtering by cashier ID:", user.id);
-          targets = targets.filter(t => t.cashierId === user.id);
-          console.log("[cashier-shift-targets] After cashier filter:", targets.length, "targets");
+        // Admin can see all targets in filtered branches
+        if (user.role !== 'admin' && user.role !== 'manager') {
+          // Check if user is a performance manager (can view all in branch)
+          const permissions = await storage.getUserPermissions(user.id);
+          const perfPerms = permissions.find(p => p.module === 'cashier_performance' || p.module === 'cashier_journal' || p.module === 'sales');
+          const canViewAll = perfPerms?.actions.includes('approve') || perfPerms?.actions.includes('create') || perfPerms?.actions.includes('edit');
+          
+          if (!canViewAll) {
+            // Cashier only sees their own targets
+            console.log("[cashier-shift-targets] Filtering by cashier ID:", user.id);
+            targets = targets.filter(t => t.cashierId === user.id);
+            console.log("[cashier-shift-targets] After cashier filter:", targets.length, "targets");
+          }
         }
       }
 
