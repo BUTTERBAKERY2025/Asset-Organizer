@@ -255,18 +255,25 @@ export default function CashierShiftPerformance() {
     averageTicket: number;
   }
 
-  const { data: cashierJournals = [] } = useQuery<CashierJournalReport[]>({
+  const { data: cashierJournals = [], isLoading: journalsLoading } = useQuery<CashierJournalReport[]>({
     queryKey: ["/api/cashier-journals-report", selectedBranch, reportStartDate, reportEndDate, reportCashierId],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (selectedBranch !== "all") params.append("branchId", selectedBranch);
+      if (selectedBranch && selectedBranch !== "all") params.append("branchId", selectedBranch);
       params.append("startDate", reportStartDate);
       params.append("endDate", reportEndDate);
       if (reportCashierId !== "all") params.append("cashierId", reportCashierId);
+      console.log("[cashier-journals-report] Fetching:", params.toString());
       const res = await fetch(`/api/cashier-journals-report?${params}`);
-      if (!res.ok) return [];
-      return res.json();
-    }
+      if (!res.ok) {
+        console.log("[cashier-journals-report] Error:", res.status);
+        return [];
+      }
+      const data = await res.json();
+      console.log("[cashier-journals-report] Got:", data.length, "records");
+      return data;
+    },
+    enabled: !!reportStartDate && !!reportEndDate,
   });
 
   // Calculate contribution analysis
