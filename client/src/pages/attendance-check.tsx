@@ -12,7 +12,8 @@ import { useBranches } from "@/hooks/useBranches";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "react-i18next";
-import { Clock, LogIn, LogOut, Check, Pencil, RotateCcw, Building2, User, Timer, ArrowRight, Users, Calendar, Sun, Moon, Sunrise, Loader2, MapPin, AlertTriangle } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Clock, LogIn, LogOut, Check, Pencil, RotateCcw, Building2, User, Timer, ArrowRight, Users, Calendar, Sun, Moon, Sunrise, Loader2, MapPin, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
@@ -58,15 +59,17 @@ export default function AttendanceCheckPage() {
     { value: "night", label: t("attendanceCheck.nightShift"), icon: Moon, color: "text-indigo-500" },
   ];
 
-  const today = format(new Date(), "yyyy-MM-dd");
+  const actualToday = format(new Date(), "yyyy-MM-dd");
+  const [selectedDate, setSelectedDate] = useState(actualToday);
+  const yesterday = format(new Date(new Date().setDate(new Date().getDate() - 1)), "yyyy-MM-dd");
 
   const { branches, userBranchId, canSelectBranch } = useBranches();
 
   const { data: scheduledEmployees, isLoading: loadingEmployees } = useQuery<ScheduledEmployee[]>({
-    queryKey: ["/api/scheduled-employees-for-attendance", selectedBranch, selectedShift, today],
+    queryKey: ["/api/scheduled-employees-for-attendance", selectedBranch, selectedShift, selectedDate],
     queryFn: async () => {
       if (!selectedBranch || !selectedShift) return [];
-      const res = await fetch(`/api/scheduled-employees-for-attendance?branchId=${selectedBranch}&shiftType=${selectedShift}&date=${today}`);
+      const res = await fetch(`/api/scheduled-employees-for-attendance?branchId=${selectedBranch}&shiftType=${selectedShift}&date=${selectedDate}`);
       if (!res.ok) return [];
       return res.json();
     },
@@ -391,9 +394,48 @@ export default function AttendanceCheckPage() {
                   <Calendar className="w-4 h-4" />
                   {t("common.date")}
                 </label>
-                <div className="p-3 bg-muted rounded-lg text-sm font-medium">
-                  {format(new Date(), "EEEE, dd MMMM yyyy", { locale: dateLocale })}
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-10 w-10 shrink-0"
+                    onClick={() => setSelectedDate(yesterday)}
+                    disabled={selectedDate <= yesterday}
+                    data-testid="btn-prev-day"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                  <Input
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val >= yesterday && val <= actualToday) {
+                        setSelectedDate(val);
+                      }
+                    }}
+                    min={yesterday}
+                    max={actualToday}
+                    className="h-10 text-sm text-center"
+                    data-testid="input-attendance-date"
+                  />
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-10 w-10 shrink-0"
+                    onClick={() => setSelectedDate(actualToday)}
+                    disabled={selectedDate >= actualToday}
+                    data-testid="btn-next-day"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
                 </div>
+                {selectedDate !== actualToday && (
+                  <div className="flex items-center gap-1 text-xs text-amber-600 bg-amber-50 rounded px-2 py-1">
+                    <AlertTriangle className="w-3 h-3" />
+                    <span>تاريخ سابق - {format(new Date(selectedDate + 'T00:00:00'), "EEEE, dd MMMM yyyy", { locale: dateLocale })}</span>
+                  </div>
+                )}
               </div>
             </div>
           </CardContent>
