@@ -113,9 +113,17 @@ export default function CashierJournalsPage() {
     surplusAmount: number;
     averageTicket: number;
   }>({
-    queryKey: ["/api/cashier-journals/stats/summary", { branchFilter, statusFilter, cashierFilter, dateFrom, dateTo }],
-    queryFn: async () => {
-      const url = `/api/cashier-journals/stats/summary${statsQueryString ? `?${statsQueryString}` : ""}`;
+    queryKey: ["/api/cashier-journals/stats/summary", branchFilter, statusFilter, cashierFilter, dateFrom, dateTo],
+    queryFn: async ({ queryKey }) => {
+      const [, branch, status, cashier, from, to] = queryKey as string[];
+      const params = new URLSearchParams();
+      if (branch && branch !== "all") params.set("branchId", branch);
+      if (status && status !== "all") params.set("status", status);
+      if (cashier && cashier !== "all") params.set("cashierId", cashier);
+      if (from) params.set("dateFrom", from);
+      if (to) params.set("dateTo", to);
+      const queryString = params.toString();
+      const url = `/api/cashier-journals/stats/summary${queryString ? `?${queryString}` : ""}`;
       const res = await fetch(url, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch stats");
       return res.json();
