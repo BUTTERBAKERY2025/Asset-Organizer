@@ -17,7 +17,7 @@ import { Loader2, TrendingUp, TrendingDown, DollarSign, Percent, Award, AlertTri
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart as RePieChart, Pie, Cell, LineChart, Line, AreaChart, Area, ComposedChart } from "recharts";
 import { useToast } from "@/hooks/use-toast";
 import * as XLSX from "xlsx";
-import { downloadArabicPdf, getArabicDefaultStyle, getArabicTableHeaderStyle } from "@/lib/pdfmake-arabic";
+import { downloadArabicPdf, downloadEnhancedPnLPdf, getArabicDefaultStyle, getArabicTableHeaderStyle } from "@/lib/pdfmake-arabic";
 
 const MONTHS_AR = [
   "يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو",
@@ -1721,12 +1721,13 @@ export default function PnLDashboard() {
                         try {
                           const branchLabel = selectedBranch?.name || "جميع الفروع";
                           const period = `${MONTHS_AR[selectedMonth - 1]} ${selectedYear}`;
-                          const docDef = generateEnhancedPnLPdfReport(
+                          await downloadEnhancedPnLPdf(
                             branchLabel,
                             period,
-                            enhancedPnL
+                            enhancedPnL,
+                            `تقرير_PnL_المحسن_${branchLabel}_${period}.pdf`
                           );
-                          await downloadArabicPdf(docDef, `تقرير_PnL_المحسن_${branchLabel}_${period}.pdf`);
+                          toast({ title: "تم التصدير", description: "تم تصدير التقرير بنجاح" });
                         } catch (error) {
                           console.error('PDF export error:', error);
                           toast({ title: "خطأ", description: "فشل في تصدير PDF", variant: "destructive" });
