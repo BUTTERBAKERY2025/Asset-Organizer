@@ -4191,7 +4191,7 @@ export async function registerRoutes(
   // Get cashier journal stats
   app.get("/api/cashier-journals/stats/summary", isAuthenticated, requirePermission("cashier_journal", "view"), async (req, res) => {
     try {
-      const { branchId } = req.query;
+      const { branchId, status, cashierId, dateFrom, dateTo } = req.query;
       const user = getCurrentUser(req);
       
       // SECURITY: Use getEffectiveBranchFilter for multi-branch support
@@ -4228,6 +4228,23 @@ export async function registerRoutes(
         journals = journals.filter(j => j.branchId === branchFilter.singleBranchId);
       }
       
+      // Apply additional filters to match the table view
+      if (status && status !== "all") {
+        journals = journals.filter(j => j.status === status);
+      }
+      
+      if (cashierId && cashierId !== "all") {
+        journals = journals.filter(j => String(j.cashierId) === String(cashierId));
+      }
+      
+      if (dateFrom) {
+        journals = journals.filter(j => j.journalDate >= String(dateFrom));
+      }
+      
+      if (dateTo) {
+        journals = journals.filter(j => j.journalDate <= String(dateTo));
+      }
+      
       // Calculate stats from filtered journals using COMPREHENSIVE net variance
       // Net variance = (actualCashDrawer + totalBankTerminalAmount) - (totalSales - returnAmount)
       const totalJournals = journals.length;
@@ -4248,8 +4265,12 @@ export async function registerRoutes(
       const shortageAmount = netShortages.reduce((sum, j) => sum + Math.abs(j.netVariance), 0);
       const surplusAmount = netSurpluses.reduce((sum, j) => sum + j.netVariance, 0);
       
+      // Calculate average ticket: use customer count if available, otherwise use journal count
       const totalCustomers = journals.reduce((sum, j) => sum + (j.customerCount || 0), 0);
-      const averageTicket = totalCustomers > 0 ? totalSalesSum / totalCustomers : 0;
+      // If no customer count data, calculate average per journal instead
+      const averageTicket = totalCustomers > 0 
+        ? totalSalesSum / totalCustomers 
+        : (totalJournals > 0 ? totalSalesSum / totalJournals : 0);
       
       res.json({
         totalJournals,

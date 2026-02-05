@@ -96,6 +96,14 @@ export default function CashierJournalsPage() {
   const isManager = user?.role === 'admin' || journalPerms?.actions.includes('approve');
   const canViewAllCashiers = isManager;
 
+  const statsQueryParams = new URLSearchParams();
+  if (branchFilter && branchFilter !== "all") statsQueryParams.set("branchId", branchFilter);
+  if (statusFilter && statusFilter !== "all") statsQueryParams.set("status", statusFilter);
+  if (cashierFilter && cashierFilter !== "all") statsQueryParams.set("cashierId", cashierFilter);
+  if (dateFrom) statsQueryParams.set("dateFrom", dateFrom);
+  if (dateTo) statsQueryParams.set("dateTo", dateTo);
+  const statsQueryString = statsQueryParams.toString();
+  
   const { data: stats } = useQuery<{
     totalJournals: number;
     totalSales: number;
@@ -105,7 +113,7 @@ export default function CashierJournalsPage() {
     surplusAmount: number;
     averageTicket: number;
   }>({
-    queryKey: ["/api/cashier-journals/stats/summary"],
+    queryKey: [`/api/cashier-journals/stats/summary${statsQueryString ? `?${statsQueryString}` : ""}`],
   });
 
   const approveMutation = useMutation({
@@ -401,7 +409,7 @@ export default function CashierJournalsPage() {
                     <Users className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs sm:text-sm text-muted-foreground truncate">متوسط الفاتورة</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground truncate">متوسط المبيعات/يومية</p>
                     <p className="text-base sm:text-xl font-bold truncate" data-testid="stat-average-ticket">{formatCurrency(stats.averageTicket)}</p>
                   </div>
                 </div>
