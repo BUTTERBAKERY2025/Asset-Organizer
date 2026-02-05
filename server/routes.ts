@@ -5191,11 +5191,19 @@ export async function registerRoutes(
       }
       
       const effectiveBranchId = branchFilter.singleBranchId || (branchFilter.branchIds ? branchFilter.branchIds[0] : undefined);
+      
+      // DEBUG: Log the report parameters
+      console.log("[OPS REPORT DEBUG] Params:", { branchId, startDate, endDate, effectiveBranchId });
+      
       const report = await storage.getOperationsReport({
         branchId: effectiveBranchId,
         startDate: startDate as string | undefined,
         endDate: endDate as string | undefined,
       });
+      
+      // DEBUG: Log shifts report
+      console.log("[OPS REPORT DEBUG] Shifts report:", report.shiftsReport);
+      
       res.json(report);
     } catch (error) {
       console.error("Error fetching operations reports:", error);
