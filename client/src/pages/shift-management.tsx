@@ -64,6 +64,11 @@ export default function ShiftManagementPage() {
   const [showLockedDialog, setShowLockedDialog] = useState(false);
   const [showAuditTrail, setShowAuditTrail] = useState(false);
   const [showApplyConfirmDialog, setShowApplyConfirmDialog] = useState(false);
+  
+  // Employee Report States - متغيرات تقرير الموظف التفصيلي
+  const [reportSelectedEmployee, setReportSelectedEmployee] = useState<string>("");
+  const [reportStartDate, setReportStartDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
+  const [reportEndDate, setReportEndDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -128,6 +133,31 @@ export default function ShiftManagementPage() {
       return res.json();
     },
     enabled: selectedBranch !== "all" && showAuditTrail,
+  });
+
+  // Employee Report Query - استعلام تقرير الموظف
+  const { data: employeeReportData, isLoading: isLoadingEmployeeReport } = useQuery<AttendanceRecord[]>({
+    queryKey: ["/api/attendance-report", { branchId: selectedBranch, employeeId: reportSelectedEmployee, startDate: reportStartDate, endDate: reportEndDate }],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/attendance?branchId=${selectedBranch}&startDate=${reportStartDate}&endDate=${reportEndDate}`);
+      const allRecords = await res.json();
+      // Filter by selected employee
+      const selectedEmp = filteredEmployees.find(e => String(e.id) === reportSelectedEmployee);
+      if (!selectedEmp) return [];
+      const empIdStr = reportSelectedEmployee;
+      const linkedUserId = selectedEmp.linkedUserId || empIdStr;
+      const normalizedEmpName = selectedEmp.employeeName?.trim().toLowerCase() || '';
+      return allRecords.filter((r: AttendanceRecord) => {
+        // SECURITY: فحص الفرع
+        if (selectedBranch !== "all" && r.branchId !== selectedBranch) return false;
+        if (r.branchEmployeeId && String(r.branchEmployeeId) === empIdStr) return true;
+        if (r.employeeId === linkedUserId || r.employeeId === empIdStr) return true;
+        const recordName = r.employeeName?.trim().toLowerCase() || '';
+        if (normalizedEmpName && recordName && normalizedEmpName === recordName) return true;
+        return false;
+      });
+    },
+    enabled: selectedBranch !== "all" && !!reportSelectedEmployee && !!reportStartDate && !!reportEndDate,
   });
 
   const isScheduleLocked = weeklyLock && weeklyLock.length > 0;
@@ -2568,6 +2598,280 @@ export default function ShiftManagementPage() {
                     <FileSpreadsheet className="w-4 h-4 text-green-600" />
                     تصدير تقرير الغياب Excel
                   </Button>
+                </CardContent>
+              </Card>
+
+              {/* Employee Detailed Report - تقرير الموظف التفصيلي */}
+              <Card className="border-2 border-teal-200">
+                <CardHeader className="bg-teal-50/50">
+                  <CardTitle className="flex items-center gap-2 text-teal-700">
+                    <UserCheck className="w-5 h-5" />
+                    تقرير حضور الموظف التفصيلي
+                  </CardTitle>
+                  <CardDescription>
+                    اختر التاريخ والموظف لعرض تقرير الحضور والانصراف مع التوقيع
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="pt-4 space-y-4">
+                  {/* Filters */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div>
+                      <Label className="text-sm font-medium mb-1 block">من تاريخ</Label>
+                      <Input
+                        type="date"
+                        value={reportStartDate}
+                        onChange={(e) => setReportStartDate(e.target.value)}
+                        data-testid="input-report-start-date"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium mb-1 block">إلى تاريخ</Label>
+                      <Input
+                        type="date"
+                        value={reportEndDate}
+                        onChange={(e) => setReportEndDate(e.target.value)}
+                        data-testid="input-report-end-date"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium mb-1 block">الفرع</Label>
+                      <div className="p-2 bg-muted rounded text-sm">
+                        {getBranchName(selectedBranch)}
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium mb-1 block">الموظف</Label>
+                      <Select value={reportSelectedEmployee} onValueChange={setReportSelectedEmployee}>
+                        <SelectTrigger data-testid="select-report-employee">
+                          <SelectValue placeholder="اختر الموظف" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {filteredEmployees.map((emp) => (
+                            <SelectItem key={emp.id} value={String(emp.id)}>
+                              {emp.employeeName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Report Content */}
+                  {reportSelectedEmployee && (
+                    <div className="space-y-4">
+                      {isLoadingEmployeeReport ? (
+                        <div className="text-center py-8">
+                          <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
+                          <span className="text-muted-foreground">جاري تحميل البيانات...</span>
+                        </div>
+                      ) : employeeReportData && employeeReportData.length > 0 ? (
+                        <>
+                          {/* Employee Info Header */}
+                          <div className="bg-teal-50 rounded-lg p-4 border border-teal-200">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <h3 className="font-bold text-lg">
+                                  {filteredEmployees.find(e => String(e.id) === reportSelectedEmployee)?.employeeName}
+                                </h3>
+                                <p className="text-sm text-muted-foreground">
+                                  الفترة: {format(parseISO(reportStartDate), "dd/MM/yyyy")} - {format(parseISO(reportEndDate), "dd/MM/yyyy")}
+                                </p>
+                              </div>
+                              <Badge className="bg-teal-100 text-teal-700">
+                                {employeeReportData.length} سجل حضور
+                              </Badge>
+                            </div>
+                          </div>
+
+                          {/* Attendance Table */}
+                          <div className="rounded-md border max-h-[400px] overflow-y-auto">
+                            <Table>
+                              <TableHeader className="sticky top-0 bg-background">
+                                <TableRow>
+                                  <TableHead className="text-right">التاريخ</TableHead>
+                                  <TableHead className="text-center">الدوام المحدد</TableHead>
+                                  <TableHead className="text-center">وقت الحضور</TableHead>
+                                  <TableHead className="text-center">وقت الانصراف</TableHead>
+                                  <TableHead className="text-center">ساعات العمل</TableHead>
+                                  <TableHead className="text-center">الحالة</TableHead>
+                                  <TableHead className="text-center">التوقيع</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {employeeReportData.map((record, idx) => {
+                                  const scheduledTime = record.scheduledStartTime && record.scheduledEndTime 
+                                    ? `${record.scheduledStartTime} - ${record.scheduledEndTime}` 
+                                    : "-";
+                                  
+                                  let workMinutes = 0;
+                                  if (record.actualCheckIn && record.actualCheckOut) {
+                                    const [inH, inM] = record.actualCheckIn.split(':').map(Number);
+                                    const [outH, outM] = record.actualCheckOut.split(':').map(Number);
+                                    workMinutes = (outH * 60 + outM) - (inH * 60 + inM);
+                                    if (workMinutes < 0) workMinutes += 24 * 60;
+                                  }
+                                  const workHours = Math.floor(workMinutes / 60);
+                                  const workMins = workMinutes % 60;
+
+                                  let status = "غائب";
+                                  let statusColor = "bg-red-100 text-red-700";
+                                  if (record.actualCheckIn && record.actualCheckOut) {
+                                    status = "مكتمل";
+                                    statusColor = "bg-green-100 text-green-700";
+                                  } else if (record.actualCheckIn) {
+                                    status = "حاضر";
+                                    statusColor = "bg-amber-100 text-amber-700";
+                                  }
+
+                                  const hasSignature = record.checkInSignature || record.checkOutSignature;
+
+                                  return (
+                                    <TableRow key={idx}>
+                                      <TableCell className="font-medium">
+                                        <div>
+                                          <div>{format(parseISO(record.attendanceDate), "dd/MM/yyyy")}</div>
+                                          <div className="text-xs text-muted-foreground">
+                                            {format(parseISO(record.attendanceDate), "EEEE", { locale: ar })}
+                                          </div>
+                                        </div>
+                                      </TableCell>
+                                      <TableCell className="text-center text-sm">{scheduledTime}</TableCell>
+                                      <TableCell className="text-center font-medium text-green-600">
+                                        {record.actualCheckIn || "-"}
+                                      </TableCell>
+                                      <TableCell className="text-center font-medium text-red-600">
+                                        {record.actualCheckOut || "-"}
+                                      </TableCell>
+                                      <TableCell className="text-center">
+                                        {workMinutes > 0 ? `${workHours}س ${workMins}د` : "-"}
+                                      </TableCell>
+                                      <TableCell className="text-center">
+                                        <Badge className={statusColor}>{status}</Badge>
+                                      </TableCell>
+                                      <TableCell className="text-center">
+                                        {hasSignature ? (
+                                          <Badge className="bg-blue-100 text-blue-700 gap-1">
+                                            <Check className="w-3 h-3" />
+                                            موقع
+                                          </Badge>
+                                        ) : (
+                                          <Badge variant="outline" className="text-muted-foreground">
+                                            <X className="w-3 h-3" />
+                                          </Badge>
+                                        )}
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })}
+                              </TableBody>
+                            </Table>
+                          </div>
+
+                          {/* Summary Stats */}
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {(() => {
+                              const totalDays = employeeReportData.length;
+                              const completeDays = employeeReportData.filter(r => r.actualCheckIn && r.actualCheckOut).length;
+                              const partialDays = employeeReportData.filter(r => r.actualCheckIn && !r.actualCheckOut).length;
+                              const signedDays = employeeReportData.filter(r => r.checkInSignature || r.checkOutSignature).length;
+                              
+                              let totalWorkMinutes = 0;
+                              employeeReportData.forEach(record => {
+                                if (record.actualCheckIn && record.actualCheckOut) {
+                                  const [inH, inM] = record.actualCheckIn.split(':').map(Number);
+                                  const [outH, outM] = record.actualCheckOut.split(':').map(Number);
+                                  let mins = (outH * 60 + outM) - (inH * 60 + inM);
+                                  if (mins < 0) mins += 24 * 60;
+                                  totalWorkMinutes += mins;
+                                }
+                              });
+                              const totalHours = Math.floor(totalWorkMinutes / 60);
+                              const totalMins = totalWorkMinutes % 60;
+
+                              return (
+                                <>
+                                  <div className="bg-blue-50 rounded-lg p-3 text-center">
+                                    <div className="text-2xl font-bold text-blue-600">{totalDays}</div>
+                                    <div className="text-xs text-muted-foreground">إجمالي الأيام</div>
+                                  </div>
+                                  <div className="bg-green-50 rounded-lg p-3 text-center">
+                                    <div className="text-2xl font-bold text-green-600">{completeDays}</div>
+                                    <div className="text-xs text-muted-foreground">أيام مكتملة</div>
+                                  </div>
+                                  <div className="bg-purple-50 rounded-lg p-3 text-center">
+                                    <div className="text-2xl font-bold text-purple-600">{totalHours}س {totalMins}د</div>
+                                    <div className="text-xs text-muted-foreground">ساعات العمل</div>
+                                  </div>
+                                  <div className="bg-teal-50 rounded-lg p-3 text-center">
+                                    <div className="text-2xl font-bold text-teal-600">{signedDays}</div>
+                                    <div className="text-xs text-muted-foreground">أيام موقعة</div>
+                                  </div>
+                                </>
+                              );
+                            })()}
+                          </div>
+
+                          {/* Export Button */}
+                          <Button 
+                            variant="outline" 
+                            className="w-full gap-2"
+                            onClick={() => {
+                              try {
+                                const selectedEmp = filteredEmployees.find(e => String(e.id) === reportSelectedEmployee);
+                                const reportData = employeeReportData.map(record => {
+                                  let workMinutes = 0;
+                                  if (record.actualCheckIn && record.actualCheckOut) {
+                                    const [inH, inM] = record.actualCheckIn.split(':').map(Number);
+                                    const [outH, outM] = record.actualCheckOut.split(':').map(Number);
+                                    workMinutes = (outH * 60 + outM) - (inH * 60 + inM);
+                                    if (workMinutes < 0) workMinutes += 24 * 60;
+                                  }
+                                  const workHours = Math.floor(workMinutes / 60);
+                                  const workMins = workMinutes % 60;
+
+                                  return {
+                                    "التاريخ": format(parseISO(record.attendanceDate), "dd/MM/yyyy"),
+                                    "اليوم": format(parseISO(record.attendanceDate), "EEEE", { locale: ar }),
+                                    "الدوام المحدد": record.scheduledStartTime && record.scheduledEndTime 
+                                      ? `${record.scheduledStartTime} - ${record.scheduledEndTime}` 
+                                      : "-",
+                                    "وقت الحضور": record.actualCheckIn || "-",
+                                    "وقت الانصراف": record.actualCheckOut || "-",
+                                    "ساعات العمل": workMinutes > 0 ? `${workHours}:${workMins.toString().padStart(2, '0')}` : "-",
+                                    "الحالة": record.actualCheckIn && record.actualCheckOut ? "مكتمل" : record.actualCheckIn ? "حاضر" : "غائب",
+                                    "التوقيع": record.checkInSignature || record.checkOutSignature ? "موقع" : "غير موقع"
+                                  };
+                                });
+                                const ws = XLSX.utils.json_to_sheet(reportData);
+                                const wb = XLSX.utils.book_new();
+                                XLSX.utils.book_append_sheet(wb, ws, "تقرير الموظف");
+                                XLSX.writeFile(wb, `تقرير_${selectedEmp?.employeeName}_${reportStartDate}_${reportEndDate}.xlsx`);
+                                toast({ title: "تم تصدير التقرير بنجاح" });
+                              } catch (error) {
+                                toast({ title: "خطأ", description: "فشل في تصدير التقرير", variant: "destructive" });
+                              }
+                            }}
+                            data-testid="btn-export-employee-report-excel"
+                          >
+                            <FileSpreadsheet className="w-4 h-4 text-green-600" />
+                            تصدير تقرير الموظف Excel
+                          </Button>
+                        </>
+                      ) : (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <UserCheck className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                          <p>لا توجد سجلات حضور للموظف في الفترة المحددة</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {!reportSelectedEmployee && (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <UserCheck className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                      <p>اختر الموظف لعرض تقرير الحضور التفصيلي</p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
