@@ -73,6 +73,9 @@ export default function CashierShiftPerformance() {
   });
   const [reportEndDate, setReportEndDate] = useState(today);
   const [reportCashierId, setReportCashierId] = useState<string>("all");
+  
+  // Targets tab specific filter
+  const [targetCashierId, setTargetCashierId] = useState<string>("all");
   const [newTarget, setNewTarget] = useState({
     cashierId: "",
     branchId: "",
@@ -104,6 +107,12 @@ export default function CashierShiftPerformance() {
       setSelectedBranch("all");
     }
   }, [userBranchId, canSelectBranch]);
+
+  // Reset cashier filters when branch changes
+  useEffect(() => {
+    setTargetCashierId("all");
+    setReportCashierId("all");
+  }, [selectedBranch]);
 
   const { data: allUsers = [] } = useQuery<User[]>({
     queryKey: ["/api/users"],
@@ -930,9 +939,62 @@ export default function CashierShiftPerformance() {
           </TabsList>
 
           <TabsContent value="targets" className="space-y-4">
+            {/* فلتر الأهداف */}
+            <Card className="bg-gradient-to-l from-amber-50 to-white border-amber-200">
+              <CardContent className="p-4">
+                <div className="flex flex-wrap items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <Target className="h-4 w-4 text-amber-600" />
+                    <span className="text-sm font-medium text-amber-700">فلترة الأهداف</span>
+                  </div>
+                  <div className="flex items-center gap-2 flex-1 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <Label className="text-xs text-gray-600">الفرع:</Label>
+                      <Select 
+                        value={selectedBranch} 
+                        onValueChange={setSelectedBranch}
+                        disabled={!canSelectBranch}
+                      >
+                        <SelectTrigger className="w-40 h-9 text-sm bg-white" data-testid="select-targets-branch">
+                          <SelectValue placeholder="اختر الفرع" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {canSelectBranch && <SelectItem value="all">جميع الفروع</SelectItem>}
+                          {branches.map((b) => (
+                            <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Label className="text-xs text-gray-600">الكاشير:</Label>
+                      <Select value={targetCashierId} onValueChange={setTargetCashierId}>
+                        <SelectTrigger className="w-40 h-9 text-sm bg-white" data-testid="select-targets-cashier">
+                          <SelectValue placeholder="جميع الكاشيرين" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">جميع الكاشيرين</SelectItem>
+                          {reportBranchCashiers.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.firstName || c.username} {c.lastName || ''}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  {selectedBranch && selectedBranch !== "all" && (
+                    <Badge variant="secondary" className="bg-amber-100 text-amber-700">
+                      {branches.find(b => b.id === selectedBranch)?.name}
+                    </Badge>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader>
+              <Card className="border-amber-200">
+                <CardHeader className="bg-gradient-to-l from-amber-50 to-transparent pb-3">
                   <CardTitle className="flex items-center gap-2">
                     <Sun className="h-5 w-5 text-amber-500" />
                     الشفت الصباحي
@@ -940,13 +1002,13 @@ export default function CashierShiftPerformance() {
                   <CardDescription>أهداف وأداء الكاشيرين في الفترة الصباحية</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {shiftTargets.filter(t => t.shiftType === 'morning').length === 0 ? (
+                  {shiftTargets.filter(t => t.shiftType === 'morning' && (targetCashierId === 'all' || t.cashierId === targetCashierId)).length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground">
                       لا توجد أهداف للشفت الصباحي
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      {shiftTargets.filter(t => t.shiftType === 'morning').map((target) => {
+                      {shiftTargets.filter(t => t.shiftType === 'morning' && (targetCashierId === 'all' || t.cashierId === targetCashierId)).map((target) => {
                         const actualSales = getCashierActualSales(target.cashierId || '', 'morning');
                         const achieved = actualSales.totalSales;
                         const dailyTarget = Number(target.targetAmount);
@@ -1069,8 +1131,8 @@ export default function CashierShiftPerformance() {
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader>
+              <Card className="border-indigo-200">
+                <CardHeader className="bg-gradient-to-l from-indigo-50 to-transparent pb-3">
                   <CardTitle className="flex items-center gap-2">
                     <Moon className="h-5 w-5 text-indigo-500" />
                     الشفت المسائي
@@ -1078,13 +1140,13 @@ export default function CashierShiftPerformance() {
                   <CardDescription>أهداف وأداء الكاشيرين في الفترة المسائية</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {shiftTargets.filter(t => t.shiftType === 'evening').length === 0 ? (
+                  {shiftTargets.filter(t => t.shiftType === 'evening' && (targetCashierId === 'all' || t.cashierId === targetCashierId)).length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground">
                       لا توجد أهداف للشفت المسائي
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      {shiftTargets.filter(t => t.shiftType === 'evening').map((target) => {
+                      {shiftTargets.filter(t => t.shiftType === 'evening' && (targetCashierId === 'all' || t.cashierId === targetCashierId)).map((target) => {
                         const actualSales = getCashierActualSales(target.cashierId || '', 'evening');
                         const achieved = actualSales.totalSales;
                         const dailyTarget = Number(target.targetAmount);
@@ -1364,41 +1426,63 @@ export default function CashierShiftPerformance() {
 
           {/* تقرير الكاشير التفصيلي */}
           <TabsContent value="cashier-report" className="space-y-4">
-            <Card>
-              <CardHeader className="pb-3">
+            <Card className="border-blue-200">
+              <CardHeader className="pb-3 bg-gradient-to-l from-blue-50 to-transparent">
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <Receipt className="h-5 w-5" />
+                  <Receipt className="h-5 w-5 text-blue-600" />
                   تقرير الكاشير التفصيلي
                 </CardTitle>
                 <CardDescription>عرض يوميات كل كاشير حسب الفترة المختارة</CardDescription>
               </CardHeader>
               <CardContent>
                 {/* Filters */}
-                <div className="flex flex-wrap items-center gap-3 mb-4 p-3 bg-gray-50 rounded-lg">
+                <div className="flex flex-wrap items-center gap-4 mb-4 p-4 bg-gradient-to-l from-blue-50 to-gray-50 rounded-lg border border-blue-100">
                   <div className="flex items-center gap-2">
-                    <Label className="text-xs">من:</Label>
+                    <Calendar className="h-4 w-4 text-blue-500" />
+                    <span className="text-sm font-medium text-blue-700">الفترة:</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label className="text-xs text-gray-600">من:</Label>
                     <Input 
                       type="date" 
                       value={reportStartDate}
                       onChange={(e) => setReportStartDate(e.target.value)}
-                      className="w-32 h-9 text-sm"
+                      className="w-36 h-9 text-sm bg-white"
                       data-testid="input-report-start"
                     />
                   </div>
                   <div className="flex items-center gap-2">
-                    <Label className="text-xs">إلى:</Label>
+                    <Label className="text-xs text-gray-600">إلى:</Label>
                     <Input 
                       type="date" 
                       value={reportEndDate}
                       onChange={(e) => setReportEndDate(e.target.value)}
-                      className="w-32 h-9 text-sm"
+                      className="w-36 h-9 text-sm bg-white"
                       data-testid="input-report-end"
                     />
                   </div>
                   <div className="flex items-center gap-2">
-                    <Label className="text-xs">الكاشير:</Label>
+                    <Label className="text-xs text-gray-600">الفرع:</Label>
+                    <Select 
+                      value={selectedBranch} 
+                      onValueChange={setSelectedBranch}
+                      disabled={!canSelectBranch}
+                    >
+                      <SelectTrigger className="w-40 h-9 text-sm bg-white" data-testid="select-report-branch">
+                        <SelectValue placeholder="اختر الفرع" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {canSelectBranch && <SelectItem value="all">جميع الفروع</SelectItem>}
+                        {branches.map((b) => (
+                          <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label className="text-xs text-gray-600">الكاشير:</Label>
                     <Select value={reportCashierId} onValueChange={setReportCashierId}>
-                      <SelectTrigger className="w-40 h-9 text-sm" data-testid="select-report-cashier">
+                      <SelectTrigger className="w-40 h-9 text-sm bg-white" data-testid="select-report-cashier">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -1411,6 +1495,9 @@ export default function CashierShiftPerformance() {
                       </SelectContent>
                     </Select>
                   </div>
+                  {journalsLoading && (
+                    <RefreshCw className="h-4 w-4 text-blue-500 animate-spin" />
+                  )}
                 </div>
 
                 {/* Report Table */}
@@ -1470,36 +1557,63 @@ export default function CashierShiftPerformance() {
 
           {/* نسبة مساهمة الكاشير */}
           <TabsContent value="contribution" className="space-y-4">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Users className="h-5 w-5" />
-                  نسبة مساهمة الكاشير من المبيعات
-                </CardTitle>
-                <CardDescription>قياس مساهمة كل كاشير من إجمالي مبيعات الفرع للفترة المختارة</CardDescription>
+            <Card className="border-purple-200">
+              <CardHeader className="pb-3 bg-gradient-to-l from-purple-50 to-transparent">
+                <div className="flex items-center justify-between flex-wrap gap-4">
+                  <div>
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <Trophy className="h-5 w-5 text-purple-600" />
+                      نسبة مساهمة الكاشير من المبيعات
+                    </CardTitle>
+                    <CardDescription>قياس مساهمة كل كاشير من إجمالي مبيعات الفرع للفترة المختارة</CardDescription>
+                  </div>
+                  {/* Filters inline */}
+                  <div className="flex items-center gap-3">
+                    <Select 
+                      value={selectedBranch} 
+                      onValueChange={setSelectedBranch}
+                      disabled={!canSelectBranch}
+                    >
+                      <SelectTrigger className="w-36 h-8 text-xs bg-white" data-testid="select-contribution-branch">
+                        <SelectValue placeholder="الفرع" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {canSelectBranch && <SelectItem value="all">جميع الفروع</SelectItem>}
+                        {branches.map((b) => (
+                          <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
                 {/* Summary Cards */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                  <div className="bg-blue-50 p-3 rounded-lg text-center">
-                    <p className="text-xs text-blue-600">إجمالي المبيعات</p>
-                    <p className="text-lg font-bold text-blue-700">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-xl text-center border border-blue-200 shadow-sm">
+                    <DollarSign className="h-6 w-6 text-blue-600 mx-auto mb-1" />
+                    <p className="text-xs text-blue-600 font-medium">إجمالي المبيعات</p>
+                    <p className="text-xl font-bold text-blue-700">
                       {formatCurrency(contributionData.reduce((s, c) => s + c.totalSales, 0))}
                     </p>
                   </div>
-                  <div className="bg-green-50 p-3 rounded-lg text-center">
-                    <p className="text-xs text-green-600">عدد الكاشيرين</p>
-                    <p className="text-lg font-bold text-green-700">{contributionData.length}</p>
+                  <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-xl text-center border border-green-200 shadow-sm">
+                    <Users className="h-6 w-6 text-green-600 mx-auto mb-1" />
+                    <p className="text-xs text-green-600 font-medium">عدد الكاشيرين</p>
+                    <p className="text-xl font-bold text-green-700">{contributionData.length}</p>
                   </div>
-                  <div className="bg-amber-50 p-3 rounded-lg text-center">
-                    <p className="text-xs text-amber-600">عدد الحركات</p>
-                    <p className="text-lg font-bold text-amber-700">
+                  <div className="bg-gradient-to-br from-amber-50 to-amber-100 p-4 rounded-xl text-center border border-amber-200 shadow-sm">
+                    <Receipt className="h-6 w-6 text-amber-600 mx-auto mb-1" />
+                    <p className="text-xs text-amber-600 font-medium">عدد الحركات</p>
+                    <p className="text-xl font-bold text-amber-700">
                       {contributionData.reduce((s, c) => s + c.transactionCount, 0)}
                     </p>
                   </div>
-                  <div className="bg-purple-50 p-3 rounded-lg text-center">
-                    <p className="text-xs text-purple-600">الفترة</p>
-                    <p className="text-sm font-bold text-purple-700">{reportStartDate} - {reportEndDate}</p>
+                  <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-xl text-center border border-purple-200 shadow-sm">
+                    <Calendar className="h-6 w-6 text-purple-600 mx-auto mb-1" />
+                    <p className="text-xs text-purple-600 font-medium">الفترة</p>
+                    <p className="text-sm font-bold text-purple-700">{reportStartDate}</p>
+                    <p className="text-sm font-bold text-purple-700">{reportEndDate}</p>
                   </div>
                 </div>
 
