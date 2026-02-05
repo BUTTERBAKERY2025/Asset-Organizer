@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useBranches } from "@/hooks/useBranches";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -89,6 +90,7 @@ export default function CashierShiftPerformance() {
 
   const { user } = useAuth();
   const { branches, userBranchId, canSelectBranch } = useBranches();
+  const { canCreate, canEdit, canDelete } = usePermissions();
 
   const selectedBranchData = useMemo(() => {
     if (selectedBranch === "all") return null;
@@ -557,6 +559,8 @@ export default function CashierShiftPerformance() {
               <RefreshCw className="h-4 w-4 ml-1 sm:ml-2" />
               <span className="hidden sm:inline">تحديث</span>
             </Button>
+            {/* Only show add target button if user has create permission */}
+            {canCreate("sales") && (
             <Dialog open={showTargetDialog} onOpenChange={(open) => {
               setShowTargetDialog(open);
               if (!open) {
@@ -777,6 +781,7 @@ export default function CashierShiftPerformance() {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
+            )}
           </div>
         </div>
 
@@ -961,6 +966,7 @@ export default function CashierShiftPerformance() {
                                 <Badge className={ALERT_COLORS[getAlertLevel(percent)].badge}>
                                   {percent.toFixed(0)}%
                                 </Badge>
+                                {canEdit("sales") && (
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -970,6 +976,7 @@ export default function CashierShiftPerformance() {
                                 >
                                   <Pencil className="h-4 w-4 text-gray-500" />
                                 </Button>
+                                )}
                               </div>
                             </div>
                             
@@ -1097,6 +1104,7 @@ export default function CashierShiftPerformance() {
                                 <Badge className={ALERT_COLORS[getAlertLevel(percent)].badge}>
                                   {percent.toFixed(0)}%
                                 </Badge>
+                                {canEdit("sales") && (
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -1106,6 +1114,7 @@ export default function CashierShiftPerformance() {
                                 >
                                   <Pencil className="h-4 w-4 text-gray-500" />
                                 </Button>
+                                )}
                               </div>
                             </div>
                             
