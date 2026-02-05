@@ -125,10 +125,14 @@ export default function CashierJournalsPage() {
       if (cashier && cashier !== "all") params.set("cashierId", cashier);
       if (from) params.set("dateFrom", from);
       if (to) params.set("dateTo", to);
+      // Add timestamp to bypass browser cache
+      params.set("_t", Date.now().toString());
       const queryString = params.toString();
-      const url = `/api/cashier-journals/stats/summary${queryString ? `?${queryString}` : ""}`;
-      console.log("[DEBUG] Fetching stats from:", url);
-      const res = await fetch(url, { credentials: "include" });
+      const url = `/api/cashier-journals/stats/summary?${queryString}`;
+      const res = await fetch(url, { 
+        credentials: "include",
+        cache: "no-store"
+      });
       if (!res.ok) throw new Error("Failed to fetch stats");
       return res.json();
     },
