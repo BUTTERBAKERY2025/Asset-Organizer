@@ -1,4 +1,20 @@
 import memoize from "memoizee";
+
+// Helper function to get Saudi Arabia time (UTC+3)
+function getSaudiArabiaTime(): { date: string; time: string; timeShort: string } {
+  const now = new Date();
+  // Create a date string in Saudi Arabia timezone
+  const saudiTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Riyadh' }));
+  const date = saudiTime.toISOString().split('T')[0];
+  const hours = saudiTime.getHours().toString().padStart(2, '0');
+  const minutes = saudiTime.getMinutes().toString().padStart(2, '0');
+  const seconds = saudiTime.getSeconds().toString().padStart(2, '0');
+  return {
+    date,
+    time: `${hours}:${minutes}:${seconds}`,
+    timeShort: `${hours}:${minutes}`
+  };
+}
 import { 
   type Branch, 
   type InsertBranch,
@@ -7432,8 +7448,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async checkIn(employeeId: string, branchId: string, signature?: string, deviceInfo?: string): Promise<AttendanceRecord> {
-    const today = new Date().toISOString().split('T')[0];
-    const now = new Date().toTimeString().split(' ')[0];
+    const saudiTime = getSaudiArabiaTime();
+    const today = saudiTime.date;
+    const now = saudiTime.time;
     
     const employee = await this.getUser(employeeId);
     if (!employee) {
@@ -7477,8 +7494,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async checkOut(employeeId: string, signature?: string): Promise<AttendanceRecord | undefined> {
-    const today = new Date().toISOString().split('T')[0];
-    const now = new Date().toTimeString().split(' ')[0];
+    const saudiTime = getSaudiArabiaTime();
+    const today = saudiTime.date;
+    const now = saudiTime.time;
     
     const existing = await this.getAttendanceByEmployeeAndDate(employeeId, today);
     if (!existing) return undefined;
@@ -7621,8 +7639,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async checkInEmployee(employeeId: string, branchId: string, signature?: string, scheduleId?: number, scheduledStartTime?: string, scheduledEndTime?: string, employeeNameParam?: string): Promise<AttendanceRecord> {
-    const today = new Date().toISOString().split('T')[0];
-    const now = new Date().toTimeString().split(' ')[0].substring(0, 5);
+    const saudiTime = getSaudiArabiaTime();
+    const today = saudiTime.date;
+    const now = saudiTime.timeShort;
     
     let employeeName = employeeNameParam || 'Unknown';
     
@@ -7700,8 +7719,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async checkOutEmployee(employeeId: string, signature?: string, scheduleId?: number): Promise<AttendanceRecord | undefined> {
-    const today = new Date().toISOString().split('T')[0];
-    const now = new Date().toTimeString().split(' ')[0].substring(0, 5);
+    const saudiTime = getSaudiArabiaTime();
+    const today = saudiTime.date;
+    const now = saudiTime.timeShort;
     
     const existing = await this.getAttendanceByEmployeeAndDate(employeeId, today);
     if (!existing) return undefined;
