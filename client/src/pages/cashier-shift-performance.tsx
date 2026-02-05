@@ -107,11 +107,19 @@ export default function CashierShiftPerformance() {
     queryKey: ["/api/users"],
   });
 
-  // Filter cashiers by selected branch in the dialog
+  // Filter cashiers by selected branch in the dialog (for adding targets)
   const branchCashiers = useMemo(() => {
     if (!newTarget.branchId) return [];
     return allUsers.filter(u => u.branchId === newTarget.branchId && u.isActive === 'active');
   }, [allUsers, newTarget.branchId]);
+
+  // Filter cashiers for report tab (based on selected branch filter)
+  const reportBranchCashiers = useMemo(() => {
+    if (selectedBranch === "all") {
+      return allUsers.filter(u => u.isActive === 'active');
+    }
+    return allUsers.filter(u => u.branchId === selectedBranch && u.isActive === 'active');
+  }, [allUsers, selectedBranch]);
 
   const { data: shiftTargets = [], isLoading: targetsLoading, refetch: refetchTargets } = useQuery<CashierShiftTarget[]>({
     queryKey: ["/api/cashier-shift-targets", selectedBranch, selectedDate, selectedShift],
@@ -1379,7 +1387,7 @@ export default function CashierShiftPerformance() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">جميع الكاشيرين</SelectItem>
-                        {branchCashiers.map((c) => (
+                        {reportBranchCashiers.map((c) => (
                           <SelectItem key={c.id} value={c.id}>
                             {c.firstName || c.username} {c.lastName || ''}
                           </SelectItem>
