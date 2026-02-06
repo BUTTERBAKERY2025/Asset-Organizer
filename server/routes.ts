@@ -3761,6 +3761,17 @@ export async function registerRoutes(
         }
       }
       
+      // SECURITY: Non-admin/manager users can only view their own journals
+      const user = getCurrentUser(req);
+      if (user.role !== 'admin' && user.role !== 'manager') {
+        const permissions = await storage.getUserPermissions(user.id);
+        const journalPerms = permissions.find(p => p.module === 'cashier_journal');
+        const isManager = journalPerms?.actions.includes('approve') || journalPerms?.actions.includes('edit');
+        if (!isManager && String(journal.cashierId) !== String(user.id)) {
+          return res.status(403).json({ error: "غير مصرح بالوصول - يمكنك فقط عرض يومياتك الخاصة" });
+        }
+      }
+      
       // Get related payment breakdowns and signatures
       const [paymentBreakdowns, signatures] = await Promise.all([
         storage.getPaymentBreakdowns(id),
@@ -3904,6 +3915,16 @@ export async function registerRoutes(
           return res.status(403).json({ error: "غير مصرح بتعديل سجل هذا الفرع" });
         }
       }
+      // SECURITY: Non-admin/manager can only edit their own journals
+      const user = getCurrentUser(req);
+      if (user.role !== 'admin' && user.role !== 'manager') {
+        const permissions = await storage.getUserPermissions(user.id);
+        const journalPerms = permissions.find(p => p.module === 'cashier_journal');
+        const isManager = journalPerms?.actions.includes('approve');
+        if (!isManager && String(existing.cashierId) !== String(user.id)) {
+          return res.status(403).json({ error: "غير مصرح - يمكنك فقط تعديل يومياتك الخاصة" });
+        }
+      }
       if (existing.status !== 'draft') {
         return res.status(400).json({ error: "Cannot edit posted, submitted or approved journal" });
       }
@@ -4043,6 +4064,17 @@ export async function registerRoutes(
         const hasAccess = await canAccessBranch(req, existing.branchId);
         if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بالوصول لهذا اليومية" });
+        }
+      }
+      
+      // SECURITY: Non-admin/manager can only submit their own journals
+      const user = getCurrentUser(req);
+      if (user.role !== 'admin' && user.role !== 'manager') {
+        const permissions = await storage.getUserPermissions(user.id);
+        const journalPerms = permissions.find(p => p.module === 'cashier_journal');
+        const isManager = journalPerms?.actions.includes('approve') || journalPerms?.actions.includes('edit');
+        if (!isManager && String(existing.cashierId) !== String(user.id)) {
+          return res.status(403).json({ error: "غير مصرح - يمكنك فقط تقديم يومياتك الخاصة" });
         }
       }
       
@@ -4327,6 +4359,17 @@ export async function registerRoutes(
         journals = journals.filter(j => branchFilter.branchIds!.includes(j.branchId));
       }
       
+      // SECURITY: Non-admin/manager users can only see their own payment breakdowns
+      const user = getCurrentUser(req);
+      if (user.role !== 'admin' && user.role !== 'manager') {
+        const permissions = await storage.getUserPermissions(user.id);
+        const journalPerms = permissions.find(p => p.module === 'cashier_journal');
+        const isManager = journalPerms?.actions.includes('approve');
+        if (!isManager) {
+          journals = journals.filter(j => String(j.cashierId) === String(user.id));
+        }
+      }
+      
       // Apply date filter
       if (startDate && typeof startDate === 'string') {
         journals = journals.filter(j => j.journalDate && j.journalDate >= startDate);
@@ -4376,6 +4419,17 @@ export async function registerRoutes(
         const hasAccess = await canAccessBranch(req, journal.branchId);
         if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بالوصول لهذا اليومية" });
+        }
+      }
+      
+      // SECURITY: Non-admin/manager can only view their own journal attachments
+      const user = getCurrentUser(req);
+      if (user.role !== 'admin' && user.role !== 'manager') {
+        const permissions = await storage.getUserPermissions(user.id);
+        const journalPerms = permissions.find(p => p.module === 'cashier_journal');
+        const isManager = journalPerms?.actions.includes('approve') || journalPerms?.actions.includes('edit');
+        if (!isManager && String(journal.cashierId) !== String(user.id)) {
+          return res.status(403).json({ error: "غير مصرح - يمكنك فقط عرض مرفقات يومياتك الخاصة" });
         }
       }
       
@@ -5513,9 +5567,20 @@ export async function registerRoutes(
         conditions.push(lte(cashierSalesJournals.journalDate, endDate as string));
       }
       
-      const journals = await db.select()
+      let journals = await db.select()
         .from(cashierSalesJournals)
         .where(conditions.length > 0 ? and(...conditions) : undefined);
+      
+      // SECURITY: Non-admin/manager users can only see their own mismatch data
+      const user = getCurrentUser(req);
+      if (user.role !== 'admin' && user.role !== 'manager') {
+        const permissions = await storage.getUserPermissions(user.id);
+        const journalPerms = permissions.find(p => p.module === 'cashier_journal');
+        const isManager = journalPerms?.actions.includes('approve');
+        if (!isManager) {
+          journals = journals.filter(j => String(j.cashierId) === String(user.id));
+        }
+      }
       
       if (journals.length === 0) {
         return res.json({
@@ -6264,6 +6329,17 @@ export async function registerRoutes(
         awards = awards.filter(a => branchFilter.branchIds!.includes(a.branchId || ''));
       }
       
+      // SECURITY: Non-admin/manager users can only see their own awards
+      const user = getCurrentUser(req);
+      if (user.role !== 'admin' && user.role !== 'manager') {
+        const permissions = await storage.getUserPermissions(user.id);
+        const opsPerms = permissions.find(p => p.module === 'operations' || p.module === 'cashier_journal');
+        const canViewAll = opsPerms?.actions.includes('approve') || opsPerms?.actions.includes('edit');
+        if (!canViewAll) {
+          awards = awards.filter(a => String(a.cashierId) === String(user.id));
+        }
+      }
+      
       if (cashierId) {
         awards = awards.filter(a => a.cashierId === cashierId);
       }
@@ -6530,12 +6606,27 @@ export async function registerRoutes(
       
       const allLeaderboard = await storage.getLeaderboard(yearMonth as string);
       // Filter both branches and cashiers arrays
-      const leaderboard = branchFilter.branchIds 
+      let leaderboard = branchFilter.branchIds 
         ? {
             branches: allLeaderboard.branches.filter((b: any) => branchFilter.branchIds!.includes(b.branchId || '')),
             cashiers: allLeaderboard.cashiers.filter((c: any) => branchFilter.branchIds!.includes(c.branchId || '')),
           }
         : allLeaderboard;
+      
+      // SECURITY: Non-admin/manager users can only see their own cashier leaderboard data
+      const user = getCurrentUser(req);
+      if (user.role !== 'admin' && user.role !== 'manager') {
+        const permissions = await storage.getUserPermissions(user.id);
+        const opsPerms = permissions.find(p => p.module === 'operations' || p.module === 'cashier_journal');
+        const canViewAll = opsPerms?.actions.includes('approve') || opsPerms?.actions.includes('edit');
+        if (!canViewAll) {
+          leaderboard = {
+            ...leaderboard,
+            cashiers: leaderboard.cashiers.filter((c: any) => String(c.cashierId) === String(user.id)),
+          };
+        }
+      }
+      
       res.json(leaderboard);
     } catch (error) {
       console.error("Error fetching leaderboard:", error);
@@ -7098,13 +7189,24 @@ export async function registerRoutes(
       }
       
       const effectiveBranchId = branchFilter.singleBranchId;
-      const data = await storage.getCashierLeaderboard(
+      let data = await storage.getCashierLeaderboard(
         effectiveBranchId,
         fromDate as string,
         toDate as string,
         status as string | undefined,
         discrepancyType as string | undefined
       );
+      
+      // SECURITY: Non-admin/manager users can only see their own leaderboard data
+      const user = getCurrentUser(req);
+      if (user.role !== 'admin' && user.role !== 'manager') {
+        const permissions = await storage.getUserPermissions(user.id);
+        const opsPerms = permissions.find(p => p.module === 'operations' || p.module === 'cashier_journal');
+        const canViewAll = opsPerms?.actions.includes('approve') || opsPerms?.actions.includes('edit');
+        if (!canViewAll) {
+          data = data.filter((d: any) => String(d.cashierId) === String(user.id));
+        }
+      }
       
       // Get incentive tiers to enrich the leaderboard
       const incentiveTiers = await storage.getActiveIncentiveTiers();
@@ -7284,7 +7386,7 @@ export async function registerRoutes(
       const effectiveBranchId = branchFilter.singleBranchId;
       const validGroupBy = ['shift', 'cashier', 'date'].includes(groupBy as string) ? groupBy as 'shift' | 'cashier' | 'date' : 'shift';
       
-      const data = await storage.getAverageTicketAnalysis(
+      let data = await storage.getAverageTicketAnalysis(
         effectiveBranchId,
         validGroupBy,
         fromDate as string,
@@ -7292,6 +7394,20 @@ export async function registerRoutes(
         status as string | undefined,
         discrepancyType as string | undefined
       );
+      
+      // SECURITY: When groupBy=cashier, non-admin/manager users can only see their own data
+      if (validGroupBy === 'cashier') {
+        const user = getCurrentUser(req);
+        if (user.role !== 'admin' && user.role !== 'manager') {
+          const permissions = await storage.getUserPermissions(user.id);
+          const opsPerms = permissions.find(p => p.module === 'operations' || p.module === 'cashier_journal');
+          const canViewAll = opsPerms?.actions.includes('approve') || opsPerms?.actions.includes('edit');
+          if (!canViewAll) {
+            data = data.filter((d: any) => String(d.cashierId) === String(user.id));
+          }
+        }
+      }
+      
       res.json(data);
     } catch (error) {
       console.error("Error fetching average ticket analysis:", error);
