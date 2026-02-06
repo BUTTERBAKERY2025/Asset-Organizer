@@ -3690,45 +3690,45 @@ export class DatabaseStorage implements IStorage {
       .map(([date, data]) => ({ date, quantity: data.quantity, orders: data.orders }))
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    // OPTIMIZED: Shifts Report with SQL WHERE
-    const shiftConditions: any[] = [];
-    if (branchId) shiftConditions.push(eq(shifts.branchId, branchId));
-    if (startDate) shiftConditions.push(gte(shifts.date, startDate));
-    if (endDate) shiftConditions.push(lte(shifts.date, endDate));
+    // Shifts Report - using employee_schedules table (main schedule data)
+    const scheduleConditions: any[] = [];
+    if (branchId) scheduleConditions.push(eq(employeeSchedules.branchId, branchId));
+    if (startDate) scheduleConditions.push(gte(employeeSchedules.scheduleDate, startDate));
+    if (endDate) scheduleConditions.push(lte(employeeSchedules.scheduleDate, endDate));
 
-    const allShifts = await db.select()
-      .from(shifts)
-      .where(shiftConditions.length > 0 ? and(...shiftConditions) : undefined);
+    const allSchedules = await db.select()
+      .from(employeeSchedules)
+      .where(scheduleConditions.length > 0 ? and(...scheduleConditions) : undefined);
 
-    const totalShifts = allShifts.length;
+    const workSchedules = allSchedules.filter(s => !s.isOff);
+    const uniqueShiftDays = new Set(workSchedules.map(s => `${s.branchId}_${s.scheduleDate}_${s.shiftType}`));
+    const totalShifts = uniqueShiftDays.size;
     
-    // OPTIMIZED: Get all shift employees in one query instead of N+1
-    const shiftIds = allShifts.map(s => s.id);
-    let allShiftEmployees: any[] = [];
-    if (shiftIds.length > 0) {
-      allShiftEmployees = await db.select()
-        .from(shiftEmployees)
-        .where(inArray(shiftEmployees.shiftId, shiftIds));
-    }
+    const shiftsWithEmployeesMap = new Map<string, Set<string>>();
+    workSchedules.forEach(s => {
+      const key = `${s.branchId}_${s.scheduleDate}_${s.shiftType}`;
+      if (!shiftsWithEmployeesMap.has(key)) shiftsWithEmployeesMap.set(key, new Set());
+      shiftsWithEmployeesMap.get(key)!.add(s.employeeId);
+    });
+    const shiftsWithEmployees = Array.from(shiftsWithEmployeesMap.values()).filter(empSet => empSet.size > 0).length;
+    const totalEmployeeAssignments = workSchedules.length;
     
-    const shiftsWithEmployeesSet = new Set(allShiftEmployees.map(e => e.shiftId));
-    const shiftsWithEmployees = shiftsWithEmployeesSet.size;
-    const totalEmployeeAssignments = allShiftEmployees.length;
-    
-    const roleCounts: Record<string, number> = {};
-    for (const emp of allShiftEmployees) {
-      if (emp.role) {
-        roleCounts[emp.role] = (roleCounts[emp.role] || 0) + 1;
-      }
-    }
-
     const shiftTypeCounts: Record<string, number> = {};
-    allShifts.forEach(s => {
-      const shiftName = s.name || 'غير محدد';
-      shiftTypeCounts[shiftName] = (shiftTypeCounts[shiftName] || 0) + 1;
+    workSchedules.forEach(s => {
+      const type = s.shiftType === 'morning' ? 'صباحي' : s.shiftType === 'evening' ? 'مسائي' : s.shiftType === 'night' ? 'ليلي' : (s.shiftType || 'غير محدد');
+      shiftTypeCounts[type] = (shiftTypeCounts[type] || 0) + 1;
     });
     const shiftsByType = Object.entries(shiftTypeCounts).map(([type, count]) => ({ type, count }));
-    const employeesByRole = Object.entries(roleCounts).map(([role, count]) => ({ role, count }));
+
+    const roleCounts: Record<string, number> = {};
+    workSchedules.forEach(s => {
+      const empName = s.employeeName || 'غير محدد';
+      roleCounts[empName] = (roleCounts[empName] || 0) + 1;
+    });
+    const employeesByRole = Object.entries(roleCounts)
+      .map(([role, count]) => ({ role, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 20);
 
     // Branch Comparison - SECURITY: Only include authorized branches
     const allBranches = await this.getAllBranches();
