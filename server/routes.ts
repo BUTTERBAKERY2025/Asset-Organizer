@@ -4807,7 +4807,7 @@ export async function registerRoutes(
   // Get all branch daily closures
   app.get("/api/branch-daily-closures", isAuthenticated, requirePermission("daily_closures", "view"), async (req, res) => {
     try {
-      const { branchId, startDate, endDate, status, page, limit: limitParam } = req.query;
+      const { branchId, startDate, endDate, status, page, limit: limitParam, search, discrepancy } = req.query;
       
       // SECURITY: Apply branch filter
       const queryBranchId = branchId as string | undefined;
@@ -4819,7 +4819,7 @@ export async function registerRoutes(
       
       // SECURITY: Pagination to prevent DoS from large result sets
       const pageNum = Math.max(1, parseInt(page as string, 10) || 1);
-      const pageSize = Math.min(100, Math.max(1, parseInt(limitParam as string, 10) || 50));
+      const pageSize = Math.min(100, Math.max(1, parseInt(limitParam as string, 10) || 25));
       const offset = (pageNum - 1) * pageSize;
       
       let conditions: SQL[] = [];
@@ -4828,7 +4828,7 @@ export async function registerRoutes(
       } else if (branchFilter.branchIds) {
         conditions.push(inArray(branchDailyClosures.branchId, branchFilter.branchIds));
       }
-      if (status) {
+      if (status && status !== 'all') {
         conditions.push(eq(branchDailyClosures.status, status as string));
       }
       if (startDate && typeof startDate === 'string') {
@@ -4837,17 +4837,58 @@ export async function registerRoutes(
       if (endDate && typeof endDate === 'string') {
         conditions.push(lte(branchDailyClosures.closureDate, endDate));
       }
+      if (discrepancy && discrepancy !== 'all') {
+        conditions.push(eq(branchDailyClosures.cashDiscrepancyStatus, discrepancy as string));
+      }
+      if (search && typeof search === 'string' && search.trim()) {
+        const term = search.trim();
+        conditions.push(
+          or(
+            sql`${branchDailyClosures.closureDate}::text ILIKE ${'%' + term + '%'}`,
+            sql`${branchDailyClosures.branchId} IN (SELECT id FROM branches WHERE name ILIKE ${'%' + term + '%'})`,
+          )!
+        );
+      }
       
       const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+      
+      const [countResult] = await db.select({ count: sql<number>`count(*)::int` })
+        .from(branchDailyClosures)
+        .where(whereClause);
+      
+      const totalCount = countResult?.count || 0;
       
       const closures = await db.select()
         .from(branchDailyClosures)
         .where(whereClause)
-        .orderBy(desc(branchDailyClosures.closureDate))
+        .orderBy(desc(branchDailyClosures.closureDate), desc(branchDailyClosures.createdAt))
         .limit(pageSize)
         .offset(offset);
       
-      res.json(closures);
+      const allFiltered = await db.select({
+        totalSales: sql<number>`COALESCE(SUM(${branchDailyClosures.totalSales}), 0)::numeric`,
+        cashTotal: sql<number>`COALESCE(SUM(${branchDailyClosures.cashTotal}), 0)::numeric`,
+        networkTotal: sql<number>`COALESCE(SUM(${branchDailyClosures.networkTotal}), 0)::numeric`,
+        totalCashDiscrepancy: sql<number>`COALESCE(SUM(${branchDailyClosures.totalCashDiscrepancy}), 0)::numeric`,
+        totalBankDiscrepancy: sql<number>`COALESCE(SUM(${branchDailyClosures.totalBankDiscrepancy}), 0)::numeric`,
+        totalCustomerCount: sql<number>`COALESCE(SUM(${branchDailyClosures.totalCustomerCount}), 0)::int`,
+        journalsCount: sql<number>`COALESCE(SUM(${branchDailyClosures.journalsCount}), 0)::int`,
+      }).from(branchDailyClosures).where(whereClause);
+      
+      res.json({
+        closures,
+        pagination: {
+          page: pageNum,
+          limit: pageSize,
+          total: totalCount,
+          totalPages: Math.ceil(totalCount / pageSize),
+        },
+        totals: allFiltered[0] || {
+          totalSales: 0, cashTotal: 0, networkTotal: 0,
+          totalCashDiscrepancy: 0, totalBankDiscrepancy: 0,
+          totalCustomerCount: 0, journalsCount: 0,
+        },
+      });
     } catch (error) {
       console.error("Error fetching branch daily closures:", error);
       res.status(500).json({ error: "Failed to fetch branch daily closures" });
