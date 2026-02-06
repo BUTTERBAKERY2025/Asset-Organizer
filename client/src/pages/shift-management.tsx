@@ -3036,7 +3036,7 @@ export default function ShiftManagementPage() {
                             <div className="flex items-center justify-between">
                               <div>
                                 <h3 className="font-bold text-lg">
-                                  {filteredEmployees.find(e => String(e.id) === reportSelectedEmployee)?.employeeName}
+                                  {filteredEmployees.find(e => String(e.id) === signatureReportEmployee)?.employeeName}
                                 </h3>
                                 <p className="text-sm text-muted-foreground">
                                   الفترة: {format(parseISO(reportStartDate), "dd/MM/yyyy")} - {format(parseISO(reportEndDate), "dd/MM/yyyy")}
@@ -3183,7 +3183,7 @@ export default function ShiftManagementPage() {
                               className="flex-1 gap-2"
                               onClick={() => {
                                 try {
-                                  const selectedEmp = filteredEmployees.find(e => String(e.id) === reportSelectedEmployee);
+                                  const selectedEmp = filteredEmployees.find(e => String(e.id) === signatureReportEmployee);
                                   const reportData = employeeReportData.map(record => {
                                     let workMinutes = 0;
                                     if (record.actualCheckIn && record.actualCheckOut) {
@@ -3228,7 +3228,7 @@ export default function ShiftManagementPage() {
                               className="flex-1 gap-2"
                               onClick={async () => {
                                 try {
-                                  const selectedEmp = filteredEmployees.find(e => String(e.id) === reportSelectedEmployee);
+                                  const selectedEmp = filteredEmployees.find(e => String(e.id) === signatureReportEmployee);
                                   if (!selectedEmp || !employeeReportData) return;
                                   
                                   // Calculate summary
@@ -3324,7 +3324,7 @@ export default function ShiftManagementPage() {
                     </div>
                   )}
 
-                  {!reportSelectedEmployee && (
+                  {!signatureReportEmployee && (
                     <div className="text-center py-8 text-muted-foreground">
                       <UserCheck className="w-12 h-12 mx-auto mb-2 opacity-50" />
                       <p>اختر الموظف لعرض تقرير الحضور التفصيلي</p>
