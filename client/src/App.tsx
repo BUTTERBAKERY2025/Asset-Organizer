@@ -56,6 +56,7 @@ const CashierJournalsPage = lazy(() => import("@/pages/cashier-journals"));
 const CashierJournalFormPage = lazy(() => import("@/pages/cashier-journal-form"));
 const BranchDailyClosingPage = lazy(() => import("@/pages/branch-daily-closing"));
 const BranchDailyClosuresPage = lazy(() => import("@/pages/branch-daily-closures"));
+const BranchDailyClosureDetailPage = lazy(() => import("@/pages/branch-daily-closure-detail"));
 const OperationsEmployeesPage = lazy(() => import("@/pages/operations-employees"));
 const TargetsPlanningPage = lazy(() => import("@/pages/targets-planning"));
 const TargetsDashboardPage = lazy(() => import("@/pages/targets-dashboard"));
@@ -245,6 +246,7 @@ function Router() {
       <Route path="/cashier-journals">{() => <ModulePage component={CashierJournalsPage} module="cashier_journal" />}</Route>
       <Route path="/cashier-journals/new">{() => <ModulePage component={CashierJournalFormPage} module="cashier_journal" />}</Route>
       <Route path="/cashier-journals/:id">{() => <ModulePage component={CashierJournalFormPage} module="cashier_journal" />}</Route>
+      <Route path="/branch-daily-closures/:id">{() => <ModulePage component={BranchDailyClosureDetailPage} module="cashier_journal" />}</Route>
       <Route path="/branch-daily-closures">{() => <ModulePage component={BranchDailyClosuresPage} module="cashier_journal" />}</Route>
       <Route path="/branch-daily-closing">{() => <ModulePage component={BranchDailyClosingPage} module="cashier_journal" />}</Route>
       <Route path="/sales-analytics">{() => <ModulePage component={SalesAnalyticsPage} module="sales_analytics" />}</Route>
