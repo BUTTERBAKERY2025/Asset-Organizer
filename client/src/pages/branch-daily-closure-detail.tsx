@@ -175,6 +175,231 @@ export default function BranchDailyClosureDetailPage() {
     XLSX.writeFile(wb, `${fileName}.xlsx`);
   };
 
+  const exportClosurePdf = () => {
+    if (!closure) return;
+    const cardMethods = ['mada', 'visa', 'mastercard', 'amex', 'card_other', 'card', 'apple_pay', 'stc_pay'];
+    const today = new Date().toLocaleDateString('ar-SA');
+    const closureDateFormatted = closure.closureDate;
+    const statusLabel = closure.status === 'closed' ? 'مغلق' : 'مفتوح';
+    const totalTx = closure.totalTransactionCount || 0;
+    const avgTicket = totalTx > 0 ? (closure.totalSales || 0) / totalTx : 0;
+
+    const journalRows = (closure.journals || []).map((j: any) => {
+      const shiftLabel = j.shiftType === 'morning' ? 'صباحي' : j.shiftType === 'evening' ? 'مسائي' : j.shiftType === 'night' ? 'ليلي' : (j.shiftType || '-');
+      const expectedCash = (j.expectedCash != null && j.expectedCash !== 0) ? j.expectedCash : ((j.openingBalance || 0) + (j.cashTotal || 0));
+      const cashDisc = (j.actualCashDrawer || 0) - expectedCash;
+      const bankDisc = j.computedBankDiscrepancy ?? j.bankDiscrepancyTotal ?? 0;
+      const netDisc = cashDisc + bankDisc;
+      const statusText = j.status === 'approved' ? 'معتمدة' : j.status === 'submitted' ? 'مقدمة' : j.status === 'draft' ? 'مسودة' : j.status === 'posted' ? 'مرحّلة' : (j.status || '-');
+      return `<tr>
+        <td>${j.cashierName || '-'}</td>
+        <td>${shiftLabel}</td>
+        <td>${formatCurrency(j.totalSales)}</td>
+        <td>${formatCurrency(j.cashTotal)}</td>
+        <td>${formatCurrency(j.networkTotal)}</td>
+        <td class="${cashDisc > 0.5 ? 'text-orange' : cashDisc < -0.5 ? 'text-red' : 'text-green'}">${formatCurrency(cashDisc)}</td>
+        <td class="${bankDisc > 0.5 ? 'text-orange' : bankDisc < -0.5 ? 'text-red' : 'text-green'}">${formatCurrency(bankDisc)}</td>
+        <td class="bold ${netDisc > 0.5 ? 'text-orange' : netDisc < -0.5 ? 'text-red' : 'text-green'}">${formatCurrency(netDisc)}</td>
+        <td>${statusText}</td>
+      </tr>`;
+    }).join('');
+
+    const totalCashDisc = (closure.journals || []).reduce((s: number, j: any) => {
+      const exp = (j.expectedCash != null && j.expectedCash !== 0) ? j.expectedCash : ((j.openingBalance || 0) + (j.cashTotal || 0));
+      return s + ((j.actualCashDrawer || 0) - exp);
+    }, 0);
+    const totalBankDisc = (closure.journals || []).reduce((s: number, j: any) => s + (j.computedBankDiscrepancy ?? j.bankDiscrepancyTotal ?? 0), 0);
+    const totalNetDisc = totalCashDisc + totalBankDisc;
+
+    const paymentRows = (closure.payments || []).map((p: any) => {
+      const methodLabel = PAYMENT_METHOD_LABELS[p.paymentMethod] || p.paymentMethod;
+      const isCard = cardMethods.includes(p.paymentMethod);
+      const posAmt = p.totalPosAmount || p.totalAmount || 0;
+      const termAmt = p.totalTerminalAmount || 0;
+      const disc = isCard ? (termAmt - posAmt) : 0;
+      return `<tr>
+        <td>${methodLabel}</td>
+        <td>${formatCurrency(p.totalAmount || 0)}</td>
+        <td>${isCard ? formatCurrency(posAmt) : '-'}</td>
+        <td>${isCard ? formatCurrency(termAmt) : '-'}</td>
+        <td class="${disc > 0.5 ? 'text-orange' : disc < -0.5 ? 'text-red' : 'text-green'}">${isCard ? formatCurrency(disc) : '-'}</td>
+      </tr>`;
+    }).join('');
+
+    const html = `<!DOCTYPE html>
+    <html dir="rtl" lang="ar">
+    <head>
+      <meta charset="UTF-8">
+      <title>بيان الإغلاق اليومي - ${branchName} - ${closureDateFormatted}</title>
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+        * { font-family: 'Cairo', 'Arial', sans-serif; direction: rtl; box-sizing: border-box; margin: 0; padding: 0; }
+        body { padding: 25px; font-size: 12px; background: white; color: #333; }
+        .header { display: flex; justify-content: space-between; border-bottom: 3px solid #D4AF37; padding-bottom: 15px; margin-bottom: 20px; }
+        .company-name { font-size: 18px; font-weight: bold; color: #D4AF37; }
+        .company-name-en { font-size: 11px; color: #666; }
+        .sub-text { font-size: 10px; color: #888; }
+        .report-title { font-size: 16px; font-weight: bold; color: #333; }
+        .section-header { background: #f8f9fa; padding: 10px 14px; font-weight: bold; font-size: 13px; margin: 18px 0 10px; border-right: 4px solid #D4AF37; }
+        .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+        .kpi-box { background: #f8f9fa; border-radius: 8px; padding: 12px; text-align: center; border: 1px solid #eee; }
+        .kpi-label { font-size: 10px; color: #888; margin-bottom: 4px; }
+        .kpi-value { font-size: 16px; font-weight: bold; }
+        .kpi-green { color: #28a745; }
+        .kpi-blue { color: #4f46e5; }
+        .kpi-emerald { color: #059669; }
+        .kpi-amber { color: #d97706; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 18px; font-size: 11px; }
+        th { background: #f3f4f6; padding: 8px 6px; border: 1px solid #ddd; font-weight: bold; text-align: center; }
+        td { padding: 7px 6px; border: 1px solid #ddd; text-align: center; }
+        .text-right { text-align: right; }
+        .text-green { color: #28a745; }
+        .text-red { color: #dc3545; }
+        .text-orange { color: #d97706; }
+        .bold { font-weight: bold; }
+        .totals-row { background: #f0f0f0; font-weight: bold; }
+        .status-badge { display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 10px; font-weight: bold; }
+        .status-open { background: #fff3cd; color: #856404; }
+        .status-closed { background: #d4edda; color: #155724; }
+        .footer { text-align: center; margin-top: 30px; font-size: 10px; color: #aaa; border-top: 1px solid #eee; padding-top: 10px; }
+        @media print { body { padding: 0; } @page { margin: 1cm; size: A4 landscape; } }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <div>
+          <div class="company-name">شركة الزبد الأفضل التجارية</div>
+          <div class="company-name-en">Best Butter Trading Co.</div>
+          <div class="sub-text">سجل تجاري: 7026155296</div>
+        </div>
+        <div style="text-align: left;">
+          <div class="report-title">بيان الإغلاق اليومي</div>
+          <div>الفرع: ${branchName}</div>
+          <div>التاريخ: ${closureDateFormatted}</div>
+          <div>الحالة: <span class="status-badge ${closure.status === 'closed' ? 'status-closed' : 'status-open'}">${statusLabel}</span></div>
+          <div class="sub-text">تاريخ التصدير: ${today}</div>
+        </div>
+      </div>
+
+      <div class="section-header">ملخص الإغلاق اليومي</div>
+      <div class="kpi-grid">
+        <div class="kpi-box">
+          <div class="kpi-label">إجمالي المبيعات</div>
+          <div class="kpi-value kpi-green">${formatCurrency(closure.totalSales)} ر.س</div>
+        </div>
+        <div class="kpi-box">
+          <div class="kpi-label">النقدي</div>
+          <div class="kpi-value kpi-emerald">${formatCurrency(closure.cashTotal)} ر.س</div>
+        </div>
+        <div class="kpi-box">
+          <div class="kpi-label">الشبكة</div>
+          <div class="kpi-value kpi-blue">${formatCurrency(closure.networkTotal)} ر.س</div>
+        </div>
+        <div class="kpi-box">
+          <div class="kpi-label">التوصيل</div>
+          <div class="kpi-value kpi-amber">${formatCurrency(closure.deliveryTotal)} ر.س</div>
+        </div>
+      </div>
+      <div class="kpi-grid">
+        <div class="kpi-box">
+          <div class="kpi-label">عدد العمليات</div>
+          <div class="kpi-value">${totalTx}</div>
+        </div>
+        <div class="kpi-box">
+          <div class="kpi-label">متوسط الفاتورة</div>
+          <div class="kpi-value">${formatCurrency(avgTicket)} ر.س</div>
+        </div>
+        <div class="kpi-box">
+          <div class="kpi-label">عدد اليوميات</div>
+          <div class="kpi-value">${closure.journalsCount || (closure.journals || []).length}</div>
+        </div>
+        <div class="kpi-box">
+          <div class="kpi-label">عدد العملاء</div>
+          <div class="kpi-value">${closure.totalCustomerCount || 0}</div>
+        </div>
+      </div>
+
+      <div class="section-header">فروقات النقدي والشبكة</div>
+      <table>
+        <tr>
+          <th>البيان</th>
+          <th>المتوقع</th>
+          <th>الفعلي</th>
+          <th>الفرق</th>
+          <th>الحالة</th>
+        </tr>
+        <tr>
+          <td class="text-right bold">النقدي</td>
+          <td>${formatCurrency(closure.totalExpectedCash)}</td>
+          <td>${formatCurrency(closure.totalActualCash)}</td>
+          <td class="bold ${(closure.totalCashDiscrepancy || 0) > 0.5 ? 'text-orange' : (closure.totalCashDiscrepancy || 0) < -0.5 ? 'text-red' : 'text-green'}">${formatCurrency(closure.totalCashDiscrepancy)} ر.س</td>
+          <td>${(closure.totalCashDiscrepancy || 0) > 0.5 ? 'زيادة' : (closure.totalCashDiscrepancy || 0) < -0.5 ? 'عجز' : 'مطابق'}</td>
+        </tr>
+        <tr>
+          <td class="text-right bold">الشبكة (البنك)</td>
+          <td>${formatCurrency(closure.totalBankPosAmount)}</td>
+          <td>${formatCurrency(closure.totalBankTerminalAmount)}</td>
+          <td class="bold ${(closure.totalBankDiscrepancy || 0) > 0.5 ? 'text-orange' : (closure.totalBankDiscrepancy || 0) < -0.5 ? 'text-red' : 'text-green'}">${formatCurrency(closure.totalBankDiscrepancy)} ر.س</td>
+          <td>${(closure.totalBankDiscrepancy || 0) > 0.5 ? 'زيادة' : (closure.totalBankDiscrepancy || 0) < -0.5 ? 'عجز' : 'مطابق'}</td>
+        </tr>
+      </table>
+
+      ${(closure.journals && closure.journals.length > 0) ? `
+      <div class="section-header">اليوميات المرتبطة (${closure.journals.length})</div>
+      <table>
+        <tr>
+          <th>الكاشير</th>
+          <th>الوردية</th>
+          <th>إجمالي المبيعات</th>
+          <th>النقدي</th>
+          <th>الشبكة</th>
+          <th>فرق النقدي</th>
+          <th>فرق الشبكة</th>
+          <th>صافي الفرق</th>
+          <th>الحالة</th>
+        </tr>
+        ${journalRows}
+        <tr class="totals-row">
+          <td colspan="3">الإجمالي</td>
+          <td>${formatCurrency((closure.journals || []).reduce((s: number, j: any) => s + (j.cashTotal || 0), 0))}</td>
+          <td>${formatCurrency((closure.journals || []).reduce((s: number, j: any) => s + (j.networkTotal || 0), 0))}</td>
+          <td class="${totalCashDisc > 0.5 ? 'text-orange' : totalCashDisc < -0.5 ? 'text-red' : 'text-green'}">${formatCurrency(totalCashDisc)}</td>
+          <td class="${totalBankDisc > 0.5 ? 'text-orange' : totalBankDisc < -0.5 ? 'text-red' : 'text-green'}">${formatCurrency(totalBankDisc)}</td>
+          <td class="bold ${totalNetDisc > 0.5 ? 'text-orange' : totalNetDisc < -0.5 ? 'text-red' : 'text-green'}">${formatCurrency(totalNetDisc)} ${totalNetDisc > 0.5 ? '(زيادة)' : totalNetDisc < -0.5 ? '(عجز)' : '(مطابق)'}</td>
+          <td></td>
+        </tr>
+      </table>` : ''}
+
+      ${(closure.payments && closure.payments.length > 0) ? `
+      <div class="section-header">تفصيل طرق الدفع</div>
+      <table>
+        <tr>
+          <th>طريقة الدفع</th>
+          <th>المبلغ (ر.س)</th>
+          <th>مبلغ الكاشير</th>
+          <th>مبلغ الجهاز</th>
+          <th>الفرق</th>
+        </tr>
+        ${paymentRows}
+      </table>` : ''}
+
+      <div class="footer">
+        تم إنشاء هذا التقرير آلياً من نظام باتر - ${today}
+      </div>
+
+      <script>window.onload = function() { window.print(); };</script>
+    </body>
+    </html>`;
+
+    const printWindow = window.open('', '_blank', 'width=1000,height=700');
+    if (printWindow) {
+      printWindow.document.write(html);
+      printWindow.document.close();
+    } else {
+      alert('يرجى السماح بالنوافذ المنبثقة لتصدير التقرير');
+    }
+  };
+
   const formatDate = (dateStr: string) => {
     try {
       const parts = dateStr.split("-");
@@ -248,10 +473,16 @@ export default function BranchDailyClosureDetailPage() {
               </div>
             </div>
           </div>
-          <Badge variant={statusInfo.variant} className="text-sm gap-1 px-3 py-1" data-testid="badge-status">
-            <StatusIcon className="w-4 h-4" />
-            {statusInfo.label}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" className="gap-1" onClick={exportClosurePdf} data-testid="button-export-pdf">
+              <Download className="w-4 h-4" />
+              تصدير PDF
+            </Button>
+            <Badge variant={statusInfo.variant} className="text-sm gap-1 px-3 py-1" data-testid="badge-status">
+              <StatusIcon className="w-4 h-4" />
+              {statusInfo.label}
+            </Badge>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -508,12 +739,22 @@ export default function BranchDailyClosureDetailPage() {
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="bg-slate-50 rounded-lg p-3 text-center">
-            <p className="text-xs text-muted-foreground">متوسط الفاتورة</p>
-            <p className="text-lg font-bold">{formatCurrency(closure.averageTicket)} ر.س</p>
+            <p className="text-xs text-muted-foreground">إجمالي المبيعات</p>
+            <p className="text-lg font-bold">{formatCurrency(closure.totalSales)} ر.س</p>
           </div>
           <div className="bg-slate-50 rounded-lg p-3 text-center">
             <p className="text-xs text-muted-foreground">عدد العمليات</p>
             <p className="text-lg font-bold">{closure.totalTransactionCount || 0}</p>
+          </div>
+          <div className="bg-slate-50 rounded-lg p-3 text-center">
+            <p className="text-xs text-muted-foreground">متوسط الفاتورة</p>
+            <p className="text-lg font-bold">
+              {formatCurrency(
+                (closure.totalTransactionCount && closure.totalTransactionCount > 0)
+                  ? (closure.totalSales || 0) / closure.totalTransactionCount
+                  : 0
+              )} ر.س
+            </p>
           </div>
           {closure.closedBy && (
             <div className="bg-slate-50 rounded-lg p-3 text-center">
