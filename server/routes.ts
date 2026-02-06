@@ -2743,7 +2743,7 @@ export async function registerRoutes(
         totalRecords: totalRecords || 0,
         processedRecords: 0,
         failedRecords: 0,
-        importedBy: req.user?.id || null,
+        importedBy: req.currentUser?.id || null,
       });
       res.status(201).json(job);
     } catch (error) {
@@ -2773,7 +2773,7 @@ export async function registerRoutes(
         branchId: branchId || null,
         data,
         status: 'completed',
-        exportedBy: req.user?.id || null,
+        exportedBy: req.currentUser?.id || null,
       });
       
       res.json({ export: exportRecord, data });
@@ -2794,7 +2794,7 @@ export async function registerRoutes(
         dateTo,
         data,
         status: 'completed',
-        exportedBy: req.user?.id || null,
+        exportedBy: req.currentUser?.id || null,
       });
       
       res.json({ export: exportRecord, data });
@@ -2813,7 +2813,7 @@ export async function registerRoutes(
         exportType: 'project_costs',
         data,
         status: 'completed',
-        exportedBy: req.user?.id || null,
+        exportedBy: req.currentUser?.id || null,
       });
       
       res.json({ export: exportRecord, data });
@@ -2977,7 +2977,7 @@ export async function registerRoutes(
       
       const validatedData = insertShiftSchema.parse({
         ...req.body,
-        createdBy: req.user?.id,
+        createdBy: req.currentUser?.id,
       });
       const shift = await storage.createShift(validatedData);
       res.status(201).json(shift);
@@ -3298,7 +3298,7 @@ export async function registerRoutes(
       
       const validatedData = insertProductionOrderSchema.parse({
         ...req.body,
-        createdBy: req.user?.id,
+        createdBy: req.currentUser?.id,
       });
       const order = await storage.createProductionOrder(validatedData);
       res.status(201).json(order);
@@ -13066,6 +13066,17 @@ export async function registerRoutes(
     try {
       const { cashierId } = req.params;
       const { startDate, endDate } = req.query;
+      const user = getCurrentUser(req);
+      
+      // SECURITY: Non-admin/manager cashiers can only view their own targets
+      if (user.role !== 'admin' && user.role !== 'manager') {
+        const permissions = await storage.getUserPermissions(user.id);
+        const perfPerms = permissions.find((p: any) => p.module === 'cashier_performance' || p.module === 'cashier_journal' || p.module === 'sales');
+        const canViewAll = perfPerms?.actions.includes('approve') || perfPerms?.actions.includes('create') || perfPerms?.actions.includes('edit');
+        if (!canViewAll && cashierId !== user.id) {
+          return res.status(403).json({ error: "غير مصرح - يمكنك فقط عرض أهدافك الخاصة" });
+        }
+      }
       
       let targets = await storage.getCashierShiftTargetsByCashier(
         cashierId, 
@@ -13260,7 +13271,19 @@ export async function registerRoutes(
           : 0;
       }
 
-      const result = Object.values(salesByCashier);
+      let result = Object.values(salesByCashier);
+      
+      // SECURITY: Non-admin/manager cashiers can only view their own sales
+      const user = getCurrentUser(req);
+      if (user.role !== 'admin' && user.role !== 'manager') {
+        const permissions = await storage.getUserPermissions(user.id);
+        const perfPerms = permissions.find((p: any) => p.module === 'cashier_performance' || p.module === 'cashier_journal' || p.module === 'sales');
+        const canViewAll = perfPerms?.actions.includes('approve') || perfPerms?.actions.includes('create') || perfPerms?.actions.includes('edit');
+        if (!canViewAll) {
+          result = result.filter(r => r.cashierId === user.id);
+        }
+      }
+      
       console.log("[cashier-performance-sales] Result:", result.length, "records");
       res.json(result);
     } catch (error) {
@@ -17327,7 +17350,7 @@ export async function registerRoutes(
   app.delete("/api/branch-employees/:id", isAuthenticated, async (req, res) => {
     try {
       // التحقق من صلاحية مدير النظام فقط
-      const userRole = req.currentUser?.role || req.user?.role;
+      const userRole = req.currentUser?.role;
       if (userRole !== "admin") {
         return res.status(403).json({ error: "غير مصرح - يمكن لمدير النظام فقط حذف الموظفين" });
       }
@@ -19196,7 +19219,7 @@ export async function registerRoutes(
 
   app.post("/api/social-posts", isAuthenticated, async (req, res) => {
     try {
-      const userId = (req.user as any)?.id;
+      const userId = req.currentUser?.id;
       const postData = { ...req.body, createdBy: userId };
       const post = await storage.createSocialPost(postData);
       res.status(201).json(post);
@@ -19320,7 +19343,7 @@ export async function registerRoutes(
 
   app.post("/api/social-templates", isAuthenticated, async (req, res) => {
     try {
-      const userId = (req.user as any)?.id;
+      const userId = req.currentUser?.id;
       const templateData = { ...req.body, createdBy: userId };
       const template = await storage.createSocialTemplate(templateData);
       res.status(201).json(template);
@@ -19421,7 +19444,7 @@ export async function registerRoutes(
 
   app.post("/api/finished-goods-inventory/from-batch/:batchId", isAuthenticated, async (req, res) => {
     try {
-      const user = req.user as any;
+      const user = req.currentUser;
       const batchId = parseInt(req.params.batchId);
       
       if (isNaN(batchId) || batchId <= 0) {
@@ -19431,7 +19454,7 @@ export async function registerRoutes(
       const inventoryItem = await storage.addProductionToFinishedGoods(
         batchId,
         user?.id,
-        user?.fullName || user?.username
+        [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username
       );
       
       res.status(201).json(inventoryItem);
@@ -19446,7 +19469,7 @@ export async function registerRoutes(
 
   app.post("/api/finished-goods-inventory/:id/transfer", isAuthenticated, async (req, res) => {
     try {
-      const user = req.user as any;
+      const user = req.currentUser;
       const inventoryId = parseInt(req.params.id);
       const { quantity, destinationType, destinationBranchId, notes } = req.body;
       
@@ -19494,7 +19517,7 @@ export async function registerRoutes(
         destinationBranchId,
         notes,
         user?.id,
-        user?.fullName || user?.username
+        [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username
       );
       
       res.status(201).json(transfer);
@@ -19622,7 +19645,7 @@ export async function registerRoutes(
 
   app.post("/api/warehouse/items", isAuthenticated, requirePermission("warehouse", "create"), async (req, res) => {
     try {
-      const user = req.user as any;
+      const user = req.currentUser;
       const item = await storage.createWarehouseItem({
         ...req.body,
         createdBy: user?.id
@@ -19690,7 +19713,7 @@ export async function registerRoutes(
         }
       }
       
-      const user = req.user as any;
+      const user = req.currentUser;
       const { quantity, dailyConsumption } = req.body;
       const stock = await storage.updateBranchStock(
         branchId,
@@ -19819,7 +19842,7 @@ export async function registerRoutes(
 
   app.post("/api/warehouse/material-transfers", isAuthenticated, requirePermission("warehouse", "create"), async (req, res) => {
     try {
-      const user = req.user as any;
+      const user = req.currentUser;
       const { items, ...transferData } = req.body;
       
       // SECURITY: Apply branch filter
@@ -19835,7 +19858,7 @@ export async function registerRoutes(
         ...transferData,
         transferNumber,
         createdBy: user?.id,
-        createdByName: user?.fullName || user?.username
+        createdByName: [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username
       }, items || []);
       
       res.status(201).json(transfer);
@@ -19847,7 +19870,7 @@ export async function registerRoutes(
 
   app.put("/api/warehouse/material-transfers/:id/status", isAuthenticated, requirePermission("warehouse", "edit"), async (req, res) => {
     try {
-      const user = req.user as any;
+      const user = req.currentUser;
       const { status, receiverSignature, ...additionalData } = req.body;
       
       if (!['pending', 'approved', 'rejected', 'in_transit', 'delivered', 'cancelled'].includes(status)) {
@@ -19873,7 +19896,7 @@ export async function registerRoutes(
       } else if (status === 'delivered') {
         updateData.arrivalTime = new Date();
         updateData.receivedBy = user?.id;
-        updateData.receivedByName = user?.fullName || user?.username;
+        updateData.receivedByName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username;
         if (receiverSignature) {
           updateData.receiverSignature = receiverSignature;
         }
@@ -19941,7 +19964,7 @@ export async function registerRoutes(
   // Modify transfer quantities by warehouse manager (before dispatch only)
   app.post("/api/warehouse/material-transfers/:id/modify-quantities", isAuthenticated, requirePermission("warehouse", "edit"), async (req, res) => {
     try {
-      const user = req.user as any;
+      const user = req.currentUser;
       const { modifications } = req.body;
       
       // modifications: [{ itemId: number, newQuantity: number, modificationNotes?: string }]
@@ -19971,7 +19994,7 @@ export async function registerRoutes(
         parseInt(req.params.id),
         modifications,
         user?.id,
-        user?.fullName || user?.username
+        [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username
       );
       
       // Create notification about quantity modification
@@ -19980,8 +20003,8 @@ export async function registerRoutes(
           type: "transfer_modified",
           title: `تم تعديل كميات: ${transfer.transferNumber}`,
           titleEn: `Quantities Modified: ${transfer.transferNumber}`,
-          body: `تم تعديل بعض الكميات من قبل مسؤول المستودع: ${user?.fullName || user?.username}`,
-          bodyEn: `Some quantities were modified by warehouse manager: ${user?.fullName || user?.username}`,
+          body: `تم تعديل بعض الكميات من قبل مسؤول المستودع: ${[user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username}`,
+          bodyEn: `Some quantities were modified by warehouse manager: ${[user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username}`,
           branchId: transfer.sourceBranchId || undefined,
           targetBranchId: transfer.destinationBranchId,
           entityType: "transfer",
@@ -20000,7 +20023,7 @@ export async function registerRoutes(
   // Confirm delivery with received quantities for each item
   app.post("/api/warehouse/material-transfers/:id/confirm-delivery", isAuthenticated, requirePermission("warehouse", "edit"), async (req, res) => {
     try {
-      const user = req.user as any;
+      const user = req.currentUser;
       const { receivedItems, receiverSignature, deliveryNotes } = req.body;
       
       // receivedItems: [{ itemId: number, receivedQuantity: number, discrepancyNotes?: string }]
@@ -20024,7 +20047,7 @@ export async function registerRoutes(
         receivedItems,
         {
           receivedBy: user?.id,
-          receivedByName: user?.fullName || user?.username,
+          receivedByName: [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username,
           receiverSignature,
           deliveryNotes
         },
@@ -20186,7 +20209,7 @@ export async function registerRoutes(
   
   app.get("/api/warehouse/notifications", isAuthenticated, requirePermission("warehouse", "view"), async (req, res) => {
     try {
-      const user = req.user as any;
+      const user = req.currentUser;
       const filters: { branchId?: string; branchIds?: string[]; userId?: string; isRead?: boolean; limit?: number } = {};
       
       // SECURITY: Enforce branch isolation using getEffectiveBranchFilter
@@ -20216,7 +20239,7 @@ export async function registerRoutes(
 
   app.get("/api/warehouse/notifications/unread-count", isAuthenticated, requirePermission("warehouse", "view"), async (req, res) => {
     try {
-      const user = req.user as any;
+      const user = req.currentUser;
       const branchId = req.query.branchId as string || user?.branchId;
       const count = await storage.getUnreadNotificationCount(branchId, user?.id);
       res.json({ count });
@@ -20238,7 +20261,7 @@ export async function registerRoutes(
 
   app.put("/api/warehouse/notifications/:id/read", isAuthenticated, requirePermission("warehouse", "edit"), async (req, res) => {
     try {
-      const user = req.user as any;
+      const user = req.currentUser;
       const notification = await storage.markNotificationAsRead(parseInt(req.params.id), user?.id);
       if (!notification) {
         return res.status(404).json({ error: "الإشعار غير موجود" });
@@ -20252,7 +20275,7 @@ export async function registerRoutes(
 
   app.put("/api/warehouse/notifications/mark-all-read", isAuthenticated, requirePermission("warehouse", "edit"), async (req, res) => {
     try {
-      const user = req.user as any;
+      const user = req.currentUser;
       const branchId = req.query.branchId as string || user?.branchId;
       await storage.markAllNotificationsAsRead(branchId, user?.id);
       res.json({ success: true });
@@ -20331,7 +20354,7 @@ export async function registerRoutes(
         return res.status(400).json({ error: "بيانات غير صالحة", details: parseResult.error.errors });
       }
 
-      const user = req.user as any;
+      const user = req.currentUser;
       const { items, ...requestData } = parseResult.data;
       
       const requestNumber = await storage.generatePurchasingRequestNumber();
@@ -20397,7 +20420,7 @@ export async function registerRoutes(
         return res.status(400).json({ error: "بيانات غير صالحة", details: parseResult.error.errors });
       }
 
-      const user = req.user as any;
+      const user = req.currentUser;
       const { status, ...additionalData } = parseResult.data;
       
       if (status === 'approved') {
