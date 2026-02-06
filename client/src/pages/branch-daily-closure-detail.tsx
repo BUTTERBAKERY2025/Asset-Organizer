@@ -304,13 +304,13 @@ export default function BranchDailyClosureDetailPage() {
 
           const commissionRows = bankPayments.map((p: any) => {
             const config = BANK_COMMISSION_RATES[p.paymentMethod];
-            const amount = p.totalAmount || 0;
-            const commission = (amount * config.rate) / 100;
-            const netAmount = amount - commission;
-            return { ...p, label: config.label, rate: config.rate, amount, commission, netAmount };
+            const terminalAmount = p.totalTerminalAmount || 0;
+            const commission = (terminalAmount * config.rate) / 100;
+            const netAmount = terminalAmount - commission;
+            return { ...p, label: config.label, rate: config.rate, terminalAmount, commission, netAmount };
           });
 
-          const totalBankSales = commissionRows.reduce((s: number, r: any) => s + r.amount, 0);
+          const totalTerminalSales = commissionRows.reduce((s: number, r: any) => s + r.terminalAmount, 0);
           const totalCommission = commissionRows.reduce((s: number, r: any) => s + r.commission, 0);
           const totalNetAmount = commissionRows.reduce((s: number, r: any) => s + r.netAmount, 0);
 
@@ -325,8 +325,8 @@ export default function BranchDailyClosureDetailPage() {
               <CardContent>
                 <div className="grid grid-cols-3 gap-3 mb-4">
                   <div className="bg-indigo-50 rounded-lg p-3 text-center">
-                    <p className="text-xs text-indigo-600">إجمالي مبيعات الشبكة</p>
-                    <p className="text-lg font-bold text-indigo-700">{formatCurrency(totalBankSales)} ر.س</p>
+                    <p className="text-xs text-indigo-600">إجمالي مبلغ Terminal البنك</p>
+                    <p className="text-lg font-bold text-indigo-700">{formatCurrency(totalTerminalSales)} ر.س</p>
                   </div>
                   <div className="bg-rose-50 rounded-lg p-3 text-center">
                     <p className="text-xs text-rose-600">إجمالي عمولة البنك</p>
@@ -343,7 +343,7 @@ export default function BranchDailyClosureDetailPage() {
                     <TableHeader>
                       <TableRow className="bg-slate-50">
                         <TableHead className="text-right font-bold">طريقة الدفع</TableHead>
-                        <TableHead className="text-right font-bold">المبلغ (ر.س)</TableHead>
+                        <TableHead className="text-right font-bold">مبلغ Terminal (ر.س)</TableHead>
                         <TableHead className="text-right font-bold">نسبة العمولة %</TableHead>
                         <TableHead className="text-right font-bold">مبلغ العمولة (ر.س)</TableHead>
                         <TableHead className="text-right font-bold">صافي المحصّل (ر.س)</TableHead>
@@ -358,7 +358,7 @@ export default function BranchDailyClosureDetailPage() {
                               {r.label}
                             </div>
                           </TableCell>
-                          <TableCell className="font-semibold">{formatCurrency(r.amount)}</TableCell>
+                          <TableCell className="font-semibold">{formatCurrency(r.terminalAmount)}</TableCell>
                           <TableCell>
                             <Badge variant="outline" className="gap-1">
                               <Percent className="w-3 h-3" />
@@ -371,7 +371,7 @@ export default function BranchDailyClosureDetailPage() {
                       ))}
                       <TableRow className="bg-slate-50 font-bold border-t-2">
                         <TableCell className="font-bold">الإجمالي</TableCell>
-                        <TableCell className="font-bold">{formatCurrency(totalBankSales)}</TableCell>
+                        <TableCell className="font-bold">{formatCurrency(totalTerminalSales)}</TableCell>
                         <TableCell></TableCell>
                         <TableCell className="text-rose-700 font-bold">{formatCurrency(totalCommission)}</TableCell>
                         <TableCell className="text-green-700 font-bold">{formatCurrency(totalNetAmount)}</TableCell>
@@ -395,8 +395,8 @@ export default function BranchDailyClosureDetailPage() {
                       <span className="font-bold text-rose-700">{formatCurrency(totalCommission)} ر.س</span>
                     </div>
                     <div className="flex justify-between items-center py-1">
-                      <span className="text-amber-900">دائن: المبيعات (إجمالي الشبكة)</span>
-                      <span className="font-bold text-indigo-700">{formatCurrency(totalBankSales)} ر.س</span>
+                      <span className="text-amber-900">دائن: المبيعات (إجمالي Terminal البنك)</span>
+                      <span className="font-bold text-indigo-700">{formatCurrency(totalTerminalSales)} ر.س</span>
                     </div>
                   </div>
                 </div>
