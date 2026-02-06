@@ -178,7 +178,7 @@ export default function BranchDailyClosureDetailPage() {
   const exportClosurePdf = () => {
     if (!closure) return;
     const cardMethods = ['mada', 'visa', 'mastercard', 'amex', 'card_other', 'card', 'apple_pay', 'stc_pay'];
-    const today = new Date().toLocaleDateString('ar-SA');
+    const today = new Date().toLocaleDateString('en-GB');
     const closureDateFormatted = closure.closureDate;
     const statusLabel = closure.status === 'closed' ? 'مغلق' : 'مفتوح';
     const totalTx = closure.totalTransactionCount || 0;
@@ -234,35 +234,36 @@ export default function BranchDailyClosureDetailPage() {
       <style>
         @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
         * { font-family: 'Cairo', 'Arial', sans-serif; direction: rtl; box-sizing: border-box; margin: 0; padding: 0; }
-        body { padding: 25px; font-size: 12px; background: white; color: #333; }
-        .header { display: flex; justify-content: space-between; border-bottom: 3px solid #D4AF37; padding-bottom: 15px; margin-bottom: 20px; }
-        .company-name { font-size: 18px; font-weight: bold; color: #D4AF37; }
-        .company-name-en { font-size: 11px; color: #666; }
-        .sub-text { font-size: 10px; color: #888; }
-        .report-title { font-size: 16px; font-weight: bold; color: #333; }
-        .section-header { background: #f8f9fa; padding: 10px 14px; font-weight: bold; font-size: 13px; margin: 18px 0 10px; border-right: 4px solid #D4AF37; }
-        .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
-        .kpi-box { background: #f8f9fa; border-radius: 8px; padding: 12px; text-align: center; border: 1px solid #eee; }
-        .kpi-label { font-size: 10px; color: #888; margin-bottom: 4px; }
-        .kpi-value { font-size: 16px; font-weight: bold; }
+        body { padding: 15px; font-size: 10px; background: white; color: #333; }
+        .header { display: flex; justify-content: space-between; border-bottom: 3px solid #D4AF37; padding-bottom: 10px; margin-bottom: 12px; }
+        .company-name { font-size: 16px; font-weight: bold; color: #D4AF37; }
+        .company-name-en { font-size: 10px; color: #666; }
+        .sub-text { font-size: 9px; color: #888; }
+        .report-title { font-size: 14px; font-weight: bold; color: #333; }
+        .section-header { background: #f8f9fa; padding: 6px 10px; font-weight: bold; font-size: 11px; margin: 10px 0 6px; border-right: 4px solid #D4AF37; }
+        .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 10px; }
+        .kpi-box { background: #f8f9fa; border-radius: 6px; padding: 6px; text-align: center; border: 1px solid #eee; }
+        .kpi-label { font-size: 9px; color: #888; margin-bottom: 2px; }
+        .kpi-value { font-size: 13px; font-weight: bold; }
         .kpi-green { color: #28a745; }
         .kpi-blue { color: #4f46e5; }
         .kpi-emerald { color: #059669; }
         .kpi-amber { color: #d97706; }
-        table { width: 100%; border-collapse: collapse; margin-bottom: 18px; font-size: 11px; }
-        th { background: #f3f4f6; padding: 8px 6px; border: 1px solid #ddd; font-weight: bold; text-align: center; }
-        td { padding: 7px 6px; border: 1px solid #ddd; text-align: center; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: 9px; }
+        th { background: #f3f4f6; padding: 4px 3px; border: 1px solid #ddd; font-weight: bold; text-align: center; }
+        td { padding: 3px 3px; border: 1px solid #ddd; text-align: center; }
         .text-right { text-align: right; }
         .text-green { color: #28a745; }
         .text-red { color: #dc3545; }
         .text-orange { color: #d97706; }
         .bold { font-weight: bold; }
         .totals-row { background: #f0f0f0; font-weight: bold; }
-        .status-badge { display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 10px; font-weight: bold; }
+        .status-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 9px; font-weight: bold; }
         .status-open { background: #fff3cd; color: #856404; }
         .status-closed { background: #d4edda; color: #155724; }
-        .footer { text-align: center; margin-top: 30px; font-size: 10px; color: #aaa; border-top: 1px solid #eee; padding-top: 10px; }
-        @media print { body { padding: 0; } @page { margin: 1cm; size: A4 landscape; } }
+        .footer { text-align: center; margin-top: 15px; font-size: 9px; color: #aaa; border-top: 1px solid #eee; padding-top: 6px; }
+        .footer-line2 { font-size: 8px; color: #bbb; margin-top: 2px; }
+        @media print { body { padding: 0; } @page { margin: 0.7cm; size: A4 landscape; } }
       </style>
     </head>
     <body>
@@ -282,40 +283,38 @@ export default function BranchDailyClosureDetailPage() {
       </div>
 
       <div class="section-header">ملخص الإغلاق اليومي</div>
-      <div class="kpi-grid">
+      <div style="display:grid;grid-template-columns:repeat(8,1fr);gap:5px;margin-bottom:10px;">
         <div class="kpi-box">
           <div class="kpi-label">إجمالي المبيعات</div>
-          <div class="kpi-value kpi-green">${formatCurrency(closure.totalSales)} ر.س</div>
+          <div class="kpi-value kpi-green" style="font-size:11px;">${formatCurrency(closure.totalSales)} ر.س</div>
         </div>
         <div class="kpi-box">
           <div class="kpi-label">النقدي</div>
-          <div class="kpi-value kpi-emerald">${formatCurrency(closure.cashTotal)} ر.س</div>
+          <div class="kpi-value kpi-emerald" style="font-size:11px;">${formatCurrency(closure.cashTotal)} ر.س</div>
         </div>
         <div class="kpi-box">
           <div class="kpi-label">الشبكة</div>
-          <div class="kpi-value kpi-blue">${formatCurrency(closure.networkTotal)} ر.س</div>
+          <div class="kpi-value kpi-blue" style="font-size:11px;">${formatCurrency(closure.networkTotal)} ر.س</div>
         </div>
         <div class="kpi-box">
           <div class="kpi-label">التوصيل</div>
-          <div class="kpi-value kpi-amber">${formatCurrency(closure.deliveryTotal)} ر.س</div>
+          <div class="kpi-value kpi-amber" style="font-size:11px;">${formatCurrency(closure.deliveryTotal)} ر.س</div>
         </div>
-      </div>
-      <div class="kpi-grid">
         <div class="kpi-box">
           <div class="kpi-label">عدد العمليات</div>
-          <div class="kpi-value">${totalTx}</div>
+          <div class="kpi-value" style="font-size:11px;">${totalTx}</div>
         </div>
         <div class="kpi-box">
           <div class="kpi-label">متوسط الفاتورة</div>
-          <div class="kpi-value">${formatCurrency(avgTicket)} ر.س</div>
+          <div class="kpi-value" style="font-size:11px;">${formatCurrency(avgTicket)} ر.س</div>
         </div>
         <div class="kpi-box">
           <div class="kpi-label">عدد اليوميات</div>
-          <div class="kpi-value">${closure.journalsCount || (closure.journals || []).length}</div>
+          <div class="kpi-value" style="font-size:11px;">${closure.journalsCount || (closure.journals || []).length}</div>
         </div>
         <div class="kpi-box">
           <div class="kpi-label">عدد العملاء</div>
-          <div class="kpi-value">${closure.totalCustomerCount || 0}</div>
+          <div class="kpi-value" style="font-size:11px;">${closure.totalCustomerCount || 0}</div>
         </div>
       </div>
 
@@ -410,7 +409,8 @@ export default function BranchDailyClosureDetailPage() {
       })()}
 
       <div class="footer">
-        تم إنشاء هذا التقرير آلياً من نظام باتر - ${today}
+        تم انشاء هذا التقرير اليا من BUTTER BAKERY SYSTEM
+        <div class="footer-line2">CEO COMMAND - ${today}</div>
       </div>
 
       <script>window.onload = function() { window.print(); };</script>
