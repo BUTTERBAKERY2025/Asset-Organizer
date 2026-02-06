@@ -4916,6 +4916,10 @@ export async function registerRoutes(
     try {
       const id = parseInt(req.params.id, 10);
       
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      
       const [closure] = await db.select()
         .from(branchDailyClosures)
         .where(eq(branchDailyClosures.id, id));
@@ -5100,6 +5104,11 @@ export async function registerRoutes(
   app.post("/api/branch-daily-closures/:id/close", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
+      
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      
       const user = getCurrentUser(req);
       
       const [closure] = await db.select()
@@ -5139,10 +5148,19 @@ export async function registerRoutes(
     }
   });
 
-  // Delete branch daily closure (only if open)
+  // Delete branch daily closure (only if open, admin only)
   app.delete("/api/branch-daily-closures/:id", isAuthenticated, async (req, res) => {
     try {
+      // SECURITY: Only admins can delete closures
+      if (!isUserAdmin(req)) {
+        return res.status(403).json({ error: "غير مصرح - الحذف متاح للمدير العام فقط" });
+      }
+      
       const id = parseInt(req.params.id, 10);
+      
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
       
       const [closure] = await db.select()
         .from(branchDailyClosures)
@@ -5150,16 +5168,6 @@ export async function registerRoutes(
       
       if (!closure) {
         return res.status(404).json({ error: "Closure not found" });
-      }
-      
-      // SECURITY: Verify branch access for non-admin users
-      if (!isUserAdmin(req)) {
-        if (closure.branchId) {
-          const hasAccess = await canAccessBranch(req, closure.branchId);
-          if (!hasAccess) {
-            return res.status(403).json({ error: "غير مصرح بحذف هذا الإغلاق" });
-          }
-        }
       }
       
       if (closure.status === 'closed') {
