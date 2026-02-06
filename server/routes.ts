@@ -4992,10 +4992,28 @@ export async function registerRoutes(
         return res.status(400).json({ error: "يوجد إغلاق يومي لهذا التاريخ بالفعل" });
       }
       
+      // SECURITY: Validate journalIds are integers
+      if (!Array.isArray(journalIds) || journalIds.some((id: any) => typeof id !== 'number' || isNaN(id))) {
+        return res.status(400).json({ error: "معرفات اليوميات غير صالحة" });
+      }
+      
       // Get journals
       const journals = await db.select()
         .from(cashierSalesJournals)
         .where(inArray(cashierSalesJournals.id, journalIds));
+      
+      // SECURITY: Verify ALL journals belong to the same branch and date
+      const invalidJournals = journals.filter(
+        j => j.branchId !== branchId || j.journalDate !== closureDate
+      );
+      if (invalidJournals.length > 0) {
+        return res.status(403).json({ error: "بعض اليوميات لا تنتمي لهذا الفرع أو التاريخ المحدد" });
+      }
+      
+      // SECURITY: Verify all requested journals were found (prevent ID guessing)
+      if (journals.length !== journalIds.length) {
+        return res.status(400).json({ error: "بعض اليوميات المحددة غير موجودة" });
+      }
       
       // Get payment breakdowns
       const paymentBreakdowns = await db.select()
