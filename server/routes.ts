@@ -16521,17 +16521,28 @@ export async function registerRoutes(
       }
       
       const effectiveBranchId = branchFilter.singleBranchId;
+      const allowedBranchIds = branchFilter.branchIds;
       
       if (periodId) {
-        const schedules = await storage.getEmployeeSchedulesByPeriod(parseInt(periodId as string));
+        let schedules = await storage.getEmployeeSchedulesByPeriod(parseInt(periodId as string));
+        // SECURITY: Filter by allowed branches to prevent cross-branch access
+        if (allowedBranchIds !== null) {
+          const allowedSet = new Set(allowedBranchIds);
+          schedules = schedules.filter((s: any) => allowedSet.has(s.branchId));
+        }
         return res.json(schedules);
       }
       if (employeeId) {
-        const schedules = await storage.getEmployeeSchedulesByEmployee(
+        let schedules = await storage.getEmployeeSchedulesByEmployee(
           employeeId as string,
           startDate as string,
           endDate as string
         );
+        // SECURITY: Filter by allowed branches to prevent cross-branch access
+        if (allowedBranchIds !== null) {
+          const allowedSet = new Set(allowedBranchIds);
+          schedules = schedules.filter((s: any) => allowedSet.has(s.branchId));
+        }
         return res.json(schedules);
       }
       if (effectiveBranchId && startDate && endDate) {
@@ -16543,7 +16554,12 @@ export async function registerRoutes(
         return res.json(schedules);
       }
       if (date) {
-        const schedules = await storage.getEmployeeSchedulesByDate(date as string, effectiveBranchId);
+        let schedules = await storage.getEmployeeSchedulesByDate(date as string, effectiveBranchId);
+        // SECURITY: Filter by allowed branches for multi-branch users without specific branch
+        if (!effectiveBranchId && allowedBranchIds !== null) {
+          const allowedSet = new Set(allowedBranchIds);
+          schedules = schedules.filter((s: any) => allowedSet.has(s.branchId));
+        }
         return res.json(schedules);
       }
       
@@ -16851,7 +16867,16 @@ export async function registerRoutes(
       if (endDate) filters.endDate = endDate;
       if (status) filters.status = status;
       
-      const records = await storage.getAllAttendanceRecords(filters);
+      let records = await storage.getAllAttendanceRecords(filters);
+      
+      // SECURITY: For multi-branch users without a specific branchId filter,
+      // branchFilter.singleBranchId is null but branchIds contains the allowed list.
+      // We must filter records to only include allowed branches.
+      if (branchFilter.branchIds !== null && !branchFilter.singleBranchId) {
+        const allowedSet = new Set(branchFilter.branchIds);
+        records = records.filter((r: any) => allowedSet.has(r.branchId));
+      }
+      
       res.json(records);
     } catch (error) {
       console.error("Error fetching attendance records:", error);
@@ -17415,7 +17440,15 @@ export async function registerRoutes(
       if (branchFilter.singleBranchId) filters.branchId = branchFilter.singleBranchId;
       if (status) filters.status = status as string;
       
-      const reports = await storage.getTimesheetReports(filters);
+      let reports = await storage.getTimesheetReports(filters);
+      
+      // SECURITY: For multi-branch users without a specific branch filter,
+      // filter reports to only include allowed branches
+      if (branchFilter.branchIds !== null && !branchFilter.singleBranchId) {
+        const allowedSet = new Set(branchFilter.branchIds);
+        reports = reports.filter((r: any) => allowedSet.has(r.branchId));
+      }
+      
       res.json(reports);
     } catch (error) {
       console.error("Error fetching timesheet reports:", error);
@@ -18486,12 +18519,17 @@ export async function registerRoutes(
   });
 
   // PDF Generation endpoint for salary closing report
-  app.post("/api/pdf/salary-closing", isAuthenticated, async (req, res) => {
+  app.post("/api/pdf/salary-closing", isAuthenticated, requirePermission("branch_employees", "view"), async (req, res) => {
     try {
       const data: SalaryClosingPdfData = req.body;
       
       if (!data.branchName || !data.month || !data.employees || !Array.isArray(data.employees)) {
         return res.status(400).json({ error: "بيانات غير صالحة" });
+      }
+      
+      // SECURITY: Limit array size to prevent DoS
+      if (data.employees.length > 500) {
+        return res.status(400).json({ error: "عدد الموظفين يتجاوز الحد الأقصى المسموح" });
       }
 
       const pdfBuffer = await generateSalaryClosingPdf(data);
@@ -18506,11 +18544,15 @@ export async function registerRoutes(
   });
 
   // PDF Generation endpoint for branch comparison report
-  app.post("/api/pdf/branch-comparison", isAuthenticated, async (req, res) => {
+  app.post("/api/pdf/branch-comparison", isAuthenticated, requirePermission("branch_employees", "view"), async (req, res) => {
     try {
       const data: BranchComparisonPdfData = req.body;
       if (!data.month || !data.branches || !Array.isArray(data.branches)) {
         return res.status(400).json({ error: "بيانات غير صالحة" });
+      }
+      // SECURITY: Limit array size to prevent DoS
+      if (data.branches.length > 100) {
+        return res.status(400).json({ error: "عدد الفروع يتجاوز الحد الأقصى المسموح" });
       }
       const pdfBuffer = await generateBranchComparisonPdf(data);
       res.setHeader("Content-Type", "application/pdf");
@@ -18523,11 +18565,15 @@ export async function registerRoutes(
   });
 
   // PDF Generation endpoint for job comparison report
-  app.post("/api/pdf/job-comparison", isAuthenticated, async (req, res) => {
+  app.post("/api/pdf/job-comparison", isAuthenticated, requirePermission("branch_employees", "view"), async (req, res) => {
     try {
       const data: JobComparisonPdfData = req.body;
       if (!data.month || !data.jobs || !Array.isArray(data.jobs)) {
         return res.status(400).json({ error: "بيانات غير صالحة" });
+      }
+      // SECURITY: Limit array size to prevent DoS
+      if (data.jobs.length > 200) {
+        return res.status(400).json({ error: "عدد الوظائف يتجاوز الحد الأقصى المسموح" });
       }
       const pdfBuffer = await generateJobComparisonPdf(data);
       res.setHeader("Content-Type", "application/pdf");
@@ -18540,11 +18586,15 @@ export async function registerRoutes(
   });
 
   // PDF Generation endpoint for salaries table report
-  app.post("/api/pdf/salaries-table", isAuthenticated, async (req, res) => {
+  app.post("/api/pdf/salaries-table", isAuthenticated, requirePermission("branch_employees", "view"), async (req, res) => {
     try {
       const data: SalaryTablePdfData = req.body;
       if (!data.month || !data.employees || !Array.isArray(data.employees)) {
         return res.status(400).json({ error: "بيانات غير صالحة" });
+      }
+      // SECURITY: Limit array size to prevent DoS
+      if (data.employees.length > 500) {
+        return res.status(400).json({ error: "عدد الموظفين يتجاوز الحد الأقصى المسموح" });
       }
       const pdfBuffer = await generateSalariesTablePdf(data);
       res.setHeader("Content-Type", "application/pdf");
@@ -18557,7 +18607,7 @@ export async function registerRoutes(
   });
 
   // PDF Generation endpoint for KPIs report
-  app.post("/api/pdf/kpis", isAuthenticated, async (req, res) => {
+  app.post("/api/pdf/kpis", isAuthenticated, requirePermission("branch_employees", "view"), async (req, res) => {
     try {
       const data: KPIsPdfData = req.body;
       if (!data.month) {
@@ -18574,11 +18624,14 @@ export async function registerRoutes(
   });
 
   // PDF Generation endpoint for health certificates report
-  app.post("/api/pdf/health-certificates", isAuthenticated, async (req, res) => {
+  app.post("/api/pdf/health-certificates", isAuthenticated, requirePermission("branch_employees", "view"), async (req, res) => {
     try {
       const data: HealthCertificatePdfData = req.body;
       if (!data.month || !data.employees || !Array.isArray(data.employees)) {
         return res.status(400).json({ error: "بيانات غير صالحة" });
+      }
+      if (data.employees.length > 500) {
+        return res.status(400).json({ error: "عدد الموظفين يتجاوز الحد الأقصى المسموح" });
       }
       const pdfBuffer = await generateHealthCertificatesPdf(data);
       res.setHeader("Content-Type", "application/pdf");
@@ -18591,7 +18644,7 @@ export async function registerRoutes(
   });
 
   // PDF Generation endpoint for comparisons report
-  app.post("/api/pdf/comparisons", isAuthenticated, async (req, res) => {
+  app.post("/api/pdf/comparisons", isAuthenticated, requirePermission("branch_employees", "view"), async (req, res) => {
     try {
       const data: ComparisonsPdfData = req.body;
       if (!data.month) {
@@ -18608,7 +18661,7 @@ export async function registerRoutes(
   });
 
   // PDF Generation endpoint for marketing report
-  app.post("/api/pdf/marketing-report", isAuthenticated, async (req, res) => {
+  app.post("/api/pdf/marketing-report", isAuthenticated, requirePermission("marketing", "view"), async (req, res) => {
     try {
       const data: MarketingReportPdfData = req.body;
       const pdfBuffer = await generateMarketingReportPdf(data);
@@ -18622,7 +18675,7 @@ export async function registerRoutes(
   });
 
   // PDF Generation endpoint for production report
-  app.post("/api/pdf/production-report", isAuthenticated, async (req, res) => {
+  app.post("/api/pdf/production-report", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
       const data: ProductionReportPdfData = req.body;
       const pdfBuffer = await generateProductionReportPdf(data);
@@ -18636,7 +18689,7 @@ export async function registerRoutes(
   });
 
   // PDF Generation endpoint for production order
-  app.post("/api/pdf/production-order", isAuthenticated, async (req, res) => {
+  app.post("/api/pdf/production-order", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
       const data: ProductionOrderPdfData = req.body;
       const pdfBuffer = await generateProductionOrderPdf(data);
