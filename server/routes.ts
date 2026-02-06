@@ -4807,7 +4807,7 @@ export async function registerRoutes(
   // Get all branch daily closures
   app.get("/api/branch-daily-closures", isAuthenticated, requirePermission("daily_closures", "view"), async (req, res) => {
     try {
-      const { branchId, startDate, endDate, status } = req.query;
+      const { branchId, startDate, endDate, status, page, limit: limitParam } = req.query;
       
       // SECURITY: Apply branch filter
       const queryBranchId = branchId as string | undefined;
@@ -4816,6 +4816,11 @@ export async function registerRoutes(
       if (!branchFilter.hasAccess) {
         return res.status(403).json({ error: "غير مصرح بالوصول" });
       }
+      
+      // SECURITY: Pagination to prevent DoS from large result sets
+      const pageNum = Math.max(1, parseInt(page as string, 10) || 1);
+      const pageSize = Math.min(100, Math.max(1, parseInt(limitParam as string, 10) || 50));
+      const offset = (pageNum - 1) * pageSize;
       
       let conditions: SQL[] = [];
       if (branchFilter.singleBranchId) {
@@ -4833,10 +4838,14 @@ export async function registerRoutes(
         conditions.push(lte(branchDailyClosures.closureDate, endDate));
       }
       
+      const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+      
       const closures = await db.select()
         .from(branchDailyClosures)
-        .where(conditions.length > 0 ? and(...conditions) : undefined)
-        .orderBy(desc(branchDailyClosures.closureDate));
+        .where(whereClause)
+        .orderBy(desc(branchDailyClosures.closureDate))
+        .limit(pageSize)
+        .offset(offset);
       
       res.json(closures);
     } catch (error) {
@@ -4995,7 +5004,10 @@ export async function registerRoutes(
       }
       
       // SECURITY: Verify branch access for non-admin users
-      if (!isUserAdmin(req) && closure.branchId) {
+      if (!isUserAdmin(req)) {
+        if (!closure.branchId) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا الإغلاق" });
+        }
         const hasAccess = await canAccessBranch(req, closure.branchId);
         if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بالوصول لهذا الإغلاق" });
@@ -5072,6 +5084,13 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Branch ID, date, and journal IDs are required" });
       }
       
+      // SECURITY: Validate and sanitize notes field
+      if (notes !== undefined && notes !== null) {
+        if (typeof notes !== 'string' || notes.length > 1000) {
+          return res.status(400).json({ error: "الملاحظات غير صالحة أو تتجاوز الحد المسموح" });
+        }
+      }
+      
       // SECURITY: Validate date format and prevent future dates
       const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
       if (!dateRegex.test(closureDate)) {
@@ -5092,23 +5111,12 @@ export async function registerRoutes(
         }
       }
       
-      // Check if closure already exists
-      const [existingClosure] = await db.select()
-        .from(branchDailyClosures)
-        .where(
-          and(
-            eq(branchDailyClosures.branchId, branchId),
-            eq(branchDailyClosures.closureDate, closureDate),
-          )
-        );
-      
-      if (existingClosure) {
-        return res.status(400).json({ error: "يوجد إغلاق يومي لهذا التاريخ بالفعل" });
-      }
-      
-      // SECURITY: Validate journalIds are integers
+      // SECURITY: Validate journalIds are integers and limit array size
       if (!Array.isArray(journalIds) || journalIds.some((id: any) => typeof id !== 'number' || isNaN(id))) {
         return res.status(400).json({ error: "معرفات اليوميات غير صالحة" });
+      }
+      if (journalIds.length > 50) {
+        return res.status(400).json({ error: "عدد اليوميات يتجاوز الحد المسموح" });
       }
       
       // Get journals
@@ -5127,6 +5135,28 @@ export async function registerRoutes(
       // SECURITY: Verify all requested journals were found (prevent ID guessing)
       if (journals.length !== journalIds.length) {
         return res.status(400).json({ error: "بعض اليوميات المحددة غير موجودة" });
+      }
+      
+      // SECURITY: Check if any journals are already linked to another closure (prevent journal hijacking)
+      const existingLinks = await db.select()
+        .from(branchDailyClosureJournals)
+        .where(inArray(branchDailyClosureJournals.journalId, journalIds));
+      if (existingLinks.length > 0) {
+        return res.status(400).json({ error: "بعض اليوميات مرتبطة بإغلاق يومي آخر بالفعل" });
+      }
+      
+      // Check if closure already exists for this date/branch
+      const [existingClosure] = await db.select()
+        .from(branchDailyClosures)
+        .where(
+          and(
+            eq(branchDailyClosures.branchId, branchId),
+            eq(branchDailyClosures.closureDate, closureDate),
+          )
+        );
+      
+      if (existingClosure) {
+        return res.status(400).json({ error: "يوجد إغلاق يومي لهذا التاريخ بالفعل" });
       }
       
       // Get payment breakdowns
@@ -5285,6 +5315,7 @@ export async function registerRoutes(
         return res.status(403).json({ error: "لا يمكن اعتماد إغلاق قمت بإنشائه بنفسك" });
       }
       
+      // SECURITY: Atomic update with status check to prevent TOCTOU race condition
       const [updated] = await db.update(branchDailyClosures)
         .set({
           status: 'closed',
@@ -5292,8 +5323,12 @@ export async function registerRoutes(
           closedAt: new Date(),
           updatedAt: new Date(),
         })
-        .where(eq(branchDailyClosures.id, id))
+        .where(and(eq(branchDailyClosures.id, id), eq(branchDailyClosures.status, 'open')))
         .returning();
+      
+      if (!updated) {
+        return res.status(409).json({ error: "تم إغلاق هذا البيان من قبل مستخدم آخر" });
+      }
       
       res.json(updated);
     } catch (error) {

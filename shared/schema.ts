@@ -1964,7 +1964,7 @@ export const branchDailyClosureJournals = pgTable("branch_daily_closure_journals
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   index("idx_closure_journal_closure").on(table.closureId),
-  index("idx_closure_journal_journal").on(table.journalId),
+  uniqueIndex("idx_closure_journal_unique").on(table.journalId),
 ]);
 
 export const insertBranchDailyClosureJournalSchema = createInsertSchema(

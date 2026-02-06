@@ -38,6 +38,16 @@ const formatCurrency = (amount: number | null | undefined) => {
   return new Intl.NumberFormat("en-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
 };
 
+const escapeHtml = (str: string | null | undefined): string => {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+};
+
 const STATUS_LABELS: Record<string, { label: string; variant: "default" | "secondary"; icon: any }> = {
   open: { label: "مفتوح", variant: "secondary", icon: Unlock },
   closed: { label: "مغلق", variant: "default", icon: Lock },
@@ -192,15 +202,15 @@ export default function BranchDailyClosureDetailPage() {
       const netDisc = cashDisc + bankDisc;
       const statusText = j.status === 'approved' ? 'معتمدة' : j.status === 'submitted' ? 'مقدمة' : j.status === 'draft' ? 'مسودة' : j.status === 'posted' ? 'مرحّلة' : (j.status || '-');
       return `<tr>
-        <td>${j.cashierName || '-'}</td>
-        <td>${shiftLabel}</td>
+        <td>${escapeHtml(j.cashierName) || '-'}</td>
+        <td>${escapeHtml(shiftLabel)}</td>
         <td>${formatCurrency(j.totalSales)}</td>
         <td>${formatCurrency(j.cashTotal)}</td>
         <td>${formatCurrency(j.networkTotal)}</td>
         <td class="${cashDisc > 0.5 ? 'text-orange' : cashDisc < -0.5 ? 'text-red' : 'text-green'}">${formatCurrency(cashDisc)}</td>
         <td class="${bankDisc > 0.5 ? 'text-orange' : bankDisc < -0.5 ? 'text-red' : 'text-green'}">${formatCurrency(bankDisc)}</td>
         <td class="bold ${netDisc > 0.5 ? 'text-orange' : netDisc < -0.5 ? 'text-red' : 'text-green'}">${formatCurrency(netDisc)}</td>
-        <td>${statusText}</td>
+        <td>${escapeHtml(statusText)}</td>
       </tr>`;
     }).join('');
 
@@ -218,7 +228,7 @@ export default function BranchDailyClosureDetailPage() {
       const termAmt = p.totalTerminalAmount || 0;
       const disc = isCard ? (termAmt - posAmt) : 0;
       return `<tr>
-        <td>${methodLabel}</td>
+        <td>${escapeHtml(methodLabel)}</td>
         <td>${formatCurrency(p.totalAmount || 0)}</td>
         <td>${isCard ? formatCurrency(posAmt) : '-'}</td>
         <td>${isCard ? formatCurrency(termAmt) : '-'}</td>
@@ -230,7 +240,7 @@ export default function BranchDailyClosureDetailPage() {
     <html dir="rtl" lang="ar">
     <head>
       <meta charset="UTF-8">
-      <title>بيان الإغلاق اليومي - ${branchName} - ${closureDateFormatted}</title>
+      <title>بيان الإغلاق اليومي - ${escapeHtml(branchName)} - ${escapeHtml(closureDateFormatted)}</title>
       <style>
         @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
         * { font-family: 'Cairo', 'Arial', sans-serif; direction: rtl; box-sizing: border-box; margin: 0; padding: 0; }
@@ -275,8 +285,8 @@ export default function BranchDailyClosureDetailPage() {
         </div>
         <div style="text-align: left;">
           <div class="report-title">بيان الإغلاق اليومي</div>
-          <div>الفرع: ${branchName}</div>
-          <div>التاريخ: ${closureDateFormatted}</div>
+          <div>الفرع: ${escapeHtml(branchName)}</div>
+          <div>التاريخ: ${escapeHtml(closureDateFormatted)}</div>
           <div>الحالة: <span class="status-badge ${closure.status === 'closed' ? 'status-closed' : 'status-open'}">${statusLabel}</span></div>
           <div class="sub-text">تاريخ التصدير: ${today}</div>
         </div>
