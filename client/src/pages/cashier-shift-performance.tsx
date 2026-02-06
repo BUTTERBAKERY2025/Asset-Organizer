@@ -95,13 +95,12 @@ export default function CashierShiftPerformance() {
   const { branches, userBranchId, canSelectBranch } = useBranches();
   const { canCreate, canEdit, canDelete, canApprove } = usePermissions();
   
-  // Check if user can view all cashiers' data (admin/manager or has approve/edit/create permission on cashier_performance or cashier_journal)
+  // Check if user can view all cashiers' data (admin/manager or has approve permission ONLY on cashier_performance or cashier_journal)
   const canViewAllCashiers = useMemo(() => {
     if (!user) return false;
     return user.role === 'admin' || user.role === 'manager' 
-      || canEdit("cashier_performance") || canCreate("cashier_performance") || canApprove("cashier_performance")
-      || canEdit("cashier_journal") || canCreate("cashier_journal") || canApprove("cashier_journal");
-  }, [user, canEdit, canCreate, canApprove]);
+      || canApprove("cashier_performance") || canApprove("cashier_journal");
+  }, [user, canApprove]);
 
   const selectedBranchData = useMemo(() => {
     if (selectedBranch === "all") return null;

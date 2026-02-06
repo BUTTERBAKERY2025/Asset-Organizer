@@ -21,6 +21,20 @@ function getCurrentUser(req: Request): User {
 function parseQueryString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
+
+// SECURITY: Centralized check - can this user view ALL cashiers' data?
+// Only admin, manager, or users with 'approve' on cashier_performance/cashier_journal can view all
+async function canUserViewAllCashiers(req: Request): Promise<boolean> {
+  const user = getCurrentUser(req);
+  if (user.role === 'admin' || user.role === 'manager') return true;
+  const permissions = await storage.getUserPermissions(user.id);
+  for (const perm of permissions) {
+    if (perm.module === 'cashier_performance' || perm.module === 'cashier_journal') {
+      if (perm.actions.includes('approve')) return true;
+    }
+  }
+  return false;
+}
 import { 
   branchDailyClosures, 
   branchDailyClosurePayments, 
@@ -3696,13 +3710,10 @@ export async function registerRoutes(
           effectiveBranchIds = branchFilter.branchIds;
         }
         
-        // Get user permissions to see if they are a supervisor/manager
-        const permissions = await storage.getUserPermissions(user.id);
-        const journalPerms = permissions.find(p => p.module === 'cashier_journal');
-        const isManager = journalPerms?.actions.includes('approve');
+        // Use centralized check
+        const isManagerUser = await canUserViewAllCashiers(req);
         
-        if (!isManager) {
-          // Cashier sees only their own journals
+        if (!isManagerUser) {
           effectiveCashierId = String(user.id);
         }
       } else if (branchFilter.singleBranchId) {
@@ -3762,14 +3773,9 @@ export async function registerRoutes(
       }
       
       // SECURITY: Non-admin/manager users can only view their own journals
-      const user = getCurrentUser(req);
-      if (user.role !== 'admin' && user.role !== 'manager') {
-        const permissions = await storage.getUserPermissions(user.id);
-        const journalPerms = permissions.find(p => p.module === 'cashier_journal');
-        const isManager = journalPerms?.actions.includes('approve') || journalPerms?.actions.includes('edit');
-        if (!isManager && String(journal.cashierId) !== String(user.id)) {
-          return res.status(403).json({ error: "غير مصرح بالوصول - يمكنك فقط عرض يومياتك الخاصة" });
-        }
+      const canViewAllJournals = await canUserViewAllCashiers(req);
+      if (!canViewAllJournals && String(journal.cashierId) !== String(getCurrentUser(req).id)) {
+        return res.status(403).json({ error: "غير مصرح بالوصول - يمكنك فقط عرض يومياتك الخاصة" });
       }
       
       // Get related payment breakdowns and signatures
@@ -3916,14 +3922,9 @@ export async function registerRoutes(
         }
       }
       // SECURITY: Non-admin/manager can only edit their own journals
-      const user = getCurrentUser(req);
-      if (user.role !== 'admin' && user.role !== 'manager') {
-        const permissions = await storage.getUserPermissions(user.id);
-        const journalPerms = permissions.find(p => p.module === 'cashier_journal');
-        const isManager = journalPerms?.actions.includes('approve');
-        if (!isManager && String(existing.cashierId) !== String(user.id)) {
-          return res.status(403).json({ error: "غير مصرح - يمكنك فقط تعديل يومياتك الخاصة" });
-        }
+      const canViewAllEdit = await canUserViewAllCashiers(req);
+      if (!canViewAllEdit && String(existing.cashierId) !== String(getCurrentUser(req).id)) {
+        return res.status(403).json({ error: "غير مصرح - يمكنك فقط تعديل يومياتك الخاصة" });
       }
       if (existing.status !== 'draft') {
         return res.status(400).json({ error: "Cannot edit posted, submitted or approved journal" });
@@ -4068,14 +4069,9 @@ export async function registerRoutes(
       }
       
       // SECURITY: Non-admin/manager can only submit their own journals
-      const user = getCurrentUser(req);
-      if (user.role !== 'admin' && user.role !== 'manager') {
-        const permissions = await storage.getUserPermissions(user.id);
-        const journalPerms = permissions.find(p => p.module === 'cashier_journal');
-        const isManager = journalPerms?.actions.includes('approve') || journalPerms?.actions.includes('edit');
-        if (!isManager && String(existing.cashierId) !== String(user.id)) {
-          return res.status(403).json({ error: "غير مصرح - يمكنك فقط تقديم يومياتك الخاصة" });
-        }
+      const canViewAllSubmit = await canUserViewAllCashiers(req);
+      if (!canViewAllSubmit && String(existing.cashierId) !== String(getCurrentUser(req).id)) {
+        return res.status(403).json({ error: "غير مصرح - يمكنك فقط تقديم يومياتك الخاصة" });
       }
       
       if (existing.status !== 'draft') {
@@ -4256,15 +4252,11 @@ export async function registerRoutes(
         // Get allowed branches
         const allowedBranches = branchFilter.branchIds || (branchFilter.singleBranchId ? [branchFilter.singleBranchId] : []);
         
-        const permissions = await storage.getUserPermissions(user.id);
-        const journalPerms = permissions.find((p: any) => p.module === 'cashier_journal');
-        const isManager = journalPerms?.actions.includes('approve');
+        const isManagerUser = await canUserViewAllCashiers(req);
         
-        if (isManager) {
+        if (isManagerUser) {
           journals = journals.filter(j => allowedBranches.includes(j.branchId));
         } else {
-          // Cashier sees only their own journals
-          // Coerce to strings for reliable comparison (handles numeric vs string IDs)
           const userId = String(user.id);
           journals = journals.filter(j => 
             allowedBranches.includes(j.branchId) && String(j.cashierId) === userId
@@ -4360,14 +4352,10 @@ export async function registerRoutes(
       }
       
       // SECURITY: Non-admin/manager users can only see their own payment breakdowns
-      const user = getCurrentUser(req);
-      if (user.role !== 'admin' && user.role !== 'manager') {
-        const permissions = await storage.getUserPermissions(user.id);
-        const journalPerms = permissions.find(p => p.module === 'cashier_journal');
-        const isManager = journalPerms?.actions.includes('approve');
-        if (!isManager) {
-          journals = journals.filter(j => String(j.cashierId) === String(user.id));
-        }
+      const canViewAllPayments = await canUserViewAllCashiers(req);
+      if (!canViewAllPayments) {
+        const user = getCurrentUser(req);
+        journals = journals.filter(j => String(j.cashierId) === String(user.id));
       }
       
       // Apply date filter
@@ -4423,14 +4411,9 @@ export async function registerRoutes(
       }
       
       // SECURITY: Non-admin/manager can only view their own journal attachments
-      const user = getCurrentUser(req);
-      if (user.role !== 'admin' && user.role !== 'manager') {
-        const permissions = await storage.getUserPermissions(user.id);
-        const journalPerms = permissions.find(p => p.module === 'cashier_journal');
-        const isManager = journalPerms?.actions.includes('approve') || journalPerms?.actions.includes('edit');
-        if (!isManager && String(journal.cashierId) !== String(user.id)) {
-          return res.status(403).json({ error: "غير مصرح - يمكنك فقط عرض مرفقات يومياتك الخاصة" });
-        }
+      const canViewAllAttach = await canUserViewAllCashiers(req);
+      if (!canViewAllAttach && String(journal.cashierId) !== String(getCurrentUser(req).id)) {
+        return res.status(403).json({ error: "غير مصرح - يمكنك فقط عرض مرفقات يومياتك الخاصة" });
       }
       
       const attachments = await storage.getJournalAttachments(journalId);
@@ -5572,14 +5555,10 @@ export async function registerRoutes(
         .where(conditions.length > 0 ? and(...conditions) : undefined);
       
       // SECURITY: Non-admin/manager users can only see their own mismatch data
-      const user = getCurrentUser(req);
-      if (user.role !== 'admin' && user.role !== 'manager') {
-        const permissions = await storage.getUserPermissions(user.id);
-        const journalPerms = permissions.find(p => p.module === 'cashier_journal');
-        const isManager = journalPerms?.actions.includes('approve');
-        if (!isManager) {
-          journals = journals.filter(j => String(j.cashierId) === String(user.id));
-        }
+      const canViewAllMismatch = await canUserViewAllCashiers(req);
+      if (!canViewAllMismatch) {
+        const user = getCurrentUser(req);
+        journals = journals.filter(j => String(j.cashierId) === String(user.id));
       }
       
       if (journals.length === 0) {
@@ -6330,14 +6309,10 @@ export async function registerRoutes(
       }
       
       // SECURITY: Non-admin/manager users can only see their own awards
-      const user = getCurrentUser(req);
-      if (user.role !== 'admin' && user.role !== 'manager') {
-        const permissions = await storage.getUserPermissions(user.id);
-        const opsPerms = permissions.find(p => p.module === 'operations' || p.module === 'cashier_journal');
-        const canViewAll = opsPerms?.actions.includes('approve') || opsPerms?.actions.includes('edit');
-        if (!canViewAll) {
-          awards = awards.filter(a => String(a.cashierId) === String(user.id));
-        }
+      const canViewAll = await canUserViewAllCashiers(req);
+      if (!canViewAll) {
+        const user = getCurrentUser(req);
+        awards = awards.filter(a => String(a.cashierId) === String(user.id));
       }
       
       if (cashierId) {
@@ -6614,17 +6589,13 @@ export async function registerRoutes(
         : allLeaderboard;
       
       // SECURITY: Non-admin/manager users can only see their own cashier leaderboard data
-      const user = getCurrentUser(req);
-      if (user.role !== 'admin' && user.role !== 'manager') {
-        const permissions = await storage.getUserPermissions(user.id);
-        const opsPerms = permissions.find(p => p.module === 'operations' || p.module === 'cashier_journal');
-        const canViewAll = opsPerms?.actions.includes('approve') || opsPerms?.actions.includes('edit');
-        if (!canViewAll) {
-          leaderboard = {
-            ...leaderboard,
-            cashiers: leaderboard.cashiers.filter((c: any) => String(c.cashierId) === String(user.id)),
-          };
-        }
+      const canViewAll = await canUserViewAllCashiers(req);
+      if (!canViewAll) {
+        const user = getCurrentUser(req);
+        leaderboard = {
+          ...leaderboard,
+          cashiers: leaderboard.cashiers.filter((c: any) => String(c.cashierId) === String(user.id)),
+        };
       }
       
       res.json(leaderboard);
@@ -7198,14 +7169,10 @@ export async function registerRoutes(
       );
       
       // SECURITY: Non-admin/manager users can only see their own leaderboard data
-      const user = getCurrentUser(req);
-      if (user.role !== 'admin' && user.role !== 'manager') {
-        const permissions = await storage.getUserPermissions(user.id);
-        const opsPerms = permissions.find(p => p.module === 'operations' || p.module === 'cashier_journal');
-        const canViewAll = opsPerms?.actions.includes('approve') || opsPerms?.actions.includes('edit');
-        if (!canViewAll) {
-          data = data.filter((d: any) => String(d.cashierId) === String(user.id));
-        }
+      const canViewAllFlag = await canUserViewAllCashiers(req);
+      if (!canViewAllFlag) {
+        const user = getCurrentUser(req);
+        data = data.filter((d: any) => String(d.cashierId) === String(user.id));
       }
       
       // Get incentive tiers to enrich the leaderboard
@@ -7397,14 +7364,10 @@ export async function registerRoutes(
       
       // SECURITY: When groupBy=cashier, non-admin/manager users can only see their own data
       if (validGroupBy === 'cashier') {
-        const user = getCurrentUser(req);
-        if (user.role !== 'admin' && user.role !== 'manager') {
-          const permissions = await storage.getUserPermissions(user.id);
-          const opsPerms = permissions.find(p => p.module === 'operations' || p.module === 'cashier_journal');
-          const canViewAll = opsPerms?.actions.includes('approve') || opsPerms?.actions.includes('edit');
-          if (!canViewAll) {
-            data = data.filter((d: any) => String(d.cashierId) === String(user.id));
-          }
+        const canViewAllFlag = await canUserViewAllCashiers(req);
+        if (!canViewAllFlag) {
+          const user = getCurrentUser(req);
+          data = data.filter((d: any) => String(d.cashierId) === String(user.id));
         }
       }
       
@@ -13138,18 +13101,12 @@ export async function registerRoutes(
         targets = targets.filter(t => branchFilter.branchIds!.includes(t.branchId || ''));
         console.log("[cashier-shift-targets] After branch filter:", targets.length, "targets");
         
-        // Admin can see all targets in filtered branches
-        if (user.role !== 'admin' && user.role !== 'manager') {
-          // Check if user is a performance manager (can view all in branch)
-          const permissions = await storage.getUserPermissions(user.id);
-          const perfPerms = permissions.find(p => p.module === 'cashier_performance' || p.module === 'cashier_journal');
-          const canViewAll = perfPerms?.actions.includes('approve') || perfPerms?.actions.includes('create') || perfPerms?.actions.includes('edit');
-          
-          if (!canViewAll) {
-            console.log("[cashier-shift-targets] Filtering by cashier ID:", user.id);
-            targets = targets.filter(t => t.cashierId === user.id);
-            console.log("[cashier-shift-targets] After cashier filter:", targets.length, "targets");
-          }
+        // Only admin/manager/approve can see all targets - regular users see their own only
+        const canViewAll = await canUserViewAllCashiers(req);
+        if (!canViewAll) {
+          console.log("[cashier-shift-targets] Filtering by cashier ID:", user.id);
+          targets = targets.filter(t => String(t.cashierId) === String(user.id));
+          console.log("[cashier-shift-targets] After cashier filter:", targets.length, "targets");
         }
       }
 
@@ -13198,14 +13155,10 @@ export async function registerRoutes(
       let targets = await storage.getCashierShiftTargetsByBranch(branchId, date);
       
       // SECURITY: Non-admin/manager users can only see their own targets
-      const user = getCurrentUser(req);
-      if (user.role !== 'admin' && user.role !== 'manager') {
-        const permissions = await storage.getUserPermissions(user.id);
-        const perfPerms = permissions.find(p => p.module === 'cashier_performance' || p.module === 'cashier_journal');
-        const canViewAll = perfPerms?.actions.includes('approve') || perfPerms?.actions.includes('create') || perfPerms?.actions.includes('edit');
-        if (!canViewAll) {
-          targets = targets.filter(t => t.cashierId === user.id);
-        }
+      const canViewAll = await canUserViewAllCashiers(req);
+      if (!canViewAll) {
+        const user = getCurrentUser(req);
+        targets = targets.filter(t => String(t.cashierId) === String(user.id));
       }
       
       res.json(targets);
@@ -13222,13 +13175,9 @@ export async function registerRoutes(
       const user = getCurrentUser(req);
       
       // SECURITY: Non-admin/manager cashiers can only view their own targets
-      if (user.role !== 'admin' && user.role !== 'manager') {
-        const permissions = await storage.getUserPermissions(user.id);
-        const perfPerms = permissions.find((p: any) => p.module === 'cashier_performance' || p.module === 'cashier_journal');
-        const canViewAll = perfPerms?.actions.includes('approve') || perfPerms?.actions.includes('create') || perfPerms?.actions.includes('edit');
-        if (!canViewAll && cashierId !== user.id) {
-          return res.status(403).json({ error: "غير مصرح - يمكنك فقط عرض أهدافك الخاصة" });
-        }
+      const canViewAll = await canUserViewAllCashiers(req);
+      if (!canViewAll && String(cashierId) !== String(user.id)) {
+        return res.status(403).json({ error: "غير مصرح - يمكنك فقط عرض أهدافك الخاصة" });
       }
       
       let targets = await storage.getCashierShiftTargetsByCashier(
@@ -13427,14 +13376,10 @@ export async function registerRoutes(
       let result = Object.values(salesByCashier);
       
       // SECURITY: Non-admin/manager cashiers can only view their own sales
-      const user = getCurrentUser(req);
-      if (user.role !== 'admin' && user.role !== 'manager') {
-        const permissions = await storage.getUserPermissions(user.id);
-        const perfPerms = permissions.find((p: any) => p.module === 'cashier_performance' || p.module === 'cashier_journal');
-        const canViewAll = perfPerms?.actions.includes('approve') || perfPerms?.actions.includes('create') || perfPerms?.actions.includes('edit');
-        if (!canViewAll) {
-          result = result.filter(r => r.cashierId === user.id);
-        }
+      const canViewAll = await canUserViewAllCashiers(req);
+      if (!canViewAll) {
+        const user = getCurrentUser(req);
+        result = result.filter(r => String(r.cashierId) === String(user.id));
       }
       
       console.log("[cashier-performance-sales] Result:", result.length, "records");
@@ -13461,15 +13406,9 @@ export async function registerRoutes(
       }
 
       // Security check: Determine if user can view all cashiers or only their own
-      let canViewAllCashiers = user.role === 'admin' || user.role === 'manager';
+      const canViewAllCashiersFlag = await canUserViewAllCashiers(req);
       
-      if (!canViewAllCashiers) {
-        const permissions = await storage.getUserPermissions(user.id);
-        const perfPerms = permissions.find(p => p.module === 'cashier_performance' || p.module === 'cashier_journal');
-        canViewAllCashiers = !!(perfPerms?.actions.includes('approve') || perfPerms?.actions.includes('create') || perfPerms?.actions.includes('edit'));
-      }
-      
-      console.log("[cashier-journals-report] User:", user.id, "Role:", user.role, "CanViewAll:", canViewAllCashiers);
+      console.log("[cashier-journals-report] User:", user.id, "Role:", user.role, "CanViewAll:", canViewAllCashiersFlag);
 
       const filters: any = {};
       if (startDate) filters.startDate = startDate as string;
@@ -13483,9 +13422,9 @@ export async function registerRoutes(
       let journals = await storage.getCashierSalesJournals(filters);
       
       // Security: If user cannot view all cashiers, restrict to their own data only
-      if (!canViewAllCashiers) {
+      if (!canViewAllCashiersFlag) {
         console.log("[cashier-journals-report] Restricting to user's own journals");
-        journals = journals.filter(j => j.cashierId === user.id);
+        journals = journals.filter(j => String(j.cashierId) === String(user.id));
       } else if (cashierId && cashierId !== 'all') {
         // Filter by selected cashier if user has permission to view all
         journals = journals.filter(j => j.cashierId === cashierId);
@@ -13696,14 +13635,10 @@ export async function registerRoutes(
       }
 
       // SECURITY: Non-admin/manager users can only see their own alerts
-      const user = getCurrentUser(req);
-      if (user.role !== 'admin' && user.role !== 'manager') {
-        const permissions = await storage.getUserPermissions(user.id);
-        const perfPerms = permissions.find(p => p.module === 'cashier_performance' || p.module === 'cashier_journal');
-        const canViewAll = perfPerms?.actions.includes('approve') || perfPerms?.actions.includes('create') || perfPerms?.actions.includes('edit');
-        if (!canViewAll) {
-          alerts = alerts.filter(a => a.cashierId === user.id);
-        }
+      const canViewAllAlerts = await canUserViewAllCashiers(req);
+      if (!canViewAllAlerts) {
+        const user = getCurrentUser(req);
+        alerts = alerts.filter(a => String(a.cashierId) === String(user.id));
       }
 
       res.json(alerts);

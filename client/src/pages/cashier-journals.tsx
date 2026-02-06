@@ -93,7 +93,9 @@ export default function CashierJournalsPage() {
   });
 
   const journalPerms = userPermissions?.find(p => p.module === 'cashier_journal');
-  const isManager = user?.role === 'admin' || journalPerms?.actions.includes('approve');
+  const perfPerms = userPermissions?.find(p => p.module === 'cashier_performance');
+  const isManager = user?.role === 'admin' || user?.role === 'manager' 
+    || journalPerms?.actions.includes('approve') || perfPerms?.actions.includes('approve');
   const canViewAllCashiers = isManager;
 
   const statsQueryParams = new URLSearchParams();
