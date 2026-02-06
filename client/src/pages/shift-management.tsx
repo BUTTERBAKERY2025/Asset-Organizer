@@ -66,10 +66,39 @@ export default function ShiftManagementPage() {
   const [showAuditTrail, setShowAuditTrail] = useState(false);
   const [showApplyConfirmDialog, setShowApplyConfirmDialog] = useState(false);
   
-  // Employee Report States - متغيرات تقرير الموظف التفصيلي
-  const [reportSelectedEmployee, setReportSelectedEmployee] = useState<string>("");
-  const [reportStartDate, setReportStartDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
-  const [reportEndDate, setReportEndDate] = useState<string>(format(new Date(), "yyyy-MM-dd"));
+  // Report filter states
+  const [reportPeriod, setReportPeriod] = useState<string>("thisWeek");
+  const [reportStartDate, setReportStartDate] = useState<string>(format(startOfWeek(new Date(), { weekStartsOn: 6 }), "yyyy-MM-dd"));
+  const [reportEndDate, setReportEndDate] = useState<string>(format(addDays(startOfWeek(new Date(), { weekStartsOn: 6 }), 6), "yyyy-MM-dd"));
+  const [reportSelectedEmployee, setReportSelectedEmployee] = useState<string>("all");
+  const [signatureReportEmployee, setSignatureReportEmployee] = useState<string>("");
+
+  const handleReportPeriodChange = (period: string) => {
+    setReportPeriod(period);
+    const today = new Date();
+    const weekStart = startOfWeek(today, { weekStartsOn: 6 });
+    switch(period) {
+      case "thisWeek":
+        setReportStartDate(format(weekStart, "yyyy-MM-dd"));
+        setReportEndDate(format(addDays(weekStart, 6), "yyyy-MM-dd"));
+        break;
+      case "lastWeek":
+        setReportStartDate(format(subWeeks(weekStart, 1), "yyyy-MM-dd"));
+        setReportEndDate(format(addDays(subWeeks(weekStart, 1), 6), "yyyy-MM-dd"));
+        break;
+      case "thisMonth":
+        setReportStartDate(format(startOfMonth(today), "yyyy-MM-dd"));
+        setReportEndDate(format(endOfMonth(today), "yyyy-MM-dd"));
+        break;
+      case "lastMonth":
+        const lastM = subMonths(today, 1);
+        setReportStartDate(format(startOfMonth(lastM), "yyyy-MM-dd"));
+        setReportEndDate(format(endOfMonth(lastM), "yyyy-MM-dd"));
+        break;
+      case "custom":
+        break;
+    }
+  };
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -136,32 +165,98 @@ export default function ShiftManagementPage() {
     enabled: selectedBranch !== "all" && showAuditTrail,
   });
 
-  // Employee Report Query - استعلام تقرير الموظف
+  // Report attendance query - driven by report filter bar
+  const { data: reportAttendanceRecords, isLoading: isLoadingReportData } = useQuery<AttendanceRecord[]>({
+    queryKey: ["/api/attendance-report", { branchId: selectedBranch, startDate: reportStartDate, endDate: reportEndDate }],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/attendance?branchId=${selectedBranch}&startDate=${reportStartDate}&endDate=${reportEndDate}`);
+      return res.json();
+    },
+    enabled: selectedBranch !== "all" && !!reportStartDate && !!reportEndDate && activeTab === "reports",
+  });
+
+  // Report schedule query
+  const { data: reportSchedules } = useQuery<EmployeeSchedule[]>({
+    queryKey: ["/api/employee-schedules-report", { branchId: selectedBranch, startDate: reportStartDate, endDate: reportEndDate }],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/employee-schedules?branchId=${selectedBranch}&startDate=${reportStartDate}&endDate=${reportEndDate}`);
+      return res.json();
+    },
+    enabled: selectedBranch !== "all" && !!reportStartDate && !!reportEndDate && activeTab === "reports",
+  });
+
+  // Employee Signature Report Query - stays separate for individual employee
   const { data: employeeReportData, isLoading: isLoadingEmployeeReport } = useQuery<AttendanceRecord[]>({
-    queryKey: ["/api/attendance-report", { branchId: selectedBranch, employeeId: reportSelectedEmployee, startDate: reportStartDate, endDate: reportEndDate }],
+    queryKey: ["/api/attendance-employee-report", { branchId: selectedBranch, employeeId: signatureReportEmployee, startDate: reportStartDate, endDate: reportEndDate }],
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/attendance?branchId=${selectedBranch}&startDate=${reportStartDate}&endDate=${reportEndDate}`);
       const allRecords = await res.json();
-      // Filter by selected employee
-      const selectedEmp = filteredEmployees.find(e => String(e.id) === reportSelectedEmployee);
+      const selectedEmp = filteredEmployees.find(e => String(e.id) === signatureReportEmployee);
       if (!selectedEmp) return [];
-      const empIdStr = reportSelectedEmployee;
-      const linkedUserId = selectedEmp.linkedUserId || empIdStr;
-      const normalizedEmpName = selectedEmp.employeeName?.trim().toLowerCase() || '';
       return allRecords.filter((r: AttendanceRecord) => {
-        // SECURITY: فحص الفرع
         if (selectedBranch !== "all" && r.branchId !== selectedBranch) return false;
-        if (r.branchEmployeeId && String(r.branchEmployeeId) === empIdStr) return true;
+        if (r.branchEmployeeId && String(r.branchEmployeeId) === signatureReportEmployee) return true;
         if (r.employeeId === `branch_emp_${selectedEmp.id}`) return true;
         if (selectedEmp.linkedUserId && r.employeeId === selectedEmp.linkedUserId) return true;
-        if (r.employeeId === empIdStr) return true;
+        if (r.employeeId === signatureReportEmployee) return true;
         const recordName = r.employeeName?.trim().toLowerCase() || '';
+        const normalizedEmpName = selectedEmp.employeeName?.trim().toLowerCase() || '';
         if (normalizedEmpName && recordName && normalizedEmpName === recordName && r.branchId === selectedEmp.branchId) return true;
         return false;
       });
     },
-    enabled: selectedBranch !== "all" && !!reportSelectedEmployee && !!reportStartDate && !!reportEndDate,
+    enabled: selectedBranch !== "all" && !!signatureReportEmployee && !!reportStartDate && !!reportEndDate,
   });
+
+  // Build report schedule data from reportSchedules
+  const reportScheduleData = useMemo(() => {
+    const data: Record<string, Record<string, ScheduleCell>> = {};
+    if (!reportSchedules) return data;
+    reportSchedules.forEach(schedule => {
+      const empKey = String(schedule.branchEmployeeId || schedule.employeeId);
+      if (!data[empKey]) data[empKey] = {};
+      if (schedule.date) {
+        data[empKey][schedule.date] = {
+          startTime: schedule.startTime || "",
+          endTime: schedule.endTime || "",
+          isOff: schedule.isOff || false,
+        };
+      }
+    });
+    return data;
+  }, [reportSchedules]);
+
+  // Filter employees for report based on employee filter
+  const reportFilteredEmployees = useMemo(() => {
+    if (reportSelectedEmployee === "all") return filteredEmployees;
+    return filteredEmployees.filter(e => String(e.id) === reportSelectedEmployee);
+  }, [filteredEmployees, reportSelectedEmployee]);
+
+  // Helper: match attendance record to employee
+  const matchAttendanceToEmployee = (record: AttendanceRecord, employee: BranchEmployee): boolean => {
+    if (selectedBranch !== "all" && record.branchId !== selectedBranch) return false;
+    if (record.branchEmployeeId && record.branchEmployeeId === employee.id) return true;
+    if (record.employeeId === `branch_emp_${employee.id}`) return true;
+    if (employee.linkedUserId && record.employeeId === employee.linkedUserId) return true;
+    if (record.employeeId === String(employee.id)) return true;
+    const rName = record.employeeName?.trim().toLowerCase() || '';
+    const eName = employee.employeeName?.trim().toLowerCase() || '';
+    if (rName && eName && rName === eName && record.branchId === employee.branchId) return true;
+    return false;
+  };
+
+  // Get attendance records for a specific employee from report data
+  const getReportAttendance = (employee: BranchEmployee): AttendanceRecord[] => {
+    return (reportAttendanceRecords || []).filter(r => r.actualCheckIn && matchAttendanceToEmployee(r, employee));
+  };
+
+  // Report date range for iteration
+  const reportDates = useMemo(() => {
+    if (!reportStartDate || !reportEndDate) return [];
+    try {
+      return eachDayOfInterval({ start: parseISO(reportStartDate), end: parseISO(reportEndDate) });
+    } catch { return []; }
+  }, [reportStartDate, reportEndDate]);
 
   const isScheduleLocked = weeklyLock && weeklyLock.length > 0;
   const currentLock = weeklyLock?.[0];
@@ -1986,96 +2081,137 @@ export default function ShiftManagementPage() {
             </TabsContent>
 
             <TabsContent value="reports" className="space-y-6 mt-4">
-              {/* ═══════════════════════════════════════════════════════════════════════════
-                  القسم الأول: رأس التقارير والإحصائيات السريعة
-                  ═══════════════════════════════════════════════════════════════════════════ */}
-              <div className="bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5 rounded-xl p-6 border border-primary/20">
-                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
-                  <div>
-                    <h2 className="text-2xl font-bold text-primary flex items-center gap-2">
-                      <FileText className="w-7 h-7" />
-                      مركز التقارير
-                    </h2>
-                    <p className="text-muted-foreground mt-1">
-                      {getBranchName(selectedBranch)} • {format(currentWeekStart, "dd MMMM yyyy", { locale: ar })} - {format(addDays(currentWeekStart, 6), "dd MMMM yyyy", { locale: ar })}
-                    </p>
+              {/* ═══ شريط الفلاتر المتقدم ═══ */}
+              <Card className="border-2 border-primary/30 shadow-lg bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5">
+                <CardContent className="pt-6 pb-4">
+                  <div className="flex items-center gap-2 mb-4">
+                    <FileText className="w-6 h-6 text-primary" />
+                    <h2 className="text-xl font-bold text-primary">مركز التقارير المتقدم</h2>
+                    {isLoadingReportData && <Loader2 className="w-4 h-4 animate-spin text-primary" />}
                   </div>
                   
-                  {/* أزرار التصدير السريع */}
-                  <div className="flex flex-wrap gap-2">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="outline" className="gap-2" disabled={isExporting || isExportingPdf} data-testid="btn-export-weekly">
-                          {(isExporting || isExportingPdf) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                          تصدير أسبوعي
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48">
-                        <DropdownMenuItem onClick={exportWeeklyReport} className="gap-2 cursor-pointer" data-testid="btn-export-excel">
-                          <FileSpreadsheet className="w-4 h-4 text-green-600" />
-                          Excel
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={exportToPdf} className="gap-2 cursor-pointer" data-testid="btn-export-pdf">
-                          <File className="w-4 h-4 text-red-600" />
-                          PDF
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={printReport} className="gap-2 cursor-pointer" data-testid="btn-print-weekly">
-                          <Printer className="w-4 h-4 text-blue-600" />
-                          طباعة
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                    
-                    <div className="flex items-center gap-2">
-                      <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                        <SelectTrigger className="w-[140px]">
-                          <SelectValue placeholder="الشهر" />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+                    <div>
+                      <Label className="text-xs font-medium mb-1 block">الفترة</Label>
+                      <Select value={reportPeriod} onValueChange={handleReportPeriodChange}>
+                        <SelectTrigger data-testid="select-report-period">
+                          <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value={format(new Date(), "yyyy-MM")}>
-                            {format(new Date(), "MMM yyyy", { locale: ar })}
-                          </SelectItem>
-                          <SelectItem value={format(subMonths(new Date(), 1), "yyyy-MM")}>
-                            {format(subMonths(new Date(), 1), "MMM yyyy", { locale: ar })}
-                          </SelectItem>
-                          <SelectItem value={format(subMonths(new Date(), 2), "yyyy-MM")}>
-                            {format(subMonths(new Date(), 2), "MMM yyyy", { locale: ar })}
-                          </SelectItem>
+                          <SelectItem value="thisWeek">هذا الأسبوع</SelectItem>
+                          <SelectItem value="lastWeek">الأسبوع الماضي</SelectItem>
+                          <SelectItem value="thisMonth">هذا الشهر</SelectItem>
+                          <SelectItem value="lastMonth">الشهر الماضي</SelectItem>
+                          <SelectItem value="custom">فترة مخصصة</SelectItem>
                         </SelectContent>
                       </Select>
-                      <Button variant="outline" onClick={generateMonthlyReport} disabled={isGeneratingMonthly} data-testid="btn-generate-monthly">
-                        {isGeneratingMonthly ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
-                      </Button>
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium mb-1 block">من تاريخ</Label>
+                      <Input
+                        type="date"
+                        value={reportStartDate}
+                        onChange={(e) => { setReportStartDate(e.target.value); setReportPeriod("custom"); }}
+                        data-testid="input-report-start-date"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium mb-1 block">إلى تاريخ</Label>
+                      <Input
+                        type="date"
+                        value={reportEndDate}
+                        onChange={(e) => { setReportEndDate(e.target.value); setReportPeriod("custom"); }}
+                        data-testid="input-report-end-date"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium mb-1 block">الموظف</Label>
+                      <Select value={reportSelectedEmployee} onValueChange={setReportSelectedEmployee}>
+                        <SelectTrigger data-testid="select-report-employee">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">جميع الموظفين</SelectItem>
+                          {filteredEmployees.map((emp) => (
+                            <SelectItem key={emp.id} value={String(emp.id)}>
+                              {emp.employeeName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
-                </div>
-                
-                {/* إحصائيات سريعة */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div className="bg-white/80 backdrop-blur rounded-lg p-3 text-center shadow-sm">
-                    <div className="text-2xl font-bold text-primary">{filteredEmployees.length}</div>
-                    <div className="text-xs text-muted-foreground">الموظفين</div>
-                  </div>
-                  <div className="bg-white/80 backdrop-blur rounded-lg p-3 text-center shadow-sm">
-                    <div className="text-2xl font-bold text-green-600">
-                      {Object.values(scheduleData).reduce((t, e) => t + Object.values(e).filter(d => !d.isOff).length, 0)}
+                  
+                  <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground bg-white/60 rounded-lg px-4 py-2">
+                    <span className="flex items-center gap-1"><Building2 className="w-3.5 h-3.5" /> {getBranchName(selectedBranch)}</span>
+                    <span>•</span>
+                    <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> {format(parseISO(reportStartDate), "dd MMM yyyy", { locale: ar })} - {format(parseISO(reportEndDate), "dd MMM yyyy", { locale: ar })}</span>
+                    <span>•</span>
+                    <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5" /> {reportFilteredEmployees.length} موظف</span>
+                    
+                    <div className="mr-auto flex gap-2">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" size="sm" className="gap-1 h-8" disabled={isExporting || isExportingPdf} data-testid="btn-export-report">
+                            {(isExporting || isExportingPdf) ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                            تصدير
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuItem onClick={exportWeeklyReport} className="gap-2 cursor-pointer" data-testid="btn-export-excel">
+                            <FileSpreadsheet className="w-4 h-4 text-green-600" />
+                            Excel
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={exportToPdf} className="gap-2 cursor-pointer" data-testid="btn-export-pdf">
+                            <File className="w-4 h-4 text-red-600" />
+                            PDF
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={printReport} className="gap-2 cursor-pointer" data-testid="btn-print-weekly">
+                            <Printer className="w-4 h-4 text-blue-600" />
+                            طباعة
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
-                    <div className="text-xs text-muted-foreground">أيام العمل</div>
                   </div>
-                  <div className="bg-white/80 backdrop-blur rounded-lg p-3 text-center shadow-sm">
-                    <div className="text-2xl font-bold text-gray-600">
-                      {Object.values(scheduleData).reduce((t, e) => t + Object.values(e).filter(d => d.isOff).length, 0)}
-                    </div>
-                    <div className="text-xs text-muted-foreground">أيام الإجازات</div>
-                  </div>
-                  <div className="bg-white/80 backdrop-blur rounded-lg p-3 text-center shadow-sm">
-                    <div className="text-2xl font-bold text-blue-600">
-                      {attendanceRecords?.filter(r => r.actualCheckIn && (selectedBranch === "all" || r.branchId === selectedBranch)).length || 0}
-                    </div>
-                    <div className="text-xs text-muted-foreground">سجلات الحضور</div>
-                  </div>
-                </div>
+                </CardContent>
+              </Card>
+
+              {/* ═══ إحصائيات سريعة ═══ */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {(() => {
+                  const totalWorkDays = reportFilteredEmployees.reduce((sum, emp) => {
+                    const empSchedule = reportScheduleData[String(emp.id)] || {};
+                    return sum + Object.values(empSchedule).filter(d => !d.isOff).length;
+                  }, 0);
+                  const totalOffDays = reportFilteredEmployees.reduce((sum, emp) => {
+                    const empSchedule = reportScheduleData[String(emp.id)] || {};
+                    return sum + Object.values(empSchedule).filter(d => d.isOff).length;
+                  }, 0);
+                  const totalAttendance = reportFilteredEmployees.reduce((sum, emp) => sum + getReportAttendance(emp).length, 0);
+                  const attendanceRate = totalWorkDays > 0 ? Math.round((totalAttendance / totalWorkDays) * 100) : 0;
+                  return (
+                    <>
+                      <div className="bg-white rounded-xl p-4 text-center shadow-sm border">
+                        <div className="text-2xl font-bold text-primary">{reportFilteredEmployees.length}</div>
+                        <div className="text-xs text-muted-foreground">الموظفين</div>
+                      </div>
+                      <div className="bg-white rounded-xl p-4 text-center shadow-sm border">
+                        <div className="text-2xl font-bold text-green-600">{totalWorkDays}</div>
+                        <div className="text-xs text-muted-foreground">أيام العمل</div>
+                      </div>
+                      <div className="bg-white rounded-xl p-4 text-center shadow-sm border">
+                        <div className="text-2xl font-bold text-blue-600">{totalAttendance}</div>
+                        <div className="text-xs text-muted-foreground">سجلات الحضور</div>
+                      </div>
+                      <div className="bg-white rounded-xl p-4 text-center shadow-sm border">
+                        <div className="text-2xl font-bold text-amber-600">{attendanceRate}%</div>
+                        <div className="text-xs text-muted-foreground">نسبة الحضور</div>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
 
               {/* ═══════════════════════════════════════════════════════════════════════════
@@ -2255,31 +2391,12 @@ export default function ShiftManagementPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filteredEmployees.map(employee => {
+                        {reportFilteredEmployees.map(employee => {
                           const empIdStr = String(employee.id);
-                          const linkedUserId = employee.linkedUserId || empIdStr;
-                          const empSchedule = scheduleData[empIdStr] || {};
+                          const empSchedule = reportScheduleData[empIdStr] || {};
                           const workDays = Object.values(empSchedule).filter(d => !d.isOff).length;
                           const offDays = Object.values(empSchedule).filter(d => d.isOff).length;
-                          
-                          // تحسين منطق المطابقة للحضور - البحث بعدة معايير
-                          const normalizedEmpName = employee.employeeName?.trim().toLowerCase() || '';
-                          const attendedDays = attendanceRecords?.filter(r => {
-                            if (!r.actualCheckIn) return false;
-                            // SECURITY: فحص الفرع
-                            if (selectedBranch !== "all" && r.branchId !== selectedBranch) return false;
-                            // المطابقة بـ branchEmployeeId أولاً
-                            if (r.branchEmployeeId && String(r.branchEmployeeId) === empIdStr) return true;
-                            // المطابقة بـ employeeId
-                            if (r.employeeId === `branch_emp_${employee.id}`) return true;
-                            if (employee.linkedUserId && r.employeeId === employee.linkedUserId) return true;
-                            if (r.employeeId === empIdStr) return true;
-                            // المطابقة بالاسم كخيار أخير
-                            const recordName = r.employeeName?.trim().toLowerCase() || '';
-                            if (normalizedEmpName && recordName && normalizedEmpName === recordName && r.branchId === employee.branchId) return true;
-                            return false;
-                          }).length || 0;
-                          
+                          const attendedDays = getReportAttendance(employee).length;
                           const absentDays = workDays - attendedDays;
                           const rate = workDays > 0 ? Math.round((attendedDays / workDays) * 100) : 0;
                           
@@ -2311,25 +2428,12 @@ export default function ShiftManagementPage() {
                       className="flex-1 gap-2"
                       onClick={() => {
                         try {
-                          const reportData = filteredEmployees.map(employee => {
+                          const reportData = reportFilteredEmployees.map(employee => {
                             const empIdStr = String(employee.id);
-                            const linkedUserId = employee.linkedUserId || empIdStr;
-                            const empSchedule = scheduleData[empIdStr] || {};
+                            const empSchedule = reportScheduleData[empIdStr] || {};
                             const workDays = Object.values(empSchedule).filter(d => !d.isOff).length;
                             const offDays = Object.values(empSchedule).filter(d => d.isOff).length;
-                            const normalizedEmpName = employee.employeeName?.trim().toLowerCase() || '';
-                            const attendedDays = attendanceRecords?.filter(r => {
-                              if (!r.actualCheckIn) return false;
-                              // SECURITY: فحص الفرع
-                              if (selectedBranch !== "all" && r.branchId !== selectedBranch) return false;
-                              if (r.branchEmployeeId && String(r.branchEmployeeId) === empIdStr) return true;
-                              if (r.employeeId === `branch_emp_${employee.id}`) return true;
-                              if (employee.linkedUserId && r.employeeId === employee.linkedUserId) return true;
-                              if (r.employeeId === empIdStr) return true;
-                              const recordName = r.employeeName?.trim().toLowerCase() || '';
-                              if (normalizedEmpName && recordName && normalizedEmpName === recordName && r.branchId === employee.branchId) return true;
-                              return false;
-                            }).length || 0;
+                            const attendedDays = getReportAttendance(employee).length;
                             const absentDays = Math.max(workDays - attendedDays, 0);
                             const rate = workDays > 0 ? Math.round((attendedDays / workDays) * 100) : 0;
                             return {
@@ -2344,7 +2448,7 @@ export default function ShiftManagementPage() {
                           const ws = XLSX.utils.json_to_sheet(reportData);
                           const wb = XLSX.utils.book_new();
                           XLSX.utils.book_append_sheet(wb, ws, "تقرير تفصيلي");
-                          XLSX.writeFile(wb, `تقرير_تفصيلي_${format(currentWeekStart, "yyyy-MM-dd")}_${getBranchName(selectedBranch)}.xlsx`);
+                          XLSX.writeFile(wb, `تقرير_تفصيلي_${format(parseISO(reportStartDate), "yyyy-MM-dd")}_${getBranchName(selectedBranch)}.xlsx`);
                           toast({ title: "تم تصدير التقرير بنجاح" });
                         } catch (error) {
                           toast({ title: "خطأ", description: "فشل في تصدير التقرير", variant: "destructive" });
@@ -2404,13 +2508,10 @@ export default function ShiftManagementPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filteredEmployees.map(employee => {
+                        {reportFilteredEmployees.map(employee => {
                           const empIdStr = String(employee.id);
-                          const linkedUserId = employee.linkedUserId || empIdStr;
-                          const empSchedule = scheduleData[empIdStr] || {};
-                          const normalizedEmpName = employee.employeeName?.trim().toLowerCase() || '';
+                          const empSchedule = reportScheduleData[empIdStr] || {};
                           
-                          // Calculate scheduled hours
                           let totalScheduledMinutes = 0;
                           Object.values(empSchedule).forEach(day => {
                             if (!day.isOff && day.startTime && day.endTime) {
@@ -2422,23 +2523,11 @@ export default function ShiftManagementPage() {
                             }
                           });
                           
-                          // Calculate actual hours from attendance
                           let totalActualMinutes = 0;
                           let totalLateMinutes = 0;
                           let totalEarlyLeaveMinutes = 0;
                           
-                          const empAttendance = attendanceRecords?.filter(r => {
-                            if (!r.actualCheckIn) return false;
-                            // SECURITY: تحقق من الفرع لمنع تسرب البيانات بين الفروع
-                            if (selectedBranch !== "all" && r.branchId !== selectedBranch) return false;
-                            if (r.branchEmployeeId && String(r.branchEmployeeId) === empIdStr) return true;
-                            if (r.employeeId === `branch_emp_${employee.id}`) return true;
-                            if (employee.linkedUserId && r.employeeId === employee.linkedUserId) return true;
-                            if (r.employeeId === empIdStr) return true;
-                            const recordName = r.employeeName?.trim().toLowerCase() || '';
-                            if (normalizedEmpName && recordName && normalizedEmpName === recordName && r.branchId === employee.branchId) return true;
-                            return false;
-                          }) || [];
+                          const empAttendance = getReportAttendance(employee);
                           
                           empAttendance.forEach(record => {
                             if (record.actualCheckIn && record.actualCheckOut) {
@@ -2521,11 +2610,9 @@ export default function ShiftManagementPage() {
                     className="w-full mt-4 gap-2"
                     onClick={() => {
                       try {
-                        const reportData = filteredEmployees.map(employee => {
+                        const reportData = reportFilteredEmployees.map(employee => {
                           const empIdStr = String(employee.id);
-                          const linkedUserId = employee.linkedUserId || empIdStr;
-                          const empSchedule = scheduleData[empIdStr] || {};
-                          const normalizedEmpName = employee.employeeName?.trim().toLowerCase() || '';
+                          const empSchedule = reportScheduleData[empIdStr] || {};
                           
                           let totalScheduledMinutes = 0;
                           Object.values(empSchedule).forEach(day => {
@@ -2542,18 +2629,7 @@ export default function ShiftManagementPage() {
                           let totalLateMinutes = 0;
                           let totalEarlyLeaveMinutes = 0;
                           
-                          const empAttendance = attendanceRecords?.filter(r => {
-                            if (!r.actualCheckIn) return false;
-                            // SECURITY: فحص الفرع
-                            if (selectedBranch !== "all" && r.branchId !== selectedBranch) return false;
-                            if (r.branchEmployeeId && String(r.branchEmployeeId) === empIdStr) return true;
-                            if (r.employeeId === `branch_emp_${employee.id}`) return true;
-                            if (employee.linkedUserId && r.employeeId === employee.linkedUserId) return true;
-                            if (r.employeeId === empIdStr) return true;
-                            const recordName = r.employeeName?.trim().toLowerCase() || '';
-                            if (normalizedEmpName && recordName && normalizedEmpName === recordName && r.branchId === employee.branchId) return true;
-                            return false;
-                          }) || [];
+                          const empAttendance = getReportAttendance(employee);
                           
                           empAttendance.forEach(record => {
                             if (record.actualCheckIn && record.actualCheckOut) {
@@ -2590,7 +2666,7 @@ export default function ShiftManagementPage() {
                         const ws = XLSX.utils.json_to_sheet(reportData);
                         const wb = XLSX.utils.book_new();
                         XLSX.utils.book_append_sheet(wb, ws, "ساعات العمل");
-                        XLSX.writeFile(wb, `تقرير_ساعات_العمل_${format(currentWeekStart, "yyyy-MM-dd")}_${getBranchName(selectedBranch)}.xlsx`);
+                        XLSX.writeFile(wb, `تقرير_ساعات_العمل_${format(parseISO(reportStartDate), "yyyy-MM-dd")}_${getBranchName(selectedBranch)}.xlsx`);
                         toast({ title: "تم تصدير التقرير بنجاح" });
                       } catch (error) {
                         toast({ title: "خطأ", description: "فشل في تصدير التقرير", variant: "destructive" });
@@ -2628,23 +2704,8 @@ export default function ShiftManagementPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filteredEmployees.map(employee => {
-                          const empIdStr = String(employee.id);
-                          const linkedUserId = employee.linkedUserId || empIdStr;
-                          const normalizedEmpName = employee.employeeName?.trim().toLowerCase() || '';
-                          
-                          const empAttendance = attendanceRecords?.filter(r => {
-                            if (!r.actualCheckIn) return false;
-                            // SECURITY: فحص الفرع
-                            if (selectedBranch !== "all" && r.branchId !== selectedBranch) return false;
-                            if (r.branchEmployeeId && String(r.branchEmployeeId) === empIdStr) return true;
-                            if (r.employeeId === `branch_emp_${employee.id}`) return true;
-                            if (employee.linkedUserId && r.employeeId === employee.linkedUserId) return true;
-                            if (r.employeeId === empIdStr) return true;
-                            const recordName = r.employeeName?.trim().toLowerCase() || '';
-                            if (normalizedEmpName && recordName && normalizedEmpName === recordName && r.branchId === employee.branchId) return true;
-                            return false;
-                          }) || [];
+                        {reportFilteredEmployees.map(employee => {
+                          const empAttendance = getReportAttendance(employee);
                           
                           let lateCount = 0;
                           let earlyLeaveCount = 0;
@@ -2731,23 +2792,8 @@ export default function ShiftManagementPage() {
                     className="w-full mt-4 gap-2"
                     onClick={() => {
                       try {
-                        const reportData = filteredEmployees.map(employee => {
-                          const empIdStr = String(employee.id);
-                          const linkedUserId = employee.linkedUserId || empIdStr;
-                          const normalizedEmpName = employee.employeeName?.trim().toLowerCase() || '';
-                          
-                          const empAttendance = attendanceRecords?.filter(r => {
-                            if (!r.actualCheckIn) return false;
-                            // SECURITY: فحص الفرع
-                            if (selectedBranch !== "all" && r.branchId !== selectedBranch) return false;
-                            if (r.branchEmployeeId && String(r.branchEmployeeId) === empIdStr) return true;
-                            if (r.employeeId === `branch_emp_${employee.id}`) return true;
-                            if (employee.linkedUserId && r.employeeId === employee.linkedUserId) return true;
-                            if (r.employeeId === empIdStr) return true;
-                            const recordName = r.employeeName?.trim().toLowerCase() || '';
-                            if (normalizedEmpName && recordName && normalizedEmpName === recordName && r.branchId === employee.branchId) return true;
-                            return false;
-                          }) || [];
+                        const reportData = reportFilteredEmployees.map(employee => {
+                          const empAttendance = getReportAttendance(employee);
                           
                           let lateCount = 0;
                           let earlyLeaveCount = 0;
@@ -2796,7 +2842,7 @@ export default function ShiftManagementPage() {
                         const ws = XLSX.utils.json_to_sheet(reportData);
                         const wb = XLSX.utils.book_new();
                         XLSX.utils.book_append_sheet(wb, ws, "الانضباط");
-                        XLSX.writeFile(wb, `تقرير_الانضباط_${format(currentWeekStart, "yyyy-MM-dd")}_${getBranchName(selectedBranch)}.xlsx`);
+                        XLSX.writeFile(wb, `تقرير_الانضباط_${format(parseISO(reportStartDate), "yyyy-MM-dd")}_${getBranchName(selectedBranch)}.xlsx`);
                         toast({ title: "تم تصدير التقرير بنجاح" });
                       } catch (error) {
                         toast({ title: "خطأ", description: "فشل في تصدير التقرير", variant: "destructive" });
@@ -2831,32 +2877,15 @@ export default function ShiftManagementPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filteredEmployees.map(employee => {
-                          const empIdStr = String(employee.id);
-                          const linkedUserId = employee.linkedUserId || empIdStr;
-                          const empSchedule = scheduleData[empIdStr] || {};
-                          const normalizedEmpName = employee.employeeName?.trim().toLowerCase() || '';
+                        {reportFilteredEmployees.map(employee => {
+                          const empSchedule = reportScheduleData[String(employee.id)] || {};
                           
-                          // Get all work days
                           const workDays = Object.entries(empSchedule)
                             .filter(([_, day]) => !day.isOff)
                             .map(([date]) => date);
                           
-                          // Get attended days
-                          const attendedDates = attendanceRecords?.filter(r => {
-                            if (!r.actualCheckIn) return false;
-                            // SECURITY: فحص الفرع
-                            if (selectedBranch !== "all" && r.branchId !== selectedBranch) return false;
-                            if (r.branchEmployeeId && String(r.branchEmployeeId) === empIdStr) return true;
-                            if (r.employeeId === `branch_emp_${employee.id}`) return true;
-                            if (employee.linkedUserId && r.employeeId === employee.linkedUserId) return true;
-                            if (r.employeeId === empIdStr) return true;
-                            const recordName = r.employeeName?.trim().toLowerCase() || '';
-                            if (normalizedEmpName && recordName && normalizedEmpName === recordName && r.branchId === employee.branchId) return true;
-                            return false;
-                          }).map(r => r.attendanceDate) || [];
+                          const attendedDates = getReportAttendance(employee).map(r => r.attendanceDate);
                           
-                          // Find absent days
                           const absentDates = workDays.filter(date => !attendedDates.includes(date));
                           
                           if (absentDates.length === 0) return null;
@@ -2892,28 +2921,14 @@ export default function ShiftManagementPage() {
                     onClick={() => {
                       try {
                         const reportData: any[] = [];
-                        filteredEmployees.forEach(employee => {
-                          const empIdStr = String(employee.id);
-                          const linkedUserId = employee.linkedUserId || empIdStr;
-                          const empSchedule = scheduleData[empIdStr] || {};
-                          const normalizedEmpName = employee.employeeName?.trim().toLowerCase() || '';
+                        reportFilteredEmployees.forEach(employee => {
+                          const empSchedule = reportScheduleData[String(employee.id)] || {};
                           
                           const workDays = Object.entries(empSchedule)
                             .filter(([_, day]) => !day.isOff)
                             .map(([date]) => date);
                           
-                          const attendedDates = attendanceRecords?.filter(r => {
-                            if (!r.actualCheckIn) return false;
-                            // SECURITY: فحص الفرع
-                            if (selectedBranch !== "all" && r.branchId !== selectedBranch) return false;
-                            if (r.branchEmployeeId && String(r.branchEmployeeId) === empIdStr) return true;
-                            if (r.employeeId === `branch_emp_${employee.id}`) return true;
-                            if (employee.linkedUserId && r.employeeId === employee.linkedUserId) return true;
-                            if (r.employeeId === empIdStr) return true;
-                            const recordName = r.employeeName?.trim().toLowerCase() || '';
-                            if (normalizedEmpName && recordName && normalizedEmpName === recordName && r.branchId === employee.branchId) return true;
-                            return false;
-                          }).map(r => r.attendanceDate) || [];
+                          const attendedDates = getReportAttendance(employee).map(r => r.attendanceDate);
                           
                           const absentDates = workDays.filter(date => !attendedDates.includes(date));
                           
@@ -2929,7 +2944,7 @@ export default function ShiftManagementPage() {
                         const ws = XLSX.utils.json_to_sheet(reportData);
                         const wb = XLSX.utils.book_new();
                         XLSX.utils.book_append_sheet(wb, ws, "الغياب");
-                        XLSX.writeFile(wb, `تقرير_الغياب_${format(currentWeekStart, "yyyy-MM-dd")}_${getBranchName(selectedBranch)}.xlsx`);
+                        XLSX.writeFile(wb, `تقرير_الغياب_${format(parseISO(reportStartDate), "yyyy-MM-dd")}_${getBranchName(selectedBranch)}.xlsx`);
                         toast({ title: "تم تصدير التقرير بنجاح" });
                       } catch (error) {
                         toast({ title: "خطأ", description: "فشل في تصدير التقرير", variant: "destructive" });
@@ -2969,8 +2984,8 @@ export default function ShiftManagementPage() {
                       <Input
                         type="date"
                         value={reportStartDate}
-                        onChange={(e) => setReportStartDate(e.target.value)}
-                        data-testid="input-report-start-date"
+                        onChange={(e) => { setReportStartDate(e.target.value); setReportPeriod("custom"); }}
+                        data-testid="input-signature-report-start-date"
                       />
                     </div>
                     <div>
@@ -2978,8 +2993,8 @@ export default function ShiftManagementPage() {
                       <Input
                         type="date"
                         value={reportEndDate}
-                        onChange={(e) => setReportEndDate(e.target.value)}
-                        data-testid="input-report-end-date"
+                        onChange={(e) => { setReportEndDate(e.target.value); setReportPeriod("custom"); }}
+                        data-testid="input-signature-report-end-date"
                       />
                     </div>
                     <div>
@@ -2990,8 +3005,8 @@ export default function ShiftManagementPage() {
                     </div>
                     <div>
                       <Label className="text-sm font-medium mb-1 block">الموظف</Label>
-                      <Select value={reportSelectedEmployee} onValueChange={setReportSelectedEmployee}>
-                        <SelectTrigger data-testid="select-report-employee">
+                      <Select value={signatureReportEmployee} onValueChange={setSignatureReportEmployee}>
+                        <SelectTrigger data-testid="select-signature-report-employee">
                           <SelectValue placeholder="اختر الموظف" />
                         </SelectTrigger>
                         <SelectContent>
@@ -3006,7 +3021,7 @@ export default function ShiftManagementPage() {
                   </div>
 
                   {/* Report Content */}
-                  {reportSelectedEmployee && (
+                  {signatureReportEmployee && (
                     <div className="space-y-4">
                       {isLoadingEmployeeReport ? (
                         <div className="text-center py-8">
