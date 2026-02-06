@@ -215,8 +215,8 @@ export default function ShiftManagementPage() {
     reportSchedules.forEach(schedule => {
       const empKey = String(schedule.branchEmployeeId || schedule.employeeId);
       if (!data[empKey]) data[empKey] = {};
-      if (schedule.date) {
-        data[empKey][schedule.date] = {
+      if (schedule.scheduleDate) {
+        data[empKey][schedule.scheduleDate] = {
           startTime: schedule.startTime || "",
           endTime: schedule.endTime || "",
           isOff: schedule.isOff || false,
@@ -226,11 +226,7 @@ export default function ShiftManagementPage() {
     return data;
   }, [reportSchedules]);
 
-  // Filter employees for report based on employee filter
-  const reportFilteredEmployees = useMemo(() => {
-    if (reportSelectedEmployee === "all") return filteredEmployees;
-    return filteredEmployees.filter(e => String(e.id) === reportSelectedEmployee);
-  }, [filteredEmployees, reportSelectedEmployee]);
+  // reportFilteredEmployees defined after filteredEmployees declaration below
 
   // Helper: match attendance record to employee
   const matchAttendanceToEmployee = (record: AttendanceRecord, employee: BranchEmployee): boolean => {
@@ -296,6 +292,11 @@ export default function ShiftManagementPage() {
     if (selectedBranch === "all") return activeEmployees;
     return activeEmployees.filter(e => e.branchId === selectedBranch);
   }, [branchEmployees, selectedBranch]);
+
+  const reportFilteredEmployees = useMemo(() => {
+    if (reportSelectedEmployee === "all") return filteredEmployees;
+    return filteredEmployees.filter(e => String(e.id) === reportSelectedEmployee);
+  }, [filteredEmployees, reportSelectedEmployee]);
 
   useEffect(() => {
     if (userBranchId && selectedBranch === "") {
@@ -3345,7 +3346,6 @@ export default function ShiftManagementPage() {
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* ملخص أداء الفرع */}
                 <Card className="border-2 border-purple-200">
                   <CardHeader className="bg-purple-50/50 py-3">
                     <CardTitle className="flex items-center gap-2 text-purple-700 text-base">
@@ -3353,100 +3353,83 @@ export default function ShiftManagementPage() {
                       ملخص أداء الفرع
                     </CardTitle>
                   </CardHeader>
-                <CardContent className="pt-4">
-                  {(() => {
-                    let totalScheduledMinutes = 0;
-                    let totalActualMinutes = 0;
-                    let totalLateMinutes = 0;
-                    let totalAbsentDays = 0;
-                    let totalWorkDays = 0;
-                    let totalAttendedDays = 0;
-                    
-                    filteredEmployees.forEach(employee => {
-                      const empIdStr = String(employee.id);
-                      const linkedUserId = employee.linkedUserId || empIdStr;
-                      const empSchedule = scheduleData[empIdStr] || {};
-                      const normalizedEmpName = employee.employeeName?.trim().toLowerCase() || '';
+                  <CardContent className="pt-4">
+                    {(() => {
+                      let totalScheduledMinutes = 0;
+                      let totalActualMinutes = 0;
+                      let totalLateMinutes = 0;
+                      let totalWorkDays = 0;
+                      let totalAttendedDays = 0;
                       
-                      Object.values(empSchedule).forEach(day => {
-                        if (!day.isOff && day.startTime && day.endTime) {
-                          totalWorkDays++;
-                          const [startH, startM] = day.startTime.split(':').map(Number);
-                          const [endH, endM] = day.endTime.split(':').map(Number);
-                          let mins = (endH * 60 + endM) - (startH * 60 + startM);
-                          if (mins < 0) mins += 24 * 60;
-                          totalScheduledMinutes += mins;
-                        }
+                      reportFilteredEmployees.forEach(employee => {
+                        const empSchedule = reportScheduleData[String(employee.id)] || {};
+                        
+                        Object.values(empSchedule).forEach(day => {
+                          if (!day.isOff && day.startTime && day.endTime) {
+                            totalWorkDays++;
+                            const [startH, startM] = day.startTime.split(':').map(Number);
+                            const [endH, endM] = day.endTime.split(':').map(Number);
+                            let mins = (endH * 60 + endM) - (startH * 60 + startM);
+                            if (mins < 0) mins += 24 * 60;
+                            totalScheduledMinutes += mins;
+                          }
+                        });
+                        
+                        const empAttendance = getReportAttendance(employee);
+                        totalAttendedDays += empAttendance.length;
+                        
+                        empAttendance.forEach(record => {
+                          if (record.actualCheckIn && record.actualCheckOut) {
+                            const [inH, inM] = record.actualCheckIn.split(':').map(Number);
+                            const [outH, outM] = record.actualCheckOut.split(':').map(Number);
+                            let mins = (outH * 60 + outM) - (inH * 60 + inM);
+                            if (mins < 0) mins += 24 * 60;
+                            totalActualMinutes += mins;
+                          }
+                          if (record.scheduledStartTime && record.actualCheckIn) {
+                            const [schedH, schedM] = record.scheduledStartTime.split(':').map(Number);
+                            const [actualH, actualM] = record.actualCheckIn.split(':').map(Number);
+                            const diff = (actualH * 60 + actualM) - (schedH * 60 + schedM);
+                            if (diff > 0) totalLateMinutes += diff;
+                          }
+                        });
                       });
                       
-                      const empAttendance = attendanceRecords?.filter(r => {
-                        if (!r.actualCheckIn) return false;
-                        // SECURITY: فحص الفرع
-                        if (selectedBranch !== "all" && r.branchId !== selectedBranch) return false;
-                        if (r.branchEmployeeId && String(r.branchEmployeeId) === empIdStr) return true;
-                        if (r.employeeId === `branch_emp_${employee.id}`) return true;
-                        if (employee.linkedUserId && r.employeeId === employee.linkedUserId) return true;
-                        if (r.employeeId === empIdStr) return true;
-                        const recordName = r.employeeName?.trim().toLowerCase() || '';
-                        if (normalizedEmpName && recordName && normalizedEmpName === recordName && r.branchId === employee.branchId) return true;
-                        return false;
-                      }) || [];
+                      const totalAbsentDays = totalWorkDays - totalAttendedDays;
+                      const attendanceRate = totalWorkDays > 0 ? Math.round((totalAttendedDays / totalWorkDays) * 100) : 0;
                       
-                      totalAttendedDays += empAttendance.length;
-                      
-                      empAttendance.forEach(record => {
-                        if (record.actualCheckIn && record.actualCheckOut) {
-                          const [inH, inM] = record.actualCheckIn.split(':').map(Number);
-                          const [outH, outM] = record.actualCheckOut.split(':').map(Number);
-                          let mins = (outH * 60 + outM) - (inH * 60 + inM);
-                          if (mins < 0) mins += 24 * 60;
-                          totalActualMinutes += mins;
-                        }
-                        if (record.scheduledStartTime && record.actualCheckIn) {
-                          const [schedH, schedM] = record.scheduledStartTime.split(':').map(Number);
-                          const [actualH, actualM] = record.actualCheckIn.split(':').map(Number);
-                          const diff = (actualH * 60 + actualM) - (schedH * 60 + schedM);
-                          if (diff > 0) totalLateMinutes += diff;
-                        }
-                      });
-                    });
-                    
-                    totalAbsentDays = totalWorkDays - totalAttendedDays;
-                    const attendanceRate = totalWorkDays > 0 ? Math.round((totalAttendedDays / totalWorkDays) * 100) : 0;
-                    
-                    return (
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="bg-blue-50 p-4 rounded-lg text-center">
-                          <div className="text-3xl font-bold text-blue-600">{filteredEmployees.length}</div>
-                          <div className="text-sm text-blue-700">إجمالي الموظفين</div>
+                      return (
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <div className="bg-blue-50 p-4 rounded-lg text-center">
+                            <div className="text-3xl font-bold text-blue-600">{reportFilteredEmployees.length}</div>
+                            <div className="text-sm text-blue-700">إجمالي الموظفين</div>
+                          </div>
+                          <div className="bg-green-50 p-4 rounded-lg text-center">
+                            <div className="text-3xl font-bold text-green-600">{attendanceRate}%</div>
+                            <div className="text-sm text-green-700">معدل الحضور</div>
+                          </div>
+                          <div className="bg-purple-50 p-4 rounded-lg text-center">
+                            <div className="text-3xl font-bold text-purple-600">{(totalActualMinutes / 60).toFixed(0)}</div>
+                            <div className="text-sm text-purple-700">إجمالي ساعات العمل</div>
+                          </div>
+                          <div className="bg-red-50 p-4 rounded-lg text-center">
+                            <div className="text-3xl font-bold text-red-600">{(totalLateMinutes / 60).toFixed(1)}</div>
+                            <div className="text-sm text-red-700">إجمالي ساعات التأخير</div>
+                          </div>
+                          <div className="bg-amber-50 p-4 rounded-lg text-center col-span-2">
+                            <div className="text-3xl font-bold text-amber-600">{totalWorkDays}</div>
+                            <div className="text-sm text-amber-700">إجمالي أيام العمل المخططة</div>
+                          </div>
+                          <div className="bg-teal-50 p-4 rounded-lg text-center col-span-2">
+                            <div className="text-3xl font-bold text-teal-600">{totalAttendedDays} / {totalAbsentDays}</div>
+                            <div className="text-sm text-teal-700">أيام الحضور / الغياب</div>
+                          </div>
                         </div>
-                        <div className="bg-green-50 p-4 rounded-lg text-center">
-                          <div className="text-3xl font-bold text-green-600">{attendanceRate}%</div>
-                          <div className="text-sm text-green-700">معدل الحضور</div>
-                        </div>
-                        <div className="bg-purple-50 p-4 rounded-lg text-center">
-                          <div className="text-3xl font-bold text-purple-600">{(totalActualMinutes / 60).toFixed(0)}</div>
-                          <div className="text-sm text-purple-700">إجمالي ساعات العمل</div>
-                        </div>
-                        <div className="bg-red-50 p-4 rounded-lg text-center">
-                          <div className="text-3xl font-bold text-red-600">{(totalLateMinutes / 60).toFixed(1)}</div>
-                          <div className="text-sm text-red-700">إجمالي ساعات التأخير</div>
-                        </div>
-                        <div className="bg-amber-50 p-4 rounded-lg text-center col-span-2">
-                          <div className="text-3xl font-bold text-amber-600">{totalWorkDays}</div>
-                          <div className="text-sm text-amber-700">إجمالي أيام العمل المخططة</div>
-                        </div>
-                        <div className="bg-teal-50 p-4 rounded-lg text-center col-span-2">
-                          <div className="text-3xl font-bold text-teal-600">{totalAttendedDays} / {totalAbsentDays}</div>
-                          <div className="text-sm text-teal-700">أيام الحضور / الغياب</div>
-                        </div>
-                      </div>
-                    );
-                  })()}
+                      );
+                    })()}
                   </CardContent>
                 </Card>
 
-                {/* الإحصائيات البيانية */}
                 <Card className="border-2 border-indigo-200">
                   <CardHeader className="bg-indigo-50/50 py-3">
                     <CardTitle className="flex items-center gap-2 text-indigo-700 text-base">
@@ -3456,122 +3439,75 @@ export default function ShiftManagementPage() {
                   </CardHeader>
                   <CardContent className="pt-4">
                     <div className="space-y-4">
-                    {/* Pie Chart - نسبة الحضور/الغياب */}
-                    <div className="bg-white p-4 rounded-lg border">
-                      <h4 className="text-center font-semibold mb-4">توزيع الحضور والغياب</h4>
-                      {(() => {
-                        let totalPresent = 0;
-                        let totalAbsent = 0;
-                        let totalOff = 0;
-                        
-                        filteredEmployees.forEach(employee => {
-                          const empIdStr = String(employee.id);
-                          const linkedUserId = employee.linkedUserId || empIdStr;
-                          const empSchedule = scheduleData[empIdStr] || {};
-                          const normalizedEmpName = employee.employeeName?.trim().toLowerCase() || '';
+                      <div className="bg-white p-4 rounded-lg border">
+                        <h4 className="text-center font-semibold mb-4">توزيع الحضور والغياب</h4>
+                        {(() => {
+                          let totalPresent = 0;
+                          let totalAbsent = 0;
+                          let totalOff = 0;
                           
-                          const workDays = Object.values(empSchedule).filter(d => !d.isOff).length;
-                          const offDays = Object.values(empSchedule).filter(d => d.isOff).length;
-                          totalOff += offDays;
+                          reportFilteredEmployees.forEach(employee => {
+                            const empSchedule = reportScheduleData[String(employee.id)] || {};
+                            const workDays = Object.values(empSchedule).filter(d => !d.isOff).length;
+                            const offDays = Object.values(empSchedule).filter(d => d.isOff).length;
+                            totalOff += offDays;
+                            const attendedDays = getReportAttendance(employee).length;
+                            totalPresent += attendedDays;
+                            totalAbsent += Math.max(workDays - attendedDays, 0);
+                          });
                           
-                          const attendedDays = attendanceRecords?.filter(r => {
-                            if (!r.actualCheckIn) return false;
-                            // SECURITY: فحص الفرع
-                            if (selectedBranch !== "all" && r.branchId !== selectedBranch) return false;
-                            if (r.branchEmployeeId && String(r.branchEmployeeId) === empIdStr) return true;
-                            if (r.employeeId === `branch_emp_${employee.id}`) return true;
-                            if (employee.linkedUserId && r.employeeId === employee.linkedUserId) return true;
-                            if (r.employeeId === empIdStr) return true;
-                            const recordName = r.employeeName?.trim().toLowerCase() || '';
-                            if (normalizedEmpName && recordName && normalizedEmpName === recordName && r.branchId === employee.branchId) return true;
-                            return false;
-                          }).length || 0;
+                          const pieData = [
+                            { name: 'حاضر', value: totalPresent, color: '#22c55e' },
+                            { name: 'غائب', value: totalAbsent, color: '#ef4444' },
+                            { name: 'إجازة', value: totalOff, color: '#9ca3af' },
+                          ].filter(d => d.value > 0);
                           
-                          totalPresent += attendedDays;
-                          totalAbsent += Math.max(workDays - attendedDays, 0);
-                        });
-                        
-                        const pieData = [
-                          { name: 'حاضر', value: totalPresent, color: '#22c55e' },
-                          { name: 'غائب', value: totalAbsent, color: '#ef4444' },
-                          { name: 'إجازة', value: totalOff, color: '#9ca3af' },
-                        ].filter(d => d.value > 0);
-                        
-                        if (pieData.length === 0) {
-                          return <div className="text-center text-muted-foreground py-8">لا توجد بيانات</div>;
-                        }
-                        
-                        return (
-                          <ResponsiveContainer width="100%" height={250}>
-                            <PieChart>
-                              <Pie
-                                data={pieData}
-                                dataKey="value"
-                                nameKey="name"
-                                cx="50%"
-                                cy="50%"
-                                outerRadius={80}
-                                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                              >
-                                {pieData.map((entry, index) => (
-                                  <Cell key={`cell-${index}`} fill={entry.color} />
-                                ))}
-                              </Pie>
-                              <Tooltip />
-                              <Legend />
-                            </PieChart>
-                          </ResponsiveContainer>
-                        );
-                      })()}
-                    </div>
-                    
-                    {/* Bar Chart - نسبة الحضور لكل موظف */}
-                    <div className="bg-white p-4 rounded-lg border">
-                      <h4 className="text-center font-semibold mb-4">نسبة الحضور لكل موظف</h4>
-                      {(() => {
-                        const barData = filteredEmployees.slice(0, 10).map(employee => {
-                          const empIdStr = String(employee.id);
-                          const linkedUserId = employee.linkedUserId || empIdStr;
-                          const empSchedule = scheduleData[empIdStr] || {};
-                          const normalizedEmpName = employee.employeeName?.trim().toLowerCase() || '';
+                          if (pieData.length === 0) return <div className="text-center text-muted-foreground py-8">لا توجد بيانات</div>;
                           
-                          const workDays = Object.values(empSchedule).filter(d => !d.isOff).length;
-                          const attendedDays = attendanceRecords?.filter(r => {
-                            if (!r.actualCheckIn) return false;
-                            // SECURITY: فحص الفرع
-                            if (selectedBranch !== "all" && r.branchId !== selectedBranch) return false;
-                            if (r.branchEmployeeId && String(r.branchEmployeeId) === empIdStr) return true;
-                            if (r.employeeId === `branch_emp_${employee.id}`) return true;
-                            if (employee.linkedUserId && r.employeeId === employee.linkedUserId) return true;
-                            if (r.employeeId === empIdStr) return true;
-                            const recordName = r.employeeName?.trim().toLowerCase() || '';
-                            if (normalizedEmpName && recordName && normalizedEmpName === recordName && r.branchId === employee.branchId) return true;
-                            return false;
-                          }).length || 0;
+                          return (
+                            <ResponsiveContainer width="100%" height={250}>
+                              <PieChart>
+                                <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80}
+                                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                                  {pieData.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={entry.color} />
+                                  ))}
+                                </Pie>
+                                <Tooltip />
+                                <Legend />
+                              </PieChart>
+                            </ResponsiveContainer>
+                          );
+                        })()}
+                      </div>
+                      
+                      <div className="bg-white p-4 rounded-lg border">
+                        <h4 className="text-center font-semibold mb-4">نسبة الحضور لكل موظف</h4>
+                        {(() => {
+                          const barData = reportFilteredEmployees.slice(0, 10).map(employee => {
+                            const empSchedule = reportScheduleData[String(employee.id)] || {};
+                            const workDays = Object.values(empSchedule).filter(d => !d.isOff).length;
+                            const attendedDays = getReportAttendance(employee).length;
+                            const rate = workDays > 0 ? Math.round((attendedDays / workDays) * 100) : 0;
+                            const shortName = employee.employeeName?.split(' ').slice(0, 2).join(' ') || 'موظف';
+                            return { name: shortName, نسبة: rate };
+                          });
                           
-                          const rate = workDays > 0 ? Math.round((attendedDays / workDays) * 100) : 0;
-                          const shortName = employee.employeeName?.split(' ').slice(0, 2).join(' ') || 'موظف';
+                          if (barData.length === 0) return <div className="text-center text-muted-foreground py-8">لا توجد بيانات</div>;
                           
-                          return { name: shortName, نسبة: rate };
-                        });
-                        
-                        if (barData.length === 0) {
-                          return <div className="text-center text-muted-foreground py-8">لا توجد بيانات</div>;
-                        }
-                        
-                        return (
-                          <ResponsiveContainer width="100%" height={250}>
-                            <BarChart data={barData} layout="vertical" margin={{ left: 80 }}>
-                              <CartesianGrid strokeDasharray="3 3" />
-                              <XAxis type="number" domain={[0, 100]} />
-                              <YAxis type="category" dataKey="name" width={75} tick={{ fontSize: 11 }} />
-                              <Tooltip formatter={(value) => [`${value}%`, 'نسبة الحضور']} />
-                              <Bar dataKey="نسبة" fill="#3b82f6" radius={[0, 4, 4, 0]} />
-                            </BarChart>
-                          </ResponsiveContainer>
-                        );
-                      })()}
-                    </div>
+                          return (
+                            <ResponsiveContainer width="100%" height={250}>
+                              <BarChart data={barData} layout="vertical" margin={{ left: 80 }}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis type="number" domain={[0, 100]} />
+                                <YAxis type="category" dataKey="name" width={75} tick={{ fontSize: 11 }} />
+                                <Tooltip formatter={(value) => [`${value}%`, 'نسبة الحضور']} />
+                                <Bar dataKey="نسبة" fill="#3b82f6" radius={[0, 4, 4, 0]} />
+                              </BarChart>
+                            </ResponsiveContainer>
+                          );
+                        })()}
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -3824,11 +3760,13 @@ export default function ShiftManagementPage() {
                             يوم {audit.scheduleDate}
                           </span>
                         )}
-                        {audit.newValue && typeof audit.newValue === 'object' && 'shiftProfile' in (audit.newValue as any) && (
-                          <Badge variant="outline" className="mr-1">
-                            {String((audit.newValue as any).shiftProfile || '')}
-                          </Badge>
-                        )}
+                        {(() => {
+                          const nv = audit.newValue as Record<string, unknown> | null;
+                          if (nv && typeof nv === 'object' && 'shiftProfile' in nv) {
+                            return <Badge variant="outline" className="mr-1">{String(nv.shiftProfile || '')}</Badge>;
+                          }
+                          return null;
+                        })()}
                       </TableCell>
                     </TableRow>
                   ))}
