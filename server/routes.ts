@@ -4905,7 +4905,7 @@ export async function registerRoutes(
         totalOpeningBalance: journals.reduce((sum, j) => sum + (j.openingBalance || 0), 0),
         totalExpectedCash: journals.reduce((sum, j) => sum + (j.expectedCash || 0), 0),
         totalActualCash: journals.reduce((sum, j) => sum + (j.actualCashDrawer || 0), 0),
-        totalCashDiscrepancy: journals.reduce((sum, j) => sum + (j.discrepancyAmount || 0), 0),
+        totalCashDiscrepancy: journals.reduce((sum, j) => sum + (j.actualCashDrawer || 0), 0) - journals.reduce((sum, j) => sum + (j.expectedCash || 0), 0),
         totalCustomerCount: journals.reduce((sum, j) => sum + (j.customerCount || 0), 0),
         totalTransactionCount: journals.reduce((sum, j) => sum + (j.transactionCount || 0), 0),
         totalBankPosAmount: journals.reduce((sum, j) => sum + (j.totalBankPosAmount || 0), 0),
@@ -5072,7 +5072,9 @@ export async function registerRoutes(
       const cashTotal = journals.reduce((sum, j) => sum + (j.cashTotal || 0), 0);
       const networkTotal = journals.reduce((sum, j) => sum + (j.networkTotal || 0), 0);
       const deliveryTotal = journals.reduce((sum, j) => sum + (j.deliveryTotal || 0), 0);
-      const totalCashDiscrepancy = journals.reduce((sum, j) => sum + (j.discrepancyAmount || 0), 0);
+      const totalExpectedCash = journals.reduce((sum, j) => sum + (j.expectedCash || 0), 0);
+      const totalActualCash = journals.reduce((sum, j) => sum + (j.actualCashDrawer || 0), 0);
+      const totalCashDiscrepancy = totalActualCash - totalExpectedCash;
       const totalBankDiscrepancy = journals.reduce((sum, j) => sum + (j.bankDiscrepancyTotal || 0), 0);
       
       const cashDiscrepancyStatus = totalCashDiscrepancy > 0.5 ? 'surplus' : totalCashDiscrepancy < -0.5 ? 'shortage' : 'balanced';
@@ -5087,8 +5089,8 @@ export async function registerRoutes(
         networkTotal,
         deliveryTotal,
         totalOpeningBalance: journals.reduce((sum, j) => sum + (j.openingBalance || 0), 0),
-        totalExpectedCash: journals.reduce((sum, j) => sum + (j.expectedCash || 0), 0),
-        totalActualCash: journals.reduce((sum, j) => sum + (j.actualCashDrawer || 0), 0),
+        totalExpectedCash,
+        totalActualCash,
         totalCashDiscrepancy,
         cashDiscrepancyStatus,
         totalBankPosAmount: journals.reduce((sum, j) => sum + (j.totalBankPosAmount || 0), 0),

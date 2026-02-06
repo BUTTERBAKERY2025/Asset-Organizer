@@ -266,7 +266,6 @@ export default function BranchDailyClosingPage() {
     cashTotal: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.cashTotal ?? 0), 0),
     networkTotal: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.networkTotal ?? 0), 0),
     deliveryTotal: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.deliveryTotal ?? 0), 0),
-    totalCashDiscrepancy: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.discrepancyAmount ?? 0), 0),
     totalBankDiscrepancy: computedBankDiscrepancy,
     totalCustomerCount: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.customerCount ?? 0), 0),
     totalOpeningBalance: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.openingBalance ?? 0), 0),
@@ -274,6 +273,9 @@ export default function BranchDailyClosingPage() {
     totalActualCash: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.actualCashDrawer ?? 0), 0),
     totalTransactionCount: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.transactionCount ?? 0), 0),
     journalsCount: selectedJournalsList.length,
+    get totalCashDiscrepancy() {
+      return this.totalActualCash - this.totalExpectedCash;
+    },
   };
   
   const grandPaymentTotals = Object.keys(selectedPaymentMethodTotals).length > 0 ? 
