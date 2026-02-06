@@ -3171,21 +3171,5 @@ export async function generateAttendanceLogPdf(data: AttendanceLogPdfData): Prom
     </body>
     </html>`;
 
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
-  });
-
-  try {
-    const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'networkidle0' });
-    const pdfBuffer = await page.pdf({
-      format: 'A4',
-      printBackground: true,
-      margin: { top: '15mm', right: '10mm', bottom: '15mm', left: '10mm' }
-    });
-    return Buffer.from(pdfBuffer);
-  } finally {
-    await browser.close();
-  }
+  return await generatePdfFromHtml(html, { landscape: false });
 }
