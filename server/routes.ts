@@ -17048,10 +17048,24 @@ export async function registerRoutes(
   // Check-in employee by manager or attendance clerk
   app.post("/api/attendance/check-in-employee", isAuthenticated, requirePermission("attendance_check", "create"), async (req, res) => {
     try {
-      const { employeeId, branchId, signature, scheduleId, scheduledStartTime, scheduledEndTime, employeeName, userLatitude, userLongitude } = req.body;
+      const { employeeId, branchId, signature, scheduleId, scheduledStartTime, scheduledEndTime, employeeName, userLatitude, userLongitude, attendanceDate } = req.body;
       
       if (!employeeId || !branchId) {
         return res.status(400).json({ error: "معرف الموظف والفرع مطلوبين" });
+      }
+      
+      // Validate attendanceDate: only today or yesterday allowed (Saudi time)
+      if (attendanceDate) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(attendanceDate)) {
+          return res.status(400).json({ error: "صيغة التاريخ غير صالحة" });
+        }
+        const saudiToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Riyadh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+        const yesterdayDate = new Date();
+        yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+        const saudiYesterday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Riyadh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(yesterdayDate);
+        if (attendanceDate !== saudiToday && attendanceDate !== saudiYesterday) {
+          return res.status(400).json({ error: "يسمح فقط بتاريخ اليوم أو الأمس" });
+        }
       }
       
       // SECURITY: Verify branch access for non-admin users
@@ -17094,13 +17108,13 @@ export async function registerRoutes(
         return res.status(400).json({ error: "حجم التوقيع كبير جداً" });
       }
 
-      const today = new Date().toISOString().split('T')[0];
-      const existingRecord = await storage.getAttendanceByEmployeeAndDate(employeeId, today);
+      const targetDate = attendanceDate || new Date().toISOString().split('T')[0];
+      const existingRecord = await storage.getAttendanceByEmployeeAndDate(employeeId, targetDate);
       if (existingRecord && existingRecord.actualCheckIn) {
         return res.status(400).json({ error: "تم تسجيل حضور هذا الموظف مسبقاً اليوم" });
       }
       
-      const record = await storage.checkInEmployee(employeeId, branchId, signature, scheduleId, scheduledStartTime, scheduledEndTime, employeeName);
+      const record = await storage.checkInEmployee(employeeId, branchId, signature, scheduleId, scheduledStartTime, scheduledEndTime, employeeName, targetDate);
       res.status(201).json(record);
     } catch (error) {
       console.error("Error checking in employee:", error);
@@ -17111,20 +17125,33 @@ export async function registerRoutes(
   // Check-out employee by manager or attendance clerk
   app.post("/api/attendance/check-out-employee", isAuthenticated, requirePermission("attendance_check", "edit"), async (req, res) => {
     try {
-      const { employeeId, scheduleId, signature } = req.body;
+      const { employeeId, scheduleId, signature, attendanceDate } = req.body;
       
       if (!employeeId) {
         return res.status(400).json({ error: "معرف الموظف مطلوب" });
       }
       
+      // Validate attendanceDate: only today or yesterday allowed (Saudi time)
+      if (attendanceDate) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(attendanceDate)) {
+          return res.status(400).json({ error: "صيغة التاريخ غير صالحة" });
+        }
+        const saudiToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Riyadh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+        const yesterdayDate = new Date();
+        yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+        const saudiYesterday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Riyadh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(yesterdayDate);
+        if (attendanceDate !== saudiToday && attendanceDate !== saudiYesterday) {
+          return res.status(400).json({ error: "يسمح فقط بتاريخ اليوم أو الأمس" });
+        }
+      }
+      
       // SECURITY: Verify branch access for non-admin users based on employee's branch
-      // Get today's attendance record to verify branch - always needed for security
-      const today = new Date().toISOString().split('T')[0];
-      const existingRecord = await storage.getAttendanceByEmployeeAndDate(employeeId, today);
+      const targetDate = attendanceDate || new Date().toISOString().split('T')[0];
+      const existingRecord = await storage.getAttendanceByEmployeeAndDate(employeeId, targetDate);
       
       // If no record exists, reject early
       if (!existingRecord) {
-        return res.status(404).json({ error: "لم يتم تسجيل حضور هذا الموظف اليوم" });
+        return res.status(404).json({ error: "لم يتم تسجيل حضور هذا الموظف في هذا التاريخ" });
       }
       
       if (!isUserAdmin(req)) {
@@ -17140,7 +17167,7 @@ export async function registerRoutes(
         return res.status(400).json({ error: "حجم التوقيع كبير جداً" });
       }
       
-      const record = await storage.checkOutEmployee(employeeId, signature, scheduleId);
+      const record = await storage.checkOutEmployee(employeeId, signature, scheduleId, targetDate);
       if (!record) {
         return res.status(404).json({ error: "لم يتم تسجيل حضور هذا الموظف اليوم" });
       }

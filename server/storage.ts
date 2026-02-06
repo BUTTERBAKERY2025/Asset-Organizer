@@ -7711,9 +7711,9 @@ export class DatabaseStorage implements IStorage {
     return employeesWithAttendance;
   }
 
-  async checkInEmployee(employeeId: string, branchId: string, signature?: string, scheduleId?: number, scheduledStartTime?: string, scheduledEndTime?: string, employeeNameParam?: string): Promise<AttendanceRecord> {
+  async checkInEmployee(employeeId: string, branchId: string, signature?: string, scheduleId?: number, scheduledStartTime?: string, scheduledEndTime?: string, employeeNameParam?: string, attendanceDate?: string): Promise<AttendanceRecord> {
     const saudiTime = getSaudiArabiaTime();
-    const today = saudiTime.date;
+    const today = attendanceDate || saudiTime.date;
     const now = saudiTime.timeShort;
     
     let employeeName = employeeNameParam || 'Unknown';
@@ -7798,9 +7798,9 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
-  async checkOutEmployee(employeeId: string, signature?: string, scheduleId?: number): Promise<AttendanceRecord | undefined> {
+  async checkOutEmployee(employeeId: string, signature?: string, scheduleId?: number, attendanceDate?: string): Promise<AttendanceRecord | undefined> {
     const saudiTime = getSaudiArabiaTime();
-    const today = saudiTime.date;
+    const today = attendanceDate || saudiTime.date;
     const now = saudiTime.timeShort;
     
     const existing = await this.getAttendanceByEmployeeAndDate(employeeId, today);
