@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import { Skeleton } from "@/components/ui/skeleton";
+import * as XLSX from "xlsx";
 import {
   ArrowRight,
   Calendar,
@@ -29,6 +30,7 @@ import {
   Building2,
   Landmark,
   Percent,
+  Download,
 } from "lucide-react";
 
 const formatCurrency = (amount: number | null | undefined) => {
@@ -85,6 +87,93 @@ export default function BranchDailyClosureDetailPage() {
   });
 
   const branchName = branches?.find((b: any) => b.id === closure?.branchId)?.name || closure?.branchId;
+
+  const exportBankCommissionExcel = () => {
+    if (!closure) return;
+
+    const bankPayments = (closure.payments || []).filter((p: any) => BANK_COMMISSION_RATES[p.paymentMethod]);
+    if (bankPayments.length === 0) return;
+
+    const rows: any[][] = [];
+
+    rows.push(["شركة الزبد الأفضل التجارية - BUTTER BAKERY"]);
+    rows.push(["بيان عمولة البنك - القيد المحاسبي"]);
+    rows.push([]);
+
+    rows.push(["الفرع:", branchName || "", "", "تاريخ الإغلاق:", closure.closureDate]);
+    rows.push(["تاريخ التصدير:", new Date().toLocaleDateString("en-GB"), "", "حالة الإغلاق:", closure.status === 'closed' ? 'مغلق' : 'مفتوح']);
+    rows.push([]);
+
+    rows.push(["تفاصيل عمولة البنك حسب طرق الدفع"]);
+    rows.push([]);
+
+    rows.push(["طريقة الدفع", "مبلغ Terminal البنك (ر.س)", "نسبة العمولة %", "مبلغ العمولة (ر.س)", "صافي المحصّل (ر.س)"]);
+
+    let totalTerminal = 0;
+    let totalComm = 0;
+    let totalNet = 0;
+
+    bankPayments.forEach((p: any) => {
+      const config = BANK_COMMISSION_RATES[p.paymentMethod];
+      const terminalAmount = p.totalTerminalAmount || 0;
+      const commission = (terminalAmount * config.rate) / 100;
+      const netAmount = terminalAmount - commission;
+      totalTerminal += terminalAmount;
+      totalComm += commission;
+      totalNet += netAmount;
+      rows.push([
+        config.label,
+        Math.round(terminalAmount * 100) / 100,
+        config.rate + "%",
+        Math.round(commission * 100) / 100,
+        Math.round(netAmount * 100) / 100,
+      ]);
+    });
+
+    rows.push([
+      "الإجمالي",
+      Math.round(totalTerminal * 100) / 100,
+      "",
+      Math.round(totalComm * 100) / 100,
+      Math.round(totalNet * 100) / 100,
+    ]);
+
+    rows.push([]);
+    rows.push([]);
+
+    const accountingTitleRow = rows.length;
+    rows.push(["ملخص القيد المحاسبي"]);
+    rows.push([]);
+    rows.push(["البيان", "مدين (ر.س)", "دائن (ر.س)"]);
+    rows.push(["البنك (صافي المحصّل)", Math.round(totalNet * 100) / 100, ""]);
+    rows.push(["عمولة البنك (مصروف)", Math.round(totalComm * 100) / 100, ""]);
+    rows.push(["المبيعات (إجمالي Terminal البنك)", "", Math.round(totalTerminal * 100) / 100]);
+    rows.push([]);
+    rows.push(["إجمالي القيد", Math.round((totalNet + totalComm) * 100) / 100, Math.round(totalTerminal * 100) / 100]);
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+
+    ws["!cols"] = [
+      { wch: 35 },
+      { wch: 25 },
+      { wch: 18 },
+      { wch: 22 },
+      { wch: 22 },
+    ];
+
+    ws["!merges"] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } },
+      { s: { r: 6, c: 0 }, e: { r: 6, c: 4 } },
+      { s: { r: accountingTitleRow, c: 0 }, e: { r: accountingTitleRow, c: 4 } },
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "عمولة البنك");
+
+    const fileName = `بيان_عمولة_البنك_${branchName || closure.branchId}_${closure.closureDate}`;
+    XLSX.writeFile(wb, `${fileName}.xlsx`);
+  };
 
   const formatDate = (dateStr: string) => {
     try {
@@ -317,10 +406,22 @@ export default function BranchDailyClosureDetailPage() {
           return (
             <Card data-testid="card-bank-commission">
               <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Landmark className="w-4 h-4 text-rose-600" />
-                  بيان عمولة البنك - القيد المحاسبي
-                </CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Landmark className="w-4 h-4 text-rose-600" />
+                    بيان عمولة البنك - القيد المحاسبي
+                  </CardTitle>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 text-green-700 border-green-300 hover:bg-green-50"
+                    onClick={exportBankCommissionExcel}
+                    data-testid="button-export-commission"
+                  >
+                    <Download className="w-4 h-4" />
+                    تصدير Excel
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-3 gap-3 mb-4">
