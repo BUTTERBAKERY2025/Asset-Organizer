@@ -759,6 +759,7 @@ export interface IStorage {
   
   // Display Bar Daily Summary
   getDisplayBarDailySummary(branchId?: string, date?: string): Promise<DisplayBarDailySummary[]>;
+  upsertDisplayBarDailySummary(data: InsertDisplayBarDailySummary): Promise<DisplayBarDailySummary>;
   updateDisplayBarDailySummary(id: number, data: Partial<InsertDisplayBarDailySummary>): Promise<DisplayBarDailySummary | undefined>;
   
   // Waste Reports
@@ -5158,6 +5159,25 @@ export class DatabaseStorage implements IStorage {
       .where(eq(displayBarDailySummary.id, id))
       .returning();
     return summary || undefined;
+  }
+
+  async upsertDisplayBarDailySummary(data: InsertDisplayBarDailySummary): Promise<DisplayBarDailySummary> {
+    const existing = await db.select().from(displayBarDailySummary).where(
+      and(
+        eq(displayBarDailySummary.branchId, data.branchId),
+        eq(displayBarDailySummary.productId, data.productId),
+        eq(displayBarDailySummary.summaryDate, data.summaryDate)
+      )
+    );
+    if (existing.length > 0) {
+      const [updated] = await db.update(displayBarDailySummary)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(displayBarDailySummary.id, existing[0].id))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(displayBarDailySummary).values(data).returning();
+    return created;
   }
 
   // Waste Reports

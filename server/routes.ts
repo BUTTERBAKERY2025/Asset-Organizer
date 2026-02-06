@@ -7465,6 +7465,74 @@ export async function registerRoutes(
     }
   });
 
+  // Calculate and upsert daily summary for a branch+date (auto-compute from receipts and waste)
+  app.post("/api/display-bar/summary/calculate", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const { branchId, date } = req.body;
+      if (!branchId || !date) {
+        return res.status(400).json({ error: "يجب تحديد الفرع والتاريخ" });
+      }
+      
+      const branchFilter = getEffectiveBranchFilter(req, branchId);
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بالوصول" });
+      }
+      
+      const receipts = await storage.getDisplayBarReceipts(branchId, date);
+      
+      const wasteReportsForDay = await storage.getWasteReports(branchId, date, date);
+      const wasteItemsMap: Record<number, number> = {};
+      for (const wr of wasteReportsForDay) {
+        if (wr.status !== 'rejected') {
+          const items = await storage.getWasteItems(wr.id);
+          for (const item of items) {
+            wasteItemsMap[item.productId] = (wasteItemsMap[item.productId] || 0) + item.quantity;
+          }
+        }
+      }
+      
+      const productIds = new Set<number>();
+      receipts.forEach(r => productIds.add(r.productId));
+      Object.keys(wasteItemsMap).forEach(pid => productIds.add(Number(pid)));
+      
+      const yesterday = new Date(date);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString().split('T')[0];
+      const previousSummaries = await storage.getDisplayBarDailySummary(branchId, yesterdayStr);
+      const previousClosingMap: Record<number, number> = {};
+      for (const ps of previousSummaries) {
+        previousClosingMap[ps.productId] = ps.closingQuantity;
+      }
+      
+      const results: any[] = [];
+      for (const productId of productIds) {
+        const receivedQuantity = receipts
+          .filter(r => r.productId === productId)
+          .reduce((sum, r) => sum + r.quantity, 0);
+        const wastedQuantity = wasteItemsMap[productId] || 0;
+        const openingQuantity = previousClosingMap[productId] || 0;
+        const closingQuantity = openingQuantity + receivedQuantity - wastedQuantity;
+        
+        const summary = await storage.upsertDisplayBarDailySummary({
+          branchId,
+          productId,
+          summaryDate: date,
+          openingQuantity,
+          receivedQuantity,
+          soldQuantity: 0,
+          wastedQuantity,
+          closingQuantity,
+        });
+        results.push(summary);
+      }
+      
+      res.json(results);
+    } catch (error) {
+      console.error("Error calculating daily summary:", error);
+      res.status(500).json({ error: "فشل في حساب الملخص اليومي" });
+    }
+  });
+
   // Update Display Bar Daily Summary
   app.patch("/api/display-bar/summary/:id", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
     try {
@@ -19738,6 +19806,27 @@ export async function registerRoutes(
         user?.id,
         [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username
       );
+      
+      if (destinationType === 'display_bar' || destinationType === 'بار_العرض') {
+        try {
+          const now = new Date();
+          const receiptDate = now.toISOString().split('T')[0];
+          const receiptTime = now.toTimeString().slice(0, 5);
+          
+          await storage.createDisplayBarReceipt({
+            branchId: transfer.sourceBranchId,
+            productId: transfer.productId!,
+            receiptDate,
+            receiptTime,
+            quantity: transfer.quantity,
+            receivedBy: user?.id,
+            productionBatch: `FG-${transfer.id}`,
+            notes: `استلام تلقائي من تحويل المنتجات النهائية #${transfer.id}${notes ? ' - ' + notes : ''}`,
+          });
+        } catch (receiptError) {
+          console.error("Error creating auto display bar receipt:", receiptError);
+        }
+      }
       
       res.status(201).json(transfer);
     } catch (error: any) {

@@ -20,7 +20,8 @@ import { apiRequest } from "@/lib/queryClient";
 import { 
   Package, AlertTriangle, Plus, Camera, Trash2, Check, X, 
   FileText, TrendingDown, Clock, Building2, Calendar, CheckCircle2, User,
-  Eye, Printer, FileDown, Hash, Image, Save, Search, RefreshCw, ArrowRight
+  Eye, Printer, FileDown, Hash, Image, Save, Search, RefreshCw, ArrowRight,
+  ChevronDown, ChevronUp, Calculator, ExternalLink
 } from "lucide-react";
 import { Link } from "wouter";
 import { TablePagination } from "@/components/ui/pagination";
@@ -130,6 +131,7 @@ export default function DisplayBarWastePage() {
   const [historyStatus, setHistoryStatus] = useState<string>("all");
   const [historyPage, setHistoryPage] = useState(1);
   const [expandedReportId, setExpandedReportId] = useState<number | null>(null);
+  const [showDailySummary, setShowDailySummary] = useState(true);
   
   const SHIFT_OPTIONS = [
     { value: "morning", label: "الوردية الصباحية", time: "06:00 - 14:00" },
@@ -209,6 +211,47 @@ export default function DisplayBarWastePage() {
       if (!res.ok) return null;
       return res.json();
     },
+  });
+
+  interface DailySummaryItem {
+    id: number;
+    branchId: string;
+    productId: number;
+    summaryDate: string;
+    openingQuantity: number;
+    receivedQuantity: number;
+    soldQuantity: number;
+    wastedQuantity: number;
+    closingQuantity: number;
+    notes: string | null;
+  }
+
+  const { data: dailySummary = [], isLoading: isSummaryLoading } = useQuery<DailySummaryItem[]>({
+    queryKey: ["/api/display-bar/summary", selectedBranch, selectedDate],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (selectedBranch !== "all") params.append("branchId", selectedBranch);
+      if (selectedDate) params.append("date", selectedDate);
+      const res = await fetch(`/api/display-bar/summary?${params}`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: selectedBranch !== "all" && activeTab === "waste",
+  });
+
+  const calculateSummaryMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/display-bar/summary/calculate", {
+        branchId: selectedBranch,
+        date: selectedDate,
+      });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/display-bar/summary"] });
+      toast({ title: "تم حساب الملخص اليومي بنجاح" });
+    },
+    onError: (err: any) => toast({ title: err.message || "حدث خطأ في حساب الملخص", variant: "destructive" }),
   });
 
   const { data: wasteHistory = [] } = useQuery<any[]>({
@@ -1561,6 +1604,98 @@ export default function DisplayBarWastePage() {
               </CardContent>
             </Card>
 
+            <Card className="border-indigo-200 bg-gradient-to-l from-indigo-50/30 to-blue-50/30" data-testid="daily-summary-card">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center justify-between">
+                  <button
+                    className="flex items-center gap-2 cursor-pointer hover:text-primary transition-colors"
+                    onClick={() => setShowDailySummary(!showDailySummary)}
+                    data-testid="btn-toggle-daily-summary"
+                  >
+                    {showDailySummary ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                    <Calculator className="w-5 h-5 text-indigo-600" />
+                    ملخص حركة المنتجات اليومي
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="text-xs" data-testid="badge-summary-count">
+                      {dailySummary.length} صنف
+                    </Badge>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1 h-9"
+                      onClick={() => calculateSummaryMutation.mutate()}
+                      disabled={calculateSummaryMutation.isPending || selectedBranch === "all"}
+                      data-testid="btn-calculate-daily-summary"
+                    >
+                      {calculateSummaryMutation.isPending ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Calculator className="w-4 h-4" />
+                      )}
+                      حساب الملخص اليومي
+                    </Button>
+                  </div>
+                </CardTitle>
+              </CardHeader>
+              {showDailySummary && (
+                <CardContent className="pt-0">
+                  {isSummaryLoading ? (
+                    <div className="text-center py-6 text-muted-foreground">جاري تحميل الملخص...</div>
+                  ) : dailySummary.length === 0 ? (
+                    <div className="text-center py-6 text-muted-foreground border rounded-lg bg-white/50">
+                      <Calculator className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                      <p className="text-sm">لا يوجد ملخص يومي بعد</p>
+                      <p className="text-xs">اضغط على "حساب الملخص اليومي" لحساب ملخص حركة المنتجات</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm" data-testid="table-daily-summary">
+                        <thead className="bg-indigo-50/80">
+                          <tr>
+                            <th className="p-2 text-right font-medium">#</th>
+                            <th className="p-2 text-right font-medium">اسم المنتج</th>
+                            <th className="p-2 text-center font-medium">الافتتاحي</th>
+                            <th className="p-2 text-center font-medium">المستلم</th>
+                            <th className="p-2 text-center font-medium">المباع</th>
+                            <th className="p-2 text-center font-medium">الهالك</th>
+                            <th className="p-2 text-center font-medium">الختامي</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y">
+                          {dailySummary.map((item, index) => (
+                            <tr key={item.id} className="hover:bg-white/50" data-testid={`row-summary-${item.productId}`}>
+                              <td className="p-2 text-muted-foreground">{index + 1}</td>
+                              <td className="p-2 font-medium">{getProductName(item.productId)}</td>
+                              <td className="p-2 text-center">{item.openingQuantity}</td>
+                              <td className="p-2 text-center text-blue-600 font-medium">{item.receivedQuantity}</td>
+                              <td className="p-2 text-center text-gray-400">{item.soldQuantity}</td>
+                              <td className="p-2 text-center text-red-600 font-medium">{item.wastedQuantity}</td>
+                              <td className={`p-2 text-center font-bold ${item.closingQuantity < 0 ? 'text-red-600' : item.closingQuantity > 0 ? 'text-green-600' : 'text-gray-500'}`}>
+                                {item.closingQuantity}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot className="bg-indigo-50/50 font-medium">
+                          <tr>
+                            <td className="p-2" colSpan={2}>الإجمالي</td>
+                            <td className="p-2 text-center">{dailySummary.reduce((s, i) => s + i.openingQuantity, 0)}</td>
+                            <td className="p-2 text-center text-blue-600">{dailySummary.reduce((s, i) => s + i.receivedQuantity, 0)}</td>
+                            <td className="p-2 text-center text-gray-400">{dailySummary.reduce((s, i) => s + i.soldQuantity, 0)}</td>
+                            <td className="p-2 text-center text-red-600">{dailySummary.reduce((s, i) => s + i.wastedQuantity, 0)}</td>
+                            <td className={`p-2 text-center font-bold ${dailySummary.reduce((s, i) => s + i.closingQuantity, 0) < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                              {dailySummary.reduce((s, i) => s + i.closingQuantity, 0)}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              )}
+            </Card>
+
             <Card>
               <CardHeader className="pb-3">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -1909,6 +2044,13 @@ export default function DisplayBarWastePage() {
                     <FileText className="w-5 h-5" />
                     سجل تقارير الهالك
                   </span>
+                  <div className="flex items-center gap-2">
+                    <Link href={`/production-reports?branchId=${historyBranch !== "all" ? historyBranch : ""}&dateFrom=${historyDateFrom}&dateTo=${historyDateTo}`}>
+                      <Button variant="outline" size="sm" className="gap-1 h-9" data-testid="link-production-reports">
+                        <ExternalLink className="w-4 h-4" />
+                        عرض في تقارير التشغيل
+                      </Button>
+                    </Link>
                   <ExportButtons
                     data={historyExportData}
                     columns={historyExportColumns}
@@ -1917,6 +2059,7 @@ export default function DisplayBarWastePage() {
                     subtitle={`من ${historyDateFrom} إلى ${historyDateTo}`}
                     disabled={wasteHistory.length === 0}
                   />
+                  </div>
                 </CardTitle>
               </CardHeader>
               <CardContent>

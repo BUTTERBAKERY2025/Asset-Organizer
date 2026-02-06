@@ -120,21 +120,23 @@ export default function OperationsDashboardPage() {
             </CardContent>
           </Card>
 
-          <Card className={`${parseFloat(stats?.wastePercentage || "0") > 5 ? 'bg-red-50/50 border-red-100' : 'bg-emerald-50/50 border-emerald-100'}`}>
-            <CardContent className="p-2 sm:p-3">
-              {isLoading ? <Skeleton className="h-10 sm:h-12" /> : (
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center ${parseFloat(stats?.wastePercentage || "0") > 5 ? 'bg-red-100' : 'bg-emerald-100'}`}>
-                    <AlertTriangle className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${parseFloat(stats?.wastePercentage || "0") > 5 ? 'text-red-600' : 'text-emerald-600'}`} />
+          <Link href="/display-bar-waste">
+            <Card className={`cursor-pointer hover:shadow-md transition-shadow ${parseFloat(stats?.wastePercentage || "0") > 5 ? 'bg-red-50/50 border-red-100' : 'bg-emerald-50/50 border-emerald-100'}`} data-testid="kpi-waste-percentage">
+              <CardContent className="p-2 sm:p-3">
+                {isLoading ? <Skeleton className="h-10 sm:h-12" /> : (
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center ${parseFloat(stats?.wastePercentage || "0") > 5 ? 'bg-red-100' : 'bg-emerald-100'}`}>
+                      <AlertTriangle className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${parseFloat(stats?.wastePercentage || "0") > 5 ? 'text-red-600' : 'text-emerald-600'}`} />
+                    </div>
+                    <div>
+                      <div className={`text-lg sm:text-xl font-bold ${parseFloat(stats?.wastePercentage || "0") > 5 ? 'text-red-700' : 'text-emerald-700'}`}>{stats?.wastePercentage || 0}%</div>
+                      <div className={`text-[10px] sm:text-[11px] ${parseFloat(stats?.wastePercentage || "0") > 5 ? 'text-red-600/70' : 'text-emerald-600/70'}`}>نسبة الهالك</div>
+                    </div>
                   </div>
-                  <div>
-                    <div className={`text-lg sm:text-xl font-bold ${parseFloat(stats?.wastePercentage || "0") > 5 ? 'text-red-700' : 'text-emerald-700'}`}>{stats?.wastePercentage || 0}%</div>
-                    <div className={`text-[10px] sm:text-[11px] ${parseFloat(stats?.wastePercentage || "0") > 5 ? 'text-red-600/70' : 'text-emerald-600/70'}`}>نسبة الهالك</div>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                )}
+              </CardContent>
+            </Card>
+          </Link>
 
           <Card className="bg-amber-50/50 border-amber-100">
             <CardContent className="p-2 sm:p-3">
