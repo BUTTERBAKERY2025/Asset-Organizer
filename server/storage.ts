@@ -7775,10 +7775,17 @@ export class DatabaseStorage implements IStorage {
       return updated;
     }
     
+    let branchEmployeeId: number | undefined = undefined;
+    if (employeeId.startsWith('branch_emp_')) {
+      const parsedId = parseInt(employeeId.replace('branch_emp_', ''), 10);
+      if (!isNaN(parsedId)) branchEmployeeId = parsedId;
+    }
+    
     const [created] = await db.insert(attendanceRecords).values({
       employeeId,
       employeeName,
       branchId,
+      branchEmployeeId: branchEmployeeId,
       scheduleId: scheduleId,
       attendanceDate: today,
       actualCheckIn: now,

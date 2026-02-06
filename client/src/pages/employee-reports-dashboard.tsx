@@ -169,9 +169,17 @@ export default function EmployeeReportsDashboardPage() {
   }, [employees, selectedBranch, selectedJobTitle, selectedEmployee]);
 
   const filteredEmployeeLookup = useMemo(() => {
+    const employeeIds = new Set<string>();
+    filteredEmployees.forEach(emp => {
+      employeeIds.add(emp.id.toString());
+      employeeIds.add(`branch_emp_${emp.id}`);
+      if ((emp as any).linkedUserId) {
+        employeeIds.add((emp as any).linkedUserId);
+      }
+    });
     return {
       ids: new Set(filteredEmployees.map(emp => emp.id)),
-      employeeIds: new Set(filteredEmployees.map(emp => emp.id.toString())),
+      employeeIds,
     };
   }, [filteredEmployees]);
 
@@ -237,11 +245,12 @@ export default function EmployeeReportsDashboardPage() {
       if (selectedJobTitle !== "all" || selectedEmployee !== "all") {
         const matchesByBranchEmployeeId = rec.branchEmployeeId && filteredEmployeeLookup.ids.has(rec.branchEmployeeId);
         const matchesByEmployeeId = filteredEmployeeLookup.employeeIds.has(rec.employeeId);
-        if (!matchesByBranchEmployeeId && !matchesByEmployeeId) return false;
+        const matchesByName = rec.employeeName && filteredEmployees.some(emp => emp.employeeName === rec.employeeName && emp.branchId === rec.branchId);
+        if (!matchesByBranchEmployeeId && !matchesByEmployeeId && !matchesByName) return false;
       }
       return true;
     });
-  }, [attendanceRecords, selectedBranch, selectedMonth, selectedJobTitle, selectedEmployee, filteredEmployeeLookup]);
+  }, [attendanceRecords, selectedBranch, selectedMonth, selectedJobTitle, selectedEmployee, filteredEmployeeLookup, filteredEmployees]);
 
   const jobTitles = useMemo(() => {
     if (!employees) return [];
@@ -302,8 +311,12 @@ export default function EmployeeReportsDashboardPage() {
     filteredEmployees.forEach(emp => {
       lookup.set(`bid:${emp.id}`, emp.id);
       lookup.set(`eid:${emp.id.toString()}`, emp.id);
+      lookup.set(`eid:branch_emp_${emp.id}`, emp.id);
       if (emp.employeeNumber) {
         lookup.set(`enum:${emp.employeeNumber}`, emp.id);
+      }
+      if ((emp as any).linkedUserId) {
+        lookup.set(`eid:${(emp as any).linkedUserId}`, emp.id);
       }
     });
     return lookup;
@@ -315,6 +328,13 @@ export default function EmployeeReportsDashboardPage() {
     }
     if (lookup.has(`eid:${rec.employeeId}`)) {
       return lookup.get(`eid:${rec.employeeId}`) || null;
+    }
+    if (rec.employeeName) {
+      for (const emp of filteredEmployees) {
+        if (emp.employeeName === rec.employeeName && emp.branchId === rec.branchId) {
+          return emp.id;
+        }
+      }
     }
     return null;
   };
