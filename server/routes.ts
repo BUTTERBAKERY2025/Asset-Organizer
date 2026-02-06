@@ -7691,16 +7691,58 @@ export async function registerRoutes(
     }
   });
 
+  // Waste Reports History endpoint (must be before /:id route)
+  app.get("/api/waste-reports/history", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const queryBranchId = req.query.branchId as string | undefined;
+      const dateFrom = req.query.dateFrom as string | undefined;
+      const dateTo = req.query.dateTo as string | undefined;
+      const status = req.query.status as string | undefined;
+      
+      const branchFilter = getEffectiveBranchFilter(req, queryBranchId);
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بالوصول" });
+      }
+      
+      const effectiveBranchId = branchFilter.singleBranchId;
+      const reports = await storage.getWasteReports(effectiveBranchId ?? undefined, dateFrom, dateTo);
+      
+      const filtered = status && status !== "all" 
+        ? reports.filter(r => r.status === status) 
+        : reports;
+      
+      const reportsWithItems = await Promise.all(filtered.map(async (report) => {
+        const items = await storage.getWasteItems(report.id);
+        return { ...report, items };
+      }));
+      
+      res.json(reportsWithItems);
+    } catch (error) {
+      console.error("Error fetching waste reports history:", error);
+      res.status(500).json({ error: "فشل في جلب سجل تقارير الهالك" });
+    }
+  });
+
   // Create Waste Report
   app.post("/api/waste-reports", isAuthenticated, requirePermission("operations", "create"), requireBranchAccess, async (req, res) => {
     try {
       const currentUser = getCurrentUser(req);
       
-      // Verify user has access to the target branch
       if (currentUser?.role !== "admin" && req.body.branchId) {
         const hasAccess = await canAccessBranch(req, req.body.branchId);
         if (!hasAccess) {
           return res.status(403).json({ error: "ليس لديك صلاحية لإنشاء تقرير هدر لهذا الفرع" });
+        }
+      }
+      
+      // Check for existing report for same branch+date+shift
+      if (req.body.branchId && req.body.reportDate) {
+        const existingReports = await storage.getWasteReports(req.body.branchId, req.body.reportDate, req.body.reportDate);
+        const existingForShift = existingReports.find(r => 
+          r.shiftName === (req.body.shiftName || null)
+        );
+        if (existingForShift) {
+          return res.status(200).json({ ...existingForShift, existing: true });
         }
       }
       
@@ -7720,7 +7762,7 @@ export async function registerRoutes(
     }
   });
 
-  // Update Waste Report
+  // Update Waste Report with approval workflow
   app.patch("/api/waste-reports/:id", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
@@ -7728,7 +7770,6 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Invalid report ID" });
       }
       
-      // Check existing report's branch access
       const existingReport = await storage.getWasteReport(id);
       if (!existingReport) {
         return res.status(404).json({ error: "Report not found" });
@@ -7742,9 +7783,36 @@ export async function registerRoutes(
         }
       }
       
+      const isAdmin = user?.role === "admin" || user?.role === "manager";
+      const newStatus = req.body.status;
+      
+      // Prevent edits to approved reports (except by admin)
+      if (existingReport.status === 'approved' && !isAdmin) {
+        return res.status(403).json({ error: "لا يمكن تعديل تقرير معتمد" });
+      }
+      
+      // When report is submitted, only allow status changes (approve/reject) by authorized users
+      if (existingReport.status === 'submitted' && !isAdmin) {
+        if (!newStatus || (newStatus !== 'approved' && newStatus !== 'rejected')) {
+          return res.status(403).json({ error: "التقرير مرسل للاعتماد ولا يمكن تعديله" });
+        }
+      }
+      
+      // Only allow approve/reject by admin/manager
+      if (newStatus === 'approved' || newStatus === 'rejected') {
+        if (!isAdmin) {
+          return res.status(403).json({ error: "فقط المدير يمكنه اعتماد أو رفض التقارير" });
+        }
+      }
+      
       const partialData = insertWasteReportSchema.partial().parse(req.body);
       
-      if (req.body.status === 'approved') {
+      if (newStatus === 'approved') {
+        (partialData as any).approvedBy = user?.id;
+        (partialData as any).approvedAt = new Date();
+      }
+      
+      if (newStatus === 'rejected') {
         (partialData as any).approvedBy = user?.id;
         (partialData as any).approvedAt = new Date();
       }
@@ -7825,6 +7893,45 @@ export async function registerRoutes(
     }
   });
 
+  // Clear all waste items for a report (used when re-saving existing report)
+  app.delete("/api/waste-reports/:reportId/items", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
+    try {
+      const reportId = parseInt(req.params.reportId, 10);
+      if (isNaN(reportId)) {
+        return res.status(400).json({ error: "Invalid report ID" });
+      }
+      
+      const report = await storage.getWasteReport(reportId);
+      if (!report) {
+        return res.status(404).json({ error: "Report not found" });
+      }
+      
+      const user = getCurrentUser(req);
+      const isAdmin = user?.role === "admin" || user?.role === "manager";
+      
+      if (report.status === 'approved' || report.status === 'submitted') {
+        if (!isAdmin) {
+          return res.status(403).json({ error: "لا يمكن تعديل تقرير معتمد أو مرسل" });
+        }
+      }
+      
+      if (user?.role !== "admin" && report.branchId) {
+        const hasAccess = await canAccessBranch(req, report.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "ليس لديك صلاحية لتعديل تقارير هذا الفرع" });
+        }
+      }
+      
+      const deletedCount = await storage.deleteWasteItemsByReportId(reportId);
+      await storage.updateWasteReport(reportId, { totalItems: 0, totalValue: 0 });
+      
+      res.json({ deleted: deletedCount });
+    } catch (error) {
+      console.error("Error clearing waste items:", error);
+      res.status(500).json({ error: "Failed to clear waste items" });
+    }
+  });
+
   // Create Waste Item
   app.post("/api/waste-reports/:reportId/items", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
     try {
@@ -7838,8 +7945,13 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Report not found" });
       }
       
-      // Verify branch access for the parent report
       const user = getCurrentUser(req);
+      const isAdmin = user?.role === "admin" || user?.role === "manager";
+      
+      if ((report.status === 'approved' || report.status === 'submitted') && !isAdmin) {
+        return res.status(403).json({ error: "لا يمكن إضافة عناصر لتقرير معتمد أو مرسل" });
+      }
+      
       if (user?.role !== "admin" && report.branchId) {
         const hasAccess = await canAccessBranch(req, report.branchId);
         if (!hasAccess) {

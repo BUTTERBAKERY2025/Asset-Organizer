@@ -774,6 +774,7 @@ export interface IStorage {
   createWasteItem(data: InsertWasteItem): Promise<WasteItem>;
   updateWasteItem(id: number, data: Partial<InsertWasteItem>): Promise<WasteItem | undefined>;
   deleteWasteItem(id: number): Promise<boolean>;
+  deleteWasteItemsByReportId(wasteReportId: number): Promise<number>;
 
   // Advanced Production Orders
   getAllAdvancedProductionOrders(): Promise<AdvancedProductionOrder[]>;
@@ -5227,6 +5228,11 @@ export class DatabaseStorage implements IStorage {
   async deleteWasteItem(id: number): Promise<boolean> {
     const result = await db.delete(wasteItems).where(eq(wasteItems.id, id)).returning();
     return result.length > 0;
+  }
+
+  async deleteWasteItemsByReportId(wasteReportId: number): Promise<number> {
+    const result = await db.delete(wasteItems).where(eq(wasteItems.wasteReportId, wasteReportId)).returning();
+    return result.length;
   }
 
   // Advanced Production Orders

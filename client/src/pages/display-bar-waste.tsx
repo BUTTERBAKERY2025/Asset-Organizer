@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useBranches } from "@/hooks/useBranches";
+import { usePermissions } from "@/hooks/usePermissions";
 import { apiRequest } from "@/lib/queryClient";
 import { 
   Package, AlertTriangle, Plus, Camera, Trash2, Check, X, 
@@ -61,6 +62,7 @@ const WASTE_REASONS = [
 export default function DisplayBarWastePage() {
   const { toast } = useToast();
   const { user } = useAuth();
+  const { canApprove } = usePermissions();
   const queryClient = useQueryClient();
   const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [receiptBranch, setReceiptBranch] = useState<string>("");
@@ -116,6 +118,18 @@ export default function DisplayBarWastePage() {
   const [wasteImageInputRef, setWasteImageInputRef] = useState<number | null>(null);
   const wasteFileInputRef = useRef<HTMLInputElement>(null);
   const [wasteEntriesInitialized, setWasteEntriesInitialized] = useState("");
+  const [savedReportId, setSavedReportId] = useState<number | null>(null);
+  const [savedReportStatus, setSavedReportStatus] = useState<string>("draft");
+  const [historyDateFrom, setHistoryDateFrom] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().split("T")[0];
+  });
+  const [historyDateTo, setHistoryDateTo] = useState(new Date().toISOString().split("T")[0]);
+  const [historyBranch, setHistoryBranch] = useState<string>("all");
+  const [historyStatus, setHistoryStatus] = useState<string>("all");
+  const [historyPage, setHistoryPage] = useState(1);
+  const [expandedReportId, setExpandedReportId] = useState<number | null>(null);
   
   const SHIFT_OPTIONS = [
     { value: "morning", label: "الوردية الصباحية", time: "06:00 - 14:00" },
@@ -196,6 +210,42 @@ export default function DisplayBarWastePage() {
       return res.json();
     },
   });
+
+  const { data: wasteHistory = [] } = useQuery<any[]>({
+    queryKey: ["/api/waste-reports/history", historyBranch, historyDateFrom, historyDateTo, historyStatus],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (historyBranch !== "all") params.append("branchId", historyBranch);
+      if (historyDateFrom) params.append("dateFrom", historyDateFrom);
+      if (historyDateTo) params.append("dateTo", historyDateTo);
+      if (historyStatus !== "all") params.append("status", historyStatus);
+      const res = await fetch(`/api/waste-reports/history?${params}`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: activeTab === "history",
+  });
+
+  const paginatedHistory = wasteHistory.slice((historyPage - 1) * itemsPerPage, historyPage * itemsPerPage);
+
+  const historyExportColumns = [
+    { header: "التاريخ", key: "reportDate", width: 12 },
+    { header: "الفرع", key: "branchName", width: 15 },
+    { header: "الوردية", key: "shiftLabel", width: 12 },
+    { header: "عدد الأصناف", key: "totalItems", width: 12 },
+    { header: "إجمالي القيمة", key: "totalValue", width: 15 },
+    { header: "الحالة", key: "statusLabel", width: 10 },
+    { header: "المسجل", key: "reporterName", width: 20 },
+  ];
+
+  const historyExportData = wasteHistory.map((r: any) => ({
+    ...r,
+    branchName: getBranchName(r.branchId),
+    shiftLabel: SHIFT_OPTIONS.find(s => s.value === r.shiftName)?.label || r.shiftName || "-",
+    statusLabel: r.status === "draft" ? "مسودة" : r.status === "submitted" ? "مرسل" : r.status === "approved" ? "معتمد" : "مرفوض",
+  }));
+
+  const canApproveWaste = canApprove("operations") || user?.role === "admin" || user?.role === "manager";
 
   const { data: viewingReportItems = [], isFetching: isFetchingItems, isSuccess: isItemsSuccess } = useQuery<WasteItem[]>({
     queryKey: ["/api/waste-reports", viewingReport?.id, "items"],
@@ -600,6 +650,14 @@ export default function DisplayBarWastePage() {
       });
       const reportData = await response.json();
       
+      if (reportData.existing) {
+        await apiRequest("DELETE", `/api/waste-reports/${reportData.id}/items`);
+        await apiRequest("PATCH", `/api/waste-reports/${reportData.id}`, {
+          totalItems: totalWasteItems,
+          totalValue: totalWasteValue,
+        });
+      }
+      
       for (const entry of wasteEntriesWithQuantity) {
         await apiRequest("POST", `/api/waste-reports/${reportData.id}/items`, {
           productId: entry.productId,
@@ -613,11 +671,37 @@ export default function DisplayBarWastePage() {
       }
       return reportData;
     },
+    onSuccess: (reportData: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/waste-reports"] });
+      setSavedReportId(reportData.id);
+      setSavedReportStatus(reportData.status || "draft");
+      toast({ title: reportData.existing ? "تم تحديث تقرير الهالك الموجود" : "تم حفظ تقرير الهالك اليومي بنجاح" });
+    },
+    onError: (err: any) => toast({ title: err.message || "حدث خطأ", variant: "destructive" }),
+  });
+
+  const submitForApprovalMutation = useMutation({
+    mutationFn: async (reportId: number) => {
+      const response = await apiRequest("PATCH", `/api/waste-reports/${reportId}`, { status: "submitted" });
+      return response.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/waste-reports"] });
-      toast({ title: "تم حفظ تقرير الهالك اليومي بنجاح" });
-      setDailyWasteEntries([]);
-      setWasteEntriesInitialized("");
+      setSavedReportStatus("submitted");
+      toast({ title: "تم إرسال التقرير للاعتماد بنجاح" });
+    },
+    onError: (err: any) => toast({ title: err.message || "حدث خطأ في إرسال التقرير", variant: "destructive" }),
+  });
+
+  const approveReportMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: number; status: string }) => {
+      const response = await apiRequest("PATCH", `/api/waste-reports/${id}`, { status });
+      return response.json();
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/waste-reports"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/waste-reports/history"] });
+      toast({ title: variables.status === "approved" ? "تم اعتماد التقرير بنجاح" : "تم رفض التقرير" });
     },
     onError: (err: any) => toast({ title: err.message || "حدث خطأ", variant: "destructive" }),
   });
@@ -826,16 +910,20 @@ export default function DisplayBarWastePage() {
           </Card>
         )}
 
-        <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setCurrentPage(1); }}>
+        <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setCurrentPage(1); setHistoryPage(1); }}>
           <div className="flex items-center justify-between">
             <TabsList>
-              <TabsTrigger value="receipts" className="gap-1">
+              <TabsTrigger value="receipts" className="gap-1" data-testid="tab-receipts">
                 <Package className="w-4 h-4" />
                 استلام الإنتاج
               </TabsTrigger>
-              <TabsTrigger value="waste" className="gap-1">
+              <TabsTrigger value="waste" className="gap-1" data-testid="tab-daily-waste">
                 <AlertTriangle className="w-4 h-4" />
-                تقارير الهالك
+                الهالك اليومي
+              </TabsTrigger>
+              <TabsTrigger value="history" className="gap-1" data-testid="tab-waste-history">
+                <FileText className="w-4 h-4" />
+                سجل الهالك
               </TabsTrigger>
             </TabsList>
             <div className="flex gap-2">
@@ -1493,6 +1581,7 @@ export default function DisplayBarWastePage() {
                       size="sm" 
                       onClick={() => setShowAddUnlistedProduct(true)}
                       className="gap-1"
+                      disabled={savedReportStatus === "submitted" || savedReportStatus === "approved"}
                     >
                       <Plus className="w-4 h-4" />
                       إضافة صنف غير مستلم
@@ -1509,6 +1598,7 @@ export default function DisplayBarWastePage() {
                         <th className="p-3 text-right font-medium">الصنف</th>
                         <th className="p-3 text-right font-medium w-24">الكمية المستلمة</th>
                         <th className="p-3 text-right font-medium w-24">كمية الهالك</th>
+                        <th className="p-3 text-right font-medium w-20">المتبقي</th>
                         <th className="p-3 text-right font-medium w-32">سبب الهالك</th>
                         <th className="p-3 text-right font-medium w-40">ملاحظات</th>
                         <th className="p-3 text-right font-medium w-20">صورة</th>
@@ -1518,7 +1608,7 @@ export default function DisplayBarWastePage() {
                     <tbody className="divide-y">
                       {filteredDailyWasteEntries.length === 0 ? (
                         <tr>
-                          <td colSpan={8} className="p-8 text-center text-muted-foreground">
+                          <td colSpan={9} className="p-8 text-center text-muted-foreground">
                             {dailyWasteSearch ? "لا توجد نتائج للبحث" : "لا توجد أصناف مستلمة لهذا اليوم"}
                           </td>
                         </tr>
@@ -1545,12 +1635,27 @@ export default function DisplayBarWastePage() {
                                 className="w-20 h-8 text-center"
                                 placeholder="0"
                                 data-testid={`input-waste-qty-${entry.productId}`}
+                                disabled={savedReportStatus === "submitted" || savedReportStatus === "approved"}
                               />
+                            </td>
+                            <td className="p-2 text-center">
+                              {(() => {
+                                const remaining = entry.receivedQuantity - entry.wasteQuantity;
+                                return (
+                                  <Badge 
+                                    className={remaining > 0 ? "bg-green-100 text-green-700" : remaining === 0 && entry.wasteQuantity > 0 ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600"}
+                                    data-testid={`remaining-${entry.productId}`}
+                                  >
+                                    {remaining}
+                                  </Badge>
+                                );
+                              })()}
                             </td>
                             <td className="p-2">
                               <Select
                                 value={entry.wasteReason}
                                 onValueChange={(val) => handleWasteEntryChange(entry.productId, "wasteReason", val)}
+                                disabled={savedReportStatus === "submitted" || savedReportStatus === "approved"}
                               >
                                 <SelectTrigger className="h-11 sm:h-10 text-xs">
                                   <SelectValue />
@@ -1568,24 +1673,28 @@ export default function DisplayBarWastePage() {
                                 onChange={(e) => handleWasteEntryChange(entry.productId, "reasonDetails", e.target.value)}
                                 className="h-8 text-xs"
                                 placeholder="تفاصيل..."
+                                disabled={savedReportStatus === "submitted" || savedReportStatus === "approved"}
                               />
                             </td>
                             <td className="p-2 text-center">
                               {entry.imageUrl ? (
                                 <div className="relative inline-block">
                                   <img src={entry.imageUrl} alt="صورة" className="w-10 h-10 object-cover rounded cursor-pointer" onClick={() => window.open(entry.imageUrl, '_blank')} />
+                                  {savedReportStatus !== "submitted" && savedReportStatus !== "approved" && (
                                   <button
                                     className="absolute -top-1 -left-1 w-4 h-4 bg-red-500 text-white rounded-full text-xs flex items-center justify-center"
                                     onClick={() => handleWasteEntryChange(entry.productId, "imageUrl", "")}
                                   >
                                     ×
                                   </button>
+                                  )}
                                 </div>
                               ) : (
                                 <Button
                                   size="sm"
                                   variant="ghost"
                                   className="h-8 w-8 p-0"
+                                  disabled={savedReportStatus === "submitted" || savedReportStatus === "approved"}
                                   onClick={() => {
                                     setWasteImageInputRef(entry.productId);
                                     wasteFileInputRef.current?.click();
@@ -1613,6 +1722,11 @@ export default function DisplayBarWastePage() {
                           <td className="p-3 text-center">
                             <Badge className="bg-red-100 text-red-700">{wasteEntriesWithQuantity.reduce((s, e) => s + e.wasteQuantity, 0)}</Badge>
                           </td>
+                          <td className="p-3 text-center">
+                            <Badge className="bg-green-100 text-green-700">
+                              {dailyWasteEntries.reduce((s, e) => s + (e.receivedQuantity - e.wasteQuantity), 0)}
+                            </Badge>
+                          </td>
                           <td colSpan={3}></td>
                           <td className="p-3 text-center font-bold text-red-700">{totalWasteValue.toLocaleString()} ر.س</td>
                         </tr>
@@ -1623,6 +1737,82 @@ export default function DisplayBarWastePage() {
               </CardContent>
             </Card>
 
+            {savedReportId && (
+              <Card className="border-primary/30 bg-primary/5">
+                <CardContent className="p-4">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">حالة التقرير:</span>
+                        {getStatusBadge(savedReportStatus)}
+                      </div>
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <span>مسودة</span>
+                        <span>←</span>
+                        <span className={savedReportStatus === "submitted" || savedReportStatus === "approved" ? "text-blue-600 font-medium" : ""}>مرسل</span>
+                        <span>←</span>
+                        <span className={savedReportStatus === "approved" ? "text-green-600 font-medium" : ""}>معتمد</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {savedReportStatus === "draft" && (
+                        <Button
+                          size="sm"
+                          variant="default"
+                          className="gap-1"
+                          onClick={() => submitForApprovalMutation.mutate(savedReportId)}
+                          disabled={submitForApprovalMutation.isPending}
+                          data-testid="btn-submit-approval"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          {submitForApprovalMutation.isPending ? "جاري الإرسال..." : "إرسال للاعتماد"}
+                        </Button>
+                      )}
+                      {savedReportStatus === "submitted" && canApproveWaste && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="default"
+                            className="gap-1 bg-green-600 hover:bg-green-700"
+                            onClick={() => approveReportMutation.mutate({ id: savedReportId, status: "approved" })}
+                            disabled={approveReportMutation.isPending}
+                            data-testid="btn-approve-report"
+                          >
+                            <Check className="w-4 h-4" />
+                            اعتماد
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            className="gap-1"
+                            onClick={() => approveReportMutation.mutate({ id: savedReportId, status: "rejected" })}
+                            disabled={approveReportMutation.isPending}
+                            data-testid="btn-reject-report"
+                          >
+                            <X className="w-4 h-4" />
+                            رفض
+                          </Button>
+                        </>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1"
+                        onClick={() => {
+                          const report = wasteReports.find((r: WasteReport) => r.id === savedReportId);
+                          if (report) handleViewReport(report);
+                        }}
+                        data-testid="btn-view-saved-report"
+                      >
+                        <Eye className="w-4 h-4" />
+                        عرض التقرير
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             <div className="flex justify-between items-center">
               <ExportButtons
                 data={wasteEntriesWithQuantity.map((e, i) => ({
@@ -1630,6 +1820,7 @@ export default function DisplayBarWastePage() {
                   productName: e.productName,
                   receivedQuantity: e.receivedQuantity,
                   wasteQuantity: e.wasteQuantity,
+                  remaining: e.receivedQuantity - e.wasteQuantity,
                   wasteReasonLabel: WASTE_REASONS.find(r => r.value === e.wasteReason)?.label || e.wasteReason,
                   reasonDetails: e.reasonDetails,
                   totalValue: (e.wasteQuantity * e.unitPrice).toLocaleString(),
@@ -1639,16 +1830,18 @@ export default function DisplayBarWastePage() {
                   { header: "الصنف", key: "productName", width: 25 },
                   { header: "الكمية المستلمة", key: "receivedQuantity", width: 12 },
                   { header: "كمية الهالك", key: "wasteQuantity", width: 12 },
+                  { header: "المتبقي", key: "remaining", width: 10 },
                   { header: "السبب", key: "wasteReasonLabel", width: 15 },
                   { header: "ملاحظات", key: "reasonDetails", width: 20 },
                   { header: "القيمة", key: "totalValue", width: 12 },
                 ]}
                 fileName={`تقرير_الهالك_${selectedDate}`}
                 title="تقرير الهالك اليومي"
-                subtitle={`الفرع: ${getBranchName(wasteBranch)} - التاريخ: ${new Date(selectedDate).toLocaleDateString("en-GB")}`}
+                subtitle={`الفرع: ${getBranchName(wasteBranch)} - التاريخ: ${new Date(selectedDate).toLocaleDateString("en-GB")} - الوردية: ${SHIFT_OPTIONS.find(s => s.value === wasteShift)?.label || wasteShift}`}
                 headerInfo={[
                   { label: "الفرع", value: getBranchName(wasteBranch) },
                   { label: "التاريخ", value: new Date(selectedDate).toLocaleDateString("en-GB") },
+                  { label: "الوردية", value: SHIFT_OPTIONS.find(s => s.value === wasteShift)?.label || wasteShift },
                   { label: "عدد الأصناف الهالكة", value: `${totalWasteItems}` },
                   { label: "إجمالي القيمة", value: `${totalWasteValue.toLocaleString()} ر.س` },
                 ]}
@@ -1656,8 +1849,9 @@ export default function DisplayBarWastePage() {
               />
               <Button 
                 onClick={() => saveDailyWasteReportMutation.mutate()}
-                disabled={saveDailyWasteReportMutation.isPending || !wasteBranch || wasteEntriesWithQuantity.length === 0}
+                disabled={saveDailyWasteReportMutation.isPending || !wasteBranch || wasteEntriesWithQuantity.length === 0 || savedReportStatus === "submitted" || savedReportStatus === "approved"}
                 className="gap-2"
+                data-testid="btn-save-waste-report"
               >
                 {saveDailyWasteReportMutation.isPending ? (
                   <>جاري الحفظ...</>
@@ -1705,20 +1899,82 @@ export default function DisplayBarWastePage() {
             </>
             )}
 
+          </TabsContent>
+
+          <TabsContent value="history" className="mt-4 space-y-4">
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <FileText className="w-5 h-5" />
-                  سجل تقارير الهالك السابقة
+                <CardTitle className="text-base flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <FileText className="w-5 h-5" />
+                    سجل تقارير الهالك
+                  </span>
+                  <ExportButtons
+                    data={historyExportData}
+                    columns={historyExportColumns}
+                    fileName={`سجل_الهالك_${historyDateFrom}_${historyDateTo}`}
+                    title="سجل تقارير الهالك"
+                    subtitle={`من ${historyDateFrom} إلى ${historyDateTo}`}
+                    disabled={wasteHistory.length === 0}
+                  />
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-0">
+              <CardContent>
+                <div className="flex flex-wrap items-center gap-2 mb-4">
+                  <div className="flex items-center gap-1">
+                    <Label className="text-xs whitespace-nowrap">من:</Label>
+                    <Input
+                      type="date"
+                      value={historyDateFrom}
+                      onChange={(e) => { setHistoryDateFrom(e.target.value); setHistoryPage(1); }}
+                      className="w-36 h-9"
+                      data-testid="input-history-date-from"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Label className="text-xs whitespace-nowrap">إلى:</Label>
+                    <Input
+                      type="date"
+                      value={historyDateTo}
+                      onChange={(e) => { setHistoryDateTo(e.target.value); setHistoryPage(1); }}
+                      className="w-36 h-9"
+                      data-testid="input-history-date-to"
+                    />
+                  </div>
+                  <Select value={historyBranch} onValueChange={(v) => { setHistoryBranch(v); setHistoryPage(1); }}>
+                    <SelectTrigger className="w-36 h-9" data-testid="select-history-branch">
+                      <Building2 className="w-4 h-4 ml-1" />
+                      <SelectValue placeholder="الفرع" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-60 overflow-y-auto">
+                      <SelectItem value="all">جميع الفروع</SelectItem>
+                      {branches.map(b => (
+                        <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={historyStatus} onValueChange={(v) => { setHistoryStatus(v); setHistoryPage(1); }}>
+                    <SelectTrigger className="w-32 h-9" data-testid="select-history-status">
+                      <SelectValue placeholder="الحالة" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">جميع الحالات</SelectItem>
+                      <SelectItem value="draft">مسودة</SelectItem>
+                      <SelectItem value="submitted">مرسل</SelectItem>
+                      <SelectItem value="approved">معتمد</SelectItem>
+                      <SelectItem value="rejected">مرفوض</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Badge variant="secondary" className="text-xs">{wasteHistory.length} تقرير</Badge>
+                </div>
+
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="bg-muted/50">
                       <tr>
                         <th className="p-3 text-right font-medium">التاريخ</th>
                         <th className="p-3 text-right font-medium">الفرع</th>
+                        <th className="p-3 text-right font-medium">الوردية</th>
                         <th className="p-3 text-right font-medium">عدد الأصناف</th>
                         <th className="p-3 text-right font-medium">إجمالي القيمة</th>
                         <th className="p-3 text-right font-medium">الحالة</th>
@@ -1727,69 +1983,140 @@ export default function DisplayBarWastePage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y">
-                      {paginatedWasteReports.length === 0 ? (
+                      {paginatedHistory.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="p-8 text-center text-muted-foreground">
-                            لا توجد تقارير هالك سابقة
+                          <td colSpan={8} className="p-8 text-center text-muted-foreground">
+                            لا توجد تقارير هالك في الفترة المحددة
                           </td>
                         </tr>
                       ) : (
-                        paginatedWasteReports.map((report) => (
-                          <tr key={report.id} className="hover:bg-muted/30">
-                            <td className="p-3">{report.reportDate}</td>
-                            <td className="p-3">{getBranchName(report.branchId)}</td>
-                            <td className="p-3">
-                              <Badge variant="outline">{report.totalItems}</Badge>
-                            </td>
-                            <td className="p-3 font-medium text-red-600">
-                              {(report.totalValue || 0).toLocaleString()} ر.س
-                            </td>
-                            <td className="p-3">{getStatusBadge(report.status)}</td>
-                            <td className="p-3">{report.reporterName || "-"}</td>
-                            <td className="p-3">
-                              <div className="flex gap-1">
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => handleViewReport(report)}
-                                  title={report.totalItems === 0 ? "التقرير فارغ" : "عرض التفاصيل"}
-                                  disabled={report.totalItems === 0}
-                                >
-                                  <Eye className="w-4 h-4" />
-                                </Button>
-                                {report.status === "draft" && (
+                        paginatedHistory.map((report: any) => (
+                          <React.Fragment key={report.id}>
+                            <tr className="hover:bg-muted/30 cursor-pointer" onClick={() => setExpandedReportId(expandedReportId === report.id ? null : report.id)} data-testid={`row-history-report-${report.id}`}>
+                              <td className="p-3">{report.reportDate}</td>
+                              <td className="p-3">
+                                <Badge variant="outline" className="gap-1 text-xs">
+                                  <Building2 className="w-3 h-3" />
+                                  {getBranchName(report.branchId)}
+                                </Badge>
+                              </td>
+                              <td className="p-3 text-xs">
+                                {SHIFT_OPTIONS.find(s => s.value === report.shiftName)?.label || report.shiftName || "-"}
+                              </td>
+                              <td className="p-3">
+                                <Badge variant="outline">{report.totalItems}</Badge>
+                              </td>
+                              <td className="p-3 font-medium text-red-600">
+                                {(report.totalValue || 0).toLocaleString()} ر.س
+                              </td>
+                              <td className="p-3">{getStatusBadge(report.status)}</td>
+                              <td className="p-3 text-xs">{report.reporterName || "-"}</td>
+                              <td className="p-3">
+                                <div className="flex gap-1">
                                   <Button
                                     size="sm"
-                                    variant="outline"
-                                    onClick={() => updateWasteReportMutation.mutate({ id: report.id, data: { status: "submitted" } })}
+                                    variant="ghost"
+                                    onClick={(e) => { e.stopPropagation(); handleViewReport(report); }}
+                                    data-testid={`btn-view-history-${report.id}`}
                                   >
-                                    إرسال
+                                    <Eye className="w-4 h-4" />
                                   </Button>
-                                )}
-                                {report.status === "submitted" && (
-                                  <Button
-                                    size="sm"
-                                    variant="default"
-                                    onClick={() => updateWasteReportMutation.mutate({ id: report.id, data: { status: "approved" } })}
-                                  >
-                                    اعتماد
-                                  </Button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
+                                  {report.status === "draft" && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="text-xs"
+                                      onClick={(e) => { e.stopPropagation(); approveReportMutation.mutate({ id: report.id, status: "submitted" }); }}
+                                      data-testid={`btn-submit-history-${report.id}`}
+                                    >
+                                      إرسال
+                                    </Button>
+                                  )}
+                                  {report.status === "submitted" && canApproveWaste && (
+                                    <>
+                                      <Button
+                                        size="sm"
+                                        variant="default"
+                                        className="text-xs bg-green-600 hover:bg-green-700"
+                                        onClick={(e) => { e.stopPropagation(); approveReportMutation.mutate({ id: report.id, status: "approved" }); }}
+                                        data-testid={`btn-approve-history-${report.id}`}
+                                      >
+                                        اعتماد
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="destructive"
+                                        className="text-xs"
+                                        onClick={(e) => { e.stopPropagation(); approveReportMutation.mutate({ id: report.id, status: "rejected" }); }}
+                                        data-testid={`btn-reject-history-${report.id}`}
+                                      >
+                                        رفض
+                                      </Button>
+                                    </>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                            {expandedReportId === report.id && report.items && (
+                              <tr>
+                                <td colSpan={8} className="p-0">
+                                  <div className="bg-muted/20 p-4 border-t border-b">
+                                    <div className="text-sm font-medium mb-2 flex items-center gap-2">
+                                      <Package className="w-4 h-4" />
+                                      أصناف التقرير ({report.items.length})
+                                    </div>
+                                    {report.items.length === 0 ? (
+                                      <p className="text-sm text-muted-foreground">لا توجد أصناف</p>
+                                    ) : (
+                                      <table className="w-full text-xs">
+                                        <thead>
+                                          <tr className="bg-muted/40">
+                                            <th className="p-2 text-right">#</th>
+                                            <th className="p-2 text-right">الصنف</th>
+                                            <th className="p-2 text-right">الكمية</th>
+                                            <th className="p-2 text-right">سعر الوحدة</th>
+                                            <th className="p-2 text-right">الإجمالي</th>
+                                            <th className="p-2 text-right">السبب</th>
+                                            <th className="p-2 text-right">ملاحظات</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="divide-y">
+                                          {report.items.map((item: any, idx: number) => (
+                                            <tr key={item.id}>
+                                              <td className="p-2">{idx + 1}</td>
+                                              <td className="p-2 font-medium">{getProductName(item.productId)}</td>
+                                              <td className="p-2">{item.quantity}</td>
+                                              <td className="p-2">{(item.unitPrice || 0).toLocaleString()} ر.س</td>
+                                              <td className="p-2 text-red-600">{(item.totalValue || 0).toLocaleString()} ر.س</td>
+                                              <td className="p-2">{WASTE_REASONS.find(r => r.value === item.wasteReason)?.label || item.wasteReason}</td>
+                                              <td className="p-2">{item.reasonDetails || "-"}</td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    )}
+                                    {report.status === "approved" && report.approvedAt && (
+                                      <div className="mt-2 text-xs text-green-700 bg-green-50 p-2 rounded">
+                                        تم الاعتماد بتاريخ: {new Date(report.approvedAt).toLocaleDateString('en-GB')}
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
                         ))
                       )}
                     </tbody>
                   </table>
                 </div>
-                {filteredWasteReports.length > itemsPerPage && (
+                {wasteHistory.length > itemsPerPage && (
                   <div className="p-3 border-t">
                     <TablePagination
-                      currentPage={currentPage}
-                      totalItems={filteredWasteReports.length}
+                      currentPage={historyPage}
+                      totalItems={wasteHistory.length}
                       itemsPerPage={itemsPerPage}
-                      onPageChange={setCurrentPage}
+                      onPageChange={setHistoryPage}
                     />
                   </div>
                 )}
