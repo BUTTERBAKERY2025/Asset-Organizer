@@ -222,13 +222,52 @@ export default function BranchDailyClosingPage() {
   };
 
   const selectedJournalsList = journalPreview?.journals?.filter((j: any) => selectedJournals.includes(j.id)) || [];
+  
+  const selectedPaymentMethodTotals: Record<string, {
+    totalAmount: number;
+    totalPosAmount: number;
+    totalTerminalAmount: number;
+    totalBankDiscrepancy: number;
+    totalTransactionCount: number;
+    totalTerminalTransactionCount: number;
+  }> = {};
+  
+  for (const journal of selectedJournalsList) {
+    const jAny = journal as any;
+    if (jAny.paymentBreakdowns && Array.isArray(jAny.paymentBreakdowns)) {
+      for (const pb of jAny.paymentBreakdowns) {
+        const method = pb.paymentMethod;
+        if (!selectedPaymentMethodTotals[method]) {
+          selectedPaymentMethodTotals[method] = {
+            totalAmount: 0, totalPosAmount: 0, totalTerminalAmount: 0,
+            totalBankDiscrepancy: 0, totalTransactionCount: 0, totalTerminalTransactionCount: 0,
+          };
+        }
+        const posAmt = pb.posAmount ?? pb.amount ?? 0;
+        const termAmt = pb.terminalAmount ?? 0;
+        const computedDisc = termAmt - posAmt;
+        selectedPaymentMethodTotals[method].totalAmount += pb.amount ?? 0;
+        selectedPaymentMethodTotals[method].totalPosAmount += posAmt;
+        selectedPaymentMethodTotals[method].totalTerminalAmount += termAmt;
+        selectedPaymentMethodTotals[method].totalBankDiscrepancy += computedDisc;
+        selectedPaymentMethodTotals[method].totalTransactionCount += pb.transactionCount ?? 0;
+        selectedPaymentMethodTotals[method].totalTerminalTransactionCount += pb.terminalTransactionCount ?? 0;
+      }
+    }
+  }
+
+  const CARD_METHODS = ['mada', 'visa', 'mastercard', 'amex', 'card_other', 'card', 'apple_pay', 'stc_pay'];
+  const computedBankDiscrepancy = Object.entries(selectedPaymentMethodTotals)
+    .filter(([method]) => CARD_METHODS.includes(method))
+    .reduce((sum, [, data]) => sum + data.totalBankDiscrepancy, 0);
+
   const selectedTotals = {
     totalSales: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.totalSales ?? 0), 0),
     cashTotal: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.cashTotal ?? 0), 0),
     networkTotal: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.networkTotal ?? 0), 0),
     deliveryTotal: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.deliveryTotal ?? 0), 0),
     totalCashDiscrepancy: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.discrepancyAmount ?? 0), 0),
-    totalBankDiscrepancy: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.bankDiscrepancyTotal ?? 0), 0),
+    totalBankDiscrepancy: computedBankDiscrepancy,
     totalCustomerCount: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.customerCount ?? 0), 0),
     totalOpeningBalance: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.openingBalance ?? 0), 0),
     totalExpectedCash: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.expectedCash ?? 0), 0),
@@ -237,8 +276,8 @@ export default function BranchDailyClosingPage() {
     journalsCount: selectedJournalsList.length,
   };
   
-  const grandPaymentTotals = journalPreview?.paymentMethodTotals ? 
-    Object.values(journalPreview.paymentMethodTotals).reduce((acc: any, data: any) => ({
+  const grandPaymentTotals = Object.keys(selectedPaymentMethodTotals).length > 0 ? 
+    Object.values(selectedPaymentMethodTotals).reduce((acc: any, data: any) => ({
       totalAmount: (acc.totalAmount ?? 0) + (data.totalAmount ?? 0),
       totalPosAmount: (acc.totalPosAmount ?? 0) + (data.totalPosAmount ?? 0),
       totalTerminalAmount: (acc.totalTerminalAmount ?? 0) + (data.totalTerminalAmount ?? 0),
@@ -446,7 +485,7 @@ export default function BranchDailyClosingPage() {
                                       {journal.paymentBreakdowns.map((pb: any, idx: number) => {
                                         const posAmt = pb.posAmount ?? pb.amount ?? 0;
                                         const termAmt = pb.terminalAmount ?? 0;
-                                        const bankDisc = pb.bankDiscrepancy ?? (termAmt - posAmt);
+                                        const bankDisc = termAmt - posAmt;
                                         return (
                                           <TableRow key={idx}>
                                             <TableCell className="font-medium">
@@ -593,7 +632,7 @@ export default function BranchDailyClosingPage() {
                     </div>
                   </div>
 
-                  {journalPreview?.paymentMethodTotals && Object.keys(journalPreview.paymentMethodTotals).length > 0 && (
+                  {Object.keys(selectedPaymentMethodTotals).length > 0 && (
                     <div className="bg-white rounded-lg border p-4">
                       <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
                         <CreditCard className="h-4 w-4 text-amber-600" />
@@ -612,22 +651,22 @@ export default function BranchDailyClosingPage() {
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {Object.entries(journalPreview.paymentMethodTotals)
+                            {Object.entries(selectedPaymentMethodTotals)
                               .sort(([a], [b]) => a === 'cash' ? -1 : b === 'cash' ? 1 : 0)
                               .map(([method, data]) => {
-                              const totalAmt = data.totalAmount ?? 0;
                               const posAmt = data.totalPosAmount ?? 0;
                               const termAmt = data.totalTerminalAmount ?? 0;
                               const bankDisc = data.totalBankDiscrepancy ?? 0;
                               const txnCount = data.totalTransactionCount ?? 0;
                               const isCash = method === 'cash';
+                              const displayAmount = Math.max(posAmt, data.totalAmount ?? 0, termAmt);
                               return (
                                 <TableRow key={method} className={isCash ? 'bg-green-50' : ''}>
                                   <TableCell className={`font-medium ${isCash ? 'text-green-700' : ''}`}>
                                     {PAYMENT_METHOD_LABELS[method] || method}
                                   </TableCell>
                                   <TableCell className={`text-center font-semibold ${isCash ? 'text-green-700' : ''}`}>
-                                    {formatCurrency(totalAmt)} ريال
+                                    {formatCurrency(displayAmount)} ريال
                                   </TableCell>
                                   <TableCell className="text-center">
                                     {formatCurrency(posAmt)} ريال
@@ -651,7 +690,7 @@ export default function BranchDailyClosingPage() {
                               <TableRow className="bg-amber-100 font-bold border-t-2 border-amber-300">
                                 <TableCell className="font-bold text-amber-800">الإجمالي الكلي</TableCell>
                                 <TableCell className="text-center font-bold text-amber-800">
-                                  {formatCurrency(grandPaymentTotals.totalAmount)} ريال
+                                  {formatCurrency(Math.max(grandPaymentTotals.totalPosAmount, grandPaymentTotals.totalAmount, grandPaymentTotals.totalTerminalAmount))} ريال
                                 </TableCell>
                                 <TableCell className="text-center font-bold text-amber-800">
                                   {formatCurrency(grandPaymentTotals.totalPosAmount)} ريال

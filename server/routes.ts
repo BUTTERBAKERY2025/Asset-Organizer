@@ -3839,7 +3839,11 @@ export async function registerRoutes(
         // Calculate total bank POS amount (sum of all POS amounts from card payments)
         journalData.totalBankPosAmount = paymentBreakdowns
           .filter((b: any) => cardMethods.includes(b.paymentMethod))
-          .reduce((sum: number, b: any) => sum + (parseFloat(b.amount) || 0), 0);
+          .reduce((sum: number, b: any) => sum + (parseFloat(b.posAmount) || parseFloat(b.amount) || 0), 0);
+        
+        // Calculate bank discrepancy total (terminal - POS)
+        journalData.bankDiscrepancyTotal = journalData.totalBankTerminalAmount - journalData.totalBankPosAmount;
+        journalData.bankDiscrepancyStatus = journalData.bankDiscrepancyTotal > 0.5 ? 'surplus' : journalData.bankDiscrepancyTotal < -0.5 ? 'shortage' : 'balanced';
       }
       
       // Calculate average ticket from transaction count (with explicit zero guard)
@@ -3960,7 +3964,11 @@ export async function registerRoutes(
         // Calculate total bank POS amount (sum of all POS amounts from card payments)
         journalData.totalBankPosAmount = paymentBreakdowns
           .filter((b: any) => cardMethods.includes(b.paymentMethod))
-          .reduce((sum: number, b: any) => sum + (parseFloat(b.amount) || 0), 0);
+          .reduce((sum: number, b: any) => sum + (parseFloat(b.posAmount) || parseFloat(b.amount) || 0), 0);
+        
+        // Calculate bank discrepancy total (terminal - POS)
+        journalData.bankDiscrepancyTotal = journalData.totalBankTerminalAmount - journalData.totalBankPosAmount;
+        journalData.bankDiscrepancyStatus = journalData.bankDiscrepancyTotal > 0.5 ? 'surplus' : journalData.bankDiscrepancyTotal < -0.5 ? 'shortage' : 'balanced';
       }
       
       // Calculate average ticket from transaction count
@@ -4906,7 +4914,7 @@ export async function registerRoutes(
         journalsCount: journals.length,
       };
       
-      // Aggregate payment methods
+      // Aggregate payment methods (compute bankDiscrepancy dynamically as terminalAmount - posAmount)
       const paymentMethodTotals: Record<string, {
         totalAmount: number;
         totalPosAmount: number;
@@ -4928,10 +4936,12 @@ export async function registerRoutes(
             totalTerminalTransactionCount: 0,
           };
         }
+        const posAmt = pb.posAmount || pb.amount || 0;
+        const termAmt = pb.terminalAmount || 0;
         paymentMethodTotals[method].totalAmount += pb.amount || 0;
-        paymentMethodTotals[method].totalPosAmount += pb.posAmount || 0;
-        paymentMethodTotals[method].totalTerminalAmount += pb.terminalAmount || 0;
-        paymentMethodTotals[method].totalBankDiscrepancy += pb.bankDiscrepancy || 0;
+        paymentMethodTotals[method].totalPosAmount += posAmt;
+        paymentMethodTotals[method].totalTerminalAmount += termAmt;
+        paymentMethodTotals[method].totalBankDiscrepancy += (termAmt - posAmt);
         paymentMethodTotals[method].totalTransactionCount += pb.transactionCount || 0;
         paymentMethodTotals[method].totalTerminalTransactionCount += pb.terminalTransactionCount || 0;
       }
@@ -5124,10 +5134,12 @@ export async function registerRoutes(
             totalTerminalTransactionCount: 0,
           };
         }
+        const posAmt = pb.posAmount || pb.amount || 0;
+        const termAmt = pb.terminalAmount || 0;
         paymentMethodTotals[method].totalAmount += pb.amount || 0;
-        paymentMethodTotals[method].totalPosAmount += pb.posAmount || 0;
-        paymentMethodTotals[method].totalTerminalAmount += pb.terminalAmount || 0;
-        paymentMethodTotals[method].totalBankDiscrepancy += pb.bankDiscrepancy || 0;
+        paymentMethodTotals[method].totalPosAmount += posAmt;
+        paymentMethodTotals[method].totalTerminalAmount += termAmt;
+        paymentMethodTotals[method].totalBankDiscrepancy += (termAmt - posAmt);
         paymentMethodTotals[method].totalTransactionCount += pb.transactionCount || 0;
         paymentMethodTotals[method].totalTerminalTransactionCount += pb.terminalTransactionCount || 0;
       }
