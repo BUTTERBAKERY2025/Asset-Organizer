@@ -557,33 +557,103 @@ export default function BranchDailyClosureDetailPage() {
                       <TableHead className="text-right">النقدي</TableHead>
                       <TableHead className="text-right">الشبكة</TableHead>
                       <TableHead className="text-right">فرق النقدي</TableHead>
+                      <TableHead className="text-right">فرق الشبكة</TableHead>
+                      <TableHead className="text-right">صافي الفرق</TableHead>
                       <TableHead className="text-right">الحالة</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {closure.journals.map((j: any) => {
                       const shiftLabel = j.shiftType === 'morning' ? 'صباحي' : j.shiftType === 'evening' ? 'مسائي' : j.shiftType === 'night' ? 'ليلي' : (j.shiftType || '-');
-                      const disc = j.discrepancyAmount || 0;
+                      const expectedCash = (j.expectedCash != null && j.expectedCash !== 0) ? j.expectedCash : ((j.openingBalance || 0) + (j.cashTotal || 0));
+                      const cashDisc = (j.actualCashDrawer || 0) - expectedCash;
+                      const bankDisc = j.bankDiscrepancyTotal || 0;
+                      const netDisc = cashDisc + bankDisc;
                       return (
-                        <TableRow key={j.id}>
-                          <TableCell className="font-medium">{j.cashierName || '-'}</TableCell>
+                        <TableRow key={j.id} data-testid={`row-journal-${j.id}`}>
+                          <TableCell className="font-medium">
+                            <Link href={`/cashier-journals/${j.id}`}>
+                              <span className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer" data-testid={`link-journal-${j.id}`}>
+                                {j.cashierName || '-'}
+                              </span>
+                            </Link>
+                          </TableCell>
                           <TableCell>{shiftLabel}</TableCell>
                           <TableCell>{formatCurrency(j.totalSales)} ر.س</TableCell>
                           <TableCell>{formatCurrency(j.cashTotal)} ر.س</TableCell>
                           <TableCell>{formatCurrency(j.networkTotal)} ر.س</TableCell>
                           <TableCell>
-                            <span className={disc > 0 ? 'text-amber-600' : disc < 0 ? 'text-red-600' : 'text-green-600'}>
-                              {formatCurrency(disc)} ر.س
+                            <span className={cashDisc > 0.5 ? 'text-amber-600 font-semibold' : cashDisc < -0.5 ? 'text-red-600 font-semibold' : 'text-green-600'}>
+                              {formatCurrency(cashDisc)} ر.س
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <span className={bankDisc > 0.5 ? 'text-amber-600 font-semibold' : bankDisc < -0.5 ? 'text-red-600 font-semibold' : 'text-green-600'}>
+                              {formatCurrency(bankDisc)} ر.س
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <span className={`font-bold ${netDisc > 0.5 ? 'text-amber-700 bg-amber-50 px-2 py-0.5 rounded' : netDisc < -0.5 ? 'text-red-700 bg-red-50 px-2 py-0.5 rounded' : 'text-green-700 bg-green-50 px-2 py-0.5 rounded'}`}>
+                              {formatCurrency(netDisc)} ر.س
+                              <span className="text-[10px] mr-1">
+                                {netDisc > 0.5 ? 'زيادة' : netDisc < -0.5 ? 'عجز' : 'مطابق'}
+                              </span>
                             </span>
                           </TableCell>
                           <TableCell>
                             <Badge variant={j.status === 'approved' ? 'default' : j.status === 'submitted' ? 'secondary' : 'outline'}>
-                              {j.status === 'approved' ? 'معتمدة' : j.status === 'submitted' ? 'مقدمة' : j.status === 'draft' ? 'مسودة' : j.status}
+                              {j.status === 'approved' ? 'معتمدة' : j.status === 'submitted' ? 'مقدمة' : j.status === 'draft' ? 'مسودة' : j.status === 'posted' ? 'مرحّلة' : j.status}
                             </Badge>
                           </TableCell>
                         </TableRow>
                       );
                     })}
+                    <TableRow className="bg-slate-50 font-bold border-t-2">
+                      <TableCell colSpan={3} className="font-bold">الإجمالي</TableCell>
+                      <TableCell className="font-bold">{formatCurrency(closure.journals.reduce((s: number, j: any) => s + (j.cashTotal || 0), 0))} ر.س</TableCell>
+                      <TableCell className="font-bold">{formatCurrency(closure.journals.reduce((s: number, j: any) => s + (j.networkTotal || 0), 0))} ر.س</TableCell>
+                      <TableCell className="font-bold">
+                        {(() => {
+                          const totalCashDisc = closure.journals.reduce((s: number, j: any) => {
+                            const exp = (j.expectedCash != null && j.expectedCash !== 0) ? j.expectedCash : ((j.openingBalance || 0) + (j.cashTotal || 0));
+                            return s + ((j.actualCashDrawer || 0) - exp);
+                          }, 0);
+                          return (
+                            <span className={totalCashDisc > 0.5 ? 'text-amber-600' : totalCashDisc < -0.5 ? 'text-red-600' : 'text-green-600'}>
+                              {formatCurrency(totalCashDisc)} ر.س
+                            </span>
+                          );
+                        })()}
+                      </TableCell>
+                      <TableCell className="font-bold">
+                        {(() => {
+                          const totalBankDisc = closure.journals.reduce((s: number, j: any) => s + (j.bankDiscrepancyTotal || 0), 0);
+                          return (
+                            <span className={totalBankDisc > 0.5 ? 'text-amber-600' : totalBankDisc < -0.5 ? 'text-red-600' : 'text-green-600'}>
+                              {formatCurrency(totalBankDisc)} ر.س
+                            </span>
+                          );
+                        })()}
+                      </TableCell>
+                      <TableCell className="font-bold">
+                        {(() => {
+                          const totalNet = closure.journals.reduce((s: number, j: any) => {
+                            const exp = (j.expectedCash != null && j.expectedCash !== 0) ? j.expectedCash : ((j.openingBalance || 0) + (j.cashTotal || 0));
+                            const cd = (j.actualCashDrawer || 0) - exp;
+                            return s + cd + (j.bankDiscrepancyTotal || 0);
+                          }, 0);
+                          return (
+                            <span className={`px-2 py-0.5 rounded ${totalNet > 0.5 ? 'text-amber-700 bg-amber-100' : totalNet < -0.5 ? 'text-red-700 bg-red-100' : 'text-green-700 bg-green-100'}`}>
+                              {formatCurrency(totalNet)} ر.س
+                              <span className="text-[10px] mr-1">
+                                {totalNet > 0.5 ? 'زيادة' : totalNet < -0.5 ? 'عجز' : 'مطابق'}
+                              </span>
+                            </span>
+                          );
+                        })()}
+                      </TableCell>
+                      <TableCell></TableCell>
+                    </TableRow>
                   </TableBody>
                 </Table>
               </div>
