@@ -246,9 +246,9 @@ function Router() {
       <Route path="/cashier-journals">{() => <ModulePage component={CashierJournalsPage} module="cashier_journal" />}</Route>
       <Route path="/cashier-journals/new">{() => <ModulePage component={CashierJournalFormPage} module="cashier_journal" />}</Route>
       <Route path="/cashier-journals/:id">{() => <ModulePage component={CashierJournalFormPage} module="cashier_journal" />}</Route>
-      <Route path="/branch-daily-closures/:id">{() => <ModulePage component={BranchDailyClosureDetailPage} module="cashier_journal" />}</Route>
-      <Route path="/branch-daily-closures">{() => <ModulePage component={BranchDailyClosuresPage} module="cashier_journal" />}</Route>
-      <Route path="/branch-daily-closing">{() => <ModulePage component={BranchDailyClosingPage} module="cashier_journal" />}</Route>
+      <Route path="/branch-daily-closures/:id">{() => <ModulePage component={BranchDailyClosureDetailPage} module="daily_closures" />}</Route>
+      <Route path="/branch-daily-closures">{() => <ModulePage component={BranchDailyClosuresPage} module="daily_closures" />}</Route>
+      <Route path="/branch-daily-closing">{() => <ModulePage component={BranchDailyClosingPage} module="daily_closures" />}</Route>
       <Route path="/sales-analytics">{() => <ModulePage component={SalesAnalyticsPage} module="sales_analytics" />}</Route>
       <Route path="/targets-planning">{() => <ModulePage component={TargetsPlanningPage} module="targets_planning" />}</Route>
       <Route path="/targets-dashboard">{() => <ModulePage component={TargetsDashboardPage} module="targets" />}</Route>

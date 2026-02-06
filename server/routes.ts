@@ -4760,7 +4760,7 @@ export async function registerRoutes(
   // ==================== Branch Daily Closures Module ====================
 
   // Get all branch daily closures
-  app.get("/api/branch-daily-closures", isAuthenticated, async (req, res) => {
+  app.get("/api/branch-daily-closures", isAuthenticated, requirePermission("daily_closures", "view"), async (req, res) => {
     try {
       const { branchId, startDate, endDate, status } = req.query;
       
@@ -4796,7 +4796,7 @@ export async function registerRoutes(
 
   // Get journals for a specific date and branch (for creating closure)
   // IMPORTANT: This must be defined BEFORE /:id to avoid "journals-preview" being matched as an ID
-  app.get("/api/branch-daily-closures/journals-preview", isAuthenticated, async (req, res) => {
+  app.get("/api/branch-daily-closures/journals-preview", isAuthenticated, requirePermission("daily_closures", "view"), async (req, res) => {
     try {
       const { branchId, date } = req.query;
       
@@ -4912,7 +4912,7 @@ export async function registerRoutes(
   });
 
   // Get single branch daily closure with details
-  app.get("/api/branch-daily-closures/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/branch-daily-closures/:id", isAuthenticated, requirePermission("daily_closures", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       
@@ -4961,7 +4961,7 @@ export async function registerRoutes(
   });
 
   // Create branch daily closure
-  app.post("/api/branch-daily-closures", isAuthenticated, async (req, res) => {
+  app.post("/api/branch-daily-closures", isAuthenticated, requirePermission("daily_closures", "create"), async (req, res) => {
     try {
       const user = getCurrentUser(req);
       const { branchId, closureDate, journalIds, notes } = req.body;
@@ -5101,7 +5101,7 @@ export async function registerRoutes(
   });
 
   // Close (finalize) branch daily closure
-  app.post("/api/branch-daily-closures/:id/close", isAuthenticated, async (req, res) => {
+  app.post("/api/branch-daily-closures/:id/close", isAuthenticated, requirePermission("daily_closures", "approve"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
       
@@ -5149,7 +5149,7 @@ export async function registerRoutes(
   });
 
   // Delete branch daily closure (only if open, admin only)
-  app.delete("/api/branch-daily-closures/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/branch-daily-closures/:id", isAuthenticated, requirePermission("daily_closures", "delete"), async (req, res) => {
     try {
       // SECURITY: Only admins can delete closures
       if (!isUserAdmin(req)) {

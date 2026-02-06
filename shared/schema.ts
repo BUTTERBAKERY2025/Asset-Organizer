@@ -536,6 +536,7 @@ export const SYSTEM_MODULES = [
   "cashier_journal",
   "cashier_performance",
   "cashier", // اسم مختصر للتوافق
+  "daily_closures", // الإغلاقات اليومية للفروع - وحدة مستقلة عن يومية الكاشير
   "pnl_dashboard",
   "incentives",
   "sales_analytics",
@@ -705,6 +706,7 @@ export const MODULE_LABELS: Record<SystemModule, string> = {
   cashier: "الكاشير",
   cashier_journal: "يومية الكاشير",
   cashier_performance: "أداء الكاشير",
+  daily_closures: "الإغلاقات اليومية للفروع",
   pnl_dashboard: "لوحة الأرباح والخسائر",
   incentives: "الحوافز",
   sales_analytics: "تحليلات المبيعات",
@@ -847,6 +849,7 @@ export const MODULE_GROUPS: { label: string; modules: SystemModule[] }[] = [
     modules: [
       "cashier_journal",
       "cashier_performance",
+      "daily_closures",
       "pnl_dashboard",
       "incentives",
       "sales_analytics",
@@ -1036,6 +1039,7 @@ export const JOB_ROLE_PERMISSION_TEMPLATES: Record<
     { module: "shifts", actions: ["view", "create", "edit"] },
     { module: "quality_control", actions: ["view"] },
     { module: "cashier_journal", actions: ["view", "approve"] },
+    { module: "daily_closures", actions: ["view", "create", "approve"] },
     { module: "inventory", actions: ["view"] },
   ],
 
@@ -1049,6 +1053,10 @@ export const JOB_ROLE_PERMISSION_TEMPLATES: Record<
     {
       module: "cashier_journal",
       actions: ["view", "create", "edit", "approve"],
+    },
+    {
+      module: "daily_closures",
+      actions: ["view", "create", "edit", "approve", "export"],
     },
     { module: "inventory", actions: ["view", "create", "edit"] },
     { module: "asset_transfers", actions: ["view", "create", "edit"] },

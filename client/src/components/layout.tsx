@@ -194,7 +194,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         icon: Receipt,
         items: [
           { href: "/cashier-journals", label: t("sidebar.cashierJournal"), icon: Wallet, module: "cashier_journal", isHeader: true },
-          { href: "/branch-daily-closures", label: t("sidebar.dailyClosures"), icon: Lock, module: "cashier_journal", indent: true },
+          { href: "/branch-daily-closures", label: t("sidebar.dailyClosures"), icon: Lock, module: "daily_closures", indent: true },
           { href: "/sales-analytics", label: t("sidebar.salesAnalytics"), icon: PieChart, module: "sales_analytics", indent: true },
           { href: "/targets-planning", label: t("sidebar.targetsPlanning"), icon: Target, module: "targets_planning", indent: true },
           { href: "/targets-dashboard", label: t("sidebar.targetsDashboard"), icon: TrendingUp, module: "targets", indent: true },
