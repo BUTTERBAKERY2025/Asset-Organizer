@@ -593,7 +593,13 @@ export default function DisplayBarWastePage() {
     return Object.values(productMap).sort((a, b) => a.productName.localeCompare(b.productName, "ar"));
   }, [filteredReceipts, products]);
 
-  const initializeWasteEntriesFromProducts = useCallback(async () => {
+  const productsRef = useRef(products);
+  productsRef.current = products;
+  const wasteReportsRef = useRef(wasteReports);
+  wasteReportsRef.current = wasteReports;
+  const loadedReportRef = useRef<string>("");
+
+  const initializeWasteEntriesFromProducts = useCallback(() => {
     const entries: DailyWasteEntry[] = aggregatedReceivedProducts.map(p => ({
       productId: p.productId,
       productName: p.productName,
@@ -606,29 +612,55 @@ export default function DisplayBarWastePage() {
       unitPrice: p.unitPrice,
       isFromReceipt: true,
     }));
+    setDailyWasteEntries(entries);
+  }, [aggregatedReceivedProducts]);
 
+  useEffect(() => {
+    const initKey = `${selectedBranch}_${selectedDate}`;
+    if (selectedBranch !== "all" && aggregatedReceivedProducts.length > 0 && wasteEntriesInitialized !== initKey) {
+      initializeWasteEntriesFromProducts();
+      setWasteEntriesInitialized(initKey);
+      loadedReportRef.current = "";
+    } else if (selectedBranch === "all") {
+      setDailyWasteEntries([]);
+      setWasteEntriesInitialized("");
+      setSavedReportId(null);
+      setSavedReportStatus("draft");
+      loadedReportRef.current = "";
+    }
+  }, [aggregatedReceivedProducts.length, selectedBranch, selectedDate, wasteEntriesInitialized]);
+
+  useEffect(() => {
+    if (selectedBranch === "all" || wasteReports.length === 0) return;
     const existingReport = wasteReports.find(
       (r: WasteReport) => r.branchId === selectedBranch && r.reportDate === selectedDate
     );
+    const loadKey = `${selectedBranch}_${selectedDate}_${existingReport?.id ?? 'none'}`;
+    if (loadKey === loadedReportRef.current) return;
+    loadedReportRef.current = loadKey;
 
     if (existingReport) {
       setSavedReportId(existingReport.id);
       setSavedReportStatus(existingReport.status || "draft");
-      try {
-        const res = await fetch(`/api/waste-reports/${existingReport.id}/items`);
-        if (res.ok) {
-          const savedItems = await res.json();
-          if (Array.isArray(savedItems) && savedItems.length > 0) {
+      fetch(`/api/waste-reports/${existingReport.id}/items`)
+        .then(res => res.ok ? res.json() : [])
+        .then((savedItems: any[]) => {
+          if (!Array.isArray(savedItems) || savedItems.length === 0) return;
+          setDailyWasteEntries(prev => {
+            const updated = [...prev];
             savedItems.forEach((item: any) => {
-              const existingEntry = entries.find(e => e.productId === item.productId);
-              if (existingEntry) {
-                existingEntry.wasteQuantity = item.quantity || 0;
-                existingEntry.wasteReason = item.wasteReason || "expired";
-                existingEntry.reasonDetails = item.reasonDetails || "";
-                existingEntry.imageUrl = item.imageUrl || "";
+              const idx = updated.findIndex(e => e.productId === item.productId);
+              if (idx >= 0) {
+                updated[idx] = {
+                  ...updated[idx],
+                  wasteQuantity: item.quantity || 0,
+                  wasteReason: item.wasteReason || "expired",
+                  reasonDetails: item.reasonDetails || "",
+                  imageUrl: item.imageUrl || "",
+                };
               } else {
-                const product = products.find(p => p.id === item.productId);
-                entries.push({
+                const product = productsRef.current.find(p => p.id === item.productId);
+                updated.push({
                   productId: item.productId,
                   productName: product?.name || "غير معروف",
                   category: product?.category || "other",
@@ -642,37 +674,15 @@ export default function DisplayBarWastePage() {
                 });
               }
             });
-          }
-        }
-      } catch (err) {
-        console.error("Error loading saved waste items:", err);
-      }
+            return updated;
+          });
+        })
+        .catch(err => console.error("Error loading saved waste items:", err));
     } else {
       setSavedReportId(null);
       setSavedReportStatus("draft");
     }
-
-    setDailyWasteEntries(entries);
-  }, [aggregatedReceivedProducts, wasteReports, selectedBranch, selectedDate, products]);
-
-  useEffect(() => {
-    const initKey = `${selectedBranch}_${selectedDate}_${wasteReports.length}`;
-    if (selectedBranch !== "all" && wasteEntriesInitialized !== initKey) {
-      const hasReceipts = aggregatedReceivedProducts.length > 0;
-      const hasExistingReport = wasteReports.some(
-        (r: WasteReport) => r.branchId === selectedBranch && r.reportDate === selectedDate
-      );
-      if (hasReceipts || hasExistingReport) {
-        initializeWasteEntriesFromProducts();
-        setWasteEntriesInitialized(initKey);
-      }
-    } else if (selectedBranch === "all") {
-      setDailyWasteEntries([]);
-      setWasteEntriesInitialized("");
-      setSavedReportId(null);
-      setSavedReportStatus("draft");
-    }
-  }, [aggregatedReceivedProducts.length, selectedBranch, selectedDate, wasteEntriesInitialized, wasteReports]);
+  }, [selectedBranch, selectedDate, wasteReports]);
 
   useEffect(() => {
     if (selectedBranch !== "all") {
@@ -1624,7 +1634,7 @@ export default function DisplayBarWastePage() {
                     <Button 
                       variant="outline" 
                       size="sm"
-                      onClick={() => { setDailyWasteEntries([]); setWasteEntriesInitialized(""); queryClient.invalidateQueries({ queryKey: ["/api/waste-reports"] }); }}
+                      onClick={() => { setDailyWasteEntries([]); setWasteEntriesInitialized(""); loadedReportRef.current = ""; queryClient.invalidateQueries({ queryKey: ["/api/waste-reports"] }); }}
                       className="gap-1"
                     >
                       <RefreshCw className="w-4 h-4" />
