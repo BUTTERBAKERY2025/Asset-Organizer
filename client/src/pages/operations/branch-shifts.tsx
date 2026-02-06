@@ -275,7 +275,7 @@ export default function BranchShiftsPage() {
   }, [selectedBranch]);
 
   // جلب عدد الموظفين من جدول الورديات تلقائياً
-  const todayDate = new Date().toISOString().split('T')[0];
+  const todayDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Riyadh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
   const { data: shiftEmployeeCountData } = useQuery<{ count: number }>({
     queryKey: ["/api/shifts/employee-count", selectedBranch, todayDate, selectedShiftType],
     queryFn: async () => {
@@ -338,13 +338,27 @@ export default function BranchShiftsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error("Failed to create shift");
+      if (res.status === 409) {
+        const err = await res.json();
+        throw new Error(err.error || "الشفت مكتمل بالفعل");
+      }
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "فشل في إنشاء الشفت");
+      }
       return res.json();
     },
     onSuccess: (shift) => {
       setCurrentShift(shift);
       queryClient.invalidateQueries({ queryKey: ["/api/branch-shifts"] });
-      toast({ title: "تم إنشاء الشفت بنجاح" });
+      if (shift._existing) {
+        toast({ title: "تم استرجاع شفت موجود لهذا الفرع اليوم", description: "يمكنك متابعة العمل عليه" });
+      } else {
+        toast({ title: "تم إنشاء الشفت بنجاح" });
+      }
+    },
+    onError: (error: Error) => {
+      toast({ title: error.message, variant: "destructive" });
     },
   });
 
@@ -355,8 +369,14 @@ export default function BranchShiftsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error("Failed to save response");
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "فشل في حفظ الاستجابات");
+      }
       return res.json();
+    },
+    onError: (error: Error) => {
+      toast({ title: error.message, variant: "destructive" });
     },
   });
 
@@ -379,7 +399,6 @@ export default function BranchShiftsPage() {
 
   const completeShiftMutation = useMutation({
     mutationFn: async (data: any) => {
-      // إضافة الموقع الجغرافي للبيانات
       const dataWithLocation = {
         ...data,
         gpsLatitude: gpsLocation?.lat,
@@ -391,7 +410,10 @@ export default function BranchShiftsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(dataWithLocation),
       });
-      if (!res.ok) throw new Error("Failed to complete shift");
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "فشل في إكمال الشفت");
+      }
       return res.json();
     },
     onSuccess: async () => {
@@ -438,6 +460,10 @@ export default function BranchShiftsPage() {
       setResponses({});
       setHasSignature(false);
     },
+    onError: (error: Error) => {
+      playNotificationSound("error");
+      toast({ title: error.message, variant: "destructive" });
+    },
   });
 
   const startShift = () => {
@@ -445,10 +471,21 @@ export default function BranchShiftsPage() {
       toast({ title: "يرجى اختيار الفرع", variant: "destructive" });
       return;
     }
+    if (!supervisorName) {
+      toast({ title: "يرجى اختيار اسم المشرف / المدير", variant: "destructive" });
+      return;
+    }
+    if (activeTab === "closing") {
+      const branchStatus = todayShifts.find((b: any) => b.branchId === selectedBranch);
+      if (!branchStatus || branchStatus.openingStatus !== "completed") {
+        toast({ title: "يجب إكمال إجراءات الفتح أولاً قبل البدء بالإغلاق", variant: "destructive" });
+        return;
+      }
+    }
     createShiftMutation.mutate({
       branchId: selectedBranch,
       shiftType: selectedShiftType,
-      shiftDate: new Date().toISOString().split("T")[0],
+      shiftDate: todayDate,
       supervisorName,
       employeeCount,
       openingTime: activeTab === "opening" ? new Date() : undefined,
@@ -504,6 +541,8 @@ export default function BranchShiftsPage() {
   const totalItems = templates.reduce((sum, t) => sum + t.items.length, 0);
   const completedItems = Object.values(responses).filter((r) => r.isCompleted).length;
   const progressPercentage = totalItems > 0 ? (completedItems / totalItems) * 100 : 0;
+  const photosUploaded = Object.values(responses).filter((r) => r.photoUrl).length;
+  const photosPercentage = totalItems > 0 ? (photosUploaded / totalItems) * 100 : 0;
 
   const initCanvas = () => {
     const canvas = canvasRef.current;
@@ -583,16 +622,14 @@ export default function BranchShiftsPage() {
       return;
     }
 
-    // التحقق من رفع الصور المطلوبة
     const filteredTemplates = templates.filter((t) => t.type === activeTab);
     const allItems = filteredTemplates.flatMap((t) => t.items);
-    const requiredPhotoItems = allItems.filter((item) => item.requiresPhoto);
-    const missingPhotos = requiredPhotoItems.filter((item) => !responses[item.id]?.photoUrl);
+    const missingPhotos = allItems.filter((item) => !responses[item.id]?.photoUrl);
     
     if (missingPhotos.length > 0) {
       toast({ 
-        title: "صور مطلوبة ناقصة", 
-        description: `يرجى التقاط صور لـ: ${missingPhotos.map(i => i.title).slice(0, 3).join('، ')}${missingPhotos.length > 3 ? '...' : ''}`,
+        title: `صور ناقصة (${missingPhotos.length} بند)`, 
+        description: `يجب التقاط صورة لكل بند. الناقص: ${missingPhotos.map(i => i.title).slice(0, 3).join('، ')}${missingPhotos.length > 3 ? ` و${missingPhotos.length - 3} بنود أخرى` : ''}`,
         variant: "destructive" 
       });
       playNotificationSound("error");
@@ -685,46 +722,86 @@ export default function BranchShiftsPage() {
                 حالة الفروع اليوم
               </CardTitle>
               <Badge variant="outline" className="bg-white">
-                {new Date().toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+                {new Date().toLocaleDateString("ar-SA", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "Asia/Riyadh" })}
               </Badge>
             </div>
           </CardHeader>
           <CardContent>
+            {todayShifts.length > 0 && (
+              <div className="flex flex-wrap items-center gap-3 mb-3 p-2 bg-white rounded-lg border">
+                <div className="flex items-center gap-1.5 text-sm">
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  <span className="text-green-700 font-medium">
+                    مكتمل: {todayShifts.filter((b: any) => b.openingStatus === "completed" && b.closingStatus === "completed").length}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 text-sm">
+                  <Clock className="h-4 w-4 text-amber-600" />
+                  <span className="text-amber-700 font-medium">
+                    مفتوح: {todayShifts.filter((b: any) => b.openingStatus === "completed" && b.closingStatus !== "completed").length}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 text-sm">
+                  <Circle className="h-4 w-4 text-gray-400" />
+                  <span className="text-gray-600 font-medium">
+                    لم يبدأ: {todayShifts.filter((b: any) => b.openingStatus !== "completed").length}
+                  </span>
+                </div>
+                <div className="mr-auto text-xs text-gray-500">
+                  إجمالي الفروع: {todayShifts.length}
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-3">
-              {todayShifts.map((branch: any) => (
-                <div 
-                  key={branch.branchId} 
-                  className={`p-3 rounded-lg border-2 transition-all ${
-                    branch.openingStatus === "completed" && branch.closingStatus === "completed"
-                      ? "border-green-400 bg-green-50"
-                      : branch.openingStatus === "completed"
-                        ? "border-amber-400 bg-amber-50"
-                        : "border-gray-200 bg-white"
-                  }`}
-                  data-testid={`branch-status-${branch.branchId}`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-semibold text-sm" data-testid={`branch-name-${branch.branchId}`}>{branch.branchName}</span>
-                    {branch.openingStatus === "completed" && branch.closingStatus === "completed" ? (
-                      <CheckCircle2 className="h-4 w-4 text-green-600" />
-                    ) : branch.openingStatus === "completed" ? (
-                      <Clock className="h-4 w-4 text-amber-600" />
-                    ) : (
-                      <Circle className="h-4 w-4 text-gray-300" />
+              {todayShifts.map((branch: any) => {
+                const isFullyComplete = branch.openingStatus === "completed" && branch.closingStatus === "completed";
+                const isPartial = branch.openingStatus === "completed" && branch.closingStatus !== "completed";
+                const openingTime = branch.shift?.openingCompletedAt ? new Date(branch.shift.openingCompletedAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true, timeZone: "Asia/Riyadh" }) : null;
+                const closingTime = branch.shift?.closingCompletedAt ? new Date(branch.shift.closingCompletedAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true, timeZone: "Asia/Riyadh" }) : null;
+                
+                return (
+                  <div 
+                    key={branch.branchId} 
+                    className={`p-3 rounded-lg border-2 transition-all cursor-pointer hover:shadow-md ${
+                      isFullyComplete
+                        ? "border-green-400 bg-green-50"
+                        : isPartial
+                          ? "border-amber-400 bg-amber-50"
+                          : "border-gray-200 bg-white hover:border-gray-300"
+                    }`}
+                    onClick={() => { setSelectedBranch(branch.branchId); }}
+                    data-testid={`branch-status-${branch.branchId}`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-semibold text-sm" data-testid={`branch-name-${branch.branchId}`}>{branch.branchName}</span>
+                      {isFullyComplete ? (
+                        <CheckCircle2 className="h-4 w-4 text-green-600" />
+                      ) : isPartial ? (
+                        <Clock className="h-4 w-4 text-amber-600 animate-pulse" />
+                      ) : (
+                        <Circle className="h-4 w-4 text-gray-300" />
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <div className={`flex items-center gap-1 text-xs ${branch.openingStatus === "completed" ? "text-green-700" : "text-gray-500"}`}>
+                        <DoorOpen className="h-3 w-3" />
+                        {branch.openingStatus === "completed" ? (
+                          <span>تم الفتح {openingTime && <span className="text-[10px] font-mono" dir="ltr">{openingTime}</span>}</span>
+                        ) : "لم يفتح"}
+                      </div>
+                      <div className={`flex items-center gap-1 text-xs ${branch.closingStatus === "completed" ? "text-green-700" : "text-gray-500"}`}>
+                        <DoorClosed className="h-3 w-3" />
+                        {branch.closingStatus === "completed" ? (
+                          <span>تم الإغلاق {closingTime && <span className="text-[10px] font-mono" dir="ltr">{closingTime}</span>}</span>
+                        ) : "لم يغلق"}
+                      </div>
+                    </div>
+                    {branch.shift?.supervisorName && (
+                      <p className="text-[10px] text-gray-400 mt-1 truncate">{branch.shift.supervisorName}</p>
                     )}
                   </div>
-                  <div className="flex flex-col gap-1">
-                    <div className={`flex items-center gap-1 text-xs ${branch.openingStatus === "completed" ? "text-green-700" : "text-gray-500"}`}>
-                      <DoorOpen className="h-3 w-3" />
-                      {branch.openingStatus === "completed" ? "✓ تم الفتح" : "لم يفتح"}
-                    </div>
-                    <div className={`flex items-center gap-1 text-xs ${branch.closingStatus === "completed" ? "text-green-700" : "text-gray-500"}`}>
-                      <DoorClosed className="h-3 w-3" />
-                      {branch.closingStatus === "completed" ? "✓ تم الإغلاق" : "لم يغلق"}
-                    </div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </CardContent>
         </Card>
@@ -914,10 +991,22 @@ export default function BranchShiftsPage() {
                     </div>
                   </div>
                 </div>
-                <Progress value={progressPercentage} className="h-2 sm:h-3" />
-                <p className="text-xs sm:text-sm text-gray-500 mt-2 text-center">
-                  {completedItems} من {totalItems} بند مكتمل
-                </p>
+                <div className="space-y-2">
+                  <div>
+                    <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
+                      <span>البنود المكتملة</span>
+                      <span>{completedItems} / {totalItems}</span>
+                    </div>
+                    <Progress value={progressPercentage} className="h-2 sm:h-3" />
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
+                      <span className="flex items-center gap-1"><Camera className="h-3 w-3" /> الصور المرفقة</span>
+                      <span className={photosPercentage === 100 ? "text-green-600 font-bold" : "text-red-500"}>{photosUploaded} / {totalItems}</span>
+                    </div>
+                    <Progress value={photosPercentage} className={`h-2 ${photosPercentage === 100 ? '[&>div]:bg-green-500' : '[&>div]:bg-red-400'}`} />
+                  </div>
+                </div>
               </CardContent>
             </Card>
 
@@ -926,23 +1015,36 @@ export default function BranchShiftsPage() {
                 const Icon = categoryIcons[template.category] || FileText;
                 const templateCompleted = template.items.filter((item) => responses[item.id]?.isCompleted).length;
                 const templateProgress = template.items.length > 0 ? (templateCompleted / template.items.length) * 100 : 0;
+                const templatePhotos = template.items.filter((item) => responses[item.id]?.photoUrl).length;
 
                 return (
-                  <AccordionItem key={template.id} value={`template-${template.id}`} className="border rounded-lg bg-white" data-testid={`template-${template.id}`}>
+                  <AccordionItem key={template.id} value={`template-${template.id}`} className={`border rounded-lg ${templateProgress === 100 && templatePhotos === template.items.length ? 'bg-green-50 border-green-300' : 'bg-white'}`} data-testid={`template-${template.id}`}>
                     <AccordionTrigger className="px-4 py-3 hover:no-underline">
                       <div className="flex items-center justify-between w-full ml-4">
                         <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-lg bg-gray-100">
-                            <Icon className="h-5 w-5 text-gray-600" />
+                          <div className={`p-2 rounded-lg ${templateProgress === 100 ? 'bg-green-100' : 'bg-gray-100'}`}>
+                            <Icon className={`h-5 w-5 ${templateProgress === 100 ? 'text-green-600' : 'text-gray-600'}`} />
                           </div>
                           <div className="text-right">
                             <p className="font-medium">{template.name}</p>
-                            <p className="text-sm text-gray-500">{template.items.length} بند</p>
+                            <div className="flex items-center gap-2 text-xs text-gray-500">
+                              <span>{template.items.length} بند</span>
+                              <span>|</span>
+                              <span className={templatePhotos === template.items.length ? "text-green-600" : "text-red-500"}>
+                                <Camera className="h-3 w-3 inline ml-0.5" />{templatePhotos}/{template.items.length}
+                              </span>
+                            </div>
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
-                          <Progress value={templateProgress} className="w-24 h-2" />
-                          <span className="text-sm font-medium">{Math.round(templateProgress)}%</span>
+                          {templateProgress === 100 && templatePhotos === template.items.length ? (
+                            <CheckCircle2 className="h-5 w-5 text-green-600" />
+                          ) : (
+                            <>
+                              <Progress value={templateProgress} className="w-20 h-2" />
+                              <span className="text-sm font-medium">{Math.round(templateProgress)}%</span>
+                            </>
+                          )}
                         </div>
                       </div>
                     </AccordionTrigger>
@@ -981,7 +1083,7 @@ export default function BranchShiftsPage() {
                                 }}
                                 data-testid={`photo-input-${item.id}`}
                               />
-                              <div className={`p-1.5 rounded-md ${responses[item.id]?.photoUrl ? "bg-green-500 text-white" : item.requiresPhoto ? "bg-red-100 text-red-600 hover:bg-red-200 border border-red-300" : "bg-amber-100 text-amber-600 hover:bg-amber-200"}`}>
+                              <div className={`p-1.5 rounded-md ${responses[item.id]?.photoUrl ? "bg-green-500 text-white" : "bg-red-100 text-red-600 hover:bg-red-200 border border-red-300"}`}>
                                 <Camera className="h-5 w-5" />
                               </div>
                             </label>
@@ -1060,11 +1162,16 @@ export default function BranchShiftsPage() {
                   <Button
                     className="flex-1 gap-2 bg-green-600 hover:bg-green-700"
                     onClick={completeChecklist}
-                    disabled={progressPercentage < 100 || !hasSignature || completeShiftMutation.isPending}
+                    disabled={progressPercentage < 100 || photosPercentage < 100 || !hasSignature || completeShiftMutation.isPending}
                     data-testid="btn-complete-checklist"
                   >
                     <CheckCircle2 className="h-4 w-4" />
                     إكمال {activeTab === "opening" ? "الفتح" : "الإغلاق"}
+                    {(progressPercentage < 100 || photosPercentage < 100 || !hasSignature) && (
+                      <span className="text-[10px] opacity-75">
+                        ({progressPercentage < 100 ? "بنود" : photosPercentage < 100 ? "صور" : "توقيع"})
+                      </span>
+                    )}
                   </Button>
                   <Button
                     variant="outline"

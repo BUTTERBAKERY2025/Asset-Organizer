@@ -23773,9 +23773,28 @@ export async function registerRoutes(
       }
       
       const { shiftDate, openingTime, closingTime, ...rest } = req.body;
+      const saudiToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Riyadh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+      const finalShiftDate = shiftDate || saudiToday;
+      
+      const existingShifts = await db.select().from(branchShifts).where(
+        and(
+          eq(branchShifts.branchId, rest.branchId),
+          eq(branchShifts.shiftDate, finalShiftDate),
+          eq(branchShifts.shiftType, rest.shiftType)
+        )
+      );
+      
+      if (existingShifts.length > 0) {
+        const existing = existingShifts[0];
+        if (existing.openingCompleted && existing.closingCompleted) {
+          return res.status(409).json({ error: "تم إكمال فتح وإغلاق هذا الفرع لهذا الشفت اليوم بالفعل" });
+        }
+        return res.status(200).json({ ...existing, _existing: true });
+      }
+      
       const shiftData = {
         ...rest,
-        shiftDate: shiftDate || new Date().toISOString().split('T')[0],
+        shiftDate: finalShiftDate,
         openingTime: openingTime ? new Date(openingTime) : null,
         closingTime: closingTime ? new Date(closingTime) : null,
         createdAt: new Date(),
@@ -23819,6 +23838,15 @@ export async function registerRoutes(
             return res.status(403).json({ error: "غير مصرح بتعديل شفت هذا الفرع" });
           }
         }
+      }
+      
+      const [currentShift] = await db.select().from(branchShifts).where(eq(branchShifts.id, shiftId));
+      if (!currentShift) {
+        return res.status(404).json({ error: "الشفت غير موجود" });
+      }
+      
+      if (req.body.closingCompleted && !currentShift.openingCompleted) {
+        return res.status(400).json({ error: "يجب إكمال إجراءات الفتح أولاً قبل الإغلاق" });
       }
       
       const updateData: any = { updatedAt: new Date() };
@@ -23913,6 +23941,14 @@ export async function registerRoutes(
       
       const checklistType = req.body.checklistType || 'opening';
       const responses = req.body.responses || [{ ...req.body, shiftId }];
+      
+      const responsesWithoutPhotos = responses.filter((r: any) => r.isCompleted && !r.photoUrl);
+      if (responsesWithoutPhotos.length > 0) {
+        return res.status(400).json({ 
+          error: `يجب إرفاق صورة لكل بند مكتمل. عدد البنود بدون صور: ${responsesWithoutPhotos.length}` 
+        });
+      }
+      
       const processedResponses = responses.map((r: any) => ({
         shiftId,
         itemId: r.itemId,
@@ -24030,7 +24066,7 @@ export async function registerRoutes(
   app.get("/api/branch-shifts/dashboard/today", isAuthenticated, requirePermission("branch_closure", "view"), async (req, res) => {
     try {
       const dateParam = req.query.date as string | undefined;
-      const targetDate = dateParam || new Date().toISOString().split('T')[0];
+      const targetDate = dateParam || new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Riyadh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
       const shifts = await db.select().from(branchShifts).where(eq(branchShifts.shiftDate, targetDate));
       let branchList = await db.select().from(branches);
       
