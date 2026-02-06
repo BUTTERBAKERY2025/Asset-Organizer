@@ -383,6 +383,32 @@ export default function BranchDailyClosureDetailPage() {
         ${paymentRows}
       </table>` : ''}
 
+      ${(() => {
+        const bankPayments = (closure.payments || []).filter((p: any) => BANK_COMMISSION_RATES[p.paymentMethod]);
+        if (bankPayments.length === 0) return '';
+        let commTotalTerminal = 0, commTotalComm = 0, commTotalNet = 0;
+        const commRows = bankPayments.map((p: any) => {
+          const config = BANK_COMMISSION_RATES[p.paymentMethod];
+          const terminalAmount = p.totalTerminalAmount || 0;
+          const commission = (terminalAmount * config.rate) / 100;
+          const netAmount = terminalAmount - commission;
+          commTotalTerminal += terminalAmount;
+          commTotalComm += commission;
+          commTotalNet += netAmount;
+          return '<tr><td>' + config.label + '</td><td>' + formatCurrency(terminalAmount) + '</td><td>' + config.rate + '%</td><td>' + formatCurrency(Math.round(commission * 100) / 100) + '</td><td>' + formatCurrency(Math.round(netAmount * 100) / 100) + '</td></tr>';
+        }).join('');
+        return '<div class="section-header">بيان عمولة البنك</div>' +
+          '<table><tr><th>طريقة الدفع</th><th>مبلغ الجهاز (ر.س)</th><th>نسبة العمولة</th><th>مبلغ العمولة (ر.س)</th><th>صافي المحصّل (ر.س)</th></tr>' +
+          commRows +
+          '<tr class="totals-row"><td>الإجمالي</td><td>' + formatCurrency(Math.round(commTotalTerminal * 100) / 100) + '</td><td></td><td>' + formatCurrency(Math.round(commTotalComm * 100) / 100) + '</td><td>' + formatCurrency(Math.round(commTotalNet * 100) / 100) + '</td></tr></table>' +
+          '<div class="section-header">ملخص القيد المحاسبي</div>' +
+          '<table><tr><th>البيان</th><th>مدين (ر.س)</th><th>دائن (ر.س)</th></tr>' +
+          '<tr><td class="text-right">البنك (صافي المحصّل)</td><td>' + formatCurrency(Math.round(commTotalNet * 100) / 100) + '</td><td>-</td></tr>' +
+          '<tr><td class="text-right">عمولة البنك (مصروف)</td><td>' + formatCurrency(Math.round(commTotalComm * 100) / 100) + '</td><td>-</td></tr>' +
+          '<tr><td class="text-right">المبيعات (إجمالي الجهاز)</td><td>-</td><td>' + formatCurrency(Math.round(commTotalTerminal * 100) / 100) + '</td></tr>' +
+          '<tr class="totals-row"><td class="text-right">إجمالي القيد</td><td>' + formatCurrency(Math.round((commTotalNet + commTotalComm) * 100) / 100) + '</td><td>' + formatCurrency(Math.round(commTotalTerminal * 100) / 100) + '</td></tr></table>';
+      })()}
+
       <div class="footer">
         تم إنشاء هذا التقرير آلياً من نظام باتر - ${today}
       </div>
