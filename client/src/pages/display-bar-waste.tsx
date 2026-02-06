@@ -593,7 +593,7 @@ export default function DisplayBarWastePage() {
     return Object.values(productMap).sort((a, b) => a.productName.localeCompare(b.productName, "ar"));
   }, [filteredReceipts, products]);
 
-  const initializeWasteEntriesFromProducts = useCallback(() => {
+  const initializeWasteEntriesFromProducts = useCallback(async () => {
     const entries: DailyWasteEntry[] = aggregatedReceivedProducts.map(p => ({
       productId: p.productId,
       productName: p.productName,
@@ -606,19 +606,73 @@ export default function DisplayBarWastePage() {
       unitPrice: p.unitPrice,
       isFromReceipt: true,
     }));
+
+    const existingReport = wasteReports.find(
+      (r: WasteReport) => r.branchId === selectedBranch && r.reportDate === selectedDate
+    );
+
+    if (existingReport) {
+      setSavedReportId(existingReport.id);
+      setSavedReportStatus(existingReport.status || "draft");
+      try {
+        const res = await fetch(`/api/waste-reports/${existingReport.id}/items`);
+        if (res.ok) {
+          const savedItems = await res.json();
+          if (Array.isArray(savedItems) && savedItems.length > 0) {
+            savedItems.forEach((item: any) => {
+              const existingEntry = entries.find(e => e.productId === item.productId);
+              if (existingEntry) {
+                existingEntry.wasteQuantity = item.quantity || 0;
+                existingEntry.wasteReason = item.wasteReason || "expired";
+                existingEntry.reasonDetails = item.reasonDetails || "";
+                existingEntry.imageUrl = item.imageUrl || "";
+              } else {
+                const product = products.find(p => p.id === item.productId);
+                entries.push({
+                  productId: item.productId,
+                  productName: product?.name || "غير معروف",
+                  category: product?.category || "other",
+                  receivedQuantity: 0,
+                  wasteQuantity: item.quantity || 0,
+                  wasteReason: item.wasteReason || "damaged",
+                  reasonDetails: item.reasonDetails || "",
+                  imageUrl: item.imageUrl || "",
+                  unitPrice: item.unitPrice || product?.basePrice || 0,
+                  isFromReceipt: false,
+                });
+              }
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Error loading saved waste items:", err);
+      }
+    } else {
+      setSavedReportId(null);
+      setSavedReportStatus("draft");
+    }
+
     setDailyWasteEntries(entries);
-  }, [aggregatedReceivedProducts]);
+  }, [aggregatedReceivedProducts, wasteReports, selectedBranch, selectedDate, products]);
 
   useEffect(() => {
-    const initKey = `${selectedBranch}_${selectedDate}`;
-    if (selectedBranch !== "all" && aggregatedReceivedProducts.length > 0 && wasteEntriesInitialized !== initKey) {
-      initializeWasteEntriesFromProducts();
-      setWasteEntriesInitialized(initKey);
+    const initKey = `${selectedBranch}_${selectedDate}_${wasteReports.length}`;
+    if (selectedBranch !== "all" && wasteEntriesInitialized !== initKey) {
+      const hasReceipts = aggregatedReceivedProducts.length > 0;
+      const hasExistingReport = wasteReports.some(
+        (r: WasteReport) => r.branchId === selectedBranch && r.reportDate === selectedDate
+      );
+      if (hasReceipts || hasExistingReport) {
+        initializeWasteEntriesFromProducts();
+        setWasteEntriesInitialized(initKey);
+      }
     } else if (selectedBranch === "all") {
       setDailyWasteEntries([]);
       setWasteEntriesInitialized("");
+      setSavedReportId(null);
+      setSavedReportStatus("draft");
     }
-  }, [aggregatedReceivedProducts.length, selectedBranch, selectedDate, wasteEntriesInitialized]);
+  }, [aggregatedReceivedProducts.length, selectedBranch, selectedDate, wasteEntriesInitialized, wasteReports]);
 
   useEffect(() => {
     if (selectedBranch !== "all") {
@@ -716,6 +770,8 @@ export default function DisplayBarWastePage() {
     },
     onSuccess: (reportData: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/waste-reports"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/waste-reports/history"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/waste-reports/analytics"] });
       setSavedReportId(reportData.id);
       setSavedReportStatus(reportData.status || "draft");
       toast({ title: reportData.existing ? "تم تحديث تقرير الهالك الموجود" : "تم حفظ تقرير الهالك اليومي بنجاح" });
@@ -730,6 +786,7 @@ export default function DisplayBarWastePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/waste-reports"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/waste-reports/history"] });
       setSavedReportStatus("submitted");
       toast({ title: "تم إرسال التقرير للاعتماد بنجاح" });
     },
@@ -1567,7 +1624,7 @@ export default function DisplayBarWastePage() {
                     <Button 
                       variant="outline" 
                       size="sm"
-                      onClick={() => { setDailyWasteEntries([]); setWasteEntriesInitialized(""); }}
+                      onClick={() => { setDailyWasteEntries([]); setWasteEntriesInitialized(""); queryClient.invalidateQueries({ queryKey: ["/api/waste-reports"] }); }}
                       className="gap-1"
                     >
                       <RefreshCw className="w-4 h-4" />
