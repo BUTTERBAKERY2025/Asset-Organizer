@@ -272,7 +272,10 @@ export default function CashierShiftPerformance() {
     averageTicket: number;
   }
 
-  const { data: cashierJournals = [], isLoading: journalsLoading } = useQuery<CashierJournalReport[]>({
+  const { data: journalsResponse, isLoading: journalsLoading } = useQuery<{
+    journals: CashierJournalReport[];
+    myContributionPercent: number | null;
+  }>({
     queryKey: ["/api/cashier-journals-report", selectedBranch, reportStartDate, reportEndDate, reportCashierId],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -284,20 +287,22 @@ export default function CashierShiftPerformance() {
       const res = await fetch(`/api/cashier-journals-report?${params}`);
       if (!res.ok) {
         console.log("[cashier-journals-report] Error:", res.status);
-        return [];
+        return { journals: [], myContributionPercent: null };
       }
       const data = await res.json();
-      console.log("[cashier-journals-report] Got:", data.length, "records");
+      console.log("[cashier-journals-report] Got:", data.journals?.length || 0, "records");
       return data;
     },
     enabled: !!reportStartDate && !!reportEndDate,
   });
 
+  const cashierJournals = journalsResponse?.journals || [];
+  const serverContributionPercent = journalsResponse?.myContributionPercent ?? null;
+
   // Calculate contribution analysis
   const contributionData = useMemo(() => {
     if (!cashierJournals.length) return [];
     
-    // Group by cashier
     const cashierTotals = new Map<string, { 
       cashierId: string;
       cashierName: string;
@@ -332,13 +337,22 @@ export default function CashierShiftPerformance() {
       }
     });
     
-    return Array.from(cashierTotals.values()).map(c => ({
-      ...c,
-      branchTotal,
-      contributionPercent: branchTotal > 0 ? (c.totalSales / branchTotal) * 100 : 0,
-      avgDailySales: c.totalSales / (uniqueDates.size || 1),
-    })).sort((a, b) => b.contributionPercent - a.contributionPercent);
-  }, [cashierJournals]);
+    return Array.from(cashierTotals.values()).map(c => {
+      let contributionPercent: number;
+      if (!canViewAllCashiers && serverContributionPercent !== null) {
+        contributionPercent = serverContributionPercent;
+      } else {
+        contributionPercent = branchTotal > 0 ? (c.totalSales / branchTotal) * 100 : 0;
+      }
+      
+      return {
+        ...c,
+        branchTotal: canViewAllCashiers ? branchTotal : 0,
+        contributionPercent,
+        avgDailySales: c.totalSales / (uniqueDates.size || 1),
+      };
+    }).sort((a, b) => b.contributionPercent - a.contributionPercent);
+  }, [cashierJournals, serverContributionPercent, canViewAllCashiers]);
 
   const createTargetMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -1599,21 +1613,14 @@ export default function CashierShiftPerformance() {
                     </div>
                   </div>
                 ) : (
-                  /* For regular cashiers - only show their own stats */
+                  /* For regular cashiers - show contribution % and transaction count only (no sales amounts to protect branch total) */
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                     {contributionData.length > 0 && (
                       <>
-                        <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-xl text-center border border-blue-200 shadow-sm">
-                          <DollarSign className="h-6 w-6 text-blue-600 mx-auto mb-1" />
-                          <p className="text-xs text-blue-600 font-medium">مبيعاتي</p>
-                          <p className="text-xl font-bold text-blue-700">
-                            {formatCurrency(contributionData[0]?.totalSales || 0)}
-                          </p>
-                        </div>
                         <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-xl text-center border border-purple-200 shadow-sm">
                           <Trophy className="h-6 w-6 text-purple-600 mx-auto mb-1" />
-                          <p className="text-xs text-purple-600 font-medium">نسبة مساهمتي</p>
-                          <p className="text-xl font-bold text-purple-700">
+                          <p className="text-xs text-purple-600 font-medium">نسبة مساهمتي من الفرع</p>
+                          <p className="text-3xl font-bold text-purple-700">
                             {contributionData[0]?.contributionPercent?.toFixed(1) || 0}%
                           </p>
                         </div>
@@ -1623,6 +1630,12 @@ export default function CashierShiftPerformance() {
                           <p className="text-xl font-bold text-amber-700">
                             {contributionData[0]?.transactionCount || 0}
                           </p>
+                        </div>
+                        <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-xl text-center border border-green-200 shadow-sm">
+                          <Calendar className="h-6 w-6 text-green-600 mx-auto mb-1" />
+                          <p className="text-xs text-green-600 font-medium">الفترة</p>
+                          <p className="text-sm font-bold text-green-700">{reportStartDate}</p>
+                          <p className="text-sm font-bold text-green-700">{reportEndDate}</p>
                         </div>
                       </>
                     )}

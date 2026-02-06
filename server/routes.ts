@@ -13421,20 +13421,25 @@ export async function registerRoutes(
 
       let journals = await storage.getCashierSalesJournals(filters);
       
-      // Security: If user cannot view all cashiers, restrict to their own data only
-      if (!canViewAllCashiersFlag) {
-        console.log("[cashier-journals-report] Restricting to user's own journals");
-        journals = journals.filter(j => String(j.cashierId) === String(user.id));
-      } else if (cashierId && cashierId !== 'all') {
-        // Filter by selected cashier if user has permission to view all
-        journals = journals.filter(j => j.cashierId === cashierId);
-      }
-
       // Get user and branch names
       const users = await storage.getAllUsers();
       const branches = await storage.getAllBranches();
       const userMap = new Map(users.map(u => [u.id, `${u.firstName || ''} ${u.lastName || ''}`]));
       const branchMap = new Map(branches.map(b => [b.id, b.name]));
+
+      // For non-admin cashiers: calculate their real contribution % from ALL branch data before filtering
+      let myContributionPercent: number | null = null;
+      if (!canViewAllCashiersFlag) {
+        const allBranchTotal = journals.reduce((sum, j) => sum + (Number(j.totalSales) || 0), 0);
+        const myTotal = journals
+          .filter(j => String(j.cashierId) === String(user.id))
+          .reduce((sum, j) => sum + (Number(j.totalSales) || 0), 0);
+        myContributionPercent = allBranchTotal > 0 ? (myTotal / allBranchTotal) * 100 : 0;
+        console.log("[cashier-journals-report] Restricting to user's own journals. Contribution:", myContributionPercent?.toFixed(1), "%");
+        journals = journals.filter(j => String(j.cashierId) === String(user.id));
+      } else if (cashierId && cashierId !== 'all') {
+        journals = journals.filter(j => j.cashierId === cashierId);
+      }
 
       const result = journals.map(j => ({
         id: j.id,
@@ -13452,7 +13457,10 @@ export async function registerRoutes(
       }));
 
       console.log("[cashier-journals-report] Returning:", result.length, "records");
-      res.json(result);
+      res.json({
+        journals: result,
+        myContributionPercent,
+      });
     } catch (error) {
       console.error("Error fetching cashier journals report:", error);
       res.status(500).json({ error: "فشل في جلب تقرير اليوميات" });
