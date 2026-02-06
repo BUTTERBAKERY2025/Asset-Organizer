@@ -20,14 +20,18 @@ if (process.env.NODE_ENV === "production") {
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
         imgSrc: ["'self'", "data:", "blob:", "https:"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+        scriptSrc: ["'self'"],
         connectSrc: ["'self'", "https:", "wss:"],
         frameAncestors: ["'self'", "https://*.replit.dev", "https://*.replit.app", "https://*.repl.co"],
+        objectSrc: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
       },
     },
     crossOriginEmbedderPolicy: false,
     crossOriginResourcePolicy: { policy: "cross-origin" },
     frameguard: false,
+    referrerPolicy: { policy: "strict-origin-when-cross-origin" },
   }));
 }
 
@@ -100,8 +104,6 @@ app.get("/api/health", async (_req, res) => {
     res.json({
       status: "healthy",
       timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      memory: process.memoryUsage(),
       database: "connected",
     });
   } catch (error) {
@@ -109,7 +111,6 @@ app.get("/api/health", async (_req, res) => {
       status: "unhealthy",
       timestamp: new Date().toISOString(),
       database: "disconnected",
-      error: error instanceof Error ? error.message : "Unknown error",
     });
   }
 });

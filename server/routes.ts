@@ -22476,7 +22476,11 @@ export async function registerRoutes(
   app.get("/api/documents/file/:filename", isAuthenticated, requirePermission("documents", "view"), async (req, res) => {
     try {
       const { downloadFromSupabase, isSupabaseAvailable } = await import("./supabase-storage");
-      const filename = req.params.filename;
+      const pathModule = await import("path");
+      const filename = pathModule.basename(req.params.filename);
+      if (!filename || filename === '.' || filename === '..' || filename.includes('\0')) {
+        return res.status(400).json({ error: "اسم ملف غير صالح" });
+      }
       
       // Try Supabase Storage first
       if (isSupabaseAvailable()) {
@@ -22543,9 +22547,14 @@ export async function registerRoutes(
       const path = await import("path");
       const fs = await import("fs");
       const filePath = path.join("./uploads/documents", filename);
+      const resolvedPath = path.resolve(filePath);
+      const uploadsDir = path.resolve("./uploads/documents");
+      if (!resolvedPath.startsWith(uploadsDir)) {
+        return res.status(400).json({ error: "مسار ملف غير صالح" });
+      }
       
-      if (fs.existsSync(filePath)) {
-        return res.sendFile(path.resolve(filePath));
+      if (fs.existsSync(resolvedPath)) {
+        return res.sendFile(resolvedPath);
       }
       
       return res.status(404).json({ error: "الملف غير موجود" });
@@ -22558,7 +22567,18 @@ export async function registerRoutes(
   // Serve shared files (public access via share link) - From Object Storage
   app.get("/api/documents/shared-file/:shareLink/:filename", async (req, res) => {
     try {
-      const share = await storage.getDocumentShareByLink(req.params.shareLink);
+      const shareLink = req.params.shareLink;
+      if (!shareLink || !/^[a-f0-9]{32}$/.test(shareLink)) {
+        return res.status(400).json({ error: "رابط مشاركة غير صالح" });
+      }
+      
+      const pathModule = await import("path");
+      const safeFilename = pathModule.basename(req.params.filename);
+      if (!safeFilename || safeFilename === '.' || safeFilename === '..' || safeFilename.includes('\0')) {
+        return res.status(400).json({ error: "اسم ملف غير صالح" });
+      }
+      
+      const share = await storage.getDocumentShareByLink(shareLink);
       if (!share || !share.isActive) {
         return res.status(403).json({ error: "رابط المشاركة غير صالح أو غير نشط" });
       }
@@ -22573,7 +22593,7 @@ export async function registerRoutes(
       }
       
       const expectedFilename = doc.filePath.split("/").pop();
-      if (req.params.filename !== expectedFilename) {
+      if (safeFilename !== expectedFilename) {
         return res.status(403).json({ error: "غير مصرح بالوصول لهذا الملف" });
       }
       
@@ -22584,7 +22604,7 @@ export async function registerRoutes(
       // Try Object Storage first
       try {
         const privateDir = objectStorageService.getPrivateObjectDir();
-        const fullPath = `${privateDir}/documents/${req.params.filename}`;
+        const fullPath = `${privateDir}/documents/${safeFilename}`;
         const pathParts = fullPath.split("/").filter(p => p);
         const bucketName = pathParts[0];
         const objectPath = pathParts.slice(1).join("/");
@@ -22604,10 +22624,15 @@ export async function registerRoutes(
       // Fallback to local storage for old files
       const path = await import("path");
       const fs = await import("fs");
-      const filePath = path.join("./uploads/documents", req.params.filename);
+      const filePath = path.join("./uploads/documents", safeFilename);
+      const resolvedPath = path.resolve(filePath);
+      const uploadsDir = path.resolve("./uploads/documents");
+      if (!resolvedPath.startsWith(uploadsDir)) {
+        return res.status(400).json({ error: "مسار ملف غير صالح" });
+      }
       
-      if (fs.existsSync(filePath)) {
-        return res.sendFile(path.resolve(filePath));
+      if (fs.existsSync(resolvedPath)) {
+        return res.sendFile(resolvedPath);
       }
       
       return res.status(404).json({ error: "الملف غير موجود" });
@@ -22620,7 +22645,11 @@ export async function registerRoutes(
   // Public share link access (no auth required) - uses POST for password security
   app.post("/api/documents/share/:shareLink", async (req, res) => {
     try {
-      const share = await storage.getDocumentShareByLink(req.params.shareLink);
+      const shareLink = req.params.shareLink;
+      if (!shareLink || !/^[a-f0-9]{32}$/.test(shareLink)) {
+        return res.status(400).json({ error: "رابط مشاركة غير صالح" });
+      }
+      const share = await storage.getDocumentShareByLink(shareLink);
       if (!share) {
         return res.status(404).json({ error: "رابط المشاركة غير صالح" });
       }
