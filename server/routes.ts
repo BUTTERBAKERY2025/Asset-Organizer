@@ -12994,7 +12994,7 @@ export async function registerRoutes(
   // Cashier Shift Targets API - أهداف الكاشير للشفت
   // ==========================================
 
-  app.get("/api/cashier-shift-targets", isAuthenticated, async (req, res) => {
+  app.get("/api/cashier-shift-targets", isAuthenticated, requirePermission("cashier_performance", "view"), async (req, res) => {
     try {
       const { branchId, date, shiftType } = req.query;
       const filters: any = {};
@@ -13026,11 +13026,10 @@ export async function registerRoutes(
         if (user.role !== 'admin' && user.role !== 'manager') {
           // Check if user is a performance manager (can view all in branch)
           const permissions = await storage.getUserPermissions(user.id);
-          const perfPerms = permissions.find(p => p.module === 'cashier_performance' || p.module === 'cashier_journal' || p.module === 'sales');
+          const perfPerms = permissions.find(p => p.module === 'cashier_performance' || p.module === 'cashier_journal');
           const canViewAll = perfPerms?.actions.includes('approve') || perfPerms?.actions.includes('create') || perfPerms?.actions.includes('edit');
           
           if (!canViewAll) {
-            // Cashier only sees their own targets
             console.log("[cashier-shift-targets] Filtering by cashier ID:", user.id);
             targets = targets.filter(t => t.cashierId === user.id);
             console.log("[cashier-shift-targets] After cashier filter:", targets.length, "targets");
@@ -13046,7 +13045,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/cashier-shift-targets/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/cashier-shift-targets/:id", isAuthenticated, requirePermission("cashier_performance", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const target = await storage.getCashierShiftTarget(id);
@@ -13069,7 +13068,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/cashier-shift-targets/branch/:branchId/date/:date", isAuthenticated, async (req, res) => {
+  app.get("/api/cashier-shift-targets/branch/:branchId/date/:date", isAuthenticated, requirePermission("cashier_performance", "view"), async (req, res) => {
     try {
       const { branchId, date } = req.params;
       
@@ -13080,7 +13079,19 @@ export async function registerRoutes(
         return res.status(403).json({ error: "غير مصرح بالوصول" });
       }
       
-      const targets = await storage.getCashierShiftTargetsByBranch(branchId, date);
+      let targets = await storage.getCashierShiftTargetsByBranch(branchId, date);
+      
+      // SECURITY: Non-admin/manager users can only see their own targets
+      const user = getCurrentUser(req);
+      if (user.role !== 'admin' && user.role !== 'manager') {
+        const permissions = await storage.getUserPermissions(user.id);
+        const perfPerms = permissions.find(p => p.module === 'cashier_performance' || p.module === 'cashier_journal');
+        const canViewAll = perfPerms?.actions.includes('approve') || perfPerms?.actions.includes('create') || perfPerms?.actions.includes('edit');
+        if (!canViewAll) {
+          targets = targets.filter(t => t.cashierId === user.id);
+        }
+      }
+      
       res.json(targets);
     } catch (error) {
       console.error("Error fetching branch cashier targets:", error);
@@ -13088,7 +13099,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/cashier-shift-targets/cashier/:cashierId", isAuthenticated, async (req, res) => {
+  app.get("/api/cashier-shift-targets/cashier/:cashierId", isAuthenticated, requirePermission("cashier_performance", "view"), async (req, res) => {
     try {
       const { cashierId } = req.params;
       const { startDate, endDate } = req.query;
@@ -13097,7 +13108,7 @@ export async function registerRoutes(
       // SECURITY: Non-admin/manager cashiers can only view their own targets
       if (user.role !== 'admin' && user.role !== 'manager') {
         const permissions = await storage.getUserPermissions(user.id);
-        const perfPerms = permissions.find((p: any) => p.module === 'cashier_performance' || p.module === 'cashier_journal' || p.module === 'sales');
+        const perfPerms = permissions.find((p: any) => p.module === 'cashier_performance' || p.module === 'cashier_journal');
         const canViewAll = perfPerms?.actions.includes('approve') || perfPerms?.actions.includes('create') || perfPerms?.actions.includes('edit');
         if (!canViewAll && cashierId !== user.id) {
           return res.status(403).json({ error: "غير مصرح - يمكنك فقط عرض أهدافك الخاصة" });
@@ -13230,7 +13241,7 @@ export async function registerRoutes(
   // Cashier Performance Sales Data API - بيانات مبيعات أداء الكاشير
   // ==========================================
 
-  app.get("/api/cashier-performance-sales", isAuthenticated, async (req, res) => {
+  app.get("/api/cashier-performance-sales", isAuthenticated, requirePermission("cashier_performance", "view"), async (req, res) => {
     try {
       const { branchId, date, shiftType } = req.query;
       
@@ -13303,7 +13314,7 @@ export async function registerRoutes(
       const user = getCurrentUser(req);
       if (user.role !== 'admin' && user.role !== 'manager') {
         const permissions = await storage.getUserPermissions(user.id);
-        const perfPerms = permissions.find((p: any) => p.module === 'cashier_performance' || p.module === 'cashier_journal' || p.module === 'sales');
+        const perfPerms = permissions.find((p: any) => p.module === 'cashier_performance' || p.module === 'cashier_journal');
         const canViewAll = perfPerms?.actions.includes('approve') || perfPerms?.actions.includes('create') || perfPerms?.actions.includes('edit');
         if (!canViewAll) {
           result = result.filter(r => r.cashierId === user.id);
@@ -13320,7 +13331,7 @@ export async function registerRoutes(
 
   // API for detailed cashier journals report with date range
   // Security: Non-admin/manager users can only see their own journals
-  app.get("/api/cashier-journals-report", isAuthenticated, async (req, res) => {
+  app.get("/api/cashier-journals-report", isAuthenticated, requirePermission("cashier_performance", "view"), async (req, res) => {
     try {
       const user = (req as any).currentUser as User;
       if (!user) {
@@ -13397,7 +13408,7 @@ export async function registerRoutes(
   // Average Ticket Targets API - أهداف متوسط الفاتورة
   // ==========================================
 
-  app.get("/api/average-ticket-targets", isAuthenticated, async (req, res) => {
+  app.get("/api/average-ticket-targets", isAuthenticated, requirePermission("cashier_performance", "view"), async (req, res) => {
     try {
       const { branchId, isActive } = req.query;
       
@@ -13421,7 +13432,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/average-ticket-targets/active", isAuthenticated, async (req, res) => {
+  app.get("/api/average-ticket-targets/active", isAuthenticated, requirePermission("cashier_performance", "view"), async (req, res) => {
     try {
       const { branchId, cashierId } = req.query;
       
@@ -13444,7 +13455,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/average-ticket-targets/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/average-ticket-targets/:id", isAuthenticated, requirePermission("cashier_performance", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const target = await storage.getAverageTicketTarget(id);
@@ -13546,7 +13557,7 @@ export async function registerRoutes(
   // Performance Alerts API - تنبيهات الأداء
   // ==========================================
 
-  app.get("/api/performance-alerts", isAuthenticated, async (req, res) => {
+  app.get("/api/performance-alerts", isAuthenticated, requirePermission("cashier_performance", "view"), async (req, res) => {
     try {
       const { branchId, date, isRead } = req.query;
       const filters: any = {};
@@ -13568,6 +13579,17 @@ export async function registerRoutes(
         alerts = alerts.filter(a => branchFilter.branchIds!.includes(a.branchId || ''));
       }
 
+      // SECURITY: Non-admin/manager users can only see their own alerts
+      const user = getCurrentUser(req);
+      if (user.role !== 'admin' && user.role !== 'manager') {
+        const permissions = await storage.getUserPermissions(user.id);
+        const perfPerms = permissions.find(p => p.module === 'cashier_performance' || p.module === 'cashier_journal');
+        const canViewAll = perfPerms?.actions.includes('approve') || perfPerms?.actions.includes('create') || perfPerms?.actions.includes('edit');
+        if (!canViewAll) {
+          alerts = alerts.filter(a => a.cashierId === user.id);
+        }
+      }
+
       res.json(alerts);
     } catch (error) {
       console.error("Error fetching performance alerts:", error);
@@ -13575,7 +13597,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/performance-alerts/unread/:branchId", isAuthenticated, async (req, res) => {
+  app.get("/api/performance-alerts/unread/:branchId", isAuthenticated, requirePermission("cashier_performance", "view"), async (req, res) => {
     try {
       const { branchId } = req.params;
       
@@ -13594,7 +13616,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/performance-alerts/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/performance-alerts/:id", isAuthenticated, requirePermission("cashier_performance", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const alert = await storage.getPerformanceAlert(id);
@@ -13617,7 +13639,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/performance-alerts", isAuthenticated, async (req, res) => {
+  app.post("/api/performance-alerts", isAuthenticated, requirePermission("cashier_performance", "create"), async (req, res) => {
     try {
       // SECURITY: Apply branch filter
       const branchFilter = getEffectiveBranchFilter(req, req.body.branchId);
@@ -13634,7 +13656,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/performance-alerts/:id/read", isAuthenticated, async (req, res) => {
+  app.patch("/api/performance-alerts/:id/read", isAuthenticated, requirePermission("cashier_performance", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       
@@ -13659,7 +13681,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/performance-alerts/:id/acknowledge", isAuthenticated, async (req, res) => {
+  app.patch("/api/performance-alerts/:id/acknowledge", isAuthenticated, requirePermission("cashier_performance", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const currentUser = getCurrentUser(req);
@@ -13685,7 +13707,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/performance-alerts/bulk-read", isAuthenticated, async (req, res) => {
+  app.post("/api/performance-alerts/bulk-read", isAuthenticated, requirePermission("cashier_performance", "view"), async (req, res) => {
     try {
       const { ids } = req.body;
       if (!Array.isArray(ids)) {
@@ -13718,7 +13740,7 @@ export async function registerRoutes(
   // Shift Performance Tracking API - تتبع أداء الشفت
   // ==========================================
 
-  app.get("/api/shift-performance-tracking", isAuthenticated, async (req, res) => {
+  app.get("/api/shift-performance-tracking", isAuthenticated, requirePermission("cashier_performance", "view"), async (req, res) => {
     try {
       const { branchId, date } = req.query;
       const filters: any = {};
@@ -13746,7 +13768,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/shift-performance-tracking/active/:branchId/:date/:shiftType", isAuthenticated, async (req, res) => {
+  app.get("/api/shift-performance-tracking/active/:branchId/:date/:shiftType", isAuthenticated, requirePermission("cashier_performance", "view"), async (req, res) => {
     try {
       const { branchId, date, shiftType } = req.params;
       
@@ -13768,7 +13790,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/shift-performance-tracking/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/shift-performance-tracking/:id", isAuthenticated, requirePermission("cashier_performance", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const tracking = await storage.getShiftPerformanceTracking(id);
@@ -13791,7 +13813,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/shift-performance-tracking", isAuthenticated, async (req, res) => {
+  app.post("/api/shift-performance-tracking", isAuthenticated, requirePermission("cashier_performance", "create"), async (req, res) => {
     try {
       // SECURITY: Apply branch filter
       const branchFilter = getEffectiveBranchFilter(req, req.body.branchId);
@@ -13808,7 +13830,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/shift-performance-tracking/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/shift-performance-tracking/:id", isAuthenticated, requirePermission("cashier_performance", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       
@@ -13838,7 +13860,7 @@ export async function registerRoutes(
     }
   });
 
-  app.put("/api/shift-performance-tracking/upsert", isAuthenticated, async (req, res) => {
+  app.put("/api/shift-performance-tracking/upsert", isAuthenticated, requirePermission("cashier_performance", "edit"), async (req, res) => {
     try {
       // SECURITY: Apply branch filter
       const branchFilter = getEffectiveBranchFilter(req, req.body.branchId);

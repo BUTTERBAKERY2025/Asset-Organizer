@@ -93,13 +93,15 @@ export default function CashierShiftPerformance() {
 
   const { user } = useAuth();
   const { branches, userBranchId, canSelectBranch } = useBranches();
-  const { canCreate, canEdit, canDelete } = usePermissions();
-
-  // Check if user can view all cashiers' data (admin/manager or has edit/create permission)
+  const { canCreate, canEdit, canDelete, canApprove } = usePermissions();
+  
+  // Check if user can view all cashiers' data (admin/manager or has approve/edit/create permission on cashier_performance or cashier_journal)
   const canViewAllCashiers = useMemo(() => {
     if (!user) return false;
-    return user.role === 'admin' || user.role === 'manager' || canEdit("cashier_performance") || canCreate("cashier_performance");
-  }, [user, canEdit, canCreate]);
+    return user.role === 'admin' || user.role === 'manager' 
+      || canEdit("cashier_performance") || canCreate("cashier_performance") || canApprove("cashier_performance")
+      || canEdit("cashier_journal") || canCreate("cashier_journal") || canApprove("cashier_journal");
+  }, [user, canEdit, canCreate, canApprove]);
 
   const selectedBranchData = useMemo(() => {
     if (selectedBranch === "all") return null;
@@ -122,6 +124,7 @@ export default function CashierShiftPerformance() {
 
   const { data: allUsers = [] } = useQuery<User[]>({
     queryKey: ["/api/users"],
+    enabled: canViewAllCashiers,
   });
 
   // Filter cashiers by selected branch in the dialog (for adding targets)
