@@ -152,9 +152,11 @@ export default function ShiftManagementPage() {
         // SECURITY: فحص الفرع
         if (selectedBranch !== "all" && r.branchId !== selectedBranch) return false;
         if (r.branchEmployeeId && String(r.branchEmployeeId) === empIdStr) return true;
-        if (r.employeeId === linkedUserId || r.employeeId === empIdStr) return true;
+        if (r.employeeId === `branch_emp_${selectedEmp.id}`) return true;
+        if (selectedEmp.linkedUserId && r.employeeId === selectedEmp.linkedUserId) return true;
+        if (r.employeeId === empIdStr) return true;
         const recordName = r.employeeName?.trim().toLowerCase() || '';
-        if (normalizedEmpName && recordName && normalizedEmpName === recordName) return true;
+        if (normalizedEmpName && recordName && normalizedEmpName === recordName && r.branchId === selectedEmp.branchId) return true;
         return false;
       });
     },
@@ -286,17 +288,28 @@ export default function ShiftManagementPage() {
     },
   });
 
-  const getAttendanceForEmployee = (employeeId: string, dateStr: string) => {
+  const getAttendanceForEmployee = (empId: string, dateStr: string, branchEmployee?: typeof filteredEmployees[0]) => {
     if (!attendanceRecords) return null;
     return attendanceRecords.find(r => {
-      // SECURITY: فحص الفرع لمنع تسرب البيانات بين الفروع
+      if (r.attendanceDate !== dateStr) return false;
       if (selectedBranch !== "all" && r.branchId !== selectedBranch) return false;
-      return r.employeeId === employeeId && r.attendanceDate === dateStr;
+      if (branchEmployee) {
+        if (r.branchEmployeeId && r.branchEmployeeId === branchEmployee.id) return true;
+        if (r.employeeId === `branch_emp_${branchEmployee.id}`) return true;
+        if (branchEmployee.linkedUserId && r.employeeId === branchEmployee.linkedUserId) return true;
+        if (r.employeeId === String(branchEmployee.id)) return true;
+        const rName = r.employeeName?.trim().toLowerCase() || '';
+        const eName = branchEmployee.employeeName?.trim().toLowerCase() || '';
+        if (rName && eName && rName === eName && r.branchId === branchEmployee.branchId) return true;
+      } else {
+        if (r.employeeId === empId) return true;
+      }
+      return false;
     });
   };
 
-  const getAttendanceStatus = (employeeId: string, dateStr: string, scheduledStart?: string) => {
-    const attendance = getAttendanceForEmployee(employeeId, dateStr);
+  const getAttendanceStatus = (employeeId: string, dateStr: string, scheduledStart?: string, branchEmployee?: typeof filteredEmployees[0]) => {
+    const attendance = getAttendanceForEmployee(employeeId, dateStr, branchEmployee);
     if (!attendance) return null;
     
     if (attendance.actualCheckIn && attendance.actualCheckOut) {
@@ -499,7 +512,7 @@ export default function ShiftManagementPage() {
         weekDates.forEach((date, index) => {
           const dateStr = format(date, "yyyy-MM-dd");
           const cellData = scheduleData[empIdStr]?.[dateStr];
-          const attendance = getAttendanceForEmployee(linkedUserId, dateStr);
+          const attendance = getAttendanceForEmployee(empIdStr, dateStr, employee);
           
           if (cellData?.isOff) {
             row[DAYS_AR[index]] = "إجازة";
@@ -521,9 +534,11 @@ export default function ShiftManagementPage() {
           // SECURITY: فحص الفرع
           if (selectedBranch !== "all" && r.branchId !== selectedBranch) return false;
           if (r.branchEmployeeId && String(r.branchEmployeeId) === empIdStr) return true;
-          if (r.employeeId === linkedUserId || r.employeeId === empIdStr) return true;
+          if (r.employeeId === `branch_emp_${employee.id}`) return true;
+          if (employee.linkedUserId && r.employeeId === employee.linkedUserId) return true;
+          if (r.employeeId === empIdStr) return true;
           const recordName = r.employeeName?.trim().toLowerCase() || '';
-          if (normalizedEmpName && recordName && normalizedEmpName === recordName) return true;
+          if (normalizedEmpName && recordName && normalizedEmpName === recordName && r.branchId === employee.branchId) return true;
           return false;
         }).length || 0;
         const rate = workDays > 0 ? Math.round((attendedDays / workDays) * 100) : 0;
@@ -568,8 +583,18 @@ export default function ShiftManagementPage() {
       const reportData: any[] = [];
       
       filteredEmployees.forEach(employee => {
-        const linkedUserId = employee.linkedUserId || String(employee.id);
-        const empAttendance = monthlyAttendance.filter(a => a.employeeId === linkedUserId);
+        const empIdStr = String(employee.id);
+        const empAttendance = monthlyAttendance.filter(a => {
+          if (selectedBranch !== "all" && a.branchId !== selectedBranch) return false;
+          if (a.branchEmployeeId && a.branchEmployeeId === employee.id) return true;
+          if (a.employeeId === `branch_emp_${employee.id}`) return true;
+          if (employee.linkedUserId && a.employeeId === employee.linkedUserId) return true;
+          if (a.employeeId === empIdStr) return true;
+          const rName = a.employeeName?.trim().toLowerCase() || '';
+          const eName = employee.employeeName?.trim().toLowerCase() || '';
+          if (rName && eName && rName === eName && a.branchId === employee.branchId) return true;
+          return false;
+        });
         const presentDays = empAttendance.filter(a => a.actualCheckIn).length;
         const lateDays = empAttendance.filter(a => a.status === "late").length;
         const totalWorkHours = empAttendance.reduce((sum, a) => sum + (a.workingHours || 0), 0);
@@ -666,9 +691,11 @@ export default function ShiftManagementPage() {
                       // SECURITY: فحص الفرع
                       if (selectedBranch !== "all" && r.branchId !== selectedBranch) return false;
                       if (r.branchEmployeeId && String(r.branchEmployeeId) === empIdStr) return true;
-                      if (r.employeeId === linkedUserId || r.employeeId === empIdStr) return true;
+                      if (r.employeeId === `branch_emp_${employee.id}`) return true;
+                      if (employee.linkedUserId && r.employeeId === employee.linkedUserId) return true;
+                      if (r.employeeId === empIdStr) return true;
                       const recordName = r.employeeName?.trim().toLowerCase() || '';
-                      if (normalizedEmpName && recordName && normalizedEmpName === recordName) return true;
+                      if (normalizedEmpName && recordName && normalizedEmpName === recordName && r.branchId === employee.branchId) return true;
                       return false;
                     }).length || 0;
                     const absentDays = workDays - attendedDays;
@@ -932,9 +959,11 @@ export default function ShiftManagementPage() {
           // SECURITY: فحص الفرع
           if (selectedBranch !== "all" && r.branchId !== selectedBranch) return false;
           if (r.branchEmployeeId && String(r.branchEmployeeId) === empIdStr) return true;
-          if (r.employeeId === linkedUserId || r.employeeId === empIdStr) return true;
+          if (r.employeeId === `branch_emp_${employee.id}`) return true;
+          if (employee.linkedUserId && r.employeeId === employee.linkedUserId) return true;
+          if (r.employeeId === empIdStr) return true;
           const recordName = r.employeeName?.trim().toLowerCase() || '';
-          if (normalizedEmpName && recordName && normalizedEmpName === recordName) return true;
+          if (normalizedEmpName && recordName && normalizedEmpName === recordName && r.branchId === employee.branchId) return true;
           return false;
         }).length || 0;
         const absentDays = workDays - attendedDays;
@@ -1495,7 +1524,7 @@ export default function ShiftManagementPage() {
                               {weekDates.map((date, index) => {
                                 const dateStr = format(date, "yyyy-MM-dd");
                                 const cellData = scheduleData[empIdStr]?.[dateStr] || { startTime: "08:00", endTime: "16:00", isOff: false };
-                                const attendance = getAttendanceStatus(linkedUserId, dateStr, cellData.startTime);
+                                const attendance = getAttendanceStatus(empIdStr, dateStr, cellData.startTime, employee);
                                 
                                 return (
                                   <TableCell key={index} className={`p-2 ${isToday(date) ? "bg-primary/5" : ""} ${cellData.isOff ? "bg-gray-100" : ""}`}>
@@ -1610,38 +1639,51 @@ export default function ShiftManagementPage() {
                               {weekDates.map((date, index) => {
                                 const dateStr = format(date, "yyyy-MM-dd");
                                 const cellData = scheduleData[empIdStr]?.[dateStr];
-                                const attendance = getAttendanceForEmployee(linkedUserId, dateStr);
+                                const attendance = getAttendanceForEmployee(empIdStr, dateStr, employee);
+                                const today = new Date();
+                                today.setHours(0, 0, 0, 0);
+                                const cellDate = new Date(dateStr + "T00:00:00");
+                                const isPast = cellDate < today;
                                 
                                 return (
                                   <TableCell key={index} className={`p-2 text-center ${isToday(date) ? "bg-primary/5" : ""}`}>
                                     {cellData?.isOff ? (
                                       <Badge variant="secondary">إجازة</Badge>
+                                    ) : !cellData ? (
+                                      <div className="text-xs text-muted-foreground">-</div>
                                     ) : (
                                       <div className="space-y-1">
                                         <div className="text-xs text-muted-foreground">
-                                          المطلوب: {cellData?.startTime || "-"} - {cellData?.endTime || "-"}
+                                          المطلوب: {cellData.startTime} - {cellData.endTime}
                                         </div>
                                         {attendance ? (
                                           <div className="space-y-1">
                                             <div className="text-xs">
                                               حضر: <span className="font-medium text-green-600">{attendance.actualCheckIn || "-"}</span>
                                             </div>
-                                            <div className="text-xs">
-                                              انصرف: <span className="font-medium text-red-600">{attendance.actualCheckOut || "-"}</span>
-                                            </div>
+                                            {attendance.actualCheckOut && (
+                                              <div className="text-xs">
+                                                انصرف: <span className="font-medium text-blue-600">{attendance.actualCheckOut}</span>
+                                              </div>
+                                            )}
                                             {attendance.status === "present" && (
                                               <Badge className="bg-green-100 text-green-700 text-xs">حاضر</Badge>
                                             )}
                                             {attendance.status === "late" && (
-                                              <Badge className="bg-amber-100 text-amber-700 text-xs">متأخر</Badge>
+                                              <Badge className="bg-amber-100 text-amber-700 text-xs">متأخر {attendance.lateMinutes ? `(${attendance.lateMinutes} د)` : ""}</Badge>
+                                            )}
+                                            {attendance.actualCheckIn && !attendance.actualCheckOut && (
+                                              <Badge className="bg-blue-100 text-blue-700 text-xs">في العمل</Badge>
                                             )}
                                           </div>
                                         ) : (
                                           <div className="text-xs text-muted-foreground">
-                                            {new Date(dateStr) < new Date() ? (
+                                            {isPast ? (
                                               <Badge className="bg-red-100 text-red-700 text-xs">غائب</Badge>
+                                            ) : isToday(date) ? (
+                                              <Badge className="bg-yellow-100 text-yellow-700 text-xs">لم يسجل بعد</Badge>
                                             ) : (
-                                              <span>-</span>
+                                              <span className="text-gray-400">مجدول</span>
                                             )}
                                           </div>
                                         )}
@@ -1782,12 +1824,12 @@ export default function ShiftManagementPage() {
                         if (selectedBranch !== "all" && r.branchId !== selectedBranch) return false;
                         // Match by branchEmployeeId first (most reliable)
                         if (r.branchEmployeeId && r.branchEmployeeId === emp.id) return true;
-                        // Match by linkedUserId
-                        if (r.employeeId === linkedUserId) return true;
-                        // Match by employee id as string
+                        if (r.employeeId === `branch_emp_${emp.id}`) return true;
+                        if (emp.linkedUserId && r.employeeId === emp.linkedUserId) return true;
                         if (r.employeeId === empIdStr) return true;
-                        // Match by employee name as fallback
-                        if (r.employeeName === emp.employeeName) return true;
+                        const rName = r.employeeName?.trim().toLowerCase() || '';
+                        const eName = emp.employeeName?.trim().toLowerCase() || '';
+                        if (rName && eName && rName === eName && r.branchId === emp.branchId) return true;
                         return false;
                       });
                       
@@ -1947,10 +1989,12 @@ export default function ShiftManagementPage() {
                             // المطابقة بـ branchEmployeeId أولاً
                             if (r.branchEmployeeId && String(r.branchEmployeeId) === empIdStr) return true;
                             // المطابقة بـ employeeId
-                            if (r.employeeId === linkedUserId || r.employeeId === empIdStr) return true;
+                            if (r.employeeId === `branch_emp_${employee.id}`) return true;
+                            if (employee.linkedUserId && r.employeeId === employee.linkedUserId) return true;
+                            if (r.employeeId === empIdStr) return true;
                             // المطابقة بالاسم كخيار أخير
                             const recordName = r.employeeName?.trim().toLowerCase() || '';
-                            if (normalizedEmpName && recordName && normalizedEmpName === recordName) return true;
+                            if (normalizedEmpName && recordName && normalizedEmpName === recordName && r.branchId === employee.branchId) return true;
                             return false;
                           }).length || 0;
                           
@@ -1997,9 +2041,11 @@ export default function ShiftManagementPage() {
                               // SECURITY: فحص الفرع
                               if (selectedBranch !== "all" && r.branchId !== selectedBranch) return false;
                               if (r.branchEmployeeId && String(r.branchEmployeeId) === empIdStr) return true;
-                              if (r.employeeId === linkedUserId || r.employeeId === empIdStr) return true;
+                              if (r.employeeId === `branch_emp_${employee.id}`) return true;
+                              if (employee.linkedUserId && r.employeeId === employee.linkedUserId) return true;
+                              if (r.employeeId === empIdStr) return true;
                               const recordName = r.employeeName?.trim().toLowerCase() || '';
-                              if (normalizedEmpName && recordName && normalizedEmpName === recordName) return true;
+                              if (normalizedEmpName && recordName && normalizedEmpName === recordName && r.branchId === employee.branchId) return true;
                               return false;
                             }).length || 0;
                             const absentDays = Math.max(workDays - attendedDays, 0);
@@ -2104,9 +2150,11 @@ export default function ShiftManagementPage() {
                             // SECURITY: تحقق من الفرع لمنع تسرب البيانات بين الفروع
                             if (selectedBranch !== "all" && r.branchId !== selectedBranch) return false;
                             if (r.branchEmployeeId && String(r.branchEmployeeId) === empIdStr) return true;
-                            if (r.employeeId === linkedUserId || r.employeeId === empIdStr) return true;
+                            if (r.employeeId === `branch_emp_${employee.id}`) return true;
+                            if (employee.linkedUserId && r.employeeId === employee.linkedUserId) return true;
+                            if (r.employeeId === empIdStr) return true;
                             const recordName = r.employeeName?.trim().toLowerCase() || '';
-                            if (normalizedEmpName && recordName && normalizedEmpName === recordName) return true;
+                            if (normalizedEmpName && recordName && normalizedEmpName === recordName && r.branchId === employee.branchId) return true;
                             return false;
                           }) || [];
                           
@@ -2217,9 +2265,11 @@ export default function ShiftManagementPage() {
                             // SECURITY: فحص الفرع
                             if (selectedBranch !== "all" && r.branchId !== selectedBranch) return false;
                             if (r.branchEmployeeId && String(r.branchEmployeeId) === empIdStr) return true;
-                            if (r.employeeId === linkedUserId || r.employeeId === empIdStr) return true;
+                            if (r.employeeId === `branch_emp_${employee.id}`) return true;
+                            if (employee.linkedUserId && r.employeeId === employee.linkedUserId) return true;
+                            if (r.employeeId === empIdStr) return true;
                             const recordName = r.employeeName?.trim().toLowerCase() || '';
-                            if (normalizedEmpName && recordName && normalizedEmpName === recordName) return true;
+                            if (normalizedEmpName && recordName && normalizedEmpName === recordName && r.branchId === employee.branchId) return true;
                             return false;
                           }) || [];
                           
@@ -2306,9 +2356,11 @@ export default function ShiftManagementPage() {
                             // SECURITY: فحص الفرع
                             if (selectedBranch !== "all" && r.branchId !== selectedBranch) return false;
                             if (r.branchEmployeeId && String(r.branchEmployeeId) === empIdStr) return true;
-                            if (r.employeeId === linkedUserId || r.employeeId === empIdStr) return true;
+                            if (r.employeeId === `branch_emp_${employee.id}`) return true;
+                            if (employee.linkedUserId && r.employeeId === employee.linkedUserId) return true;
+                            if (r.employeeId === empIdStr) return true;
                             const recordName = r.employeeName?.trim().toLowerCase() || '';
-                            if (normalizedEmpName && recordName && normalizedEmpName === recordName) return true;
+                            if (normalizedEmpName && recordName && normalizedEmpName === recordName && r.branchId === employee.branchId) return true;
                             return false;
                           }) || [];
                           
@@ -2407,9 +2459,11 @@ export default function ShiftManagementPage() {
                             // SECURITY: فحص الفرع
                             if (selectedBranch !== "all" && r.branchId !== selectedBranch) return false;
                             if (r.branchEmployeeId && String(r.branchEmployeeId) === empIdStr) return true;
-                            if (r.employeeId === linkedUserId || r.employeeId === empIdStr) return true;
+                            if (r.employeeId === `branch_emp_${employee.id}`) return true;
+                            if (employee.linkedUserId && r.employeeId === employee.linkedUserId) return true;
+                            if (r.employeeId === empIdStr) return true;
                             const recordName = r.employeeName?.trim().toLowerCase() || '';
-                            if (normalizedEmpName && recordName && normalizedEmpName === recordName) return true;
+                            if (normalizedEmpName && recordName && normalizedEmpName === recordName && r.branchId === employee.branchId) return true;
                             return false;
                           }) || [];
                           
@@ -2512,9 +2566,11 @@ export default function ShiftManagementPage() {
                             // SECURITY: فحص الفرع
                             if (selectedBranch !== "all" && r.branchId !== selectedBranch) return false;
                             if (r.branchEmployeeId && String(r.branchEmployeeId) === empIdStr) return true;
-                            if (r.employeeId === linkedUserId || r.employeeId === empIdStr) return true;
+                            if (r.employeeId === `branch_emp_${employee.id}`) return true;
+                            if (employee.linkedUserId && r.employeeId === employee.linkedUserId) return true;
+                            if (r.employeeId === empIdStr) return true;
                             const recordName = r.employeeName?.trim().toLowerCase() || '';
-                            if (normalizedEmpName && recordName && normalizedEmpName === recordName) return true;
+                            if (normalizedEmpName && recordName && normalizedEmpName === recordName && r.branchId === employee.branchId) return true;
                             return false;
                           }).map(r => r.attendanceDate) || [];
                           
@@ -2569,9 +2625,11 @@ export default function ShiftManagementPage() {
                             // SECURITY: فحص الفرع
                             if (selectedBranch !== "all" && r.branchId !== selectedBranch) return false;
                             if (r.branchEmployeeId && String(r.branchEmployeeId) === empIdStr) return true;
-                            if (r.employeeId === linkedUserId || r.employeeId === empIdStr) return true;
+                            if (r.employeeId === `branch_emp_${employee.id}`) return true;
+                            if (employee.linkedUserId && r.employeeId === employee.linkedUserId) return true;
+                            if (r.employeeId === empIdStr) return true;
                             const recordName = r.employeeName?.trim().toLowerCase() || '';
-                            if (normalizedEmpName && recordName && normalizedEmpName === recordName) return true;
+                            if (normalizedEmpName && recordName && normalizedEmpName === recordName && r.branchId === employee.branchId) return true;
                             return false;
                           }).map(r => r.attendanceDate) || [];
                           
@@ -3029,9 +3087,11 @@ export default function ShiftManagementPage() {
                         // SECURITY: فحص الفرع
                         if (selectedBranch !== "all" && r.branchId !== selectedBranch) return false;
                         if (r.branchEmployeeId && String(r.branchEmployeeId) === empIdStr) return true;
-                        if (r.employeeId === linkedUserId || r.employeeId === empIdStr) return true;
+                        if (r.employeeId === `branch_emp_${employee.id}`) return true;
+                        if (employee.linkedUserId && r.employeeId === employee.linkedUserId) return true;
+                        if (r.employeeId === empIdStr) return true;
                         const recordName = r.employeeName?.trim().toLowerCase() || '';
-                        if (normalizedEmpName && recordName && normalizedEmpName === recordName) return true;
+                        if (normalizedEmpName && recordName && normalizedEmpName === recordName && r.branchId === employee.branchId) return true;
                         return false;
                       }) || [];
                       
@@ -3122,9 +3182,11 @@ export default function ShiftManagementPage() {
                             // SECURITY: فحص الفرع
                             if (selectedBranch !== "all" && r.branchId !== selectedBranch) return false;
                             if (r.branchEmployeeId && String(r.branchEmployeeId) === empIdStr) return true;
-                            if (r.employeeId === linkedUserId || r.employeeId === empIdStr) return true;
+                            if (r.employeeId === `branch_emp_${employee.id}`) return true;
+                            if (employee.linkedUserId && r.employeeId === employee.linkedUserId) return true;
+                            if (r.employeeId === empIdStr) return true;
                             const recordName = r.employeeName?.trim().toLowerCase() || '';
-                            if (normalizedEmpName && recordName && normalizedEmpName === recordName) return true;
+                            if (normalizedEmpName && recordName && normalizedEmpName === recordName && r.branchId === employee.branchId) return true;
                             return false;
                           }).length || 0;
                           
@@ -3182,9 +3244,11 @@ export default function ShiftManagementPage() {
                             // SECURITY: فحص الفرع
                             if (selectedBranch !== "all" && r.branchId !== selectedBranch) return false;
                             if (r.branchEmployeeId && String(r.branchEmployeeId) === empIdStr) return true;
-                            if (r.employeeId === linkedUserId || r.employeeId === empIdStr) return true;
+                            if (r.employeeId === `branch_emp_${employee.id}`) return true;
+                            if (employee.linkedUserId && r.employeeId === employee.linkedUserId) return true;
+                            if (r.employeeId === empIdStr) return true;
                             const recordName = r.employeeName?.trim().toLowerCase() || '';
-                            if (normalizedEmpName && recordName && normalizedEmpName === recordName) return true;
+                            if (normalizedEmpName && recordName && normalizedEmpName === recordName && r.branchId === employee.branchId) return true;
                             return false;
                           }).length || 0;
                           
