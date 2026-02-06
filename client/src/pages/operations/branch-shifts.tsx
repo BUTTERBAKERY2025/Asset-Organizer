@@ -1142,6 +1142,10 @@ export default function BranchShiftsPage() {
                   onTouchEnd={(e) => {
                     e.preventDefault();
                     setIsDrawing(false);
+                    const canvas = canvasRef.current;
+                    if (canvas) {
+                      setSignatureData(canvas.toDataURL());
+                    }
                   }}
                   data-testid="canvas-signature"
                 />
