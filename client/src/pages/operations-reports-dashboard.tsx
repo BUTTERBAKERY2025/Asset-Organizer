@@ -175,16 +175,13 @@ function KPICard({
         </div>
       )}
       <CardContent className="p-3">
-        <div className="flex items-center justify-between gap-2">
-          <div className={`p-2 rounded-lg ${bgColor} shrink-0`}>
-            <Icon className={`w-4 h-4 ${color}`} />
-          </div>
-          <div className="flex-1 min-w-0 text-center">
-            <p className={`text-lg font-bold ${color} truncate leading-tight`}>{value}</p>
-            <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{title}</p>
-            {subtitle && <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{subtitle}</p>}
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-muted-foreground mb-1 whitespace-nowrap">{title}</p>
+            <p className={`text-base font-bold ${color} whitespace-nowrap`}>{value}</p>
+            {subtitle && <p className="text-xs text-muted-foreground mt-1 whitespace-nowrap">{subtitle}</p>}
             {trendLabel && (
-              <div className="flex items-center justify-center gap-1 mt-0.5 text-[10px]">
+              <div className="flex items-center gap-1 mt-1 text-xs">
                 {trend === "up" && <TrendingUp className="w-3 h-3 text-green-500" />}
                 {trend === "down" && <TrendingDown className="w-3 h-3 text-red-500" />}
                 <span className={trend === "up" ? "text-green-500" : trend === "down" ? "text-red-500" : "text-muted-foreground"}>
@@ -192,6 +189,9 @@ function KPICard({
                 </span>
               </div>
             )}
+          </div>
+          <div className={`p-2 rounded-lg ${bgColor} shrink-0`}>
+            <Icon className={`w-4 h-4 ${color}`} />
           </div>
         </div>
       </CardContent>
@@ -989,8 +989,8 @@ export default function OperationsReportsDashboardPage() {
     return new Intl.NumberFormat("en-SA", {
       style: "currency",
       currency: "SAR",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
     }).format(value);
   };
 
@@ -2490,22 +2490,22 @@ export default function OperationsReportsDashboardPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <KPICard title="إجمالي اليوميات" value={formatNumber(filteredCashierJournals.length)} icon={Receipt} color="text-blue-600" bgColor="bg-blue-100" />
-                <KPICard title="إجمالي المبيعات" value={formatNumber(filteredCashierJournals.reduce((sum, j) => sum + (j.totalSales || 0), 0))}
+                <KPICard title="إجمالي المبيعات" value={formatCurrency(filteredCashierJournals.reduce((sum, j) => sum + (j.totalSales || 0), 0))}
                   icon={DollarSign} color="text-green-600" bgColor="bg-green-100" />
-                <KPICard title="النقدي" value={formatNumber(filteredCashierJournals.reduce((sum, j) => sum + (j.cashTotal || 0), 0))}
+                <KPICard title="النقدي" value={formatCurrency(filteredCashierJournals.reduce((sum, j) => sum + (j.cashTotal || 0), 0))}
                   icon={Wallet} color="text-emerald-600" bgColor="bg-emerald-100" />
-                <KPICard title="الشبكة" value={formatNumber(filteredCashierJournals.reduce((sum, j) => sum + (j.networkTotal || 0), 0))}
+                <KPICard title="الشبكة" value={formatCurrency(filteredCashierJournals.reduce((sum, j) => sum + (j.networkTotal || 0), 0))}
                   icon={CreditCard} color="text-indigo-600" bgColor="bg-indigo-100" />
                 <KPICard title="حالات العجز"
                   value={formatNumber(filteredCashierJournals.filter(j => j.discrepancyStatus === 'shortage').length)}
                   icon={TrendingDown} color="text-red-600" bgColor="bg-red-100" 
-                  subtitle={`SAR ${formatNumber(filteredCashierJournals.filter(j => j.discrepancyStatus === 'shortage').reduce((sum, j) => sum + Math.abs(j.discrepancyAmount || 0), 0))}`} />
+                  subtitle={formatCurrency(filteredCashierJournals.filter(j => j.discrepancyStatus === 'shortage').reduce((sum, j) => sum + Math.abs(j.discrepancyAmount || 0), 0))} />
                 <KPICard title="حالات الفائض"
                   value={formatNumber(filteredCashierJournals.filter(j => j.discrepancyStatus === 'surplus').length)}
                   icon={TrendingUp} color="text-amber-600" bgColor="bg-amber-100"
-                  subtitle={`SAR ${formatNumber(filteredCashierJournals.filter(j => j.discrepancyStatus === 'surplus').reduce((sum, j) => sum + (j.discrepancyAmount || 0), 0))}`} />
+                  subtitle={formatCurrency(filteredCashierJournals.filter(j => j.discrepancyStatus === 'surplus').reduce((sum, j) => sum + (j.discrepancyAmount || 0), 0))} />
                 <KPICard title="بانتظار الموافقة"
                   value={formatNumber(filteredCashierJournals.filter(j => j.status === 'submitted').length)}
                   icon={Clock} color="text-yellow-600" bgColor="bg-yellow-100" />
