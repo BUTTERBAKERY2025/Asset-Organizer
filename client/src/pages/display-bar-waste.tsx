@@ -165,7 +165,7 @@ export default function DisplayBarWastePage() {
       const params = new URLSearchParams();
       if (selectedBranch !== "all") params.append("branchId", selectedBranch);
       if (selectedDate) params.append("date", selectedDate);
-      const res = await fetch(`/api/display-bar/receipts?${params}`);
+      const res = await fetch(`/api/display-bar/receipts?${params}`, { credentials: "include" });
       if (!res.ok) return [];
       const data = await res.json();
       return Array.isArray(data) ? data : [];
@@ -181,7 +181,7 @@ export default function DisplayBarWastePage() {
         params.append("dateFrom", selectedDate);
         params.append("dateTo", selectedDate);
       }
-      const res = await fetch(`/api/waste-reports?${params}`);
+      const res = await fetch(`/api/waste-reports?${params}`, { credentials: "include" });
       if (!res.ok) return [];
       const data = await res.json();
       return Array.isArray(data) ? data : [];
@@ -192,7 +192,6 @@ export default function DisplayBarWastePage() {
     queryKey: ["/api/waste-reports/stats"],
   });
 
-  // Waste Analytics - waste vs sales comparison
   interface WasteAnalytics {
     date: string;
     branchId: string;
@@ -207,7 +206,7 @@ export default function DisplayBarWastePage() {
       const params = new URLSearchParams();
       if (selectedBranch !== "all") params.append("branchId", selectedBranch);
       if (selectedDate) params.append("date", selectedDate);
-      const res = await fetch(`/api/waste-reports/analytics?${params}`);
+      const res = await fetch(`/api/waste-reports/analytics?${params}`, { credentials: "include" });
       if (!res.ok) return null;
       return res.json();
     },
@@ -232,7 +231,7 @@ export default function DisplayBarWastePage() {
       const params = new URLSearchParams();
       if (selectedBranch !== "all") params.append("branchId", selectedBranch);
       if (selectedDate) params.append("date", selectedDate);
-      const res = await fetch(`/api/display-bar/summary?${params}`);
+      const res = await fetch(`/api/display-bar/summary?${params}`, { credentials: "include" });
       if (!res.ok) return [];
       return res.json();
     },
@@ -262,7 +261,7 @@ export default function DisplayBarWastePage() {
       if (historyDateFrom) params.append("dateFrom", historyDateFrom);
       if (historyDateTo) params.append("dateTo", historyDateTo);
       if (historyStatus !== "all") params.append("status", historyStatus);
-      const res = await fetch(`/api/waste-reports/history?${params}`);
+      const res = await fetch(`/api/waste-reports/history?${params}`, { credentials: "include" });
       if (!res.ok) return [];
       return res.json();
     },
@@ -294,7 +293,7 @@ export default function DisplayBarWastePage() {
     queryKey: ["/api/waste-reports", viewingReport?.id, "items"],
     queryFn: async () => {
       if (!viewingReport?.id) return [];
-      const res = await fetch(`/api/waste-reports/${viewingReport.id}/items`);
+      const res = await fetch(`/api/waste-reports/${viewingReport.id}/items`, { credentials: "include" });
       if (!res.ok) return [];
       return res.json();
     },
@@ -642,7 +641,7 @@ export default function DisplayBarWastePage() {
     if (existingReport) {
       setSavedReportId(existingReport.id);
       setSavedReportStatus(existingReport.status || "draft");
-      fetch(`/api/waste-reports/${existingReport.id}/items`)
+      fetch(`/api/waste-reports/${existingReport.id}/items`, { credentials: "include" })
         .then(res => res.ok ? res.json() : [])
         .then((savedItems: any[]) => {
           if (!Array.isArray(savedItems) || savedItems.length === 0) return;
@@ -779,6 +778,7 @@ export default function DisplayBarWastePage() {
       return reportData;
     },
     onSuccess: (reportData: any) => {
+      loadedReportRef.current = `${wasteBranch}_${selectedDate}_${reportData.id}`;
       queryClient.invalidateQueries({ queryKey: ["/api/waste-reports"] });
       queryClient.invalidateQueries({ queryKey: ["/api/waste-reports/history"] });
       queryClient.invalidateQueries({ queryKey: ["/api/waste-reports/analytics"] });
@@ -786,7 +786,10 @@ export default function DisplayBarWastePage() {
       setSavedReportStatus(reportData.status || "draft");
       toast({ title: reportData.existing ? "تم تحديث تقرير الهالك الموجود" : "تم حفظ تقرير الهالك اليومي بنجاح" });
     },
-    onError: (err: any) => toast({ title: err.message || "حدث خطأ", variant: "destructive" }),
+    onError: (err: any) => {
+      console.error("Save waste report error:", err);
+      toast({ title: err.message || "حدث خطأ في حفظ التقرير", variant: "destructive" });
+    },
   });
 
   const submitForApprovalMutation = useMutation({
