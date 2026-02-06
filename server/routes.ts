@@ -7466,11 +7466,15 @@ export async function registerRoutes(
   });
 
   // Calculate and upsert daily summary for a branch+date (auto-compute from receipts and waste)
-  app.post("/api/display-bar/summary/calculate", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+  app.post("/api/display-bar/summary/calculate", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
     try {
       const { branchId, date } = req.body;
       if (!branchId || !date) {
         return res.status(400).json({ error: "يجب تحديد الفرع والتاريخ" });
+      }
+      
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(new Date(date).getTime())) {
+        return res.status(400).json({ error: "صيغة التاريخ غير صالحة" });
       }
       
       const branchFilter = getEffectiveBranchFilter(req, branchId);
@@ -7541,9 +7545,7 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Invalid summary ID" });
       }
       
-      // Get existing summary to check branch access
-      const existingSummaries = await storage.getDisplayBarDailySummary(undefined, undefined);
-      const existingSummary = existingSummaries.find((s: any) => s.id === id);
+      const existingSummary = await storage.getDisplayBarDailySummaryById(id);
       if (!existingSummary) {
         return res.status(404).json({ error: "Summary not found" });
       }
@@ -7731,35 +7733,7 @@ export async function registerRoutes(
     }
   });
 
-  // Get Single Waste Report
-  app.get("/api/waste-reports/:id", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
-    try {
-      const id = parseInt(req.params.id, 10);
-      if (isNaN(id)) {
-        return res.status(400).json({ error: "Invalid report ID" });
-      }
-      const report = await storage.getWasteReport(id);
-      if (!report) {
-        return res.status(404).json({ error: "Report not found" });
-      }
-      
-      // Verify branch access for non-admin users
-      const user = getCurrentUser(req);
-      if (user?.role !== "admin" && report.branchId) {
-        const hasAccess = await canAccessBranch(req, report.branchId);
-        if (!hasAccess) {
-          return res.status(403).json({ error: "ليس لديك صلاحية للوصول لهذا التقرير" });
-        }
-      }
-      
-      res.json(report);
-    } catch (error) {
-      console.error("Error fetching waste report:", error);
-      res.status(500).json({ error: "Failed to fetch waste report" });
-    }
-  });
-
-  // Waste Reports History endpoint (must be before /:id route)
+  // Waste Reports History endpoint (MUST be before /:id route to avoid Express matching "history" as :id)
   app.get("/api/waste-reports/history", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
       const queryBranchId = req.query.branchId as string | undefined;
@@ -7791,6 +7765,34 @@ export async function registerRoutes(
     }
   });
 
+  // Get Single Waste Report
+  app.get("/api/waste-reports/:id", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid report ID" });
+      }
+      const report = await storage.getWasteReport(id);
+      if (!report) {
+        return res.status(404).json({ error: "Report not found" });
+      }
+      
+      // Verify branch access for non-admin users
+      const user = getCurrentUser(req);
+      if (user?.role !== "admin" && report.branchId) {
+        const hasAccess = await canAccessBranch(req, report.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "ليس لديك صلاحية للوصول لهذا التقرير" });
+        }
+      }
+      
+      res.json(report);
+    } catch (error) {
+      console.error("Error fetching waste report:", error);
+      res.status(500).json({ error: "Failed to fetch waste report" });
+    }
+  });
+
   // Create Waste Report
   app.post("/api/waste-reports", isAuthenticated, requirePermission("operations", "create"), requireBranchAccess, async (req, res) => {
     try {
@@ -7814,8 +7816,12 @@ export async function registerRoutes(
         }
       }
       
+      const sanitizedBody = { ...req.body };
+      if (typeof sanitizedBody.notes === 'string') sanitizedBody.notes = sanitizedBody.notes.slice(0, 1000);
+      if (typeof sanitizedBody.shiftName === 'string') sanitizedBody.shiftName = sanitizedBody.shiftName.slice(0, 50);
+      
       const validatedData = insertWasteReportSchema.parse({
-        ...req.body,
+        ...sanitizedBody,
         reportedBy: currentUser?.id,
         reporterName: currentUser ? `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() : null,
       });
@@ -7911,6 +7917,12 @@ export async function registerRoutes(
       }
       
       const user = getCurrentUser(req);
+      const isAdmin = user?.role === "admin" || user?.role === "manager";
+      
+      if ((existingReport.status === 'approved' || existingReport.status === 'submitted') && !isAdmin) {
+        return res.status(403).json({ error: "لا يمكن حذف تقرير معتمد أو مرسل للاعتماد" });
+      }
+      
       if (user?.role !== "admin" && existingReport.branchId) {
         const hasAccess = await canAccessBranch(req, existingReport.branchId);
         if (!hasAccess) {
@@ -8045,6 +8057,64 @@ export async function registerRoutes(
       }
       console.error("Error creating waste item:", error);
       res.status(500).json({ error: "Failed to create waste item" });
+    }
+  });
+
+  // Batch replace waste items (atomic transaction - all or nothing)
+  app.put("/api/waste-reports/:reportId/items/batch", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
+    try {
+      const reportId = parseInt(req.params.reportId, 10);
+      if (isNaN(reportId)) {
+        return res.status(400).json({ error: "Invalid report ID" });
+      }
+      
+      const report = await storage.getWasteReport(reportId);
+      if (!report) {
+        return res.status(404).json({ error: "Report not found" });
+      }
+      
+      const user = getCurrentUser(req);
+      const isAdmin = user?.role === "admin" || user?.role === "manager";
+      
+      if ((report.status === 'approved' || report.status === 'submitted') && !isAdmin) {
+        return res.status(403).json({ error: "لا يمكن تعديل عناصر تقرير معتمد أو مرسل" });
+      }
+      
+      if (user?.role !== "admin" && report.branchId) {
+        const hasAccess = await canAccessBranch(req, report.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "ليس لديك صلاحية لتعديل تقارير هذا الفرع" });
+        }
+      }
+      
+      const { items } = req.body;
+      if (!Array.isArray(items)) {
+        return res.status(400).json({ error: "items must be an array" });
+      }
+      
+      if (items.length > 500) {
+        return res.status(400).json({ error: "الحد الأقصى 500 عنصر لكل تقرير" });
+      }
+      
+      const validatedItems = items.map((item: any) => {
+        const reasonDetails = typeof item.reasonDetails === 'string' ? item.reasonDetails.slice(0, 500) : '';
+        const imageUrl = typeof item.imageUrl === 'string' ? item.imageUrl.slice(0, 2000) : '';
+        return insertWasteItemSchema.parse({
+          ...item,
+          reasonDetails,
+          imageUrl,
+          wasteReportId: reportId,
+        });
+      });
+      
+      const created = await storage.batchReplaceWasteItems(reportId, validatedItems);
+      res.status(200).json({ items: created, count: created.length });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      console.error("Error batch saving waste items:", error);
+      res.status(500).json({ error: "فشل في حفظ عناصر الهالك" });
     }
   });
 

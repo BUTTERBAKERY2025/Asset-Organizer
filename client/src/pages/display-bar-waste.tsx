@@ -757,24 +757,23 @@ export default function DisplayBarWastePage() {
       const reportData = await response.json();
       
       if (reportData.existing) {
-        await apiRequest("DELETE", `/api/waste-reports/${reportData.id}/items`);
         await apiRequest("PATCH", `/api/waste-reports/${reportData.id}`, {
           totalItems: totalWasteItems,
           totalValue: totalWasteValue,
         });
       }
       
-      for (const entry of wasteEntriesWithQuantity) {
-        await apiRequest("POST", `/api/waste-reports/${reportData.id}/items`, {
-          productId: entry.productId,
-          quantity: entry.wasteQuantity,
-          unitPrice: entry.unitPrice,
-          totalValue: entry.wasteQuantity * entry.unitPrice,
-          wasteReason: entry.wasteReason,
-          reasonDetails: entry.reasonDetails,
-          imageUrl: entry.imageUrl,
-        });
-      }
+      const batchItems = wasteEntriesWithQuantity.map(entry => ({
+        productId: entry.productId,
+        quantity: entry.wasteQuantity,
+        unitPrice: entry.unitPrice,
+        totalValue: entry.wasteQuantity * entry.unitPrice,
+        wasteReason: entry.wasteReason,
+        reasonDetails: (entry.reasonDetails || '').slice(0, 500),
+        imageUrl: (entry.imageUrl || '').slice(0, 2000),
+      }));
+      
+      await apiRequest("PUT", `/api/waste-reports/${reportData.id}/items/batch`, { items: batchItems });
       return reportData;
     },
     onSuccess: (reportData: any) => {

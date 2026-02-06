@@ -759,6 +759,7 @@ export interface IStorage {
   
   // Display Bar Daily Summary
   getDisplayBarDailySummary(branchId?: string, date?: string): Promise<DisplayBarDailySummary[]>;
+  getDisplayBarDailySummaryById(id: number): Promise<DisplayBarDailySummary | undefined>;
   upsertDisplayBarDailySummary(data: InsertDisplayBarDailySummary): Promise<DisplayBarDailySummary>;
   updateDisplayBarDailySummary(id: number, data: Partial<InsertDisplayBarDailySummary>): Promise<DisplayBarDailySummary | undefined>;
   
@@ -776,6 +777,7 @@ export interface IStorage {
   updateWasteItem(id: number, data: Partial<InsertWasteItem>): Promise<WasteItem | undefined>;
   deleteWasteItem(id: number): Promise<boolean>;
   deleteWasteItemsByReportId(wasteReportId: number): Promise<number>;
+  batchReplaceWasteItems(wasteReportId: number, items: InsertWasteItem[]): Promise<WasteItem[]>;
 
   // Advanced Production Orders
   getAllAdvancedProductionOrders(): Promise<AdvancedProductionOrder[]>;
@@ -5153,6 +5155,11 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(displayBarDailySummary).orderBy(desc(displayBarDailySummary.summaryDate));
   }
 
+  async getDisplayBarDailySummaryById(id: number): Promise<DisplayBarDailySummary | undefined> {
+    const [summary] = await db.select().from(displayBarDailySummary).where(eq(displayBarDailySummary.id, id));
+    return summary || undefined;
+  }
+
   async updateDisplayBarDailySummary(id: number, data: Partial<InsertDisplayBarDailySummary>): Promise<DisplayBarDailySummary | undefined> {
     const [summary] = await db.update(displayBarDailySummary)
       .set({ ...data, updatedAt: new Date() })
@@ -5253,6 +5260,20 @@ export class DatabaseStorage implements IStorage {
   async deleteWasteItemsByReportId(wasteReportId: number): Promise<number> {
     const result = await db.delete(wasteItems).where(eq(wasteItems.wasteReportId, wasteReportId)).returning();
     return result.length;
+  }
+
+  async batchReplaceWasteItems(wasteReportId: number, items: InsertWasteItem[]): Promise<WasteItem[]> {
+    return await db.transaction(async (tx) => {
+      await tx.delete(wasteItems).where(eq(wasteItems.wasteReportId, wasteReportId));
+      if (items.length === 0) return [];
+      const created = await tx.insert(wasteItems).values(items).returning();
+      const totalItems = created.reduce((sum, i) => sum + i.quantity, 0);
+      const totalValue = created.reduce((sum, i) => sum + (i.totalValue || 0), 0);
+      await tx.update(wasteReports)
+        .set({ totalItems, totalValue })
+        .where(eq(wasteReports.id, wasteReportId));
+      return created;
+    });
   }
 
   // Advanced Production Orders
