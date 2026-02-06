@@ -5015,10 +5015,46 @@ export async function registerRoutes(
         .innerJoin(cashierSalesJournals, eq(branchDailyClosureJournals.journalId, cashierSalesJournals.id))
         .where(eq(branchDailyClosureJournals.closureId, id));
       
+      const journalsList = linkedJournals.map((lj: any) => lj.journal);
+      const journalIds = journalsList.map((j: any) => j.id);
+      
+      const journalPaymentBreakdowns = journalIds.length > 0
+        ? await db.select()
+            .from(cashierPaymentBreakdowns)
+            .where(inArray(cashierPaymentBreakdowns.journalId, journalIds))
+        : [];
+      
+      const detailCardMethods = ['mada', 'visa', 'mastercard', 'amex', 'card_other', 'card', 'apple_pay', 'stc_pay'];
+      
+      const journalsWithComputedDisc = journalsList.map((j: any) => {
+        const jBreakdowns = journalPaymentBreakdowns.filter(pb => pb.journalId === j.id);
+        
+        if (jBreakdowns.length > 0) {
+          const cardBreakdowns = jBreakdowns.filter(pb => detailCardMethods.includes(pb.paymentMethod));
+          const computedTerminalTotal = cardBreakdowns.reduce((sum, pb) => sum + (pb.terminalAmount || 0), 0);
+          const computedPosTotal = cardBreakdowns.reduce((sum, pb) => sum + (pb.posAmount || pb.amount || 0), 0);
+          const computedBankDisc = computedTerminalTotal - computedPosTotal;
+          
+          return {
+            ...j,
+            computedBankDiscrepancy: computedBankDisc,
+            computedBankTerminalTotal: computedTerminalTotal,
+            computedBankPosTotal: computedPosTotal,
+          };
+        }
+        
+        return {
+          ...j,
+          computedBankDiscrepancy: j.bankDiscrepancyTotal || 0,
+          computedBankTerminalTotal: j.totalBankTerminalAmount || 0,
+          computedBankPosTotal: j.totalBankPosAmount || 0,
+        };
+      });
+      
       res.json({
         ...closure,
         payments,
-        journals: linkedJournals.map((lj: any) => lj.journal),
+        journals: journalsWithComputedDisc,
       });
     } catch (error) {
       console.error("Error fetching branch daily closure:", error);

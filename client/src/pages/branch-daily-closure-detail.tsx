@@ -567,7 +567,7 @@ export default function BranchDailyClosureDetailPage() {
                       const shiftLabel = j.shiftType === 'morning' ? 'صباحي' : j.shiftType === 'evening' ? 'مسائي' : j.shiftType === 'night' ? 'ليلي' : (j.shiftType || '-');
                       const expectedCash = (j.expectedCash != null && j.expectedCash !== 0) ? j.expectedCash : ((j.openingBalance || 0) + (j.cashTotal || 0));
                       const cashDisc = (j.actualCashDrawer || 0) - expectedCash;
-                      const bankDisc = j.bankDiscrepancyTotal || 0;
+                      const bankDisc = j.computedBankDiscrepancy ?? j.bankDiscrepancyTotal ?? 0;
                       const netDisc = cashDisc + bankDisc;
                       return (
                         <TableRow key={j.id} data-testid={`row-journal-${j.id}`}>
@@ -627,7 +627,7 @@ export default function BranchDailyClosureDetailPage() {
                       </TableCell>
                       <TableCell className="font-bold">
                         {(() => {
-                          const totalBankDisc = closure.journals.reduce((s: number, j: any) => s + (j.bankDiscrepancyTotal || 0), 0);
+                          const totalBankDisc = closure.journals.reduce((s: number, j: any) => s + (j.computedBankDiscrepancy ?? j.bankDiscrepancyTotal ?? 0), 0);
                           return (
                             <span className={totalBankDisc > 0.5 ? 'text-amber-600' : totalBankDisc < -0.5 ? 'text-red-600' : 'text-green-600'}>
                               {formatCurrency(totalBankDisc)} ر.س
@@ -640,7 +640,7 @@ export default function BranchDailyClosureDetailPage() {
                           const totalNet = closure.journals.reduce((s: number, j: any) => {
                             const exp = (j.expectedCash != null && j.expectedCash !== 0) ? j.expectedCash : ((j.openingBalance || 0) + (j.cashTotal || 0));
                             const cd = (j.actualCashDrawer || 0) - exp;
-                            return s + cd + (j.bankDiscrepancyTotal || 0);
+                            return s + cd + (j.computedBankDiscrepancy ?? j.bankDiscrepancyTotal ?? 0);
                           }, 0);
                           return (
                             <span className={`px-2 py-0.5 rounded ${totalNet > 0.5 ? 'text-amber-700 bg-amber-100' : totalNet < -0.5 ? 'text-red-700 bg-red-100' : 'text-green-700 bg-green-100'}`}>
