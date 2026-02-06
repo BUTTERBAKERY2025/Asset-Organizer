@@ -431,14 +431,21 @@ export default function EmployeeReportsDashboardPage() {
     });
     
     const prevMonthEmployeeIds = new Set(prevMonthEmployees.map(emp => emp.id));
+    const prevMonthEmpIdStrings = new Set<string>();
+    prevMonthEmployees.forEach(emp => {
+      prevMonthEmpIdStrings.add(emp.id.toString());
+      prevMonthEmpIdStrings.add(`branch_emp_${emp.id}`);
+      if ((emp as any).linkedUserId) prevMonthEmpIdStrings.add((emp as any).linkedUserId);
+    });
     
     const prevAttendance = attendanceRecords.filter(rec => {
       if (selectedBranch !== "all" && rec.branchId !== selectedBranch) return false;
       if (rec.attendanceDate < prevMonthStart || rec.attendanceDate > prevMonthEnd) return false;
       if (selectedJobTitle !== "all" || selectedEmployee !== "all") {
         const matchesByBranchEmployeeId = rec.branchEmployeeId && prevMonthEmployeeIds.has(rec.branchEmployeeId);
-        const matchesByEmployeeId = prevMonthEmployeeIds.has(parseInt(rec.employeeId) || 0);
-        if (!matchesByBranchEmployeeId && !matchesByEmployeeId) return false;
+        const matchesByEmployeeId = prevMonthEmpIdStrings.has(rec.employeeId);
+        const matchesByName = rec.employeeName && prevMonthEmployees.some(emp => emp.employeeName === rec.employeeName && emp.branchId === rec.branchId);
+        if (!matchesByBranchEmployeeId && !matchesByEmployeeId && !matchesByName) return false;
       }
       return true;
     });
@@ -481,13 +488,20 @@ export default function EmployeeReportsDashboardPage() {
       });
       
       const branchEmployeeIds = new Set(branchEmps.map(e => e.id));
+      const branchEmpIdStrings = new Set<string>();
+      branchEmps.forEach(e => {
+        branchEmpIdStrings.add(e.id.toString());
+        branchEmpIdStrings.add(`branch_emp_${e.id}`);
+        if ((e as any).linkedUserId) branchEmpIdStrings.add((e as any).linkedUserId);
+      });
       const branchAttendance = attendanceRecords.filter(rec => {
         if (rec.branchId !== branch.id) return false;
         if (rec.attendanceDate < monthStart || rec.attendanceDate > monthEnd) return false;
         if (selectedJobTitle !== "all" || selectedEmployee !== "all") {
           const matchesByBranchEmployeeId = rec.branchEmployeeId && branchEmployeeIds.has(rec.branchEmployeeId);
-          const matchesByEmployeeId = branchEmployeeIds.has(parseInt(rec.employeeId) || 0);
-          if (!matchesByBranchEmployeeId && !matchesByEmployeeId) return false;
+          const matchesByEmployeeId = branchEmpIdStrings.has(rec.employeeId);
+          const matchesByName = rec.employeeName && branchEmps.some(emp => emp.employeeName === rec.employeeName && emp.branchId === rec.branchId);
+          if (!matchesByBranchEmployeeId && !matchesByEmployeeId && !matchesByName) return false;
         }
         return true;
       });
@@ -572,7 +586,7 @@ export default function EmployeeReportsDashboardPage() {
       current.maxSalary = Math.max(current.maxSalary, salary);
       
       const empAttendance = attendanceRecords.filter(rec => 
-        (rec.branchEmployeeId === emp.id || rec.employeeId === emp.id.toString()) &&
+        (rec.branchEmployeeId === emp.id || rec.employeeId === emp.id.toString() || rec.employeeId === `branch_emp_${emp.id}` || ((emp as any).linkedUserId && rec.employeeId === (emp as any).linkedUserId) || (rec.employeeName === emp.employeeName && rec.branchId === emp.branchId)) &&
         rec.attendanceDate >= monthStart && rec.attendanceDate <= monthEnd
       );
       current.present += empAttendance.filter(r => r.status === "present" || r.status === "late").length;
@@ -686,8 +700,12 @@ export default function EmployeeReportsDashboardPage() {
     branchEmployees.forEach(emp => {
       employeeLookup.set(`bid:${emp.id}`, emp.id);
       employeeLookup.set(`eid:${emp.id.toString()}`, emp.id);
+      employeeLookup.set(`eid:branch_emp_${emp.id}`, emp.id);
       if (emp.employeeNumber) {
         employeeLookup.set(`enum:${emp.employeeNumber}`, emp.id);
+      }
+      if ((emp as any).linkedUserId) {
+        employeeLookup.set(`eid:${(emp as any).linkedUserId}`, emp.id);
       }
     });
     
@@ -701,6 +719,10 @@ export default function EmployeeReportsDashboardPage() {
       const employeeNumber = (rec as any).employeeNumber;
       if (employeeNumber && employeeLookup.has(`enum:${employeeNumber}`)) {
         return employeeLookup.get(`enum:${employeeNumber}`)!;
+      }
+      if (rec.employeeName) {
+        const match = branchEmployees.find(emp => emp.employeeName === rec.employeeName && emp.branchId === rec.branchId);
+        if (match) return match.id;
       }
       return null;
     };
