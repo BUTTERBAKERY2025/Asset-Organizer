@@ -257,9 +257,12 @@ export default function BranchDailyClosingPage() {
   }
 
   const CARD_METHODS = ['mada', 'visa', 'mastercard', 'amex', 'card_other', 'card', 'apple_pay', 'stc_pay'];
-  const computedBankDiscrepancy = Object.entries(selectedPaymentMethodTotals)
-    .filter(([method]) => CARD_METHODS.includes(method))
-    .reduce((sum, [, data]) => sum + data.totalBankDiscrepancy, 0);
+  const hasPaymentBreakdowns = Object.keys(selectedPaymentMethodTotals).length > 0;
+  const computedBankDiscrepancy = hasPaymentBreakdowns
+    ? Object.entries(selectedPaymentMethodTotals)
+        .filter(([method]) => CARD_METHODS.includes(method))
+        .reduce((sum, [, data]) => sum + data.totalBankDiscrepancy, 0)
+    : selectedJournalsList.reduce((sum: number, j: any) => sum + (j.bankDiscrepancyTotal ?? 0), 0);
 
   const selectedTotals = {
     totalSales: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.totalSales ?? 0), 0),
@@ -269,7 +272,10 @@ export default function BranchDailyClosingPage() {
     totalBankDiscrepancy: computedBankDiscrepancy,
     totalCustomerCount: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.customerCount ?? 0), 0),
     totalOpeningBalance: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.openingBalance ?? 0), 0),
-    totalExpectedCash: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.expectedCash ?? 0), 0),
+    totalExpectedCash: selectedJournalsList.reduce((sum: number, j: any) => {
+      const expected = j.expectedCash || ((j.openingBalance || 0) + (j.cashTotal || 0));
+      return sum + expected;
+    }, 0),
     totalActualCash: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.actualCashDrawer ?? 0), 0),
     totalTransactionCount: selectedJournalsList.reduce((sum: number, j: any) => sum + (j.transactionCount ?? 0), 0),
     journalsCount: selectedJournalsList.length,
@@ -593,7 +599,7 @@ export default function BranchDailyClosingPage() {
                       </div>
                       <div className="bg-white rounded-lg p-2 sm:p-3 border border-green-100">
                         <span className="text-gray-500 text-[10px] sm:text-xs md:text-sm block mb-1">مبيعات نقدية</span>
-                        <span className="font-bold text-sm sm:text-base md:text-lg text-green-700">{formatCurrency(selectedTotals.cashTotal)} ر.س</span>
+                        <span className="font-bold text-sm sm:text-base md:text-lg text-green-700">{formatCurrency(selectedTotals.totalExpectedCash - selectedTotals.totalOpeningBalance)} ر.س</span>
                       </div>
                       <div className="bg-white rounded-lg p-2 sm:p-3 border border-green-100">
                         <span className="text-gray-500 text-[10px] sm:text-xs md:text-sm block mb-1">المتوقع</span>

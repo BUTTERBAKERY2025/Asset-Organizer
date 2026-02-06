@@ -4903,18 +4903,22 @@ export async function registerRoutes(
         networkTotal: journals.reduce((sum, j) => sum + (j.networkTotal || 0), 0),
         deliveryTotal: journals.reduce((sum, j) => sum + (j.deliveryTotal || 0), 0),
         totalOpeningBalance: journals.reduce((sum, j) => sum + (j.openingBalance || 0), 0),
-        totalExpectedCash: journals.reduce((sum, j) => sum + (j.expectedCash || 0), 0),
+        totalExpectedCash: journals.reduce((sum, j) => {
+          const expected = j.expectedCash || ((j.openingBalance || 0) + (j.cashTotal || 0));
+          return sum + expected;
+        }, 0),
         totalActualCash: journals.reduce((sum, j) => sum + (j.actualCashDrawer || 0), 0),
-        totalCashDiscrepancy: journals.reduce((sum, j) => sum + (j.actualCashDrawer || 0), 0) - journals.reduce((sum, j) => sum + (j.expectedCash || 0), 0),
         totalCustomerCount: journals.reduce((sum, j) => sum + (j.customerCount || 0), 0),
         totalTransactionCount: journals.reduce((sum, j) => sum + (j.transactionCount || 0), 0),
         totalBankPosAmount: journals.reduce((sum, j) => sum + (j.totalBankPosAmount || 0), 0),
         totalBankTerminalAmount: journals.reduce((sum, j) => sum + (j.totalBankTerminalAmount || 0), 0),
-        totalBankDiscrepancy: journals.reduce((sum, j) => sum + (j.bankDiscrepancyTotal || 0), 0),
         journalsCount: journals.length,
       };
+      // Compute totalCashDiscrepancy after totals are set
+      (totals as any).totalCashDiscrepancy = totals.totalActualCash - totals.totalExpectedCash;
       
       // Aggregate payment methods (compute bankDiscrepancy dynamically as terminalAmount - posAmount)
+      const cardMethods = ['mada', 'visa', 'mastercard', 'amex', 'card_other', 'card', 'apple_pay', 'stc_pay'];
       const paymentMethodTotals: Record<string, {
         totalAmount: number;
         totalPosAmount: number;
@@ -4945,6 +4949,15 @@ export async function registerRoutes(
         paymentMethodTotals[method].totalTransactionCount += pb.transactionCount || 0;
         paymentMethodTotals[method].totalTerminalTransactionCount += pb.terminalTransactionCount || 0;
       }
+      
+      // Compute totalBankDiscrepancy from card methods only (consistent with frontend)
+      // If no payment breakdowns exist, fall back to journal-level bank discrepancy totals
+      const computedTotalBankDiscrepancy = paymentBreakdowns.length > 0
+        ? Object.entries(paymentMethodTotals)
+            .filter(([method]) => cardMethods.includes(method))
+            .reduce((sum, [, data]) => sum + data.totalBankDiscrepancy, 0)
+        : journals.reduce((sum, j) => sum + (j.bankDiscrepancyTotal || 0), 0);
+      (totals as any).totalBankDiscrepancy = computedTotalBankDiscrepancy;
       
       res.json({
         existingClosure,
@@ -5072,12 +5085,55 @@ export async function registerRoutes(
       const cashTotal = journals.reduce((sum, j) => sum + (j.cashTotal || 0), 0);
       const networkTotal = journals.reduce((sum, j) => sum + (j.networkTotal || 0), 0);
       const deliveryTotal = journals.reduce((sum, j) => sum + (j.deliveryTotal || 0), 0);
-      const totalExpectedCash = journals.reduce((sum, j) => sum + (j.expectedCash || 0), 0);
+      const totalExpectedCash = journals.reduce((sum, j) => {
+        const expected = j.expectedCash || ((j.openingBalance || 0) + (j.cashTotal || 0));
+        return sum + expected;
+      }, 0);
       const totalActualCash = journals.reduce((sum, j) => sum + (j.actualCashDrawer || 0), 0);
       const totalCashDiscrepancy = totalActualCash - totalExpectedCash;
-      const totalBankDiscrepancy = journals.reduce((sum, j) => sum + (j.bankDiscrepancyTotal || 0), 0);
       
       const cashDiscrepancyStatus = totalCashDiscrepancy > 0.5 ? 'surplus' : totalCashDiscrepancy < -0.5 ? 'shortage' : 'balanced';
+      
+      // Aggregate payment breakdowns first (needed for bank discrepancy)
+      const closureCardMethods = ['mada', 'visa', 'mastercard', 'amex', 'card_other', 'card', 'apple_pay', 'stc_pay'];
+      const paymentMethodTotals: Record<string, {
+        totalAmount: number;
+        totalPosAmount: number;
+        totalTerminalAmount: number;
+        totalBankDiscrepancy: number;
+        totalTransactionCount: number;
+        totalTerminalTransactionCount: number;
+      }> = {};
+      
+      for (const pb of paymentBreakdowns) {
+        const method = pb.paymentMethod;
+        if (!paymentMethodTotals[method]) {
+          paymentMethodTotals[method] = {
+            totalAmount: 0,
+            totalPosAmount: 0,
+            totalTerminalAmount: 0,
+            totalBankDiscrepancy: 0,
+            totalTransactionCount: 0,
+            totalTerminalTransactionCount: 0,
+          };
+        }
+        const posAmt = pb.posAmount || pb.amount || 0;
+        const termAmt = pb.terminalAmount || 0;
+        paymentMethodTotals[method].totalAmount += pb.amount || 0;
+        paymentMethodTotals[method].totalPosAmount += posAmt;
+        paymentMethodTotals[method].totalTerminalAmount += termAmt;
+        paymentMethodTotals[method].totalBankDiscrepancy += (termAmt - posAmt);
+        paymentMethodTotals[method].totalTransactionCount += pb.transactionCount || 0;
+        paymentMethodTotals[method].totalTerminalTransactionCount += pb.terminalTransactionCount || 0;
+      }
+      
+      // Compute bank discrepancy from card methods only (consistent with frontend)
+      // If no payment breakdowns exist, fall back to journal-level bank discrepancy totals
+      const totalBankDiscrepancy = paymentBreakdowns.length > 0
+        ? Object.entries(paymentMethodTotals)
+            .filter(([method]) => closureCardMethods.includes(method))
+            .reduce((sum, [, data]) => sum + data.totalBankDiscrepancy, 0)
+        : journals.reduce((sum, j) => sum + (j.bankDiscrepancyTotal || 0), 0);
       const bankDiscrepancyStatus = totalBankDiscrepancy > 0.5 ? 'surplus' : totalBankDiscrepancy < -0.5 ? 'shortage' : 'balanced';
       
       // Create closure
@@ -5112,38 +5168,6 @@ export async function registerRoutes(
           closureId: newClosure.id,
           journalId,
         });
-      }
-      
-      // Aggregate and insert payment breakdowns
-      const paymentMethodTotals: Record<string, {
-        totalAmount: number;
-        totalPosAmount: number;
-        totalTerminalAmount: number;
-        totalBankDiscrepancy: number;
-        totalTransactionCount: number;
-        totalTerminalTransactionCount: number;
-      }> = {};
-      
-      for (const pb of paymentBreakdowns) {
-        const method = pb.paymentMethod;
-        if (!paymentMethodTotals[method]) {
-          paymentMethodTotals[method] = {
-            totalAmount: 0,
-            totalPosAmount: 0,
-            totalTerminalAmount: 0,
-            totalBankDiscrepancy: 0,
-            totalTransactionCount: 0,
-            totalTerminalTransactionCount: 0,
-          };
-        }
-        const posAmt = pb.posAmount || pb.amount || 0;
-        const termAmt = pb.terminalAmount || 0;
-        paymentMethodTotals[method].totalAmount += pb.amount || 0;
-        paymentMethodTotals[method].totalPosAmount += posAmt;
-        paymentMethodTotals[method].totalTerminalAmount += termAmt;
-        paymentMethodTotals[method].totalBankDiscrepancy += (termAmt - posAmt);
-        paymentMethodTotals[method].totalTransactionCount += pb.transactionCount || 0;
-        paymentMethodTotals[method].totalTerminalTransactionCount += pb.terminalTransactionCount || 0;
       }
       
       for (const [method, totals] of Object.entries(paymentMethodTotals)) {
