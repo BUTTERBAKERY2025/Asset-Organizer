@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useBranches } from "@/hooks/useBranches";
 import { useLocation, useParams, Link } from "wouter";
-import { ArrowRight, Save, Send, Plus, Trash2, Wallet, CreditCard, Smartphone, Truck, AlertCircle, AlertTriangle, CheckCircle, Calculator, Users, Receipt, Camera, ImageIcon, X, Upload, FileDown, Copy, RotateCcw } from "lucide-react";
+import { ArrowRight, Save, Send, Plus, Trash2, Wallet, CreditCard, Smartphone, Truck, AlertCircle, AlertTriangle, CheckCircle, Calculator, Users, Receipt, Camera, ImageIcon, X, Upload, FileDown, Copy, RotateCcw, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, Maximize2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -303,6 +303,49 @@ export default function CashierJournalFormPage() {
   }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingType, setUploadingType] = useState<AttachmentType | null>(null);
+
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [lightboxZoom, setLightboxZoom] = useState(1);
+
+  const allAttachmentImages = [
+    ...attachments.map(a => ({ src: a.fileData, label: ATTACHMENT_TYPE_LABELS[a.attachmentType as AttachmentType] || a.attachmentType, fileName: a.fileName })),
+    ...pendingAttachments.map(a => ({ src: a.fileData, label: ATTACHMENT_TYPE_LABELS[a.attachmentType] || a.attachmentType, fileName: a.fileName })),
+  ];
+
+  const openLightbox = useCallback((index: number) => {
+    setLightboxIndex(index);
+    setLightboxZoom(1);
+    setLightboxOpen(true);
+  }, []);
+
+  const closeLightbox = useCallback(() => {
+    setLightboxOpen(false);
+    setLightboxZoom(1);
+  }, []);
+
+  const navigateLightbox = useCallback((direction: number) => {
+    setLightboxIndex(prev => {
+      const next = prev + direction;
+      if (next < 0) return allAttachmentImages.length - 1;
+      if (next >= allAttachmentImages.length) return 0;
+      return next;
+    });
+    setLightboxZoom(1);
+  }, [allAttachmentImages.length]);
+
+  useEffect(() => {
+    if (!lightboxOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeLightbox();
+      if (e.key === "ArrowLeft") navigateLightbox(1);
+      if (e.key === "ArrowRight") navigateLightbox(-1);
+      if (e.key === "+" || e.key === "=") setLightboxZoom(z => Math.min(z + 0.25, 4));
+      if (e.key === "-") setLightboxZoom(z => Math.max(z - 0.25, 0.5));
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [lightboxOpen, closeLightbox, navigateLightbox]);
 
   const { branches: filteredBranches, userBranchId, canSelectBranch } = useBranches();
 
@@ -2151,13 +2194,16 @@ export default function CashierJournalFormPage() {
                   <div className="space-y-2">
                     <Label className="text-sm font-semibold">المرفقات المحفوظة</Label>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                      {attachments.map((attachment) => (
-                        <div key={attachment.id} className="relative border rounded-lg overflow-hidden group">
+                      {attachments.map((attachment, idx) => (
+                        <div key={attachment.id} className="relative border rounded-lg overflow-hidden group cursor-pointer" onClick={() => openLightbox(idx)} data-testid={`attachment-image-${attachment.id}`}>
                           <img
                             src={attachment.fileData}
                             alt={attachment.fileName}
-                            className="w-full h-32 object-cover"
+                            className="w-full h-32 object-cover transition-transform group-hover:scale-105"
                           />
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                            <Maximize2 className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
+                          </div>
                           <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-xs p-2">
                             {ATTACHMENT_TYPE_LABELS[attachment.attachmentType as AttachmentType]}
                           </div>
@@ -2165,8 +2211,8 @@ export default function CashierJournalFormPage() {
                             <Button
                               variant="destructive"
                               size="icon"
-                              className="absolute top-2 left-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                              onClick={() => deleteAttachmentMutation.mutate(attachment.id)}
+                              className="absolute top-2 left-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                              onClick={(e) => { e.stopPropagation(); deleteAttachmentMutation.mutate(attachment.id); }}
                               data-testid={`button-delete-attachment-${attachment.id}`}
                             >
                               <X className="w-4 h-4" />
@@ -2183,20 +2229,23 @@ export default function CashierJournalFormPage() {
                     <Label className="text-sm font-semibold">مرفقات في انتظار الحفظ</Label>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                       {pendingAttachments.map((attachment, index) => (
-                        <div key={index} className="relative border rounded-lg overflow-hidden group border-dashed border-2 border-orange-300">
+                        <div key={index} className="relative border rounded-lg overflow-hidden group border-dashed border-2 border-orange-300 cursor-pointer" onClick={() => openLightbox(attachments.length + index)} data-testid={`pending-attachment-image-${index}`}>
                           <img
                             src={attachment.fileData}
                             alt={attachment.fileName}
-                            className="w-full h-32 object-cover"
+                            className="w-full h-32 object-cover transition-transform group-hover:scale-105"
                           />
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                            <Maximize2 className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
+                          </div>
                           <div className="absolute bottom-0 left-0 right-0 bg-orange-500/80 text-white text-xs p-2">
                             {ATTACHMENT_TYPE_LABELS[attachment.attachmentType]}
                           </div>
                           <Button
                             variant="destructive"
                             size="icon"
-                            className="absolute top-2 left-2 h-6 w-6"
-                            onClick={() => removePendingAttachment(index)}
+                            className="absolute top-2 left-2 h-6 w-6 z-10"
+                            onClick={(e) => { e.stopPropagation(); removePendingAttachment(index); }}
                             data-testid={`button-remove-pending-${index}`}
                           >
                             <X className="w-4 h-4" />
@@ -2736,6 +2785,98 @@ export default function CashierJournalFormPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {lightboxOpen && allAttachmentImages.length > 0 && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center"
+          onClick={closeLightbox}
+          data-testid="lightbox-overlay"
+        >
+          <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-10">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-white hover:bg-white/20 h-10 w-10"
+                onClick={(e) => { e.stopPropagation(); setLightboxZoom(z => Math.min(z + 0.25, 4)); }}
+                data-testid="lightbox-zoom-in"
+              >
+                <ZoomIn className="w-5 h-5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-white hover:bg-white/20 h-10 w-10"
+                onClick={(e) => { e.stopPropagation(); setLightboxZoom(z => Math.max(z - 0.25, 0.5)); }}
+                data-testid="lightbox-zoom-out"
+              >
+                <ZoomOut className="w-5 h-5" />
+              </Button>
+              <span className="text-white/70 text-sm">{Math.round(lightboxZoom * 100)}%</span>
+            </div>
+            <div className="bg-black/60 text-white px-3 py-1.5 rounded-full text-sm">
+              {allAttachmentImages[lightboxIndex]?.label} ({lightboxIndex + 1}/{allAttachmentImages.length})
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-white hover:bg-white/20 h-10 w-10"
+              onClick={closeLightbox}
+              data-testid="lightbox-close"
+            >
+              <X className="w-6 h-6" />
+            </Button>
+          </div>
+
+          <div
+            className="max-w-[90vw] max-h-[85vh] overflow-auto flex items-center justify-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={allAttachmentImages[lightboxIndex]?.src}
+              alt={allAttachmentImages[lightboxIndex]?.fileName}
+              className="max-w-none transition-transform duration-200 rounded shadow-2xl select-none"
+              style={{ transform: `scale(${lightboxZoom})`, transformOrigin: 'center center' }}
+              draggable={false}
+              data-testid="lightbox-image"
+            />
+          </div>
+
+          {allAttachmentImages.length > 1 && (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-white hover:bg-white/20 h-12 w-12"
+                onClick={(e) => { e.stopPropagation(); navigateLightbox(-1); }}
+                data-testid="lightbox-prev"
+              >
+                <ChevronRight className="w-8 h-8" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-white hover:bg-white/20 h-12 w-12"
+                onClick={(e) => { e.stopPropagation(); navigateLightbox(1); }}
+                data-testid="lightbox-next"
+              >
+                <ChevronLeft className="w-8 h-8" />
+              </Button>
+            </>
+          )}
+
+          <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-1.5">
+            {allAttachmentImages.map((_, i) => (
+              <button
+                key={i}
+                className={`w-2.5 h-2.5 rounded-full transition-colors ${i === lightboxIndex ? 'bg-white' : 'bg-white/40 hover:bg-white/60'}`}
+                onClick={(e) => { e.stopPropagation(); setLightboxIndex(i); setLightboxZoom(1); }}
+                data-testid={`lightbox-dot-${i}`}
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }
