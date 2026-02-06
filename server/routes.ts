@@ -4826,6 +4826,12 @@ export async function registerRoutes(
       if (status) {
         conditions.push(eq(branchDailyClosures.status, status as string));
       }
+      if (startDate && typeof startDate === 'string') {
+        conditions.push(gte(branchDailyClosures.closureDate, startDate));
+      }
+      if (endDate && typeof endDate === 'string') {
+        conditions.push(lte(branchDailyClosures.closureDate, endDate));
+      }
       
       const closures = await db.select()
         .from(branchDailyClosures)
@@ -5030,6 +5036,18 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Branch ID, date, and journal IDs are required" });
       }
       
+      // SECURITY: Validate date format and prevent future dates
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(closureDate)) {
+        return res.status(400).json({ error: "تنسيق التاريخ غير صالح" });
+      }
+      const closureDateObj = new Date(closureDate + 'T00:00:00');
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (closureDateObj > today) {
+        return res.status(400).json({ error: "لا يمكن إنشاء إغلاق لتاريخ مستقبلي" });
+      }
+      
       // SECURITY: Verify branch access for non-admin users
       if (!isUserAdmin(req)) {
         const hasAccess = await canAccessBranch(req, branchId);
@@ -5136,60 +5154,62 @@ export async function registerRoutes(
         : journals.reduce((sum, j) => sum + (j.bankDiscrepancyTotal || 0), 0);
       const bankDiscrepancyStatus = totalBankDiscrepancy > 0.5 ? 'surplus' : totalBankDiscrepancy < -0.5 ? 'shortage' : 'balanced';
       
-      // Create closure
-      const [newClosure] = await db.insert(branchDailyClosures).values({
-        branchId,
-        closureDate,
-        totalSales,
-        cashTotal,
-        networkTotal,
-        deliveryTotal,
-        totalOpeningBalance: journals.reduce((sum, j) => sum + (j.openingBalance || 0), 0),
-        totalExpectedCash,
-        totalActualCash,
-        totalCashDiscrepancy,
-        cashDiscrepancyStatus,
-        totalBankPosAmount: journals.reduce((sum, j) => sum + (j.totalBankPosAmount || 0), 0),
-        totalBankTerminalAmount: journals.reduce((sum, j) => sum + (j.totalBankTerminalAmount || 0), 0),
-        totalBankDiscrepancy,
-        bankDiscrepancyStatus,
-        totalCustomerCount: journals.reduce((sum, j) => sum + (j.customerCount || 0), 0),
-        totalTransactionCount: journals.reduce((sum, j) => sum + (j.transactionCount || 0), 0),
-        averageTicket: totalSales / Math.max(journals.reduce((sum, j) => sum + (j.customerCount || 0), 0), 1),
-        journalsCount: journals.length,
-        status: 'open',
-        notes,
-        createdBy: user.id,
-      }).returning();
-      
-      // Link journals to closure
-      for (const journalId of journalIds) {
-        await db.insert(branchDailyClosureJournals).values({
-          closureId: newClosure.id,
-          journalId,
-        });
-      }
-      
-      for (const [method, totals] of Object.entries(paymentMethodTotals)) {
-        const discType = totals.totalBankDiscrepancy > 0.5 ? 'surplus' : totals.totalBankDiscrepancy < -0.5 ? 'shortage' : 'balanced';
-        await db.insert(branchDailyClosurePayments).values({
-          closureId: newClosure.id,
-          paymentMethod: method,
-          totalAmount: totals.totalAmount,
-          totalPosAmount: totals.totalPosAmount,
-          totalTerminalAmount: totals.totalTerminalAmount,
-          totalBankDiscrepancy: totals.totalBankDiscrepancy,
-          bankDiscrepancyType: discType,
-          totalTransactionCount: totals.totalTransactionCount,
-          totalTerminalTransactionCount: totals.totalTerminalTransactionCount,
-        });
-      }
+      // SECURITY: Use transaction for atomic closure creation
+      const newClosure = await db.transaction(async (tx) => {
+        const [closure] = await tx.insert(branchDailyClosures).values({
+          branchId,
+          closureDate,
+          totalSales,
+          cashTotal,
+          networkTotal,
+          deliveryTotal,
+          totalOpeningBalance: journals.reduce((sum, j) => sum + (j.openingBalance || 0), 0),
+          totalExpectedCash,
+          totalActualCash,
+          totalCashDiscrepancy,
+          cashDiscrepancyStatus,
+          totalBankPosAmount: journals.reduce((sum, j) => sum + (j.totalBankPosAmount || 0), 0),
+          totalBankTerminalAmount: journals.reduce((sum, j) => sum + (j.totalBankTerminalAmount || 0), 0),
+          totalBankDiscrepancy,
+          bankDiscrepancyStatus,
+          totalCustomerCount: journals.reduce((sum, j) => sum + (j.customerCount || 0), 0),
+          totalTransactionCount: journals.reduce((sum, j) => sum + (j.transactionCount || 0), 0),
+          averageTicket: totalSales / Math.max(journals.reduce((sum, j) => sum + (j.customerCount || 0), 0), 1),
+          journalsCount: journals.length,
+          status: 'open',
+          notes,
+          createdBy: user.id,
+        }).returning();
+        
+        for (const journalId of journalIds) {
+          await tx.insert(branchDailyClosureJournals).values({
+            closureId: closure.id,
+            journalId,
+          });
+        }
+        
+        for (const [method, totals] of Object.entries(paymentMethodTotals)) {
+          const discType = totals.totalBankDiscrepancy > 0.5 ? 'surplus' : totals.totalBankDiscrepancy < -0.5 ? 'shortage' : 'balanced';
+          await tx.insert(branchDailyClosurePayments).values({
+            closureId: closure.id,
+            paymentMethod: method,
+            totalAmount: totals.totalAmount,
+            totalPosAmount: totals.totalPosAmount,
+            totalTerminalAmount: totals.totalTerminalAmount,
+            totalBankDiscrepancy: totals.totalBankDiscrepancy,
+            bankDiscrepancyType: discType,
+            totalTransactionCount: totals.totalTransactionCount,
+            totalTerminalTransactionCount: totals.totalTerminalTransactionCount,
+          });
+        }
+        
+        return closure;
+      });
       
       res.json(newClosure);
     } catch (error: any) {
       console.error("Error creating branch daily closure:", error);
-      console.error("Error details:", error?.message, error?.stack);
-      res.status(500).json({ error: "Failed to create branch daily closure", details: error?.message });
+      res.status(500).json({ error: "فشل في إنشاء الإغلاق اليومي" });
     }
   });
 
@@ -5222,6 +5242,11 @@ export async function registerRoutes(
       
       if (closure.status === 'closed') {
         return res.status(400).json({ error: "اليومية مغلقة بالفعل" });
+      }
+      
+      // SECURITY: Separation of duties - creator cannot approve their own closure
+      if (closure.createdBy === user.id && !isUserAdmin(req)) {
+        return res.status(403).json({ error: "لا يمكن اعتماد إغلاق قمت بإنشائه بنفسك" });
       }
       
       const [updated] = await db.update(branchDailyClosures)
