@@ -3048,3 +3048,144 @@ export async function generateTodayAttendancePdf(data: TodayAttendancePdfData): 
     await browser.close();
   }
 }
+
+export interface AttendanceLogPdfData {
+  branchName: string;
+  periodStart: string;
+  periodEnd: string;
+  employees: Array<{
+    employeeName: string;
+    jobTitle: string;
+    days: Array<{
+      day: string;
+      date: string;
+      checkIn: string;
+      checkOut: string;
+      status: string;
+    }>;
+    presentCount: number;
+    absentCount: number;
+  }>;
+}
+
+export async function generateAttendanceLogPdf(data: AttendanceLogPdfData): Promise<Buffer> {
+  const statusColors: Record<string, { bg: string; text: string }> = {
+    'حاضر': { bg: '#dcfce7', text: '#166534' },
+    'متأخر': { bg: '#fef3c7', text: '#92400e' },
+    'غائب': { bg: '#fee2e2', text: '#991b1b' },
+    'إجازة': { bg: '#dbeafe', text: '#1e40af' },
+    'مجدول': { bg: '#f3f4f6', text: '#6b7280' },
+  };
+
+  const totalPresent = data.employees.reduce((s, e) => s + e.presentCount, 0);
+  const totalAbsent = data.employees.reduce((s, e) => s + e.absentCount, 0);
+  const totalScheduled = totalPresent + totalAbsent;
+  const attendanceRate = totalScheduled > 0 ? Math.round((totalPresent / totalScheduled) * 100) : 0;
+
+  const employeeSections = data.employees.map((emp, empIdx) => {
+    const dayRows = emp.days.map((d, i) => {
+      const colors = statusColors[d.status] || statusColors['مجدول'];
+      return `<tr style="background: ${i % 2 === 0 ? '#ffffff' : '#f9fafb'};">
+        <td style="text-align: center; padding: 6px 8px; border-bottom: 1px solid #e5e7eb;">${d.day}</td>
+        <td style="text-align: center; padding: 6px 8px; border-bottom: 1px solid #e5e7eb;">${d.date}</td>
+        <td style="text-align: center; padding: 6px 8px; border-bottom: 1px solid #e5e7eb; color: ${d.checkIn !== '-' ? '#166534' : '#9ca3af'}; font-weight: 500;">${d.checkIn}</td>
+        <td style="text-align: center; padding: 6px 8px; border-bottom: 1px solid #e5e7eb; color: ${d.checkOut !== '-' ? '#2563eb' : '#9ca3af'};">${d.checkOut}</td>
+        <td style="text-align: center; padding: 6px 8px; border-bottom: 1px solid #e5e7eb;">
+          <span style="background: ${colors.bg}; color: ${colors.text}; padding: 2px 10px; border-radius: 4px; font-size: 10px; font-weight: 600;">${d.status}</span>
+        </td>
+      </tr>`;
+    }).join('');
+
+    return `
+      <div style="margin-bottom: 20px; page-break-inside: avoid;">
+        <div style="background: ${empIdx % 2 === 0 ? '#f0f9ff' : '#fefce8'}; padding: 10px 15px; border-radius: 8px 8px 0 0; border: 1px solid #e5e7eb; border-bottom: none; display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <span style="font-weight: 700; font-size: 13px; color: #1e3a5f;">${emp.employeeName}</span>
+            <span style="margin-right: 10px; font-size: 11px; color: #6b7280;">${emp.jobTitle}</span>
+          </div>
+          <div style="display: flex; gap: 10px;">
+            <span style="background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 4px; font-size: 10px;">حضور: ${emp.presentCount}</span>
+            <span style="background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 4px; font-size: 10px;">غياب: ${emp.absentCount}</span>
+          </div>
+        </div>
+        <table style="width: 100%; border-collapse: collapse; border: 1px solid #e5e7eb; border-radius: 0 0 8px 8px; overflow: hidden;">
+          <thead>
+            <tr style="background: #f1f5f9;">
+              <th style="padding: 8px; text-align: center; font-size: 11px; font-weight: 600; color: #475569; border-bottom: 2px solid #d4a853;">اليوم</th>
+              <th style="padding: 8px; text-align: center; font-size: 11px; font-weight: 600; color: #475569; border-bottom: 2px solid #d4a853;">التاريخ</th>
+              <th style="padding: 8px; text-align: center; font-size: 11px; font-weight: 600; color: #475569; border-bottom: 2px solid #d4a853;">وقت الحضور</th>
+              <th style="padding: 8px; text-align: center; font-size: 11px; font-weight: 600; color: #475569; border-bottom: 2px solid #d4a853;">وقت الانصراف</th>
+              <th style="padding: 8px; text-align: center; font-size: 11px; font-weight: 600; color: #475569; border-bottom: 2px solid #d4a853;">الحالة</th>
+            </tr>
+          </thead>
+          <tbody>${dayRows}</tbody>
+        </table>
+      </div>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html>
+    <html dir="rtl" lang="ar">
+    <head>
+      <meta charset="UTF-8">
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Cairo', Arial, sans-serif; direction: rtl; padding: 20px; background: #fff; font-size: 12px; }
+      </style>
+    </head>
+    <body>
+      <div style="text-align: center; margin-bottom: 25px; padding-bottom: 15px; border-bottom: 3px solid #d4a853;">
+        <div style="font-size: 18px; font-weight: 700; color: #1e3a5f; margin-bottom: 5px;">شركة الزبد الأفضل التجارية</div>
+        <div style="font-size: 16px; font-weight: 600; color: #d4a853; margin-bottom: 5px;">سجل الحضور والانصراف</div>
+        <div style="font-size: 12px; color: #666;">الفرع: ${data.branchName} | الفترة: ${data.periodStart} إلى ${data.periodEnd}</div>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 25px;">
+        <div style="background: #f0fdf4; padding: 12px; border-radius: 8px; text-align: center;">
+          <div style="font-size: 24px; font-weight: 700; color: #166534;">${totalPresent}</div>
+          <div style="font-size: 11px; color: #166534;">أيام الحضور</div>
+        </div>
+        <div style="background: #fef2f2; padding: 12px; border-radius: 8px; text-align: center;">
+          <div style="font-size: 24px; font-weight: 700; color: #991b1b;">${totalAbsent}</div>
+          <div style="font-size: 11px; color: #991b1b;">أيام الغياب</div>
+        </div>
+        <div style="background: #eff6ff; padding: 12px; border-radius: 8px; text-align: center;">
+          <div style="font-size: 24px; font-weight: 700; color: #1d4ed8;">${data.employees.length}</div>
+          <div style="font-size: 11px; color: #1d4ed8;">عدد الموظفين</div>
+        </div>
+        <div style="background: #fefce8; padding: 12px; border-radius: 8px; text-align: center;">
+          <div style="font-size: 24px; font-weight: 700; color: #a16207;">${attendanceRate}%</div>
+          <div style="font-size: 11px; color: #a16207;">نسبة الحضور</div>
+        </div>
+      </div>
+      ${employeeSections}
+      <div style="display: flex; justify-content: space-around; margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
+        <div style="text-align: center; width: 200px;">
+          <div style="border-bottom: 1px solid #333; margin-bottom: 5px; padding-bottom: 30px;"></div>
+          <div style="font-size: 11px; color: #666;">مدير الفرع</div>
+        </div>
+        <div style="text-align: center; width: 200px;">
+          <div style="border-bottom: 1px solid #333; margin-bottom: 5px; padding-bottom: 30px;"></div>
+          <div style="font-size: 11px; color: #666;">مسؤول الموارد البشرية</div>
+        </div>
+      </div>
+    </body>
+    </html>`;
+
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
+  });
+
+  try {
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: 'networkidle0' });
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: { top: '15mm', right: '10mm', bottom: '15mm', left: '10mm' }
+    });
+    return Buffer.from(pdfBuffer);
+  } finally {
+    await browser.close();
+  }
+}

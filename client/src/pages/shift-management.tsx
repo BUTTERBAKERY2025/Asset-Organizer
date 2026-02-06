@@ -1064,6 +1064,259 @@ export default function ShiftManagementPage() {
     }
   };
 
+  const exportAttendanceToExcel = () => {
+    if (selectedBranch === "all") {
+      toast({ title: "تنبيه", description: "يرجى اختيار فرع محدد أولاً", variant: "destructive" });
+      return;
+    }
+    if (filteredEmployees.length === 0) {
+      toast({ title: "تنبيه", description: "لا يوجد موظفين لتصدير السجل", variant: "destructive" });
+      return;
+    }
+    try {
+      const reportRows: any[] = [];
+      filteredEmployees.forEach(employee => {
+        const empIdStr = String(employee.id);
+        weekDates.forEach((date, dayIndex) => {
+          const dateStr = format(date, "yyyy-MM-dd");
+          const cellData = scheduleData[empIdStr]?.[dateStr];
+          const attendance = getAttendanceForEmployee(empIdStr, dateStr, employee);
+          let status = "-";
+          let scheduledTime = "-";
+          let checkIn = "-";
+          let checkOut = "-";
+          let workHours = "-";
+          let lateMin = "-";
+          if (cellData?.isOff) {
+            status = "إجازة";
+          } else if (cellData) {
+            scheduledTime = `${cellData.startTime} - ${cellData.endTime}`;
+            if (attendance) {
+              checkIn = attendance.actualCheckIn || "-";
+              checkOut = attendance.actualCheckOut || "-";
+              workHours = attendance.workingHours ? String(attendance.workingHours.toFixed(1)) : "-";
+              lateMin = attendance.lateMinutes ? String(attendance.lateMinutes) : "0";
+              status = attendance.status === "present" ? "حاضر" : attendance.status === "late" ? "متأخر" : attendance.status || "غائب";
+            } else {
+              const today = new Date(); today.setHours(0, 0, 0, 0);
+              status = new Date(dateStr + "T00:00:00") < today ? "غائب" : "مجدول";
+            }
+          }
+          reportRows.push({
+            "الموظف": employee.employeeName,
+            "المسمى الوظيفي": employee.jobTitle || "موظف",
+            "اليوم": DAYS_AR[dayIndex],
+            "التاريخ": format(date, "dd/MM/yyyy"),
+            "الدوام المطلوب": scheduledTime,
+            "وقت الحضور": checkIn,
+            "وقت الانصراف": checkOut,
+            "ساعات العمل": workHours,
+            "دقائق التأخير": lateMin,
+            "الحالة": status,
+          });
+        });
+      });
+      const ws = XLSX.utils.json_to_sheet(reportRows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "سجل الحضور");
+      const colWidths = [
+        { wch: 20 }, { wch: 15 }, { wch: 10 }, { wch: 12 },
+        { wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 10 },
+      ];
+      ws["!cols"] = colWidths;
+      XLSX.writeFile(wb, `سجل_الحضور_${format(currentWeekStart, "yyyy-MM-dd")}_${getBranchName(selectedBranch)}.xlsx`);
+      toast({ title: "تم تصدير سجل الحضور بصيغة Excel بنجاح" });
+    } catch (error) {
+      toast({ title: "خطأ", description: "فشل في تصدير سجل الحضور", variant: "destructive" });
+    }
+  };
+
+  const exportAttendanceToCsv = () => {
+    if (selectedBranch === "all") {
+      toast({ title: "تنبيه", description: "يرجى اختيار فرع محدد أولاً", variant: "destructive" });
+      return;
+    }
+    if (filteredEmployees.length === 0) {
+      toast({ title: "تنبيه", description: "لا يوجد موظفين لتصدير السجل", variant: "destructive" });
+      return;
+    }
+    try {
+      const headers = ["الموظف", "المسمى الوظيفي", "اليوم", "التاريخ", "الدوام المطلوب", "وقت الحضور", "وقت الانصراف", "ساعات العمل", "دقائق التأخير", "الحالة"];
+      const rows: string[][] = [headers];
+      filteredEmployees.forEach(employee => {
+        const empIdStr = String(employee.id);
+        weekDates.forEach((date, dayIndex) => {
+          const dateStr = format(date, "yyyy-MM-dd");
+          const cellData = scheduleData[empIdStr]?.[dateStr];
+          const attendance = getAttendanceForEmployee(empIdStr, dateStr, employee);
+          let status = "-";
+          let scheduledTime = "-";
+          let checkIn = "-";
+          let checkOut = "-";
+          let workHours = "-";
+          let lateMin = "-";
+          if (cellData?.isOff) {
+            status = "إجازة";
+          } else if (cellData) {
+            scheduledTime = `${cellData.startTime} - ${cellData.endTime}`;
+            if (attendance) {
+              checkIn = attendance.actualCheckIn || "-";
+              checkOut = attendance.actualCheckOut || "-";
+              workHours = attendance.workingHours ? String(attendance.workingHours.toFixed(1)) : "-";
+              lateMin = attendance.lateMinutes ? String(attendance.lateMinutes) : "0";
+              status = attendance.status === "present" ? "حاضر" : attendance.status === "late" ? "متأخر" : attendance.status || "غائب";
+            } else {
+              const today = new Date(); today.setHours(0, 0, 0, 0);
+              status = new Date(dateStr + "T00:00:00") < today ? "غائب" : "مجدول";
+            }
+          }
+          rows.push([employee.employeeName, employee.jobTitle || "موظف", DAYS_AR[dayIndex], format(date, "dd/MM/yyyy"), scheduledTime, checkIn, checkOut, workHours, lateMin, status]);
+        });
+      });
+      const bom = "\uFEFF";
+      const csvContent = bom + rows.map(r => r.map(c => `"${c}"`).join(",")).join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `سجل_الحضور_${format(currentWeekStart, "yyyy-MM-dd")}_${getBranchName(selectedBranch)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast({ title: "تم تصدير سجل الحضور بصيغة CSV بنجاح" });
+    } catch (error) {
+      toast({ title: "خطأ", description: "فشل في تصدير سجل الحضور", variant: "destructive" });
+    }
+  };
+
+  const exportAttendanceToPdf = async () => {
+    if (selectedBranch === "all") {
+      toast({ title: "تنبيه", description: "يرجى اختيار فرع محدد أولاً", variant: "destructive" });
+      return;
+    }
+    if (filteredEmployees.length === 0) {
+      toast({ title: "تنبيه", description: "لا يوجد موظفين لتصدير السجل", variant: "destructive" });
+      return;
+    }
+    setIsExportingPdf(true);
+    try {
+      const employeesData = filteredEmployees.map(employee => {
+        const empIdStr = String(employee.id);
+        const days = weekDates.map((date, dayIndex) => {
+          const dateStr = format(date, "yyyy-MM-dd");
+          const cellData = scheduleData[empIdStr]?.[dateStr];
+          const attendance = getAttendanceForEmployee(empIdStr, dateStr, employee);
+          let status = "-";
+          let checkIn = "-";
+          let checkOut = "-";
+          if (cellData?.isOff) {
+            status = "إجازة";
+          } else if (cellData) {
+            if (attendance) {
+              checkIn = attendance.actualCheckIn || "-";
+              checkOut = attendance.actualCheckOut || "-";
+              status = attendance.status === "present" ? "حاضر" : attendance.status === "late" ? "متأخر" : attendance.status || "غائب";
+            } else {
+              const today = new Date(); today.setHours(0, 0, 0, 0);
+              status = new Date(dateStr + "T00:00:00") < today ? "غائب" : "مجدول";
+            }
+          }
+          return { day: DAYS_AR[dayIndex], date: format(date, "dd/MM"), checkIn, checkOut, status };
+        });
+        const presentCount = days.filter(d => d.status === "حاضر" || d.status === "متأخر").length;
+        const absentCount = days.filter(d => d.status === "غائب").length;
+        return { employeeName: employee.employeeName, jobTitle: employee.jobTitle || "موظف", days, presentCount, absentCount };
+      });
+
+      const res = await apiRequest("POST", "/api/reports/attendance-log-pdf", {
+        branchName: getBranchName(selectedBranch),
+        periodStart: format(currentWeekStart, "dd/MM/yyyy"),
+        periodEnd: format(addDays(currentWeekStart, 6), "dd/MM/yyyy"),
+        employees: employeesData,
+      });
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `سجل_الحضور_${format(currentWeekStart, "yyyy-MM-dd")}_${getBranchName(selectedBranch)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      toast({ title: "تم تصدير سجل الحضور بصيغة PDF بنجاح" });
+    } catch (error) {
+      toast({ title: "خطأ", description: "فشل في تصدير سجل الحضور كـ PDF", variant: "destructive" });
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
+  const printAttendanceLog = () => {
+    if (selectedBranch === "all") {
+      toast({ title: "تنبيه", description: "يرجى اختيار فرع محدد أولاً", variant: "destructive" });
+      return;
+    }
+    if (filteredEmployees.length === 0) {
+      toast({ title: "تنبيه", description: "لا يوجد موظفين لطباعة السجل", variant: "destructive" });
+      return;
+    }
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+    let tableRows = "";
+    filteredEmployees.forEach(employee => {
+      const empIdStr = String(employee.id);
+      weekDates.forEach((date, dayIndex) => {
+        const dateStr = format(date, "yyyy-MM-dd");
+        const cellData = scheduleData[empIdStr]?.[dateStr];
+        const attendance = getAttendanceForEmployee(empIdStr, dateStr, employee);
+        let status = "-";
+        let scheduledTime = "-";
+        let checkIn = "-";
+        let checkOut = "-";
+        let badgeClass = "";
+        if (cellData?.isOff) {
+          status = "إجازة"; badgeClass = "badge-blue";
+        } else if (cellData) {
+          scheduledTime = `${cellData.startTime} - ${cellData.endTime}`;
+          if (attendance) {
+            checkIn = attendance.actualCheckIn || "-";
+            checkOut = attendance.actualCheckOut || "-";
+            if (attendance.status === "present") { status = "حاضر"; badgeClass = "badge-green"; }
+            else if (attendance.status === "late") { status = `متأخر (${attendance.lateMinutes || 0} د)`; badgeClass = "badge-amber"; }
+            else { status = "غائب"; badgeClass = "badge-red"; }
+          } else {
+            const today = new Date(); today.setHours(0, 0, 0, 0);
+            if (new Date(dateStr + "T00:00:00") < today) { status = "غائب"; badgeClass = "badge-red"; }
+            else { status = "مجدول"; badgeClass = ""; }
+          }
+        }
+        tableRows += `<tr><td>${employee.employeeName}</td><td>${DAYS_AR[dayIndex]}</td><td>${format(date, "dd/MM/yyyy")}</td><td>${scheduledTime}</td><td>${checkIn}</td><td>${checkOut}</td><td><span class="${badgeClass}">${status}</span></td></tr>`;
+      });
+    });
+    printWindow.document.write(`<html dir="rtl"><head><title>سجل الحضور - ${getBranchName(selectedBranch)}</title><style>
+      body { font-family: Arial, sans-serif; padding: 20px; direction: rtl; }
+      table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+      th, td { border: 1px solid #ddd; padding: 8px; text-align: center; font-size: 12px; }
+      th { background-color: #f4f4f4; font-weight: bold; }
+      h1 { text-align: center; color: #333; font-size: 18px; }
+      .sub { text-align: center; color: #666; margin-bottom: 10px; }
+      .badge-green { background: #d4edda; color: #155724; padding: 2px 8px; border-radius: 4px; }
+      .badge-red { background: #f8d7da; color: #721c24; padding: 2px 8px; border-radius: 4px; }
+      .badge-amber { background: #fff3cd; color: #856404; padding: 2px 8px; border-radius: 4px; }
+      .badge-blue { background: #cce5ff; color: #004085; padding: 2px 8px; border-radius: 4px; }
+      @media print { body { padding: 0; } }
+    </style></head><body>
+      <h1>سجل الحضور والانصراف - ${getBranchName(selectedBranch)}</h1>
+      <p class="sub">${format(currentWeekStart, "dd/MM/yyyy")} إلى ${format(addDays(currentWeekStart, 6), "dd/MM/yyyy")}</p>
+      <table><thead><tr><th>الموظف</th><th>اليوم</th><th>التاريخ</th><th>الدوام المطلوب</th><th>وقت الحضور</th><th>وقت الانصراف</th><th>الحالة</th></tr></thead><tbody>${tableRows}</tbody></table>
+    </body></html>`);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => printWindow.print(), 500);
+    toast({ title: "جاري طباعة سجل الحضور" });
+  };
+
   const [, navigate] = useLocation();
 
   // Download Excel template for importing schedules
@@ -1595,16 +1848,45 @@ export default function ShiftManagementPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex gap-2 mb-4 items-center">
-                    <Button variant="outline" size="icon" onClick={() => setCurrentWeekStart(subWeeks(currentWeekStart, 1))}>
-                      <ChevronRight className="w-4 h-4" />
-                    </Button>
-                    <span className="text-sm font-medium">
-                      {format(currentWeekStart, "dd MMMM", { locale: ar })} - {format(addDays(currentWeekStart, 6), "dd MMMM yyyy", { locale: ar })}
-                    </span>
-                    <Button variant="outline" size="icon" onClick={() => setCurrentWeekStart(addWeeks(currentWeekStart, 1))}>
-                      <ChevronLeft className="w-4 h-4" />
-                    </Button>
+                  <div className="flex flex-wrap gap-2 mb-4 items-center justify-between">
+                    <div className="flex gap-2 items-center">
+                      <Button variant="outline" size="icon" onClick={() => setCurrentWeekStart(subWeeks(currentWeekStart, 1))} data-testid="btn-attendance-prev-week">
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                      <span className="text-sm font-medium">
+                        {format(currentWeekStart, "dd MMMM", { locale: ar })} - {format(addDays(currentWeekStart, 6), "dd MMMM yyyy", { locale: ar })}
+                      </span>
+                      <Button variant="outline" size="icon" onClick={() => setCurrentWeekStart(addWeeks(currentWeekStart, 1))} data-testid="btn-attendance-next-week">
+                        <ChevronLeft className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" className="gap-2" disabled={isExportingPdf} data-testid="btn-export-attendance">
+                          {isExportingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                          تصدير السجل
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-52">
+                        <DropdownMenuItem onClick={exportAttendanceToExcel} className="gap-2 cursor-pointer" data-testid="btn-export-attendance-excel">
+                          <FileSpreadsheet className="w-4 h-4 text-green-600" />
+                          تصدير Excel
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={exportAttendanceToCsv} className="gap-2 cursor-pointer" data-testid="btn-export-attendance-csv">
+                          <FileText className="w-4 h-4 text-teal-600" />
+                          تصدير CSV
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={exportAttendanceToPdf} className="gap-2 cursor-pointer" data-testid="btn-export-attendance-pdf">
+                          <File className="w-4 h-4 text-red-600" />
+                          تصدير PDF
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={printAttendanceLog} className="gap-2 cursor-pointer" data-testid="btn-print-attendance">
+                          <Printer className="w-4 h-4 text-blue-600" />
+                          طباعة
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
 
                   {filteredEmployees.length === 0 ? (
