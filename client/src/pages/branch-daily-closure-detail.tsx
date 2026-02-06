@@ -27,6 +27,8 @@ import {
   AlertTriangle,
   CheckCircle,
   Building2,
+  Landmark,
+  Percent,
 } from "lucide-react";
 
 const formatCurrency = (amount: number | null | undefined) => {
@@ -43,6 +45,32 @@ const DISCREPANCY_LABELS: Record<string, { label: string; color: string; icon: a
   balanced: { label: "متوازن", color: "text-green-600 bg-green-50", icon: CheckCircle },
   shortage: { label: "عجز", color: "text-red-600 bg-red-50", icon: TrendingDown },
   surplus: { label: "زيادة", color: "text-amber-600 bg-amber-50", icon: TrendingUp },
+};
+
+const BANK_COMMISSION_RATES: Record<string, { label: string; rate: number }> = {
+  mada: { label: "مدى (Mada)", rate: 0.728 },
+  visa: { label: "فيزا (Visa)", rate: 1.8025 },
+  mastercard: { label: "ماستركارد (MasterCard)", rate: 1.8025 },
+  card: { label: "بطاقة ائتمان", rate: 1.8025 },
+  apple_pay: { label: "Apple Pay", rate: 1.8025 },
+  stc_pay: { label: "STC Pay", rate: 0.728 },
+};
+
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  cash: "نقداً",
+  card: "بطاقة ائتمان",
+  mada: "مدى",
+  visa: "فيزا",
+  mastercard: "ماستركارد",
+  apple_pay: "Apple Pay",
+  stc_pay: "STC Pay",
+  hunger_station: "هنقرستيشن",
+  toyou: "ToYou",
+  jahez: "جاهز",
+  marsool: "مرسول",
+  keeta: "كيتا",
+  the_chefs: "ذا شيفز",
+  other: "أخرى",
 };
 
 export default function BranchDailyClosureDetailPage() {
@@ -257,7 +285,7 @@ export default function BranchDailyClosureDetailPage() {
                     <TableBody>
                       {closure.payments.map((p: any) => (
                         <TableRow key={p.id}>
-                          <TableCell className="font-medium">{p.paymentMethod}</TableCell>
+                          <TableCell className="font-medium">{PAYMENT_METHOD_LABELS[p.paymentMethod] || p.paymentMethod}</TableCell>
                           <TableCell>{formatCurrency(p.totalAmount)} ر.س</TableCell>
                           <TableCell>{p.totalTransactionCount || 0}</TableCell>
                         </TableRow>
@@ -269,6 +297,113 @@ export default function BranchDailyClosureDetailPage() {
             </CardContent>
           </Card>
         </div>
+
+        {(() => {
+          const bankPayments = (closure.payments || []).filter((p: any) => BANK_COMMISSION_RATES[p.paymentMethod]);
+          if (bankPayments.length === 0) return null;
+
+          const commissionRows = bankPayments.map((p: any) => {
+            const config = BANK_COMMISSION_RATES[p.paymentMethod];
+            const amount = p.totalAmount || 0;
+            const commission = (amount * config.rate) / 100;
+            const netAmount = amount - commission;
+            return { ...p, label: config.label, rate: config.rate, amount, commission, netAmount };
+          });
+
+          const totalBankSales = commissionRows.reduce((s: number, r: any) => s + r.amount, 0);
+          const totalCommission = commissionRows.reduce((s: number, r: any) => s + r.commission, 0);
+          const totalNetAmount = commissionRows.reduce((s: number, r: any) => s + r.netAmount, 0);
+
+          return (
+            <Card data-testid="card-bank-commission">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Landmark className="w-4 h-4 text-rose-600" />
+                  بيان عمولة البنك - القيد المحاسبي
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                  <div className="bg-indigo-50 rounded-lg p-3 text-center">
+                    <p className="text-xs text-indigo-600">إجمالي مبيعات الشبكة</p>
+                    <p className="text-lg font-bold text-indigo-700">{formatCurrency(totalBankSales)} ر.س</p>
+                  </div>
+                  <div className="bg-rose-50 rounded-lg p-3 text-center">
+                    <p className="text-xs text-rose-600">إجمالي عمولة البنك</p>
+                    <p className="text-lg font-bold text-rose-700">{formatCurrency(totalCommission)} ر.س</p>
+                  </div>
+                  <div className="bg-green-50 rounded-lg p-3 text-center">
+                    <p className="text-xs text-green-600">صافي المبلغ المحصّل</p>
+                    <p className="text-lg font-bold text-green-700">{formatCurrency(totalNetAmount)} ر.س</p>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-slate-50">
+                        <TableHead className="text-right font-bold">طريقة الدفع</TableHead>
+                        <TableHead className="text-right font-bold">المبلغ (ر.س)</TableHead>
+                        <TableHead className="text-right font-bold">نسبة العمولة %</TableHead>
+                        <TableHead className="text-right font-bold">مبلغ العمولة (ر.س)</TableHead>
+                        <TableHead className="text-right font-bold">صافي المحصّل (ر.س)</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {commissionRows.map((r: any) => (
+                        <TableRow key={r.paymentMethod} data-testid={`row-commission-${r.paymentMethod}`}>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                              <CreditCard className="w-4 h-4 text-indigo-500" />
+                              {r.label}
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-semibold">{formatCurrency(r.amount)}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="gap-1">
+                              <Percent className="w-3 h-3" />
+                              {r.rate}%
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-rose-600 font-semibold">{formatCurrency(r.commission)}</TableCell>
+                          <TableCell className="text-green-600 font-semibold">{formatCurrency(r.netAmount)}</TableCell>
+                        </TableRow>
+                      ))}
+                      <TableRow className="bg-slate-50 font-bold border-t-2">
+                        <TableCell className="font-bold">الإجمالي</TableCell>
+                        <TableCell className="font-bold">{formatCurrency(totalBankSales)}</TableCell>
+                        <TableCell></TableCell>
+                        <TableCell className="text-rose-700 font-bold">{formatCurrency(totalCommission)}</TableCell>
+                        <TableCell className="text-green-700 font-bold">{formatCurrency(totalNetAmount)}</TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </div>
+
+                <div className="mt-4 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                  <p className="text-sm font-bold text-amber-800 mb-2 flex items-center gap-1">
+                    <Receipt className="w-4 h-4" />
+                    ملخص القيد المحاسبي
+                  </p>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between items-center py-1 border-b border-amber-200">
+                      <span className="text-amber-900">مدين: البنك (صافي المحصّل)</span>
+                      <span className="font-bold text-green-700">{formatCurrency(totalNetAmount)} ر.س</span>
+                    </div>
+                    <div className="flex justify-between items-center py-1 border-b border-amber-200">
+                      <span className="text-amber-900">مدين: عمولة البنك (مصروف)</span>
+                      <span className="font-bold text-rose-700">{formatCurrency(totalCommission)} ر.س</span>
+                    </div>
+                    <div className="flex justify-between items-center py-1">
+                      <span className="text-amber-900">دائن: المبيعات (إجمالي الشبكة)</span>
+                      <span className="font-bold text-indigo-700">{formatCurrency(totalBankSales)} ر.س</span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })()}
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div className="bg-slate-50 rounded-lg p-3 text-center">
