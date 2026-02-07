@@ -7668,6 +7668,8 @@ export class DatabaseStorage implements IStorage {
           return branchEmp;
         };
         
+        const nameIsUnresolved = (name: string | null | undefined) => !name || name === 'Unknown' || name === 'غير معروف';
+        
         // Strategy 1: If employeeId is branch_emp_XX format, parse and lookup
         if (schedule.employeeId.startsWith('branch_emp_')) {
           try {
@@ -7685,7 +7687,7 @@ export class DatabaseStorage implements IStorage {
         }
         
         // Strategy 2: If name still unresolved and we have branchEmployeeId, use it directly
-        if ((!resolvedName || resolvedName === 'Unknown' || resolvedName === 'غير معروف') && schedule.branchEmployeeId) {
+        if (nameIsUnresolved(resolvedName) && schedule.branchEmployeeId) {
           try {
             const branchEmp = await lookupBranchEmployee(schedule.branchEmployeeId);
             if (branchEmp?.employeeName) {
@@ -7698,7 +7700,7 @@ export class DatabaseStorage implements IStorage {
         }
         
         // Strategy 3: If still unresolved and employeeId is not branch_emp_ format, try users table
-        if ((!resolvedName || resolvedName === 'Unknown' || resolvedName === 'غير معروف') && !schedule.employeeId.startsWith('branch_emp_')) {
+        if (nameIsUnresolved(resolvedName) && !schedule.employeeId.startsWith('branch_emp_')) {
           try {
             const employee = await this.getUser(schedule.employeeId);
             if (employee) {
@@ -7707,42 +7709,27 @@ export class DatabaseStorage implements IStorage {
           } catch (e) {
             // Continue
           }
-          
-          // Strategy 4: If user lookup failed but we can extract numeric ID, try branch employees
-          if ((!resolvedName || resolvedName === 'Unknown' || resolvedName === 'غير معروف')) {
-            try {
-              const numericId = parseInt(schedule.employeeId, 10);
-              if (!isNaN(numericId)) {
-                const branchEmp = await lookupBranchEmployee(numericId);
-                if (branchEmp?.employeeName) {
-                  resolvedName = branchEmp.employeeName;
-                  resolvedNameEn = branchEmp.employeeNameEn || '';
-                }
-              }
-            } catch (e) {
-              // Continue
-            }
-          }
         }
         
+        const finalName = resolvedName || 'غير معروف';
         return {
           ...schedule,
-          employeeName: resolvedName || 'غير معروف',
+          employeeName: finalName,
           employeeNameEn: resolvedNameEn || '',
-          attendance: attendance || null
+          attendance: attendance || null,
+          _isDeleted: nameIsUnresolved(finalName)
         };
       })
     );
 
-    // Deduplicate by employeeId - keep only the first schedule entry per employee
+    // Filter out schedules for deleted/removed employees and deduplicate by employeeId
     const seenEmployeeIds = new Set<string>();
     const uniqueEmployees = employeesWithAttendance.filter(emp => {
-      if (seenEmployeeIds.has(emp.employeeId)) {
-        return false;
-      }
+      if (emp._isDeleted) return false;
+      if (seenEmployeeIds.has(emp.employeeId)) return false;
       seenEmployeeIds.add(emp.employeeId);
       return true;
-    });
+    }).map(({ _isDeleted, ...rest }) => rest);
 
     // If no schedules found for today, fallback to branch employees with default shift times
     if (uniqueEmployees.length === 0) {
