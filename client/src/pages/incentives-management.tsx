@@ -637,80 +637,130 @@ export default function IncentivesManagement() {
 
           {/* Tab 1: Point Settings */}
           <TabsContent value="point-settings">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Settings className="h-5 w-5 text-amber-600" />
-                  إعدادات النقاط
-                </CardTitle>
-                <CardDescription>تعريف قيمة النقطة والحدود القصوى</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl">
-                  <div>
-                    <Label>قيمة النقطة (ريال)</Label>
-                    <Input
-                      type="number"
-                      step="0.1"
-                      value={pointSettingsForm.pointValue}
-                      onChange={(e) => setPointSettingsForm({ ...pointSettingsForm, pointValue: e.target.value })}
-                      placeholder="0.5"
-                      data-testid="input-point-value"
-                      className="h-11 sm:h-10"
-                    />
+            <div className="space-y-6">
+              <Card className="border-blue-200">
+                <CardHeader className="bg-blue-50 rounded-t-lg">
+                  <CardTitle className="flex items-center gap-2 text-blue-800">
+                    <Star className="h-5 w-5" />
+                    ما هي إعدادات النقاط؟
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <div className="text-sm text-gray-700 space-y-3">
+                    <p>هذه الصفحة تحدد <strong>القواعد الأساسية</strong> لنظام الحوافز بالكامل. كل كاشير يجمع نقاط من التحديات اليومية، وهنا تحدد كم تساوي كل نقطة بالريال وما هي الحدود.</p>
+                    <div className="bg-white border rounded-lg p-3 mt-2">
+                      <p className="font-bold text-amber-700 mb-2">مثال عملي:</p>
+                      <p>لو قيمة النقطة = <strong>0.50 ريال</strong> وكاشير جمع <strong>100 نقطة</strong> في اليوم</p>
+                      <p>= 100 × 0.50 = <strong className="text-green-700 text-lg">50 ريال مكافأة</strong></p>
+                    </div>
                   </div>
-                  <div>
-                    <Label>الحد الأقصى للنقاط اليومية</Label>
-                    <Input
-                      type="number"
-                      value={pointSettingsForm.maxDailyPoints}
-                      onChange={(e) => setPointSettingsForm({ ...pointSettingsForm, maxDailyPoints: e.target.value })}
-                      placeholder="500"
-                      data-testid="input-max-daily-points"
-                      className="h-11 sm:h-10"
-                    />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Settings className="h-5 w-5 text-amber-600" />
+                    ضبط الإعدادات
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2 p-4 bg-gray-50 rounded-lg border">
+                      <Label className="text-base font-bold">قيمة النقطة الواحدة (بالريال)</Label>
+                      <p className="text-xs text-gray-500">كم ريال تساوي كل نقطة يكسبها الكاشير؟</p>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={pointSettingsForm.pointValue}
+                        onChange={(e) => setPointSettingsForm({ ...pointSettingsForm, pointValue: e.target.value })}
+                        placeholder="مثال: 0.5 يعني كل نقطة = نصف ريال"
+                        data-testid="input-point-value"
+                        className="h-11 sm:h-10"
+                      />
+                      <p className="text-xs text-blue-600">القيم الشائعة: 0.25 - 0.50 - 1.00 ريال</p>
+                    </div>
+
+                    <div className="space-y-2 p-4 bg-gray-50 rounded-lg border">
+                      <Label className="text-base font-bold">الحد الأقصى للنقاط اليومية</Label>
+                      <p className="text-xs text-gray-500">أقصى عدد نقاط يمكن للكاشير كسبها في يوم واحد (اتركه فارغ = بدون حد)</p>
+                      <Input
+                        type="number"
+                        value={pointSettingsForm.maxDailyPoints}
+                        onChange={(e) => setPointSettingsForm({ ...pointSettingsForm, maxDailyPoints: e.target.value })}
+                        placeholder="مثال: 200 نقطة = 100 ريال كحد أقصى يومياً"
+                        data-testid="input-max-daily-points"
+                        className="h-11 sm:h-10"
+                      />
+                    </div>
+
+                    <div className="space-y-2 p-4 bg-gray-50 rounded-lg border">
+                      <Label className="text-base font-bold">الحد الأقصى للنقاط الشهرية</Label>
+                      <p className="text-xs text-gray-500">أقصى عدد نقاط يمكن للكاشير كسبها في الشهر (اتركه فارغ = بدون حد)</p>
+                      <Input
+                        type="number"
+                        value={pointSettingsForm.maxMonthlyPoints}
+                        onChange={(e) => setPointSettingsForm({ ...pointSettingsForm, maxMonthlyPoints: e.target.value })}
+                        placeholder="مثال: 5000 نقطة = 2500 ريال كحد أقصى شهرياً"
+                        data-testid="input-max-monthly-points"
+                        className="h-11 sm:h-10"
+                      />
+                    </div>
+
+                    <div className="space-y-2 p-4 bg-gray-50 rounded-lg border">
+                      <Label className="text-base font-bold">معامل الموسم (مضاعف النقاط)</Label>
+                      <p className="text-xs text-gray-500">في المواسم والأعياد يمكنك مضاعفة النقاط. القيمة 1 = عادي، 1.5 = مرة ونصف، 2 = ضعف</p>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        value={pointSettingsForm.seasonalMultiplier}
+                        onChange={(e) => setPointSettingsForm({ ...pointSettingsForm, seasonalMultiplier: e.target.value })}
+                        placeholder="1 = عادي | 1.5 = موسم | 2 = ضعف"
+                        data-testid="input-seasonal-multiplier"
+                        className="h-11 sm:h-10"
+                      />
+                      <p className="text-xs text-blue-600">مثال: في رمضان اجعلها 1.5 لتشجيع الكاشير</p>
+                    </div>
                   </div>
-                  <div>
-                    <Label>الحد الأقصى للنقاط الشهرية</Label>
-                    <Input
-                      type="number"
-                      value={pointSettingsForm.maxMonthlyPoints}
-                      onChange={(e) => setPointSettingsForm({ ...pointSettingsForm, maxMonthlyPoints: e.target.value })}
-                      placeholder="10000"
-                      data-testid="input-max-monthly-points"
-                      className="h-11 sm:h-10"
-                    />
-                  </div>
-                  <div>
-                    <Label>معامل الموسم</Label>
-                    <Input
-                      type="number"
-                      step="0.1"
-                      value={pointSettingsForm.seasonalMultiplier}
-                      onChange={(e) => setPointSettingsForm({ ...pointSettingsForm, seasonalMultiplier: e.target.value })}
-                      placeholder="1.0"
-                      data-testid="input-seasonal-multiplier"
-                      className="h-11 sm:h-10"
-                    />
-                  </div>
-                </div>
-                {pointSettings && pointSettings.pointValue && (
-                  <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
-                    <p>الإعدادات الحالية: قيمة النقطة = {pointSettings.pointValue} ريال | الحد اليومي = {pointSettings.maxDailyPoints || "غير محدد"} | الحد الشهري = {pointSettings.maxMonthlyPoints || "غير محدد"} | معامل الموسم = {pointSettings.seasonalMultiplier}</p>
-                  </div>
-                )}
-                <div className="mt-6">
+
+                  {pointSettings && pointSettings.pointValue && (
+                    <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                      <h4 className="font-bold text-green-800 mb-2 flex items-center gap-2">
+                        <Check className="h-4 w-4" />
+                        الإعدادات المحفوظة حالياً
+                      </h4>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div className="text-center p-2 bg-white rounded border">
+                          <p className="text-xl font-bold text-amber-700">{pointSettings.pointValue} ر.س</p>
+                          <p className="text-xs text-gray-500">قيمة النقطة</p>
+                        </div>
+                        <div className="text-center p-2 bg-white rounded border">
+                          <p className="text-xl font-bold text-blue-700">{pointSettings.maxDailyPoints || "∞"}</p>
+                          <p className="text-xs text-gray-500">حد يومي</p>
+                        </div>
+                        <div className="text-center p-2 bg-white rounded border">
+                          <p className="text-xl font-bold text-purple-700">{pointSettings.maxMonthlyPoints || "∞"}</p>
+                          <p className="text-xs text-gray-500">حد شهري</p>
+                        </div>
+                        <div className="text-center p-2 bg-white rounded border">
+                          <p className="text-xl font-bold text-green-700">×{pointSettings.seasonalMultiplier}</p>
+                          <p className="text-xs text-gray-500">معامل الموسم</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   <Button
                     onClick={() => savePointSettingsMutation.mutate(pointSettingsForm)}
                     disabled={savePointSettingsMutation.isPending}
-                    className="bg-amber-600 hover:bg-amber-700"
+                    className="bg-amber-600 hover:bg-amber-700 w-full sm:w-auto"
                     data-testid="button-save-point-settings"
                   >
                     {savePointSettingsMutation.isPending ? "جاري الحفظ..." : "حفظ الإعدادات"}
                   </Button>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
 
           {/* Tab 2: Daily Challenges */}
