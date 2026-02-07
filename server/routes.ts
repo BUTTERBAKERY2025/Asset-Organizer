@@ -23949,6 +23949,14 @@ export async function registerRoutes(
         });
       }
       
+      await db.delete(shiftChecklistResponses)
+        .where(
+          and(
+            eq(shiftChecklistResponses.shiftId, shiftId),
+            eq(shiftChecklistResponses.checklistType, checklistType)
+          )
+        );
+
       const processedResponses = responses.map((r: any) => ({
         shiftId,
         itemId: r.itemId,
