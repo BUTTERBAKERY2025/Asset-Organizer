@@ -7625,6 +7625,7 @@ export class DatabaseStorage implements IStorage {
       id: employeeSchedules.id,
       employeeId: employeeSchedules.employeeId,
       employeeName: employeeSchedules.employeeName,
+      branchEmployeeId: employeeSchedules.branchEmployeeId,
       startTime: employeeSchedules.startTime,
       endTime: employeeSchedules.endTime,
       shiftType: employeeSchedules.shiftType,
@@ -7655,32 +7656,49 @@ export class DatabaseStorage implements IStorage {
       filteredSchedules.map(async (schedule) => {
         const attendance = await this.getAttendanceByEmployeeAndDate(schedule.employeeId, date);
         
-        // Always resolve employee name from authoritative source
         let resolvedName = schedule.employeeName;
-        
-        // For branch employees (format: branch_emp_XX), always fetch fresh name from branch_employees table
         let resolvedNameEn = '';
+        
+        // Helper to lookup branch employee by ID
+        const lookupBranchEmployee = async (empId: number) => {
+          const [branchEmp] = await db.select()
+            .from(branchEmployees)
+            .where(eq(branchEmployees.id, empId))
+            .limit(1);
+          return branchEmp;
+        };
+        
+        // Strategy 1: If employeeId is branch_emp_XX format, parse and lookup
         if (schedule.employeeId.startsWith('branch_emp_')) {
           try {
             const branchEmpId = parseInt(schedule.employeeId.replace('branch_emp_', ''), 10);
             if (!isNaN(branchEmpId)) {
-              const [branchEmp] = await db.select()
-                .from(branchEmployees)
-                .where(eq(branchEmployees.id, branchEmpId))
-                .limit(1);
+              const branchEmp = await lookupBranchEmployee(branchEmpId);
               if (branchEmp?.employeeName) {
                 resolvedName = branchEmp.employeeName;
                 resolvedNameEn = branchEmp.employeeNameEn || '';
-              } else {
-                console.log(`[WARN] Branch employee ID ${branchEmpId} not found in branch_employees table for employeeId: ${schedule.employeeId}`);
               }
             }
           } catch (e) {
-            console.log(`[ERROR] Error fetching branch employee ${schedule.employeeId}: ${e}`);
-            // Continue with schedule name
+            // Continue to fallback
           }
-        } else if (!resolvedName || resolvedName === 'Unknown' || resolvedName === 'غير معروف') {
-          // For system users, try to get from users table
+        }
+        
+        // Strategy 2: If name still unresolved and we have branchEmployeeId, use it directly
+        if ((!resolvedName || resolvedName === 'Unknown' || resolvedName === 'غير معروف') && schedule.branchEmployeeId) {
+          try {
+            const branchEmp = await lookupBranchEmployee(schedule.branchEmployeeId);
+            if (branchEmp?.employeeName) {
+              resolvedName = branchEmp.employeeName;
+              resolvedNameEn = branchEmp.employeeNameEn || '';
+            }
+          } catch (e) {
+            // Continue to fallback
+          }
+        }
+        
+        // Strategy 3: If still unresolved and employeeId is not branch_emp_ format, try users table
+        if ((!resolvedName || resolvedName === 'Unknown' || resolvedName === 'غير معروف') && !schedule.employeeId.startsWith('branch_emp_')) {
           try {
             const employee = await this.getUser(schedule.employeeId);
             if (employee) {
@@ -7688,6 +7706,22 @@ export class DatabaseStorage implements IStorage {
             }
           } catch (e) {
             // Continue
+          }
+          
+          // Strategy 4: If user lookup failed but we can extract numeric ID, try branch employees
+          if ((!resolvedName || resolvedName === 'Unknown' || resolvedName === 'غير معروف')) {
+            try {
+              const numericId = parseInt(schedule.employeeId, 10);
+              if (!isNaN(numericId)) {
+                const branchEmp = await lookupBranchEmployee(numericId);
+                if (branchEmp?.employeeName) {
+                  resolvedName = branchEmp.employeeName;
+                  resolvedNameEn = branchEmp.employeeNameEn || '';
+                }
+              }
+            } catch (e) {
+              // Continue
+            }
           }
         }
         
