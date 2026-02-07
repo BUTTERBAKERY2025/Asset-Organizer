@@ -111,8 +111,8 @@ export default function IncentivesManagement() {
   });
 
   const [newChallenge, setNewChallenge] = useState({
-    name: "", challengeType: "avg_ticket", branchId: "", targetValue: "",
-    basePoints: "", bonusPointsPerUnit: "0", validFrom: "", validTo: "",
+    name: "", challengeType: "avg_ticket", branchId: "", cashierId: "", targetValue: "",
+    basePoints: "", bonusPointsPerUnit: "0", shiftType: "", validFrom: "", validTo: "",
   });
 
   const [newCommission, setNewCommission] = useState({
@@ -219,9 +219,11 @@ export default function IncentivesManagement() {
           name: data.name,
           challengeType: data.challengeType,
           branchId: data.branchId || null,
+          cashierId: data.cashierId || null,
           targetValue: parseFloat(data.targetValue),
           basePoints: parseInt(data.basePoints),
           bonusPointsPerUnit: parseFloat(data.bonusPointsPerUnit) || 0,
+          shiftType: data.shiftType || null,
           validFrom: data.validFrom,
           validTo: data.validTo || null,
           isActive: true,
@@ -233,7 +235,7 @@ export default function IncentivesManagement() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/challenges"] });
       setShowChallengeDialog(false);
-      setNewChallenge({ name: "", challengeType: "avg_ticket", branchId: "", targetValue: "", basePoints: "", bonusPointsPerUnit: "0", validFrom: "", validTo: "" });
+      setNewChallenge({ name: "", challengeType: "avg_ticket", branchId: "", cashierId: "", targetValue: "", basePoints: "", bonusPointsPerUnit: "0", shiftType: "", validFrom: "", validTo: "" });
       toast({ title: "تم إنشاء التحدي بنجاح" });
     },
     onError: () => {
@@ -870,13 +872,41 @@ export default function IncentivesManagement() {
                         <div>
                           <Label className="font-bold">الفرع</Label>
                           <p className="text-xs text-gray-500 mb-1">اختر فرع محدد أو اتركه لجميع الفروع</p>
-                          <Select value={newChallenge.branchId} onValueChange={(v) => setNewChallenge({ ...newChallenge, branchId: v })}>
+                          <Select value={newChallenge.branchId} onValueChange={(v) => setNewChallenge({ ...newChallenge, branchId: v, cashierId: "" })}>
                             <SelectTrigger data-testid="select-challenge-branch" className="h-11 sm:h-10"><SelectValue placeholder="جميع الفروع" /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="all">جميع الفروع</SelectItem>
                               {branches.map((b) => (<SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>))}
                             </SelectContent>
                           </Select>
+                        </div>
+                        <div>
+                          <Label className="font-bold">الكاشير (اختياري)</Label>
+                          <p className="text-xs text-gray-500 mb-1">اختر كاشير محدد أو اتركه لجميع كاشيرات الفرع</p>
+                          <Select value={newChallenge.cashierId} onValueChange={(v) => setNewChallenge({ ...newChallenge, cashierId: v })}>
+                            <SelectTrigger data-testid="select-challenge-cashier" className="h-11 sm:h-10"><SelectValue placeholder="جميع الكاشيرات" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">جميع الكاشيرات</SelectItem>
+                              {allUsers
+                                .filter((u: any) => {
+                                  const isActiveCashier = u.isActive !== "inactive" && (u.role === "employee" || u.role === "cashier" || u.role === "admin");
+                                  if (!newChallenge.branchId || newChallenge.branchId === "all") return isActiveCashier;
+                                  return isActiveCashier && u.branchId === newChallenge.branchId;
+                                })
+                                .map((u: any) => (
+                                  <SelectItem key={u.id} value={u.id}>
+                                    {u.firstName && u.lastName ? `${u.firstName} ${u.lastName}` : u.username}
+                                    {u.jobTitle ? ` - ${u.jobTitle}` : ""}
+                                  </SelectItem>
+                                ))
+                              }
+                            </SelectContent>
+                          </Select>
+                          {newChallenge.branchId && newChallenge.branchId !== "all" && (
+                            <p className="text-xs text-blue-600 mt-1">
+                              يعرض فقط الموظفين المسجلين في الفرع المحدد
+                            </p>
+                          )}
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                           <div>
@@ -933,6 +963,7 @@ export default function IncentivesManagement() {
                             <TableHead>اسم التحدي</TableHead>
                             <TableHead>ماذا يُقاس؟</TableHead>
                             <TableHead className="hidden md:table-cell">الفرع</TableHead>
+                            <TableHead>الكاشير</TableHead>
                             <TableHead>الهدف المطلوب</TableHead>
                             <TableHead>النقاط عند التحقيق</TableHead>
                             <TableHead className="hidden sm:table-cell">نقاط إضافية/وحدة</TableHead>
@@ -946,6 +977,7 @@ export default function IncentivesManagement() {
                               <TableCell className="font-medium text-xs sm:text-sm">{c.name}</TableCell>
                               <TableCell><Badge variant="outline" className="text-xs">{CHALLENGE_TYPE_LABELS[c.challengeType] || c.challengeType}</Badge></TableCell>
                               <TableCell className="text-xs hidden md:table-cell">{getBranchName(c.branchId)}</TableCell>
+                              <TableCell className="text-xs">{c.cashierId ? getUserName(c.cashierId) : <span className="text-gray-400">الكل</span>}</TableCell>
                               <TableCell className="font-mono text-xs sm:text-sm font-bold">{c.targetValue}</TableCell>
                               <TableCell className="font-mono text-xs sm:text-sm text-green-700 font-bold">{c.basePoints} نقطة</TableCell>
                               <TableCell className="font-mono text-xs hidden sm:table-cell">{c.bonusPointsPerUnit || 0} نقطة</TableCell>

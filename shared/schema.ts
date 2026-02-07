@@ -2214,6 +2214,7 @@ export const cashierDailyChallenges = pgTable("cashier_daily_challenges", {
   name: text("name").notNull(),
   challengeType: text("challenge_type").notNull(), // avg_ticket, customer_count, shift_sales
   branchId: varchar("branch_id").references(() => branches.id),
+  cashierId: varchar("cashier_id").references(() => users.id),
   targetValue: real("target_value").notNull(),
   basePoints: integer("base_points").notNull(),
   bonusPointsPerUnit: real("bonus_points_per_unit").default(0),
