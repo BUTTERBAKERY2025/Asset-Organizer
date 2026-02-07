@@ -7817,9 +7817,12 @@ export class DatabaseStorage implements IStorage {
         const employee = await this.getUser(employeeId);
         if (employee) {
           employeeName = `${employee.firstName || ''} ${employee.lastName || ''}`.trim() || employee.username || employeeName;
+          if (employee.branchId && employee.branchId !== branchId && employee.role !== 'admin') {
+            throw new Error("هذا الموظف لا ينتمي لهذا الفرع");
+          }
         }
-      } catch (e) {
-        // User not found, continue with provided name
+      } catch (e: any) {
+        if (e?.message?.includes('لا ينتمي')) throw e;
         console.log('User lookup failed for:', employeeId);
       }
     }
