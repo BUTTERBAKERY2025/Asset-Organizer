@@ -412,51 +412,68 @@ export function registerGovernanceRoutes(app: Express) {
       
       const { sendWhatsApp, sendEmail, sendSMS, invitationMessage, meetingLink, meetingPlatform, scheduledDate, quorumRequired, ...meetingData } = req.body;
       
-      const data = insertGovernanceMeetingSchema.parse({
+      const meetingTypeMap: Record<string, string> = {
+        'ordinary': 'ordinary_assembly',
+        'extraordinary': 'extraordinary_assembly',
+        'ordinary_assembly': 'ordinary_assembly',
+        'extraordinary_assembly': 'extraordinary_assembly',
+        'board': 'board',
+        'committee': 'committee',
+      };
+      const resolvedMeetingType = meetingTypeMap[meetingData.meetingType] || meetingData.meetingType;
+
+      const insertData: any = {
         ...meetingData,
+        meetingType: resolvedMeetingType,
         meetingNumber,
         meetingDate: scheduledDate ? new Date(scheduledDate) : new Date(),
         quorumRequired: quorumRequired ? String(quorumRequired) : "50",
         notes: meetingLink ? `رابط الاجتماع (${meetingPlatform}): ${meetingLink}\n${meetingData.notes || ''}` : meetingData.notes,
         createdBy: getCurrentUserId(req),
-      });
-      const [meeting] = await db.insert(governanceMeetings).values(data).returning();
+      };
+
+      const [meeting] = await db.insert(governanceMeetings).values(insertData).returning();
 
       let invitationResults = null;
       if (sendWhatsApp || sendSMS) {
-        const shareholdersList = await db.select().from(shareholders).where(eq(shareholders.votingRights, true));
-        
-        if (shareholdersList.length > 0) {
-          const meetingDateObj = new Date(scheduledDate || meetingData.meetingDate);
-          const invitation = {
-            meetingTitle: meetingData.title,
-            meetingDate: meetingDateObj.toLocaleDateString('ar-SA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
-            meetingTime: meetingDateObj.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' }),
-            location: meetingData.location || 'سيتم تحديده لاحقاً',
-            meetingLink: meetingLink,
-            agenda: meetingData.agenda,
-          };
+        try {
+          const shareholdersList = await db.select().from(shareholders).where(eq(shareholders.votingRights, true));
+          
+          if (shareholdersList.length > 0) {
+            const meetingDateObj = new Date(scheduledDate || meetingData.meetingDate);
+            const invitation = {
+              meetingTitle: meetingData.title,
+              meetingDate: meetingDateObj.toLocaleDateString('ar-SA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
+              meetingTime: meetingDateObj.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' }),
+              location: meetingData.location || 'سيتم تحديده لاحقاً',
+              meetingLink: meetingLink,
+              agenda: meetingData.agenda,
+            };
 
-          invitationResults = await sendMeetingInvitations(
-            shareholdersList.map(s => ({ fullName: s.fullName, phone: s.phone || undefined, email: s.email || undefined })),
-            invitation,
-            { sendWhatsApp: !!sendWhatsApp, sendSMS: !!sendSMS }
-          );
+            invitationResults = await sendMeetingInvitations(
+              shareholdersList.map(s => ({ fullName: s.fullName, phone: s.phone || undefined, email: s.email || undefined })),
+              invitation,
+              { sendWhatsApp: !!sendWhatsApp, sendSMS: !!sendSMS }
+            );
 
-          await db.insert(systemAuditLogs).values({
-            module: 'governance_meetings',
-            entityId: String(meeting.id),
-            entityName: meeting.title,
-            action: 'send_invitations',
-            details: JSON.stringify({ 
-              meetingId: meeting.id, 
-              channels: { whatsapp: sendWhatsApp, sms: sendSMS },
-              results: invitationResults 
-            }),
-            userId: getCurrentUserId(req),
-            userName: (req as any).currentUser?.username || 'system',
-            ipAddress: req.ip || req.socket.remoteAddress || 'unknown',
-          });
+            await db.insert(systemAuditLogs).values({
+              module: 'governance_meetings',
+              entityId: String(meeting.id),
+              entityName: meeting.title,
+              action: 'send_invitations',
+              details: JSON.stringify({ 
+                meetingId: meeting.id, 
+                channels: { whatsapp: sendWhatsApp, sms: sendSMS },
+                results: invitationResults 
+              }),
+              userId: getCurrentUserId(req),
+              userName: (req as any).currentUser?.username || 'system',
+              ipAddress: req.ip || req.socket.remoteAddress || 'unknown',
+            });
+          }
+        } catch (inviteError) {
+          console.error("Error sending invitations (meeting created successfully):", inviteError);
+          invitationResults = { sent: 0, failed: 0, error: "فشل في إرسال الدعوات لكن تم إنشاء الاجتماع بنجاح" };
         }
       }
 

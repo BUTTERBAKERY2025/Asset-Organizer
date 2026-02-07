@@ -188,12 +188,12 @@ export default function GeneralAssemblyPage() {
   // حسابات الاجتماعات
   const meetingStats = useMemo(() => {
     const assemblyMeetings = meetings.filter(m => 
-      m.meetingType === 'ordinary' || m.meetingType === 'extraordinary'
+      m.meetingType === 'ordinary' || m.meetingType === 'extraordinary' || m.meetingType === 'ordinary_assembly' || m.meetingType === 'extraordinary_assembly'
     );
     return {
       total: assemblyMeetings.length,
-      ordinary: assemblyMeetings.filter(m => m.meetingType === 'ordinary').length,
-      extraordinary: assemblyMeetings.filter(m => m.meetingType === 'extraordinary').length,
+      ordinary: assemblyMeetings.filter(m => m.meetingType === 'ordinary' || m.meetingType === 'ordinary_assembly').length,
+      extraordinary: assemblyMeetings.filter(m => m.meetingType === 'extraordinary' || m.meetingType === 'extraordinary_assembly').length,
       scheduled: assemblyMeetings.filter(m => m.status === 'scheduled').length,
       completed: assemblyMeetings.filter(m => m.status === 'completed').length,
       upcoming: assemblyMeetings.filter(m => {
@@ -220,7 +220,7 @@ export default function GeneralAssemblyPage() {
   };
 
   const assemblyMeetings = meetings.filter(m => 
-    m.meetingType === 'ordinary' || m.meetingType === 'extraordinary'
+    m.meetingType === 'ordinary' || m.meetingType === 'extraordinary' || m.meetingType === 'ordinary_assembly' || m.meetingType === 'extraordinary_assembly'
   );
 
   const getStatusBadge = (status: string) => {
@@ -245,10 +245,14 @@ export default function GeneralAssemblyPage() {
     const styles: Record<string, string> = {
       ordinary: 'bg-emerald-100 text-emerald-800 border-emerald-300',
       extraordinary: 'bg-purple-100 text-purple-800 border-purple-300',
+      ordinary_assembly: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+      extraordinary_assembly: 'bg-purple-100 text-purple-800 border-purple-300',
     };
     const labels: Record<string, string> = {
       ordinary: 'عادية',
       extraordinary: 'غير عادية',
+      ordinary_assembly: 'عادية',
+      extraordinary_assembly: 'غير عادية',
     };
     return <Badge className={styles[type] || 'bg-gray-100'}>{labels[type] || type}</Badge>;
   };
@@ -412,8 +416,8 @@ export default function GeneralAssemblyPage() {
                     {meetingStats.upcoming.slice(0, 3).map((meeting) => (
                       <div key={meeting.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                         <div className="flex items-center gap-3">
-                          <div className={`p-2 rounded-lg ${meeting.meetingType === 'ordinary' ? 'bg-emerald-100' : 'bg-purple-100'}`}>
-                            <Building2 className={`h-5 w-5 ${meeting.meetingType === 'ordinary' ? 'text-emerald-600' : 'text-purple-600'}`} />
+                          <div className={`p-2 rounded-lg ${meeting.meetingType === 'ordinary' || meeting.meetingType === 'ordinary_assembly' ? 'bg-emerald-100' : 'bg-purple-100'}`}>
+                            <Building2 className={`h-5 w-5 ${meeting.meetingType === 'ordinary' || meeting.meetingType === 'ordinary_assembly' ? 'text-emerald-600' : 'text-purple-600'}`} />
                           </div>
                           <div>
                             <p className="font-medium">{meeting.title}</p>
