@@ -484,6 +484,97 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
+  app.post("/api/governance/meetings/:id/send-invitations", isAuthenticated, requirePermission("governance_meetings", "edit"), async (req, res) => {
+    try {
+      const meetingId = parseInt(req.params.id);
+      const { sendWhatsApp, sendSMS } = req.body;
+
+      const [meeting] = await db.select().from(governanceMeetings).where(eq(governanceMeetings.id, meetingId));
+      if (!meeting) {
+        return res.status(404).json({ error: "الاجتماع غير موجود" });
+      }
+
+      const shareholdersList = await db.select().from(shareholders).where(eq(shareholders.votingRights, true));
+      
+      if (shareholdersList.length === 0) {
+        return res.json({ sent: 0, failed: 0, results: [], message: "لا يوجد مساهمين لديهم حق التصويت" });
+      }
+
+      const shareholdersWithPhones = shareholdersList.filter(s => s.phone);
+      const shareholdersWithoutPhones = shareholdersList.filter(s => !s.phone);
+
+      const meetingDateObj = new Date(meeting.meetingDate);
+      const invitation = {
+        meetingTitle: meeting.title,
+        meetingDate: meetingDateObj.toLocaleDateString('ar-SA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }),
+        meetingTime: meetingDateObj.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' }),
+        location: meeting.location || 'سيتم تحديده لاحقاً',
+        meetingLink: meeting.virtualMeetingLink || undefined,
+        agenda: meeting.agenda || undefined,
+      };
+
+      const invitationResults = await sendMeetingInvitations(
+        shareholdersWithPhones.map(s => ({ fullName: s.fullName, phone: s.phone || undefined, email: s.email || undefined })),
+        invitation,
+        { sendWhatsApp: !!sendWhatsApp, sendSMS: !!sendSMS }
+      );
+
+      await db.insert(systemAuditLogs).values({
+        module: 'governance_meetings',
+        entityId: String(meetingId),
+        entityName: meeting.title,
+        action: 'resend_invitations',
+        details: JSON.stringify({ 
+          meetingId, 
+          channels: { whatsapp: sendWhatsApp, sms: sendSMS },
+          results: invitationResults,
+          shareholdersWithoutPhones: shareholdersWithoutPhones.map(s => s.fullName),
+        }),
+        userId: getCurrentUserId(req),
+        userName: (req as any).currentUser?.username || 'system',
+        ipAddress: req.ip || req.socket.remoteAddress || 'unknown',
+      });
+
+      res.json({
+        ...invitationResults,
+        totalShareholders: shareholdersList.length,
+        withPhones: shareholdersWithPhones.length,
+        withoutPhones: shareholdersWithoutPhones.map(s => ({ name: s.fullName, id: s.id })),
+      });
+    } catch (error) {
+      console.error("Error sending invitations:", error);
+      res.status(500).json({ error: "فشل في إرسال الدعوات" });
+    }
+  });
+
+  app.get("/api/governance/shareholders-phones", isAuthenticated, requirePermission("governance_shareholders", "view"), async (req, res) => {
+    try {
+      const shareholdersList = await db.select({
+        id: shareholders.id,
+        fullName: shareholders.fullName,
+        phone: shareholders.phone,
+        email: shareholders.email,
+        votingRights: shareholders.votingRights,
+        status: shareholders.status,
+        sharePercentage: shareholders.sharePercentage,
+      }).from(shareholders).where(eq(shareholders.status, 'active'));
+      
+      res.json({
+        shareholders: shareholdersList,
+        summary: {
+          total: shareholdersList.length,
+          withPhone: shareholdersList.filter(s => s.phone).length,
+          withoutPhone: shareholdersList.filter(s => !s.phone).length,
+          withVotingRights: shareholdersList.filter(s => s.votingRights).length,
+        },
+        twilioConfigured: isTwilioConfigured(),
+      });
+    } catch (error) {
+      console.error("Error fetching shareholders phones:", error);
+      res.status(500).json({ error: "فشل في جلب بيانات المساهمين" });
+    }
+  });
+
   app.patch("/api/governance/meetings/:id", isAuthenticated, requirePermission("governance_meetings", "edit"), async (req, res) => {
     try {
       const validatedData = updateGovernanceMeetingSchema.parse(req.body);
