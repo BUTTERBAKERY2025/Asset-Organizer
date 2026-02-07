@@ -559,39 +559,38 @@ export default function AttendanceCheckPage() {
         )}
 
         <Dialog open={!!selectedEmployee && !!signatureMode} onOpenChange={() => closeSignatureDialog()}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
+          <DialogContent className="max-w-[95vw] sm:max-w-md max-h-[90vh] overflow-hidden flex flex-col p-4 sm:p-6">
+            <DialogHeader className="shrink-0 pb-1">
+              <DialogTitle className="flex items-center gap-2 text-sm sm:text-base">
                 {signatureMode === "check_in" ? (
                   <>
-                    <LogIn className="w-5 h-5 text-green-600" />
-                    <div className="flex flex-col">
-                      <span>{t("attendanceCheck.checkInTitle")} - {selectedEmployee?.employeeName}</span>
+                    <LogIn className="w-4 h-4 sm:w-5 sm:h-5 text-green-600 shrink-0" />
+                    <div className="flex flex-col min-w-0">
+                      <span className="truncate">{t("attendanceCheck.checkInTitle")} - {selectedEmployee?.employeeName}</span>
                       {selectedEmployee?.employeeNameEn && (
-                        <span className="text-sm font-normal text-muted-foreground">{selectedEmployee.employeeNameEn}</span>
+                        <span className="text-xs sm:text-sm font-normal text-muted-foreground truncate">{selectedEmployee.employeeNameEn}</span>
                       )}
                     </div>
                   </>
                 ) : (
                   <>
-                    <LogOut className="w-5 h-5 text-red-600" />
-                    <div className="flex flex-col">
-                      <span>{t("attendanceCheck.checkOutTitle")} - {selectedEmployee?.employeeName}</span>
+                    <LogOut className="w-4 h-4 sm:w-5 sm:h-5 text-red-600 shrink-0" />
+                    <div className="flex flex-col min-w-0">
+                      <span className="truncate">{t("attendanceCheck.checkOutTitle")} - {selectedEmployee?.employeeName}</span>
                       {selectedEmployee?.employeeNameEn && (
-                        <span className="text-sm font-normal text-muted-foreground">{selectedEmployee.employeeNameEn}</span>
+                        <span className="text-xs sm:text-sm font-normal text-muted-foreground truncate">{selectedEmployee.employeeNameEn}</span>
                       )}
                     </div>
                   </>
                 )}
               </DialogTitle>
-              <DialogDescription>
+              <DialogDescription className="text-xs sm:text-sm">
                 {t("attendanceCheck.signatureRequired")}
               </DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-4">
-              {/* Location Verification Status */}
-              <div className={`p-3 rounded-lg flex items-center gap-3 ${
+            <div className="space-y-3 overflow-y-auto flex-1 min-h-0 px-0.5">
+              <div className={`p-2 sm:p-3 rounded-lg flex items-center gap-2 sm:gap-3 ${
                 locationStatus === "checking" ? "bg-blue-50 border border-blue-200" :
                 locationStatus === "valid" ? "bg-green-50 border border-green-200" :
                 locationStatus === "invalid" ? "bg-red-50 border border-red-200" :
@@ -601,96 +600,93 @@ export default function AttendanceCheckPage() {
               }`}>
                 {locationStatus === "checking" && (
                   <>
-                    <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
-                    <div>
-                      <p className="text-sm font-medium text-blue-700">جاري التحقق من الموقع...</p>
-                    </div>
+                    <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 animate-spin shrink-0" />
+                    <p className="text-xs sm:text-sm font-medium text-blue-700">جاري التحقق من الموقع...</p>
                   </>
                 )}
                 {locationStatus === "valid" && (
                   <>
-                    <MapPin className="w-5 h-5 text-green-600" />
+                    <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-green-600 shrink-0" />
                     <div>
-                      <p className="text-sm font-medium text-green-700">الموقع صحيح ✓</p>
+                      <p className="text-xs sm:text-sm font-medium text-green-700">الموقع صحيح ✓</p>
                       {locationDistance !== null && (
-                        <p className="text-xs text-green-600">المسافة: {locationDistance.toLocaleString('en-US')} متر من الفرع</p>
+                        <p className="text-[10px] sm:text-xs text-green-600">المسافة: {locationDistance.toLocaleString('en-US')} متر</p>
                       )}
                     </div>
                   </>
                 )}
                 {locationStatus === "invalid" && (
                   <>
-                    <AlertTriangle className="w-5 h-5 text-red-600" />
+                    <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-red-600 shrink-0" />
                     <div>
-                      <p className="text-sm font-medium text-red-700">الموقع خارج النطاق المسموح</p>
+                      <p className="text-xs sm:text-sm font-medium text-red-700">الموقع خارج النطاق المسموح</p>
                       {locationDistance !== null && (
-                        <p className="text-xs text-red-600">المسافة: {locationDistance.toLocaleString('en-US')} متر (يجب أن تكون داخل نطاق الفرع)</p>
+                        <p className="text-[10px] sm:text-xs text-red-600">المسافة: {locationDistance.toLocaleString('en-US')} متر</p>
                       )}
                     </div>
                   </>
                 )}
                 {locationStatus === "error" && (
                   <>
-                    <AlertTriangle className="w-5 h-5 text-orange-600" />
+                    <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-orange-600 shrink-0" />
                     <div>
-                      <p className="text-sm font-medium text-orange-700">فشل في تحديد الموقع</p>
-                      <p className="text-xs text-orange-600">تأكد من تفعيل خدمات الموقع</p>
+                      <p className="text-xs sm:text-sm font-medium text-orange-700">فشل في تحديد الموقع</p>
+                      <p className="text-[10px] sm:text-xs text-orange-600">تأكد من تفعيل خدمات الموقع</p>
                     </div>
                   </>
                 )}
                 {locationStatus === "no_location" && (
                   <>
-                    <MapPin className="w-5 h-5 text-gray-500" />
+                    <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500 shrink-0" />
                     <div>
-                      <p className="text-sm font-medium text-gray-700">لم يتم تحديد موقع الفرع</p>
-                      <p className="text-xs text-gray-500">التحقق من الموقع غير مفعل لهذا الفرع</p>
+                      <p className="text-xs sm:text-sm font-medium text-gray-700">لم يتم تحديد موقع الفرع</p>
+                      <p className="text-[10px] sm:text-xs text-gray-500">التحقق من الموقع غير مفعل لهذا الفرع</p>
                     </div>
                   </>
                 )}
                 {locationStatus === "idle" && (
                   <>
-                    <MapPin className="w-5 h-5 text-muted-foreground" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">في انتظار التحقق من الموقع</p>
-                    </div>
+                    <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground shrink-0" />
+                    <p className="text-xs sm:text-sm text-muted-foreground">في انتظار التحقق من الموقع</p>
                   </>
                 )}
               </div>
 
-              <div className="text-center p-4 bg-muted rounded-lg">
-                <div className="text-3xl font-mono font-bold text-primary">
+              <div className="text-center p-2 sm:p-3 bg-muted rounded-lg">
+                <div className="text-2xl sm:text-3xl font-mono font-bold text-primary">
                   {format(currentTime, "hh:mm:ss", { locale: dateLocale })}
                 </div>
-                <div className="text-sm text-muted-foreground mt-1">
+                <div className="text-xs sm:text-sm text-muted-foreground">
                   {format(currentTime, "a", { locale: dateLocale })}
                 </div>
               </div>
 
-              <div className="p-3 rounded-lg bg-amber-50 border border-amber-300">
-                <div className="flex items-start gap-2 mb-2">
-                  <ShieldAlert className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
-                  <div className="space-y-1.5">
-                    <p className="text-xs font-bold text-amber-800 leading-relaxed">
-                      تنبيه: يجب أن يقوم الموظف بالتوقيع بنفسه. سيتم مطابقة التوقيع من إدارة الموارد البشرية. التوقيع بالنيابة يعرّض للإجراءات التأديبية والفصل وفقاً للمادة (80) من نظام العمل.
+              <div className="p-2 sm:p-3 rounded-lg bg-amber-50 border border-amber-300">
+                <div className="flex items-start gap-1.5 sm:gap-2">
+                  <ShieldAlert className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                  <div className="space-y-1">
+                    <p className="text-[10px] sm:text-xs font-bold text-amber-800 leading-relaxed">
+                      تنبيه: يجب أن يوقع الموظف بنفسه. سيتم مطابقة التوقيع من الموارد البشرية. التوقيع بالنيابة يعرّض للفصل وفقاً للمادة (80) من نظام العمل.
                     </p>
-                    <p className="text-xs font-semibold text-amber-700 leading-relaxed" dir="ltr" style={{textAlign: 'left'}}>
-                      Warning: Employees must sign personally. Signatures are verified by HR. Signing for others may result in termination under Article (80) of the Saudi Labor Law.
+                    <p className="text-[10px] sm:text-xs font-semibold text-amber-700 leading-relaxed" dir="ltr" style={{textAlign: 'left'}}>
+                      Employees must sign personally. Signing for others may result in termination under Article (80) of the Saudi Labor Law.
                     </p>
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium flex items-center gap-2">
-                  <Pencil className="w-4 h-4" />
+              <div className="space-y-1.5">
+                <label className="text-xs sm:text-sm font-medium flex items-center gap-1.5">
+                  <Pencil className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   {t("attendanceCheck.employeeSignature")}
                 </label>
                 <div className="border-2 border-dashed border-gray-300 rounded-lg overflow-hidden bg-white">
                   <canvas
                     ref={canvasRef}
                     width={400}
-                    height={150}
+                    height={120}
                     className="w-full touch-none cursor-crosshair"
+                    style={{ height: 'clamp(100px, 18vh, 150px)' }}
                     onMouseDown={(e) => startDrawing(getMousePos(e))}
                     onMouseMove={(e) => draw(getMousePos(e))}
                     onMouseUp={stopDrawing}
@@ -701,32 +697,32 @@ export default function AttendanceCheckPage() {
                     data-testid="signature-canvas"
                   />
                 </div>
-                <Button variant="outline" size="sm" onClick={clearCanvas} className="gap-2" data-testid="btn-clear-signature">
-                  <RotateCcw className="w-4 h-4" />
+                <Button variant="outline" size="sm" onClick={clearCanvas} className="gap-1.5 h-7 text-xs sm:text-sm sm:h-8" data-testid="btn-clear-signature">
+                  <RotateCcw className="w-3.5 h-3.5" />
                   {t("attendanceCheck.clearSignature")}
                 </Button>
               </div>
+            </div>
 
-              <div className="flex gap-3">
-                <Button
-                  variant="outline"
-                  onClick={closeSignatureDialog}
-                  className="flex-1"
-                >
-                  {t("common.cancel")}
-                </Button>
-                <Button
-                  onClick={handleSubmitSignature}
-                  disabled={(signatureMode === "check_in" ? checkInMutation.isPending : checkOutMutation.isPending) || !hasSignature}
-                  className={`flex-1 gap-2 ${signatureMode === "check_in" ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700"}`}
-                  data-testid="btn-submit-signature"
-                >
-                  {signatureMode === "check_in" ? <LogIn className="w-4 h-4" /> : <LogOut className="w-4 h-4" />}
-                  {(signatureMode === "check_in" ? checkInMutation.isPending : checkOutMutation.isPending) 
-                    ? t("attendanceCheck.processing") 
-                    : signatureMode === "check_in" ? t("attendanceCheck.confirmCheckIn") : t("attendanceCheck.confirmCheckOut")}
-                </Button>
-              </div>
+            <div className="flex gap-2 sm:gap-3 shrink-0 pt-2">
+              <Button
+                variant="outline"
+                onClick={closeSignatureDialog}
+                className="flex-1 h-9 sm:h-10 text-xs sm:text-sm"
+              >
+                {t("common.cancel")}
+              </Button>
+              <Button
+                onClick={handleSubmitSignature}
+                disabled={(signatureMode === "check_in" ? checkInMutation.isPending : checkOutMutation.isPending) || !hasSignature}
+                className={`flex-1 gap-1.5 h-9 sm:h-10 text-xs sm:text-sm ${signatureMode === "check_in" ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700"}`}
+                data-testid="btn-submit-signature"
+              >
+                {signatureMode === "check_in" ? <LogIn className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <LogOut className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
+                {(signatureMode === "check_in" ? checkInMutation.isPending : checkOutMutation.isPending) 
+                  ? t("attendanceCheck.processing") 
+                  : signatureMode === "check_in" ? t("attendanceCheck.confirmCheckIn") : t("attendanceCheck.confirmCheckOut")}
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
