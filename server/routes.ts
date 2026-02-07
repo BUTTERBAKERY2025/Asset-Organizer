@@ -17931,7 +17931,32 @@ export async function registerRoutes(
         }
       }
       
+      const oldBranchId = existingEmployee.branchId;
+      const newBranchId = parsed.data.branchId;
+      
       const employee = await storage.updateBranchEmployee(id, parsed.data);
+      
+      if (newBranchId && newBranchId !== oldBranchId) {
+        try {
+          const { employeeSchedules } = await import("@shared/schema");
+          const { eq, and, gte, or } = await import("drizzle-orm");
+          const { db } = await import("./db");
+          const today = new Date().toISOString().split('T')[0];
+          await db.update(employeeSchedules)
+            .set({ branchId: newBranchId })
+            .where(and(
+              or(
+                eq(employeeSchedules.employeeId, `branch_emp_${id}`),
+                eq(employeeSchedules.branchEmployeeId, id)
+              ),
+              gte(employeeSchedules.scheduleDate, today)
+            ));
+          console.log(`Updated future schedules for employee ${id} from branch ${oldBranchId} to ${newBranchId}`);
+        } catch (scheduleError) {
+          console.error("Error updating employee schedules on branch transfer:", scheduleError);
+        }
+      }
+      
       res.json(employee);
     } catch (error) {
       console.error("Error updating branch employee:", error);

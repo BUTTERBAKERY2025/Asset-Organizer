@@ -7722,14 +7722,34 @@ export class DatabaseStorage implements IStorage {
       })
     );
 
-    // Filter out schedules for deleted/removed employees and deduplicate by employeeId
+    const verifiedEmployees = await Promise.all(
+      employeesWithAttendance.map(async (emp) => {
+        if (emp.employeeId.startsWith('branch_emp_')) {
+          try {
+            const branchEmpId = parseInt(emp.employeeId.replace('branch_emp_', ''), 10);
+            if (!isNaN(branchEmpId)) {
+              const [currentBranchEmp] = await db.select({ branchId: branchEmployees.branchId, status: branchEmployees.status })
+                .from(branchEmployees)
+                .where(eq(branchEmployees.id, branchEmpId))
+                .limit(1);
+              if (currentBranchEmp && (currentBranchEmp.branchId !== branchId || currentBranchEmp.status !== 'active')) {
+                return { ...emp, _isTransferred: true };
+              }
+            }
+          } catch (e) {}
+        }
+        return emp;
+      })
+    );
+
     const seenEmployeeIds = new Set<string>();
-    const uniqueEmployees = employeesWithAttendance.filter(emp => {
+    const uniqueEmployees = verifiedEmployees.filter(emp => {
       if (emp._isDeleted) return false;
+      if ((emp as any)._isTransferred) return false;
       if (seenEmployeeIds.has(emp.employeeId)) return false;
       seenEmployeeIds.add(emp.employeeId);
       return true;
-    }).map(({ _isDeleted, ...rest }) => rest);
+    }).map(({ _isDeleted, _isTransferred, ...rest }: any) => rest);
 
     // If no schedules found for today, fallback to branch employees with default shift times
     if (uniqueEmployees.length === 0) {
