@@ -615,15 +615,17 @@ export default function ShiftReportsPage() {
                               <div className="flex items-center justify-center gap-1.5">
                                 <Badge 
                                   variant={shift.openingCompleted ? "default" : "outline"} 
-                                  className={`text-[10px] px-1.5 py-0.5 ${shift.openingCompleted ? "bg-green-600" : "text-gray-400"}`}
+                                  className={`text-[10px] px-1.5 py-0.5 gap-1 ${shift.openingCompleted ? "bg-green-600" : shift.status !== "pending" ? "border-amber-400 text-amber-600" : "text-gray-400"}`}
                                 >
-                                  {shift.openingCompleted ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                                  {shift.openingCompleted ? <CheckCircle2 className="h-3 w-3" /> : shift.status !== "pending" ? <Clock className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                                  فتح
                                 </Badge>
                                 <Badge 
                                   variant={shift.closingCompleted ? "default" : "outline"}
-                                  className={`text-[10px] px-1.5 py-0.5 ${shift.closingCompleted ? "bg-green-600" : "text-gray-400"}`}
+                                  className={`text-[10px] px-1.5 py-0.5 gap-1 ${shift.closingCompleted ? "bg-green-600" : "text-gray-400"}`}
                                 >
                                   {shift.closingCompleted ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                                  إغلاق
                                 </Badge>
                               </div>
                             </td>
@@ -633,23 +635,22 @@ export default function ShiftReportsPage() {
                                   variant="ghost"
                                   size="sm"
                                   onClick={() => openReport(shift, "opening")}
-                                  disabled={!shift.openingCompleted}
-                                  className={`h-7 px-2 text-[10px] ${shift.openingCompleted ? "text-amber-700 hover:bg-amber-100" : "text-gray-300"}`}
+                                  className={`h-7 px-2 text-[10px] ${shift.openingCompleted ? "text-green-700 hover:bg-green-100 font-semibold" : "text-amber-700 hover:bg-amber-100"}`}
                                   data-testid={`btn-view-opening-${shift.id}`}
                                 >
                                   <Eye className="h-3 w-3 ml-0.5" />
-                                  فتح
+                                  تقرير الفتح
                                 </Button>
                                 <Button
                                   variant="ghost"
                                   size="sm"
                                   onClick={() => openReport(shift, "closing")}
-                                  disabled={!shift.closingCompleted}
-                                  className={`h-7 px-2 text-[10px] ${shift.closingCompleted ? "text-blue-700 hover:bg-blue-100" : "text-gray-300"}`}
+                                  disabled={!shift.closingCompleted && !shift.openingCompleted}
+                                  className={`h-7 px-2 text-[10px] ${shift.closingCompleted ? "text-green-700 hover:bg-green-100 font-semibold" : shift.openingCompleted ? "text-blue-700 hover:bg-blue-100" : "text-gray-300"}`}
                                   data-testid={`btn-view-closing-${shift.id}`}
                                 >
                                   <Eye className="h-3 w-3 ml-0.5" />
-                                  إغلاق
+                                  تقرير الإغلاق
                                 </Button>
                               </div>
                             </td>
