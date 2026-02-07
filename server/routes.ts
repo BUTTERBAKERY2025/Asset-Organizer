@@ -4196,6 +4196,16 @@ export async function registerRoutes(
       }
       
       const journal = await storage.approveCashierJournal(id, getCurrentUser(req).id);
+      
+      // Auto-calculate incentive points when journal is approved
+      try {
+        const incentiveResult = await storage.calculateJournalIncentives(id);
+        if (incentiveResult.totalPoints > 0) {
+          console.log(`[Incentives] Auto-calculated ${incentiveResult.totalPoints} points for journal #${id}`);
+        }
+      } catch (incentiveErr: any) {
+        console.warn(`[Incentives] Auto-calculation skipped for journal #${id}: ${incentiveErr.message}`);
+      }
       res.json(journal);
     } catch (error) {
       console.error("Error approving cashier journal:", error);
@@ -7100,7 +7110,67 @@ export async function registerRoutes(
     }
   });
 
-  // ==========================================
+  // Calculate incentives from journal
+  app.post("/api/smart-incentives/calculate/:journalId", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
+    try {
+      const journalId = parseInt(req.params.journalId);
+      const result = await storage.calculateJournalIncentives(journalId);
+      res.json(result);
+    } catch (error: any) {
+      console.error("Error calculating incentives:", error);
+      res.status(500).json({ error: error.message || "فشل في احتساب الحوافز" });
+    }
+  });
+
+  // Calculate incentives for all approved journals in a date range
+  app.post("/api/smart-incentives/calculate-batch", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
+    try {
+      const { branchId, dateFrom, dateTo } = req.body;
+      if (!branchId || !dateFrom || !dateTo) {
+        return res.status(400).json({ error: "يجب تحديد الفرع وتاريخ البداية والنهاية" });
+      }
+      
+      const { journals: approvedJournals } = await storage.getCashierJournalsFiltered({
+        branchId,
+        startDate: dateFrom,
+        endDate: dateTo,
+        status: 'approved',
+      });
+      
+      const { journals: postedJournals } = await storage.getCashierJournalsFiltered({
+        branchId,
+        startDate: dateFrom,
+        endDate: dateTo,
+        status: 'posted',
+      });
+      
+      const allJournals = [...approvedJournals, ...postedJournals];
+      
+      let totalPoints = 0;
+      let totalAmount = 0;
+      let processedCount = 0;
+      const errors: string[] = [];
+      
+      for (const journal of allJournals) {
+        try {
+          const result = await storage.calculateJournalIncentives(journal.id);
+          totalPoints += result.totalPoints;
+          totalAmount += result.totalAmount;
+          processedCount++;
+        } catch (err: any) {
+          errors.push(`يومية #${journal.id}: ${err.message}`);
+          console.error(`Error calculating for journal ${journal.id}:`, err);
+        }
+      }
+      
+      res.json({ processedCount, totalJournals: allJournals.length, totalPoints, totalAmount, errors: errors.length > 0 ? errors : undefined });
+    } catch (error: any) {
+      console.error("Error in batch calculation:", error);
+      res.status(500).json({ error: error.message || "فشل في الاحتساب الجماعي" });
+    }
+  });
+
+    // ==========================================
   // Seasons & Holidays Routes
   // ==========================================
 

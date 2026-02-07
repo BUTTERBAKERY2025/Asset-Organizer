@@ -793,6 +793,8 @@ export interface IStorage {
   updatePointsEntryStatus(id: number, status: string, approvedBy?: string): Promise<CashierPointsLedger | undefined>;
   getCashierPointsSummary(cashierId: string, yearMonth?: string): Promise<{ totalPoints: number; totalAmount: number; pendingPoints: number; pendingAmount: number; approvedPoints: number; approvedAmount: number }>;
   
+  calculateJournalIncentives(journalId: number): Promise<{ challengePoints: CashierPointsLedger[]; totalPoints: number; totalAmount: number }>;
+
   // Cashier Product Sales - مبيعات الأصناف
   getCashierProductSales(cashierId: string, date?: string): Promise<CashierProductSales[]>;
   createCashierProductSale(sale: InsertCashierProductSales): Promise<CashierProductSales>;
@@ -12364,6 +12366,108 @@ export class DatabaseStorage implements IStorage {
       .where(eq(cashierProductSales.id, id))
       .returning();
     return updated || undefined;
+  }
+
+  async calculateJournalIncentives(journalId: number): Promise<{ challengePoints: CashierPointsLedger[]; totalPoints: number; totalAmount: number }> {
+    const [journal] = await db.select().from(cashierSalesJournals).where(eq(cashierSalesJournals.id, journalId));
+    if (!journal) throw new Error("اليومية غير موجودة");
+
+    const settings = await this.getPointSettings();
+    if (!settings || !settings.isActive) {
+      return { challengePoints: [], totalPoints: 0, totalAmount: 0 };
+    }
+
+    const challengeTypes = ['challenge_avg_ticket', 'challenge_customer_count', 'challenge_shift_sales'];
+    const existingChallengeEntries = await db.select().from(cashierPointsLedger).where(
+      and(
+        eq(cashierPointsLedger.cashierId, journal.cashierId),
+        eq(cashierPointsLedger.transactionDate, journal.journalDate),
+        eq(cashierPointsLedger.branchId, journal.branchId),
+        inArray(cashierPointsLedger.pointsType, challengeTypes),
+      )
+    );
+
+    if (existingChallengeEntries.length > 0) {
+      for (const entry of existingChallengeEntries) {
+        await db.delete(cashierPointsLedger).where(eq(cashierPointsLedger.id, entry.id));
+      }
+    }
+
+    const activeChallenges = await this.getActiveDailyChallenges(journal.branchId);
+    const pointValue = Number(settings.pointValue) || 0.5;
+    const seasonalMultiplier = Number(settings.seasonalMultiplier) || 1;
+    const maxDailyPoints = settings.maxDailyPoints ? Number(settings.maxDailyPoints) : null;
+    const pendingEntries: Array<{ challengeType: string; challengeId: number; challengeName: string; pointsEarned: number; targetValue: number; actualValue: number }> = [];
+    let totalPointsEarned = 0;
+
+    for (const challenge of activeChallenges) {
+      if (challenge.shiftType && challenge.shiftType !== journal.shiftType) continue;
+      if (challenge.validTo && challenge.validTo < journal.journalDate) continue;
+
+      let actualValue = 0;
+      let targetValue = Number(challenge.targetValue);
+      let pointsEarned = 0;
+
+      switch (challenge.challengeType) {
+        case 'avg_ticket':
+          actualValue = Number(journal.averageTicket) || 0;
+          break;
+        case 'customer_count':
+          actualValue = Number(journal.customerCount) || 0;
+          break;
+        case 'shift_sales':
+          actualValue = Number(journal.totalSales) || 0;
+          break;
+        default:
+          continue;
+      }
+
+      if (actualValue >= targetValue) {
+        pointsEarned = Number(challenge.basePoints) || 0;
+        const excess = actualValue - targetValue;
+        const bonusPerUnit = Number(challenge.bonusPointsPerUnit) || 0;
+        if (excess > 0 && bonusPerUnit > 0) {
+          pointsEarned += Math.floor(excess * bonusPerUnit);
+        }
+      }
+
+      if (pointsEarned > 0) {
+        pointsEarned = Math.round(pointsEarned * seasonalMultiplier);
+        totalPointsEarned += pointsEarned;
+        pendingEntries.push({ challengeType: challenge.challengeType, challengeId: challenge.id, challengeName: challenge.name, pointsEarned, targetValue, actualValue });
+      }
+    }
+
+    if (maxDailyPoints && totalPointsEarned > maxDailyPoints) {
+      const ratio = maxDailyPoints / totalPointsEarned;
+      for (const pe of pendingEntries) {
+        pe.pointsEarned = Math.floor(pe.pointsEarned * ratio);
+      }
+      totalPointsEarned = maxDailyPoints;
+    }
+
+    const createdEntries: CashierPointsLedger[] = [];
+    for (const pe of pendingEntries) {
+      const amountEarned = Number((pe.pointsEarned * pointValue).toFixed(2));
+      const entry = await this.createPointsEntry({
+        cashierId: journal.cashierId,
+        branchId: journal.branchId,
+        transactionDate: journal.journalDate,
+        shiftType: journal.shiftType || undefined,
+        pointsType: `challenge_${pe.challengeType}`,
+        sourceId: pe.challengeId,
+        sourceName: pe.challengeName,
+        pointsEarned: pe.pointsEarned,
+        pointValue,
+        amountEarned,
+        status: 'earned',
+        notes: `تحدي: ${pe.challengeName} | الهدف: ${pe.targetValue} | الفعلي: ${pe.actualValue}`,
+      });
+      createdEntries.push(entry);
+    }
+
+    const totalAmount = Number((totalPointsEarned * pointValue).toFixed(2));
+    return { challengePoints: createdEntries, totalPoints: totalPointsEarned, totalAmount };
   }
 }
 

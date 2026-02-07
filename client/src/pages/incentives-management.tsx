@@ -100,6 +100,11 @@ export default function IncentivesManagement() {
   const [walletDateFrom, setWalletDateFrom] = useState("");
   const [walletDateTo, setWalletDateTo] = useState("");
 
+  const [calcBranchId, setCalcBranchId] = useState("");
+  const [calcDateFrom, setCalcDateFrom] = useState("");
+  const [calcDateTo, setCalcDateTo] = useState("");
+  const [batchCalcResult, setBatchCalcResult] = useState<{ processedCount: number; totalJournals: number; totalPoints: number; totalAmount: number } | null>(null);
+
   const [newTier, setNewTier] = useState({
     name: "", description: "", minAchievementPercent: "", maxAchievementPercent: "",
     rewardType: "fixed", fixedAmount: "", percentageRate: "", applicableTo: "all", sortOrder: "0",
@@ -437,6 +442,26 @@ export default function IncentivesManagement() {
     },
   });
 
+  const batchCalcMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/smart-incentives/calculate-batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ branchId: calcBranchId, dateFrom: calcDateFrom, dateTo: calcDateTo }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "فشل الاحتساب");
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setBatchCalcResult(data);
+      queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/points-ledger"] });
+      toast({ title: `تم احتساب النقاط لـ ${data.processedCount} يومية | ${data.totalPoints} نقطة` });
+    },
+    onError: (error: any) => {
+      toast({ title: "خطأ", description: error.message, variant: "destructive" });
+    },
+  });
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-SA", {
       style: "currency",
@@ -603,6 +628,10 @@ export default function IncentivesManagement() {
             <TabsTrigger value="awards" className="flex items-center gap-1 text-xs sm:text-sm" data-testid="tab-awards">
               <Award className="h-3.5 w-3.5" />
               سجل الحوافز
+            </TabsTrigger>
+            <TabsTrigger value="calculate" className="flex items-center gap-1 text-xs sm:text-sm bg-green-50 text-green-700 data-[state=active]:bg-green-600 data-[state=active]:text-white" data-testid="tab-calculate">
+              <Calculator className="h-3.5 w-3.5" />
+              احتساب النقاط
             </TabsTrigger>
           </TabsList>
 
@@ -1387,6 +1416,126 @@ export default function IncentivesManagement() {
                       </Table>
                     </div>
                   )}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* Tab 7: Calculate Points */}
+          <TabsContent value="calculate">
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Calculator className="h-5 w-5 text-green-600" />
+                    احتساب النقاط من يوميات الكاشير
+                  </CardTitle>
+                  <CardDescription>
+                    يتم احتساب النقاط تلقائياً عند اعتماد يومية الكاشير. يمكنك أيضاً تشغيل الاحتساب الجماعي لفترة محددة.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
+                    <h4 className="font-bold text-blue-800 flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4" />
+                      كيف يعمل النظام
+                    </h4>
+                    <div className="text-sm text-blue-700 space-y-2">
+                      <p><strong>1. الربط التلقائي:</strong> عند اعتماد يومية كاشير، يتم تلقائياً مقارنة بياناتها (متوسط الفاتورة، عدد العملاء، إجمالي المبيعات) بالتحديات اليومية المفعّلة.</p>
+                      <p><strong>2. احتساب النقاط:</strong> إذا حقق الكاشير الهدف المطلوب، تُسجل النقاط الأساسية + الإضافية تلقائياً في محفظته.</p>
+                      <p><strong>3. المعامل الموسمي:</strong> النقاط تُضرب في معامل الموسم المحدد في إعدادات النقاط.</p>
+                      <p><strong>4. الحد اليومي:</strong> لا تتجاوز نقاط اليوم الواحد الحد الأقصى المحدد في الإعدادات.</p>
+                    </div>
+                  </div>
+
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 space-y-3">
+                    <h4 className="font-bold text-amber-800 flex items-center gap-2">
+                      <FileSpreadsheet className="h-4 w-4" />
+                      خطوات التشغيل
+                    </h4>
+                    <div className="text-sm text-amber-700 space-y-2">
+                      <p>1. تأكد من إعداد <strong>إعدادات النقاط</strong> (قيمة النقطة، الحدود)</p>
+                      <p>2. أنشئ <strong>تحديات يومية</strong> (متوسط الفاتورة / عدد العملاء / مبيعات الوردية)</p>
+                      <p>3. عند اعتماد يومية كاشير → <strong>النقاط تُحسب تلقائياً</strong></p>
+                      <p>4. راجع النتائج في تبويب <strong>رصيد الكاشير</strong></p>
+                    </div>
+                  </div>
+
+                  <Card className="border-green-200">
+                    <CardHeader className="bg-green-50">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Calculator className="h-4 w-4 text-green-600" />
+                        احتساب جماعي لفترة محددة
+                      </CardTitle>
+                      <CardDescription>احتساب النقاط لجميع يوميات الكاشير المعتمدة في فترة محددة</CardDescription>
+                    </CardHeader>
+                    <CardContent className="pt-4 space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                          <Label>الفرع</Label>
+                          <Select value={calcBranchId} onValueChange={setCalcBranchId}>
+                            <SelectTrigger data-testid="select-calc-branch">
+                              <SelectValue placeholder="اختر الفرع" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {branches.map((b: Branch) => (
+                                <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label>من تاريخ</Label>
+                          <Input type="date" value={calcDateFrom} onChange={(e) => setCalcDateFrom(e.target.value)} data-testid="input-calc-date-from" />
+                        </div>
+                        <div>
+                          <Label>إلى تاريخ</Label>
+                          <Input type="date" value={calcDateTo} onChange={(e) => setCalcDateTo(e.target.value)} data-testid="input-calc-date-to" />
+                        </div>
+                      </div>
+                      <Button
+                        onClick={() => batchCalcMutation.mutate()}
+                        disabled={!calcBranchId || !calcDateFrom || !calcDateTo || batchCalcMutation.isPending}
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                        data-testid="button-batch-calculate"
+                      >
+                        {batchCalcMutation.isPending ? (
+                          <span className="flex items-center gap-2">
+                            <span className="animate-spin">⏳</span> جاري الاحتساب...
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-2">
+                            <Calculator className="h-4 w-4" />
+                            تشغيل الاحتساب الجماعي
+                          </span>
+                        )}
+                      </Button>
+
+                      {batchCalcResult && (
+                        <div className="bg-green-50 border border-green-300 rounded-lg p-4 mt-4">
+                          <h4 className="font-bold text-green-800 mb-2">نتائج الاحتساب</h4>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <div className="text-center p-3 bg-white rounded-lg border">
+                              <p className="text-2xl font-bold text-green-700">{batchCalcResult.processedCount}</p>
+                              <p className="text-xs text-gray-500">يومية تم معالجتها</p>
+                            </div>
+                            <div className="text-center p-3 bg-white rounded-lg border">
+                              <p className="text-2xl font-bold text-blue-700">{batchCalcResult.totalJournals}</p>
+                              <p className="text-xs text-gray-500">إجمالي اليوميات</p>
+                            </div>
+                            <div className="text-center p-3 bg-white rounded-lg border">
+                              <p className="text-2xl font-bold text-amber-700">{batchCalcResult.totalPoints}</p>
+                              <p className="text-xs text-gray-500">نقاط مكتسبة</p>
+                            </div>
+                            <div className="text-center p-3 bg-white rounded-lg border">
+                              <p className="text-2xl font-bold text-purple-700">{batchCalcResult.totalAmount?.toFixed(2)} ر.س</p>
+                              <p className="text-xs text-gray-500">القيمة المالية</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
                 </CardContent>
               </Card>
             </div>
