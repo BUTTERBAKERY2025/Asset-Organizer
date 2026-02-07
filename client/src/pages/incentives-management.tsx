@@ -96,6 +96,7 @@ export default function IncentivesManagement() {
 
   const [calculatedAwards, setCalculatedAwards] = useState<CalculatedAward[]>([]);
 
+  const [walletBranchId, setWalletBranchId] = useState("");
   const [walletCashierId, setWalletCashierId] = useState("");
   const [walletDateFrom, setWalletDateFrom] = useState("");
   const [walletDateTo, setWalletDateTo] = useState("");
@@ -1239,17 +1240,40 @@ export default function IncentivesManagement() {
                   <CardDescription>عرض رصيد النقاط والمعاملات</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <div>
+                      <Label>الفرع</Label>
+                      <Select value={walletBranchId} onValueChange={(v) => { setWalletBranchId(v); setWalletCashierId(""); }}>
+                        <SelectTrigger data-testid="select-wallet-branch" className="h-11 sm:h-10"><SelectValue placeholder="جميع الفروع" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">جميع الفروع</SelectItem>
+                          {branches.map((b) => (<SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                     <div>
                       <Label>الكاشير</Label>
                       <Select value={walletCashierId} onValueChange={setWalletCashierId}>
                         <SelectTrigger data-testid="select-wallet-cashier" className="h-11 sm:h-10"><SelectValue placeholder="اختر الكاشير" /></SelectTrigger>
                         <SelectContent>
-                          {allUsers.filter((u: any) => u.role === "employee" || u.role === "cashier").map((u: any) => (
-                            <SelectItem key={u.id} value={u.id}>{u.firstName || ""} {u.lastName || ""} ({u.username || u.id})</SelectItem>
-                          ))}
+                          {allUsers
+                            .filter((u: any) => {
+                              const isCashier = u.isActive !== "inactive" && (u.role === "employee" || u.role === "cashier" || u.role === "admin");
+                              if (!walletBranchId || walletBranchId === "all") return isCashier;
+                              return isCashier && u.branchId === walletBranchId;
+                            })
+                            .map((u: any) => (
+                              <SelectItem key={u.id} value={u.id}>
+                                {u.firstName && u.lastName ? `${u.firstName} ${u.lastName}` : u.username}
+                                {u.jobTitle ? ` - ${u.jobTitle}` : ""}
+                              </SelectItem>
+                            ))
+                          }
                         </SelectContent>
                       </Select>
+                      {walletBranchId && walletBranchId !== "all" && (
+                        <p className="text-xs text-blue-600 mt-1">يعرض فقط موظفي الفرع المحدد</p>
+                      )}
                     </div>
                     <div>
                       <Label>من تاريخ</Label>
