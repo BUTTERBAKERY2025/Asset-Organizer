@@ -8,14 +8,22 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useBranches } from "@/hooks/useBranches";
-import { Gift, Award, DollarSign, Settings, ChevronLeft, Calculator, Check, X, Plus, FileSpreadsheet, FileText, ArrowRight } from "lucide-react";
+import {
+  Gift, Award, DollarSign, Settings, ChevronLeft, Calculator, Check, X, Plus,
+  FileSpreadsheet, FileText, ArrowRight, Wallet, Target, Trophy, Star,
+  Trash2, TrendingUp, Users, Calendar
+} from "lucide-react";
 import { Link } from "wouter";
 import * as XLSX from "xlsx";
-import type { Branch, IncentiveTier, IncentiveAward } from "@shared/schema";
+import type {
+  Branch, IncentiveTier, IncentiveAward,
+  CashierDailyChallenge, ProductCommission, BranchAchievementBonus,
+  CashierPointsLedger, PointSettings
+} from "@shared/schema";
 
 const REWARD_TYPE_LABELS: Record<string, string> = {
   fixed: "مبلغ ثابت",
@@ -28,6 +36,7 @@ const AWARD_STATUS_LABELS: Record<string, string> = {
   approved: "معتمد",
   paid: "مدفوع",
   cancelled: "ملغى",
+  earned: "مكتسب",
 };
 
 const AWARD_STATUS_COLORS: Record<string, string> = {
@@ -35,6 +44,27 @@ const AWARD_STATUS_COLORS: Record<string, string> = {
   approved: "bg-blue-500",
   paid: "bg-green-500",
   cancelled: "bg-gray-500",
+  earned: "bg-emerald-500",
+};
+
+const CHALLENGE_TYPE_LABELS: Record<string, string> = {
+  avg_ticket: "متوسط الفاتورة",
+  customer_count: "عدد العملاء",
+  shift_sales: "مبيعات الشفت",
+};
+
+const COMMISSION_TYPE_LABELS: Record<string, string> = {
+  weekly_product: "صنف الأسبوع",
+  monthly_product: "صنف الشهر",
+  new_product: "صنف جديد",
+};
+
+const POINTS_TYPE_LABELS: Record<string, string> = {
+  challenge_avg_ticket: "تحدي متوسط الفاتورة",
+  challenge_customers: "تحدي عدد العملاء",
+  challenge_sales: "تحدي المبيعات",
+  product_commission: "عمولة صنف",
+  branch_bonus: "مكافأة فرع",
 };
 
 interface CalculatedAward {
@@ -52,25 +82,64 @@ interface CalculatedAward {
 export default function IncentivesManagement() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { branches, canSelectBranch } = useBranches();
+
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  });
-  const [showNewTierDialog, setShowNewTierDialog] = useState(false);
-  const [calculatedAwards, setCalculatedAwards] = useState<CalculatedAward[]>([]);
-  const [newTier, setNewTier] = useState({
-    name: "",
-    description: "",
-    minAchievementPercent: "",
-    maxAchievementPercent: "",
-    rewardType: "fixed",
-    fixedAmount: "",
-    percentageRate: "",
-    applicableTo: "all",
-    sortOrder: "0"
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   });
 
-  const { branches, canSelectBranch } = useBranches();
+  const [showNewTierDialog, setShowNewTierDialog] = useState(false);
+  const [showChallengeDialog, setShowChallengeDialog] = useState(false);
+  const [showCommissionDialog, setShowCommissionDialog] = useState(false);
+  const [showBranchBonusDialog, setShowBranchBonusDialog] = useState(false);
+
+  const [calculatedAwards, setCalculatedAwards] = useState<CalculatedAward[]>([]);
+
+  const [walletCashierId, setWalletCashierId] = useState("");
+  const [walletDateFrom, setWalletDateFrom] = useState("");
+  const [walletDateTo, setWalletDateTo] = useState("");
+
+  const [newTier, setNewTier] = useState({
+    name: "", description: "", minAchievementPercent: "", maxAchievementPercent: "",
+    rewardType: "fixed", fixedAmount: "", percentageRate: "", applicableTo: "all", sortOrder: "0",
+  });
+
+  const [newChallenge, setNewChallenge] = useState({
+    name: "", challengeType: "avg_ticket", branchId: "", targetValue: "",
+    basePoints: "", bonusPointsPerUnit: "0", validFrom: "", validTo: "",
+  });
+
+  const [newCommission, setNewCommission] = useState({
+    productName: "", productCategory: "", commissionType: "weekly_product",
+    branchId: "", targetQuantity: "", pointsOnTarget: "", bonusPointsPerExtra: "0",
+    validFrom: "", validTo: "",
+  });
+
+  const [newBranchBonus, setNewBranchBonus] = useState({
+    branchId: "", yearMonth: "", bonusPool: "", targetAmount: "",
+    distributionMethod: "contribution_ratio",
+  });
+
+  const [pointSettingsForm, setPointSettingsForm] = useState({
+    pointValue: "0.5", maxDailyPoints: "", maxMonthlyPoints: "", seasonalMultiplier: "1",
+  });
+
+  const { data: pointSettings } = useQuery<PointSettings>({
+    queryKey: ["/api/smart-incentives/point-settings"],
+  });
+
+  const { data: challenges = [], isLoading: challengesLoading } = useQuery<CashierDailyChallenge[]>({
+    queryKey: ["/api/smart-incentives/challenges"],
+  });
+
+  const { data: commissions = [], isLoading: commissionsLoading } = useQuery<ProductCommission[]>({
+    queryKey: ["/api/smart-incentives/product-commissions"],
+  });
+
+  const { data: branchBonuses = [], isLoading: branchBonusLoading } = useQuery<BranchAchievementBonus[]>({
+    queryKey: ["/api/smart-incentives/branch-bonus"],
+  });
 
   const { data: tiers = [], isLoading: tiersLoading } = useQuery<IncentiveTier[]>({
     queryKey: ["/api/incentives/tiers"],
@@ -78,6 +147,189 @@ export default function IncentivesManagement() {
 
   const { data: awards = [], isLoading: awardsLoading } = useQuery<IncentiveAward[]>({
     queryKey: ["/api/incentives/awards"],
+  });
+
+  const { data: allUsers = [] } = useQuery<any[]>({
+    queryKey: ["/api/users"],
+  });
+
+  const ledgerQueryEnabled = !!walletCashierId;
+  const ledgerParams = new URLSearchParams();
+  if (walletCashierId) ledgerParams.set("cashierId", walletCashierId);
+  if (walletDateFrom) ledgerParams.set("dateFrom", walletDateFrom);
+  if (walletDateTo) ledgerParams.set("dateTo", walletDateTo);
+
+  const { data: ledgerEntries = [], isLoading: ledgerLoading } = useQuery<CashierPointsLedger[]>({
+    queryKey: ["/api/smart-incentives/points-ledger", walletCashierId, walletDateFrom, walletDateTo],
+    queryFn: async () => {
+      const res = await fetch(`/api/smart-incentives/points-ledger?${ledgerParams.toString()}`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: ledgerQueryEnabled,
+  });
+
+  const { data: pointsSummary } = useQuery<any>({
+    queryKey: ["/api/smart-incentives/points-summary", walletCashierId, selectedMonth],
+    queryFn: async () => {
+      if (!walletCashierId) return null;
+      const res = await fetch(`/api/smart-incentives/points-summary/${walletCashierId}?yearMonth=${selectedMonth}`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !!walletCashierId,
+  });
+
+  const savePointSettingsMutation = useMutation({
+    mutationFn: async (data: typeof pointSettingsForm) => {
+      const res = await fetch("/api/smart-incentives/point-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pointValue: parseFloat(data.pointValue) || 0.5,
+          maxDailyPoints: data.maxDailyPoints ? parseInt(data.maxDailyPoints) : null,
+          maxMonthlyPoints: data.maxMonthlyPoints ? parseInt(data.maxMonthlyPoints) : null,
+          seasonalMultiplier: parseFloat(data.seasonalMultiplier) || 1,
+          isActive: true,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to save point settings");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/point-settings"] });
+      toast({ title: "تم حفظ إعدادات النقاط بنجاح" });
+    },
+    onError: () => {
+      toast({ title: "خطأ في حفظ إعدادات النقاط", variant: "destructive" });
+    },
+  });
+
+  const createChallengeMutation = useMutation({
+    mutationFn: async (data: typeof newChallenge) => {
+      const res = await fetch("/api/smart-incentives/challenges", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: data.name,
+          challengeType: data.challengeType,
+          branchId: data.branchId || null,
+          targetValue: parseFloat(data.targetValue),
+          basePoints: parseInt(data.basePoints),
+          bonusPointsPerUnit: parseFloat(data.bonusPointsPerUnit) || 0,
+          validFrom: data.validFrom,
+          validTo: data.validTo || null,
+          isActive: true,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to create challenge");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/challenges"] });
+      setShowChallengeDialog(false);
+      setNewChallenge({ name: "", challengeType: "avg_ticket", branchId: "", targetValue: "", basePoints: "", bonusPointsPerUnit: "0", validFrom: "", validTo: "" });
+      toast({ title: "تم إنشاء التحدي بنجاح" });
+    },
+    onError: () => {
+      toast({ title: "خطأ في إنشاء التحدي", variant: "destructive" });
+    },
+  });
+
+  const deleteChallengeMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/smart-incentives/challenges/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete challenge");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/challenges"] });
+      toast({ title: "تم حذف التحدي بنجاح" });
+    },
+  });
+
+  const createCommissionMutation = useMutation({
+    mutationFn: async (data: typeof newCommission) => {
+      const res = await fetch("/api/smart-incentives/product-commissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productName: data.productName,
+          productCategory: data.productCategory || null,
+          commissionType: data.commissionType,
+          branchId: data.branchId || null,
+          targetQuantity: parseInt(data.targetQuantity),
+          pointsOnTarget: parseInt(data.pointsOnTarget),
+          bonusPointsPerExtra: parseFloat(data.bonusPointsPerExtra) || 0,
+          validFrom: data.validFrom,
+          validTo: data.validTo || null,
+          isActive: true,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to create commission");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/product-commissions"] });
+      setShowCommissionDialog(false);
+      setNewCommission({ productName: "", productCategory: "", commissionType: "weekly_product", branchId: "", targetQuantity: "", pointsOnTarget: "", bonusPointsPerExtra: "0", validFrom: "", validTo: "" });
+      toast({ title: "تم إنشاء العمولة بنجاح" });
+    },
+    onError: () => {
+      toast({ title: "خطأ في إنشاء العمولة", variant: "destructive" });
+    },
+  });
+
+  const deleteCommissionMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/smart-incentives/product-commissions/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete commission");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/product-commissions"] });
+      toast({ title: "تم حذف العمولة بنجاح" });
+    },
+  });
+
+  const createBranchBonusMutation = useMutation({
+    mutationFn: async (data: typeof newBranchBonus) => {
+      const res = await fetch("/api/smart-incentives/branch-bonus", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          branchId: data.branchId,
+          yearMonth: data.yearMonth,
+          bonusPool: parseFloat(data.bonusPool),
+          targetAmount: parseFloat(data.targetAmount),
+          distributionMethod: data.distributionMethod,
+          isActive: true,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to create branch bonus");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/branch-bonus"] });
+      setShowBranchBonusDialog(false);
+      setNewBranchBonus({ branchId: "", yearMonth: "", bonusPool: "", targetAmount: "", distributionMethod: "contribution_ratio" });
+      toast({ title: "تم إنشاء مكافأة الفرع بنجاح" });
+    },
+    onError: () => {
+      toast({ title: "خطأ في إنشاء مكافأة الفرع", variant: "destructive" });
+    },
+  });
+
+  const deleteBranchBonusMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/smart-incentives/branch-bonus/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete branch bonus");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/branch-bonus"] });
+      toast({ title: "تم حذف مكافأة الفرع بنجاح" });
+    },
   });
 
   const createTierMutation = useMutation({
@@ -95,7 +347,7 @@ export default function IncentivesManagement() {
           percentageRate: data.percentageRate ? parseFloat(data.percentageRate) : null,
           applicableTo: data.applicableTo,
           sortOrder: parseInt(data.sortOrder),
-          isActive: true
+          isActive: true,
         }),
       });
       if (!res.ok) throw new Error("Failed to create tier");
@@ -104,15 +356,12 @@ export default function IncentivesManagement() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/incentives/tiers"] });
       setShowNewTierDialog(false);
-      setNewTier({
-        name: "", description: "", minAchievementPercent: "", maxAchievementPercent: "",
-        rewardType: "fixed", fixedAmount: "", percentageRate: "", applicableTo: "all", sortOrder: "0"
-      });
+      setNewTier({ name: "", description: "", minAchievementPercent: "", maxAchievementPercent: "", rewardType: "fixed", fixedAmount: "", percentageRate: "", applicableTo: "all", sortOrder: "0" });
       toast({ title: "تم إنشاء مستوى الحافز بنجاح" });
     },
     onError: () => {
       toast({ title: "خطأ في إنشاء مستوى الحافز", variant: "destructive" });
-    }
+    },
   });
 
   const calculateIncentivesMutation = useMutation({
@@ -131,40 +380,36 @@ export default function IncentivesManagement() {
     },
     onError: () => {
       toast({ title: "خطأ في حساب الحوافز", variant: "destructive" });
-    }
+    },
   });
 
   const approveAwardMutation = useMutation({
     mutationFn: async (awardId: number) => {
-      const res = await fetch(`/api/incentives/awards/${awardId}/approve`, {
-        method: "POST",
-      });
+      const res = await fetch(`/api/incentives/awards/${awardId}/approve`, { method: "POST" });
       if (!res.ok) throw new Error("Failed to approve award");
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/incentives/awards"] });
       toast({ title: "تم اعتماد الحافز بنجاح" });
-    }
+    },
   });
 
   const payAwardMutation = useMutation({
     mutationFn: async (awardId: number) => {
-      const res = await fetch(`/api/incentives/awards/${awardId}/pay`, {
-        method: "POST",
-      });
+      const res = await fetch(`/api/incentives/awards/${awardId}/pay`, { method: "POST" });
       if (!res.ok) throw new Error("Failed to mark as paid");
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/incentives/awards"] });
       toast({ title: "تم تسجيل صرف الحافز بنجاح" });
-    }
+    },
   });
 
   const saveCalculatedAwardsMutation = useMutation({
-    mutationFn: async (awards: CalculatedAward[]) => {
-      const promises = awards.map(award => 
+    mutationFn: async (awardsList: CalculatedAward[]) => {
+      const promises = awardsList.map((award) =>
         fetch("/api/incentives/awards", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -179,7 +424,7 @@ export default function IncentivesManagement() {
             tierId: award.tierId,
             calculatedReward: award.calculatedReward,
             finalReward: award.calculatedReward,
-            status: "pending"
+            status: "pending",
           }),
         })
       );
@@ -189,122 +434,114 @@ export default function IncentivesManagement() {
       queryClient.invalidateQueries({ queryKey: ["/api/incentives/awards"] });
       setCalculatedAwards([]);
       toast({ title: "تم حفظ سجلات الحوافز بنجاح" });
-    }
+    },
   });
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-SA', { 
-      style: 'currency', 
-      currency: 'SAR',
+    return new Intl.NumberFormat("en-SA", {
+      style: "currency",
+      currency: "SAR",
       minimumFractionDigits: 0,
-      maximumFractionDigits: 0 
+      maximumFractionDigits: 0,
     }).format(amount);
   };
 
   const getBranchName = (branchId: string | null) => {
     if (!branchId) return "جميع الفروع";
-    return branches.find(b => b.id === branchId)?.name || branchId;
+    return branches.find((b) => b.id === branchId)?.name || branchId;
+  };
+
+  const getUserName = (userId: string | null) => {
+    if (!userId) return "-";
+    const u = allUsers.find((u: any) => u.id === userId);
+    return u ? `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.username || userId : userId;
+  };
+
+  const walletSummary = {
+    totalPoints: ledgerEntries.reduce((s, e) => s + (e.pointsEarned || 0), 0),
+    totalAmount: ledgerEntries.reduce((s, e) => s + (e.amountEarned || 0), 0),
+    pending: ledgerEntries.filter((e) => e.status === "earned").length,
+    approved: ledgerEntries.filter((e) => e.status === "approved" || e.status === "paid").length,
   };
 
   const exportToExcel = () => {
     const wb = XLSX.utils.book_new();
-    
+
     if (awards?.length) {
-      const filteredAwards = awards.filter(a => a.periodStart?.startsWith(selectedMonth));
-      const data = filteredAwards.map(a => ({
-        'الفرع': getBranchName(a.branchId || ''),
-        'الفترة من': a.periodStart,
-        'الفترة إلى': a.periodEnd,
-        'الهدف': a.targetAmount,
-        'المحقق': a.achievedAmount,
-        'النسبة': `${a.achievementPercent?.toFixed(1)}%`,
-        'المكافأة': a.finalReward,
-        'الحالة': AWARD_STATUS_LABELS[a.status] || a.status
+      const filteredAwards = awards.filter((a) => a.periodStart?.startsWith(selectedMonth));
+      const data = filteredAwards.map((a) => ({
+        الفرع: getBranchName(a.branchId || ""),
+        "الفترة من": a.periodStart,
+        "الفترة إلى": a.periodEnd,
+        الهدف: a.targetAmount,
+        المحقق: a.achievedAmount,
+        النسبة: `${a.achievementPercent?.toFixed(1)}%`,
+        المكافأة: a.finalReward,
+        الحالة: AWARD_STATUS_LABELS[a.status] || a.status,
       }));
       const ws = XLSX.utils.json_to_sheet(data);
-      XLSX.utils.book_append_sheet(wb, ws, 'سجل الحوافز');
+      XLSX.utils.book_append_sheet(wb, ws, "سجل الحوافز");
     }
-    
-    if (calculatedAwards?.length) {
-      const calcData = calculatedAwards.map(a => ({
-        'الفرع': a.branchName,
-        'الهدف': a.targetAmount,
-        'المحقق': a.achievedAmount,
-        'النسبة': `${a.achievementPercent.toFixed(1)}%`,
-        'المستوى': a.tierName,
-        'المكافأة المحسوبة': a.calculatedReward
-      }));
-      const ws2 = XLSX.utils.json_to_sheet(calcData);
-      XLSX.utils.book_append_sheet(wb, ws2, 'الحوافز المحسوبة');
-    }
-    
-    if (tiers?.length) {
-      const tiersData = tiers.map(t => ({
-        'المستوى': t.name,
-        'الوصف': t.description || '',
-        'من نسبة': `${t.minAchievementPercent}%`,
-        'إلى نسبة': `${t.maxAchievementPercent}%`,
-        'نوع المكافأة': REWARD_TYPE_LABELS[t.rewardType] || t.rewardType,
-        'مبلغ ثابت': t.fixedAmount || 0,
-        'نسبة مئوية': `${t.percentageRate || 0}%`
-      }));
-      const ws3 = XLSX.utils.json_to_sheet(tiersData);
-      XLSX.utils.book_append_sheet(wb, ws3, 'مستويات الحوافز');
-    }
-    
-    XLSX.writeFile(wb, `الحوافز_${selectedMonth}.xlsx`);
-  };
 
-  const exportToPDF = () => {
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(`
-        <!DOCTYPE html>
-        <html dir="rtl" lang="ar">
-        <head>
-          <meta charset="UTF-8">
-          <title>تقرير الحوافز - ${selectedMonth}</title>
-          <style>
-            body { font-family: 'Cairo', sans-serif; padding: 20px; direction: rtl; }
-            table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-            th, td { border: 1px solid #ddd; padding: 8px; text-align: right; }
-            th { background-color: #f59e0b; color: white; }
-            h1, h2 { color: #92400e; }
-            .header { text-align: center; margin-bottom: 30px; }
-            @media print { body { print-color-adjust: exact; } }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1>تقرير الحوافز والمكافآت</h1>
-            <p>الشهر: ${selectedMonth}</p>
-          </div>
-          ${calculatedAwards?.length ? `
-            <h2>الحوافز المحسوبة</h2>
-            <table>
-              <thead><tr><th>الفرع</th><th>الهدف</th><th>المحقق</th><th>النسبة</th><th>المستوى</th><th>المكافأة</th></tr></thead>
-              <tbody>${calculatedAwards.map(a => `<tr><td>${a.branchName}</td><td>${formatCurrency(a.targetAmount)}</td><td>${formatCurrency(a.achievedAmount)}</td><td>${a.achievementPercent.toFixed(1)}%</td><td>${a.tierName}</td><td>${formatCurrency(a.calculatedReward)}</td></tr>`).join('')}</tbody>
-            </table>
-          ` : ''}
-          ${tiers?.length ? `
-            <h2>مستويات الحوافز</h2>
-            <table>
-              <thead><tr><th>المستوى</th><th>من %</th><th>إلى %</th><th>نوع المكافأة</th><th>المبلغ</th></tr></thead>
-              <tbody>${tiers.map(t => `<tr><td>${t.name}</td><td>${t.minAchievementPercent}%</td><td>${t.maxAchievementPercent}%</td><td>${REWARD_TYPE_LABELS[t.rewardType] || t.rewardType}</td><td>${formatCurrency(t.fixedAmount || 0)}</td></tr>`).join('')}</tbody>
-            </table>
-          ` : ''}
-        </body>
-        </html>
-      `);
-      printWindow.document.close();
-      printWindow.focus();
-      setTimeout(() => printWindow.print(), 500);
+    if (challenges?.length) {
+      const cData = challenges.map((c) => ({
+        الاسم: c.name,
+        النوع: CHALLENGE_TYPE_LABELS[c.challengeType] || c.challengeType,
+        الفرع: getBranchName(c.branchId),
+        الهدف: c.targetValue,
+        "النقاط الأساسية": c.basePoints,
+        "من تاريخ": c.validFrom,
+        "إلى تاريخ": c.validTo || "-",
+      }));
+      const ws2 = XLSX.utils.json_to_sheet(cData);
+      XLSX.utils.book_append_sheet(wb, ws2, "التحديات اليومية");
     }
+
+    if (commissions?.length) {
+      const pData = commissions.map((c) => ({
+        المنتج: c.productName,
+        الفئة: c.productCategory || "-",
+        "الكمية المستهدفة": c.targetQuantity,
+        "النقاط عند الهدف": c.pointsOnTarget,
+        "من تاريخ": c.validFrom,
+      }));
+      const ws3 = XLSX.utils.json_to_sheet(pData);
+      XLSX.utils.book_append_sheet(wb, ws3, "عمولة الأصناف");
+    }
+
+    if (ledgerEntries?.length) {
+      const lData = ledgerEntries.map((e) => ({
+        التاريخ: e.transactionDate,
+        النوع: POINTS_TYPE_LABELS[e.pointsType] || e.pointsType,
+        المصدر: e.sourceName || "-",
+        النقاط: e.pointsEarned,
+        المبلغ: e.amountEarned,
+        الحالة: AWARD_STATUS_LABELS[e.status] || e.status,
+      }));
+      const ws4 = XLSX.utils.json_to_sheet(lData);
+      XLSX.utils.book_append_sheet(wb, ws4, "رصيد النقاط");
+    }
+
+    if (tiers?.length) {
+      const tiersData = tiers.map((t) => ({
+        المستوى: t.name,
+        الوصف: t.description || "",
+        "من نسبة": `${t.minAchievementPercent}%`,
+        "إلى نسبة": `${t.maxAchievementPercent}%`,
+        "نوع المكافأة": REWARD_TYPE_LABELS[t.rewardType] || t.rewardType,
+        "مبلغ ثابت": t.fixedAmount || 0,
+        "نسبة مئوية": `${t.percentageRate || 0}%`,
+      }));
+      const ws5 = XLSX.utils.json_to_sheet(tiersData);
+      XLSX.utils.book_append_sheet(wb, ws5, "مستويات الحوافز");
+    }
+
+    XLSX.writeFile(wb, `الحوافز_${selectedMonth}.xlsx`);
   };
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl">
+      <div className="p-4 md:p-8 lg:p-10 max-w-7xl mx-auto space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link href="/cashier-journals">
@@ -315,12 +552,12 @@ export default function IncentivesManagement() {
             <div>
               <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-amber-900 flex items-center gap-3">
                 <Gift className="h-6 w-6 sm:h-8 sm:w-8" />
-                إدارة الحوافز والمكافآت
+                إدارة الحوافز الذكية
               </h1>
-              <p className="text-amber-700 mt-1 text-sm sm:text-base">تعريف مستويات الحوافز وإدارة المكافآت</p>
+              <p className="text-amber-700 mt-1 text-sm sm:text-base">نظام النقاط والتحديات والعمولات</p>
             </div>
           </div>
-          
+
           <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
             <div className="flex items-center gap-2">
               <Label className="text-sm">الشهر:</Label>
@@ -332,118 +569,236 @@ export default function IncentivesManagement() {
                 data-testid="input-month-selector"
               />
             </div>
-            
+
             <Button variant="outline" onClick={exportToExcel} data-testid="button-export-excel" className="h-11 sm:h-9">
               <FileSpreadsheet className="h-4 w-4 ml-2" />
               <span className="hidden sm:inline">تصدير Excel</span>
               <span className="sm:hidden">Excel</span>
             </Button>
-            
-            <Button variant="outline" onClick={exportToPDF} data-testid="button-export-pdf" className="h-11 sm:h-9">
-              <FileText className="h-4 w-4 ml-2" />
-              <span className="hidden sm:inline">طباعة PDF</span>
-              <span className="sm:hidden">PDF</span>
-            </Button>
-            
-            <Button 
-              onClick={() => calculateIncentivesMutation.mutate()}
-              disabled={calculateIncentivesMutation.isPending}
-              className="bg-amber-600 hover:bg-amber-700 h-11 sm:h-9"
-              data-testid="button-calculate"
-            >
-              <Calculator className="h-4 w-4 ml-2" />
-              {calculateIncentivesMutation.isPending ? "جاري الحساب..." : "احسب الحوافز"}
-            </Button>
           </div>
         </div>
 
-        <Tabs defaultValue="awards" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="awards" className="flex items-center gap-2">
-              <Award className="h-4 w-4" />
+        <Tabs defaultValue="point-settings" className="space-y-4">
+          <TabsList className="flex flex-wrap h-auto gap-1">
+            <TabsTrigger value="point-settings" className="flex items-center gap-1 text-xs sm:text-sm" data-testid="tab-point-settings">
+              <Settings className="h-3.5 w-3.5" />
+              إعدادات النقاط
+            </TabsTrigger>
+            <TabsTrigger value="challenges" className="flex items-center gap-1 text-xs sm:text-sm" data-testid="tab-challenges">
+              <Target className="h-3.5 w-3.5" />
+              التحديات اليومية
+            </TabsTrigger>
+            <TabsTrigger value="commissions" className="flex items-center gap-1 text-xs sm:text-sm" data-testid="tab-commissions">
+              <Trophy className="h-3.5 w-3.5" />
+              عمولة الأصناف
+            </TabsTrigger>
+            <TabsTrigger value="branch-bonus" className="flex items-center gap-1 text-xs sm:text-sm" data-testid="tab-branch-bonus">
+              <TrendingUp className="h-3.5 w-3.5" />
+              عمولة الفرع
+            </TabsTrigger>
+            <TabsTrigger value="wallet" className="flex items-center gap-1 text-xs sm:text-sm" data-testid="tab-wallet">
+              <Wallet className="h-3.5 w-3.5" />
+              رصيد الكاشير
+            </TabsTrigger>
+            <TabsTrigger value="awards" className="flex items-center gap-1 text-xs sm:text-sm" data-testid="tab-awards">
+              <Award className="h-3.5 w-3.5" />
               سجل الحوافز
-            </TabsTrigger>
-            <TabsTrigger value="tiers" className="flex items-center gap-2">
-              <Settings className="h-4 w-4" />
-              مستويات الحوافز
-            </TabsTrigger>
-            <TabsTrigger value="calculated" className="flex items-center gap-2">
-              <Calculator className="h-4 w-4" />
-              الحوافز المحسوبة ({calculatedAwards.length})
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="awards">
+          {/* Tab 1: Point Settings */}
+          <TabsContent value="point-settings">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Award className="h-5 w-5 text-amber-600" />
-                  سجل الحوافز والمكافآت
+                  <Settings className="h-5 w-5 text-amber-600" />
+                  إعدادات النقاط
                 </CardTitle>
+                <CardDescription>تعريف قيمة النقطة والحدود القصوى</CardDescription>
               </CardHeader>
               <CardContent>
-                {awardsLoading ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl">
+                  <div>
+                    <Label>قيمة النقطة (ريال)</Label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      value={pointSettingsForm.pointValue}
+                      onChange={(e) => setPointSettingsForm({ ...pointSettingsForm, pointValue: e.target.value })}
+                      placeholder="0.5"
+                      data-testid="input-point-value"
+                      className="h-11 sm:h-10"
+                    />
+                  </div>
+                  <div>
+                    <Label>الحد الأقصى للنقاط اليومية</Label>
+                    <Input
+                      type="number"
+                      value={pointSettingsForm.maxDailyPoints}
+                      onChange={(e) => setPointSettingsForm({ ...pointSettingsForm, maxDailyPoints: e.target.value })}
+                      placeholder="500"
+                      data-testid="input-max-daily-points"
+                      className="h-11 sm:h-10"
+                    />
+                  </div>
+                  <div>
+                    <Label>الحد الأقصى للنقاط الشهرية</Label>
+                    <Input
+                      type="number"
+                      value={pointSettingsForm.maxMonthlyPoints}
+                      onChange={(e) => setPointSettingsForm({ ...pointSettingsForm, maxMonthlyPoints: e.target.value })}
+                      placeholder="10000"
+                      data-testid="input-max-monthly-points"
+                      className="h-11 sm:h-10"
+                    />
+                  </div>
+                  <div>
+                    <Label>معامل الموسم</Label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      value={pointSettingsForm.seasonalMultiplier}
+                      onChange={(e) => setPointSettingsForm({ ...pointSettingsForm, seasonalMultiplier: e.target.value })}
+                      placeholder="1.0"
+                      data-testid="input-seasonal-multiplier"
+                      className="h-11 sm:h-10"
+                    />
+                  </div>
+                </div>
+                {pointSettings && pointSettings.pointValue && (
+                  <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+                    <p>الإعدادات الحالية: قيمة النقطة = {pointSettings.pointValue} ريال | الحد اليومي = {pointSettings.maxDailyPoints || "غير محدد"} | الحد الشهري = {pointSettings.maxMonthlyPoints || "غير محدد"} | معامل الموسم = {pointSettings.seasonalMultiplier}</p>
+                  </div>
+                )}
+                <div className="mt-6">
+                  <Button
+                    onClick={() => savePointSettingsMutation.mutate(pointSettingsForm)}
+                    disabled={savePointSettingsMutation.isPending}
+                    className="bg-amber-600 hover:bg-amber-700"
+                    data-testid="button-save-point-settings"
+                  >
+                    {savePointSettingsMutation.isPending ? "جاري الحفظ..." : "حفظ الإعدادات"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Tab 2: Daily Challenges */}
+          <TabsContent value="challenges">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Target className="h-5 w-5 text-amber-600" />
+                    التحديات اليومية
+                  </CardTitle>
+                  <CardDescription>إدارة تحديات الكاشير اليومية</CardDescription>
+                </div>
+                <Dialog open={showChallengeDialog} onOpenChange={setShowChallengeDialog}>
+                  <DialogTrigger asChild>
+                    <Button data-testid="button-add-challenge" className="bg-amber-600 hover:bg-amber-700 h-11 sm:h-9">
+                      <Plus className="h-4 w-4 ml-2" />
+                      إضافة تحدي
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-md" dir="rtl">
+                    <DialogHeader>
+                      <DialogTitle>إضافة تحدي يومي جديد</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div>
+                        <Label>اسم التحدي</Label>
+                        <Input value={newChallenge.name} onChange={(e) => setNewChallenge({ ...newChallenge, name: e.target.value })} placeholder="مثال: تحدي متوسط الفاتورة" data-testid="input-challenge-name" className="h-11 sm:h-10" />
+                      </div>
+                      <div>
+                        <Label>نوع التحدي</Label>
+                        <Select value={newChallenge.challengeType} onValueChange={(v) => setNewChallenge({ ...newChallenge, challengeType: v })}>
+                          <SelectTrigger data-testid="select-challenge-type" className="h-11 sm:h-10"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="avg_ticket">متوسط الفاتورة</SelectItem>
+                            <SelectItem value="customer_count">عدد العملاء</SelectItem>
+                            <SelectItem value="shift_sales">مبيعات الشفت</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label>الفرع (اختياري)</Label>
+                        <Select value={newChallenge.branchId} onValueChange={(v) => setNewChallenge({ ...newChallenge, branchId: v })}>
+                          <SelectTrigger data-testid="select-challenge-branch" className="h-11 sm:h-10"><SelectValue placeholder="جميع الفروع" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">جميع الفروع</SelectItem>
+                            {branches.map((b) => (<SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label>القيمة المستهدفة</Label>
+                          <Input type="number" value={newChallenge.targetValue} onChange={(e) => setNewChallenge({ ...newChallenge, targetValue: e.target.value })} placeholder="50" data-testid="input-challenge-target" className="h-11 sm:h-10" />
+                        </div>
+                        <div>
+                          <Label>النقاط الأساسية</Label>
+                          <Input type="number" value={newChallenge.basePoints} onChange={(e) => setNewChallenge({ ...newChallenge, basePoints: e.target.value })} placeholder="10" data-testid="input-challenge-base-points" className="h-11 sm:h-10" />
+                        </div>
+                      </div>
+                      <div>
+                        <Label>نقاط إضافية لكل وحدة</Label>
+                        <Input type="number" value={newChallenge.bonusPointsPerUnit} onChange={(e) => setNewChallenge({ ...newChallenge, bonusPointsPerUnit: e.target.value })} placeholder="0" data-testid="input-challenge-bonus" className="h-11 sm:h-10" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label>تاريخ البداية</Label>
+                          <Input type="date" value={newChallenge.validFrom} onChange={(e) => setNewChallenge({ ...newChallenge, validFrom: e.target.value })} data-testid="input-challenge-valid-from" className="h-11 sm:h-10" />
+                        </div>
+                        <div>
+                          <Label>تاريخ النهاية</Label>
+                          <Input type="date" value={newChallenge.validTo} onChange={(e) => setNewChallenge({ ...newChallenge, validTo: e.target.value })} data-testid="input-challenge-valid-to" className="h-11 sm:h-10" />
+                        </div>
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button onClick={() => createChallengeMutation.mutate(newChallenge)} disabled={createChallengeMutation.isPending || !newChallenge.name || !newChallenge.targetValue || !newChallenge.basePoints || !newChallenge.validFrom} className="bg-amber-600 hover:bg-amber-700" data-testid="button-save-challenge">
+                        {createChallengeMutation.isPending ? "جاري الحفظ..." : "حفظ التحدي"}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </CardHeader>
+              <CardContent>
+                {challengesLoading ? (
                   <div className="text-center py-8 text-gray-500">جاري التحميل...</div>
-                ) : awards.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">لا توجد سجلات حوافز</div>
+                ) : challenges.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">لا توجد تحديات مسجلة</div>
                 ) : (
                   <div className="overflow-x-auto">
-                    <Table className="min-w-[600px]">
+                    <Table className="min-w-[700px]">
                       <TableHeader>
                         <TableRow>
-                          <TableHead>الفرع</TableHead>
-                          <TableHead className="hidden md:table-cell">الفترة</TableHead>
-                          <TableHead className="hidden sm:table-cell">الهدف</TableHead>
-                          <TableHead className="hidden md:table-cell">المحقق</TableHead>
-                          <TableHead>النسبة</TableHead>
-                          <TableHead>الحافز</TableHead>
-                          <TableHead>الحالة</TableHead>
-                          <TableHead>الإجراءات</TableHead>
+                          <TableHead>الاسم</TableHead>
+                          <TableHead>النوع</TableHead>
+                          <TableHead className="hidden md:table-cell">الفرع</TableHead>
+                          <TableHead>الهدف</TableHead>
+                          <TableHead>النقاط</TableHead>
+                          <TableHead className="hidden sm:table-cell">مكافأة/وحدة</TableHead>
+                          <TableHead className="hidden md:table-cell">الصلاحية</TableHead>
+                          <TableHead>إجراء</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {awards.map((award) => (
-                          <TableRow key={award.id} data-testid={`row-award-${award.id}`}>
-                            <TableCell className="font-medium text-xs sm:text-sm">{getBranchName(award.branchId)}</TableCell>
-                            <TableCell className="text-xs sm:text-sm hidden md:table-cell">{award.periodStart} - {award.periodEnd}</TableCell>
-                            <TableCell className="font-mono text-xs sm:text-sm hidden sm:table-cell">{formatCurrency(award.targetAmount)}</TableCell>
-                            <TableCell className="font-mono text-xs sm:text-sm hidden md:table-cell">{formatCurrency(award.achievedAmount)}</TableCell>
-                            <TableCell className={`font-bold text-xs sm:text-sm ${award.achievementPercent >= 100 ? 'text-green-600' : 'text-amber-600'}`}>
-                              {award.achievementPercent.toFixed(1)}%
-                            </TableCell>
-                            <TableCell className="font-mono font-bold text-green-600 text-xs sm:text-sm">
-                              {formatCurrency(award.finalReward)}
-                            </TableCell>
+                        {challenges.map((c) => (
+                          <TableRow key={c.id} data-testid={`row-challenge-${c.id}`}>
+                            <TableCell className="font-medium text-xs sm:text-sm">{c.name}</TableCell>
+                            <TableCell><Badge variant="outline" className="text-xs">{CHALLENGE_TYPE_LABELS[c.challengeType] || c.challengeType}</Badge></TableCell>
+                            <TableCell className="text-xs hidden md:table-cell">{getBranchName(c.branchId)}</TableCell>
+                            <TableCell className="font-mono text-xs sm:text-sm">{c.targetValue}</TableCell>
+                            <TableCell className="font-mono text-xs sm:text-sm">{c.basePoints}</TableCell>
+                            <TableCell className="font-mono text-xs hidden sm:table-cell">{c.bonusPointsPerUnit || 0}</TableCell>
+                            <TableCell className="text-xs hidden md:table-cell">{c.validFrom} {c.validTo ? `- ${c.validTo}` : ""}</TableCell>
                             <TableCell>
-                              <Badge className={`text-[10px] sm:text-xs ${AWARD_STATUS_COLORS[award.status]}`}>
-                                {AWARD_STATUS_LABELS[award.status]}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                {award.status === 'pending' && (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-8 w-8 sm:h-9 sm:w-auto p-0 sm:px-3"
-                                    onClick={() => approveAwardMutation.mutate(award.id)}
-                                    data-testid={`button-approve-${award.id}`}
-                                  >
-                                    <Check className="h-4 w-4" />
-                                  </Button>
-                                )}
-                                {award.status === 'approved' && (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="text-green-600 h-8 w-8 sm:h-9 sm:w-auto p-0 sm:px-3"
-                                    onClick={() => payAwardMutation.mutate(award.id)}
-                                    data-testid={`button-pay-${award.id}`}
-                                  >
-                                    <DollarSign className="h-4 w-4" />
-                                  </Button>
-                                )}
-                              </div>
+                              <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700 h-8 w-8 p-0" onClick={() => deleteChallengeMutation.mutate(c.id)} data-testid={`button-delete-challenge-${c.id}`}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -455,232 +810,586 @@ export default function IncentivesManagement() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="tiers">
+          {/* Tab 3: Product Commissions */}
+          <TabsContent value="commissions">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
                   <CardTitle className="flex items-center gap-2">
-                    <Settings className="h-5 w-5 text-amber-600" />
-                    مستويات الحوافز
+                    <Trophy className="h-5 w-5 text-amber-600" />
+                    عمولة الأصناف
                   </CardTitle>
-                  <CardDescription>تعريف مستويات المكافآت حسب نسبة تحقيق الهدف</CardDescription>
+                  <CardDescription>إدارة عمولات المنتجات المستهدفة</CardDescription>
                 </div>
-                <Dialog open={showNewTierDialog} onOpenChange={setShowNewTierDialog}>
+                <Dialog open={showCommissionDialog} onOpenChange={setShowCommissionDialog}>
                   <DialogTrigger asChild>
-                    <Button data-testid="button-add-tier" className="h-11 sm:h-9">
+                    <Button data-testid="button-add-commission" className="bg-amber-600 hover:bg-amber-700 h-11 sm:h-9">
                       <Plus className="h-4 w-4 ml-2" />
-                      إضافة مستوى
+                      إضافة عمولة
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="max-w-md" dir="rtl">
                     <DialogHeader>
-                      <DialogTitle>إضافة مستوى حافز جديد</DialogTitle>
+                      <DialogTitle>إضافة عمولة صنف جديد</DialogTitle>
                     </DialogHeader>
-                    
                     <div className="space-y-4">
                       <div>
-                        <Label>اسم المستوى</Label>
-                        <Input
-                          value={newTier.name}
-                          onChange={(e) => setNewTier({ ...newTier, name: e.target.value })}
-                          placeholder="مثال: المستوى الذهبي"
-                          data-testid="input-tier-name"
-                          className="h-11 sm:h-10"
-                        />
+                        <Label>اسم المنتج</Label>
+                        <Input value={newCommission.productName} onChange={(e) => setNewCommission({ ...newCommission, productName: e.target.value })} placeholder="مثال: كرواسون شوكولاتة" data-testid="input-commission-product" className="h-11 sm:h-10" />
                       </div>
-                      
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <Label>الحد الأدنى %</Label>
-                          <Input
-                            type="number"
-                            value={newTier.minAchievementPercent}
-                            onChange={(e) => setNewTier({ ...newTier, minAchievementPercent: e.target.value })}
-                            placeholder="80"
-                            data-testid="input-min-percent"
-                            className="h-11 sm:h-10"
-                          />
+                          <Label>الفئة</Label>
+                          <Input value={newCommission.productCategory} onChange={(e) => setNewCommission({ ...newCommission, productCategory: e.target.value })} placeholder="معجنات" data-testid="input-commission-category" className="h-11 sm:h-10" />
                         </div>
                         <div>
-                          <Label>الحد الأقصى %</Label>
-                          <Input
-                            type="number"
-                            value={newTier.maxAchievementPercent}
-                            onChange={(e) => setNewTier({ ...newTier, maxAchievementPercent: e.target.value })}
-                            placeholder="99"
-                            data-testid="input-max-percent"
-                            className="h-11 sm:h-10"
-                          />
+                          <Label>نوع العمولة</Label>
+                          <Select value={newCommission.commissionType} onValueChange={(v) => setNewCommission({ ...newCommission, commissionType: v })}>
+                            <SelectTrigger data-testid="select-commission-type" className="h-11 sm:h-10"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="weekly_product">صنف الأسبوع</SelectItem>
+                              <SelectItem value="monthly_product">صنف الشهر</SelectItem>
+                              <SelectItem value="new_product">صنف جديد</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
                       </div>
-                      
                       <div>
-                        <Label>نوع المكافأة</Label>
-                        <Select
-                          value={newTier.rewardType}
-                          onValueChange={(v) => setNewTier({ ...newTier, rewardType: v })}
-                        >
-                          <SelectTrigger data-testid="select-reward-type" className="h-11 sm:h-10">
-                            <SelectValue />
-                          </SelectTrigger>
+                        <Label>الفرع (اختياري)</Label>
+                        <Select value={newCommission.branchId} onValueChange={(v) => setNewCommission({ ...newCommission, branchId: v })}>
+                          <SelectTrigger data-testid="select-commission-branch" className="h-11 sm:h-10"><SelectValue placeholder="جميع الفروع" /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="fixed">مبلغ ثابت</SelectItem>
-                            <SelectItem value="percentage">نسبة من الزيادة</SelectItem>
-                            <SelectItem value="both">ثابت + نسبة</SelectItem>
+                            <SelectItem value="all">جميع الفروع</SelectItem>
+                            {branches.map((b) => (<SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>))}
                           </SelectContent>
                         </Select>
                       </div>
-                      
-                      {(newTier.rewardType === 'fixed' || newTier.rewardType === 'both') && (
+                      <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <Label>المبلغ الثابت (ريال)</Label>
-                          <Input
-                            type="number"
-                            value={newTier.fixedAmount}
-                            onChange={(e) => setNewTier({ ...newTier, fixedAmount: e.target.value })}
-                            placeholder="500"
-                            data-testid="input-fixed-amount"
-                            className="h-11 sm:h-10"
-                          />
+                          <Label>الكمية المستهدفة</Label>
+                          <Input type="number" value={newCommission.targetQuantity} onChange={(e) => setNewCommission({ ...newCommission, targetQuantity: e.target.value })} placeholder="50" data-testid="input-commission-target-qty" className="h-11 sm:h-10" />
                         </div>
-                      )}
-                      
-                      {(newTier.rewardType === 'percentage' || newTier.rewardType === 'both') && (
                         <div>
-                          <Label>نسبة من الزيادة %</Label>
-                          <Input
-                            type="number"
-                            value={newTier.percentageRate}
-                            onChange={(e) => setNewTier({ ...newTier, percentageRate: e.target.value })}
-                            placeholder="5"
-                            data-testid="input-percentage-rate"
-                            className="h-11 sm:h-10"
-                          />
+                          <Label>نقاط عند الهدف</Label>
+                          <Input type="number" value={newCommission.pointsOnTarget} onChange={(e) => setNewCommission({ ...newCommission, pointsOnTarget: e.target.value })} placeholder="20" data-testid="input-commission-points" className="h-11 sm:h-10" />
                         </div>
-                      )}
+                      </div>
+                      <div>
+                        <Label>نقاط إضافية لكل قطعة زيادة</Label>
+                        <Input type="number" value={newCommission.bonusPointsPerExtra} onChange={(e) => setNewCommission({ ...newCommission, bonusPointsPerExtra: e.target.value })} placeholder="0" data-testid="input-commission-bonus" className="h-11 sm:h-10" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label>تاريخ البداية</Label>
+                          <Input type="date" value={newCommission.validFrom} onChange={(e) => setNewCommission({ ...newCommission, validFrom: e.target.value })} data-testid="input-commission-valid-from" className="h-11 sm:h-10" />
+                        </div>
+                        <div>
+                          <Label>تاريخ النهاية</Label>
+                          <Input type="date" value={newCommission.validTo} onChange={(e) => setNewCommission({ ...newCommission, validTo: e.target.value })} data-testid="input-commission-valid-to" className="h-11 sm:h-10" />
+                        </div>
+                      </div>
                     </div>
-                    
                     <DialogFooter>
-                      <Button variant="outline" onClick={() => setShowNewTierDialog(false)} className="h-11 sm:h-9">إلغاء</Button>
-                      <Button 
-                        onClick={() => createTierMutation.mutate(newTier)}
-                        disabled={!newTier.name || !newTier.minAchievementPercent || createTierMutation.isPending}
-                        data-testid="button-save-tier"
-                      >
-                        {createTierMutation.isPending ? "جاري الحفظ..." : "حفظ"}
+                      <Button onClick={() => createCommissionMutation.mutate(newCommission)} disabled={createCommissionMutation.isPending || !newCommission.productName || !newCommission.targetQuantity || !newCommission.pointsOnTarget || !newCommission.validFrom} className="bg-amber-600 hover:bg-amber-700" data-testid="button-save-commission">
+                        {createCommissionMutation.isPending ? "جاري الحفظ..." : "حفظ العمولة"}
                       </Button>
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
               </CardHeader>
               <CardContent>
-                {tiersLoading ? (
+                {commissionsLoading ? (
                   <div className="text-center py-8 text-gray-500">جاري التحميل...</div>
-                ) : tiers.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">لا توجد مستويات حوافز</div>
+                ) : commissions.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">لا توجد عمولات مسجلة</div>
                 ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>اسم المستوى</TableHead>
-                        <TableHead>نطاق التحقيق</TableHead>
-                        <TableHead>نوع المكافأة</TableHead>
-                        <TableHead>المبلغ الثابت</TableHead>
-                        <TableHead>نسبة الزيادة</TableHead>
-                        <TableHead>الحالة</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {tiers.map((tier) => (
-                        <TableRow key={tier.id} data-testid={`row-tier-${tier.id}`}>
-                          <TableCell className="font-medium">{tier.name}</TableCell>
-                          <TableCell>
-                            {tier.minAchievementPercent}% - {tier.maxAchievementPercent ? `${tier.maxAchievementPercent}%` : '∞'}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline">{REWARD_TYPE_LABELS[tier.rewardType]}</Badge>
-                          </TableCell>
-                          <TableCell className="font-mono">
-                            {tier.fixedAmount ? formatCurrency(tier.fixedAmount) : '-'}
-                          </TableCell>
-                          <TableCell>
-                            {tier.percentageRate ? `${tier.percentageRate}%` : '-'}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={tier.isActive ? "default" : "secondary"}>
-                              {tier.isActive ? "نشط" : "غير نشط"}
-                            </Badge>
-                          </TableCell>
+                  <div className="overflow-x-auto">
+                    <Table className="min-w-[700px]">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>المنتج</TableHead>
+                          <TableHead className="hidden sm:table-cell">الفئة</TableHead>
+                          <TableHead>النوع</TableHead>
+                          <TableHead>الكمية</TableHead>
+                          <TableHead>النقاط</TableHead>
+                          <TableHead className="hidden md:table-cell">مكافأة/قطعة</TableHead>
+                          <TableHead className="hidden md:table-cell">الصلاحية</TableHead>
+                          <TableHead>إجراء</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {commissions.map((c) => (
+                          <TableRow key={c.id} data-testid={`row-commission-${c.id}`}>
+                            <TableCell className="font-medium text-xs sm:text-sm">{c.productName}</TableCell>
+                            <TableCell className="text-xs hidden sm:table-cell">{c.productCategory || "-"}</TableCell>
+                            <TableCell><Badge variant="outline" className="text-xs">{COMMISSION_TYPE_LABELS[c.commissionType] || c.commissionType}</Badge></TableCell>
+                            <TableCell className="font-mono text-xs sm:text-sm">{c.targetQuantity}</TableCell>
+                            <TableCell className="font-mono text-xs sm:text-sm">{c.pointsOnTarget}</TableCell>
+                            <TableCell className="font-mono text-xs hidden md:table-cell">{c.bonusPointsPerExtra || 0}</TableCell>
+                            <TableCell className="text-xs hidden md:table-cell">{c.validFrom} {c.validTo ? `- ${c.validTo}` : ""}</TableCell>
+                            <TableCell>
+                              <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700 h-8 w-8 p-0" onClick={() => deleteCommissionMutation.mutate(c.id)} data-testid={`button-delete-commission-${c.id}`}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 )}
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="calculated">
+          {/* Tab 4: Branch Achievement Bonus */}
+          <TabsContent value="branch-bonus">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
                   <CardTitle className="flex items-center gap-2">
-                    <Calculator className="h-5 w-5 text-amber-600" />
-                    الحوافز المحسوبة لشهر {selectedMonth}
+                    <TrendingUp className="h-5 w-5 text-amber-600" />
+                    عمولة الفرع
                   </CardTitle>
-                  <CardDescription>معاينة الحوافز قبل حفظها</CardDescription>
+                  <CardDescription>مكافأة تحقيق هدف الفرع الشهري</CardDescription>
                 </div>
-                {calculatedAwards.length > 0 && (
-                  <Button 
-                    onClick={() => saveCalculatedAwardsMutation.mutate(calculatedAwards)}
-                    disabled={saveCalculatedAwardsMutation.isPending}
-                    className="bg-green-600 hover:bg-green-700"
-                    data-testid="button-save-calculated"
-                  >
-                    <Check className="h-4 w-4 ml-2" />
-                    حفظ الكل
-                  </Button>
-                )}
+                <Dialog open={showBranchBonusDialog} onOpenChange={setShowBranchBonusDialog}>
+                  <DialogTrigger asChild>
+                    <Button data-testid="button-add-branch-bonus" className="bg-amber-600 hover:bg-amber-700 h-11 sm:h-9">
+                      <Plus className="h-4 w-4 ml-2" />
+                      إضافة مكافأة
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-md" dir="rtl">
+                    <DialogHeader>
+                      <DialogTitle>إضافة مكافأة فرع جديدة</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div>
+                        <Label>الفرع</Label>
+                        <Select value={newBranchBonus.branchId} onValueChange={(v) => setNewBranchBonus({ ...newBranchBonus, branchId: v })}>
+                          <SelectTrigger data-testid="select-branch-bonus-branch" className="h-11 sm:h-10"><SelectValue placeholder="اختر الفرع" /></SelectTrigger>
+                          <SelectContent>
+                            {branches.map((b) => (<SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label>الشهر</Label>
+                        <Input type="month" value={newBranchBonus.yearMonth} onChange={(e) => setNewBranchBonus({ ...newBranchBonus, yearMonth: e.target.value })} data-testid="input-branch-bonus-month" className="h-11 sm:h-10" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label>مجموع المكافأة (ريال)</Label>
+                          <Input type="number" value={newBranchBonus.bonusPool} onChange={(e) => setNewBranchBonus({ ...newBranchBonus, bonusPool: e.target.value })} placeholder="5000" data-testid="input-branch-bonus-pool" className="h-11 sm:h-10" />
+                        </div>
+                        <div>
+                          <Label>الهدف المطلوب (ريال)</Label>
+                          <Input type="number" value={newBranchBonus.targetAmount} onChange={(e) => setNewBranchBonus({ ...newBranchBonus, targetAmount: e.target.value })} placeholder="100000" data-testid="input-branch-bonus-target" className="h-11 sm:h-10" />
+                        </div>
+                      </div>
+                      <div>
+                        <Label>طريقة التوزيع</Label>
+                        <Select value={newBranchBonus.distributionMethod} onValueChange={(v) => setNewBranchBonus({ ...newBranchBonus, distributionMethod: v })}>
+                          <SelectTrigger data-testid="select-distribution-method" className="h-11 sm:h-10"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="contribution_ratio">حسب نسبة المساهمة</SelectItem>
+                            <SelectItem value="equal">توزيع متساوي</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button onClick={() => createBranchBonusMutation.mutate(newBranchBonus)} disabled={createBranchBonusMutation.isPending || !newBranchBonus.branchId || !newBranchBonus.yearMonth || !newBranchBonus.bonusPool || !newBranchBonus.targetAmount} className="bg-amber-600 hover:bg-amber-700" data-testid="button-save-branch-bonus">
+                        {createBranchBonusMutation.isPending ? "جاري الحفظ..." : "حفظ المكافأة"}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               </CardHeader>
               <CardContent>
-                {calculatedAwards.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    اضغط على "احسب الحوافز" لعرض الحوافز المستحقة
-                  </div>
+                {branchBonusLoading ? (
+                  <div className="text-center py-8 text-gray-500">جاري التحميل...</div>
+                ) : branchBonuses.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">لا توجد مكافآت فروع مسجلة</div>
                 ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>الفرع</TableHead>
-                        <TableHead>الهدف</TableHead>
-                        <TableHead>المحقق</TableHead>
-                        <TableHead>نسبة التحقيق</TableHead>
-                        <TableHead>المستوى</TableHead>
-                        <TableHead>الحافز المستحق</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {calculatedAwards.map((award, index) => (
-                        <TableRow key={index} data-testid={`row-calculated-${index}`}>
-                          <TableCell className="font-medium">{award.branchName}</TableCell>
-                          <TableCell className="font-mono">{formatCurrency(award.targetAmount)}</TableCell>
-                          <TableCell className="font-mono">{formatCurrency(award.achievedAmount)}</TableCell>
-                          <TableCell className={`font-bold ${award.achievementPercent >= 100 ? 'text-green-600' : 'text-amber-600'}`}>
-                            {award.achievementPercent.toFixed(1)}%
-                          </TableCell>
-                          <TableCell>
-                            <Badge className="bg-amber-500">{award.tierName}</Badge>
-                          </TableCell>
-                          <TableCell className="font-mono font-bold text-green-600 text-lg">
-                            {formatCurrency(award.calculatedReward)}
-                          </TableCell>
+                  <div className="overflow-x-auto">
+                    <Table className="min-w-[600px]">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>الفرع</TableHead>
+                          <TableHead>الشهر</TableHead>
+                          <TableHead>مجموع المكافأة</TableHead>
+                          <TableHead>الهدف</TableHead>
+                          <TableHead className="hidden sm:table-cell">التوزيع</TableHead>
+                          <TableHead>إجراء</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {branchBonuses.map((b) => (
+                          <TableRow key={b.id} data-testid={`row-branch-bonus-${b.id}`}>
+                            <TableCell className="font-medium text-xs sm:text-sm">{getBranchName(b.branchId)}</TableCell>
+                            <TableCell className="text-xs sm:text-sm">{b.yearMonth}</TableCell>
+                            <TableCell className="font-mono text-xs sm:text-sm text-green-600 font-bold">{formatCurrency(b.bonusPool)}</TableCell>
+                            <TableCell className="font-mono text-xs sm:text-sm">{formatCurrency(b.targetAmount)}</TableCell>
+                            <TableCell className="text-xs hidden sm:table-cell">{b.distributionMethod === "contribution_ratio" ? "حسب المساهمة" : "متساوي"}</TableCell>
+                            <TableCell>
+                              <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700 h-8 w-8 p-0" onClick={() => deleteBranchBonusMutation.mutate(b.id)} data-testid={`button-delete-branch-bonus-${b.id}`}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Tab 5: Cashier Wallet / Ledger */}
+          <TabsContent value="wallet">
+            <div className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Wallet className="h-5 w-5 text-amber-600" />
+                    رصيد الكاشير
+                  </CardTitle>
+                  <CardDescription>عرض رصيد النقاط والمعاملات</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                    <div>
+                      <Label>الكاشير</Label>
+                      <Select value={walletCashierId} onValueChange={setWalletCashierId}>
+                        <SelectTrigger data-testid="select-wallet-cashier" className="h-11 sm:h-10"><SelectValue placeholder="اختر الكاشير" /></SelectTrigger>
+                        <SelectContent>
+                          {allUsers.filter((u: any) => u.role === "employee" || u.role === "cashier").map((u: any) => (
+                            <SelectItem key={u.id} value={u.id}>{u.firstName || ""} {u.lastName || ""} ({u.username || u.id})</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>من تاريخ</Label>
+                      <Input type="date" value={walletDateFrom} onChange={(e) => setWalletDateFrom(e.target.value)} data-testid="input-wallet-date-from" className="h-11 sm:h-10" />
+                    </div>
+                    <div>
+                      <Label>إلى تاريخ</Label>
+                      <Input type="date" value={walletDateTo} onChange={(e) => setWalletDateTo(e.target.value)} data-testid="input-wallet-date-to" className="h-11 sm:h-10" />
+                    </div>
+                  </div>
+
+                  {ledgerQueryEnabled && (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+                      <Card className="border-amber-200 bg-amber-50">
+                        <CardContent className="p-4 text-center">
+                          <Star className="h-5 w-5 text-amber-600 mx-auto mb-1" />
+                          <p className="text-xs text-amber-700">إجمالي النقاط</p>
+                          <p className="text-lg font-bold text-amber-900" data-testid="text-total-points">{walletSummary.totalPoints}</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="border-green-200 bg-green-50">
+                        <CardContent className="p-4 text-center">
+                          <DollarSign className="h-5 w-5 text-green-600 mx-auto mb-1" />
+                          <p className="text-xs text-green-700">إجمالي المبلغ</p>
+                          <p className="text-lg font-bold text-green-900" data-testid="text-total-amount">{formatCurrency(walletSummary.totalAmount)}</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="border-yellow-200 bg-yellow-50">
+                        <CardContent className="p-4 text-center">
+                          <Calendar className="h-5 w-5 text-yellow-600 mx-auto mb-1" />
+                          <p className="text-xs text-yellow-700">معلقة</p>
+                          <p className="text-lg font-bold text-yellow-900" data-testid="text-pending-count">{walletSummary.pending}</p>
+                        </CardContent>
+                      </Card>
+                      <Card className="border-blue-200 bg-blue-50">
+                        <CardContent className="p-4 text-center">
+                          <Check className="h-5 w-5 text-blue-600 mx-auto mb-1" />
+                          <p className="text-xs text-blue-700">معتمدة</p>
+                          <p className="text-lg font-bold text-blue-900" data-testid="text-approved-count">{walletSummary.approved}</p>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  )}
+
+                  {!ledgerQueryEnabled ? (
+                    <div className="text-center py-8 text-gray-500">اختر كاشير أو تاريخ لعرض الرصيد</div>
+                  ) : ledgerLoading ? (
+                    <div className="text-center py-8 text-gray-500">جاري التحميل...</div>
+                  ) : ledgerEntries.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">لا توجد معاملات</div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <Table className="min-w-[600px]">
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>التاريخ</TableHead>
+                            <TableHead>النوع</TableHead>
+                            <TableHead className="hidden sm:table-cell">المصدر</TableHead>
+                            <TableHead>النقاط</TableHead>
+                            <TableHead>المبلغ</TableHead>
+                            <TableHead>الحالة</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {ledgerEntries.map((entry) => (
+                            <TableRow key={entry.id} data-testid={`row-ledger-${entry.id}`}>
+                              <TableCell className="text-xs sm:text-sm">{entry.transactionDate}</TableCell>
+                              <TableCell><Badge variant="outline" className="text-xs">{POINTS_TYPE_LABELS[entry.pointsType] || entry.pointsType}</Badge></TableCell>
+                              <TableCell className="text-xs hidden sm:table-cell">{entry.sourceName || "-"}</TableCell>
+                              <TableCell className="font-mono text-xs sm:text-sm font-bold text-amber-600">+{entry.pointsEarned}</TableCell>
+                              <TableCell className="font-mono text-xs sm:text-sm text-green-600">{formatCurrency(entry.amountEarned)}</TableCell>
+                              <TableCell>
+                                <Badge className={`text-[10px] sm:text-xs ${AWARD_STATUS_COLORS[entry.status] || "bg-gray-500"}`}>
+                                  {AWARD_STATUS_LABELS[entry.status] || entry.status}
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* Tab 6: Awards History */}
+          <TabsContent value="awards">
+            <div className="space-y-4">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Settings className="h-5 w-5 text-amber-600" />
+                      مستويات الحوافز
+                    </CardTitle>
+                    <CardDescription>تعريف مستويات المكافآت حسب نسبة تحقيق الهدف</CardDescription>
+                  </div>
+                  <Dialog open={showNewTierDialog} onOpenChange={setShowNewTierDialog}>
+                    <DialogTrigger asChild>
+                      <Button data-testid="button-add-tier" className="h-11 sm:h-9">
+                        <Plus className="h-4 w-4 ml-2" />
+                        إضافة مستوى
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-md" dir="rtl">
+                      <DialogHeader>
+                        <DialogTitle>إضافة مستوى حافز جديد</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div>
+                          <Label>اسم المستوى</Label>
+                          <Input value={newTier.name} onChange={(e) => setNewTier({ ...newTier, name: e.target.value })} placeholder="مثال: المستوى الذهبي" data-testid="input-tier-name" className="h-11 sm:h-10" />
+                        </div>
+                        <div>
+                          <Label>الوصف</Label>
+                          <Input value={newTier.description} onChange={(e) => setNewTier({ ...newTier, description: e.target.value })} placeholder="وصف المستوى" data-testid="input-tier-description" className="h-11 sm:h-10" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label>الحد الأدنى %</Label>
+                            <Input type="number" value={newTier.minAchievementPercent} onChange={(e) => setNewTier({ ...newTier, minAchievementPercent: e.target.value })} placeholder="80" data-testid="input-min-percent" className="h-11 sm:h-10" />
+                          </div>
+                          <div>
+                            <Label>الحد الأقصى %</Label>
+                            <Input type="number" value={newTier.maxAchievementPercent} onChange={(e) => setNewTier({ ...newTier, maxAchievementPercent: e.target.value })} placeholder="99" data-testid="input-max-percent" className="h-11 sm:h-10" />
+                          </div>
+                        </div>
+                        <div>
+                          <Label>نوع المكافأة</Label>
+                          <Select value={newTier.rewardType} onValueChange={(v) => setNewTier({ ...newTier, rewardType: v })}>
+                            <SelectTrigger data-testid="select-reward-type" className="h-11 sm:h-10"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="fixed">مبلغ ثابت</SelectItem>
+                              <SelectItem value="percentage">نسبة مئوية</SelectItem>
+                              <SelectItem value="both">ثابت + نسبة</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label>المبلغ الثابت (ريال)</Label>
+                            <Input type="number" value={newTier.fixedAmount} onChange={(e) => setNewTier({ ...newTier, fixedAmount: e.target.value })} placeholder="500" data-testid="input-fixed-amount" className="h-11 sm:h-10" />
+                          </div>
+                          <div>
+                            <Label>النسبة %</Label>
+                            <Input type="number" value={newTier.percentageRate} onChange={(e) => setNewTier({ ...newTier, percentageRate: e.target.value })} placeholder="2" data-testid="input-percentage-rate" className="h-11 sm:h-10" />
+                          </div>
+                        </div>
+                        <div>
+                          <Label>الترتيب</Label>
+                          <Input type="number" value={newTier.sortOrder} onChange={(e) => setNewTier({ ...newTier, sortOrder: e.target.value })} data-testid="input-sort-order" className="h-11 sm:h-10" />
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button onClick={() => createTierMutation.mutate(newTier)} disabled={createTierMutation.isPending || !newTier.name || !newTier.minAchievementPercent} className="bg-amber-600 hover:bg-amber-700" data-testid="button-save-tier">
+                          {createTierMutation.isPending ? "جاري الحفظ..." : "حفظ المستوى"}
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                </CardHeader>
+                <CardContent>
+                  {tiersLoading ? (
+                    <div className="text-center py-8 text-gray-500">جاري التحميل...</div>
+                  ) : tiers.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">لا توجد مستويات حوافز</div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <Table className="min-w-[600px]">
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>المستوى</TableHead>
+                            <TableHead className="hidden sm:table-cell">الوصف</TableHead>
+                            <TableHead>من %</TableHead>
+                            <TableHead>إلى %</TableHead>
+                            <TableHead>نوع المكافأة</TableHead>
+                            <TableHead className="hidden md:table-cell">المبلغ</TableHead>
+                            <TableHead className="hidden md:table-cell">النسبة</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {tiers.map((tier) => (
+                            <TableRow key={tier.id} data-testid={`row-tier-${tier.id}`}>
+                              <TableCell className="font-medium text-xs sm:text-sm">{tier.name}</TableCell>
+                              <TableCell className="text-xs hidden sm:table-cell">{tier.description || "-"}</TableCell>
+                              <TableCell className="font-mono text-xs sm:text-sm">{tier.minAchievementPercent}%</TableCell>
+                              <TableCell className="font-mono text-xs sm:text-sm">{tier.maxAchievementPercent}%</TableCell>
+                              <TableCell><Badge variant="outline" className="text-xs">{REWARD_TYPE_LABELS[tier.rewardType] || tier.rewardType}</Badge></TableCell>
+                              <TableCell className="font-mono text-xs hidden md:table-cell">{tier.fixedAmount ? formatCurrency(tier.fixedAmount) : "-"}</TableCell>
+                              <TableCell className="font-mono text-xs hidden md:table-cell">{tier.percentageRate ? `${tier.percentageRate}%` : "-"}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Award className="h-5 w-5 text-amber-600" />
+                      سجل الحوافز والمكافآت
+                    </CardTitle>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => calculateIncentivesMutation.mutate()}
+                      disabled={calculateIncentivesMutation.isPending}
+                      className="bg-amber-600 hover:bg-amber-700 h-11 sm:h-9"
+                      data-testid="button-calculate"
+                    >
+                      <Calculator className="h-4 w-4 ml-2" />
+                      {calculateIncentivesMutation.isPending ? "جاري الحساب..." : "احسب الحوافز"}
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {calculatedAwards.length > 0 && (
+                    <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="font-bold text-green-800">الحوافز المحسوبة ({calculatedAwards.length})</h3>
+                        <Button size="sm" onClick={() => saveCalculatedAwardsMutation.mutate(calculatedAwards)} disabled={saveCalculatedAwardsMutation.isPending} className="bg-green-600 hover:bg-green-700" data-testid="button-save-calculated">
+                          {saveCalculatedAwardsMutation.isPending ? "جاري الحفظ..." : "حفظ الحوافز"}
+                        </Button>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <Table className="min-w-[500px]">
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>الفرع</TableHead>
+                              <TableHead>الهدف</TableHead>
+                              <TableHead>المحقق</TableHead>
+                              <TableHead>النسبة</TableHead>
+                              <TableHead>المستوى</TableHead>
+                              <TableHead>المكافأة</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {calculatedAwards.map((a, i) => (
+                              <TableRow key={i} data-testid={`row-calculated-${i}`}>
+                                <TableCell className="text-xs sm:text-sm">{a.branchName}</TableCell>
+                                <TableCell className="font-mono text-xs sm:text-sm">{formatCurrency(a.targetAmount)}</TableCell>
+                                <TableCell className="font-mono text-xs sm:text-sm">{formatCurrency(a.achievedAmount)}</TableCell>
+                                <TableCell className={`font-bold text-xs sm:text-sm ${a.achievementPercent >= 100 ? "text-green-600" : "text-amber-600"}`}>{a.achievementPercent.toFixed(1)}%</TableCell>
+                                <TableCell className="text-xs sm:text-sm">{a.tierName}</TableCell>
+                                <TableCell className="font-mono font-bold text-green-600 text-xs sm:text-sm">{formatCurrency(a.calculatedReward)}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>
+                  )}
+
+                  {awardsLoading ? (
+                    <div className="text-center py-8 text-gray-500">جاري التحميل...</div>
+                  ) : awards.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">لا توجد سجلات حوافز</div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <Table className="min-w-[600px]">
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>الفرع</TableHead>
+                            <TableHead className="hidden md:table-cell">الفترة</TableHead>
+                            <TableHead className="hidden sm:table-cell">الهدف</TableHead>
+                            <TableHead className="hidden md:table-cell">المحقق</TableHead>
+                            <TableHead>النسبة</TableHead>
+                            <TableHead>الحافز</TableHead>
+                            <TableHead>الحالة</TableHead>
+                            <TableHead>الإجراءات</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {awards.map((award) => (
+                            <TableRow key={award.id} data-testid={`row-award-${award.id}`}>
+                              <TableCell className="font-medium text-xs sm:text-sm">{getBranchName(award.branchId)}</TableCell>
+                              <TableCell className="text-xs sm:text-sm hidden md:table-cell">{award.periodStart} - {award.periodEnd}</TableCell>
+                              <TableCell className="font-mono text-xs sm:text-sm hidden sm:table-cell">{formatCurrency(award.targetAmount)}</TableCell>
+                              <TableCell className="font-mono text-xs sm:text-sm hidden md:table-cell">{formatCurrency(award.achievedAmount)}</TableCell>
+                              <TableCell className={`font-bold text-xs sm:text-sm ${award.achievementPercent >= 100 ? "text-green-600" : "text-amber-600"}`}>
+                                {award.achievementPercent.toFixed(1)}%
+                              </TableCell>
+                              <TableCell className="font-mono font-bold text-green-600 text-xs sm:text-sm">
+                                {formatCurrency(award.finalReward)}
+                              </TableCell>
+                              <TableCell>
+                                <Badge className={`text-[10px] sm:text-xs ${AWARD_STATUS_COLORS[award.status]}`}>
+                                  {AWARD_STATUS_LABELS[award.status]}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  {award.status === "pending" && (
+                                    <Button size="sm" variant="outline" className="h-8 w-8 sm:h-9 sm:w-auto p-0 sm:px-3" onClick={() => approveAwardMutation.mutate(award.id)} data-testid={`button-approve-${award.id}`}>
+                                      <Check className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                  {award.status === "approved" && (
+                                    <Button size="sm" variant="outline" className="text-green-600 h-8 w-8 sm:h-9 sm:w-auto p-0 sm:px-3" onClick={() => payAwardMutation.mutate(award.id)} data-testid={`button-pay-${award.id}`}>
+                                      <DollarSign className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
       </div>

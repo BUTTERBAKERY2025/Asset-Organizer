@@ -461,6 +461,24 @@ import {
   pnlMonthlyInputs,
   type PnlMonthlyInputs,
   type InsertPnlMonthlyInputs,
+  pointSettings,
+  type PointSettings,
+  type InsertPointSettings,
+  cashierDailyChallenges,
+  type CashierDailyChallenge,
+  type InsertCashierDailyChallenge,
+  productCommissions,
+  type ProductCommission,
+  type InsertProductCommission,
+  branchAchievementBonus,
+  type BranchAchievementBonus,
+  type InsertBranchAchievementBonus,
+  cashierPointsLedger,
+  type CashierPointsLedger,
+  type InsertCashierPointsLedger,
+  cashierProductSales,
+  type CashierProductSales,
+  type InsertCashierProductSales,
 } from "@shared/schema";
 
 type TransferHistory = typeof transferHistory.$inferSelect;
@@ -739,6 +757,46 @@ export interface IStorage {
   updateIncentiveAward(id: number, award: Partial<InsertIncentiveAward>): Promise<IncentiveAward | undefined>;
   approveIncentiveAward(id: number, approvedBy: string): Promise<IncentiveAward | undefined>;
   markIncentiveAwardAsPaid(id: number): Promise<IncentiveAward | undefined>;
+
+  // Smart Points System - نظام النقاط الذكي
+  getPointSettings(): Promise<PointSettings | undefined>;
+  upsertPointSettings(settings: InsertPointSettings): Promise<PointSettings>;
+  
+  // Daily Challenges - التحديات اليومية
+  getAllDailyChallenges(): Promise<CashierDailyChallenge[]>;
+  getActiveDailyChallenges(branchId?: string): Promise<CashierDailyChallenge[]>;
+  getDailyChallenge(id: number): Promise<CashierDailyChallenge | undefined>;
+  createDailyChallenge(challenge: InsertCashierDailyChallenge): Promise<CashierDailyChallenge>;
+  updateDailyChallenge(id: number, challenge: Partial<InsertCashierDailyChallenge>): Promise<CashierDailyChallenge | undefined>;
+  deleteDailyChallenge(id: number): Promise<boolean>;
+  
+  // Product Commissions - عمولة الأصناف
+  getAllProductCommissions(): Promise<ProductCommission[]>;
+  getActiveProductCommissions(branchId?: string): Promise<ProductCommission[]>;
+  getProductCommission(id: number): Promise<ProductCommission | undefined>;
+  createProductCommission(commission: InsertProductCommission): Promise<ProductCommission>;
+  updateProductCommission(id: number, commission: Partial<InsertProductCommission>): Promise<ProductCommission | undefined>;
+  deleteProductCommission(id: number): Promise<boolean>;
+  
+  // Branch Achievement Bonus - عمولة إنجاز الفرع
+  getAllBranchBonuses(): Promise<BranchAchievementBonus[]>;
+  getBranchBonus(id: number): Promise<BranchAchievementBonus | undefined>;
+  getBranchBonusByBranchMonth(branchId: string, yearMonth: string): Promise<BranchAchievementBonus | undefined>;
+  createBranchBonus(bonus: InsertBranchAchievementBonus): Promise<BranchAchievementBonus>;
+  updateBranchBonus(id: number, bonus: Partial<InsertBranchAchievementBonus>): Promise<BranchAchievementBonus | undefined>;
+  deleteBranchBonus(id: number): Promise<boolean>;
+  
+  // Cashier Points Ledger - رصيد النقاط
+  getCashierPointsLedger(cashierId: string, dateFrom?: string, dateTo?: string): Promise<CashierPointsLedger[]>;
+  getBranchPointsLedger(branchId: string, dateFrom?: string, dateTo?: string): Promise<CashierPointsLedger[]>;
+  createPointsEntry(entry: InsertCashierPointsLedger): Promise<CashierPointsLedger>;
+  updatePointsEntryStatus(id: number, status: string, approvedBy?: string): Promise<CashierPointsLedger | undefined>;
+  getCashierPointsSummary(cashierId: string, yearMonth?: string): Promise<{ totalPoints: number; totalAmount: number; pendingPoints: number; pendingAmount: number; approvedPoints: number; approvedAmount: number }>;
+  
+  // Cashier Product Sales - مبيعات الأصناف
+  getCashierProductSales(cashierId: string, date?: string): Promise<CashierProductSales[]>;
+  createCashierProductSale(sale: InsertCashierProductSales): Promise<CashierProductSales>;
+  updateCashierProductSale(id: number, sale: Partial<InsertCashierProductSales>): Promise<CashierProductSales | undefined>;
   
   // Targets Performance Calculation
   calculateBranchPerformance(branchId: string, yearMonth: string): Promise<{
@@ -12043,6 +12101,269 @@ export class DatabaseStorage implements IStorage {
         .returning();
       return inserted;
     }
+  }
+
+  // ==========================================
+  // Smart Points System Implementation
+  // ==========================================
+
+  async getPointSettings(): Promise<PointSettings | undefined> {
+    try {
+      const [settings] = await db.select().from(pointSettings).where(eq(pointSettings.isActive, true)).limit(1);
+      return settings || undefined;
+    } catch (error: any) {
+      if (error?.code === '42P01') return undefined;
+      throw error;
+    }
+  }
+
+  async upsertPointSettings(settings: InsertPointSettings): Promise<PointSettings> {
+    await db.update(pointSettings).set({ isActive: false }).where(eq(pointSettings.isActive, true));
+    const [created] = await db.insert(pointSettings).values({ ...settings, isActive: true }).returning();
+    return created;
+  }
+
+  async getAllDailyChallenges(): Promise<CashierDailyChallenge[]> {
+    try {
+      return await db.select().from(cashierDailyChallenges).orderBy(desc(cashierDailyChallenges.createdAt));
+    } catch (error: any) {
+      if (error?.code === '42P01') return [];
+      throw error;
+    }
+  }
+
+  async getActiveDailyChallenges(branchId?: string): Promise<CashierDailyChallenge[]> {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const conditions = [
+        eq(cashierDailyChallenges.isActive, true),
+        lte(cashierDailyChallenges.validFrom, today),
+      ];
+      if (branchId) {
+        conditions.push(or(eq(cashierDailyChallenges.branchId, branchId), isNull(cashierDailyChallenges.branchId))!);
+      }
+      return await db.select().from(cashierDailyChallenges).where(and(...conditions));
+    } catch (error: any) {
+      if (error?.code === '42P01') return [];
+      throw error;
+    }
+  }
+
+  async getDailyChallenge(id: number): Promise<CashierDailyChallenge | undefined> {
+    const [challenge] = await db.select().from(cashierDailyChallenges).where(eq(cashierDailyChallenges.id, id));
+    return challenge || undefined;
+  }
+
+  async createDailyChallenge(challenge: InsertCashierDailyChallenge): Promise<CashierDailyChallenge> {
+    const [created] = await db.insert(cashierDailyChallenges).values(challenge).returning();
+    return created;
+  }
+
+  async updateDailyChallenge(id: number, challenge: Partial<InsertCashierDailyChallenge>): Promise<CashierDailyChallenge | undefined> {
+    const [updated] = await db.update(cashierDailyChallenges)
+      .set({ ...challenge, updatedAt: new Date() })
+      .where(eq(cashierDailyChallenges.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteDailyChallenge(id: number): Promise<boolean> {
+    const result = await db.delete(cashierDailyChallenges).where(eq(cashierDailyChallenges.id, id));
+    return true;
+  }
+
+  async getAllProductCommissions(): Promise<ProductCommission[]> {
+    try {
+      return await db.select().from(productCommissions).orderBy(desc(productCommissions.createdAt));
+    } catch (error: any) {
+      if (error?.code === '42P01') return [];
+      throw error;
+    }
+  }
+
+  async getActiveProductCommissions(branchId?: string): Promise<ProductCommission[]> {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const conditions = [
+        eq(productCommissions.isActive, true),
+        lte(productCommissions.validFrom, today),
+      ];
+      if (branchId) {
+        conditions.push(or(eq(productCommissions.branchId, branchId), isNull(productCommissions.branchId))!);
+      }
+      return await db.select().from(productCommissions).where(and(...conditions));
+    } catch (error: any) {
+      if (error?.code === '42P01') return [];
+      throw error;
+    }
+  }
+
+  async getProductCommission(id: number): Promise<ProductCommission | undefined> {
+    const [commission] = await db.select().from(productCommissions).where(eq(productCommissions.id, id));
+    return commission || undefined;
+  }
+
+  async createProductCommission(commission: InsertProductCommission): Promise<ProductCommission> {
+    const [created] = await db.insert(productCommissions).values(commission).returning();
+    return created;
+  }
+
+  async updateProductCommission(id: number, commission: Partial<InsertProductCommission>): Promise<ProductCommission | undefined> {
+    const [updated] = await db.update(productCommissions)
+      .set({ ...commission, updatedAt: new Date() })
+      .where(eq(productCommissions.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteProductCommission(id: number): Promise<boolean> {
+    const result = await db.delete(productCommissions).where(eq(productCommissions.id, id));
+    return true;
+  }
+
+  async getAllBranchBonuses(): Promise<BranchAchievementBonus[]> {
+    try {
+      return await db.select().from(branchAchievementBonus).orderBy(desc(branchAchievementBonus.createdAt));
+    } catch (error: any) {
+      if (error?.code === '42P01') return [];
+      throw error;
+    }
+  }
+
+  async getBranchBonus(id: number): Promise<BranchAchievementBonus | undefined> {
+    const [bonus] = await db.select().from(branchAchievementBonus).where(eq(branchAchievementBonus.id, id));
+    return bonus || undefined;
+  }
+
+  async getBranchBonusByBranchMonth(branchId: string, yearMonth: string): Promise<BranchAchievementBonus | undefined> {
+    const [bonus] = await db.select().from(branchAchievementBonus)
+      .where(and(eq(branchAchievementBonus.branchId, branchId), eq(branchAchievementBonus.yearMonth, yearMonth)));
+    return bonus || undefined;
+  }
+
+  async createBranchBonus(bonus: InsertBranchAchievementBonus): Promise<BranchAchievementBonus> {
+    const [created] = await db.insert(branchAchievementBonus).values(bonus).returning();
+    return created;
+  }
+
+  async updateBranchBonus(id: number, bonus: Partial<InsertBranchAchievementBonus>): Promise<BranchAchievementBonus | undefined> {
+    const [updated] = await db.update(branchAchievementBonus)
+      .set({ ...bonus, updatedAt: new Date() })
+      .where(eq(branchAchievementBonus.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteBranchBonus(id: number): Promise<boolean> {
+    const result = await db.delete(branchAchievementBonus).where(eq(branchAchievementBonus.id, id));
+    return true;
+  }
+
+  async getCashierPointsLedger(cashierId: string, dateFrom?: string, dateTo?: string): Promise<CashierPointsLedger[]> {
+    try {
+      const conditions = [eq(cashierPointsLedger.cashierId, cashierId)];
+      if (dateFrom) conditions.push(gte(cashierPointsLedger.transactionDate, dateFrom));
+      if (dateTo) conditions.push(lte(cashierPointsLedger.transactionDate, dateTo));
+      return await db.select().from(cashierPointsLedger).where(and(...conditions)).orderBy(desc(cashierPointsLedger.createdAt));
+    } catch (error: any) {
+      if (error?.code === '42P01') return [];
+      throw error;
+    }
+  }
+
+  async getBranchPointsLedger(branchId: string, dateFrom?: string, dateTo?: string): Promise<CashierPointsLedger[]> {
+    try {
+      const conditions = [eq(cashierPointsLedger.branchId, branchId)];
+      if (dateFrom) conditions.push(gte(cashierPointsLedger.transactionDate, dateFrom));
+      if (dateTo) conditions.push(lte(cashierPointsLedger.transactionDate, dateTo));
+      return await db.select().from(cashierPointsLedger).where(and(...conditions)).orderBy(desc(cashierPointsLedger.createdAt));
+    } catch (error: any) {
+      if (error?.code === '42P01') return [];
+      throw error;
+    }
+  }
+
+  async createPointsEntry(entry: InsertCashierPointsLedger): Promise<CashierPointsLedger> {
+    const [created] = await db.insert(cashierPointsLedger).values(entry).returning();
+    return created;
+  }
+
+  async updatePointsEntryStatus(id: number, status: string, approvedBy?: string): Promise<CashierPointsLedger | undefined> {
+    const updateData: any = { status };
+    if (approvedBy) {
+      updateData.approvedBy = approvedBy;
+      updateData.approvedAt = new Date();
+    }
+    const [updated] = await db.update(cashierPointsLedger).set(updateData).where(eq(cashierPointsLedger.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async getCashierPointsSummary(cashierId: string, yearMonth?: string): Promise<{ totalPoints: number; totalAmount: number; pendingPoints: number; pendingAmount: number; approvedPoints: number; approvedAmount: number }> {
+    try {
+      const conditions = [eq(cashierPointsLedger.cashierId, cashierId)];
+      if (yearMonth) {
+        const [year, month] = yearMonth.split('-');
+        const startDate = `${year}-${month}-01`;
+        const endDate = `${year}-${month}-31`;
+        conditions.push(gte(cashierPointsLedger.transactionDate, startDate));
+        conditions.push(lte(cashierPointsLedger.transactionDate, endDate));
+      }
+      
+      const entries = await db.select().from(cashierPointsLedger).where(and(...conditions));
+      
+      const result = {
+        totalPoints: 0,
+        totalAmount: 0,
+        pendingPoints: 0,
+        pendingAmount: 0,
+        approvedPoints: 0,
+        approvedAmount: 0,
+      };
+      
+      for (const entry of entries) {
+        if (entry.status !== 'cancelled') {
+          result.totalPoints += entry.pointsEarned;
+          result.totalAmount += entry.amountEarned;
+        }
+        if (entry.status === 'earned') {
+          result.pendingPoints += entry.pointsEarned;
+          result.pendingAmount += entry.amountEarned;
+        }
+        if (entry.status === 'approved' || entry.status === 'paid') {
+          result.approvedPoints += entry.pointsEarned;
+          result.approvedAmount += entry.amountEarned;
+        }
+      }
+      
+      return result;
+    } catch (error: any) {
+      if (error?.code === '42P01') return { totalPoints: 0, totalAmount: 0, pendingPoints: 0, pendingAmount: 0, approvedPoints: 0, approvedAmount: 0 };
+      throw error;
+    }
+  }
+
+  async getCashierProductSales(cashierId: string, date?: string): Promise<CashierProductSales[]> {
+    try {
+      const conditions = [eq(cashierProductSales.cashierId, cashierId)];
+      if (date) conditions.push(eq(cashierProductSales.salesDate, date));
+      return await db.select().from(cashierProductSales).where(and(...conditions)).orderBy(desc(cashierProductSales.createdAt));
+    } catch (error: any) {
+      if (error?.code === '42P01') return [];
+      throw error;
+    }
+  }
+
+  async createCashierProductSale(sale: InsertCashierProductSales): Promise<CashierProductSales> {
+    const [created] = await db.insert(cashierProductSales).values(sale).returning();
+    return created;
+  }
+
+  async updateCashierProductSale(id: number, sale: Partial<InsertCashierProductSales>): Promise<CashierProductSales | undefined> {
+    const [updated] = await db.update(cashierProductSales)
+      .set({ ...sale, updatedAt: new Date() })
+      .where(eq(cashierProductSales.id, id))
+      .returning();
+    return updated || undefined;
   }
 }
 

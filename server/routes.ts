@@ -6846,6 +6846,261 @@ export async function registerRoutes(
   });
 
   // ==========================================
+  // نظام النقاط والعمولات الذكي - Smart Points System
+  // ==========================================
+
+  // Point Settings
+  app.get("/api/smart-incentives/point-settings", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const settings = await storage.getPointSettings();
+      res.json(settings || { pointValue: 0.5, maxDailyPoints: null, maxMonthlyPoints: null, seasonalMultiplier: 1, isActive: true });
+    } catch (error) {
+      console.error("Error fetching point settings:", error);
+      res.status(500).json({ error: "فشل في جلب إعدادات النقاط" });
+    }
+  });
+
+  app.post("/api/smart-incentives/point-settings", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
+    try {
+      const settings = await storage.upsertPointSettings({ ...req.body, updatedBy: (req as any).user?.id });
+      res.json(settings);
+    } catch (error) {
+      console.error("Error saving point settings:", error);
+      res.status(500).json({ error: "فشل في حفظ إعدادات النقاط" });
+    }
+  });
+
+  // Daily Challenges CRUD
+  app.get("/api/smart-incentives/challenges", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const branchId = req.query.branchId as string | undefined;
+      const activeOnly = req.query.active === "true";
+      const challenges = activeOnly
+        ? await storage.getActiveDailyChallenges(branchId)
+        : await storage.getAllDailyChallenges();
+      res.json(challenges);
+    } catch (error) {
+      console.error("Error fetching challenges:", error);
+      res.status(500).json({ error: "فشل في جلب التحديات" });
+    }
+  });
+
+  app.post("/api/smart-incentives/challenges", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
+    try {
+      const challenge = await storage.createDailyChallenge({ ...req.body, createdBy: (req as any).user?.id });
+      res.json(challenge);
+    } catch (error) {
+      console.error("Error creating challenge:", error);
+      res.status(500).json({ error: "فشل في إنشاء التحدي" });
+    }
+  });
+
+  app.patch("/api/smart-incentives/challenges/:id", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const challenge = await storage.updateDailyChallenge(id, req.body);
+      if (!challenge) return res.status(404).json({ error: "التحدي غير موجود" });
+      res.json(challenge);
+    } catch (error) {
+      console.error("Error updating challenge:", error);
+      res.status(500).json({ error: "فشل في تحديث التحدي" });
+    }
+  });
+
+  app.delete("/api/smart-incentives/challenges/:id", isAuthenticated, requirePermission("operations", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteDailyChallenge(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting challenge:", error);
+      res.status(500).json({ error: "فشل في حذف التحدي" });
+    }
+  });
+
+  // Product Commissions CRUD
+  app.get("/api/smart-incentives/product-commissions", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const branchId = req.query.branchId as string | undefined;
+      const activeOnly = req.query.active === "true";
+      const commissions = activeOnly
+        ? await storage.getActiveProductCommissions(branchId)
+        : await storage.getAllProductCommissions();
+      res.json(commissions);
+    } catch (error) {
+      console.error("Error fetching product commissions:", error);
+      res.status(500).json({ error: "فشل في جلب عمولات الأصناف" });
+    }
+  });
+
+  app.post("/api/smart-incentives/product-commissions", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
+    try {
+      const commission = await storage.createProductCommission({ ...req.body, createdBy: (req as any).user?.id });
+      res.json(commission);
+    } catch (error) {
+      console.error("Error creating product commission:", error);
+      res.status(500).json({ error: "فشل في إنشاء عمولة الصنف" });
+    }
+  });
+
+  app.patch("/api/smart-incentives/product-commissions/:id", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const commission = await storage.updateProductCommission(id, req.body);
+      if (!commission) return res.status(404).json({ error: "عمولة الصنف غير موجودة" });
+      res.json(commission);
+    } catch (error) {
+      console.error("Error updating product commission:", error);
+      res.status(500).json({ error: "فشل في تحديث عمولة الصنف" });
+    }
+  });
+
+  app.delete("/api/smart-incentives/product-commissions/:id", isAuthenticated, requirePermission("operations", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteProductCommission(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting product commission:", error);
+      res.status(500).json({ error: "فشل في حذف عمولة الصنف" });
+    }
+  });
+
+  // Branch Achievement Bonus CRUD
+  app.get("/api/smart-incentives/branch-bonus", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const bonuses = await storage.getAllBranchBonuses();
+      res.json(bonuses);
+    } catch (error) {
+      console.error("Error fetching branch bonuses:", error);
+      res.status(500).json({ error: "فشل في جلب عمولات الفروع" });
+    }
+  });
+
+  app.post("/api/smart-incentives/branch-bonus", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
+    try {
+      const bonus = await storage.createBranchBonus({ ...req.body, createdBy: (req as any).user?.id });
+      res.json(bonus);
+    } catch (error) {
+      console.error("Error creating branch bonus:", error);
+      res.status(500).json({ error: "فشل في إنشاء عمولة الفرع" });
+    }
+  });
+
+  app.patch("/api/smart-incentives/branch-bonus/:id", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const bonus = await storage.updateBranchBonus(id, req.body);
+      if (!bonus) return res.status(404).json({ error: "عمولة الفرع غير موجودة" });
+      res.json(bonus);
+    } catch (error) {
+      console.error("Error updating branch bonus:", error);
+      res.status(500).json({ error: "فشل في تحديث عمولة الفرع" });
+    }
+  });
+
+  app.delete("/api/smart-incentives/branch-bonus/:id", isAuthenticated, requirePermission("operations", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteBranchBonus(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting branch bonus:", error);
+      res.status(500).json({ error: "فشل في حذف عمولة الفرع" });
+    }
+  });
+
+  // Cashier Points Ledger
+  app.get("/api/smart-incentives/points-ledger", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const { cashierId, branchId, dateFrom, dateTo } = req.query as any;
+      let ledger;
+      if (cashierId) {
+        ledger = await storage.getCashierPointsLedger(cashierId, dateFrom, dateTo);
+      } else if (branchId) {
+        ledger = await storage.getBranchPointsLedger(branchId, dateFrom, dateTo);
+      } else {
+        return res.status(400).json({ error: "يجب تحديد الكاشير أو الفرع" });
+      }
+      res.json(ledger);
+    } catch (error) {
+      console.error("Error fetching points ledger:", error);
+      res.status(500).json({ error: "فشل في جلب سجل النقاط" });
+    }
+  });
+
+  app.get("/api/smart-incentives/points-summary/:cashierId", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const { cashierId } = req.params;
+      const yearMonth = req.query.yearMonth as string | undefined;
+      const summary = await storage.getCashierPointsSummary(cashierId, yearMonth);
+      res.json(summary);
+    } catch (error) {
+      console.error("Error fetching points summary:", error);
+      res.status(500).json({ error: "فشل في جلب ملخص النقاط" });
+    }
+  });
+
+  app.post("/api/smart-incentives/points-ledger", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
+    try {
+      const entry = await storage.createPointsEntry(req.body);
+      res.json(entry);
+    } catch (error) {
+      console.error("Error creating points entry:", error);
+      res.status(500).json({ error: "فشل في إنشاء قيد النقاط" });
+    }
+  });
+
+  app.patch("/api/smart-incentives/points-ledger/:id/status", isAuthenticated, requirePermission("operations", "approve"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { status } = req.body;
+      const userId = (req as any).user?.id;
+      const entry = await storage.updatePointsEntryStatus(id, status, userId);
+      if (!entry) return res.status(404).json({ error: "القيد غير موجود" });
+      res.json(entry);
+    } catch (error) {
+      console.error("Error updating points entry status:", error);
+      res.status(500).json({ error: "فشل في تحديث حالة القيد" });
+    }
+  });
+
+  // Cashier Product Sales
+  app.get("/api/smart-incentives/product-sales", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const { cashierId, date } = req.query as any;
+      if (!cashierId) return res.status(400).json({ error: "يجب تحديد الكاشير" });
+      const sales = await storage.getCashierProductSales(cashierId, date);
+      res.json(sales);
+    } catch (error) {
+      console.error("Error fetching product sales:", error);
+      res.status(500).json({ error: "فشل في جلب مبيعات الأصناف" });
+    }
+  });
+
+  app.post("/api/smart-incentives/product-sales", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
+    try {
+      const sale = await storage.createCashierProductSale({ ...req.body, recordedBy: (req as any).user?.id });
+      res.json(sale);
+    } catch (error) {
+      console.error("Error creating product sale:", error);
+      res.status(500).json({ error: "فشل في تسجيل مبيعات الصنف" });
+    }
+  });
+
+  app.patch("/api/smart-incentives/product-sales/:id", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const sale = await storage.updateCashierProductSale(id, req.body);
+      if (!sale) return res.status(404).json({ error: "السجل غير موجود" });
+      res.json(sale);
+    } catch (error) {
+      console.error("Error updating product sale:", error);
+      res.status(500).json({ error: "فشل في تحديث مبيعات الصنف" });
+    }
+  });
+
+  // ==========================================
   // Seasons & Holidays Routes
   // ==========================================
 

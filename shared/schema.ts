@@ -2182,6 +2182,167 @@ export const insertIncentiveAwardSchema = createInsertSchema(
 export type IncentiveAward = typeof incentiveAwards.$inferSelect;
 export type InsertIncentiveAward = z.infer<typeof insertIncentiveAwardSchema>;
 
+// ==========================================
+// نظام النقاط والعمولات الذكي - Smart Points & Commissions
+// ==========================================
+
+// إعدادات النقاط العامة - Point Settings
+export const pointSettings = pgTable("point_settings", {
+  id: serial("id").primaryKey(),
+  pointValue: real("point_value").notNull().default(0.5),
+  maxDailyPoints: integer("max_daily_points"),
+  maxMonthlyPoints: integer("max_monthly_points"),
+  seasonalMultiplier: real("seasonal_multiplier").default(1),
+  isActive: boolean("is_active").default(true).notNull(),
+  notes: text("notes"),
+  updatedBy: varchar("updated_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertPointSettingsSchema = createInsertSchema(pointSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type PointSettings = typeof pointSettings.$inferSelect;
+export type InsertPointSettings = z.infer<typeof insertPointSettingsSchema>;
+
+// تحديات الكاشير اليومية - Cashier Daily Challenges
+export const cashierDailyChallenges = pgTable("cashier_daily_challenges", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  challengeType: text("challenge_type").notNull(), // avg_ticket, customer_count, shift_sales
+  branchId: varchar("branch_id").references(() => branches.id),
+  targetValue: real("target_value").notNull(),
+  basePoints: integer("base_points").notNull(),
+  bonusPointsPerUnit: real("bonus_points_per_unit").default(0),
+  unitLabel: text("unit_label"),
+  shiftType: text("shift_type"),
+  isActive: boolean("is_active").default(true).notNull(),
+  validFrom: text("valid_from").notNull(),
+  validTo: text("valid_to"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertCashierDailyChallengeSchema = createInsertSchema(cashierDailyChallenges).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type CashierDailyChallenge = typeof cashierDailyChallenges.$inferSelect;
+export type InsertCashierDailyChallenge = z.infer<typeof insertCashierDailyChallengeSchema>;
+
+// عمولة الأصناف المستهدفة - Product Commission
+export const productCommissions = pgTable("product_commissions", {
+  id: serial("id").primaryKey(),
+  productName: text("product_name").notNull(),
+  productCategory: text("product_category"),
+  commissionType: text("commission_type").notNull(), // weekly_product, monthly_product, new_product
+  branchId: varchar("branch_id").references(() => branches.id),
+  targetQuantity: integer("target_quantity").notNull(),
+  pointsOnTarget: integer("points_on_target").notNull(),
+  bonusPointsPerExtra: real("bonus_points_per_extra").default(0),
+  shiftType: text("shift_type"),
+  isActive: boolean("is_active").default(true).notNull(),
+  validFrom: text("valid_from").notNull(),
+  validTo: text("valid_to"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertProductCommissionSchema = createInsertSchema(productCommissions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type ProductCommission = typeof productCommissions.$inferSelect;
+export type InsertProductCommission = z.infer<typeof insertProductCommissionSchema>;
+
+// عمولة إنجاز الفرع الجماعية - Branch Achievement Bonus Settings
+export const branchAchievementBonus = pgTable("branch_achievement_bonus", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  yearMonth: text("year_month").notNull(),
+  bonusPool: real("bonus_pool").notNull(),
+  targetAmount: real("target_amount").notNull(),
+  distributionMethod: text("distribution_method").default("contribution_ratio").notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertBranchAchievementBonusSchema = createInsertSchema(branchAchievementBonus).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type BranchAchievementBonus = typeof branchAchievementBonus.$inferSelect;
+export type InsertBranchAchievementBonus = z.infer<typeof insertBranchAchievementBonusSchema>;
+
+// رصيد نقاط الكاشير - Cashier Points Ledger
+export const cashierPointsLedger = pgTable("cashier_points_ledger", {
+  id: serial("id").primaryKey(),
+  cashierId: varchar("cashier_id").notNull().references(() => users.id),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  transactionDate: text("transaction_date").notNull(),
+  shiftType: text("shift_type"),
+  pointsType: text("points_type").notNull(), // challenge_avg_ticket, challenge_customers, challenge_sales, product_commission, branch_bonus
+  sourceId: integer("source_id"),
+  sourceName: text("source_name"),
+  pointsEarned: integer("points_earned").notNull(),
+  pointValue: real("point_value").notNull(),
+  amountEarned: real("amount_earned").notNull(),
+  status: text("status").default("earned").notNull(), // earned, approved, paid, cancelled
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_points_cashier_date").on(table.cashierId, table.transactionDate),
+  index("idx_points_branch_date").on(table.branchId, table.transactionDate),
+  index("idx_points_status").on(table.status),
+]);
+
+export const insertCashierPointsLedgerSchema = createInsertSchema(cashierPointsLedger).omit({
+  id: true,
+  approvedAt: true,
+  createdAt: true,
+});
+export type CashierPointsLedger = typeof cashierPointsLedger.$inferSelect;
+export type InsertCashierPointsLedger = z.infer<typeof insertCashierPointsLedgerSchema>;
+
+// سجل مبيعات الأصناف المستهدفة لكل كاشير - Product Sales Tracking
+export const cashierProductSales = pgTable("cashier_product_sales", {
+  id: serial("id").primaryKey(),
+  cashierId: varchar("cashier_id").notNull().references(() => users.id),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  commissionId: integer("commission_id").notNull().references(() => productCommissions.id),
+  salesDate: text("sales_date").notNull(),
+  shiftType: text("shift_type"),
+  quantitySold: integer("quantity_sold").notNull().default(0),
+  targetQuantity: integer("target_quantity").notNull(),
+  isTargetMet: boolean("is_target_met").default(false),
+  pointsAwarded: integer("points_awarded").default(0),
+  recordedBy: varchar("recorded_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_product_sales_cashier").on(table.cashierId, table.salesDate),
+]);
+
+export const insertCashierProductSalesSchema = createInsertSchema(cashierProductSales).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type CashierProductSales = typeof cashierProductSales.$inferSelect;
+export type InsertCashierProductSales = z.infer<typeof insertCashierProductSalesSchema>;
+
 // Seasons and Holidays - المواسم والإجازات
 export const seasonsHolidays = pgTable("seasons_holidays", {
   id: serial("id").primaryKey(),
