@@ -847,44 +847,42 @@ export default function IncentivesManagement() {
                         إضافة تحدي
                       </Button>
                     </DialogTrigger>
-                    <DialogContent className="max-w-lg" dir="rtl">
+                    <DialogContent className="max-w-md sm:max-w-lg max-h-[90vh] overflow-y-auto" dir="rtl">
                       <DialogHeader>
                         <DialogTitle>إضافة تحدي يومي جديد</DialogTitle>
                       </DialogHeader>
-                      <div className="space-y-4">
+                      <div className="space-y-3">
                         <div>
-                          <Label className="font-bold">اسم التحدي</Label>
-                          <p className="text-xs text-gray-500 mb-1">اسم واضح يصف التحدي للكاشير</p>
-                          <Input value={newChallenge.name} onChange={(e) => setNewChallenge({ ...newChallenge, name: e.target.value })} placeholder="مثال: تحدي متوسط الفاتورة - صباحي" data-testid="input-challenge-name" className="h-11 sm:h-10" />
+                          <Label className="font-bold text-sm">اسم التحدي</Label>
+                          <Input value={newChallenge.name} onChange={(e) => setNewChallenge({ ...newChallenge, name: e.target.value })} placeholder="مثال: تحدي متوسط الفاتورة - صباحي" data-testid="input-challenge-name" className="h-9 mt-1" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label className="font-bold text-sm">نوع التحدي</Label>
+                            <Select value={newChallenge.challengeType} onValueChange={(v) => setNewChallenge({ ...newChallenge, challengeType: v })}>
+                              <SelectTrigger data-testid="select-challenge-type" className="h-9 mt-1"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="avg_ticket">متوسط الفاتورة</SelectItem>
+                                <SelectItem value="customer_count">عدد العملاء</SelectItem>
+                                <SelectItem value="shift_sales">مبيعات الوردية</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label className="font-bold text-sm">الفرع</Label>
+                            <Select value={newChallenge.branchId} onValueChange={(v) => setNewChallenge({ ...newChallenge, branchId: v, cashierId: "" })}>
+                              <SelectTrigger data-testid="select-challenge-branch" className="h-9 mt-1"><SelectValue placeholder="جميع الفروع" /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="all">جميع الفروع</SelectItem>
+                                {branches.map((b) => (<SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>))}
+                              </SelectContent>
+                            </Select>
+                          </div>
                         </div>
                         <div>
-                          <Label className="font-bold">نوع التحدي</Label>
-                          <p className="text-xs text-gray-500 mb-1">اختر ماذا سيقاس من بيانات يومية الكاشير</p>
-                          <Select value={newChallenge.challengeType} onValueChange={(v) => setNewChallenge({ ...newChallenge, challengeType: v })}>
-                            <SelectTrigger data-testid="select-challenge-type" className="h-11 sm:h-10"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="avg_ticket">متوسط الفاتورة (ريال)</SelectItem>
-                              <SelectItem value="customer_count">عدد العملاء (عدد)</SelectItem>
-                              <SelectItem value="shift_sales">إجمالي مبيعات الوردية (ريال)</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <Label className="font-bold">الفرع</Label>
-                          <p className="text-xs text-gray-500 mb-1">اختر فرع محدد أو اتركه لجميع الفروع</p>
-                          <Select value={newChallenge.branchId} onValueChange={(v) => setNewChallenge({ ...newChallenge, branchId: v, cashierId: "" })}>
-                            <SelectTrigger data-testid="select-challenge-branch" className="h-11 sm:h-10"><SelectValue placeholder="جميع الفروع" /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="all">جميع الفروع</SelectItem>
-                              {branches.map((b) => (<SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <Label className="font-bold">الكاشير (اختياري)</Label>
-                          <p className="text-xs text-gray-500 mb-1">اختر كاشير محدد أو اتركه لجميع كاشيرات الفرع</p>
+                          <Label className="font-bold text-sm">الكاشير (اختياري)</Label>
                           <Select value={newChallenge.cashierId} onValueChange={(v) => setNewChallenge({ ...newChallenge, cashierId: v })}>
-                            <SelectTrigger data-testid="select-challenge-cashier" className="h-11 sm:h-10"><SelectValue placeholder="جميع الكاشيرات" /></SelectTrigger>
+                            <SelectTrigger data-testid="select-challenge-cashier" className="h-9 mt-1"><SelectValue placeholder="جميع الكاشيرات" /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="all">جميع الكاشيرات</SelectItem>
                               {allUsers
@@ -903,38 +901,31 @@ export default function IncentivesManagement() {
                             </SelectContent>
                           </Select>
                           {newChallenge.branchId && newChallenge.branchId !== "all" && (
-                            <p className="text-xs text-blue-600 mt-1">
-                              يعرض فقط الموظفين المسجلين في الفرع المحدد
-                            </p>
+                            <p className="text-xs text-blue-600 mt-1">يعرض فقط موظفي الفرع المحدد</p>
                           )}
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-3 gap-3">
                           <div>
-                            <Label className="font-bold">القيمة المستهدفة</Label>
-                            <p className="text-xs text-gray-500 mb-1">الرقم المطلوب تحقيقه</p>
-                            <Input type="number" value={newChallenge.targetValue} onChange={(e) => setNewChallenge({ ...newChallenge, targetValue: e.target.value })} placeholder="مثال: 45" data-testid="input-challenge-target" className="h-11 sm:h-10" />
+                            <Label className="font-bold text-sm">الهدف</Label>
+                            <Input type="number" value={newChallenge.targetValue} onChange={(e) => setNewChallenge({ ...newChallenge, targetValue: e.target.value })} placeholder="45" data-testid="input-challenge-target" className="h-9 mt-1" />
                           </div>
                           <div>
-                            <Label className="font-bold">النقاط الأساسية</Label>
-                            <p className="text-xs text-gray-500 mb-1">نقاط عند تحقيق الهدف</p>
-                            <Input type="number" value={newChallenge.basePoints} onChange={(e) => setNewChallenge({ ...newChallenge, basePoints: e.target.value })} placeholder="مثال: 50" data-testid="input-challenge-base-points" className="h-11 sm:h-10" />
+                            <Label className="font-bold text-sm">النقاط الأساسية</Label>
+                            <Input type="number" value={newChallenge.basePoints} onChange={(e) => setNewChallenge({ ...newChallenge, basePoints: e.target.value })} placeholder="50" data-testid="input-challenge-base-points" className="h-9 mt-1" />
+                          </div>
+                          <div>
+                            <Label className="font-bold text-sm">إضافي/وحدة</Label>
+                            <Input type="number" value={newChallenge.bonusPointsPerUnit} onChange={(e) => setNewChallenge({ ...newChallenge, bonusPointsPerUnit: e.target.value })} placeholder="0" data-testid="input-challenge-bonus" className="h-9 mt-1" />
                           </div>
                         </div>
-                        <div>
-                          <Label className="font-bold">نقاط إضافية لكل وحدة فوق الهدف</Label>
-                          <p className="text-xs text-gray-500 mb-1">كل وحدة (ريال/عميل) فوق الهدف = نقاط إضافية. اتركه 0 إذا لا تريد إضافي.</p>
-                          <Input type="number" value={newChallenge.bonusPointsPerUnit} onChange={(e) => setNewChallenge({ ...newChallenge, bonusPointsPerUnit: e.target.value })} placeholder="مثال: 2 يعني كل ريال/عميل زيادة = 2 نقطة" data-testid="input-challenge-bonus" className="h-11 sm:h-10" />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-2 gap-3">
                           <div>
-                            <Label className="font-bold">تاريخ البداية</Label>
-                            <p className="text-xs text-gray-500 mb-1">التحدي يبدأ من هذا التاريخ</p>
-                            <Input type="date" value={newChallenge.validFrom} onChange={(e) => setNewChallenge({ ...newChallenge, validFrom: e.target.value })} data-testid="input-challenge-valid-from" className="h-11 sm:h-10" />
+                            <Label className="font-bold text-sm">تاريخ البداية</Label>
+                            <Input type="date" value={newChallenge.validFrom} onChange={(e) => setNewChallenge({ ...newChallenge, validFrom: e.target.value })} data-testid="input-challenge-valid-from" className="h-9 mt-1" />
                           </div>
                           <div>
-                            <Label className="font-bold">تاريخ النهاية (اختياري)</Label>
-                            <p className="text-xs text-gray-500 mb-1">اتركه فارغ = مستمر</p>
-                            <Input type="date" value={newChallenge.validTo} onChange={(e) => setNewChallenge({ ...newChallenge, validTo: e.target.value })} data-testid="input-challenge-valid-to" className="h-11 sm:h-10" />
+                            <Label className="font-bold text-sm">تاريخ النهاية (اختياري)</Label>
+                            <Input type="date" value={newChallenge.validTo} onChange={(e) => setNewChallenge({ ...newChallenge, validTo: e.target.value })} data-testid="input-challenge-valid-to" className="h-9 mt-1" />
                           </div>
                         </div>
                       </div>
