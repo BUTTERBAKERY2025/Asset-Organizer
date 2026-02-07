@@ -13,7 +13,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
-import { Clock, LogIn, LogOut, Check, Pencil, RotateCcw, Building2, User, Timer, ArrowRight, Users, Calendar, Sun, Moon, Sunrise, Loader2, MapPin, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
+import { Clock, LogIn, LogOut, Check, Pencil, RotateCcw, Building2, User, Timer, ArrowRight, Users, Calendar, Sun, Moon, Sunrise, Loader2, MapPin, AlertTriangle, ChevronLeft, ChevronRight, ShieldAlert } from "lucide-react";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
@@ -663,6 +663,20 @@ export default function AttendanceCheckPage() {
                 </div>
                 <div className="text-sm text-muted-foreground mt-1">
                   {format(currentTime, "a", { locale: dateLocale })}
+                </div>
+              </div>
+
+              <div className="p-3 rounded-lg bg-amber-50 border border-amber-300">
+                <div className="flex items-start gap-2 mb-2">
+                  <ShieldAlert className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-bold text-amber-800 leading-relaxed">
+                      تنبيه: يجب أن يقوم الموظف بالتوقيع بنفسه. سيتم مطابقة التوقيع من إدارة الموارد البشرية. التوقيع بالنيابة يعرّض للإجراءات التأديبية والفصل وفقاً للمادة (80) من نظام العمل.
+                    </p>
+                    <p className="text-xs font-semibold text-amber-700 leading-relaxed" dir="ltr" style={{textAlign: 'left'}}>
+                      Warning: Employees must sign personally. Signatures are verified by HR. Signing for others may result in termination under Article (80) of the Saudi Labor Law.
+                    </p>
+                  </div>
                 </div>
               </div>
 
