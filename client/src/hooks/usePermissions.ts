@@ -42,13 +42,20 @@ export function usePermissions() {
     if (isViewer) {
       if (action !== "view") return false;
       // Check if viewer has view permission for this module
-      const perm = permissions.find(p => p.module === module);
+      let perm = permissions.find(p => p.module === module);
+      if (!perm && module === "attendance_check") {
+        perm = permissions.find(p => p.module === "attendance");
+      }
       if (!perm) return false;
       return perm.actions.includes("view");
     }
     
     // Employee uses granular permissions from database
-    const perm = permissions.find(p => p.module === module);
+    let perm = permissions.find(p => p.module === module);
+    // Backward compatibility: attendance_check also accepts attendance permission
+    if (!perm && module === "attendance_check") {
+      perm = permissions.find(p => p.module === "attendance");
+    }
     if (!perm) return false;
     return perm.actions.includes(action);
   };

@@ -515,7 +515,12 @@ export const requirePermission = (module: string, action: string): RequestHandle
     
     // Check granular permissions from database
     const permissions = await storage.getUserPermissions(user.id);
-    const modulePerm = permissions.find((p: any) => p.module === module);
+    let modulePerm = permissions.find((p: any) => p.module === module);
+    
+    // Backward compatibility: attendance_check also accepts attendance permission
+    if (!modulePerm && module === 'attendance_check') {
+      modulePerm = permissions.find((p: any) => p.module === 'attendance');
+    }
     
     console.log(`[Auth] Checking permission for ${user.username}: module=${module}, action=${action}, found=`, modulePerm);
     

@@ -830,7 +830,7 @@ export const MODULE_GROUPS: { label: string; modules: SystemModule[] }[] = [
   },
   {
     label: "الورديات والحضور",
-    modules: ["shifts", "attendance", "timesheet", "branch_closure"],
+    modules: ["shifts", "attendance", "attendance_check", "timesheet", "branch_closure"],
   },
   {
     label: "الموظفين والموارد البشرية",
