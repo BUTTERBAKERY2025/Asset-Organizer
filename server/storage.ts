@@ -7416,6 +7416,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createEmployeeSchedule(schedule: InsertEmployeeSchedule): Promise<EmployeeSchedule> {
+    const existing = await db.select().from(employeeSchedules)
+      .where(and(
+        eq(employeeSchedules.employeeId, schedule.employeeId),
+        eq(employeeSchedules.branchId, schedule.branchId),
+        eq(employeeSchedules.scheduleDate, schedule.scheduleDate)
+      ))
+      .limit(1);
+    
+    if (existing.length > 0) {
+      const [updated] = await db.update(employeeSchedules)
+        .set({ ...schedule, updatedAt: new Date() })
+        .where(eq(employeeSchedules.id, existing[0].id))
+        .returning();
+      return updated;
+    }
+    
     const [created] = await db.insert(employeeSchedules).values(schedule).returning();
     return created;
   }
@@ -7425,13 +7441,23 @@ export class DatabaseStorage implements IStorage {
     
     const results: EmployeeSchedule[] = [];
     
-    for (const schedule of schedules) {
+    // Deduplicate input schedules by employeeId + scheduleDate + branchId
+    const inputSeen = new Set<string>();
+    const deduplicatedSchedules = schedules.filter(s => {
+      const key = `${s.employeeId}_${s.scheduleDate}_${s.branchId}`;
+      if (inputSeen.has(key)) return false;
+      inputSeen.add(key);
+      return true;
+    });
+    
+    for (const schedule of deduplicatedSchedules) {
       let existing: EmployeeSchedule[] = [];
       
       if (schedule.branchEmployeeId) {
         existing = await db.select().from(employeeSchedules)
           .where(and(
             eq(employeeSchedules.branchEmployeeId, schedule.branchEmployeeId),
+            eq(employeeSchedules.branchId, schedule.branchId),
             eq(employeeSchedules.scheduleDate, schedule.scheduleDate)
           ))
           .limit(1);
@@ -7441,6 +7467,7 @@ export class DatabaseStorage implements IStorage {
         existing = await db.select().from(employeeSchedules)
           .where(and(
             eq(employeeSchedules.employeeId, schedule.employeeId),
+            eq(employeeSchedules.branchId, schedule.branchId),
             eq(employeeSchedules.scheduleDate, schedule.scheduleDate)
           ))
           .limit(1);
@@ -7673,8 +7700,18 @@ export class DatabaseStorage implements IStorage {
       })
     );
 
+    // Deduplicate by employeeId - keep only the first schedule entry per employee
+    const seenEmployeeIds = new Set<string>();
+    const uniqueEmployees = employeesWithAttendance.filter(emp => {
+      if (seenEmployeeIds.has(emp.employeeId)) {
+        return false;
+      }
+      seenEmployeeIds.add(emp.employeeId);
+      return true;
+    });
+
     // If no schedules found for today, fallback to branch employees with default shift times
-    if (employeesWithAttendance.length === 0) {
+    if (uniqueEmployees.length === 0) {
       const branchEmps = await this.getBranchEmployeesByBranch(branchId);
       const activeEmployees = branchEmps.filter(emp => emp.status === 'active');
       
@@ -7708,7 +7745,7 @@ export class DatabaseStorage implements IStorage {
       return fallbackEmployees;
     }
 
-    return employeesWithAttendance;
+    return uniqueEmployees;
   }
 
   async checkInEmployee(employeeId: string, branchId: string, signature?: string, scheduleId?: number, scheduledStartTime?: string, scheduledEndTime?: string, employeeNameParam?: string, attendanceDate?: string): Promise<AttendanceRecord> {
