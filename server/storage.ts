@@ -7794,9 +7794,24 @@ export class DatabaseStorage implements IStorage {
     const today = attendanceDate || saudiTime.date;
     const now = saudiTime.timeShort;
     
+    if (employeeId.startsWith('branch_emp_')) {
+      const branchEmpId = parseInt(employeeId.replace('branch_emp_', ''), 10);
+      if (!isNaN(branchEmpId)) {
+        const [currentEmp] = await db.select({ branchId: branchEmployees.branchId, status: branchEmployees.status })
+          .from(branchEmployees)
+          .where(eq(branchEmployees.id, branchEmpId))
+          .limit(1);
+        if (currentEmp && currentEmp.branchId !== branchId) {
+          throw new Error("هذا الموظف لا ينتمي لهذا الفرع - ربما تم نقله لفرع آخر");
+        }
+        if (currentEmp && currentEmp.status !== 'active') {
+          throw new Error("هذا الموظف غير نشط حالياً");
+        }
+      }
+    }
+    
     let employeeName = employeeNameParam || 'Unknown';
     
-    // Only try to get user if employeeId doesn't start with "branch_emp_" (those are not real users)
     if (!employeeId.startsWith('branch_emp_')) {
       try {
         const employee = await this.getUser(employeeId);
@@ -8175,16 +8190,65 @@ export class DatabaseStorage implements IStorage {
     const otherAllowances = employee.otherAllowances ?? current.otherAllowances ?? 0;
     const nationality = employee.nationality ?? current.nationality;
     const socialInsuranceDeduction = employee.socialInsuranceDeduction ?? current.socialInsuranceDeduction ?? 0;
-    // خصم التأمينات الاجتماعية للموظفين السعوديين فقط
     const socialInsurance = nationality === "سعودي" ? socialInsuranceDeduction : 0;
     const grossSalary = salary + housingAllowance + transportAllowance + foodAllowance + otherAllowances;
     const totalSalary = grossSalary - socialInsurance;
+
+    const oldBranchId = current.branchId;
+    const newBranchId = employee.branchId;
+    const isBranchTransfer = newBranchId && newBranchId !== oldBranchId;
+
+    if (isBranchTransfer) {
+      const result = await db.transaction(async (tx) => {
+        const [updated] = await tx.update(branchEmployees)
+          .set({ ...employee, totalSalary, updatedAt: new Date() })
+          .where(eq(branchEmployees.id, id))
+          .returning();
+
+        const saudiTime = getSaudiArabiaTime();
+        const today = saudiTime.date;
+        const movedSchedules = await tx.update(employeeSchedules)
+          .set({ branchId: newBranchId })
+          .where(and(
+            or(
+              eq(employeeSchedules.employeeId, `branch_emp_${id}`),
+              eq(employeeSchedules.branchEmployeeId, id)
+            ),
+            gte(employeeSchedules.scheduleDate, today)
+          ))
+          .returning({ id: employeeSchedules.id });
+        console.log(`[BranchTransfer] Employee ${id}: moved ${movedSchedules.length} future schedules from ${oldBranchId} to ${newBranchId}`);
+
+        return updated;
+      });
+      return result;
+    }
 
     const [updated] = await db.update(branchEmployees)
       .set({ ...employee, totalSalary, updatedAt: new Date() })
       .where(eq(branchEmployees.id, id))
       .returning();
     return updated;
+  }
+
+  async syncEmployeeSchedulesOnBranchTransfer(employeeId: number, oldBranchId: string, newBranchId: string): Promise<void> {
+    try {
+      const saudiTime = getSaudiArabiaTime();
+      const today = saudiTime.date;
+      const result = await db.update(employeeSchedules)
+        .set({ branchId: newBranchId })
+        .where(and(
+          or(
+            eq(employeeSchedules.employeeId, `branch_emp_${employeeId}`),
+            eq(employeeSchedules.branchEmployeeId, employeeId)
+          ),
+          gte(employeeSchedules.scheduleDate, today)
+        ))
+        .returning({ id: employeeSchedules.id });
+      console.log(`[BranchTransfer] Employee ${employeeId}: moved ${result.length} future schedules from ${oldBranchId} to ${newBranchId}`);
+    } catch (error) {
+      console.error(`[BranchTransfer] Failed to sync schedules for employee ${employeeId}:`, error);
+    }
   }
 
   async deleteBranchEmployee(id: number): Promise<boolean> {
