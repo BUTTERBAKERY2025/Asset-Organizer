@@ -125,8 +125,9 @@ export default function IncentivesManagement() {
   });
 
   const [newBranchBonus, setNewBranchBonus] = useState({
-    branchId: "", yearMonth: "", bonusPool: "", targetAmount: "",
+    branchId: "", yearMonth: "", targetAmount: "",
     distributionMethod: "contribution_ratio",
+    tiers: [{ fromPercent: "80", toPercent: "99", bonusAmount: "" }] as { fromPercent: string; toPercent: string; bonusAmount: string }[],
   });
 
   const [pointSettingsForm, setPointSettingsForm] = useState({
@@ -375,15 +376,26 @@ export default function IncentivesManagement() {
 
   const createBranchBonusMutation = useMutation({
     mutationFn: async (data: typeof newBranchBonus) => {
+      const tiersData = data.tiers
+        .filter(t => t.fromPercent && t.bonusAmount)
+        .map(t => ({
+          fromPercent: parseFloat(t.fromPercent) || 0,
+          toPercent: t.toPercent ? (parseFloat(t.toPercent) || null) : null,
+          bonusAmount: parseFloat(t.bonusAmount) || 0,
+        }));
+      if (tiersData.length === 0) throw new Error("يجب إضافة شريحة واحدة على الأقل");
+      const validAmounts = tiersData.map(t => t.bonusAmount).filter(a => a > 0);
+      const maxBonus = validAmounts.length > 0 ? Math.max(...validAmounts) : 0;
       const res = await fetch("/api/smart-incentives/branch-bonus", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           branchId: data.branchId,
           yearMonth: data.yearMonth,
-          bonusPool: parseFloat(data.bonusPool),
+          bonusPool: maxBonus,
           targetAmount: parseFloat(data.targetAmount),
           distributionMethod: data.distributionMethod,
+          bonusTiers: JSON.stringify(tiersData),
           isActive: true,
         }),
       });
@@ -393,7 +405,7 @@ export default function IncentivesManagement() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/branch-bonus"] });
       setShowBranchBonusDialog(false);
-      setNewBranchBonus({ branchId: "", yearMonth: "", bonusPool: "", targetAmount: "", distributionMethod: "contribution_ratio" });
+      setNewBranchBonus({ branchId: "", yearMonth: "", targetAmount: "", distributionMethod: "contribution_ratio", tiers: [{ fromPercent: "80", toPercent: "99", bonusAmount: "" }] });
       toast({ title: "تم إنشاء مكافأة الفرع بنجاح" });
     },
     onError: () => {
@@ -1510,69 +1522,168 @@ export default function IncentivesManagement() {
                       إضافة مكافأة
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="max-w-md" dir="rtl">
+                  <DialogContent className="max-w-lg" dir="rtl">
                     <DialogHeader>
                       <DialogTitle>إضافة مكافأة فرع جديدة</DialogTitle>
                     </DialogHeader>
-                    <div className="space-y-4">
-                      <div>
-                        <Label>الفرع</Label>
-                        <Select value={newBranchBonus.branchId} onValueChange={(v) => setNewBranchBonus({ ...newBranchBonus, branchId: v })}>
-                          <SelectTrigger data-testid="select-branch-bonus-branch" className="h-11 sm:h-10"><SelectValue placeholder="اختر الفرع" /></SelectTrigger>
-                          <SelectContent>
-                            {branches.map((b) => (<SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <Label>الشهر</Label>
-                        <Input type="month" value={newBranchBonus.yearMonth} onChange={(e) => setNewBranchBonus({ ...newBranchBonus, yearMonth: e.target.value })} data-testid="input-branch-bonus-month" className="h-11 sm:h-10" />
-                      </div>
+                    <div className="space-y-4 max-h-[70vh] overflow-y-auto pl-1">
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <Label>مجموع المكافأة (ريال)</Label>
-                          <Input type="number" value={newBranchBonus.bonusPool} onChange={(e) => setNewBranchBonus({ ...newBranchBonus, bonusPool: e.target.value })} placeholder="5000" data-testid="input-branch-bonus-pool" className="h-11 sm:h-10" />
+                          <Label>الفرع</Label>
+                          <Select value={newBranchBonus.branchId} onValueChange={(v) => setNewBranchBonus({ ...newBranchBonus, branchId: v })}>
+                            <SelectTrigger data-testid="select-branch-bonus-branch" className="h-10"><SelectValue placeholder="اختر الفرع" /></SelectTrigger>
+                            <SelectContent>
+                              {branches.map((b) => (<SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>))}
+                            </SelectContent>
+                          </Select>
                         </div>
                         <div>
-                          <Label className="flex items-center gap-1">
-                            الهدف المطلوب (ريال)
+                          <Label>الشهر</Label>
+                          <Input type="month" value={newBranchBonus.yearMonth} onChange={(e) => setNewBranchBonus({ ...newBranchBonus, yearMonth: e.target.value })} data-testid="input-branch-bonus-month" className="h-10" />
+                        </div>
+                      </div>
+
+                      {branchTargetEnabled && (
+                        <div className={`p-3 rounded-lg border ${hasAutoTarget ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Target className="h-4 w-4 text-green-600" />
+                              <span className="text-sm font-medium">الهدف الشهري للفرع</span>
+                              {branchTargetFetching && <RefreshCw className="h-3 w-3 text-blue-500 animate-spin" />}
+                            </div>
                             {hasAutoTarget && (
-                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-green-400 text-green-700 bg-green-50">
+                              <Badge variant="outline" className="text-[10px] px-1.5 h-5 border-green-400 text-green-700 bg-white">
                                 <Check className="h-2.5 w-2.5 ml-0.5" />
                                 من تخطيط الأهداف
                               </Badge>
                             )}
-                            {branchTargetFetching && (
-                              <RefreshCw className="h-3 w-3 text-blue-500 animate-spin" />
-                            )}
-                          </Label>
-                          <Input 
-                            type="number" 
-                            value={newBranchBonus.targetAmount} 
-                            onChange={(e) => setNewBranchBonus({ ...newBranchBonus, targetAmount: e.target.value })} 
-                            placeholder={branchTargetEnabled && !hasAutoTarget && !branchTargetFetching ? "لا يوجد هدف - أدخل يدوياً" : "100000"} 
-                            readOnly={hasAutoTarget}
-                            data-testid="input-branch-bonus-target" 
-                            className={`h-11 sm:h-10 ${hasAutoTarget ? 'bg-green-50 border-green-300 font-bold text-green-700' : ''}`}
-                          />
-                          {branchTargetEnabled && !hasAutoTarget && !branchTargetFetching && (
-                            <p className="text-[11px] text-amber-600 mt-1">لم يتم العثور على هدف شهري لهذا الفرع في صفحة تخطيط الأهداف</p>
-                          )}
+                          </div>
+                          {hasAutoTarget ? (
+                            <p className="text-lg font-bold text-green-700 mt-1">{formatCurrency(parseFloat(newBranchBonus.targetAmount))} ريال</p>
+                          ) : !branchTargetFetching ? (
+                            <div className="mt-2">
+                              <p className="text-[11px] text-amber-700 mb-1">لم يتم العثور على هدف - أدخل يدوياً</p>
+                              <Input 
+                                type="number" 
+                                value={newBranchBonus.targetAmount} 
+                                onChange={(e) => setNewBranchBonus({ ...newBranchBonus, targetAmount: e.target.value })} 
+                                placeholder="أدخل الهدف الشهري"
+                                data-testid="input-branch-bonus-target" 
+                                className="h-9 bg-white"
+                              />
+                            </div>
+                          ) : null}
                         </div>
-                      </div>
+                      )}
+
                       <div>
-                        <Label>طريقة التوزيع</Label>
+                        <div className="flex items-center justify-between mb-2">
+                          <Label className="flex items-center gap-1.5 text-sm font-semibold">
+                            <Award className="h-4 w-4 text-amber-600" />
+                            شرائح المكافأة حسب نسبة التحقيق
+                          </Label>
+                          <Button 
+                            type="button" 
+                            variant="outline" 
+                            size="sm" 
+                            className="h-7 text-xs gap-1 border-amber-300 text-amber-700 hover:bg-amber-50"
+                            onClick={() => setNewBranchBonus(prev => ({ ...prev, tiers: [...prev.tiers, { fromPercent: "", toPercent: "", bonusAmount: "" }] }))}
+                            data-testid="button-add-tier"
+                          >
+                            <Plus className="h-3 w-3" />
+                            إضافة شريحة
+                          </Button>
+                        </div>
+                        <div className="space-y-2">
+                          {newBranchBonus.tiers.map((tier, idx) => (
+                            <div key={idx} className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-lg border border-gray-200" data-testid={`tier-row-${idx}`}>
+                              <div className="flex items-center gap-1.5 flex-1">
+                                <span className="text-xs text-gray-500 whitespace-nowrap">من</span>
+                                <Input 
+                                  type="number" 
+                                  value={tier.fromPercent} 
+                                  onChange={(e) => {
+                                    const tiers = [...newBranchBonus.tiers];
+                                    tiers[idx] = { ...tiers[idx], fromPercent: e.target.value };
+                                    setNewBranchBonus(prev => ({ ...prev, tiers }));
+                                  }}
+                                  placeholder="80"
+                                  className="h-8 w-16 text-center text-sm"
+                                  data-testid={`input-tier-from-${idx}`}
+                                />
+                                <span className="text-xs text-gray-500">%</span>
+                                <span className="text-xs text-gray-500 whitespace-nowrap">إلى</span>
+                                <Input 
+                                  type="number" 
+                                  value={tier.toPercent} 
+                                  onChange={(e) => {
+                                    const tiers = [...newBranchBonus.tiers];
+                                    tiers[idx] = { ...tiers[idx], toPercent: e.target.value };
+                                    setNewBranchBonus(prev => ({ ...prev, tiers }));
+                                  }}
+                                  placeholder="فأعلى"
+                                  className="h-8 w-16 text-center text-sm"
+                                  data-testid={`input-tier-to-${idx}`}
+                                />
+                                <span className="text-xs text-gray-500">%</span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs text-gray-500">=</span>
+                                <Input 
+                                  type="number" 
+                                  value={tier.bonusAmount} 
+                                  onChange={(e) => {
+                                    const tiers = [...newBranchBonus.tiers];
+                                    tiers[idx] = { ...tiers[idx], bonusAmount: e.target.value };
+                                    setNewBranchBonus(prev => ({ ...prev, tiers }));
+                                  }}
+                                  placeholder="2000"
+                                  className="h-8 w-20 text-center text-sm font-bold"
+                                  data-testid={`input-tier-amount-${idx}`}
+                                />
+                                <span className="text-xs text-gray-500">ر.س</span>
+                              </div>
+                              {newBranchBonus.tiers.length > 1 && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 w-7 p-0 text-red-400 hover:text-red-600 hover:bg-red-50"
+                                  onClick={() => setNewBranchBonus(prev => ({ ...prev, tiers: prev.tiers.filter((_, i) => i !== idx) }))}
+                                  data-testid={`button-delete-tier-${idx}`}
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        {newBranchBonus.tiers.length > 0 && newBranchBonus.tiers.some(t => t.bonusAmount) && (
+                          <div className="mt-2 p-2 bg-amber-50 rounded border border-amber-200 text-xs text-amber-800">
+                            <span className="font-semibold">أقصى مكافأة: </span>
+                            {formatCurrency(Math.max(...newBranchBonus.tiers.filter(t => t.bonusAmount).map(t => parseFloat(t.bonusAmount) || 0)))} ريال
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <Label>طريقة التوزيع على فريق العمل</Label>
                         <Select value={newBranchBonus.distributionMethod} onValueChange={(v) => setNewBranchBonus({ ...newBranchBonus, distributionMethod: v })}>
-                          <SelectTrigger data-testid="select-distribution-method" className="h-11 sm:h-10"><SelectValue /></SelectTrigger>
+                          <SelectTrigger data-testid="select-distribution-method" className="h-10"><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="contribution_ratio">حسب نسبة المساهمة</SelectItem>
+                            <SelectItem value="contribution_ratio">حسب نسبة المساهمة في المبيعات</SelectItem>
                             <SelectItem value="equal">توزيع متساوي</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                     </div>
                     <DialogFooter>
-                      <Button onClick={() => createBranchBonusMutation.mutate(newBranchBonus)} disabled={createBranchBonusMutation.isPending || !newBranchBonus.branchId || !newBranchBonus.yearMonth || !newBranchBonus.bonusPool || !newBranchBonus.targetAmount} className="bg-amber-600 hover:bg-amber-700" data-testid="button-save-branch-bonus">
+                      <Button 
+                        onClick={() => createBranchBonusMutation.mutate(newBranchBonus)} 
+                        disabled={createBranchBonusMutation.isPending || !newBranchBonus.branchId || !newBranchBonus.yearMonth || !newBranchBonus.targetAmount || newBranchBonus.tiers.some(t => !t.fromPercent || !t.bonusAmount)} 
+                        className="bg-amber-600 hover:bg-amber-700" 
+                        data-testid="button-save-branch-bonus"
+                      >
                         {createBranchBonusMutation.isPending ? "جاري الحفظ..." : "حفظ المكافأة"}
                       </Button>
                     </DialogFooter>
@@ -1586,34 +1697,47 @@ export default function IncentivesManagement() {
                   <div className="text-center py-8 text-gray-500">لا توجد مكافآت فروع مسجلة</div>
                 ) : (
                   <div className="overflow-x-auto">
-                    <Table className="min-w-[600px]">
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>الفرع</TableHead>
-                          <TableHead>الشهر</TableHead>
-                          <TableHead>مجموع المكافأة</TableHead>
-                          <TableHead>الهدف</TableHead>
-                          <TableHead className="hidden sm:table-cell">التوزيع</TableHead>
-                          <TableHead>إجراء</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {branchBonuses.map((b) => (
-                          <TableRow key={b.id} data-testid={`row-branch-bonus-${b.id}`}>
-                            <TableCell className="font-medium text-xs sm:text-sm">{getBranchName(b.branchId)}</TableCell>
-                            <TableCell className="text-xs sm:text-sm">{b.yearMonth}</TableCell>
-                            <TableCell className="font-mono text-xs sm:text-sm text-green-600 font-bold">{formatCurrency(b.bonusPool)}</TableCell>
-                            <TableCell className="font-mono text-xs sm:text-sm">{formatCurrency(b.targetAmount)}</TableCell>
-                            <TableCell className="text-xs hidden sm:table-cell">{b.distributionMethod === "contribution_ratio" ? "حسب المساهمة" : "متساوي"}</TableCell>
-                            <TableCell>
+                    <div className="space-y-3">
+                      {branchBonuses.map((b) => {
+                        let tiers: any[] | null = null;
+                        try { if (b.bonusTiers) tiers = JSON.parse(b.bonusTiers); } catch { tiers = null; }
+                        return (
+                          <div key={b.id} className="border rounded-lg p-4 hover:shadow-sm transition-shadow" data-testid={`row-branch-bonus-${b.id}`}>
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-3">
+                                <div>
+                                  <span className="font-semibold text-sm">{getBranchName(b.branchId)}</span>
+                                  <span className="text-xs text-gray-500 mr-2">| {b.yearMonth}</span>
+                                </div>
+                                <Badge variant="outline" className="text-[10px] h-5">{b.distributionMethod === "contribution_ratio" ? "حسب المساهمة" : "توزيع متساوي"}</Badge>
+                              </div>
                               <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700 h-8 w-8 p-0" onClick={() => deleteBranchBonusMutation.mutate(b.id)} data-testid={`button-delete-branch-bonus-${b.id}`}>
                                 <Trash2 className="h-4 w-4" />
                               </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-gray-600 mb-2">
+                              <Target className="h-3.5 w-3.5 text-green-600" />
+                              <span>الهدف: <span className="font-bold text-green-700">{formatCurrency(b.targetAmount)}</span></span>
+                            </div>
+                            {tiers && tiers.length > 0 ? (
+                              <div className="flex flex-wrap gap-2">
+                                {tiers.map((tier: any, idx: number) => (
+                                  <div key={idx} className="bg-amber-50 border border-amber-200 rounded px-2.5 py-1.5 text-xs">
+                                    <span className="text-gray-600">{tier.fromPercent}%{tier.toPercent ? ` - ${tier.toPercent}%` : ' فأعلى'}</span>
+                                    <span className="mx-1.5">=</span>
+                                    <span className="font-bold text-amber-700">{formatCurrency(tier.bonusAmount)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="text-xs text-gray-500">
+                                <span>المكافأة: <span className="font-bold text-green-600">{formatCurrency(b.bonusPool)}</span></span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </CardContent>

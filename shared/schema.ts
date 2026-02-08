@@ -2271,6 +2271,7 @@ export const branchAchievementBonus = pgTable("branch_achievement_bonus", {
   bonusPool: real("bonus_pool").notNull(),
   targetAmount: real("target_amount").notNull(),
   distributionMethod: text("distribution_method").default("contribution_ratio").notNull(),
+  bonusTiers: text("bonus_tiers"),
   isActive: boolean("is_active").default(true).notNull(),
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
