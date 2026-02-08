@@ -20,7 +20,7 @@ import {
   Target, TrendingUp, TrendingDown, Users, Trophy, ChevronLeft, Calendar, 
   Award, AlertTriangle, Bell, Clock, CheckCircle2, Plus, Settings, 
   Sun, Moon, DollarSign, Receipt, User as UserIcon, RefreshCw, BarChart as BarChartIcon,
-  Pencil, Star
+  Pencil, Star, Search, CalendarDays, X
 } from "lucide-react";
 import { Link } from "wouter";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line, Legend, PieChart, Pie, Cell } from "recharts";
@@ -62,6 +62,7 @@ export default function CashierShiftPerformance() {
   const [selectedDate, setSelectedDate] = useState(today);
   const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [selectedShift, setSelectedShift] = useState<string>("all");
+  const [datePreset, setDatePreset] = useState<string>("today");
   const [showTargetDialog, setShowTargetDialog] = useState(false);
   const [editingTarget, setEditingTarget] = useState<CashierShiftTarget | null>(null);
   
@@ -596,42 +597,75 @@ export default function CashierShiftPerformance() {
     refetchSales();
   };
 
+  const setQuickDate = (preset: string) => {
+    const now = new Date();
+    setDatePreset(preset);
+    switch(preset) {
+      case 'today':
+        setSelectedDate(now.toISOString().split('T')[0]);
+        break;
+      case 'yesterday': {
+        const yesterday = new Date(now);
+        yesterday.setDate(yesterday.getDate() - 1);
+        setSelectedDate(yesterday.toISOString().split('T')[0]);
+        break;
+      }
+      case 'week': {
+        setSelectedDate(now.toISOString().split('T')[0]);
+        break;
+      }
+      case 'month': {
+        setSelectedDate(now.toISOString().split('T')[0]);
+        break;
+      }
+    }
+  };
+
   return (
     <Layout>
       <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-4 sm:space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-4 sm:mb-6">
-          <div className="flex items-center gap-2 sm:gap-4">
-            <Link href="/targets-dashboard">
-              <Button variant="ghost" size="icon" data-testid="button-back" className="h-11 w-11 sm:h-8 sm:w-8">
-                <ChevronLeft className="h-5 w-5" />
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-[#8B4513]" data-testid="text-page-title">
-                تتبع أداء الكاشير بالشفتات
-              </h1>
-              <p className="text-xs sm:text-sm text-muted-foreground">مراقبة الأهداف والأداء لكل كاشير حسب الشفت</p>
+        <div className="flex flex-col gap-4 mb-2">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <Link href="/targets-dashboard">
+                <Button variant="ghost" size="icon" data-testid="button-back" className="h-10 w-10 rounded-xl bg-amber-50 hover:bg-amber-100">
+                  <ChevronLeft className="h-5 w-5 text-amber-700" />
+                </Button>
+              </Link>
+              <div>
+                <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-amber-900" data-testid="text-page-title">
+                  تتبع أداء الكاشير بالشفتات
+                </h1>
+                <div className="flex items-center gap-2 mt-0.5">
+                  {user && (
+                    <span className="text-xs text-amber-600 flex items-center gap-1" data-testid="text-cashier-name">
+                      <UserIcon className="h-3 w-3" />
+                      {user.firstName || user.username || 'الكاشير'} {user.lastName || ''}
+                      {selectedBranchData && <span className="text-gray-400">• {selectedBranchData.name}</span>}
+                    </span>
+                  )}
+                  {!user && <p className="text-xs text-muted-foreground">مراقبة الأهداف والأداء لكل كاشير حسب الشفت</p>}
+                </div>
+              </div>
             </div>
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            <Button variant="outline" onClick={handleRefresh} data-testid="button-refresh" className="h-11 sm:h-9 text-sm">
-              <RefreshCw className="h-4 w-4 ml-1 sm:ml-2" />
-              <span className="hidden sm:inline">تحديث</span>
-            </Button>
-            <Link href="/incentives-management">
-              <Button variant="outline" className="h-11 sm:h-9 text-sm bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100" data-testid="btn-goto-incentives">
-                <Award className="h-4 w-4 ml-1" />
-                <span className="hidden sm:inline">الحوافز الذكية</span>
+            <div className="flex gap-2 flex-wrap">
+              <Button variant="outline" onClick={handleRefresh} data-testid="button-refresh" className="h-9 text-sm rounded-lg">
+                <RefreshCw className="h-4 w-4 ml-1" />
+                <span className="hidden sm:inline">تحديث</span>
               </Button>
-            </Link>
-            <Link href="/targets-planning">
-              <Button variant="outline" className="h-11 sm:h-9 text-sm" data-testid="btn-goto-targets-planning">
-                <Calendar className="h-4 w-4 ml-1" />
-                <span className="hidden sm:inline">تخطيط الأهداف</span>
-              </Button>
-            </Link>
-            {/* Only show add target button if user has create permission */}
-            {canCreate("cashier_performance") && (
+              <Link href="/incentives-management">
+                <Button variant="outline" className="h-9 text-sm rounded-lg bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100" data-testid="btn-goto-incentives">
+                  <Award className="h-4 w-4 ml-1" />
+                  <span className="hidden sm:inline">الحوافز</span>
+                </Button>
+              </Link>
+              <Link href="/targets-planning">
+                <Button variant="outline" className="h-9 text-sm rounded-lg" data-testid="btn-goto-targets-planning">
+                  <Calendar className="h-4 w-4 ml-1" />
+                  <span className="hidden sm:inline">التخطيط</span>
+                </Button>
+              </Link>
+              {canCreate("cashier_performance") && (
             <Dialog open={showTargetDialog} onOpenChange={(open) => {
               setShowTargetDialog(open);
               if (!open) {
@@ -853,113 +887,128 @@ export default function CashierShiftPerformance() {
               </DialogContent>
             </Dialog>
             )}
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3 sm:gap-4 mb-6">
-          {/* Cashier Name Display */}
-          {user && (
-            <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-              <UserIcon className="h-4 w-4 text-amber-600" />
-              <span className="text-sm font-medium text-amber-800" data-testid="text-cashier-name">
-                {user.firstName || user.username || 'الكاشير'} {user.lastName || ''}
-              </span>
             </div>
-          )}
-          <div className="flex items-center gap-2">
-            <Label className="text-sm">التاريخ:</Label>
-            <Input 
-              type="date" 
-              value={selectedDate} 
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="w-36 sm:w-44 h-11 sm:h-10"
-              data-testid="input-date"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <Label className="text-sm">الفرع:</Label>
-            <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-              <SelectTrigger className="w-36 sm:w-44 h-11 sm:h-10" data-testid="select-filter-branch" disabled={!canSelectBranch}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {canSelectBranch && <SelectItem value="all">جميع الفروع</SelectItem>}
-                {branches.map((branch) => (
-                  <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex items-center gap-2">
-            <Label className="text-sm">الشفت:</Label>
-            <Select value={selectedShift} onValueChange={setSelectedShift}>
-              <SelectTrigger className="w-36 sm:w-44 h-11 sm:h-10" data-testid="select-filter-shift">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">جميع الشفتات</SelectItem>
-                {SHIFT_TYPES.map((shift) => (
-                  <SelectItem key={shift.value} value={shift.value}>{shift.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
-          <Card data-testid="card-total-target">
-            <CardContent className="p-3 sm:pt-6 sm:px-6">
-              <div className="flex items-center gap-2 sm:gap-4">
-                <div className="p-2 sm:p-3 rounded-full bg-blue-100">
-                  <Target className="h-4 w-4 sm:h-6 sm:w-6 text-blue-600" />
-                </div>
+        <Card className="border-amber-200 shadow-sm" data-testid="filter-card">
+          <CardHeader className="pb-3 bg-gradient-to-l from-amber-50/50 to-transparent">
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2 text-base text-amber-900">
+                <Search className="h-4 w-4" />
+                البحث والفلاتر
+              </CardTitle>
+              <Button variant="ghost" size="sm" onClick={() => { setSelectedDate(today); setSelectedShift('all'); if(canSelectBranch) setSelectedBranch('all'); setDatePreset('today'); }} className="text-xs text-gray-500 hover:text-red-500" data-testid="btn-reset-filters">
+                <X className="h-3 w-3 ml-1" />
+                مسح الفلاتر
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-3">
+            <div className="flex flex-wrap gap-2 mb-4">
+              {[
+                { key: 'today', label: 'اليوم', icon: CalendarDays },
+                { key: 'yesterday', label: 'أمس', icon: Clock },
+                { key: 'week', label: 'هذا الأسبوع', icon: Calendar },
+                { key: 'month', label: 'هذا الشهر', icon: Calendar },
+              ].map(p => (
+                <Button
+                  key={p.key}
+                  variant={datePreset === p.key ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setQuickDate(p.key)}
+                  className={`h-8 text-xs ${datePreset === p.key ? 'bg-amber-600 hover:bg-amber-700' : ''}`}
+                  data-testid={`btn-date-${p.key}`}
+                >
+                  <p.icon className="h-3 w-3 ml-1" />
+                  {p.label}
+                </Button>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div>
+                <Label className="text-xs text-gray-600 mb-1 block">التاريخ</Label>
+                <Input type="date" value={selectedDate} onChange={(e) => { setSelectedDate(e.target.value); setDatePreset(''); }} className="h-10" data-testid="input-date" />
+              </div>
+              {canSelectBranch && (
                 <div>
-                  <p className="text-[10px] sm:text-sm text-muted-foreground">إجمالي الأهداف</p>
-                  <p className="text-lg sm:text-2xl font-bold">{formatCurrency(summaryStats.totalTarget)}</p>
+                  <Label className="text-xs text-gray-600 mb-1 block">الفرع</Label>
+                  <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+                    <SelectTrigger className="h-10" data-testid="select-filter-branch"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">جميع الفروع</SelectItem>
+                      {branches.map((branch) => (<SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              <div>
+                <Label className="text-xs text-gray-600 mb-1 block">الشفت</Label>
+                <Select value={selectedShift} onValueChange={setSelectedShift}>
+                  <SelectTrigger className="h-10" data-testid="select-filter-shift"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">جميع الشفتات</SelectItem>
+                    {SHIFT_TYPES.map((shift) => (<SelectItem key={shift.value} value={shift.value}>{shift.label}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white border-0 shadow-md" data-testid="card-total-target">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-blue-100">إجمالي الأهداف</p>
+                  <p className="text-xl sm:text-2xl font-bold mt-1">{formatCurrency(summaryStats.totalTarget)}</p>
+                </div>
+                <div className="p-2.5 rounded-xl bg-white/20">
+                  <Target className="h-5 w-5" />
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card data-testid="card-total-achieved">
-            <CardContent className="p-3 sm:pt-6 sm:px-6">
-              <div className="flex items-center gap-2 sm:gap-4">
-                <div className="p-2 sm:p-3 rounded-full bg-green-100">
-                  <DollarSign className="h-4 w-4 sm:h-6 sm:w-6 text-green-600" />
-                </div>
+          <Card className="bg-gradient-to-br from-emerald-500 to-emerald-600 text-white border-0 shadow-md" data-testid="card-total-achieved">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] sm:text-sm text-muted-foreground">إجمالي المحقق</p>
-                  <p className="text-lg sm:text-2xl font-bold">{formatCurrency(summaryStats.totalAchieved)}</p>
+                  <p className="text-xs text-emerald-100">إجمالي المحقق</p>
+                  <p className="text-xl sm:text-2xl font-bold mt-1">{formatCurrency(summaryStats.totalAchieved)}</p>
+                </div>
+                <div className="p-2.5 rounded-xl bg-white/20">
+                  <DollarSign className="h-5 w-5" />
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card data-testid="card-avg-percent">
-            <CardContent className="p-3 sm:pt-6 sm:px-6">
-              <div className="flex items-center gap-2 sm:gap-4">
-                <div className="p-2 sm:p-3 rounded-full bg-amber-100">
-                  <BarChartIcon className="h-4 w-4 sm:h-6 sm:w-6 text-amber-600" />
-                </div>
+          <Card className={`border-0 shadow-md ${summaryStats.avgPercent >= 100 ? 'bg-gradient-to-br from-green-500 to-green-600 text-white' : summaryStats.avgPercent >= 70 ? 'bg-gradient-to-br from-amber-500 to-amber-600 text-white' : 'bg-gradient-to-br from-red-500 to-red-600 text-white'}`} data-testid="card-avg-percent">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] sm:text-sm text-muted-foreground">نسبة الإنجاز</p>
-                  <p className={`text-lg sm:text-2xl font-bold ${getPercentColor(summaryStats.avgPercent)}`}>
-                    {summaryStats.avgPercent.toFixed(1)}%
-                  </p>
+                  <p className="text-xs opacity-80">نسبة الإنجاز</p>
+                  <p className="text-xl sm:text-2xl font-bold mt-1">{summaryStats.avgPercent.toFixed(1)}%</p>
+                </div>
+                <div className="p-2.5 rounded-xl bg-white/20">
+                  <BarChartIcon className="h-5 w-5" />
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card data-testid="card-alerts">
-            <CardContent className="p-3 sm:pt-6 sm:px-6">
-              <div className="flex items-center gap-2 sm:gap-4">
-                <div className={`p-2 sm:p-3 rounded-full ${summaryStats.alertCount > 0 ? 'bg-red-100' : 'bg-gray-100'}`}>
-                  <Bell className={`h-4 w-4 sm:h-6 sm:w-6 ${summaryStats.alertCount > 0 ? 'text-red-600' : 'text-gray-600'}`} />
-                </div>
+          <Card className={`border-0 shadow-md ${summaryStats.alertCount > 0 ? 'bg-gradient-to-br from-red-500 to-red-600 text-white' : 'bg-gradient-to-br from-gray-500 to-gray-600 text-white'}`} data-testid="card-alerts">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] sm:text-sm text-muted-foreground">تنبيهات نشطة</p>
-                  <p className="text-lg sm:text-2xl font-bold">{summaryStats.alertCount}</p>
+                  <p className="text-xs opacity-80">تنبيهات نشطة</p>
+                  <p className="text-xl sm:text-2xl font-bold mt-1">{summaryStats.alertCount}</p>
+                </div>
+                <div className="p-2.5 rounded-xl bg-white/20">
+                  <Bell className="h-5 w-5" />
                 </div>
               </div>
             </CardContent>
@@ -967,7 +1016,7 @@ export default function CashierShiftPerformance() {
         </div>
 
         <Tabs defaultValue="targets" className="space-y-4">
-          <TabsList data-testid="tabs-main" className="flex-wrap h-auto gap-1">
+          <TabsList data-testid="tabs-main" className="flex-wrap h-auto gap-1 bg-amber-50/50 p-1.5 rounded-xl border border-amber-100">
             <TabsTrigger value="targets" data-testid="tab-targets" className="text-xs sm:text-sm">
               <Target className="h-3 w-3 sm:h-4 sm:w-4 ml-1" />
               الأهداف
