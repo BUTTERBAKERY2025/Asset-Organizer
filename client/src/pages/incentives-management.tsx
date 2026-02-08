@@ -469,6 +469,36 @@ export default function IncentivesManagement() {
     },
   });
 
+  const [manualAdjustBonusId, setManualAdjustBonusId] = useState<number | null>(null);
+  const [manualAmounts, setManualAmounts] = useState<Record<string, string>>({});
+  const [manualComment, setManualComment] = useState("");
+
+  const manualAdjustMutation = useMutation({
+    mutationFn: async ({ id, adjustments, comment }: { id: number; adjustments: any[]; comment: string }) => {
+      const res = await fetch(`/api/smart-incentives/branch-bonus/${id}/manual-adjust`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ adjustments, comment }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "فشل في التعديل اليدوي");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/branch-bonus"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/points-ledger"] });
+      setManualAdjustBonusId(null);
+      setManualAmounts({});
+      setManualComment("");
+      toast({ title: "تم حفظ التوزيع اليدوي بنجاح" });
+    },
+    onError: (error: any) => {
+      toast({ title: error.message || "خطأ في التعديل اليدوي", variant: "destructive" });
+    },
+  });
+
   const createTierMutation = useMutation({
     mutationFn: async (data: typeof newTier) => {
       const res = await fetch("/api/incentives/tiers", {
@@ -1747,7 +1777,9 @@ export default function IncentivesManagement() {
                         try { if (b.bonusTiers) tiers = JSON.parse(b.bonusTiers); } catch { tiers = null; }
                         let calcDetails: any = null;
                         try { if (b.calculationDetails) calcDetails = JSON.parse(b.calculationDetails); } catch { calcDetails = null; }
-                        const isCalculated = b.calculationStatus === "calculated";
+                        const isCalculated = b.calculationStatus === "calculated" || b.calculationStatus === "manual_adjusted";
+                        const isManualAdjusted = b.calculationStatus === "manual_adjusted";
+                        const isEditing = manualAdjustBonusId === b.id;
                         const isCalculating = calculatingBonusId === b.id;
                         return (
                           <div key={b.id} className={`border rounded-lg p-4 hover:shadow-sm transition-shadow ${isCalculated ? "border-green-300 bg-green-50/30" : ""}`} data-testid={`row-branch-bonus-${b.id}`}>
@@ -1847,26 +1879,132 @@ export default function IncentivesManagement() {
 
                                 {calcDetails?.distribution && calcDetails.distribution.length > 0 && (
                                   <div className="mt-2">
-                                    <div className="text-xs font-semibold text-gray-700 mb-1.5">توزيع المكافأة على الكاشيرات:</div>
-                                    <div className="space-y-1">
-                                      {calcDetails.distribution.map((d: any, idx: number) => (
-                                        <div key={idx} className="flex items-center justify-between bg-white border rounded px-3 py-1.5 text-xs">
-                                          <div className="flex items-center gap-2">
-                                            <Users className="h-3 w-3 text-gray-400" />
-                                            <span className="font-medium">{d.name}</span>
-                                            <span className="text-gray-400">({d.share}%)</span>
-                                          </div>
-                                          <div className="flex items-center gap-3">
-                                            <span className="text-gray-500">مبيعات: {formatCurrency(d.sales)}</span>
-                                            <span className="font-bold text-green-700">{formatCurrency(d.amount)} ريال</span>
+                                    <div className="flex items-center justify-between mb-1.5">
+                                      <div className="text-xs font-semibold text-gray-700">
+                                        {isManualAdjusted ? "التوزيع اليدوي:" : "توزيع المكافأة على الكاشيرات:"}
+                                        {isManualAdjusted && <Badge className="bg-orange-500 text-[9px] h-4 mr-2">تعديل يدوي</Badge>}
+                                      </div>
+                                      {!isEditing && (
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="text-purple-600 border-purple-300 hover:bg-purple-50 h-7 text-[11px] px-2"
+                                          onClick={() => {
+                                            setManualAdjustBonusId(b.id);
+                                            const amounts: Record<string, string> = {};
+                                            calcDetails.distribution.forEach((d: any) => { amounts[d.cashierId] = String(d.amount); });
+                                            setManualAmounts(amounts);
+                                            setManualComment("");
+                                          }}
+                                          data-testid={`button-manual-adjust-${b.id}`}
+                                        >
+                                          <Pencil className="h-3 w-3 ml-1" /> تعديل يدوي
+                                        </Button>
+                                      )}
+                                    </div>
+
+                                    {isEditing ? (
+                                      <div className="space-y-2 bg-purple-50/50 border border-purple-200 rounded-lg p-3">
+                                        <div className="space-y-1.5">
+                                          {calcDetails.distribution.map((d: any, idx: number) => (
+                                            <div key={idx} className="flex items-center gap-2 bg-white border rounded px-3 py-2 text-xs">
+                                              <Users className="h-3 w-3 text-gray-400 shrink-0" />
+                                              <span className="font-medium min-w-[80px]">{d.name}</span>
+                                              <span className="text-gray-400 text-[10px]">مبيعات: {formatCurrency(d.sales)}</span>
+                                              <div className="flex items-center gap-1 mr-auto">
+                                                <Input
+                                                  type="number"
+                                                  value={manualAmounts[d.cashierId] || ""}
+                                                  onChange={(e) => setManualAmounts(prev => ({ ...prev, [d.cashierId]: e.target.value }))}
+                                                  className="h-7 w-24 text-xs text-center"
+                                                  placeholder="المبلغ"
+                                                  data-testid={`input-manual-amount-${d.cashierId}`}
+                                                />
+                                                <span className="text-[10px] text-gray-500">ريال</span>
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                        <div className="bg-white border rounded p-2">
+                                          <div className="flex items-center justify-between mb-1">
+                                            <Label className="text-xs font-semibold text-purple-700">إجمالي التوزيع اليدوي</Label>
+                                            <span className="text-sm font-bold text-purple-800">
+                                              {formatCurrency(Object.values(manualAmounts).reduce((s, v) => s + (parseFloat(v) || 0), 0))} ريال
+                                            </span>
                                           </div>
                                         </div>
-                                      ))}
-                                    </div>
+                                        <div>
+                                          <Label className="text-xs text-gray-600 mb-1 block">سبب التعديل اليدوي <span className="text-red-500">*</span></Label>
+                                          <textarea
+                                            value={manualComment}
+                                            onChange={(e) => setManualComment(e.target.value)}
+                                            className="w-full border rounded p-2 text-xs h-16 resize-none focus:ring-2 focus:ring-purple-300 focus:border-purple-400"
+                                            placeholder="اكتب سبب التعديل اليدوي للتوزيع..."
+                                            data-testid="textarea-manual-comment"
+                                          />
+                                        </div>
+                                        <div className="flex items-center gap-2 justify-end">
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-8 text-xs"
+                                            onClick={() => { setManualAdjustBonusId(null); setManualAmounts({}); setManualComment(""); }}
+                                          >
+                                            إلغاء
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            className="bg-purple-600 hover:bg-purple-700 text-white h-8 text-xs px-4"
+                                            disabled={!manualComment.trim() || manualAdjustMutation.isPending}
+                                            onClick={() => {
+                                              const adjustments = calcDetails.distribution.map((d: any) => ({
+                                                cashierId: d.cashierId,
+                                                name: d.name,
+                                                sales: d.sales,
+                                                amount: manualAmounts[d.cashierId] || "0",
+                                              }));
+                                              manualAdjustMutation.mutate({ id: b.id, adjustments, comment: manualComment });
+                                            }}
+                                            data-testid="button-save-manual-adjust"
+                                          >
+                                            {manualAdjustMutation.isPending ? "جاري الحفظ..." : "حفظ التوزيع اليدوي"}
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div className="space-y-1">
+                                        {calcDetails.distribution.map((d: any, idx: number) => (
+                                          <div key={idx} className={`flex items-center justify-between border rounded px-3 py-1.5 text-xs ${d.manualAdjust ? "bg-purple-50 border-purple-200" : "bg-white"}`}>
+                                            <div className="flex items-center gap-2">
+                                              <Users className="h-3 w-3 text-gray-400" />
+                                              <span className="font-medium">{d.name}</span>
+                                              {d.share > 0 && <span className="text-gray-400">({d.share}%)</span>}
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                              <span className="text-gray-500">مبيعات: {formatCurrency(d.sales)}</span>
+                                              <span className="font-bold text-green-700">{formatCurrency(d.amount)} ريال</span>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+
+                                    {calcDetails?.manualAdjustment && !isEditing && (
+                                      <div className="mt-2 bg-purple-50 border border-purple-200 rounded p-2 text-xs">
+                                        <div className="flex items-center gap-1 text-purple-700 font-semibold mb-1">
+                                          <Pencil className="h-3 w-3" />
+                                          <span>ملاحظة التعديل اليدوي:</span>
+                                        </div>
+                                        <p className="text-purple-800">{calcDetails.manualAdjustment.comment}</p>
+                                        <div className="text-[10px] text-purple-500 mt-1">
+                                          إجمالي: {formatCurrency(calcDetails.manualAdjustment.totalAdjusted)} ريال
+                                        </div>
+                                      </div>
+                                    )}
                                   </div>
                                 )}
 
-                                {(b.matchedTierAmount || 0) === 0 && (
+                                {(b.matchedTierAmount || 0) === 0 && !calcDetails?.manualAdjustment && (
                                   <div className="bg-orange-50 border border-orange-200 rounded p-2 text-xs text-orange-700">
                                     <span className="font-semibold">ملاحظة:</span> نسبة الإنجاز لم تصل لأي شريحة من شرائح المكافأة. لم يتم توزيع أي مكافأة.
                                   </div>

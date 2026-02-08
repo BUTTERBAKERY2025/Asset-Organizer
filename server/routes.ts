@@ -7272,6 +7272,96 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/smart-incentives/branch-bonus/:id/manual-adjust", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const userId = (req as any).user?.id;
+      const { adjustments, comment } = req.body;
+
+      if (!adjustments || !Array.isArray(adjustments) || adjustments.length === 0) {
+        return res.status(400).json({ error: "يجب تحديد التوزيع اليدوي" });
+      }
+      if (!comment || comment.trim().length === 0) {
+        return res.status(400).json({ error: "يجب كتابة تعليق للتوزيع اليدوي" });
+      }
+
+      const bonus = (await storage.getAllBranchBonuses()).find(b => b.id === id);
+      if (!bonus) return res.status(404).json({ error: "عمولة الفرع غير موجودة" });
+      if (bonus.calculationStatus !== "calculated" && bonus.calculationStatus !== "manual_adjusted") {
+        return res.status(400).json({ error: "يجب احتساب المكافأة أولاً قبل التعديل اليدوي" });
+      }
+
+      let existingCalcDetails: any = {};
+      try { if (bonus.calculationDetails) existingCalcDetails = JSON.parse(bonus.calculationDetails); } catch {}
+      const validCashierIds = new Set((existingCalcDetails.distribution || []).map((d: any) => d.cashierId));
+      const invalidCashiers = adjustments.filter((a: any) => a.cashierId && !validCashierIds.has(a.cashierId));
+      if (invalidCashiers.length > 0) {
+        return res.status(400).json({ error: "تم اكتشاف كاشيرات غير مرتبطين بهذا الفرع" });
+      }
+
+      const ledger = await storage.getBranchPointsLedger(bonus.branchId);
+      const bonusEntries = ledger.filter(e => e.pointsType === "branch_bonus" && e.sourceId === id && e.status !== "cancelled");
+      for (const entry of bonusEntries) {
+        await storage.updatePointsEntryStatus(entry.id, "cancelled");
+      }
+
+      const settings = await storage.getPointSettings();
+      const pointValue = settings?.pointValue || 0.5;
+
+      const [year, month] = bonus.yearMonth.split("-").map(Number);
+      const lastDay = new Date(year, month, 0).getDate();
+      const endDate = `${bonus.yearMonth}-${String(lastDay).padStart(2, "0")}`;
+
+      const newDistribution: any[] = [];
+      for (const adj of adjustments) {
+        const amount = parseFloat(adj.amount) || 0;
+        if (amount > 0) {
+          const points = Math.round(amount / pointValue);
+          await storage.createPointsEntry({
+            cashierId: adj.cashierId,
+            branchId: bonus.branchId,
+            transactionDate: endDate,
+            pointsType: "branch_bonus",
+            sourceId: bonus.id,
+            sourceName: `مكافأة فرع (تعديل يدوي) - ${bonus.yearMonth}`,
+            pointsEarned: points,
+            pointValue: pointValue,
+            amountEarned: amount,
+            status: "earned",
+            notes: `تعديل يدوي: ${comment}`,
+          });
+          newDistribution.push({
+            cashierId: adj.cashierId,
+            name: adj.name,
+            sales: adj.sales || 0,
+            share: 0,
+            amount: amount,
+            manualAdjust: true,
+          });
+        }
+      }
+
+      existingCalcDetails.distribution = newDistribution;
+      existingCalcDetails.manualAdjustment = {
+        comment,
+        adjustedBy: userId,
+        adjustedAt: new Date().toISOString(),
+        totalAdjusted: newDistribution.reduce((s, d) => s + d.amount, 0),
+      };
+
+      await storage.updateBranchBonus(id, {
+        calculationStatus: "manual_adjusted",
+        matchedTierAmount: newDistribution.reduce((s, d) => s + d.amount, 0),
+        calculationDetails: JSON.stringify(existingCalcDetails),
+      } as any);
+
+      res.json({ success: true, distribution: newDistribution });
+    } catch (error) {
+      console.error("Error manual adjusting branch bonus:", error);
+      res.status(500).json({ error: "فشل في التعديل اليدوي" });
+    }
+  });
+
   // Cashier Points Ledger
   app.get("/api/smart-incentives/points-ledger", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
