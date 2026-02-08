@@ -2353,6 +2353,48 @@ export const insertCashierProductSalesSchema = createInsertSchema(cashierProduct
 export type CashierProductSales = typeof cashierProductSales.$inferSelect;
 export type InsertCashierProductSales = z.infer<typeof insertCashierProductSalesSchema>;
 
+// كشف حساب حوافز الكاشير - Cashier Incentive Statements
+export const cashierIncentiveStatements = pgTable("cashier_incentive_statements", {
+  id: serial("id").primaryKey(),
+  statementNumber: text("statement_number").notNull(),
+  cashierId: varchar("cashier_id").notNull().references(() => users.id),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  periodFrom: text("period_from").notNull(),
+  periodTo: text("period_to").notNull(),
+  totalPoints: integer("total_points").default(0).notNull(),
+  totalAmount: real("total_amount").default(0).notNull(),
+  dailyChallengePoints: integer("daily_challenge_points").default(0),
+  productCommissionPoints: integer("product_commission_points").default(0),
+  branchBonusPoints: integer("branch_bonus_points").default(0),
+  manualAdjustmentPoints: integer("manual_adjustment_points").default(0),
+  entriesCount: integer("entries_count").default(0),
+  status: text("status").default("draft").notNull(),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  rejectedBy: varchar("rejected_by").references(() => users.id),
+  rejectedAt: timestamp("rejected_at"),
+  rejectionReason: text("rejection_reason"),
+  paidBy: varchar("paid_by").references(() => users.id),
+  paidAt: timestamp("paid_at"),
+  statementData: text("statement_data"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_incentive_stmt_cashier").on(table.cashierId),
+  index("idx_incentive_stmt_branch").on(table.branchId),
+  index("idx_incentive_stmt_status").on(table.status),
+]);
+
+export const insertCashierIncentiveStatementSchema = createInsertSchema(cashierIncentiveStatements).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type CashierIncentiveStatement = typeof cashierIncentiveStatements.$inferSelect;
+export type InsertCashierIncentiveStatement = z.infer<typeof insertCashierIncentiveStatementSchema>;
+
 // Seasons and Holidays - المواسم والإجازات
 export const seasonsHolidays = pgTable("seasons_holidays", {
   id: serial("id").primaryKey(),

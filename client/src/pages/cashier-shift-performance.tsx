@@ -22,13 +22,13 @@ import {
   Target, TrendingUp, TrendingDown, Users, Trophy, ChevronLeft, Calendar, 
   Award, AlertTriangle, Bell, Clock, CheckCircle2, Settings, 
   Sun, Moon, DollarSign, Receipt, User as UserIcon, RefreshCw, BarChart as BarChartIcon,
-  Star, Search, CalendarDays, X, FileSpreadsheet, Printer, FileText, Package
+  Star, Search, CalendarDays, X, FileSpreadsheet, Printer, FileText, Package, Download
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Link } from "wouter";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line, Legend, PieChart, Pie, Cell } from "recharts";
 import * as XLSX from "xlsx";
-import type { Branch, PerformanceAlert, ShiftPerformanceTracking, User } from "@shared/schema";
+import type { Branch, PerformanceAlert, ShiftPerformanceTracking, User, CashierIncentiveStatement } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 
 const SHIFT_TYPES = [
@@ -88,6 +88,20 @@ export default function CashierShiftPerformance() {
   const [achievementShiftDate, setAchievementShiftDate] = useState("");
   const [achievementShiftType, setAchievementShiftType] = useState("");
   const [submittingAchievement, setSubmittingAchievement] = useState(false);
+
+  const [stmtPeriodFrom, setStmtPeriodFrom] = useState(() => {
+    const d = new Date();
+    d.setDate(1);
+    return d.toISOString().split('T')[0];
+  });
+  const [stmtPeriodTo, setStmtPeriodTo] = useState(() => new Date().toISOString().split('T')[0]);
+  const [stmtCashierId, setStmtCashierId] = useState<string>("");
+  const [stmtViewMode, setStmtViewMode] = useState<'list' | 'detail'>('list');
+  const [selectedStatement, setSelectedStatement] = useState<any>(null);
+  const [stmtNotes, setStmtNotes] = useState("");
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [rejectingStmtId, setRejectingStmtId] = useState<number | null>(null);
 
   const { user } = useAuth();
   const { branches, userBranchId, canSelectBranch } = useBranches();
@@ -383,6 +397,49 @@ export default function CashierShiftPerformance() {
     }).sort((a, b) => b.contributionPercent - a.contributionPercent);
   }, [cashierJournals, serverContributionPercent, canViewAllCashiers]);
 
+  const { data: incentiveStatements = [], isLoading: loadingStatements, refetch: refetchStatements } = useQuery({
+    queryKey: ["/api/smart-incentives/incentive-statements", selectedBranch, stmtCashierId],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (selectedBranch && selectedBranch !== "all") params.set("branchId", selectedBranch);
+      if (stmtCashierId) params.set("cashierId", stmtCashierId);
+      const res = await fetch(`/api/smart-incentives/incentive-statements?${params}`);
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+  });
+
+  const createStatementMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await apiRequest("POST", "/api/smart-incentives/incentive-statements", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast.success("تم إنشاء كشف الحوافز بنجاح");
+      refetchStatements();
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "فشل في إنشاء الكشف");
+    },
+  });
+
+  const updateStatementStatusMutation = useMutation({
+    mutationFn: async ({ id, status, rejectionReason }: { id: number; status: string; rejectionReason?: string }) => {
+      const res = await apiRequest("PATCH", `/api/smart-incentives/incentive-statements/${id}/status`, { status, rejectionReason });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast.success("تم تحديث حالة الكشف بنجاح");
+      refetchStatements();
+      setSelectedStatement(null);
+      setShowRejectDialog(false);
+      setRejectionReason("");
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "فشل في تحديث الحالة");
+    },
+  });
+
   const markAlertReadMutation = useMutation({
     mutationFn: async (id: number) => {
       return apiRequest("PATCH", `/api/performance-alerts/${id}/read`, {});
@@ -391,6 +448,78 @@ export default function CashierShiftPerformance() {
       queryClient.invalidateQueries({ queryKey: ["/api/performance-alerts"] });
     }
   });
+
+  const getStmtStatusInfo = (status: string) => {
+    switch (status) {
+      case 'draft': return { label: 'مسودة', color: 'bg-gray-100 text-gray-700', icon: '📝' };
+      case 'submitted': return { label: 'مقدم للاعتماد', color: 'bg-blue-100 text-blue-700', icon: '📤' };
+      case 'approved': return { label: 'معتمد', color: 'bg-green-100 text-green-700', icon: '✅' };
+      case 'rejected': return { label: 'مرفوض', color: 'bg-red-100 text-red-700', icon: '❌' };
+      case 'paid': return { label: 'تم الصرف', color: 'bg-purple-100 text-purple-700', icon: '💰' };
+      default: return { label: status, color: 'bg-gray-100 text-gray-700', icon: '📋' };
+    }
+  };
+
+  const getPointsTypeLabel = (type: string) => {
+    switch (type) {
+      case 'daily_challenge': return 'تحدي يومي';
+      case 'product_commission': return 'عمولة صنف';
+      case 'branch_bonus': return 'مكافأة فرع';
+      case 'manual_adjustment': return 'تعديل يدوي';
+      default: return type;
+    }
+  };
+
+  const handleCreateStatement = () => {
+    if (!stmtCashierId) {
+      toast.error("يجب اختيار الكاشير");
+      return;
+    }
+    if (!selectedBranch || selectedBranch === "all") {
+      toast.error("يجب اختيار فرع محدد");
+      return;
+    }
+    createStatementMutation.mutate({
+      cashierId: stmtCashierId,
+      branchId: selectedBranch,
+      periodFrom: stmtPeriodFrom,
+      periodTo: stmtPeriodTo,
+      notes: stmtNotes || undefined,
+    });
+  };
+
+  const handleExportStatementExcel = (stmt: any) => {
+    const data = stmt.statementData ? JSON.parse(stmt.statementData) : null;
+    if (!data) return;
+    
+    const rows = data.entries.map((e: any, i: number) => ({
+      '#': i + 1,
+      'التاريخ': e.date,
+      'الشفت': e.shiftType === 'morning' ? 'صباحي' : e.shiftType === 'evening' ? 'مسائي' : '-',
+      'النوع': getPointsTypeLabel(e.type),
+      'المصدر': e.source || '-',
+      'النقاط': e.points,
+      'المبلغ (ر.س)': e.amount?.toFixed(2),
+      'ملاحظات': e.notes || '-',
+    }));
+
+    rows.push({
+      '#': '',
+      'التاريخ': '',
+      'الشفت': '',
+      'النوع': '',
+      'المصدر': 'الإجمالي',
+      'النقاط': data.summary.totalPoints,
+      'المبلغ (ر.س)': data.summary.totalAmount?.toFixed(2),
+      'ملاحظات': '',
+    });
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "كشف الحوافز");
+    XLSX.writeFile(wb, `incentive_statement_${stmt.statementNumber}.xlsx`);
+    toast.success("تم تصدير الكشف بنجاح");
+  };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', { 
@@ -850,6 +979,10 @@ export default function CashierShiftPerformance() {
               {summaryStats.alertCount > 0 && (
                 <Badge className="mr-1 bg-red-500 text-white text-xs">{summaryStats.alertCount}</Badge>
               )}
+            </TabsTrigger>
+            <TabsTrigger value="incentive-statements" data-testid="tab-incentive-statements" className="text-xs sm:text-sm">
+              <FileText className="h-3 w-3 sm:h-4 sm:w-4 ml-1" />
+              كشف حساب الحوافز
             </TabsTrigger>
           </TabsList>
 
@@ -1753,6 +1886,288 @@ export default function CashierShiftPerformance() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          <TabsContent value="incentive-statements" className="space-y-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <FileText className="h-5 w-5 text-amber-600" />
+                      كشف حساب حوافز الكاشير
+                    </CardTitle>
+                    <CardDescription className="text-xs mt-1">
+                      إنشاء ومراجعة واعتماد كشوفات حوافز الكاشير للصرف
+                    </CardDescription>
+                  </div>
+                  {stmtViewMode === 'detail' && (
+                    <Button variant="outline" size="sm" onClick={() => { setStmtViewMode('list'); setSelectedStatement(null); }}>
+                      <ChevronLeft className="h-4 w-4 ml-1" />
+                      العودة للقائمة
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent>
+                {stmtViewMode === 'list' ? (
+                  <div className="space-y-4">
+                    <div className="bg-gradient-to-l from-amber-50 to-gray-50 rounded-lg border border-amber-100 p-3 space-y-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div>
+                          <Label className="text-xs font-bold">من تاريخ</Label>
+                          <Input type="date" value={stmtPeriodFrom} onChange={(e) => setStmtPeriodFrom(e.target.value)} className="h-9 text-xs" data-testid="input-stmt-from" />
+                        </div>
+                        <div>
+                          <Label className="text-xs font-bold">إلى تاريخ</Label>
+                          <Input type="date" value={stmtPeriodTo} onChange={(e) => setStmtPeriodTo(e.target.value)} className="h-9 text-xs" data-testid="input-stmt-to" />
+                        </div>
+                        <div>
+                          <Label className="text-xs font-bold">الكاشير</Label>
+                          <Select value={stmtCashierId} onValueChange={setStmtCashierId}>
+                            <SelectTrigger className="h-9 text-xs" data-testid="select-stmt-cashier">
+                              <SelectValue placeholder="اختر الكاشير" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {reportBranchCashiers.map((c: any) => (
+                                <SelectItem key={c.id} value={c.id}>{c.firstName || c.username || c.id} {c.lastName || ''}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex items-end gap-2">
+                          <Button onClick={handleCreateStatement} disabled={createStatementMutation.isPending || !stmtCashierId || !selectedBranch || selectedBranch === "all"} className="bg-amber-600 hover:bg-amber-700 h-9 text-xs flex-1" data-testid="button-create-statement">
+                            {createStatementMutation.isPending ? "جاري الإنشاء..." : "إنشاء كشف"}
+                          </Button>
+                        </div>
+                      </div>
+                      {stmtCashierId && (
+                        <div>
+                          <Label className="text-xs">ملاحظات (اختياري)</Label>
+                          <Input value={stmtNotes} onChange={(e) => setStmtNotes(e.target.value)} placeholder="ملاحظات إضافية على الكشف..." className="h-8 text-xs" />
+                        </div>
+                      )}
+                    </div>
+
+                    {loadingStatements ? (
+                      <div className="text-center py-8 text-gray-500">جاري التحميل...</div>
+                    ) : incentiveStatements.length === 0 ? (
+                      <div className="text-center py-12">
+                        <FileText className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+                        <p className="text-gray-500 text-sm">لا توجد كشوفات حوافز بعد</p>
+                        <p className="text-gray-400 text-xs mt-1">اختر الكاشير والفترة ثم اضغط "إنشاء كشف"</p>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-gray-50">
+                              <TableHead className="text-right text-xs font-bold">رقم الكشف</TableHead>
+                              <TableHead className="text-right text-xs font-bold">الكاشير</TableHead>
+                              <TableHead className="text-right text-xs font-bold">الفترة</TableHead>
+                              <TableHead className="text-center text-xs font-bold">النقاط</TableHead>
+                              <TableHead className="text-center text-xs font-bold">المبلغ</TableHead>
+                              <TableHead className="text-center text-xs font-bold">القيود</TableHead>
+                              <TableHead className="text-center text-xs font-bold">الحالة</TableHead>
+                              <TableHead className="text-center text-xs font-bold">إجراءات</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {incentiveStatements.map((stmt: any) => {
+                              const statusInfo = getStmtStatusInfo(stmt.status);
+                              return (
+                                <TableRow key={stmt.id} className="hover:bg-amber-50/30 cursor-pointer" onClick={() => { setSelectedStatement(stmt); setStmtViewMode('detail'); }}>
+                                  <TableCell className="text-xs font-mono font-bold text-amber-700">{stmt.statementNumber}</TableCell>
+                                  <TableCell className="text-xs">{getCashierName(stmt.cashierId)}</TableCell>
+                                  <TableCell className="text-xs">{stmt.periodFrom} → {stmt.periodTo}</TableCell>
+                                  <TableCell className="text-center text-xs font-bold">{stmt.totalPoints}</TableCell>
+                                  <TableCell className="text-center text-xs font-bold text-green-700">{stmt.totalAmount?.toFixed(2)} ر.س</TableCell>
+                                  <TableCell className="text-center text-xs">{stmt.entriesCount}</TableCell>
+                                  <TableCell className="text-center">
+                                    <Badge className={`text-[10px] ${statusInfo.color}`}>{statusInfo.icon} {statusInfo.label}</Badge>
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <div className="flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleExportStatementExcel(stmt)} title="تصدير Excel" data-testid={`button-export-stmt-${stmt.id}`}>
+                                        <FileSpreadsheet className="h-3.5 w-3.5 text-green-600" />
+                                      </Button>
+                                      {stmt.status === 'draft' && (
+                                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => updateStatementStatusMutation.mutate({ id: stmt.id, status: 'submitted' })} title="تقديم للاعتماد" data-testid={`button-submit-stmt-${stmt.id}`}>
+                                          <CheckCircle2 className="h-3.5 w-3.5 text-blue-600" />
+                                        </Button>
+                                      )}
+                                      {stmt.status === 'submitted' && (
+                                        <>
+                                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => updateStatementStatusMutation.mutate({ id: stmt.id, status: 'approved' })} title="اعتماد" data-testid={`button-approve-stmt-${stmt.id}`}>
+                                            <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                                          </Button>
+                                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setRejectingStmtId(stmt.id); setShowRejectDialog(true); }} title="رفض" data-testid={`button-reject-stmt-${stmt.id}`}>
+                                            <X className="h-3.5 w-3.5 text-red-600" />
+                                          </Button>
+                                        </>
+                                      )}
+                                      {stmt.status === 'approved' && (
+                                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => updateStatementStatusMutation.mutate({ id: stmt.id, status: 'paid' })} title="صرف" data-testid={`button-pay-stmt-${stmt.id}`}>
+                                          <DollarSign className="h-3.5 w-3.5 text-purple-600" />
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    )}
+                  </div>
+                ) : selectedStatement ? (
+                  <div className="space-y-4">
+                    <div className="bg-gradient-to-l from-amber-50 to-white border border-amber-200 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <h3 className="font-bold text-lg text-amber-800">{selectedStatement.statementNumber}</h3>
+                          <p className="text-xs text-gray-500">تاريخ الإنشاء: {new Date(selectedStatement.createdAt).toLocaleDateString('ar-SA')}</p>
+                        </div>
+                        <Badge className={`text-sm px-3 py-1 ${getStmtStatusInfo(selectedStatement.status).color}`}>
+                          {getStmtStatusInfo(selectedStatement.status).icon} {getStmtStatusInfo(selectedStatement.status).label}
+                        </Badge>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                        <div className="bg-white rounded p-2 border">
+                          <span className="text-gray-500">الكاشير:</span>
+                          <p className="font-bold">{getCashierName(selectedStatement.cashierId)}</p>
+                        </div>
+                        <div className="bg-white rounded p-2 border">
+                          <span className="text-gray-500">الفرع:</span>
+                          <p className="font-bold">{branches?.find((b: any) => b.id === selectedStatement.branchId)?.name || selectedStatement.branchId}</p>
+                        </div>
+                        <div className="bg-white rounded p-2 border">
+                          <span className="text-gray-500">الفترة:</span>
+                          <p className="font-bold">{selectedStatement.periodFrom} → {selectedStatement.periodTo}</p>
+                        </div>
+                        <div className="bg-white rounded p-2 border">
+                          <span className="text-gray-500">عدد القيود:</span>
+                          <p className="font-bold">{selectedStatement.entriesCount}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-center">
+                        <p className="text-[10px] text-amber-700">إجمالي النقاط</p>
+                        <p className="text-xl font-bold text-amber-800">{selectedStatement.totalPoints}</p>
+                      </div>
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
+                        <p className="text-[10px] text-green-700">إجمالي المبلغ</p>
+                        <p className="text-xl font-bold text-green-800">{selectedStatement.totalAmount?.toFixed(2)} <span className="text-xs">ر.س</span></p>
+                      </div>
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
+                        <p className="text-[10px] text-blue-700">تحديات يومية</p>
+                        <p className="text-lg font-bold text-blue-800">{selectedStatement.dailyChallengePoints || 0}</p>
+                      </div>
+                      <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-center">
+                        <p className="text-[10px] text-purple-700">عمولات أصناف</p>
+                        <p className="text-lg font-bold text-purple-800">{selectedStatement.productCommissionPoints || 0}</p>
+                      </div>
+                      <div className="bg-pink-50 border border-pink-200 rounded-lg p-3 text-center">
+                        <p className="text-[10px] text-pink-700">مكافآت فرع</p>
+                        <p className="text-lg font-bold text-pink-800">{selectedStatement.branchBonusPoints || 0}</p>
+                      </div>
+                    </div>
+
+                    {(() => {
+                      const data = selectedStatement.statementData ? JSON.parse(selectedStatement.statementData) : null;
+                      if (!data || !data.entries) return <p className="text-center text-gray-500 py-4 text-sm">لا توجد بيانات تفصيلية</p>;
+                      return (
+                        <div className="overflow-x-auto border rounded-lg">
+                          <Table>
+                            <TableHeader>
+                              <TableRow className="bg-gray-50">
+                                <TableHead className="text-right text-xs font-bold w-10">#</TableHead>
+                                <TableHead className="text-right text-xs font-bold">التاريخ</TableHead>
+                                <TableHead className="text-center text-xs font-bold">الشفت</TableHead>
+                                <TableHead className="text-right text-xs font-bold">النوع</TableHead>
+                                <TableHead className="text-right text-xs font-bold">المصدر</TableHead>
+                                <TableHead className="text-center text-xs font-bold">النقاط</TableHead>
+                                <TableHead className="text-center text-xs font-bold">المبلغ (ر.س)</TableHead>
+                                <TableHead className="text-right text-xs font-bold">ملاحظات</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {data.entries.map((entry: any, idx: number) => (
+                                <TableRow key={idx} className="hover:bg-amber-50/20">
+                                  <TableCell className="text-xs text-gray-500">{idx + 1}</TableCell>
+                                  <TableCell className="text-xs">{entry.date}</TableCell>
+                                  <TableCell className="text-center text-xs">
+                                    {entry.shiftType === 'morning' ? '☀️ صباحي' : entry.shiftType === 'evening' ? '🌙 مسائي' : '-'}
+                                  </TableCell>
+                                  <TableCell className="text-xs">
+                                    <Badge variant="outline" className="text-[10px]">{getPointsTypeLabel(entry.type)}</Badge>
+                                  </TableCell>
+                                  <TableCell className="text-xs">{entry.source || '-'}</TableCell>
+                                  <TableCell className="text-center text-xs font-bold text-amber-700">{entry.points}</TableCell>
+                                  <TableCell className="text-center text-xs font-bold text-green-700">{entry.amount?.toFixed(2)}</TableCell>
+                                  <TableCell className="text-xs text-gray-500 max-w-[150px] truncate">{entry.notes || '-'}</TableCell>
+                                </TableRow>
+                              ))}
+                              <TableRow className="bg-amber-50 font-bold">
+                                <TableCell colSpan={5} className="text-left text-xs">الإجمالي</TableCell>
+                                <TableCell className="text-center text-xs text-amber-800">{data.summary.totalPoints}</TableCell>
+                                <TableCell className="text-center text-xs text-green-800">{data.summary.totalAmount?.toFixed(2)}</TableCell>
+                                <TableCell></TableCell>
+                              </TableRow>
+                            </TableBody>
+                          </Table>
+                        </div>
+                      );
+                    })()}
+
+                    {selectedStatement.notes && (
+                      <div className="bg-gray-50 rounded-lg p-3 border text-xs">
+                        <span className="font-bold">ملاحظات: </span>{selectedStatement.notes}
+                      </div>
+                    )}
+                    {selectedStatement.rejectionReason && (
+                      <div className="bg-red-50 rounded-lg p-3 border border-red-200 text-xs text-red-700">
+                        <span className="font-bold">سبب الرفض: </span>{selectedStatement.rejectionReason}
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap gap-2 justify-center pt-2 border-t">
+                      <Button variant="outline" size="sm" onClick={() => handleExportStatementExcel(selectedStatement)} className="text-xs" data-testid="button-detail-export-excel">
+                        <FileSpreadsheet className="h-3.5 w-3.5 ml-1 text-green-600" />
+                        تصدير Excel
+                      </Button>
+                      {selectedStatement.status === 'draft' && (
+                        <Button size="sm" className="text-xs bg-blue-600 hover:bg-blue-700" onClick={() => updateStatementStatusMutation.mutate({ id: selectedStatement.id, status: 'submitted' })} data-testid="button-detail-submit">
+                          <CheckCircle2 className="h-3.5 w-3.5 ml-1" />
+                          تقديم للاعتماد
+                        </Button>
+                      )}
+                      {selectedStatement.status === 'submitted' && (
+                        <>
+                          <Button size="sm" className="text-xs bg-green-600 hover:bg-green-700" onClick={() => updateStatementStatusMutation.mutate({ id: selectedStatement.id, status: 'approved' })} data-testid="button-detail-approve">
+                            <CheckCircle2 className="h-3.5 w-3.5 ml-1" />
+                            اعتماد الكشف
+                          </Button>
+                          <Button size="sm" variant="destructive" className="text-xs" onClick={() => { setRejectingStmtId(selectedStatement.id); setShowRejectDialog(true); }} data-testid="button-detail-reject">
+                            <X className="h-3.5 w-3.5 ml-1" />
+                            رفض
+                          </Button>
+                        </>
+                      )}
+                      {selectedStatement.status === 'approved' && (
+                        <Button size="sm" className="text-xs bg-purple-600 hover:bg-purple-700" onClick={() => updateStatementStatusMutation.mutate({ id: selectedStatement.id, status: 'paid' })} data-testid="button-detail-pay">
+                          <DollarSign className="h-3.5 w-3.5 ml-1" />
+                          تأكيد الصرف
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
 
         <Dialog open={showProductAchievementDialog} onOpenChange={setShowProductAchievementDialog}>
@@ -1855,6 +2270,42 @@ export default function CashierShiftPerformance() {
                 data-testid="button-submit-achievement"
               >
                 {submittingAchievement ? "جاري التسجيل..." : "تسجيل الإنجاز"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
+          <DialogContent className="max-w-sm" dir="rtl">
+            <DialogHeader>
+              <DialogTitle className="text-red-600 flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5" />
+                رفض كشف الحوافز
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <Label className="text-xs font-bold">سبب الرفض</Label>
+              <Input
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                placeholder="أدخل سبب الرفض..."
+                className="h-10"
+                data-testid="input-rejection-reason"
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  if (rejectingStmtId) {
+                    updateStatementStatusMutation.mutate({ id: rejectingStmtId, status: 'rejected', rejectionReason });
+                  }
+                }}
+                disabled={!rejectionReason.trim()}
+                className="w-full"
+                data-testid="button-confirm-reject"
+              >
+                تأكيد الرفض
               </Button>
             </DialogFooter>
           </DialogContent>

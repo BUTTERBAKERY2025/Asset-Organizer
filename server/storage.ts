@@ -479,6 +479,9 @@ import {
   cashierProductSales,
   type CashierProductSales,
   type InsertCashierProductSales,
+  cashierIncentiveStatements,
+  type CashierIncentiveStatement,
+  type InsertCashierIncentiveStatement,
 } from "@shared/schema";
 
 type TransferHistory = typeof transferHistory.$inferSelect;
@@ -801,6 +804,12 @@ export interface IStorage {
   getCashierProductSales(cashierId: string, date?: string): Promise<CashierProductSales[]>;
   createCashierProductSale(sale: InsertCashierProductSales): Promise<CashierProductSales>;
   updateCashierProductSale(id: number, sale: Partial<InsertCashierProductSales>): Promise<CashierProductSales | undefined>;
+
+  // Cashier Incentive Statements - كشوفات حوافز الكاشير
+  createIncentiveStatement(data: InsertCashierIncentiveStatement): Promise<CashierIncentiveStatement>;
+  getIncentiveStatements(branchId?: string, cashierId?: string, status?: string): Promise<CashierIncentiveStatement[]>;
+  getIncentiveStatement(id: number): Promise<CashierIncentiveStatement | undefined>;
+  updateIncentiveStatementStatus(id: number, status: string, userId: string, rejectionReason?: string): Promise<CashierIncentiveStatement | undefined>;
   
   // Targets Performance Calculation
   calculateBranchPerformance(branchId: string, yearMonth: string): Promise<{
@@ -12544,6 +12553,49 @@ export class DatabaseStorage implements IStorage {
 
     const totalAmount = Number((totalPointsEarned * pointValue).toFixed(2));
     return { challengePoints: createdEntries, totalPoints: totalPointsEarned, totalAmount, diagnostics };
+  }
+
+  async createIncentiveStatement(data: InsertCashierIncentiveStatement): Promise<CashierIncentiveStatement> {
+    const [created] = await db.insert(cashierIncentiveStatements).values(data).returning();
+    return created;
+  }
+
+  async getIncentiveStatements(branchId?: string, cashierId?: string, status?: string): Promise<CashierIncentiveStatement[]> {
+    try {
+      const conditions = [];
+      if (branchId) conditions.push(eq(cashierIncentiveStatements.branchId, branchId));
+      if (cashierId) conditions.push(eq(cashierIncentiveStatements.cashierId, cashierId));
+      if (status) conditions.push(eq(cashierIncentiveStatements.status, status));
+      if (conditions.length > 0) {
+        return await db.select().from(cashierIncentiveStatements).where(and(...conditions)).orderBy(desc(cashierIncentiveStatements.createdAt));
+      }
+      return await db.select().from(cashierIncentiveStatements).orderBy(desc(cashierIncentiveStatements.createdAt));
+    } catch (error: any) {
+      if (error?.code === '42P01') return [];
+      throw error;
+    }
+  }
+
+  async getIncentiveStatement(id: number): Promise<CashierIncentiveStatement | undefined> {
+    const [stmt] = await db.select().from(cashierIncentiveStatements).where(eq(cashierIncentiveStatements.id, id));
+    return stmt || undefined;
+  }
+
+  async updateIncentiveStatementStatus(id: number, status: string, userId: string, rejectionReason?: string): Promise<CashierIncentiveStatement | undefined> {
+    const updateData: any = { status, updatedAt: new Date() };
+    if (status === 'approved') {
+      updateData.approvedBy = userId;
+      updateData.approvedAt = new Date();
+    } else if (status === 'rejected') {
+      updateData.rejectedBy = userId;
+      updateData.rejectedAt = new Date();
+      if (rejectionReason) updateData.rejectionReason = rejectionReason;
+    } else if (status === 'paid') {
+      updateData.paidBy = userId;
+      updateData.paidAt = new Date();
+    }
+    const [updated] = await db.update(cashierIncentiveStatements).set(updateData).where(eq(cashierIncentiveStatements.id, id)).returning();
+    return updated || undefined;
   }
 }
 

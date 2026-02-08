@@ -7496,6 +7496,140 @@ export async function registerRoutes(
     }
   });
 
+  // Cashier Incentive Statements - كشف حساب حوافز الكاشير
+  app.get("/api/smart-incentives/incentive-statements", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const { branchId, cashierId, status } = req.query as any;
+      const statements = await storage.getIncentiveStatements(branchId, cashierId, status);
+      res.json(statements);
+    } catch (error) {
+      console.error("Error fetching incentive statements:", error);
+      res.status(500).json({ error: "فشل في جلب كشوفات الحوافز" });
+    }
+  });
+
+  app.get("/api/smart-incentives/incentive-statements/:id", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const stmt = await storage.getIncentiveStatement(id);
+      if (!stmt) return res.status(404).json({ error: "الكشف غير موجود" });
+      res.json(stmt);
+    } catch (error) {
+      console.error("Error fetching incentive statement:", error);
+      res.status(500).json({ error: "فشل في جلب كشف الحوافز" });
+    }
+  });
+
+  app.post("/api/smart-incentives/incentive-statements", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
+    try {
+      const { cashierId, branchId, periodFrom, periodTo, notes } = req.body;
+      if (!cashierId || !branchId || !periodFrom || !periodTo) {
+        return res.status(400).json({ error: "بيانات ناقصة - يجب تحديد الكاشير والفرع والفترة" });
+      }
+
+      const ledger = await storage.getCashierPointsLedger(cashierId, periodFrom, periodTo);
+      const branchEntries = ledger.filter((e: any) => e.branchId === branchId && e.status !== 'cancelled');
+
+      if (branchEntries.length === 0) {
+        return res.status(400).json({ error: "لا توجد حوافز مسجلة لهذا الكاشير في الفترة المحددة" });
+      }
+
+      let dailyChallengePoints = 0;
+      let productCommissionPoints = 0;
+      let branchBonusPoints = 0;
+      let manualAdjustmentPoints = 0;
+      let totalPoints = 0;
+      let totalAmount = 0;
+
+      for (const entry of branchEntries) {
+        totalPoints += entry.pointsEarned;
+        totalAmount += entry.amountEarned;
+        if (entry.pointsType === 'daily_challenge') dailyChallengePoints += entry.pointsEarned;
+        else if (entry.pointsType === 'product_commission') productCommissionPoints += entry.pointsEarned;
+        else if (entry.pointsType === 'branch_bonus') branchBonusPoints += entry.pointsEarned;
+        else if (entry.pointsType === 'manual_adjustment') manualAdjustmentPoints += entry.pointsEarned;
+      }
+
+      const stmtCount = (await storage.getIncentiveStatements()).length;
+      const statementNumber = `INV-${new Date().getFullYear()}-${String(stmtCount + 1).padStart(5, '0')}`;
+
+      const statementData = JSON.stringify({
+        entries: branchEntries.map((e: any) => ({
+          id: e.id,
+          date: e.transactionDate,
+          shiftType: e.shiftType,
+          type: e.pointsType,
+          source: e.sourceName,
+          points: e.pointsEarned,
+          amount: e.amountEarned,
+          status: e.status,
+          notes: e.notes,
+        })),
+        summary: { totalPoints, totalAmount, dailyChallengePoints, productCommissionPoints, branchBonusPoints, manualAdjustmentPoints },
+        generatedAt: new Date().toISOString(),
+      });
+
+      const userId = (req as any).user?.id;
+      const stmt = await storage.createIncentiveStatement({
+        statementNumber,
+        cashierId,
+        branchId,
+        periodFrom,
+        periodTo,
+        totalPoints,
+        totalAmount,
+        dailyChallengePoints,
+        productCommissionPoints,
+        branchBonusPoints,
+        manualAdjustmentPoints,
+        entriesCount: branchEntries.length,
+        status: 'draft',
+        notes: notes || null,
+        createdBy: userId,
+        statementData,
+      });
+
+      res.json(stmt);
+    } catch (error) {
+      console.error("Error creating incentive statement:", error);
+      res.status(500).json({ error: "فشل في إنشاء كشف الحوافز" });
+    }
+  });
+
+  app.patch("/api/smart-incentives/incentive-statements/:id/status", isAuthenticated, requirePermission("operations", "approve"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { status, rejectionReason } = req.body;
+      const userId = (req as any).user?.id;
+
+      if (!['submitted', 'approved', 'rejected', 'paid'].includes(status)) {
+        return res.status(400).json({ error: "حالة غير صالحة" });
+      }
+
+      const stmt = await storage.getIncentiveStatement(id);
+      if (!stmt) return res.status(404).json({ error: "الكشف غير موجود" });
+
+      if (status === 'submitted' && stmt.status !== 'draft') {
+        return res.status(400).json({ error: "يمكن تقديم الكشفات المسودة فقط" });
+      }
+      if (status === 'approved' && stmt.status !== 'submitted') {
+        return res.status(400).json({ error: "يمكن اعتماد الكشفات المقدمة فقط" });
+      }
+      if (status === 'rejected' && stmt.status !== 'submitted') {
+        return res.status(400).json({ error: "يمكن رفض الكشفات المقدمة فقط" });
+      }
+      if (status === 'paid' && stmt.status !== 'approved') {
+        return res.status(400).json({ error: "يمكن صرف الكشفات المعتمدة فقط" });
+      }
+
+      const updated = await storage.updateIncentiveStatementStatus(id, status, userId, rejectionReason);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating incentive statement status:", error);
+      res.status(500).json({ error: "فشل في تحديث حالة الكشف" });
+    }
+  });
+
   // Cashier Product Sales
   app.get("/api/smart-incentives/product-sales", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
