@@ -4586,16 +4586,29 @@ export class DatabaseStorage implements IStorage {
         ? (projectedTotal / progress.targetAmount) * 100 
         : 0;
 
-      // Calculate trend from last 7 days
-      const recentDays = progress.dailyProgress.slice(-7).filter(d => d.achievedAmount > 0);
+      // Calculate trend from recent days with actual sales data
+      const saudiToday = getSaudiArabiaTime().date;
+      const monthEndDate = `${yearMonth}-${String(daysInMonth).padStart(2, '0')}`;
+      const cutoffDate = saudiToday < monthEndDate ? saudiToday : monthEndDate;
+      const pastDaysWithSales = progress.dailyProgress
+        .filter(d => d.date <= cutoffDate && d.achievedAmount > 0);
+      const recentDays = pastDaysWithSales.slice(-7);
       let trend: 'up' | 'down' | 'stable' = 'stable';
-      if (recentDays.length >= 2) {
-        const firstHalf = recentDays.slice(0, Math.floor(recentDays.length / 2));
-        const secondHalf = recentDays.slice(Math.floor(recentDays.length / 2));
+      if (recentDays.length >= 4) {
+        const midpoint = Math.floor(recentDays.length / 2);
+        const firstHalf = recentDays.slice(0, midpoint);
+        const secondHalf = recentDays.slice(midpoint);
         const firstAvg = firstHalf.reduce((s, d) => s + d.achievedAmount, 0) / firstHalf.length;
         const secondAvg = secondHalf.reduce((s, d) => s + d.achievedAmount, 0) / secondHalf.length;
-        if (secondAvg > firstAvg * 1.1) trend = 'up';
-        else if (secondAvg < firstAvg * 0.9) trend = 'down';
+        const changePercent = firstAvg > 0 ? ((secondAvg - firstAvg) / firstAvg) * 100 : 0;
+        if (changePercent > 5) trend = 'up';
+        else if (changePercent < -5) trend = 'down';
+      } else if (recentDays.length >= 2) {
+        const firstDay = recentDays[0].achievedAmount;
+        const lastDay = recentDays[recentDays.length - 1].achievedAmount;
+        const changePercent = firstDay > 0 ? ((lastDay - firstDay) / firstDay) * 100 : 0;
+        if (changePercent > 10) trend = 'up';
+        else if (changePercent < -10) trend = 'down';
       }
 
       results.push({
