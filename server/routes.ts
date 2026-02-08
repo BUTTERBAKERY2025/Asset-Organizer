@@ -246,6 +246,11 @@ export async function registerRoutes(
       const updateData: any = {};
       const currentUser = getCurrentUser(req);
       
+      // SECURITY: Prevent non-admin users from modifying their own account via admin endpoint
+      if (req.params.id === currentUser.id && currentUser.role !== "admin") {
+        return res.status(403).json({ error: "استخدم صفحة الملف الشخصي لتعديل بياناتك" });
+      }
+      
       if (firstName !== undefined) updateData.firstName = firstName;
       if (lastName !== undefined) updateData.lastName = lastName;
       
@@ -261,6 +266,14 @@ export async function registerRoutes(
       if (role !== undefined) {
         if (!["admin", "employee", "viewer", "attendance_clerk"].includes(role)) {
           return res.status(400).json({ error: "Invalid role" });
+        }
+        // SECURITY: Only admins can change user roles to prevent privilege escalation
+        if (currentUser.role !== "admin") {
+          return res.status(403).json({ error: "فقط المسؤولين يمكنهم تغيير الأدوار" });
+        }
+        // SECURITY: Prevent admin from changing their own role
+        if (req.params.id === currentUser.id) {
+          return res.status(403).json({ error: "لا يمكنك تغيير دورك الخاص" });
         }
         updateData.role = role;
       }
@@ -359,8 +372,6 @@ export async function registerRoutes(
       const currentUser = getCurrentUser(req);
       const targetUserId = req.params.id;
       
-      console.log("[Permissions] Received permissions to save:", JSON.stringify(permissions, null, 2));
-      console.log("[Permissions] Target user:", targetUserId);
       
       // SECURITY: Prevent users from modifying their own permissions
       if (currentUser.id === targetUserId && currentUser.role !== "admin") {
@@ -390,7 +401,7 @@ export async function registerRoutes(
         }))
         .filter((perm: any) => perm.actions.length > 0);
       
-      console.log("[Permissions] Validated permissions:", JSON.stringify(validatedPermissions, null, 2));
+
       
       // Build a set of requested module:action pairs
       const requestedPerms = new Set<string>();
@@ -527,14 +538,12 @@ export async function registerRoutes(
           module: "attendance_check",
           actions: ["view", "create", "edit"],
         }];
-        console.log(`[Permissions] Attendance clerk ${currentUser.username} has limited permissions: attendance_check only`);
+
         return res.json(attendancePermissions);
       }
       
       // Use cached permissions for better performance
       const permissions = await getCachedPermissions(currentUser.id);
-      console.log(`[Permissions] User ${currentUser.username} (${currentUser.id}) has ${permissions.length} permissions:`, 
-        permissions.map(p => p.module).join(', '));
       res.json(permissions);
     } catch (error) {
       console.error("Error fetching my permissions:", error);
@@ -14085,7 +14094,7 @@ export async function registerRoutes(
         return res.status(403).json({ error: "لا يمكنك تعديل تعييناتك الخاصة" });
       }
       
-      console.log("Creating assignment:", { userId, roleId, branchId, departmentId, scopeType });
+
       
       if (!roleId) {
         return res.status(400).json({ error: "معرف الدور مطلوب" });
@@ -14094,7 +14103,7 @@ export async function registerRoutes(
       // Handle "all_branches" - grant access to all branches via user_branch_access
       let actualBranchId = branchId;
       if (branchId === "all_branches") {
-        console.log("All branches selected, granting access to all branches for user:", userId);
+        // Branch access granted
         actualBranchId = null; // No specific branch in assignment
         
         // Get all branches and grant access
@@ -14866,16 +14875,14 @@ export async function registerRoutes(
       if (date) filters.date = date;
       if (shiftType) filters.shiftType = shiftType;
       
-      console.log("[cashier-shift-targets] Request filters:", filters);
+
       
       let targets = await storage.getAllCashierShiftTargets(filters);
-      console.log("[cashier-shift-targets] Storage returned:", targets.length, "targets");
+
       
       const user = getCurrentUser(req);
       // SECURITY: Apply branch filter
       const branchFilter = getEffectiveBranchFilter(req, branchId);
-      console.log("[cashier-shift-targets] User:", user?.id, "Role:", user?.role, "BranchFilter:", branchFilter);
-
       if (!branchFilter.hasAccess) {
         return res.status(403).json({ error: "غير مصرح بالوصول" });
       }
@@ -14884,18 +14891,16 @@ export async function registerRoutes(
       if (branchFilter.branchIds) {
         // Filter by branch
         targets = targets.filter(t => branchFilter.branchIds!.includes(t.branchId || ''));
-        console.log("[cashier-shift-targets] After branch filter:", targets.length, "targets");
+
         
         // Only admin/manager/approve can see all targets - regular users see their own only
         const canViewAll = await canUserViewAllCashiers(req);
         if (!canViewAll) {
-          console.log("[cashier-shift-targets] Filtering by cashier ID:", user.id);
+
           targets = targets.filter(t => String(t.cashierId) === String(user.id));
-          console.log("[cashier-shift-targets] After cashier filter:", targets.length, "targets");
+
         }
       }
-
-      console.log("[cashier-shift-targets] Final result:", targets.length, "targets");
       res.json(targets);
     } catch (error) {
       console.error("Error fetching cashier shift targets:", error);
@@ -15208,8 +15213,6 @@ export async function registerRoutes(
       // Security check: Determine if user can view all cashiers or only their own
       const canViewAllCashiersFlag = await canUserViewAllCashiers(req);
       
-      console.log("[cashier-journals-report] User:", user.id, "Role:", user.role, "CanViewAll:", canViewAllCashiersFlag);
-
       const filters: any = {};
       if (startDate) filters.startDate = startDate as string;
       if (endDate) filters.endDate = endDate as string;
@@ -15235,7 +15238,7 @@ export async function registerRoutes(
           .filter(j => String(j.cashierId) === String(user.id))
           .reduce((sum, j) => sum + (Number(j.totalSales) || 0), 0);
         myContributionPercent = allBranchTotal > 0 ? (myTotal / allBranchTotal) * 100 : 0;
-        console.log("[cashier-journals-report] Restricting to user's own journals. Contribution:", myContributionPercent?.toFixed(1), "%");
+
         journals = journals.filter(j => String(j.cashierId) === String(user.id));
       } else if (cashierId && cashierId !== 'all') {
         journals = journals.filter(j => j.cashierId === cashierId);
@@ -15255,8 +15258,6 @@ export async function registerRoutes(
         transactionCount: j.transactionCount || 0,
         averageTicket: j.transactionCount ? (Number(j.totalSales) / j.transactionCount) : 0,
       }));
-
-      console.log("[cashier-journals-report] Returning:", result.length, "records");
       res.json({
         journals: result,
         myContributionPercent,
