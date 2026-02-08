@@ -474,6 +474,45 @@ export default function IncentivesManagement() {
   const [manualAmounts, setManualAmounts] = useState<Record<string, string>>({});
   const [manualComment, setManualComment] = useState("");
 
+  const [editBonusDialogOpen, setEditBonusDialogOpen] = useState(false);
+  const [editBonusData, setEditBonusData] = useState<{
+    id: number;
+    branchId: string;
+    yearMonth: string;
+    targetAmount: string;
+    distributionMethod: string;
+    tiers: { fromPercent: string; toPercent: string; bonusAmount: string }[];
+  } | null>(null);
+
+  const updateBranchBonusMutation = useMutation({
+    mutationFn: async (data: { id: number; targetAmount: number; distributionMethod: string; bonusTiers: string; bonusPool: number }) => {
+      const res = await fetch(`/api/smart-incentives/branch-bonus/${data.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetAmount: data.targetAmount,
+          distributionMethod: data.distributionMethod,
+          bonusTiers: data.bonusTiers,
+          bonusPool: data.bonusPool,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "فشل في تحديث المكافأة");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/branch-bonus"] });
+      setEditBonusDialogOpen(false);
+      setEditBonusData(null);
+      toast({ title: "تم تحديث المكافأة بنجاح" });
+    },
+    onError: (error: any) => {
+      toast({ title: error.message || "خطأ في تحديث المكافأة", variant: "destructive" });
+    },
+  });
+
   const manualAdjustMutation = useMutation({
     mutationFn: async ({ id, adjustments, comment }: { id: number; adjustments: any[]; comment: string }) => {
       const res = await fetch(`/api/smart-incentives/branch-bonus/${id}/manual-adjust`, {
@@ -1764,6 +1803,173 @@ export default function IncentivesManagement() {
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
+
+                <Dialog open={editBonusDialogOpen} onOpenChange={(open) => { setEditBonusDialogOpen(open); if (!open) setEditBonusData(null); }}>
+                  <DialogContent className="max-w-lg" dir="rtl">
+                    <DialogHeader>
+                      <DialogTitle>تعديل إعدادات المكافأة</DialogTitle>
+                    </DialogHeader>
+                    {editBonusData && (
+                      <div className="space-y-4 max-h-[70vh] overflow-y-auto pl-1">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label className="text-xs text-gray-600">الفرع</Label>
+                            <div className="h-10 flex items-center px-3 bg-gray-100 rounded border text-sm">
+                              {branches.find(br => br.id === editBonusData.branchId)?.name || editBonusData.branchId}
+                            </div>
+                          </div>
+                          <div>
+                            <Label className="text-xs text-gray-600">الشهر</Label>
+                            <div className="h-10 flex items-center px-3 bg-gray-100 rounded border text-sm">
+                              {editBonusData.yearMonth}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div>
+                          <Label className="text-xs text-gray-600">الهدف الشهري (ريال)</Label>
+                          <Input
+                            type="number"
+                            value={editBonusData.targetAmount}
+                            onChange={(e) => setEditBonusData({ ...editBonusData, targetAmount: e.target.value })}
+                            placeholder="أدخل الهدف الشهري"
+                            className="h-10"
+                            data-testid="input-edit-target"
+                          />
+                        </div>
+
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <Label className="flex items-center gap-1.5 text-sm font-semibold">
+                              <Award className="h-4 w-4 text-amber-600" />
+                              شرائح المكافأة حسب نسبة التحقيق
+                            </Label>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs gap-1 border-amber-300 text-amber-700 hover:bg-amber-50"
+                              onClick={() => setEditBonusData(prev => prev ? { ...prev, tiers: [...prev.tiers, { fromPercent: "", toPercent: "", bonusAmount: "" }] } : prev)}
+                              data-testid="button-edit-add-tier"
+                            >
+                              <Plus className="h-3 w-3" />
+                              إضافة شريحة
+                            </Button>
+                          </div>
+                          <div className="space-y-2">
+                            {editBonusData.tiers.map((tier, idx) => (
+                              <div key={idx} className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-lg border border-gray-200" data-testid={`edit-tier-row-${idx}`}>
+                                <div className="flex items-center gap-1.5 flex-1">
+                                  <span className="text-xs text-gray-500 whitespace-nowrap">من</span>
+                                  <Input
+                                    type="number"
+                                    value={tier.fromPercent}
+                                    onChange={(e) => {
+                                      const t = [...editBonusData.tiers];
+                                      t[idx] = { ...t[idx], fromPercent: e.target.value };
+                                      setEditBonusData({ ...editBonusData, tiers: t });
+                                    }}
+                                    placeholder="80"
+                                    className="h-8 w-16 text-center text-sm"
+                                    data-testid={`input-edit-tier-from-${idx}`}
+                                  />
+                                  <span className="text-xs text-gray-500">%</span>
+                                  <span className="text-xs text-gray-500 whitespace-nowrap">إلى</span>
+                                  <Input
+                                    type="number"
+                                    value={tier.toPercent}
+                                    onChange={(e) => {
+                                      const t = [...editBonusData.tiers];
+                                      t[idx] = { ...t[idx], toPercent: e.target.value };
+                                      setEditBonusData({ ...editBonusData, tiers: t });
+                                    }}
+                                    placeholder="فأعلى"
+                                    className="h-8 w-16 text-center text-sm"
+                                    data-testid={`input-edit-tier-to-${idx}`}
+                                  />
+                                  <span className="text-xs text-gray-500">%</span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs text-gray-500">=</span>
+                                  <Input
+                                    type="number"
+                                    value={tier.bonusAmount}
+                                    onChange={(e) => {
+                                      const t = [...editBonusData.tiers];
+                                      t[idx] = { ...t[idx], bonusAmount: e.target.value };
+                                      setEditBonusData({ ...editBonusData, tiers: t });
+                                    }}
+                                    placeholder="2000"
+                                    className="h-8 w-20 text-center text-sm font-bold"
+                                    data-testid={`input-edit-tier-amount-${idx}`}
+                                  />
+                                  <span className="text-xs text-gray-500">ر.س</span>
+                                </div>
+                                {editBonusData.tiers.length > 1 && (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0 text-red-400 hover:text-red-600 hover:bg-red-50"
+                                    onClick={() => setEditBonusData(prev => prev ? { ...prev, tiers: prev.tiers.filter((_, i) => i !== idx) } : prev)}
+                                    data-testid={`button-edit-delete-tier-${idx}`}
+                                  >
+                                    <X className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                          {editBonusData.tiers.length > 0 && editBonusData.tiers.some(t => t.bonusAmount) && (
+                            <div className="mt-2 p-2 bg-amber-50 rounded border border-amber-200 text-xs text-amber-800">
+                              <span className="font-semibold">أقصى مكافأة: </span>
+                              {formatCurrency(Math.max(...editBonusData.tiers.filter(t => t.bonusAmount).map(t => parseFloat(t.bonusAmount) || 0)))} ريال
+                            </div>
+                          )}
+                        </div>
+
+                        <div>
+                          <Label className="text-xs text-gray-600">طريقة التوزيع على فريق العمل</Label>
+                          <Select value={editBonusData.distributionMethod} onValueChange={(v) => setEditBonusData({ ...editBonusData, distributionMethod: v })}>
+                            <SelectTrigger data-testid="select-edit-distribution-method" className="h-10"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="contribution_ratio">حسب نسبة المساهمة في المبيعات</SelectItem>
+                              <SelectItem value="equal">توزيع متساوي</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    )}
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => { setEditBonusDialogOpen(false); setEditBonusData(null); }}>
+                        إلغاء
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          if (!editBonusData) return;
+                          const tiersData = editBonusData.tiers.filter(t => t.fromPercent && t.bonusAmount).map(t => ({
+                            fromPercent: parseFloat(t.fromPercent),
+                            toPercent: t.toPercent ? parseFloat(t.toPercent) : null,
+                            bonusAmount: parseFloat(t.bonusAmount),
+                          }));
+                          const maxBonus = tiersData.length > 0 ? Math.max(...tiersData.map(t => t.bonusAmount)) : 0;
+                          updateBranchBonusMutation.mutate({
+                            id: editBonusData.id,
+                            targetAmount: parseFloat(editBonusData.targetAmount) || 0,
+                            distributionMethod: editBonusData.distributionMethod,
+                            bonusTiers: JSON.stringify(tiersData),
+                            bonusPool: maxBonus,
+                          });
+                        }}
+                        disabled={updateBranchBonusMutation.isPending || !editBonusData?.targetAmount || editBonusData?.tiers.some(t => !t.fromPercent || !t.bonusAmount)}
+                        className="bg-blue-600 hover:bg-blue-700"
+                        data-testid="button-save-edit-bonus"
+                      >
+                        {updateBranchBonusMutation.isPending ? "جاري الحفظ..." : "حفظ التعديلات"}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               </CardHeader>
               <CardContent>
                 {branchBonusLoading ? (
@@ -1820,9 +2026,52 @@ export default function IncentivesManagement() {
                                       إجراءات
                                     </Button>
                                   </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end" className="w-48">
+                                  <DropdownMenuContent align="end" className="w-56">
+                                    <DropdownMenuItem
+                                      className="text-xs gap-2 cursor-pointer"
+                                      onClick={() => {
+                                        const existingTiers = tiers || [];
+                                        setEditBonusData({
+                                          id: b.id,
+                                          branchId: b.branchId,
+                                          yearMonth: b.yearMonth,
+                                          targetAmount: String(b.targetAmount),
+                                          distributionMethod: b.distributionMethod,
+                                          tiers: existingTiers.length > 0
+                                            ? existingTiers.map((t: any) => ({ fromPercent: String(t.fromPercent), toPercent: String(t.toPercent || ""), bonusAmount: String(t.bonusAmount) }))
+                                            : [{ fromPercent: "80", toPercent: "99", bonusAmount: "" }],
+                                        });
+                                        setEditBonusDialogOpen(true);
+                                      }}
+                                      data-testid={`menu-edit-settings-${b.id}`}
+                                    >
+                                      <Settings className="h-3.5 w-3.5 text-blue-600" />
+                                      <span>تعديل الهدف والشرائح</span>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      className="text-xs gap-2 cursor-pointer"
+                                      onClick={() => {
+                                        const existingTiers = tiers || [];
+                                        setEditBonusData({
+                                          id: b.id,
+                                          branchId: b.branchId,
+                                          yearMonth: b.yearMonth,
+                                          targetAmount: String(b.targetAmount),
+                                          distributionMethod: b.distributionMethod === "contribution_ratio" ? "equal" : "contribution_ratio",
+                                          tiers: existingTiers.length > 0
+                                            ? existingTiers.map((t: any) => ({ fromPercent: String(t.fromPercent), toPercent: String(t.toPercent || ""), bonusAmount: String(t.bonusAmount) }))
+                                            : [{ fromPercent: "80", toPercent: "99", bonusAmount: "" }],
+                                        });
+                                        setEditBonusDialogOpen(true);
+                                      }}
+                                      data-testid={`menu-change-distribution-${b.id}`}
+                                    >
+                                      <Users className="h-3.5 w-3.5 text-green-600" />
+                                      <span>تغيير طريقة التوزيع</span>
+                                    </DropdownMenuItem>
                                     {isCalculated && (
                                       <>
+                                        <DropdownMenuSeparator />
                                         <DropdownMenuItem
                                           className="text-xs gap-2 cursor-pointer"
                                           onClick={() => {
@@ -1849,9 +2098,9 @@ export default function IncentivesManagement() {
                                           <RefreshCw className="h-3.5 w-3.5" />
                                           <span>إعادة الاحتساب</span>
                                         </DropdownMenuItem>
-                                        <DropdownMenuSeparator />
                                       </>
                                     )}
+                                    <DropdownMenuSeparator />
                                     <DropdownMenuItem
                                       className="text-xs gap-2 cursor-pointer text-red-600"
                                       onClick={() => {
