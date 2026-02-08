@@ -6954,7 +6954,8 @@ export async function registerRoutes(
       for (const ch of validChallenges) {
         if (!ch.cashierId || !ch.branchId) continue;
         const effectiveShift = (ch.shiftType && ch.shiftType !== 'null') ? ch.shiftType : null;
-        const shiftsToAssign = effectiveShift ? [effectiveShift] : ['morning', 'evening'];
+        if (!effectiveShift) continue;
+        const shiftsToAssign = [effectiveShift];
         for (const shift of shiftsToAssign) {
           const key = `${ch.cashierId}_${ch.branchId}_${shift}`;
           if (!grouped[key]) {
