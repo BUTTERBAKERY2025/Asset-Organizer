@@ -7042,7 +7042,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/smart-incentives/top-cashiers", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+  app.get("/api/smart-incentives/top-cashiers", isAuthenticated, async (req, res) => {
     try {
       const yearMonth = req.query.yearMonth as string;
       const limit = parseInt(req.query.limit as string) || 10;
