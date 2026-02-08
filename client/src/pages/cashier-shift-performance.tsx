@@ -13,7 +13,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -21,13 +20,13 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Check, ChevronsUpDown } from "lucide-react";
 import { 
   Target, TrendingUp, TrendingDown, Users, Trophy, ChevronLeft, Calendar, 
-  Award, AlertTriangle, Bell, Clock, CheckCircle2, Plus, Settings, 
+  Award, AlertTriangle, Bell, Clock, CheckCircle2, Settings, 
   Sun, Moon, DollarSign, Receipt, User as UserIcon, RefreshCw, BarChart as BarChartIcon,
-  Pencil, Star, Search, CalendarDays, X
+  Star, Search, CalendarDays, X
 } from "lucide-react";
 import { Link } from "wouter";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line, Legend, PieChart, Pie, Cell } from "recharts";
-import type { Branch, CashierShiftTarget, PerformanceAlert, ShiftPerformanceTracking, User } from "@shared/schema";
+import type { Branch, PerformanceAlert, ShiftPerformanceTracking, User } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 
 const SHIFT_TYPES = [
@@ -66,8 +65,6 @@ export default function CashierShiftPerformance() {
   const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [selectedShift, setSelectedShift] = useState<string>("all");
   const [datePreset, setDatePreset] = useState<string>("today");
-  const [showTargetDialog, setShowTargetDialog] = useState(false);
-  const [editingTarget, setEditingTarget] = useState<CashierShiftTarget | null>(null);
   
   // Report filters
   const [reportStartDate, setReportStartDate] = useState(() => {
@@ -82,21 +79,6 @@ export default function CashierShiftPerformance() {
   // Targets tab specific filter
   const [targetCashierId, setTargetCashierId] = useState<string>("all");
   const [targetCashierOpen, setTargetCashierOpen] = useState(false);
-  const [dialogCashierOpen, setDialogCashierOpen] = useState(false);
-  const [newTarget, setNewTarget] = useState({
-    cashierId: "",
-    branchId: "",
-    shiftType: "morning",
-    cashierRole: "main",
-    periodType: "weekly" as "daily" | "weekly" | "monthly",
-    startDate: today,
-    endDate: "",
-    totalTargetAmount: 0,
-    totalTargetTransactions: 0,
-    targetAmount: 0, // Daily distributed
-    targetTransactions: 0, // Daily distributed
-    targetTicketValue: 0,
-  });
 
   const { user } = useAuth();
   const { branches, userBranchId, canSelectBranch } = useBranches();
@@ -133,12 +115,6 @@ export default function CashierShiftPerformance() {
     enabled: canViewAllCashiers,
   });
 
-  // Filter cashiers by selected branch in the dialog (for adding targets)
-  const branchCashiers = useMemo(() => {
-    if (!newTarget.branchId) return [];
-    return allUsers.filter(u => u.branchId === newTarget.branchId && u.isActive === 'active');
-  }, [allUsers, newTarget.branchId]);
-
   // Filter cashiers for report tab (based on selected branch filter)
   const reportBranchCashiers = useMemo(() => {
     if (selectedBranch === "all") {
@@ -147,14 +123,14 @@ export default function CashierShiftPerformance() {
     return allUsers.filter(u => u.branchId === selectedBranch && u.isActive === 'active');
   }, [allUsers, selectedBranch]);
 
-  const { data: shiftTargets = [], isLoading: targetsLoading, refetch: refetchTargets } = useQuery<CashierShiftTarget[]>({
-    queryKey: ["/api/cashier-shift-targets", selectedBranch, selectedDate, selectedShift],
+  const { data: shiftTargets = [], isLoading: targetsLoading, refetch: refetchTargets } = useQuery<any[]>({
+    queryKey: ["/api/smart-incentives/challenges-as-targets", selectedBranch, selectedDate, selectedShift],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (selectedBranch !== "all") params.append("branchId", selectedBranch);
       if (selectedDate) params.append("date", selectedDate);
       if (selectedShift !== "all") params.append("shiftType", selectedShift);
-      const res = await fetch(`/api/cashier-shift-targets?${params}`);
+      const res = await fetch(`/api/smart-incentives/challenges-as-targets?${params}`);
       if (!res.ok) return [];
       return res.json();
     }
@@ -382,127 +358,6 @@ export default function CashierShiftPerformance() {
     }).sort((a, b) => b.contributionPercent - a.contributionPercent);
   }, [cashierJournals, serverContributionPercent, canViewAllCashiers]);
 
-  const createTargetMutation = useMutation({
-    mutationFn: async (data: any) => {
-      return apiRequest("POST", "/api/cashier-shift-targets", data);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/cashier-shift-targets"] });
-      setShowTargetDialog(false);
-      resetNewTarget();
-      toast.success("تم حفظ الهدف بنجاح");
-    },
-    onError: (error: any) => {
-      console.error("Error creating target:", error);
-      toast.error(error?.message || "فشل في حفظ الهدف. تحقق من الصلاحيات أو البيانات.");
-    }
-  });
-
-  const updateTargetMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: any }) => {
-      return apiRequest("PATCH", `/api/cashier-shift-targets/${id}`, data);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/cashier-shift-targets"] });
-      setEditingTarget(null);
-      resetNewTarget();
-      toast.success("تم تحديث الهدف بنجاح");
-    },
-    onError: (error: any) => {
-      console.error("Error updating target:", error);
-      toast.error(error?.message || "فشل في تحديث الهدف. تحقق من الصلاحيات.");
-    }
-  });
-
-  const openEditDialog = (target: CashierShiftTarget) => {
-    setEditingTarget(target);
-    setNewTarget({
-      cashierId: target.cashierId || "",
-      branchId: target.branchId || "",
-      shiftType: target.shiftType || "morning",
-      cashierRole: target.cashierRole || "main",
-      periodType: (target as any).periodType || "daily",
-      startDate: (target as any).startDate || target.targetDate || today,
-      endDate: (target as any).endDate || target.targetDate || today,
-      totalTargetAmount: Number((target as any).totalTargetAmount) || Number(target.targetAmount) || 0,
-      totalTargetTransactions: Number((target as any).totalTargetTransactions) || Number(target.targetTransactions) || 0,
-      targetAmount: Number(target.targetAmount) || 0,
-      targetTransactions: Number(target.targetTransactions) || 0,
-      targetTicketValue: Number(target.targetTicketValue) || 0,
-    });
-    setShowTargetDialog(true);
-  };
-
-  // Calculate number of days in period
-  const calculateDaysInPeriod = (start: string, end: string) => {
-    const startDate = new Date(start);
-    const endDate = new Date(end);
-    const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-    return Math.max(diffDays, 1);
-  };
-
-  // Auto-calculate end date based on period type
-  const calculateEndDate = (startDate: string, periodType: string) => {
-    const start = new Date(startDate);
-    let end: Date;
-    
-    if (periodType === "weekly") {
-      end = new Date(start);
-      end.setDate(end.getDate() + 6); // 7 days including start
-    } else if (periodType === "monthly") {
-      end = new Date(start);
-      end.setMonth(end.getMonth() + 1);
-      end.setDate(end.getDate() - 1); // End of month
-    } else {
-      end = start; // daily
-    }
-    
-    return end.toISOString().split('T')[0];
-  };
-
-  // Calculate daily targets from total
-  const calculateDailyTargets = (totalAmount: number, totalTransactions: number, days: number) => {
-    const dailyAmount = Math.round((totalAmount / days) * 100) / 100;
-    const dailyTransactions = Math.round(totalTransactions / days);
-    const ticketValue = dailyTransactions > 0 ? Math.round((dailyAmount / dailyTransactions) * 100) / 100 : 0;
-    return { dailyAmount, dailyTransactions, ticketValue };
-  };
-
-  const handleSaveTarget = () => {
-    const days = calculateDaysInPeriod(newTarget.startDate, newTarget.endDate);
-    const { dailyAmount, dailyTransactions, ticketValue } = calculateDailyTargets(
-      newTarget.totalTargetAmount, 
-      newTarget.totalTargetTransactions, 
-      days
-    );
-
-    const targetData = {
-      cashierId: newTarget.cashierId,
-      branchId: newTarget.branchId,
-      shiftType: newTarget.shiftType,
-      cashierRole: newTarget.cashierRole,
-      periodType: newTarget.periodType,
-      startDate: newTarget.startDate,
-      endDate: newTarget.endDate,
-      totalTargetAmount: newTarget.totalTargetAmount,
-      totalTargetTransactions: newTarget.totalTargetTransactions,
-      targetAmount: dailyAmount,
-      targetTransactions: dailyTransactions,
-      targetTicketValue: ticketValue,
-      targetDate: newTarget.startDate, // Legacy field
-    };
-
-    if (editingTarget) {
-      updateTargetMutation.mutate({
-        id: editingTarget.id,
-        data: targetData
-      });
-    } else {
-      createTargetMutation.mutate(targetData);
-    }
-  };
-
   const markAlertReadMutation = useMutation({
     mutationFn: async (id: number) => {
       return apiRequest("PATCH", `/api/performance-alerts/${id}/read`, {});
@@ -511,23 +366,6 @@ export default function CashierShiftPerformance() {
       queryClient.invalidateQueries({ queryKey: ["/api/performance-alerts"] });
     }
   });
-
-  const resetNewTarget = () => {
-    setNewTarget({
-      cashierId: "",
-      branchId: "",
-      shiftType: "morning",
-      cashierRole: "main",
-      periodType: "weekly",
-      startDate: today,
-      endDate: calculateEndDate(today, "weekly"),
-      totalTargetAmount: 0,
-      totalTargetTransactions: 0,
-      targetAmount: 0,
-      targetTransactions: 0,
-      targetTicketValue: 0,
-    });
-  };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', { 
@@ -671,243 +509,14 @@ export default function CashierShiftPerformance() {
                   <span className="hidden sm:inline">التخطيط</span>
                 </Button>
               </Link>
-              {canCreate("cashier_performance") && (
-            <Dialog open={showTargetDialog} onOpenChange={(open) => {
-              setShowTargetDialog(open);
-              if (!open) {
-                setEditingTarget(null);
-                resetNewTarget();
-              }
-            }}>
-              <DialogTrigger asChild>
-                <Button data-testid="button-add-target" className="h-11 sm:h-9 text-sm">
-                  <Plus className="h-4 w-4 ml-1 sm:ml-2" />
-                  <span className="hidden sm:inline">إضافة هدف جديد</span>
-                  <span className="sm:hidden">هدف جديد</span>
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-                <DialogHeader className="pb-2">
-                  <DialogTitle className="text-base">{editingTarget ? "تعديل هدف الكاشير" : "إضافة هدف كاشير جديد"}</DialogTitle>
-                </DialogHeader>
-                <div className="grid gap-3 py-2">
-                  {/* Row 1: Branch & Cashier */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="grid gap-1">
-                      <Label className="text-xs">الفرع</Label>
-                      <Select 
-                        value={newTarget.branchId} 
-                        onValueChange={(v) => setNewTarget({...newTarget, branchId: v, cashierId: ""})}
-                        disabled={!!editingTarget}
-                      >
-                        <SelectTrigger data-testid="select-branch" className="h-9">
-                          <SelectValue placeholder="اختر الفرع" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {branches.map((branch: { id: string; name: string }) => (
-                            <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="grid gap-1">
-                      <Label className="text-xs">الكاشير</Label>
-                      <Popover open={dialogCashierOpen} onOpenChange={setDialogCashierOpen}>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            role="combobox"
-                            aria-expanded={dialogCashierOpen}
-                            disabled={!newTarget.branchId || !!editingTarget}
-                            className="h-9 w-full justify-between font-normal text-sm"
-                            data-testid="select-cashier-id"
-                          >
-                            <span className="truncate">
-                              {newTarget.cashierId
-                                ? (() => { const c = branchCashiers.find(u => u.id === newTarget.cashierId); return c ? `${c.firstName || c.username} ${c.lastName || ''}` : "اختر"; })()
-                                : (newTarget.branchId ? "اختر الكاشير" : "الفرع أولاً")}
-                            </span>
-                            <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-64 p-0" align="start">
-                          <Command shouldFilter={true}>
-                            <CommandInput placeholder="ابحث عن كاشير..." data-testid="search-dialog-cashier" />
-                            <CommandList>
-                              <CommandEmpty>لا يوجد كاشير</CommandEmpty>
-                              <CommandGroup>
-                                {branchCashiers.map((u) => (
-                                  <CommandItem key={u.id} value={`${u.firstName || u.username} ${u.lastName || ''}`} onSelect={() => { setNewTarget({...newTarget, cashierId: u.id}); setDialogCashierOpen(false); }}>
-                                    <Check className={`ml-2 h-4 w-4 ${newTarget.cashierId === u.id ? "opacity-100" : "opacity-0"}`} />
-                                    {u.firstName || u.username} {u.lastName || ''}
-                                  </CommandItem>
-                                ))}
-                              </CommandGroup>
-                            </CommandList>
-                          </Command>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                  </div>
-
-                  {/* Row 2: Shift Type & Cashier Role */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="grid gap-1">
-                      <Label className="text-xs">نوع الشفت</Label>
-                      <Select 
-                        value={newTarget.shiftType} 
-                        onValueChange={(v) => setNewTarget({...newTarget, shiftType: v})}
-                        disabled={!!editingTarget}
-                      >
-                        <SelectTrigger data-testid="select-shift-type" className="h-9">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {SHIFT_TYPES.map((shift) => (
-                            <SelectItem key={shift.value} value={shift.value}>{shift.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="grid gap-1">
-                      <Label className="text-xs">دور الكاشير</Label>
-                      <Select value={newTarget.cashierRole} onValueChange={(v) => setNewTarget({...newTarget, cashierRole: v})}>
-                        <SelectTrigger data-testid="select-cashier-role" className="h-9">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {CASHIER_ROLES.map((role) => (
-                            <SelectItem key={role.value} value={role.value}>{role.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  
-                  {/* Row 3: Period Type & Date Range */}
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="grid gap-1">
-                      <Label className="text-xs">نوع الفترة</Label>
-                      <Select 
-                        value={newTarget.periodType} 
-                        onValueChange={(v: "daily" | "weekly" | "monthly") => {
-                          const endDate = calculateEndDate(newTarget.startDate, v);
-                          setNewTarget({...newTarget, periodType: v, endDate});
-                        }}
-                      >
-                        <SelectTrigger data-testid="select-period-type" className="h-9">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="daily">يومي</SelectItem>
-                          <SelectItem value="weekly">أسبوعي</SelectItem>
-                          <SelectItem value="monthly">شهري</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="grid gap-1">
-                      <Label className="text-xs">من</Label>
-                      <Input 
-                        type="date" 
-                        value={newTarget.startDate}
-                        onChange={(e) => {
-                          const startDate = e.target.value;
-                          const endDate = calculateEndDate(startDate, newTarget.periodType);
-                          setNewTarget({...newTarget, startDate, endDate});
-                        }}
-                        data-testid="input-start-date"
-                        className="h-9 text-sm"
-                      />
-                    </div>
-                    <div className="grid gap-1">
-                      <Label className="text-xs">إلى</Label>
-                      <Input 
-                        type="date" 
-                        value={newTarget.endDate}
-                        onChange={(e) => setNewTarget({...newTarget, endDate: e.target.value})}
-                        data-testid="input-end-date"
-                        className="h-9 text-sm"
-                      />
-                    </div>
-                  </div>
-                  
-                  {/* Period days info - inline badge */}
-                  {newTarget.startDate && newTarget.endDate && (
-                    <div className="flex justify-center">
-                      <span className="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-full">
-                        {calculateDaysInPeriod(newTarget.startDate, newTarget.endDate)} يوم
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Row 4: Targets */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="grid gap-1">
-                      <Label className="text-xs">هدف المبيعات للفترة (ر.س)</Label>
-                      <Input 
-                        type="number" 
-                        value={newTarget.totalTargetAmount} 
-                        onChange={(e) => setNewTarget({...newTarget, totalTargetAmount: Number(e.target.value)})}
-                        data-testid="input-total-target-amount"
-                        className="h-9"
-                        placeholder="70000"
-                      />
-                    </div>
-                    <div className="grid gap-1">
-                      <Label className="text-xs">عدد الحركات المستهدفة</Label>
-                      <Input 
-                        type="number" 
-                        value={newTarget.totalTargetTransactions} 
-                        onChange={(e) => setNewTarget({...newTarget, totalTargetTransactions: Number(e.target.value)})}
-                        data-testid="input-total-target-transactions"
-                        className="h-9"
-                        placeholder="700"
-                      />
-                    </div>
-                  </div>
-                  
-                  {/* Calculated Daily Targets - Compact */}
-                  {newTarget.totalTargetAmount > 0 && newTarget.startDate && newTarget.endDate && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-2">
-                      <div className="text-xs font-medium text-amber-800 mb-1">الأهداف اليومية الموزعة:</div>
-                      <div className="flex justify-between text-xs">
-                        <span className="text-gray-600">
-                          المبيعات: <strong className="text-amber-700">{formatCurrency(Math.round(newTarget.totalTargetAmount / calculateDaysInPeriod(newTarget.startDate, newTarget.endDate)))}</strong>
-                        </span>
-                        <span className="text-gray-600">
-                          الحركات: <strong className="text-amber-700">{Math.round(newTarget.totalTargetTransactions / calculateDaysInPeriod(newTarget.startDate, newTarget.endDate))}</strong>
-                        </span>
-                        <span className="text-gray-600">
-                          م. الفاتورة: <strong className="text-amber-700">{newTarget.totalTargetTransactions > 0 ? formatCurrency(Math.round(newTarget.totalTargetAmount / newTarget.totalTargetTransactions)) : "0"}</strong>
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => {
-                    setShowTargetDialog(false);
-                    setEditingTarget(null);
-                    resetNewTarget();
-                  }} data-testid="button-cancel" className="h-11 sm:h-9">
-                    إلغاء
+              {canViewAllCashiers && (
+                <Link href="/incentives-management">
+                  <Button variant="outline" className="h-9 text-sm rounded-lg bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100" data-testid="btn-goto-challenges">
+                    <Settings className="h-4 w-4 ml-1" />
+                    إدارة التحديات
                   </Button>
-                  <Button 
-                    onClick={handleSaveTarget} 
-                    disabled={(createTargetMutation.isPending || updateTargetMutation.isPending) || 
-                      (!editingTarget && (!newTarget.branchId || !newTarget.cashierId)) || 
-                      !newTarget.totalTargetAmount || !newTarget.startDate || !newTarget.endDate}
-                    data-testid="button-save-target"
-                    className="h-11 sm:h-9"
-                  >
-                    {(createTargetMutation.isPending || updateTargetMutation.isPending) 
-                      ? "جاري الحفظ..." 
-                      : editingTarget ? "تحديث الهدف" : "حفظ الهدف"}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-            )}
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -1158,12 +767,12 @@ export default function CashierShiftPerformance() {
                     <Sun className="h-5 w-5 text-amber-500" />
                     الشفت الصباحي
                   </CardTitle>
-                  <CardDescription>أهداف وأداء الكاشيرين في الفترة الصباحية</CardDescription>
+                  <CardDescription>التحديات اليومية والأداء - الفترة الصباحية</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {shiftTargets.filter(t => t.shiftType === 'morning' && (targetCashierId === 'all' || t.cashierId === targetCashierId)).length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground">
-                      لا توجد أهداف للشفت الصباحي
+                      لم يتم تعيين تحديات يومية للشفت الصباحي
                     </div>
                   ) : (
                     <div className="space-y-4">
@@ -1198,23 +807,19 @@ export default function CashierShiftPerformance() {
                                   ) : null;
                                 })()}
                               </div>
-                              <div className="flex items-center gap-2">
-                                <Badge className={ALERT_COLORS[getAlertLevel(percent)].badge}>
+                              <Badge className={ALERT_COLORS[getAlertLevel(percent)].badge}>
                                   {percent.toFixed(0)}%
                                 </Badge>
-                                {canEdit("cashier_performance") && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7"
-                                  onClick={() => openEditDialog(target)}
-                                  data-testid={`button-edit-target-${target.id}`}
-                                >
-                                  <Pencil className="h-4 w-4 text-gray-500" />
-                                </Button>
-                                )}
-                              </div>
                             </div>
+                            {(target as any).challenges && (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {(target as any).challenges.map((ch: any) => (
+                                  <Badge key={ch.id} variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200">
+                                    {ch.name}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
                             
                             {/* Period info */}
                             {periodType !== 'daily' && (
@@ -1304,12 +909,12 @@ export default function CashierShiftPerformance() {
                     <Moon className="h-5 w-5 text-indigo-500" />
                     الشفت المسائي
                   </CardTitle>
-                  <CardDescription>أهداف وأداء الكاشيرين في الفترة المسائية</CardDescription>
+                  <CardDescription>التحديات اليومية والأداء - الفترة المسائية</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {shiftTargets.filter(t => t.shiftType === 'evening' && (targetCashierId === 'all' || t.cashierId === targetCashierId)).length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground">
-                      لا توجد أهداف للشفت المسائي
+                      لم يتم تعيين تحديات يومية للشفت المسائي
                     </div>
                   ) : (
                     <div className="space-y-4">
@@ -1344,23 +949,19 @@ export default function CashierShiftPerformance() {
                                   ) : null;
                                 })()}
                               </div>
-                              <div className="flex items-center gap-2">
-                                <Badge className={ALERT_COLORS[getAlertLevel(percent)].badge}>
+                              <Badge className={ALERT_COLORS[getAlertLevel(percent)].badge}>
                                   {percent.toFixed(0)}%
                                 </Badge>
-                                {canEdit("cashier_performance") && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7"
-                                  onClick={() => openEditDialog(target)}
-                                  data-testid={`button-edit-target-${target.id}`}
-                                >
-                                  <Pencil className="h-4 w-4 text-gray-500" />
-                                </Button>
-                                )}
-                              </div>
                             </div>
+                            {(target as any).challenges && (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {(target as any).challenges.map((ch: any) => (
+                                  <Badge key={ch.id} variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200">
+                                    {ch.name}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
                             
                             {/* Period info */}
                             {periodType !== 'daily' && (

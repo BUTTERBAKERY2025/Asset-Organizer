@@ -6929,6 +6929,76 @@ export async function registerRoutes(
     }
   });
 
+  // Daily Challenges as Targets - تحويل التحديات اليومية إلى أهداف
+  app.get("/api/smart-incentives/challenges-as-targets", isAuthenticated, async (req, res) => {
+    try {
+      const { branchId, date, shiftType } = req.query;
+      const targetDate = (date as string) || new Date().toISOString().split('T')[0];
+      
+      const allChallenges = await storage.getActiveDailyChallenges(branchId as string);
+      
+      const validChallenges = allChallenges.filter(c => {
+        if (c.validFrom > targetDate) return false;
+        if (c.validTo && c.validTo < targetDate) return false;
+        if (shiftType && shiftType !== "all" && c.shiftType && c.shiftType !== shiftType) return false;
+        return true;
+      });
+
+      const grouped: Record<string, { cashierId: string; branchId: string; shiftType: string; targetAmount: number; targetTransactions: number; targetTicketValue: number; challenges: Array<{ id: number; name: string; type: string; targetValue: number; basePoints: number }> }> = {};
+
+      for (const ch of validChallenges) {
+        if (!ch.cashierId || !ch.branchId) continue;
+        const shift = ch.shiftType || 'morning';
+        const key = `${ch.cashierId}_${ch.branchId}_${shift}`;
+        if (!grouped[key]) {
+          grouped[key] = { cashierId: ch.cashierId, branchId: ch.branchId, shiftType: shift, targetAmount: 0, targetTransactions: 0, targetTicketValue: 0, challenges: [] };
+        }
+        grouped[key].challenges.push({ id: ch.id, name: ch.name, type: ch.challengeType, targetValue: ch.targetValue, basePoints: ch.basePoints });
+        if (ch.challengeType === 'shift_sales') grouped[key].targetAmount = ch.targetValue;
+        else if (ch.challengeType === 'customer_count') grouped[key].targetTransactions = Math.round(ch.targetValue);
+        else if (ch.challengeType === 'avg_ticket') grouped[key].targetTicketValue = ch.targetValue;
+      }
+
+      const targets = Object.values(grouped).map((g, idx) => ({
+        id: idx + 1,
+        cashierId: g.cashierId,
+        branchId: g.branchId,
+        shiftType: g.shiftType,
+        cashierRole: 'main',
+        periodType: 'daily',
+        startDate: targetDate,
+        endDate: targetDate,
+        totalTargetAmount: String(g.targetAmount),
+        totalTargetTransactions: g.targetTransactions,
+        targetAmount: String(g.targetAmount),
+        targetTransactions: g.targetTransactions,
+        targetTicketValue: String(g.targetTicketValue),
+        targetDate: targetDate,
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        challenges: g.challenges,
+      }));
+
+      const user = getCurrentUser(req);
+      const branchFilter = getEffectiveBranchFilter(req, branchId);
+      if (!branchFilter.hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول" });
+
+      let filtered = targets;
+      if (branchFilter.branchIds) {
+        filtered = filtered.filter(t => branchFilter.branchIds!.includes(t.branchId));
+        const canViewAll = await canUserViewAllCashiers(req);
+        if (!canViewAll) {
+          filtered = filtered.filter(t => String(t.cashierId) === String(user?.id));
+        }
+      }
+
+      res.json(filtered);
+    } catch (error) {
+      console.error("Error fetching challenges as targets:", error);
+      res.status(500).json({ error: "فشل في جلب الأهداف من التحديات" });
+    }
+  });
+
   // Product Commissions CRUD
   app.get("/api/smart-incentives/product-commissions", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
