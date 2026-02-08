@@ -6995,7 +6995,14 @@ export async function registerRoutes(
   // Daily Challenges as Targets - تحويل التحديات اليومية إلى أهداف
   app.get("/api/smart-incentives/challenges-as-targets", isAuthenticated, async (req, res) => {
     try {
-      const { branchId, date, shiftType } = req.query;
+      const user = getCurrentUser(req);
+      let { branchId, date, shiftType } = req.query;
+      if (user.role !== 'admin' && !branchId) {
+        branchId = user.branchId || undefined;
+      }
+      if (user.role !== 'admin' && branchId && !(await canAccessBranch(req, branchId as string))) {
+        return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      }
       const targetDate = (date as string) || new Date().toISOString().split('T')[0];
       
       const allChallenges = await storage.getActiveDailyChallenges(branchId as string);
@@ -7108,7 +7115,6 @@ export async function registerRoutes(
         }
       }
 
-      const user = getCurrentUser(req);
       const branchFilter = getEffectiveBranchFilter(req, branchId);
       if (!branchFilter.hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول" });
 
@@ -7296,6 +7302,12 @@ export async function registerRoutes(
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const user = getCurrentUser(req);
+      const bonus = (await storage.getAllBranchBonuses()).find(b => b.id === id);
+      if (!bonus) return res.status(404).json({ error: "المكافأة غير موجودة" });
+      if (user.role !== 'admin' && bonus.branchId !== user.branchId) {
+        return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      }
       await storage.deleteBranchBonus(id);
       res.json({ success: true });
     } catch (error) {
@@ -7314,6 +7326,11 @@ export async function registerRoutes(
       const allBonuses = await storage.getAllBranchBonuses();
       const bonus = allBonuses.find(b => b.id === id);
       if (!bonus) return res.status(404).json({ error: "عمولة الفرع غير موجودة" });
+
+      const calcUser = getCurrentUser(req);
+      if (calcUser.role !== 'admin' && bonus.branchId !== calcUser.branchId) {
+        return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      }
 
       if (bonus.calculationStatus === "calculated") {
         return res.status(400).json({ error: "تم احتساب هذه المكافأة مسبقاً" });
@@ -7494,6 +7511,10 @@ export async function registerRoutes(
 
       const bonus = (await storage.getAllBranchBonuses()).find(b => b.id === id);
       if (!bonus) return res.status(404).json({ error: "عمولة الفرع غير موجودة" });
+      const currentUser = getCurrentUser(req);
+      if (currentUser.role !== 'admin' && bonus.branchId !== currentUser.branchId) {
+        return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      }
       if (bonus.calculationStatus !== "calculated" && bonus.calculationStatus !== "manual_adjusted") {
         return res.status(400).json({ error: "يجب احتساب المكافأة أولاً قبل التعديل اليدوي" });
       }
