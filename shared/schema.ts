@@ -2243,6 +2243,7 @@ export const productCommissions = pgTable("product_commissions", {
   productCategory: text("product_category"),
   commissionType: text("commission_type").notNull(), // weekly_product, monthly_product, new_product
   branchId: varchar("branch_id").references(() => branches.id),
+  cashierId: varchar("cashier_id").references(() => users.id),
   targetQuantity: integer("target_quantity").notNull(),
   pointsOnTarget: integer("points_on_target").notNull(),
   bonusPointsPerExtra: real("bonus_points_per_extra").default(0),
