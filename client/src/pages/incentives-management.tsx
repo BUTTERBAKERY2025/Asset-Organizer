@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -162,6 +162,34 @@ export default function IncentivesManagement() {
   const { data: branchBonuses = [], isLoading: branchBonusLoading } = useQuery<BranchAchievementBonus[]>({
     queryKey: ["/api/smart-incentives/branch-bonus"],
   });
+
+  const branchTargetBranchId = newBranchBonus.branchId;
+  const branchTargetYearMonth = newBranchBonus.yearMonth;
+  const branchTargetEnabled = !!branchTargetBranchId && !!branchTargetYearMonth;
+  const { data: fetchedBranchTargets = [], isFetching: branchTargetFetching } = useQuery<any[]>({
+    queryKey: ["/api/targets/monthly", { branchId: branchTargetBranchId, yearMonth: branchTargetYearMonth }],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("branchId", branchTargetBranchId);
+      params.set("yearMonth", branchTargetYearMonth);
+      const res = await fetch(`/api/targets/monthly?${params}`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: branchTargetEnabled,
+  });
+
+  const autoTargetAmount = fetchedBranchTargets.length > 0 ? String(fetchedBranchTargets[0].targetAmount) : "";
+  const hasAutoTarget = fetchedBranchTargets.length > 0;
+
+  useEffect(() => {
+    if (!branchTargetEnabled) return;
+    if (hasAutoTarget) {
+      setNewBranchBonus(prev => ({ ...prev, targetAmount: autoTargetAmount }));
+    } else if (!branchTargetFetching) {
+      setNewBranchBonus(prev => ({ ...prev, targetAmount: "" }));
+    }
+  }, [branchTargetBranchId, branchTargetYearMonth, autoTargetAmount, hasAutoTarget, branchTargetFetching, branchTargetEnabled]);
 
   const { data: tiers = [], isLoading: tiersLoading } = useQuery<IncentiveTier[]>({
     queryKey: ["/api/incentives/tiers"],
@@ -1506,8 +1534,30 @@ export default function IncentivesManagement() {
                           <Input type="number" value={newBranchBonus.bonusPool} onChange={(e) => setNewBranchBonus({ ...newBranchBonus, bonusPool: e.target.value })} placeholder="5000" data-testid="input-branch-bonus-pool" className="h-11 sm:h-10" />
                         </div>
                         <div>
-                          <Label>الهدف المطلوب (ريال)</Label>
-                          <Input type="number" value={newBranchBonus.targetAmount} onChange={(e) => setNewBranchBonus({ ...newBranchBonus, targetAmount: e.target.value })} placeholder="100000" data-testid="input-branch-bonus-target" className="h-11 sm:h-10" />
+                          <Label className="flex items-center gap-1">
+                            الهدف المطلوب (ريال)
+                            {hasAutoTarget && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-green-400 text-green-700 bg-green-50">
+                                <Check className="h-2.5 w-2.5 ml-0.5" />
+                                من تخطيط الأهداف
+                              </Badge>
+                            )}
+                            {branchTargetFetching && (
+                              <RefreshCw className="h-3 w-3 text-blue-500 animate-spin" />
+                            )}
+                          </Label>
+                          <Input 
+                            type="number" 
+                            value={newBranchBonus.targetAmount} 
+                            onChange={(e) => setNewBranchBonus({ ...newBranchBonus, targetAmount: e.target.value })} 
+                            placeholder={branchTargetEnabled && !hasAutoTarget && !branchTargetFetching ? "لا يوجد هدف - أدخل يدوياً" : "100000"} 
+                            readOnly={hasAutoTarget}
+                            data-testid="input-branch-bonus-target" 
+                            className={`h-11 sm:h-10 ${hasAutoTarget ? 'bg-green-50 border-green-300 font-bold text-green-700' : ''}`}
+                          />
+                          {branchTargetEnabled && !hasAutoTarget && !branchTargetFetching && (
+                            <p className="text-[11px] text-amber-600 mt-1">لم يتم العثور على هدف شهري لهذا الفرع في صفحة تخطيط الأهداف</p>
+                          )}
                         </div>
                       </div>
                       <div>
