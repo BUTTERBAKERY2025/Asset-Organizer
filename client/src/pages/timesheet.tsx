@@ -39,6 +39,7 @@ interface BranchEmployee {
   branchId: string;
   jobTitle?: string;
   linkedUserId?: string | null;
+  status?: string;
 }
 
 interface TimesheetReport {
@@ -162,7 +163,7 @@ export default function TimesheetPage() {
       branchId: u.branchId || '',
       type: 'user' as const,
     })),
-    ...branchEmployees.filter(be => !be.linkedUserId).map(be => ({
+    ...branchEmployees.filter(be => !be.linkedUserId && be.status === 'active').map(be => ({
       id: `branch_emp_${be.id}`,
       name: be.employeeName,
       branchId: be.branchId,

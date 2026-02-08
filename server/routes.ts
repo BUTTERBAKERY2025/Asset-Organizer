@@ -4647,7 +4647,8 @@ export async function registerRoutes(
         const otherCosts = inputs?.otherCosts || 0;
         
         // 6. Get employee costs from branch_employees
-        const employees = await storage.getBranchEmployeesByBranch(bId);
+        const allBranchEmps = await storage.getBranchEmployeesByBranch(bId);
+        const employees = allBranchEmps.filter((e: any) => e.status === 'active');
         let totalSalaries = 0;
         let totalGosi = 0; // Saudi GOSI 12%
         let totalNonSaudiCosts = 0; // Work permit 800, Expat levy 800, Residency 54, Insurance 2%
@@ -7065,7 +7066,8 @@ export async function registerRoutes(
         let branchCashierIds: string[] = [];
         const commissionsNeedingAllCashiers = validCommissions.some(c => !c.cashierId);
         if (commissionsNeedingAllCashiers && branchId) {
-          const branchEmps = await storage.getBranchEmployeesByBranch(branchId as string);
+          const branchEmps = (await storage.getBranchEmployeesByBranch(branchId as string))
+            .filter(emp => emp.status === 'active');
           branchCashierIds = branchEmps
             .filter(emp => emp.linkedUserId)
             .map(emp => emp.linkedUserId as string);
@@ -19245,6 +19247,11 @@ export async function registerRoutes(
         return res.json([]);
       }
       
+      const statusFilter = req.query.status as string | undefined;
+      if (statusFilter) {
+        employees = employees.filter((e: any) => e.status === statusFilter);
+      }
+
       res.json(employees);
     } catch (error) {
       console.error("Error fetching branch employees:", error);
@@ -20875,7 +20882,8 @@ export async function registerRoutes(
         const otherCosts = inputs?.otherCosts || 0;
         
         // 3. حساب تكاليف الموظفين
-        const employees = await storage.getBranchEmployeesByBranch(branch.id);
+        const allEmps = await storage.getBranchEmployeesByBranch(branch.id);
+        const employees = allEmps.filter((e: any) => e.status === 'active');
         let totalSalaries = 0;
         let totalGosi = 0;
         let totalNonSaudiCosts = 0;
@@ -21092,7 +21100,8 @@ export async function registerRoutes(
         return res.status(404).json({ error: "الفترة المالية غير موجودة" });
       }
 
-      const employees = await storage.getBranchEmployeesByBranch(period.branchId);
+      const allEmps = await storage.getBranchEmployeesByBranch(period.branchId);
+      const employees = allEmps.filter((e: any) => e.status === 'active');
       
       const totalBaseSalary = employees.reduce((sum: number, e: any) => sum + (e.basicSalary || 0), 0);
       const totalAllowances = employees.reduce((sum: number, e: any) => 

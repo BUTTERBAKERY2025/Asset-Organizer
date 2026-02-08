@@ -263,7 +263,7 @@ export default function BranchShiftsPage() {
       if (!res.ok) return [];
       const users = await res.json();
       // فلترة الموظفين النشطين للفرع
-      return users.filter((u: any) => u.branchId === selectedBranch && u.isActive !== "inactive");
+      return users.filter((u: any) => u.branchId === selectedBranch && u.isActive === "active");
     },
     enabled: !!selectedBranch,
     staleTime: 0, // إعادة جلب البيانات عند كل تغيير
