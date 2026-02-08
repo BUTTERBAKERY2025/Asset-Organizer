@@ -22,10 +22,11 @@ import {
   Target, TrendingUp, TrendingDown, Users, Trophy, ChevronLeft, Calendar, 
   Award, AlertTriangle, Bell, Clock, CheckCircle2, Settings, 
   Sun, Moon, DollarSign, Receipt, User as UserIcon, RefreshCw, BarChart as BarChartIcon,
-  Star, Search, CalendarDays, X
+  Star, Search, CalendarDays, X, FileSpreadsheet, Printer, FileText
 } from "lucide-react";
 import { Link } from "wouter";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line, Legend, PieChart, Pie, Cell } from "recharts";
+import * as XLSX from "xlsx";
 import type { Branch, PerformanceAlert, ShiftPerformanceTracking, User } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -372,6 +373,104 @@ export default function CashierShiftPerformance() {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0 
     }).format(amount) + ' ر.س';
+  };
+
+  const exportReportExcel = () => {
+    if (cashierJournals.length === 0) return toast.error("لا توجد بيانات للتصدير");
+    const data = cashierJournals.map(j => ({
+      'التاريخ': j.date,
+      'الكاشير': j.cashierName,
+      'الشفت': j.shiftType === 'morning' ? 'صباحي' : 'مسائي',
+      'المبيعات': j.totalSales,
+      'نقدي': j.cashSales,
+      'بطاقات': j.cardSales,
+      'الحركات': j.transactionCount,
+      'متوسط الفاتورة': j.averageTicket,
+    }));
+    data.push({
+      'التاريخ': 'الإجمالي',
+      'الكاشير': '',
+      'الشفت': '',
+      'المبيعات': cashierJournals.reduce((s, j) => s + j.totalSales, 0),
+      'نقدي': cashierJournals.reduce((s, j) => s + j.cashSales, 0),
+      'بطاقات': cashierJournals.reduce((s, j) => s + j.cardSales, 0),
+      'الحركات': cashierJournals.reduce((s, j) => s + j.transactionCount, 0),
+      'متوسط الفاتورة': 0,
+    });
+    const ws = XLSX.utils.json_to_sheet(data);
+    ws['!cols'] = [{ wch: 12 }, { wch: 18 }, { wch: 8 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 14 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "تقرير الكاشير");
+    XLSX.writeFile(wb, `تقرير_الكاشير_${reportStartDate}_${reportEndDate}.xlsx`);
+    toast.success("تم تصدير التقرير بنجاح");
+  };
+
+  const exportReportCSV = () => {
+    if (cashierJournals.length === 0) return toast.error("لا توجد بيانات للتصدير");
+    const headers = ['التاريخ', 'الكاشير', 'الشفت', 'المبيعات', 'نقدي', 'بطاقات', 'الحركات', 'متوسط الفاتورة'];
+    const rows = cashierJournals.map(j => [
+      j.date, j.cashierName, j.shiftType === 'morning' ? 'صباحي' : 'مسائي',
+      j.totalSales, j.cashSales, j.cardSales, j.transactionCount, j.averageTicket
+    ]);
+    const bom = '\uFEFF';
+    const csv = bom + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `تقرير_الكاشير_${reportStartDate}_${reportEndDate}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("تم تصدير التقرير بنجاح");
+  };
+
+  const printReport = () => {
+    if (cashierJournals.length === 0) return toast.error("لا توجد بيانات للطباعة");
+    const printContent = `
+      <html dir="rtl" lang="ar">
+      <head>
+        <meta charset="utf-8">
+        <title>تقرير الكاشير</title>
+        <style>
+          body { font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif; direction: rtl; padding: 20px; }
+          h2 { text-align: center; color: #8B4513; margin-bottom: 5px; }
+          .subtitle { text-align: center; color: #666; font-size: 14px; margin-bottom: 20px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+          th { background: #f3f1ec; color: #8B4513; padding: 8px; border: 1px solid #ddd; font-size: 13px; }
+          td { padding: 7px 8px; border: 1px solid #ddd; font-size: 12px; text-align: right; }
+          tr:nth-child(even) { background: #fafaf8; }
+          .total-row { background: #fff8eb !important; font-weight: bold; }
+          @media print { body { padding: 0; } }
+        </style>
+      </head>
+      <body>
+        <h2>تقرير الكاشير التفصيلي</h2>
+        <p class="subtitle">الفترة: ${reportStartDate} إلى ${reportEndDate}</p>
+        <table>
+          <thead><tr>
+            <th>التاريخ</th><th>الكاشير</th><th>الشفت</th><th>المبيعات</th><th>نقدي</th><th>بطاقات</th><th>الحركات</th><th>م. الفاتورة</th>
+          </tr></thead>
+          <tbody>
+            ${cashierJournals.map(j => `<tr>
+              <td>${j.date}</td><td>${j.cashierName}</td>
+              <td>${j.shiftType === 'morning' ? 'صباحي' : 'مسائي'}</td>
+              <td>${formatCurrency(j.totalSales)}</td><td>${formatCurrency(j.cashSales)}</td>
+              <td>${formatCurrency(j.cardSales)}</td><td>${j.transactionCount}</td>
+              <td>${formatCurrency(j.averageTicket)}</td>
+            </tr>`).join('')}
+            <tr class="total-row">
+              <td colspan="3">الإجمالي</td>
+              <td>${formatCurrency(cashierJournals.reduce((s, j) => s + j.totalSales, 0))}</td>
+              <td>${formatCurrency(cashierJournals.reduce((s, j) => s + j.cashSales, 0))}</td>
+              <td>${formatCurrency(cashierJournals.reduce((s, j) => s + j.cardSales, 0))}</td>
+              <td>${cashierJournals.reduce((s, j) => s + j.transactionCount, 0)}</td>
+              <td>-</td>
+            </tr>
+          </tbody>
+        </table>
+      </body></html>`;
+    const win = window.open('', '_blank');
+    if (win) { win.document.write(printContent); win.document.close(); win.print(); }
   };
 
   const getPercentColor = (percent: number) => {
@@ -1120,11 +1219,29 @@ export default function CashierShiftPerformance() {
           <TabsContent value="cashier-report" className="space-y-4">
             <Card className="border-blue-200">
               <CardHeader className="pb-3 bg-gradient-to-l from-blue-50 to-transparent">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Receipt className="h-5 w-5 text-blue-600" />
-                  تقرير الكاشير التفصيلي
-                </CardTitle>
-                <CardDescription>عرض يوميات كل كاشير حسب الفترة المختارة</CardDescription>
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div>
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <Receipt className="h-5 w-5 text-blue-600" />
+                      تقرير الكاشير التفصيلي
+                    </CardTitle>
+                    <CardDescription>عرض يوميات كل كاشير حسب الفترة المختارة</CardDescription>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={exportReportExcel} className="h-8 gap-1.5 text-xs border-green-300 text-green-700 hover:bg-green-50" data-testid="btn-export-excel">
+                      <FileSpreadsheet className="h-3.5 w-3.5" />
+                      Excel
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={exportReportCSV} className="h-8 gap-1.5 text-xs border-blue-300 text-blue-700 hover:bg-blue-50" data-testid="btn-export-csv">
+                      <FileText className="h-3.5 w-3.5" />
+                      CSV
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={printReport} className="h-8 gap-1.5 text-xs border-amber-300 text-amber-700 hover:bg-amber-50" data-testid="btn-print-report">
+                      <Printer className="h-3.5 w-3.5" />
+                      طباعة
+                    </Button>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
                 {/* Filters - date range and cashier only, branch is in main header */}
@@ -1363,27 +1480,39 @@ export default function CashierShiftPerformance() {
                     <p>لا توجد بيانات للفترة المختارة</p>
                   </div>
                 ) : canViewAllCashiers ? (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="space-y-6">
                     {/* Pie Chart */}
-                    <div className="h-64">
+                    <div className="h-80 w-full">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie
                             data={contributionData}
                             cx="50%"
-                            cy="50%"
-                            innerRadius={40}
-                            outerRadius={80}
-                            paddingAngle={2}
+                            cy="45%"
+                            innerRadius={50}
+                            outerRadius={90}
+                            paddingAngle={3}
                             dataKey="contributionPercent"
                             nameKey="cashierName"
-                            label={({ name, percent }) => `${name}: ${percent.toFixed(0)}%`}
+                            label={({ name, contributionPercent }) => `${name}: ${contributionPercent?.toFixed(0)}%`}
+                            labelLine={{ strokeWidth: 1, stroke: '#999' }}
                           >
                             {contributionData.map((_, i) => (
-                              <Cell key={i} fill={['#8B4513', '#D4A574', '#F5DEB3', '#DEB887', '#CD853F', '#A0522D'][i % 6]} />
+                              <Cell key={i} fill={['#8B4513', '#D4A574', '#CD853F', '#A0522D', '#DEB887', '#F5DEB3'][i % 6]} />
                             ))}
                           </Pie>
-                          <RechartsTooltip formatter={(value: number) => `${value.toFixed(1)}%`} />
+                          <RechartsTooltip 
+                            formatter={(value: number) => `${value.toFixed(1)}%`}
+                            contentStyle={{ direction: 'rtl', fontFamily: 'Cairo, sans-serif' }}
+                          />
+                          <Legend 
+                            verticalAlign="bottom"
+                            align="center"
+                            layout="horizontal"
+                            iconSize={10}
+                            wrapperStyle={{ direction: 'rtl', fontSize: '12px', paddingTop: '10px' }}
+                            formatter={(value: string) => <span style={{ color: '#555', marginInlineStart: '4px' }}>{value}</span>}
+                          />
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
