@@ -106,7 +106,7 @@ export default function IncentivesManagement() {
   const [calcBranchId, setCalcBranchId] = useState("");
   const [calcDateFrom, setCalcDateFrom] = useState("");
   const [calcDateTo, setCalcDateTo] = useState("");
-  const [batchCalcResult, setBatchCalcResult] = useState<{ processedCount: number; totalJournals: number; totalPoints: number; totalAmount: number } | null>(null);
+  const [batchCalcResult, setBatchCalcResult] = useState<{ processedCount: number; totalJournals: number; totalPoints: number; totalAmount: number; journalDetails?: Array<{journalId: number; cashierName: string; journalDate: string; status: string; points: number; diagnostics: Array<{challengeName: string; challengeType: string; targetValue: number; actualValue: number; met: boolean; reason?: string}>}> } | null>(null);
 
   const [newTier, setNewTier] = useState({
     name: "", description: "", minAchievementPercent: "", maxAchievementPercent: "",
@@ -1917,7 +1917,7 @@ export default function IncentivesManagement() {
                       </Button>
 
                       {batchCalcResult && (
-                        <div className="bg-green-50 border border-green-300 rounded-lg p-4 mt-4">
+                        <div className="bg-green-50 border border-green-300 rounded-lg p-4 mt-4 space-y-4">
                           <h4 className="font-bold text-green-800 mb-2">نتائج الاحتساب</h4>
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                             <div className="text-center p-3 bg-white rounded-lg border">
@@ -1937,6 +1937,43 @@ export default function IncentivesManagement() {
                               <p className="text-xs text-gray-500">القيمة المالية</p>
                             </div>
                           </div>
+                          {batchCalcResult.journalDetails && batchCalcResult.journalDetails.length > 0 && (
+                            <div className="mt-4">
+                              <h5 className="font-semibold text-gray-700 mb-2">تفاصيل اليوميات</h5>
+                              <div className="space-y-2 max-h-64 overflow-y-auto">
+                                {batchCalcResult.journalDetails.map((jd) => (
+                                  <div key={jd.journalId} className={`p-3 rounded-lg border text-sm ${jd.points > 0 ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-200'}`}>
+                                    <div className="flex justify-between items-center mb-1">
+                                      <span className="font-medium">{jd.cashierName} - يومية #{jd.journalId}</span>
+                                      <span className="text-xs text-gray-500">{jd.journalDate} | {jd.status}</span>
+                                    </div>
+                                    {jd.points > 0 ? (
+                                      <p className="text-green-700 font-bold">+{jd.points} نقطة</p>
+                                    ) : (
+                                      <p className="text-yellow-700">0 نقطة</p>
+                                    )}
+                                    {jd.diagnostics && jd.diagnostics.length > 0 && (
+                                      <div className="mt-1 space-y-1">
+                                        {jd.diagnostics.map((d, idx) => (
+                                          <div key={idx} className={`text-xs p-1.5 rounded ${d.met ? 'bg-green-100 text-green-800' : 'bg-red-50 text-red-700'}`}>
+                                            <span className="font-medium">{d.challengeName}</span>
+                                            {d.met ? (
+                                              <span> ✓ تحقق (الفعلي: {d.actualValue} | الهدف: {d.targetValue})</span>
+                                            ) : (
+                                              <span> ✗ {d.reason}</span>
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                    {(!jd.diagnostics || jd.diagnostics.length === 0) && jd.points === 0 && (
+                                      <p className="text-xs text-gray-500 mt-1">لا توجد تحديات مطابقة لهذه اليومية</p>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </CardContent>

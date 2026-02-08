@@ -122,6 +122,7 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+
   // Setup authentication
   await setupAuth(app);
 
@@ -7157,6 +7158,7 @@ export async function registerRoutes(
       let totalAmount = 0;
       let processedCount = 0;
       const errors: string[] = [];
+      const journalDetails: Array<{journalId: number; cashierName: string; journalDate: string; status: string; points: number; diagnostics: any[]}> = [];
       
       for (const journal of allJournals) {
         try {
@@ -7164,13 +7166,21 @@ export async function registerRoutes(
           totalPoints += result.totalPoints;
           totalAmount += result.totalAmount;
           processedCount++;
+          journalDetails.push({
+            journalId: journal.id,
+            cashierName: journal.cashierName,
+            journalDate: journal.journalDate,
+            status: journal.status,
+            points: result.totalPoints,
+            diagnostics: result.diagnostics || [],
+          });
         } catch (err: any) {
           errors.push(`يومية #${journal.id}: ${err.message}`);
           console.error(`Error calculating for journal ${journal.id}:`, err);
         }
       }
       
-      res.json({ processedCount, totalJournals: allJournals.length, totalPoints, totalAmount, errors: errors.length > 0 ? errors : undefined });
+      res.json({ processedCount, totalJournals: allJournals.length, totalPoints, totalAmount, journalDetails, errors: errors.length > 0 ? errors : undefined });
     } catch (error: any) {
       console.error("Error in batch calculation:", error);
       res.status(500).json({ error: error.message || "فشل في الاحتساب الجماعي" });

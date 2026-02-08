@@ -793,7 +793,7 @@ export interface IStorage {
   updatePointsEntryStatus(id: number, status: string, approvedBy?: string): Promise<CashierPointsLedger | undefined>;
   getCashierPointsSummary(cashierId: string, yearMonth?: string): Promise<{ totalPoints: number; totalAmount: number; pendingPoints: number; pendingAmount: number; approvedPoints: number; approvedAmount: number }>;
   
-  calculateJournalIncentives(journalId: number): Promise<{ challengePoints: CashierPointsLedger[]; totalPoints: number; totalAmount: number }>;
+  calculateJournalIncentives(journalId: number): Promise<{ challengePoints: CashierPointsLedger[]; totalPoints: number; totalAmount: number; diagnostics: Array<{challengeName: string; challengeType: string; targetValue: number; actualValue: number; met: boolean; reason?: string}> }>;
 
   // Cashier Product Sales - مبيعات الأصناف
   getCashierProductSales(cashierId: string, date?: string): Promise<CashierProductSales[]>;
@@ -12368,7 +12368,7 @@ export class DatabaseStorage implements IStorage {
     return updated || undefined;
   }
 
-  async calculateJournalIncentives(journalId: number): Promise<{ challengePoints: CashierPointsLedger[]; totalPoints: number; totalAmount: number }> {
+  async calculateJournalIncentives(journalId: number): Promise<{ challengePoints: CashierPointsLedger[]; totalPoints: number; totalAmount: number; diagnostics: Array<{challengeName: string; challengeType: string; targetValue: number; actualValue: number; met: boolean; reason?: string}> }> {
     const [journal] = await db.select().from(cashierSalesJournals).where(eq(cashierSalesJournals.id, journalId));
     if (!journal) throw new Error("اليومية غير موجودة");
 
@@ -12398,21 +12398,40 @@ export class DatabaseStorage implements IStorage {
     const seasonalMultiplier = Number(settings.seasonalMultiplier) || 1;
     const maxDailyPoints = settings.maxDailyPoints ? Number(settings.maxDailyPoints) : null;
     const pendingEntries: Array<{ challengeType: string; challengeId: number; challengeName: string; pointsEarned: number; targetValue: number; actualValue: number }> = [];
+    const diagnostics: Array<{challengeName: string; challengeType: string; targetValue: number; actualValue: number; met: boolean; reason?: string}> = [];
     let totalPointsEarned = 0;
 
     for (const challenge of activeChallenges) {
-      if (challenge.shiftType && challenge.shiftType !== journal.shiftType) continue;
-      if (challenge.validTo && challenge.validTo < journal.journalDate) continue;
-      if (challenge.cashierId && challenge.cashierId !== journal.cashierId) continue;
+      if (challenge.shiftType && challenge.shiftType !== journal.shiftType) {
+        diagnostics.push({ challengeName: challenge.name, challengeType: challenge.challengeType, targetValue: Number(challenge.targetValue), actualValue: 0, met: false, reason: `نوع الشفت غير مطابق: التحدي=${challenge.shiftType}, اليومية=${journal.shiftType}` });
+        continue;
+      }
+      if (challenge.validTo && challenge.validTo < journal.journalDate) {
+        diagnostics.push({ challengeName: challenge.name, challengeType: challenge.challengeType, targetValue: Number(challenge.targetValue), actualValue: 0, met: false, reason: `التحدي انتهت صلاحيته: ${challenge.validTo} < ${journal.journalDate}` });
+        continue;
+      }
+      if (challenge.cashierId && challenge.cashierId !== journal.cashierId) {
+        diagnostics.push({ challengeName: challenge.name, challengeType: challenge.challengeType, targetValue: Number(challenge.targetValue), actualValue: 0, met: false, reason: `التحدي مخصص لكاشير آخر` });
+        continue;
+      }
 
       let actualValue = 0;
       let targetValue = Number(challenge.targetValue);
       let pointsEarned = 0;
 
       switch (challenge.challengeType) {
-        case 'avg_ticket':
+        case 'avg_ticket': {
           actualValue = Number(journal.averageTicket) || 0;
+          if (actualValue === 0 && Number(journal.totalSales) > 0) {
+            const txCount = Number(journal.transactionCount) || 0;
+            const custCount = Number(journal.customerCount) || 0;
+            const divisor = txCount > 0 ? txCount : (custCount > 0 ? custCount : 0);
+            if (divisor > 0) {
+              actualValue = Math.round((Number(journal.totalSales) / divisor) * 100) / 100;
+            }
+          }
           break;
+        }
         case 'customer_count':
           actualValue = Number(journal.customerCount) || 0;
           break;
@@ -12436,6 +12455,9 @@ export class DatabaseStorage implements IStorage {
         pointsEarned = Math.round(pointsEarned * seasonalMultiplier);
         totalPointsEarned += pointsEarned;
         pendingEntries.push({ challengeType: challenge.challengeType, challengeId: challenge.id, challengeName: challenge.name, pointsEarned, targetValue, actualValue });
+        diagnostics.push({ challengeName: challenge.name, challengeType: challenge.challengeType, targetValue, actualValue, met: true });
+      } else {
+        diagnostics.push({ challengeName: challenge.name, challengeType: challenge.challengeType, targetValue, actualValue, met: false, reason: `القيمة الفعلية (${actualValue}) أقل من الهدف (${targetValue})` });
       }
     }
 
@@ -12468,7 +12490,7 @@ export class DatabaseStorage implements IStorage {
     }
 
     const totalAmount = Number((totalPointsEarned * pointValue).toFixed(2));
-    return { challengePoints: createdEntries, totalPoints: totalPointsEarned, totalAmount };
+    return { challengePoints: createdEntries, totalPoints: totalPointsEarned, totalAmount, diagnostics };
   }
 }
 
