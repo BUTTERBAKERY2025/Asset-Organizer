@@ -12403,6 +12403,7 @@ export class DatabaseStorage implements IStorage {
     for (const challenge of activeChallenges) {
       if (challenge.shiftType && challenge.shiftType !== journal.shiftType) continue;
       if (challenge.validTo && challenge.validTo < journal.journalDate) continue;
+      if (challenge.cashierId && challenge.cashierId !== journal.cashierId) continue;
 
       let actualValue = 0;
       let targetValue = Number(challenge.targetValue);

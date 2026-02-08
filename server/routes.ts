@@ -7144,7 +7144,14 @@ export async function registerRoutes(
         status: 'posted',
       });
       
-      const allJournals = [...approvedJournals, ...postedJournals];
+      const { journals: submittedJournals } = await storage.getCashierJournalsFiltered({
+        branchId,
+        startDate: dateFrom,
+        endDate: dateTo,
+        status: 'submitted',
+      });
+      
+      const allJournals = [...approvedJournals, ...postedJournals, ...submittedJournals];
       
       let totalPoints = 0;
       let totalAmount = 0;
