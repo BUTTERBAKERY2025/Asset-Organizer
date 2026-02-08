@@ -15,7 +15,7 @@ import { useBranches } from "@/hooks/useBranches";
 import {
   Gift, Award, DollarSign, Settings, ChevronLeft, Calculator, Check, X, Plus,
   FileSpreadsheet, FileText, ArrowRight, Wallet, Target, Trophy, Star,
-  Trash2, TrendingUp, Users, Calendar
+  Trash2, TrendingUp, Users, Calendar, Eye, Pencil
 } from "lucide-react";
 import { Link } from "wouter";
 import * as XLSX from "xlsx";
@@ -91,6 +91,8 @@ export default function IncentivesManagement() {
 
   const [showNewTierDialog, setShowNewTierDialog] = useState(false);
   const [showChallengeDialog, setShowChallengeDialog] = useState(false);
+  const [viewChallenge, setViewChallenge] = useState<any>(null);
+  const [editChallenge, setEditChallenge] = useState<any>(null);
   const [showCommissionDialog, setShowCommissionDialog] = useState(false);
   const [showBranchBonusDialog, setShowBranchBonusDialog] = useState(false);
 
@@ -241,6 +243,26 @@ export default function IncentivesManagement() {
     },
     onError: () => {
       toast({ title: "خطأ في إنشاء التحدي", variant: "destructive" });
+    },
+  });
+
+  const updateChallengeMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const res = await fetch(`/api/smart-incentives/challenges/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Failed to update challenge");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/challenges"] });
+      setEditChallenge(null);
+      toast({ title: "تم تحديث التحدي بنجاح" });
+    },
+    onError: () => {
+      toast({ title: "خطأ في تحديث التحدي", variant: "destructive" });
     },
   });
 
@@ -960,7 +982,7 @@ export default function IncentivesManagement() {
                             <TableHead>النقاط عند التحقيق</TableHead>
                             <TableHead className="hidden sm:table-cell">نقاط إضافية/وحدة</TableHead>
                             <TableHead className="hidden md:table-cell">الفترة</TableHead>
-                            <TableHead>حذف</TableHead>
+                            <TableHead>إجراء</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -975,9 +997,17 @@ export default function IncentivesManagement() {
                               <TableCell className="font-mono text-xs hidden sm:table-cell">{c.bonusPointsPerUnit || 0} نقطة</TableCell>
                               <TableCell className="text-xs hidden md:table-cell">{c.validFrom} {c.validTo ? `← ${c.validTo}` : "← مستمر"}</TableCell>
                               <TableCell>
-                                <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700 h-8 w-8 p-0" onClick={() => deleteChallengeMutation.mutate(c.id)} data-testid={`button-delete-challenge-${c.id}`}>
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
+                                <div className="flex items-center gap-1">
+                                  <Button variant="ghost" size="sm" className="text-blue-500 hover:text-blue-700 h-8 w-8 p-0" onClick={() => setViewChallenge(c)} data-testid={`button-view-challenge-${c.id}`} title="عرض التفاصيل">
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="sm" className="text-amber-500 hover:text-amber-700 h-8 w-8 p-0" onClick={() => setEditChallenge({ ...c })} data-testid={`button-edit-challenge-${c.id}`} title="تعديل">
+                                    <Settings className="h-4 w-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700 h-8 w-8 p-0" onClick={() => deleteChallengeMutation.mutate(c.id)} data-testid={`button-delete-challenge-${c.id}`} title="حذف">
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
                               </TableCell>
                             </TableRow>
                           ))}
@@ -987,6 +1017,207 @@ export default function IncentivesManagement() {
                   )}
                 </CardContent>
               </Card>
+
+              {/* View Challenge Dialog */}
+              <Dialog open={!!viewChallenge} onOpenChange={(open) => !open && setViewChallenge(null)}>
+                <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto" dir="rtl">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <Eye className="h-5 w-5 text-blue-600" />
+                      تفاصيل التحدي
+                    </DialogTitle>
+                  </DialogHeader>
+                  {viewChallenge && (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-gray-50 rounded-lg p-3">
+                          <p className="text-xs text-gray-500">اسم التحدي</p>
+                          <p className="font-bold text-sm">{viewChallenge.name}</p>
+                        </div>
+                        <div className="bg-gray-50 rounded-lg p-3">
+                          <p className="text-xs text-gray-500">نوع التحدي</p>
+                          <p className="font-bold text-sm">{CHALLENGE_TYPE_LABELS[viewChallenge.challengeType] || viewChallenge.challengeType}</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-gray-50 rounded-lg p-3">
+                          <p className="text-xs text-gray-500">الفرع</p>
+                          <p className="font-bold text-sm">{getBranchName(viewChallenge.branchId)}</p>
+                        </div>
+                        <div className="bg-gray-50 rounded-lg p-3">
+                          <p className="text-xs text-gray-500">الكاشير</p>
+                          <p className="font-bold text-sm">{viewChallenge.cashierId ? getUserName(viewChallenge.cashierId) : "جميع الكاشيرات"}</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-center">
+                          <p className="text-xs text-amber-600">الهدف المطلوب</p>
+                          <p className="font-bold text-lg text-amber-800">{viewChallenge.targetValue}</p>
+                        </div>
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
+                          <p className="text-xs text-green-600">النقاط الأساسية</p>
+                          <p className="font-bold text-lg text-green-800">{viewChallenge.basePoints}</p>
+                        </div>
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
+                          <p className="text-xs text-blue-600">إضافي/وحدة</p>
+                          <p className="font-bold text-lg text-blue-800">{viewChallenge.bonusPointsPerUnit || 0}</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-gray-50 rounded-lg p-3">
+                          <p className="text-xs text-gray-500">تاريخ البداية</p>
+                          <p className="font-bold text-sm">{viewChallenge.validFrom}</p>
+                        </div>
+                        <div className="bg-gray-50 rounded-lg p-3">
+                          <p className="text-xs text-gray-500">تاريخ النهاية</p>
+                          <p className="font-bold text-sm">{viewChallenge.validTo || "مستمر"}</p>
+                        </div>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        <p className="text-xs text-gray-500">الحالة</p>
+                        <Badge className={viewChallenge.isActive ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}>
+                          {viewChallenge.isActive ? "نشط" : "متوقف"}
+                        </Badge>
+                      </div>
+                    </div>
+                  )}
+                  <DialogFooter className="gap-2">
+                    <Button variant="outline" onClick={() => { setEditChallenge({ ...viewChallenge }); setViewChallenge(null); }}>
+                      <Pencil className="h-4 w-4 ml-2" />
+                      تعديل
+                    </Button>
+                    <Button variant="outline" onClick={() => setViewChallenge(null)}>إغلاق</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              {/* Edit Challenge Dialog */}
+              <Dialog open={!!editChallenge} onOpenChange={(open) => !open && setEditChallenge(null)}>
+                <DialogContent className="max-w-md sm:max-w-lg max-h-[90vh] overflow-y-auto" dir="rtl">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <Pencil className="h-5 w-5 text-amber-600" />
+                      تعديل التحدي
+                    </DialogTitle>
+                  </DialogHeader>
+                  {editChallenge && (
+                    <div className="space-y-3">
+                      <div>
+                        <Label className="font-bold text-sm">اسم التحدي</Label>
+                        <Input value={editChallenge.name} onChange={(e) => setEditChallenge({ ...editChallenge, name: e.target.value })} className="h-9 mt-1" data-testid="input-edit-challenge-name" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label className="font-bold text-sm">نوع التحدي</Label>
+                          <Select value={editChallenge.challengeType} onValueChange={(v) => setEditChallenge({ ...editChallenge, challengeType: v })}>
+                            <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="avg_ticket">متوسط الفاتورة</SelectItem>
+                              <SelectItem value="customer_count">عدد العملاء</SelectItem>
+                              <SelectItem value="shift_sales">مبيعات الوردية</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label className="font-bold text-sm">الفرع</Label>
+                          <Select value={editChallenge.branchId || "all"} onValueChange={(v) => setEditChallenge({ ...editChallenge, branchId: v === "all" ? null : v, cashierId: "" })}>
+                            <SelectTrigger className="h-9 mt-1"><SelectValue placeholder="جميع الفروع" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">جميع الفروع</SelectItem>
+                              {branches.map((b) => (<SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <div>
+                        <Label className="font-bold text-sm">الكاشير (اختياري)</Label>
+                        <Select value={editChallenge.cashierId || "all"} onValueChange={(v) => setEditChallenge({ ...editChallenge, cashierId: v === "all" ? null : v })}>
+                          <SelectTrigger className="h-9 mt-1"><SelectValue placeholder="جميع الكاشيرات" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">جميع الكاشيرات</SelectItem>
+                            {allUsers
+                              .filter((u: any) => {
+                                const isActiveCashier = u.isActive !== "inactive" && (u.role === "employee" || u.role === "cashier" || u.role === "admin");
+                                if (!editChallenge.branchId || editChallenge.branchId === "all") return isActiveCashier;
+                                return isActiveCashier && u.branchId === editChallenge.branchId;
+                              })
+                              .map((u: any) => (
+                                <SelectItem key={u.id} value={u.id}>
+                                  {u.firstName && u.lastName ? `${u.firstName} ${u.lastName}` : u.username}
+                                  {u.jobTitle ? ` - ${u.jobTitle}` : ""}
+                                </SelectItem>
+                              ))
+                            }
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <Label className="font-bold text-sm">الهدف</Label>
+                          <Input type="number" value={editChallenge.targetValue} onChange={(e) => setEditChallenge({ ...editChallenge, targetValue: parseFloat(e.target.value) || 0 })} className="h-9 mt-1" data-testid="input-edit-challenge-target" />
+                        </div>
+                        <div>
+                          <Label className="font-bold text-sm">النقاط الأساسية</Label>
+                          <Input type="number" value={editChallenge.basePoints} onChange={(e) => setEditChallenge({ ...editChallenge, basePoints: parseInt(e.target.value) || 0 })} className="h-9 mt-1" data-testid="input-edit-challenge-points" />
+                        </div>
+                        <div>
+                          <Label className="font-bold text-sm">إضافي/وحدة</Label>
+                          <Input type="number" value={editChallenge.bonusPointsPerUnit || 0} onChange={(e) => setEditChallenge({ ...editChallenge, bonusPointsPerUnit: parseFloat(e.target.value) || 0 })} className="h-9 mt-1" />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label className="font-bold text-sm">تاريخ البداية</Label>
+                          <Input type="date" value={editChallenge.validFrom} onChange={(e) => setEditChallenge({ ...editChallenge, validFrom: e.target.value })} className="h-9 mt-1" />
+                        </div>
+                        <div>
+                          <Label className="font-bold text-sm">تاريخ النهاية</Label>
+                          <Input type="date" value={editChallenge.validTo || ""} onChange={(e) => setEditChallenge({ ...editChallenge, validTo: e.target.value || null })} className="h-9 mt-1" />
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Label className="font-bold text-sm">الحالة:</Label>
+                        <Button
+                          variant={editChallenge.isActive ? "default" : "outline"}
+                          size="sm"
+                          className={editChallenge.isActive ? "bg-green-600 hover:bg-green-700" : ""}
+                          onClick={() => setEditChallenge({ ...editChallenge, isActive: !editChallenge.isActive })}
+                        >
+                          {editChallenge.isActive ? "نشط" : "متوقف"}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setEditChallenge(null)}>إلغاء</Button>
+                    <Button
+                      className="bg-amber-600 hover:bg-amber-700"
+                      disabled={updateChallengeMutation.isPending}
+                      onClick={() => {
+                        if (!editChallenge) return;
+                        updateChallengeMutation.mutate({
+                          id: editChallenge.id,
+                          data: {
+                            name: editChallenge.name,
+                            challengeType: editChallenge.challengeType,
+                            branchId: editChallenge.branchId || null,
+                            cashierId: editChallenge.cashierId || null,
+                            targetValue: editChallenge.targetValue,
+                            basePoints: editChallenge.basePoints,
+                            bonusPointsPerUnit: editChallenge.bonusPointsPerUnit || 0,
+                            validFrom: editChallenge.validFrom,
+                            validTo: editChallenge.validTo || null,
+                            isActive: editChallenge.isActive,
+                          },
+                        });
+                      }}
+                      data-testid="button-save-edit-challenge"
+                    >
+                      {updateChallengeMutation.isPending ? "جاري الحفظ..." : "حفظ التعديلات"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </div>
           </TabsContent>
 
