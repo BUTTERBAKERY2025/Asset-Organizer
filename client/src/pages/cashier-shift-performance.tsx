@@ -1950,17 +1950,19 @@ export default function CashierShiftPerformance() {
                               </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-64 p-0" align="start">
-                              <Command>
-                                <CommandInput placeholder="بحث عن كاشير..." />
-                                <CommandEmpty>لا يوجد كاشير</CommandEmpty>
-                                <CommandGroup>
-                                  {reportBranchCashiers.map((c: any) => (
-                                    <CommandItem key={c.id} value={`${c.firstName || c.username} ${c.lastName || ''}`} onSelect={() => { setStmtCashierId(c.id); setStmtCashierOpen(false); }}>
-                                      <Check className={`ml-2 h-3 w-3 ${stmtCashierId === c.id ? "opacity-100" : "opacity-0"}`} />
-                                      {c.firstName || c.username || c.id} {c.lastName || ''}
-                                    </CommandItem>
-                                  ))}
-                                </CommandGroup>
+                              <Command shouldFilter={true}>
+                                <CommandInput placeholder="ابحث عن كاشير..." data-testid="search-stmt-cashier" />
+                                <CommandList>
+                                  <CommandEmpty>لا توجد نتائج</CommandEmpty>
+                                  <CommandGroup>
+                                    {reportBranchCashiers.map((c: any) => (
+                                      <CommandItem key={c.id} value={`${c.firstName || c.username} ${c.lastName || ''}`} onSelect={() => { setStmtCashierId(c.id); setStmtCashierOpen(false); }}>
+                                        <Check className={`ml-2 h-3 w-3 ${stmtCashierId === c.id ? "opacity-100" : "opacity-0"}`} />
+                                        {c.firstName || c.username || c.id} {c.lastName || ''}
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                </CommandList>
                               </Command>
                             </PopoverContent>
                           </Popover>
