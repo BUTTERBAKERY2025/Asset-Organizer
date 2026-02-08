@@ -22,8 +22,9 @@ import {
   Target, TrendingUp, TrendingDown, Users, Trophy, ChevronLeft, Calendar, 
   Award, AlertTriangle, Bell, Clock, CheckCircle2, Settings, 
   Sun, Moon, DollarSign, Receipt, User as UserIcon, RefreshCw, BarChart as BarChartIcon,
-  Star, Search, CalendarDays, X, FileSpreadsheet, Printer, FileText
+  Star, Search, CalendarDays, X, FileSpreadsheet, Printer, FileText, Package
 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Link } from "wouter";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line, Legend, PieChart, Pie, Cell } from "recharts";
 import * as XLSX from "xlsx";
@@ -81,6 +82,11 @@ export default function CashierShiftPerformance() {
   const [targetCashierId, setTargetCashierId] = useState<string>("all");
   const [targetCashierOpen, setTargetCashierOpen] = useState(false);
 
+  const [showProductAchievementDialog, setShowProductAchievementDialog] = useState(false);
+  const [selectedProductCommission, setSelectedProductCommission] = useState<any>(null);
+  const [achievedQuantity, setAchievedQuantity] = useState("");
+  const [submittingAchievement, setSubmittingAchievement] = useState(false);
+
   const { user } = useAuth();
   const { branches, userBranchId, canSelectBranch } = useBranches();
   const { canCreate, canEdit, canDelete, canApprove } = usePermissions();
@@ -135,6 +141,22 @@ export default function CashierShiftPerformance() {
       if (!res.ok) return [];
       return res.json();
     }
+  });
+
+  const { data: productSales = [], refetch: refetchProductSales } = useQuery<any[]>({
+    queryKey: ["/api/smart-incentives/product-sales", targetCashierId, selectedDate, selectedBranch],
+    queryFn: async () => {
+      const params = new URLSearchParams({ date: selectedDate });
+      if (targetCashierId && targetCashierId !== 'all') {
+        params.set("cashierId", targetCashierId);
+      } else if (selectedBranch && selectedBranch !== 'all') {
+        params.set("branchId", selectedBranch);
+      } else {
+        return [];
+      }
+      const res = await fetch(`/api/smart-incentives/product-sales?${params}`);
+      return res.ok ? res.json() : [];
+    },
   });
 
   const { data: performanceAlerts = [], refetch: refetchAlerts } = useQuery<PerformanceAlert[]>({
@@ -471,6 +493,40 @@ export default function CashierShiftPerformance() {
       </body></html>`;
     const win = window.open('', '_blank');
     if (win) { win.document.write(printContent); win.document.close(); win.print(); }
+  };
+
+  const handleSubmitProductAchievement = async () => {
+    if (!selectedProductCommission || !achievedQuantity) return;
+    setSubmittingAchievement(true);
+    try {
+      const res = await fetch("/api/smart-incentives/product-commission-achievement", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cashierId: selectedProductCommission.cashierId,
+          commissionId: selectedProductCommission.productCommission.commissionId,
+          date: selectedDate,
+          shiftType: selectedProductCommission.shiftType,
+          quantitySold: parseInt(achievedQuantity),
+        }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      const result = await res.json();
+      if (result.isTargetMet) {
+        toast.success(`تم تحقيق الهدف! 🎉 ${result.pointsAwarded > 0 ? `تم منح ${result.pointsAwarded} نقطة` : ''}`);
+      } else {
+        toast.info(result.pointsAwarded > 0 ? `تم تسجيل الإنجاز - تم منح ${result.pointsAwarded} نقطة` : "تم تسجيل الإنجاز - لم يتم تحقيق الهدف بعد");
+      }
+      refetchProductSales();
+      queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/challenges-as-targets"] });
+      setShowProductAchievementDialog(false);
+      setAchievedQuantity("");
+      setSelectedProductCommission(null);
+    } catch (e) {
+      toast.error("خطأ في تسجيل الإنجاز");
+    } finally {
+      setSubmittingAchievement(false);
+    }
   };
 
   const getPercentColor = (percent: number) => {
@@ -1060,6 +1116,76 @@ export default function CashierShiftPerformance() {
                 </CardContent>
               </Card>
             </div>
+
+            {shiftTargets.filter(t => (t as any).productCommission && (targetCashierId === 'all' || t.cashierId === targetCashierId)).length > 0 && (
+              <Card className="border-purple-200 mt-6">
+                <CardHeader className="bg-gradient-to-l from-purple-50 to-transparent pb-3">
+                  <CardTitle className="flex items-center gap-2">
+                    <Package className="h-5 w-5 text-purple-500" />
+                    عمولات الأصناف المستهدفة
+                  </CardTitle>
+                  <CardDescription>أهداف بيع الأصناف المحددة والنقاط المرتبطة</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {shiftTargets
+                      .filter(t => (t as any).productCommission && (targetCashierId === 'all' || t.cashierId === targetCashierId))
+                      .map((target) => {
+                        const pc = (target as any).productCommission;
+                        const existingSale = productSales.find((s: any) => s.commissionId === pc.commissionId && s.shiftType === target.shiftType);
+                        const soldQty = existingSale?.quantitySold || 0;
+                        const progressPercent = pc.targetQuantity > 0 ? (soldQty / pc.targetQuantity) * 100 : 0;
+                        const isCompleted = existingSale?.isTargetMet;
+                        
+                        return (
+                          <div
+                            key={`pc-${pc.commissionId}-${target.cashierId}-${target.shiftType}`}
+                            className={`border rounded-lg p-3 cursor-pointer transition-all hover:shadow-md ${isCompleted ? 'bg-green-50 border-green-300' : 'bg-white hover:bg-purple-50 border-purple-200'}`}
+                            onClick={() => {
+                              setSelectedProductCommission(target);
+                              setAchievedQuantity(soldQty > 0 ? String(soldQty) : "");
+                              setShowProductAchievementDialog(true);
+                            }}
+                            data-testid={`product-commission-${pc.commissionId}-${target.cashierId}`}
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-1.5">
+                                <Package className="h-4 w-4 text-purple-500" />
+                                <span className="font-medium text-sm">{pc.productName}</span>
+                              </div>
+                              {isCompleted && (
+                                <Badge className="bg-green-500 text-white text-[9px] h-4 px-1">
+                                  <CheckCircle2 className="h-2.5 w-2.5 ml-0.5" />محقق
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="text-xs text-gray-500 mb-1">
+                              {getCashierName(target.cashierId)} • {target.shiftType === 'morning' ? 'صباحي' : 'مسائي'}
+                            </div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <Progress value={Math.min(progressPercent, 100)} className="h-2 flex-1" />
+                              <span className="text-xs font-mono text-gray-600">{soldQty}/{pc.targetQuantity}</span>
+                            </div>
+                            <div className="flex items-center justify-between text-[10px]">
+                              <span className="text-purple-600">🎯 {pc.pointsOnTarget} نقطة</span>
+                              {pc.bonusPointsPerExtra > 0 && (
+                                <span className="text-amber-600">+{pc.bonusPointsPerExtra}/قطعة زيادة</span>
+                              )}
+                            </div>
+                            {existingSale?.pointsAwarded > 0 && (
+                              <div className="mt-1 text-center">
+                                <Badge className="bg-emerald-500 text-white text-[9px]">
+                                  <Star className="h-2.5 w-2.5 ml-0.5" />{existingSale.pointsAwarded} نقطة مكتسبة
+                                </Badge>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           <TabsContent value="performance" className="space-y-4">
@@ -1596,6 +1722,65 @@ export default function CashierShiftPerformance() {
             </Card>
           </TabsContent>
         </Tabs>
+
+        <Dialog open={showProductAchievementDialog} onOpenChange={setShowProductAchievementDialog}>
+          <DialogContent className="max-w-sm" dir="rtl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Package className="h-5 w-5 text-purple-500" />
+                تسجيل إنجاز صنف
+              </DialogTitle>
+            </DialogHeader>
+            {selectedProductCommission && (
+              <div className="space-y-4">
+                <div className="bg-purple-50 rounded-lg p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-sm">{selectedProductCommission.productCommission.productName}</span>
+                    <Badge variant="outline" className="text-xs">{selectedProductCommission.productCommission.commissionType === 'weekly_product' ? 'أسبوعي' : selectedProductCommission.productCommission.commissionType === 'monthly_product' ? 'شهري' : 'جديد'}</Badge>
+                  </div>
+                  <div className="text-xs text-gray-600">
+                    الكاشير: {getCashierName(selectedProductCommission.cashierId)}
+                  </div>
+                  <div className="text-xs text-gray-600">
+                    الهدف: {selectedProductCommission.productCommission.targetQuantity} قطعة
+                  </div>
+                  <div className="text-xs text-purple-700">
+                    🎯 {selectedProductCommission.productCommission.pointsOnTarget} نقطة عند تحقيق الهدف
+                    {selectedProductCommission.productCommission.bonusPointsPerExtra > 0 && ` + ${selectedProductCommission.productCommission.bonusPointsPerExtra} نقطة لكل قطعة إضافية`}
+                  </div>
+                </div>
+                <div>
+                  <Label>الكمية المباعة</Label>
+                  <Input
+                    type="number"
+                    value={achievedQuantity}
+                    onChange={(e) => setAchievedQuantity(e.target.value)}
+                    placeholder={`الهدف: ${selectedProductCommission.productCommission.targetQuantity}`}
+                    className="h-11 sm:h-10 text-center text-lg font-bold"
+                    min="0"
+                    data-testid="input-achieved-quantity"
+                  />
+                  {achievedQuantity && parseInt(achievedQuantity) >= selectedProductCommission.productCommission.targetQuantity && (
+                    <p className="text-green-600 text-xs mt-1 text-center font-medium">✅ الهدف محقق!</p>
+                  )}
+                  {achievedQuantity && parseInt(achievedQuantity) > 0 && parseInt(achievedQuantity) < selectedProductCommission.productCommission.targetQuantity && (
+                    <p className="text-amber-600 text-xs mt-1 text-center">متبقي {selectedProductCommission.productCommission.targetQuantity - parseInt(achievedQuantity)} قطعة للهدف</p>
+                  )}
+                </div>
+              </div>
+            )}
+            <DialogFooter>
+              <Button
+                onClick={handleSubmitProductAchievement}
+                disabled={submittingAchievement || !achievedQuantity || parseInt(achievedQuantity) < 0}
+                className="bg-purple-600 hover:bg-purple-700 w-full"
+                data-testid="button-submit-achievement"
+              >
+                {submittingAchievement ? "جاري التسجيل..." : "تسجيل الإنجاز"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );

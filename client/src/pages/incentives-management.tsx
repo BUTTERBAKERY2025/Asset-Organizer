@@ -121,7 +121,7 @@ export default function IncentivesManagement() {
 
   const [newCommission, setNewCommission] = useState({
     productName: "", productCategory: "", commissionType: "weekly_product",
-    branchId: "", targetQuantity: "", pointsOnTarget: "", bonusPointsPerExtra: "0",
+    branchId: "", cashierId: "", targetQuantity: "", pointsOnTarget: "", bonusPointsPerExtra: "0",
     validFrom: "", validTo: "",
   });
 
@@ -341,6 +341,7 @@ export default function IncentivesManagement() {
           productCategory: data.productCategory || null,
           commissionType: data.commissionType,
           branchId: data.branchId || null,
+          cashierId: (data.cashierId && data.cashierId !== "all") ? data.cashierId : null,
           targetQuantity: parseInt(data.targetQuantity),
           pointsOnTarget: parseInt(data.pointsOnTarget),
           bonusPointsPerExtra: parseFloat(data.bonusPointsPerExtra) || 0,
@@ -355,7 +356,7 @@ export default function IncentivesManagement() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/product-commissions"] });
       setShowCommissionDialog(false);
-      setNewCommission({ productName: "", productCategory: "", commissionType: "weekly_product", branchId: "", targetQuantity: "", pointsOnTarget: "", bonusPointsPerExtra: "0", validFrom: "", validTo: "" });
+      setNewCommission({ productName: "", productCategory: "", commissionType: "weekly_product", branchId: "", cashierId: "", targetQuantity: "", pointsOnTarget: "", bonusPointsPerExtra: "0", validFrom: "", validTo: "" });
       toast({ title: "تم إنشاء العمولة بنجاح" });
     },
     onError: () => {
@@ -1530,15 +1531,37 @@ export default function IncentivesManagement() {
                           </Select>
                         </div>
                       </div>
-                      <div>
-                        <Label>الفرع (اختياري)</Label>
-                        <Select value={newCommission.branchId} onValueChange={(v) => setNewCommission({ ...newCommission, branchId: v })}>
-                          <SelectTrigger data-testid="select-commission-branch" className="h-11 sm:h-10"><SelectValue placeholder="جميع الفروع" /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">جميع الفروع</SelectItem>
-                            {branches.map((b) => (<SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>))}
-                          </SelectContent>
-                        </Select>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label>الفرع (اختياري)</Label>
+                          <Select value={newCommission.branchId} onValueChange={(v) => setNewCommission({ ...newCommission, branchId: v, cashierId: "" })}>
+                            <SelectTrigger data-testid="select-commission-branch" className="h-11 sm:h-10"><SelectValue placeholder="جميع الفروع" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">جميع الفروع</SelectItem>
+                              {branches.map((b) => (<SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label>الكاشير (اختياري)</Label>
+                          <Select value={newCommission.cashierId} onValueChange={(v) => setNewCommission({ ...newCommission, cashierId: v })}>
+                            <SelectTrigger data-testid="select-commission-cashier" className="h-11 sm:h-10"><SelectValue placeholder="جميع الكاشيرات" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">جميع الكاشيرات</SelectItem>
+                              {allUsers
+                                .filter((u: any) => {
+                                  const isActiveCashier = u.isActive !== "inactive" && (u.role === "employee" || u.role === "cashier" || u.role === "admin");
+                                  if (!newCommission.branchId || newCommission.branchId === "all") return isActiveCashier;
+                                  return isActiveCashier && u.branchId === newCommission.branchId;
+                                })
+                                .map((u: any) => (
+                                  <SelectItem key={u.id} value={u.id}>
+                                    {u.firstName && u.lastName ? `${u.firstName} ${u.lastName}` : u.username}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
@@ -1586,6 +1609,7 @@ export default function IncentivesManagement() {
                           <TableHead>المنتج</TableHead>
                           <TableHead className="hidden sm:table-cell">الفئة</TableHead>
                           <TableHead>النوع</TableHead>
+                          <TableHead>الكاشير</TableHead>
                           <TableHead>الكمية</TableHead>
                           <TableHead>النقاط</TableHead>
                           <TableHead className="hidden md:table-cell">مكافأة/قطعة</TableHead>
@@ -1599,6 +1623,7 @@ export default function IncentivesManagement() {
                             <TableCell className="font-medium text-xs sm:text-sm">{c.productName}</TableCell>
                             <TableCell className="text-xs hidden sm:table-cell">{c.productCategory || "-"}</TableCell>
                             <TableCell><Badge variant="outline" className="text-xs">{COMMISSION_TYPE_LABELS[c.commissionType] || c.commissionType}</Badge></TableCell>
+                            <TableCell className="text-xs">{(c as any).cashierId ? getUserName((c as any).cashierId) : <span className="text-gray-400">الكل</span>}</TableCell>
                             <TableCell className="font-mono text-xs sm:text-sm">{c.targetQuantity}</TableCell>
                             <TableCell className="font-mono text-xs sm:text-sm">{c.pointsOnTarget}</TableCell>
                             <TableCell className="font-mono text-xs hidden md:table-cell">{c.bonusPointsPerExtra || 0}</TableCell>

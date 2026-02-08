@@ -68,6 +68,7 @@ import {
   shiftEmployees,
   weeklyScheduleLocks,
   scheduleChangeAudit,
+  cashierProductSales,
 } from "@shared/schema";
 import { 
   generateSalaryClosingPdf, type SalaryClosingPdfData,
@@ -6968,7 +6969,7 @@ export async function registerRoutes(
         }
       }
 
-      const targets = Object.values(grouped).map((g, idx) => ({
+      let targets = Object.values(grouped).map((g, idx) => ({
         id: idx + 1,
         cashierId: g.cashierId,
         branchId: g.branchId,
@@ -6986,7 +6987,68 @@ export async function registerRoutes(
         isActive: true,
         createdAt: new Date().toISOString(),
         challenges: g.challenges,
-      }));
+      })) as any[];
+
+      const activeCommissions = await storage.getActiveProductCommissions(branchId as string);
+      const validCommissions = activeCommissions.filter(c => {
+        if (c.validFrom > targetDate) return false;
+        if (c.validTo && c.validTo < targetDate) return false;
+        return true;
+      });
+
+      if (validCommissions.length > 0) {
+        let branchCashierIds: string[] = [];
+        const commissionsNeedingAllCashiers = validCommissions.some(c => !c.cashierId);
+        if (commissionsNeedingAllCashiers && branchId) {
+          const branchEmps = await storage.getBranchEmployeesByBranch(branchId as string);
+          branchCashierIds = branchEmps
+            .filter(emp => emp.linkedUserId)
+            .map(emp => emp.linkedUserId as string);
+        }
+
+        for (const commission of validCommissions) {
+          const effectiveShift = (commission.shiftType && commission.shiftType !== 'null') ? commission.shiftType : ((shiftType as string) || 'morning');
+          const cashierIds: string[] = commission.cashierId
+            ? [commission.cashierId]
+            : branchCashierIds;
+
+          for (const cid of cashierIds) {
+            targets.push({
+              id: 10000 + commission.id,
+              cashierId: cid,
+              branchId: commission.branchId,
+              shiftType: effectiveShift,
+              cashierRole: 'main',
+              periodType: commission.commissionType === 'weekly_product' ? 'weekly' : 'monthly',
+              startDate: commission.validFrom,
+              endDate: commission.validTo || targetDate,
+              totalTargetAmount: "0",
+              totalTargetTransactions: 0,
+              targetAmount: "0",
+              targetTransactions: 0,
+              targetTicketValue: "0",
+              targetDate: targetDate,
+              isActive: true,
+              createdAt: commission.createdAt,
+              challenges: [{
+                id: commission.id,
+                name: commission.productName,
+                type: 'product_commission',
+                targetValue: commission.targetQuantity,
+                basePoints: commission.pointsOnTarget,
+              }],
+              productCommission: {
+                commissionId: commission.id,
+                productName: commission.productName,
+                targetQuantity: commission.targetQuantity,
+                pointsOnTarget: commission.pointsOnTarget,
+                bonusPointsPerExtra: commission.bonusPointsPerExtra,
+                commissionType: commission.commissionType,
+              },
+            });
+          }
+        }
+      }
 
       const user = getCurrentUser(req);
       const branchFilter = getEffectiveBranchFilter(req, branchId);
@@ -7437,10 +7499,21 @@ export async function registerRoutes(
   // Cashier Product Sales
   app.get("/api/smart-incentives/product-sales", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
-      const { cashierId, date } = req.query as any;
-      if (!cashierId) return res.status(400).json({ error: "يجب تحديد الكاشير" });
-      const sales = await storage.getCashierProductSales(cashierId, date);
-      res.json(sales);
+      const { cashierId, date, branchId } = req.query as any;
+      if (!cashierId && !branchId) return res.status(400).json({ error: "يجب تحديد الكاشير أو الفرع" });
+      
+      if (cashierId) {
+        const sales = await storage.getCashierProductSales(cashierId, date);
+        res.json(sales);
+      } else {
+        const allSales = await db.select().from(cashierProductSales)
+          .where(and(
+            eq(cashierProductSales.branchId, branchId),
+            date ? eq(cashierProductSales.salesDate, date) : undefined
+          ))
+          .orderBy(desc(cashierProductSales.createdAt));
+        res.json(allSales);
+      }
     } catch (error) {
       console.error("Error fetching product sales:", error);
       res.status(500).json({ error: "فشل في جلب مبيعات الأصناف" });
@@ -7466,6 +7539,101 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error updating product sale:", error);
       res.status(500).json({ error: "فشل في تحديث مبيعات الصنف" });
+    }
+  });
+
+  app.post("/api/smart-incentives/product-commission-achievement", isAuthenticated, async (req, res) => {
+    try {
+      const { cashierId, commissionId, date, shiftType, quantitySold } = req.body;
+      if (!cashierId || !commissionId || !date || quantitySold === undefined) {
+        return res.status(400).json({ error: "بيانات ناقصة" });
+      }
+
+      const commission = await storage.getProductCommission(commissionId);
+      if (!commission) return res.status(404).json({ error: "العمولة غير موجودة" });
+      if (!commission.isActive) return res.status(400).json({ error: "العمولة غير نشطة" });
+
+      if (commission.cashierId && commission.cashierId !== cashierId) {
+        return res.status(403).json({ error: "هذه العمولة غير مخصصة لهذا الكاشير" });
+      }
+
+      if (date < commission.validFrom || (commission.validTo && date > commission.validTo)) {
+        return res.status(400).json({ error: "التاريخ خارج فترة صلاحية العمولة" });
+      }
+
+      const branchId = commission.branchId;
+      if (!branchId) return res.status(400).json({ error: "الفرع غير محدد في العمولة" });
+
+      const existingSales = await storage.getCashierProductSales(cashierId, date);
+      const existingRecord = existingSales.find(s => s.commissionId === commissionId && s.shiftType === (shiftType || null));
+
+      const qty = parseInt(String(quantitySold));
+      const targetQty = commission.targetQuantity;
+      const isTargetMet = qty >= targetQty;
+      let pointsAwarded = 0;
+
+      if (isTargetMet) {
+        pointsAwarded = commission.pointsOnTarget;
+        const extraQty = qty - targetQty;
+        if (extraQty > 0 && commission.bonusPointsPerExtra) {
+          pointsAwarded += Math.floor(extraQty * commission.bonusPointsPerExtra);
+        }
+      }
+
+      let saleRecord;
+      if (existingRecord) {
+        saleRecord = await storage.updateCashierProductSale(existingRecord.id, {
+          quantitySold: qty,
+          isTargetMet,
+          pointsAwarded,
+        });
+      } else {
+        saleRecord = await storage.createCashierProductSale({
+          cashierId,
+          branchId,
+          commissionId,
+          salesDate: date,
+          shiftType: shiftType || null,
+          quantitySold: qty,
+          targetQuantity: targetQty,
+          isTargetMet,
+          pointsAwarded,
+          recordedBy: (req as any).user?.id || null,
+        });
+      }
+
+      if (pointsAwarded > 0) {
+        const settings = await storage.getPointSettings();
+        const pointValue = settings?.pointValue || 1;
+
+        if (existingRecord) {
+          const existingLedger = await storage.getCashierPointsLedger(cashierId, undefined, undefined);
+          const existingEntry = existingLedger.find((e: any) => e.sourceId === commissionId && e.pointsType === 'product_commission' && e.transactionDate === date && e.shiftType === (shiftType || null));
+          if (existingEntry) {
+            await storage.updatePointsEntryStatus(existingEntry.id, 'cancelled');
+          }
+        }
+
+        await storage.createPointsEntry({
+          cashierId,
+          branchId,
+          transactionDate: date,
+          shiftType: shiftType || null,
+          pointsType: 'product_commission',
+          sourceId: commissionId,
+          sourceName: commission.productName,
+          pointsEarned: pointsAwarded,
+          pointValue,
+          amountEarned: pointsAwarded * pointValue,
+          status: 'earned',
+          notes: `عمولة صنف: ${commission.productName} - الكمية: ${qty}/${targetQty}`,
+        });
+      }
+
+      res.json({ success: true, sale: saleRecord, pointsAwarded, isTargetMet });
+    } catch (error) {
+      console.error("Error recording commission achievement:", error);
+      res.status(500).json({ error: "فشل في تسجيل الإنجاز" });
     }
   });
 
