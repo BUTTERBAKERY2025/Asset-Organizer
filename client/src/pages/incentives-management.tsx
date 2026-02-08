@@ -10,12 +10,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { useBranches } from "@/hooks/useBranches";
 import {
   Gift, Award, DollarSign, Settings, ChevronLeft, Calculator, Check, X, Plus,
   FileSpreadsheet, FileText, ArrowRight, Wallet, Target, Trophy, Star,
-  Trash2, TrendingUp, Users, Calendar, Eye, Pencil, RefreshCw
+  Trash2, TrendingUp, Users, Calendar, Eye, Pencil, RefreshCw, MoreVertical
 } from "lucide-react";
 import { Link } from "wouter";
 import * as XLSX from "xlsx";
@@ -1793,7 +1794,7 @@ export default function IncentivesManagement() {
                                 {isCalculated && <Badge className="bg-green-600 text-[10px] h-5">تم الاحتساب</Badge>}
                               </div>
                               <div className="flex items-center gap-1">
-                                {!isCalculated ? (
+                                {!isCalculated && (
                                   <Button
                                     size="sm"
                                     className="bg-blue-600 hover:bg-blue-700 text-white h-8 text-xs px-3"
@@ -1811,25 +1812,60 @@ export default function IncentivesManagement() {
                                       <><Calculator className="h-3.5 w-3.5 ml-1.5" /> احتساب نهاية الشهر</>
                                     )}
                                   </Button>
-                                ) : (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="text-orange-600 border-orange-300 hover:bg-orange-50 h-8 text-xs px-3"
-                                    onClick={() => {
-                                      if (window.confirm("هل تريد إعادة تعيين الاحتساب؟ سيتم إلغاء جميع النقاط الموزعة على الكاشيرات.")) {
-                                        resetCalculationMutation.mutate(b.id);
-                                      }
-                                    }}
-                                    disabled={resetCalculationMutation.isPending}
-                                    data-testid={`button-reset-bonus-${b.id}`}
-                                  >
-                                    <RefreshCw className="h-3.5 w-3.5 ml-1.5" /> إعادة الاحتساب
-                                  </Button>
                                 )}
-                                <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700 h-8 w-8 p-0" onClick={() => deleteBranchBonusMutation.mutate(b.id)} data-testid={`button-delete-branch-bonus-${b.id}`}>
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" size="sm" className="h-8 text-xs px-2 gap-1" data-testid={`button-actions-${b.id}`}>
+                                      <MoreVertical className="h-4 w-4" />
+                                      إجراءات
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-48">
+                                    {isCalculated && (
+                                      <>
+                                        <DropdownMenuItem
+                                          className="text-xs gap-2 cursor-pointer"
+                                          onClick={() => {
+                                            setManualAdjustBonusId(b.id);
+                                            const amounts: Record<string, string> = {};
+                                            calcDetails?.distribution?.forEach((d: any) => { amounts[d.cashierId] = String(d.amount); });
+                                            setManualAmounts(amounts);
+                                            setManualComment("");
+                                          }}
+                                          data-testid={`menu-manual-adjust-${b.id}`}
+                                        >
+                                          <Pencil className="h-3.5 w-3.5 text-purple-600" />
+                                          <span>تعديل يدوي في المكافأة</span>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          className="text-xs gap-2 cursor-pointer text-orange-600"
+                                          onClick={() => {
+                                            if (window.confirm("هل تريد إعادة تعيين الاحتساب؟ سيتم إلغاء جميع النقاط الموزعة على الكاشيرات.")) {
+                                              resetCalculationMutation.mutate(b.id);
+                                            }
+                                          }}
+                                          data-testid={`menu-reset-bonus-${b.id}`}
+                                        >
+                                          <RefreshCw className="h-3.5 w-3.5" />
+                                          <span>إعادة الاحتساب</span>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                      </>
+                                    )}
+                                    <DropdownMenuItem
+                                      className="text-xs gap-2 cursor-pointer text-red-600"
+                                      onClick={() => {
+                                        if (window.confirm("هل تريد حذف هذه المكافأة نهائياً؟")) {
+                                          deleteBranchBonusMutation.mutate(b.id);
+                                        }
+                                      }}
+                                      data-testid={`menu-delete-bonus-${b.id}`}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                      <span>حذف المكافأة</span>
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
                               </div>
                             </div>
                             <div className="flex items-center gap-2 text-xs text-gray-600 mb-2">
@@ -1884,23 +1920,6 @@ export default function IncentivesManagement() {
                                         {isManualAdjusted ? "التوزيع اليدوي:" : "توزيع المكافأة على الكاشيرات:"}
                                         {isManualAdjusted && <Badge className="bg-orange-500 text-[9px] h-4 mr-2">تعديل يدوي</Badge>}
                                       </div>
-                                      {!isEditing && (
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          className="text-purple-600 border-purple-300 hover:bg-purple-50 h-7 text-[11px] px-2"
-                                          onClick={() => {
-                                            setManualAdjustBonusId(b.id);
-                                            const amounts: Record<string, string> = {};
-                                            calcDetails.distribution.forEach((d: any) => { amounts[d.cashierId] = String(d.amount); });
-                                            setManualAmounts(amounts);
-                                            setManualComment("");
-                                          }}
-                                          data-testid={`button-manual-adjust-${b.id}`}
-                                        >
-                                          <Pencil className="h-3 w-3 ml-1" /> تعديل يدوي
-                                        </Button>
-                                      )}
                                     </div>
 
                                     {isEditing ? (
