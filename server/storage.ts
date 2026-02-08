@@ -12370,8 +12370,8 @@ export class DatabaseStorage implements IStorage {
         cashierMap.set(entry.cashierId, existing);
       }
       
-      const allUsers = await this.getUsers();
-      const allBranches = await this.getBranches();
+      const allUsers = await this.getAllUsers();
+      const allBranches = await this.getAllBranches();
       const userMap = new Map(allUsers.map((u: any) => [u.id, u]));
       const branchMap = new Map(allBranches.map((b: any) => [b.id, b]));
       
@@ -12427,7 +12427,7 @@ export class DatabaseStorage implements IStorage {
 
     const settings = await this.getPointSettings();
     if (!settings || !settings.isActive) {
-      return { challengePoints: [], totalPoints: 0, totalAmount: 0 };
+      return { challengePoints: [], totalPoints: 0, totalAmount: 0, diagnostics: [] };
     }
 
     const challengeTypes = ['challenge_avg_ticket', 'challenge_customer_count', 'challenge_shift_sales'];
