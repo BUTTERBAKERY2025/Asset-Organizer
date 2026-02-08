@@ -1481,40 +1481,43 @@ export default function CashierShiftPerformance() {
                   </div>
                 ) : canViewAllCashiers ? (
                   <div className="space-y-6">
-                    {/* Pie Chart */}
-                    <div className="h-80 w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={contributionData}
-                            cx="50%"
-                            cy="45%"
-                            innerRadius={50}
-                            outerRadius={90}
-                            paddingAngle={3}
-                            dataKey="contributionPercent"
-                            nameKey="cashierName"
-                            label={({ name, contributionPercent }) => `${name}: ${contributionPercent?.toFixed(0)}%`}
-                            labelLine={{ strokeWidth: 1, stroke: '#999' }}
-                          >
-                            {contributionData.map((_, i) => (
-                              <Cell key={i} fill={['#8B4513', '#D4A574', '#CD853F', '#A0522D', '#DEB887', '#F5DEB3'][i % 6]} />
-                            ))}
-                          </Pie>
-                          <RechartsTooltip 
-                            formatter={(value: number) => `${value.toFixed(1)}%`}
-                            contentStyle={{ direction: 'rtl', fontFamily: 'Cairo, sans-serif' }}
-                          />
-                          <Legend 
-                            verticalAlign="bottom"
-                            align="center"
-                            layout="horizontal"
-                            iconSize={10}
-                            wrapperStyle={{ direction: 'rtl', fontSize: '12px', paddingTop: '10px' }}
-                            formatter={(value: string) => <span style={{ color: '#555', marginInlineStart: '4px' }}>{value}</span>}
-                          />
-                        </PieChart>
-                      </ResponsiveContainer>
+                    {/* Pie Chart with Legend Grid */}
+                    <div className="flex flex-col lg:flex-row items-start gap-6">
+                      <div className="h-72 w-full lg:w-1/2 flex-shrink-0">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={contributionData}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={55}
+                              outerRadius={100}
+                              paddingAngle={2}
+                              dataKey="contributionPercent"
+                              nameKey="cashierName"
+                              label={false}
+                            >
+                              {contributionData.map((_, i) => (
+                                <Cell key={i} fill={['#8B4513', '#D4A574', '#CD853F', '#A0522D', '#DEB887', '#F5DEB3', '#C4A882', '#966F33', '#B8860B', '#DAA520'][i % 10]} />
+                              ))}
+                            </Pie>
+                            <RechartsTooltip 
+                              formatter={(value: number, name: string) => [`${value.toFixed(1)}%`, name]}
+                              contentStyle={{ direction: 'rtl', fontFamily: 'Cairo, sans-serif', fontSize: '13px' }}
+                              labelStyle={{ fontWeight: 'bold' }}
+                            />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div className="w-full lg:w-1/2 grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm self-center">
+                        {contributionData.map((c, i) => (
+                          <div key={c.cashierId} className="flex items-center gap-2 py-1 px-2 rounded hover:bg-gray-50" data-testid={`legend-item-${c.cashierId}`}>
+                            <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: ['#8B4513', '#D4A574', '#CD853F', '#A0522D', '#DEB887', '#F5DEB3', '#C4A882', '#966F33', '#B8860B', '#DAA520'][i % 10] }} />
+                            <span className="truncate text-xs text-gray-700 flex-1">{c.cashierName}</span>
+                            <span className="font-bold text-xs text-amber-700 flex-shrink-0">{c.contributionPercent.toFixed(0)}%</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
 
                     {/* Table */}
