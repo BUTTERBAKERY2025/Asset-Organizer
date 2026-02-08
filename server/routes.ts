@@ -6898,7 +6898,9 @@ export async function registerRoutes(
 
   app.post("/api/smart-incentives/challenges", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
     try {
-      const challenge = await storage.createDailyChallenge({ ...req.body, createdBy: (req as any).user?.id });
+      const body = { ...req.body, createdBy: (req as any).user?.id };
+      if (body.shiftType === 'null' || body.shiftType === '') body.shiftType = null;
+      const challenge = await storage.createDailyChallenge(body);
       res.json(challenge);
     } catch (error) {
       console.error("Error creating challenge:", error);
@@ -6909,7 +6911,9 @@ export async function registerRoutes(
   app.patch("/api/smart-incentives/challenges/:id", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const challenge = await storage.updateDailyChallenge(id, req.body);
+      const body = { ...req.body };
+      if (body.shiftType === 'null' || body.shiftType === '') body.shiftType = null;
+      const challenge = await storage.updateDailyChallenge(id, body);
       if (!challenge) return res.status(404).json({ error: "التحدي غير موجود" });
       res.json(challenge);
     } catch (error) {
@@ -6936,11 +6940,12 @@ export async function registerRoutes(
       const targetDate = (date as string) || new Date().toISOString().split('T')[0];
       
       const allChallenges = await storage.getActiveDailyChallenges(branchId as string);
-      
+
       const validChallenges = allChallenges.filter(c => {
         if (c.validFrom > targetDate) return false;
         if (c.validTo && c.validTo < targetDate) return false;
-        if (shiftType && shiftType !== "all" && c.shiftType && c.shiftType !== shiftType) return false;
+        const cShift = (c.shiftType && c.shiftType !== 'null') ? c.shiftType : null;
+        if (shiftType && shiftType !== "all" && cShift && cShift !== shiftType) return false;
         return true;
       });
 
@@ -6948,16 +6953,18 @@ export async function registerRoutes(
 
       for (const ch of validChallenges) {
         if (!ch.cashierId || !ch.branchId) continue;
-        if (!ch.shiftType) continue;
-        const shift = ch.shiftType;
-        const key = `${ch.cashierId}_${ch.branchId}_${shift}`;
-        if (!grouped[key]) {
-          grouped[key] = { cashierId: ch.cashierId, branchId: ch.branchId, shiftType: shift, targetAmount: 0, targetTransactions: 0, targetTicketValue: 0, challenges: [] };
+        const effectiveShift = (ch.shiftType && ch.shiftType !== 'null') ? ch.shiftType : null;
+        const shiftsToAssign = effectiveShift ? [effectiveShift] : ['morning', 'evening'];
+        for (const shift of shiftsToAssign) {
+          const key = `${ch.cashierId}_${ch.branchId}_${shift}`;
+          if (!grouped[key]) {
+            grouped[key] = { cashierId: ch.cashierId, branchId: ch.branchId, shiftType: shift, targetAmount: 0, targetTransactions: 0, targetTicketValue: 0, challenges: [] };
+          }
+          grouped[key].challenges.push({ id: ch.id, name: ch.name, type: ch.challengeType, targetValue: ch.targetValue, basePoints: ch.basePoints });
+          if (ch.challengeType === 'shift_sales') grouped[key].targetAmount = ch.targetValue;
+          else if (ch.challengeType === 'customer_count') grouped[key].targetTransactions = Math.round(ch.targetValue);
+          else if (ch.challengeType === 'avg_ticket') grouped[key].targetTicketValue = ch.targetValue;
         }
-        grouped[key].challenges.push({ id: ch.id, name: ch.name, type: ch.challengeType, targetValue: ch.targetValue, basePoints: ch.basePoints });
-        if (ch.challengeType === 'shift_sales') grouped[key].targetAmount = ch.targetValue;
-        else if (ch.challengeType === 'customer_count') grouped[key].targetTransactions = Math.round(ch.targetValue);
-        else if (ch.challengeType === 'avg_ticket') grouped[key].targetTicketValue = ch.targetValue;
       }
 
       const targets = Object.values(grouped).map((g, idx) => ({
