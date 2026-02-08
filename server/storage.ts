@@ -4586,29 +4586,35 @@ export class DatabaseStorage implements IStorage {
         ? (projectedTotal / progress.targetAmount) * 100 
         : 0;
 
-      // Calculate trend from recent days with actual sales data
+      // Calculate trend: split days with actual sales into first half vs second half
+      // Compare achievement % (sales/target) of each half
       const saudiToday = getSaudiArabiaTime().date;
       const monthEndDate = `${yearMonth}-${String(daysInMonth).padStart(2, '0')}`;
       const cutoffDate = saudiToday < monthEndDate ? saudiToday : monthEndDate;
-      const pastDaysWithSales = progress.dailyProgress
+      const completedDaysWithSales = progress.dailyProgress
         .filter(d => d.date <= cutoffDate && d.achievedAmount > 0);
-      const recentDays = pastDaysWithSales.slice(-7);
       let trend: 'up' | 'down' | 'stable' = 'stable';
-      if (recentDays.length >= 4) {
-        const midpoint = Math.floor(recentDays.length / 2);
-        const firstHalf = recentDays.slice(0, midpoint);
-        const secondHalf = recentDays.slice(midpoint);
-        const firstAvg = firstHalf.reduce((s, d) => s + d.achievedAmount, 0) / firstHalf.length;
-        const secondAvg = secondHalf.reduce((s, d) => s + d.achievedAmount, 0) / secondHalf.length;
-        const changePercent = firstAvg > 0 ? ((secondAvg - firstAvg) / firstAvg) * 100 : 0;
-        if (changePercent > 5) trend = 'up';
-        else if (changePercent < -5) trend = 'down';
-      } else if (recentDays.length >= 2) {
-        const firstDay = recentDays[0].achievedAmount;
-        const lastDay = recentDays[recentDays.length - 1].achievedAmount;
-        const changePercent = firstDay > 0 ? ((lastDay - firstDay) / firstDay) * 100 : 0;
-        if (changePercent > 10) trend = 'up';
-        else if (changePercent < -10) trend = 'down';
+      if (completedDaysWithSales.length >= 4) {
+        const midpoint = Math.floor(completedDaysWithSales.length / 2);
+        const firstHalfDays = completedDaysWithSales.slice(0, midpoint);
+        const secondHalfDays = completedDaysWithSales.slice(midpoint);
+        const firstHalfSales = firstHalfDays.reduce((s, d) => s + d.achievedAmount, 0);
+        const secondHalfSales = secondHalfDays.reduce((s, d) => s + d.achievedAmount, 0);
+        const firstHalfTarget = firstHalfDays.reduce((s, d) => s + d.targetAmount, 0);
+        const secondHalfTarget = secondHalfDays.reduce((s, d) => s + d.targetAmount, 0);
+        const firstHalfPercent = firstHalfTarget > 0 ? (firstHalfSales / firstHalfTarget) * 100 : 0;
+        const secondHalfPercent = secondHalfTarget > 0 ? (secondHalfSales / secondHalfTarget) * 100 : 0;
+        const percentDiff = secondHalfPercent - firstHalfPercent;
+        if (percentDiff > 5) trend = 'up';
+        else if (percentDiff < -5) trend = 'down';
+      } else if (completedDaysWithSales.length >= 2) {
+        const firstDayPercent = completedDaysWithSales[0].targetAmount > 0
+          ? (completedDaysWithSales[0].achievedAmount / completedDaysWithSales[0].targetAmount) * 100 : 0;
+        const lastDayPercent = completedDaysWithSales[completedDaysWithSales.length - 1].targetAmount > 0
+          ? (completedDaysWithSales[completedDaysWithSales.length - 1].achievedAmount / completedDaysWithSales[completedDaysWithSales.length - 1].targetAmount) * 100 : 0;
+        const change = lastDayPercent - firstDayPercent;
+        if (change > 10) trend = 'up';
+        else if (change < -10) trend = 'down';
       }
 
       results.push({
