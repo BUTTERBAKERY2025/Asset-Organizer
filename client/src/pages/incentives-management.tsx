@@ -15,7 +15,7 @@ import { useBranches } from "@/hooks/useBranches";
 import {
   Gift, Award, DollarSign, Settings, ChevronLeft, Calculator, Check, X, Plus,
   FileSpreadsheet, FileText, ArrowRight, Wallet, Target, Trophy, Star,
-  Trash2, TrendingUp, Users, Calendar, Eye, Pencil
+  Trash2, TrendingUp, Users, Calendar, Eye, Pencil, RefreshCw
 } from "lucide-react";
 import { Link } from "wouter";
 import * as XLSX from "xlsx";
@@ -170,22 +170,31 @@ export default function IncentivesManagement() {
   const { data: ledgerEntries = [], isLoading: ledgerLoading } = useQuery<CashierPointsLedger[]>({
     queryKey: ["/api/smart-incentives/points-ledger", walletCashierId, walletDateFrom, walletDateTo],
     queryFn: async () => {
-      const res = await fetch(`/api/smart-incentives/points-ledger?${ledgerParams.toString()}`);
+      const params = new URLSearchParams();
+      if (walletCashierId) params.set("cashierId", walletCashierId);
+      if (walletDateFrom) params.set("dateFrom", walletDateFrom);
+      if (walletDateTo) params.set("dateTo", walletDateTo);
+      params.set("_t", Date.now().toString());
+      const res = await fetch(`/api/smart-incentives/points-ledger?${params.toString()}`, { cache: 'no-store' });
       if (!res.ok) return [];
       return res.json();
     },
     enabled: ledgerQueryEnabled,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
 
   const { data: pointsSummary } = useQuery<any>({
     queryKey: ["/api/smart-incentives/points-summary", walletCashierId, selectedMonth],
     queryFn: async () => {
       if (!walletCashierId) return null;
-      const res = await fetch(`/api/smart-incentives/points-summary/${walletCashierId}?yearMonth=${selectedMonth}`);
+      const res = await fetch(`/api/smart-incentives/points-summary/${walletCashierId}?yearMonth=${selectedMonth}&_t=${Date.now()}`, { cache: 'no-store' });
       if (!res.ok) return null;
       return res.json();
     },
     enabled: !!walletCashierId,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
 
   const savePointSettingsMutation = useMutation({
@@ -480,6 +489,7 @@ export default function IncentivesManagement() {
     onSuccess: (data) => {
       setBatchCalcResult(data);
       queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/points-ledger"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/points-summary"] });
       toast({ title: `تم احتساب النقاط لـ ${data.processedCount} يومية | ${data.totalPoints} نقطة` });
     },
     onError: (error: any) => {
@@ -1463,12 +1473,28 @@ export default function IncentivesManagement() {
           <TabsContent value="wallet">
             <div className="space-y-4">
               <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Wallet className="h-5 w-5 text-amber-600" />
-                    رصيد الكاشير
-                  </CardTitle>
-                  <CardDescription>عرض رصيد النقاط والمعاملات</CardDescription>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Wallet className="h-5 w-5 text-amber-600" />
+                      رصيد الكاشير
+                    </CardTitle>
+                    <CardDescription>عرض رصيد النقاط والمعاملات</CardDescription>
+                  </div>
+                  {ledgerQueryEnabled && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/points-ledger"] });
+                        queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/points-summary"] });
+                      }}
+                      data-testid="btn-refresh-wallet"
+                    >
+                      <RefreshCw className="h-4 w-4 ml-1" />
+                      تحديث
+                    </Button>
+                  )}
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">

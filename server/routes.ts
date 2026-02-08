@@ -7024,6 +7024,8 @@ export async function registerRoutes(
   // Cashier Points Ledger
   app.get("/api/smart-incentives/points-ledger", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
+      res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+      res.set('Pragma', 'no-cache');
       const { cashierId, branchId, dateFrom, dateTo } = req.query as any;
       let ledger;
       if (cashierId) {
@@ -7042,6 +7044,8 @@ export async function registerRoutes(
 
   app.get("/api/smart-incentives/points-summary/:cashierId", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
+      res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+      res.set('Pragma', 'no-cache');
       const { cashierId } = req.params;
       const yearMonth = req.query.yearMonth as string | undefined;
       const summary = await storage.getCashierPointsSummary(cashierId, yearMonth);
