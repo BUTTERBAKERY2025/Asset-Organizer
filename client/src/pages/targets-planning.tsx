@@ -15,7 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Target, Plus, Calendar, TrendingUp, Building2, Settings, Play, Edit, Trash2, Copy, Lock, Unlock, FileSpreadsheet, FileText, CheckCircle, RefreshCw, Zap, PenLine, Save, X, ArrowRight } from "lucide-react";
+import { Target, Plus, Calendar, TrendingUp, Building2, Settings, Play, Edit, Trash2, Copy, Lock, Unlock, FileSpreadsheet, FileText, CheckCircle, RefreshCw, Zap, PenLine, Save, X, ArrowRight, Users, Award } from "lucide-react";
 import { Link } from "wouter";
 import * as XLSX from "xlsx";
 import { downloadArabicPdf } from "@/lib/pdfmake-arabic";
@@ -916,6 +916,18 @@ export default function TargetsPlanning() {
                 <Button variant="outline" className="h-11 sm:h-9">
                   <TrendingUp className="h-4 w-4 sm:ml-2" />
                   <span className="hidden sm:inline">لوحة الأداء</span>
+                </Button>
+              </Link>
+              <Link href="/cashier-shift-performance">
+                <Button variant="outline" className="h-11 sm:h-9" data-testid="btn-goto-shift-performance">
+                  <Users className="h-4 w-4 sm:ml-2" />
+                  <span className="hidden sm:inline">أداء الشفتات</span>
+                </Button>
+              </Link>
+              <Link href="/incentives-management">
+                <Button variant="outline" className="h-11 sm:h-9 bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100" data-testid="btn-goto-incentives">
+                  <Award className="h-4 w-4 sm:ml-2" />
+                  <span className="hidden sm:inline">الحوافز الذكية</span>
                 </Button>
               </Link>
             </div>

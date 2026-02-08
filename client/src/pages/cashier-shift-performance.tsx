@@ -202,13 +202,19 @@ export default function CashierShiftPerformance() {
   });
 
   const currentYearMonth = selectedDate.substring(0, 7);
-  const { data: topCashierPoints = [] } = useQuery<Array<{ cashierId: string; cashierName: string; branchId: string; branchName: string; totalPoints: number; totalAmount: number; challengeCount: number }>>({
+  const { data: topCashierPoints = [], isLoading: pointsLoading } = useQuery<Array<{ cashierId: string; cashierName: string; branchId: string; branchName: string; totalPoints: number; totalAmount: number; challengeCount: number }>>({
     queryKey: ["/api/smart-incentives/top-cashiers", currentYearMonth],
     queryFn: async () => {
-      const res = await fetch(`/api/smart-incentives/top-cashiers?yearMonth=${currentYearMonth}&limit=50`);
+      const res = await fetch(`/api/smart-incentives/top-cashiers?yearMonth=${currentYearMonth}&limit=50`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' }
+      });
       if (!res.ok) return [];
       return res.json();
     },
+    staleTime: 0,
+    retry: 2,
+    refetchOnMount: 'always',
   });
 
   const getCashierPoints = (cashierId: string) => {
@@ -616,6 +622,12 @@ export default function CashierShiftPerformance() {
               <Button variant="outline" className="h-11 sm:h-9 text-sm bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100" data-testid="btn-goto-incentives">
                 <Award className="h-4 w-4 ml-1" />
                 <span className="hidden sm:inline">الحوافز الذكية</span>
+              </Button>
+            </Link>
+            <Link href="/targets-planning">
+              <Button variant="outline" className="h-11 sm:h-9 text-sm" data-testid="btn-goto-targets-planning">
+                <Calendar className="h-4 w-4 ml-1" />
+                <span className="hidden sm:inline">تخطيط الأهداف</span>
               </Button>
             </Link>
             {/* Only show add target button if user has create permission */}

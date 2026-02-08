@@ -137,6 +137,20 @@ export default function IncentivesManagement() {
     queryKey: ["/api/smart-incentives/point-settings"],
   });
 
+  const { data: topCashierPoints = [] } = useQuery<Array<{ cashierId: string; cashierName: string; branchId: string; branchName: string; totalPoints: number; totalAmount: number; challengeCount: number }>>({
+    queryKey: ["/api/smart-incentives/top-cashiers", selectedMonth],
+    queryFn: async () => {
+      const res = await fetch(`/api/smart-incentives/top-cashiers?yearMonth=${selectedMonth}&limit=50`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' }
+      });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    staleTime: 0,
+    refetchOnMount: 'always',
+  });
+
   const { data: challenges = [], isLoading: challengesLoading } = useQuery<CashierDailyChallenge[]>({
     queryKey: ["/api/smart-incentives/challenges"],
   });
@@ -649,8 +663,56 @@ export default function IncentivesManagement() {
                 <span className="hidden sm:inline">أداء الشفتات</span>
               </Button>
             </Link>
+
+            <Link href="/targets-planning">
+              <Button variant="outline" className="h-11 sm:h-9" data-testid="btn-goto-targets-planning">
+                <Calendar className="h-4 w-4 ml-1" />
+                <span className="hidden sm:inline">تخطيط الأهداف</span>
+              </Button>
+            </Link>
           </div>
         </div>
+
+        {topCashierPoints.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3" data-testid="incentive-overview-stats">
+            <Card className="border-emerald-200 bg-gradient-to-bl from-emerald-50 to-white">
+              <CardContent className="p-4 text-center">
+                <div className="flex items-center justify-center gap-1 mb-1">
+                  <Users className="h-4 w-4 text-emerald-600" />
+                  <span className="text-xs text-emerald-700">كاشيرين نشطين</span>
+                </div>
+                <div className="text-2xl font-bold text-emerald-800" data-testid="stat-active-cashiers">{topCashierPoints.length}</div>
+              </CardContent>
+            </Card>
+            <Card className="border-amber-200 bg-gradient-to-bl from-amber-50 to-white">
+              <CardContent className="p-4 text-center">
+                <div className="flex items-center justify-center gap-1 mb-1">
+                  <Star className="h-4 w-4 text-amber-600" />
+                  <span className="text-xs text-amber-700">إجمالي النقاط</span>
+                </div>
+                <div className="text-2xl font-bold text-amber-800" data-testid="stat-total-points">{topCashierPoints.reduce((s, c) => s + c.totalPoints, 0)}</div>
+              </CardContent>
+            </Card>
+            <Card className="border-blue-200 bg-gradient-to-bl from-blue-50 to-white">
+              <CardContent className="p-4 text-center">
+                <div className="flex items-center justify-center gap-1 mb-1">
+                  <DollarSign className="h-4 w-4 text-blue-600" />
+                  <span className="text-xs text-blue-700">إجمالي المبالغ SAR</span>
+                </div>
+                <div className="text-2xl font-bold text-blue-800" data-testid="stat-total-amount">{topCashierPoints.reduce((s, c) => s + c.totalAmount, 0).toFixed(0)}</div>
+              </CardContent>
+            </Card>
+            <Card className="border-purple-200 bg-gradient-to-bl from-purple-50 to-white">
+              <CardContent className="p-4 text-center">
+                <div className="flex items-center justify-center gap-1 mb-1">
+                  <Target className="h-4 w-4 text-purple-600" />
+                  <span className="text-xs text-purple-700">التحديات المنجزة</span>
+                </div>
+                <div className="text-2xl font-bold text-purple-800" data-testid="stat-total-challenges">{topCashierPoints.reduce((s, c) => s + c.challengeCount, 0)}</div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         <Tabs defaultValue="point-settings" className="space-y-4">
           <TabsList className="flex flex-wrap h-auto gap-1">
@@ -1486,6 +1548,38 @@ export default function IncentivesManagement() {
           {/* Tab 5: Cashier Wallet / Ledger */}
           <TabsContent value="wallet">
             <div className="space-y-4">
+              {topCashierPoints.length > 0 && (
+                <Card className="border-emerald-200" data-testid="wallet-top-performers">
+                  <CardHeader className="bg-gradient-to-l from-emerald-50 to-transparent pb-2">
+                    <CardTitle className="flex items-center gap-2 text-emerald-700 text-base">
+                      <Trophy className="h-5 w-5 text-amber-500" />
+                      أفضل الكاشيرين - {selectedMonth}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
+                      {topCashierPoints.slice(0, 5).map((cashier, idx) => (
+                        <div
+                          key={cashier.cashierId}
+                          className={`border rounded-lg p-2 text-center cursor-pointer transition-colors hover:bg-emerald-50 ${walletCashierId === cashier.cashierId ? 'bg-emerald-100 border-emerald-400' : 'bg-white'}`}
+                          onClick={() => { setWalletCashierId(cashier.cashierId); setWalletBranchId(cashier.branchId); }}
+                          data-testid={`top-performer-${idx}`}
+                        >
+                          <div className="flex items-center justify-center gap-1 mb-1">
+                            {idx === 0 && <Trophy className="h-3.5 w-3.5 text-amber-500" />}
+                            <span className="text-xs font-medium text-gray-800 truncate">{cashier.cashierName}</span>
+                          </div>
+                          <div className="flex items-center justify-center gap-1">
+                            <Star className="h-3 w-3 text-amber-400" />
+                            <span className="text-sm font-bold text-emerald-700">{cashier.totalPoints}</span>
+                          </div>
+                          <div className="text-[10px] text-gray-500">{cashier.branchName}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
                   <div>
