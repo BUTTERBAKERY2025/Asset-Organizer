@@ -16,6 +16,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Check, ChevronsUpDown } from "lucide-react";
 import { 
   Target, TrendingUp, TrendingDown, Users, Trophy, ChevronLeft, Calendar, 
   Award, AlertTriangle, Bell, Clock, CheckCircle2, Plus, Settings, 
@@ -74,9 +77,12 @@ export default function CashierShiftPerformance() {
   });
   const [reportEndDate, setReportEndDate] = useState(today);
   const [reportCashierId, setReportCashierId] = useState<string>("all");
+  const [reportCashierOpen, setReportCashierOpen] = useState(false);
   
   // Targets tab specific filter
   const [targetCashierId, setTargetCashierId] = useState<string>("all");
+  const [targetCashierOpen, setTargetCashierOpen] = useState(false);
+  const [dialogCashierOpen, setDialogCashierOpen] = useState(false);
   const [newTarget, setNewTarget] = useState({
     cashierId: "",
     branchId: "",
@@ -706,26 +712,41 @@ export default function CashierShiftPerformance() {
                     </div>
                     <div className="grid gap-1">
                       <Label className="text-xs">الكاشير</Label>
-                      <Select 
-                        value={newTarget.cashierId} 
-                        onValueChange={(v) => setNewTarget({...newTarget, cashierId: v})}
-                        disabled={!newTarget.branchId || !!editingTarget}
-                      >
-                        <SelectTrigger data-testid="select-cashier-id" className="h-9">
-                          <SelectValue placeholder={newTarget.branchId ? "اختر" : "الفرع أولاً"} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {branchCashiers.length > 0 ? (
-                            branchCashiers.map((user) => (
-                              <SelectItem key={user.id} value={user.id}>
-                                {user.firstName || user.username} {user.lastName || ""}
-                              </SelectItem>
-                            ))
-                          ) : (
-                            <SelectItem value="_empty" disabled>لا يوجد كاشير</SelectItem>
-                          )}
-                        </SelectContent>
-                      </Select>
+                      <Popover open={dialogCashierOpen} onOpenChange={setDialogCashierOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={dialogCashierOpen}
+                            disabled={!newTarget.branchId || !!editingTarget}
+                            className="h-9 w-full justify-between font-normal text-sm"
+                            data-testid="select-cashier-id"
+                          >
+                            <span className="truncate">
+                              {newTarget.cashierId
+                                ? (() => { const c = branchCashiers.find(u => u.id === newTarget.cashierId); return c ? `${c.firstName || c.username} ${c.lastName || ''}` : "اختر"; })()
+                                : (newTarget.branchId ? "اختر الكاشير" : "الفرع أولاً")}
+                            </span>
+                            <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-64 p-0" align="start">
+                          <Command shouldFilter={true}>
+                            <CommandInput placeholder="ابحث عن كاشير..." data-testid="search-dialog-cashier" />
+                            <CommandList>
+                              <CommandEmpty>لا يوجد كاشير</CommandEmpty>
+                              <CommandGroup>
+                                {branchCashiers.map((u) => (
+                                  <CommandItem key={u.id} value={`${u.firstName || u.username} ${u.lastName || ''}`} onSelect={() => { setNewTarget({...newTarget, cashierId: u.id}); setDialogCashierOpen(false); }}>
+                                    <Check className={`ml-2 h-4 w-4 ${newTarget.cashierId === u.id ? "opacity-100" : "opacity-0"}`} />
+                                    {u.firstName || u.username} {u.lastName || ''}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
                     </div>
                   </div>
 
@@ -1052,19 +1073,36 @@ export default function CashierShiftPerformance() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Label className="text-xs text-gray-600">الكاشير:</Label>
-                  <Select value={targetCashierId} onValueChange={setTargetCashierId}>
-                    <SelectTrigger className="w-40 h-9 text-sm bg-white" data-testid="select-targets-cashier">
-                      <SelectValue placeholder="جميع الكاشيرين" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">جميع الكاشيرين</SelectItem>
-                      {reportBranchCashiers.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.firstName || c.username} {c.lastName || ''}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover open={targetCashierOpen} onOpenChange={setTargetCashierOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" role="combobox" aria-expanded={targetCashierOpen} className="w-56 h-9 text-sm bg-white justify-between font-normal" data-testid="select-targets-cashier">
+                        <span className="truncate">
+                          {targetCashierId === "all" ? "جميع الكاشيرين" : (() => { const c = reportBranchCashiers.find(u => u.id === targetCashierId); return c ? `${c.firstName || c.username} ${c.lastName || ''}` : "جميع الكاشيرين"; })()}
+                        </span>
+                        <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-64 p-0" align="start">
+                      <Command shouldFilter={true}>
+                        <CommandInput placeholder="ابحث عن كاشير..." data-testid="search-targets-cashier" />
+                        <CommandList>
+                          <CommandEmpty>لا توجد نتائج</CommandEmpty>
+                          <CommandGroup>
+                            <CommandItem value="all-cashiers" onSelect={() => { setTargetCashierId("all"); setTargetCashierOpen(false); }}>
+                              <Check className={`ml-2 h-4 w-4 ${targetCashierId === "all" ? "opacity-100" : "opacity-0"}`} />
+                              جميع الكاشيرين
+                            </CommandItem>
+                            {reportBranchCashiers.map((c) => (
+                              <CommandItem key={c.id} value={`${c.firstName || c.username} ${c.lastName || ''}`} onSelect={() => { setTargetCashierId(c.id); setTargetCashierOpen(false); }}>
+                                <Check className={`ml-2 h-4 w-4 ${targetCashierId === c.id ? "opacity-100" : "opacity-0"}`} />
+                                {c.firstName || c.username} {c.lastName || ''}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </div>
             )}
@@ -1602,19 +1640,36 @@ export default function CashierShiftPerformance() {
                   {canViewAllCashiers && (
                     <div className="flex items-center gap-2">
                       <Label className="text-xs text-gray-600">الكاشير:</Label>
-                      <Select value={reportCashierId} onValueChange={setReportCashierId}>
-                        <SelectTrigger className="w-40 h-9 text-sm bg-white" data-testid="select-report-cashier">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">جميع الكاشيرين</SelectItem>
-                          {reportBranchCashiers.map((c) => (
-                            <SelectItem key={c.id} value={c.id}>
-                              {c.firstName || c.username} {c.lastName || ''}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Popover open={reportCashierOpen} onOpenChange={setReportCashierOpen}>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" role="combobox" aria-expanded={reportCashierOpen} className="w-56 h-9 text-sm bg-white justify-between font-normal" data-testid="select-report-cashier">
+                            <span className="truncate">
+                              {reportCashierId === "all" ? "جميع الكاشيرين" : (() => { const c = reportBranchCashiers.find(u => u.id === reportCashierId); return c ? `${c.firstName || c.username} ${c.lastName || ''}` : "جميع الكاشيرين"; })()}
+                            </span>
+                            <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-64 p-0" align="start">
+                          <Command shouldFilter={true}>
+                            <CommandInput placeholder="ابحث عن كاشير..." data-testid="search-report-cashier" />
+                            <CommandList>
+                              <CommandEmpty>لا توجد نتائج</CommandEmpty>
+                              <CommandGroup>
+                                <CommandItem value="all-cashiers-report" onSelect={() => { setReportCashierId("all"); setReportCashierOpen(false); }}>
+                                  <Check className={`ml-2 h-4 w-4 ${reportCashierId === "all" ? "opacity-100" : "opacity-0"}`} />
+                                  جميع الكاشيرين
+                                </CommandItem>
+                                {reportBranchCashiers.map((c) => (
+                                  <CommandItem key={c.id} value={`${c.firstName || c.username} ${c.lastName || ''}`} onSelect={() => { setReportCashierId(c.id); setReportCashierOpen(false); }}>
+                                    <Check className={`ml-2 h-4 w-4 ${reportCashierId === c.id ? "opacity-100" : "opacity-0"}`} />
+                                    {c.firstName || c.username} {c.lastName || ''}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
                     </div>
                   )}
                   {journalsLoading && (
