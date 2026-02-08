@@ -8345,7 +8345,8 @@ export class DatabaseStorage implements IStorage {
     }
 
     const totalEmployees = employees.length;
-    const totalSalaries = employees.reduce((sum, emp) => sum + (emp.totalSalary || emp.salary || 0), 0);
+    const activeEmployees = employees.filter(e => e.status === 'active');
+    const totalSalaries = activeEmployees.reduce((sum, emp) => sum + (emp.totalSalary || emp.salary || 0), 0);
 
     const nationalityMap = new Map<string, number>();
     const jobTitleMap = new Map<string, number>();

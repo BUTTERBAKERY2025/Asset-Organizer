@@ -3487,7 +3487,7 @@ export async function registerRoutes(
       
       const users = await storage.getAllUsers();
       let employees = users
-        .filter(u => u.role === "employee" || u.branchId || u.jobTitle)
+        .filter(u => (u.role === "employee" || u.branchId || u.jobTitle) && u.isActive === "active")
         .map(({ password, ...user }) => user);
       
       // Filter by branch
@@ -13035,7 +13035,7 @@ export async function registerRoutes(
     try {
       const users = await storage.getAllUsers();
       // Return minimal user info for chef selection
-      const chefs = users.map(u => ({
+      const chefs = users.filter(u => u.isActive === "active").map(u => ({
         id: u.id,
         username: u.username,
         firstName: u.firstName,

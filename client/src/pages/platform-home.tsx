@@ -197,7 +197,7 @@ export default function PlatformHomePage() {
       const res = await fetch("/api/branch-employees");
       if (!res.ok) return 0;
       const employees = await res.json();
-      return employees.length;
+      return employees.filter((e: any) => e.status === 'active').length;
     },
     enabled: isAuthenticated,
     staleTime: 10 * 60 * 1000,
