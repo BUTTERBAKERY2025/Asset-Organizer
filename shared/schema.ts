@@ -542,6 +542,14 @@ export const SYSTEM_MODULES = [
   "sales_analytics",
   "sales_uploads",
   
+  // الحوافز الذكية
+  "smart_incentives_settings",
+  "smart_incentives_challenges",
+  "smart_incentives_commissions",
+  "smart_incentives_bonus",
+  "smart_incentives_wallet",
+  "smart_incentives_statements",
+  
   // الأهداف والأداء
   "targets",
   "targets_planning",
@@ -711,6 +719,12 @@ export const MODULE_LABELS: Record<SystemModule, string> = {
   incentives: "الحوافز",
   sales_analytics: "تحليلات المبيعات",
   sales_uploads: "رفع بيانات المبيعات",
+  smart_incentives_settings: "إعدادات النقاط والحوافز",
+  smart_incentives_challenges: "التحديات اليومية",
+  smart_incentives_commissions: "عمولات المنتجات",
+  smart_incentives_bonus: "مكافأة إنجاز الفرع",
+  smart_incentives_wallet: "محفظة النقاط",
+  smart_incentives_statements: "كشوفات حساب الحوافز",
   
   // الأهداف والأداء
   targets: "الأهداف",
@@ -857,6 +871,17 @@ export const MODULE_GROUPS: { label: string; modules: SystemModule[] }[] = [
     ],
   },
   {
+    label: "الحوافز الذكية",
+    modules: [
+      "smart_incentives_settings",
+      "smart_incentives_challenges",
+      "smart_incentives_commissions",
+      "smart_incentives_bonus",
+      "smart_incentives_wallet",
+      "smart_incentives_statements",
+    ],
+  },
+  {
     label: "الأهداف والأداء",
     modules: ["targets", "targets_planning", "waste_tracking"],
   },
@@ -972,6 +997,8 @@ export const ROLE_PERMISSION_TEMPLATES: Record<
       actions: ["view", "create", "edit", "export"],
     },
     { module: "reports", actions: ["view", "export"] },
+    { module: "smart_incentives_wallet", actions: ["view"] },
+    { module: "smart_incentives_statements", actions: ["view"] },
   ],
 
   // Viewer: View-only access to all modules

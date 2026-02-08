@@ -6862,18 +6862,32 @@ export async function registerRoutes(
   // ==========================================
 
   // Point Settings
-  app.get("/api/smart-incentives/point-settings", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+  app.get("/api/smart-incentives/point-settings", isAuthenticated, requirePermission("smart_incentives_settings", "view"), async (req, res) => {
     try {
       const settings = await storage.getPointSettings();
       res.json(settings || { pointValue: 0.5, maxDailyPoints: null, maxMonthlyPoints: null, seasonalMultiplier: 1, isActive: true });
+
     } catch (error) {
       console.error("Error fetching point settings:", error);
       res.status(500).json({ error: "فشل في جلب إعدادات النقاط" });
     }
   });
 
-  app.post("/api/smart-incentives/point-settings", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
+  app.post("/api/smart-incentives/point-settings", isAuthenticated, requirePermission("smart_incentives_settings", "create"), async (req, res) => {
     try {
+      const { pointValue, maxDailyPoints, maxMonthlyPoints, seasonalMultiplier } = req.body;
+      if (pointValue !== undefined && (typeof pointValue !== 'number' || pointValue < 0 || pointValue > 1000)) {
+        return res.status(400).json({ error: "قيمة النقطة يجب أن تكون رقماً بين 0 و 1000" });
+      }
+      if (maxDailyPoints !== undefined && maxDailyPoints !== null && (typeof maxDailyPoints !== 'number' || maxDailyPoints < 0)) {
+        return res.status(400).json({ error: "الحد الأقصى للنقاط اليومية يجب أن يكون رقماً موجباً" });
+      }
+      if (maxMonthlyPoints !== undefined && maxMonthlyPoints !== null && (typeof maxMonthlyPoints !== 'number' || maxMonthlyPoints < 0)) {
+        return res.status(400).json({ error: "الحد الأقصى للنقاط الشهرية يجب أن يكون رقماً موجباً" });
+      }
+      if (seasonalMultiplier !== undefined && (typeof seasonalMultiplier !== 'number' || seasonalMultiplier < 0 || seasonalMultiplier > 100)) {
+        return res.status(400).json({ error: "مضاعف الموسم يجب أن يكون رقماً بين 0 و 100" });
+      }
       const settings = await storage.upsertPointSettings({ ...req.body, updatedBy: (req as any).user?.id });
       res.json(settings);
     } catch (error) {
@@ -6883,13 +6897,23 @@ export async function registerRoutes(
   });
 
   // Daily Challenges CRUD
-  app.get("/api/smart-incentives/challenges", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+  app.get("/api/smart-incentives/challenges", isAuthenticated, requirePermission("smart_incentives_challenges", "view"), async (req, res) => {
     try {
-      const branchId = req.query.branchId as string | undefined;
+      const user = getCurrentUser(req);
+      let branchId = req.query.branchId as string | undefined;
+      if (user.role !== 'admin' && !branchId) {
+        branchId = user.branchId || undefined;
+      }
+      if (user.role !== 'admin' && branchId && !(await canAccessBranch(req, branchId))) {
+        return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      }
       const activeOnly = req.query.active === "true";
-      const challenges = activeOnly
+      let challenges = activeOnly
         ? await storage.getActiveDailyChallenges(branchId)
         : await storage.getAllDailyChallenges();
+      if (user.role !== 'admin' && !branchId) {
+        challenges = challenges.filter((c: any) => c.branchId === user.branchId);
+      }
       res.json(challenges);
     } catch (error) {
       console.error("Error fetching challenges:", error);
@@ -6897,9 +6921,28 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/smart-incentives/challenges", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
+  app.post("/api/smart-incentives/challenges", isAuthenticated, requirePermission("smart_incentives_challenges", "create"), async (req, res) => {
     try {
+      const user = getCurrentUser(req);
       const body = { ...req.body, createdBy: (req as any).user?.id };
+      if (body.name && String(body.name).length > 200) {
+        return res.status(400).json({ error: "اسم التحدي يجب ألا يتجاوز 200 حرف" });
+      }
+      if (body.targetValue !== undefined && (isNaN(Number(body.targetValue)) || Number(body.targetValue) < 0)) {
+        return res.status(400).json({ error: "القيمة المستهدفة يجب أن تكون رقماً موجباً" });
+      }
+      if (body.basePoints !== undefined && (isNaN(Number(body.basePoints)) || Number(body.basePoints) < 0)) {
+        return res.status(400).json({ error: "النقاط الأساسية يجب أن تكون رقماً موجباً" });
+      }
+      if (body.validFrom && isNaN(Date.parse(body.validFrom))) {
+        return res.status(400).json({ error: "تاريخ البداية غير صالح" });
+      }
+      if (body.validTo && isNaN(Date.parse(body.validTo))) {
+        return res.status(400).json({ error: "تاريخ النهاية غير صالح" });
+      }
+      if (user.role !== 'admin' && body.branchId && !(await canAccessBranch(req, body.branchId))) {
+        return res.status(403).json({ error: "غير مصرح بإنشاء تحدي لهذا الفرع" });
+      }
       if (body.shiftType === 'null' || body.shiftType === '') body.shiftType = null;
       const challenge = await storage.createDailyChallenge(body);
       res.json(challenge);
@@ -6909,10 +6952,24 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/smart-incentives/challenges/:id", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
+  app.patch("/api/smart-incentives/challenges/:id", isAuthenticated, requirePermission("smart_incentives_challenges", "edit"), async (req, res) => {
     try {
+      const user = getCurrentUser(req);
       const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
       const body = { ...req.body };
+      if (body.name && String(body.name).length > 200) {
+        return res.status(400).json({ error: "اسم التحدي يجب ألا يتجاوز 200 حرف" });
+      }
+      if (body.targetValue !== undefined && (isNaN(Number(body.targetValue)) || Number(body.targetValue) < 0)) {
+        return res.status(400).json({ error: "القيمة المستهدفة يجب أن تكون رقماً موجباً" });
+      }
+      if (body.basePoints !== undefined && (isNaN(Number(body.basePoints)) || Number(body.basePoints) < 0)) {
+        return res.status(400).json({ error: "النقاط الأساسية يجب أن تكون رقماً موجباً" });
+      }
+      if (user.role !== 'admin' && body.branchId && !(await canAccessBranch(req, body.branchId))) {
+        return res.status(403).json({ error: "غير مصرح بتعديل تحدي لهذا الفرع" });
+      }
       if (body.shiftType === 'null' || body.shiftType === '') body.shiftType = null;
       const challenge = await storage.updateDailyChallenge(id, body);
       if (!challenge) return res.status(404).json({ error: "التحدي غير موجود" });
@@ -6923,9 +6980,10 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/smart-incentives/challenges/:id", isAuthenticated, requirePermission("operations", "delete"), async (req, res) => {
+  app.delete("/api/smart-incentives/challenges/:id", isAuthenticated, requirePermission("smart_incentives_challenges", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
       await storage.deleteDailyChallenge(id);
       res.json({ success: true });
     } catch (error) {
@@ -7071,13 +7129,23 @@ export async function registerRoutes(
   });
 
   // Product Commissions CRUD
-  app.get("/api/smart-incentives/product-commissions", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+  app.get("/api/smart-incentives/product-commissions", isAuthenticated, requirePermission("smart_incentives_commissions", "view"), async (req, res) => {
     try {
-      const branchId = req.query.branchId as string | undefined;
+      const user = getCurrentUser(req);
+      let branchId = req.query.branchId as string | undefined;
+      if (user.role !== 'admin' && !branchId) {
+        branchId = user.branchId || undefined;
+      }
+      if (user.role !== 'admin' && branchId && !(await canAccessBranch(req, branchId))) {
+        return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      }
       const activeOnly = req.query.active === "true";
-      const commissions = activeOnly
+      let commissions = activeOnly
         ? await storage.getActiveProductCommissions(branchId)
         : await storage.getAllProductCommissions();
+      if (user.role !== 'admin' && !branchId) {
+        commissions = commissions.filter((c: any) => c.branchId === user.branchId);
+      }
       res.json(commissions);
     } catch (error) {
       console.error("Error fetching product commissions:", error);
@@ -7085,8 +7153,31 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/smart-incentives/product-commissions", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
+  app.post("/api/smart-incentives/product-commissions", isAuthenticated, requirePermission("smart_incentives_commissions", "create"), async (req, res) => {
     try {
+      const user = getCurrentUser(req);
+      const { productName, targetQuantity, pointsOnTarget, bonusPointsPerExtra, branchId, validFrom, validTo } = req.body;
+      if (productName && String(productName).length > 200) {
+        return res.status(400).json({ error: "اسم المنتج يجب ألا يتجاوز 200 حرف" });
+      }
+      if (targetQuantity !== undefined && (isNaN(Number(targetQuantity)) || Number(targetQuantity) < 0)) {
+        return res.status(400).json({ error: "الكمية المستهدفة يجب أن تكون رقماً موجباً" });
+      }
+      if (pointsOnTarget !== undefined && (isNaN(Number(pointsOnTarget)) || Number(pointsOnTarget) < 0)) {
+        return res.status(400).json({ error: "النقاط على الهدف يجب أن تكون رقماً موجباً" });
+      }
+      if (bonusPointsPerExtra !== undefined && bonusPointsPerExtra !== null && (isNaN(Number(bonusPointsPerExtra)) || Number(bonusPointsPerExtra) < 0)) {
+        return res.status(400).json({ error: "نقاط المكافأة الإضافية يجب أن تكون رقماً موجباً" });
+      }
+      if (validFrom && isNaN(Date.parse(validFrom))) {
+        return res.status(400).json({ error: "تاريخ البداية غير صالح" });
+      }
+      if (validTo && isNaN(Date.parse(validTo))) {
+        return res.status(400).json({ error: "تاريخ النهاية غير صالح" });
+      }
+      if (user.role !== 'admin' && branchId && !(await canAccessBranch(req, branchId))) {
+        return res.status(403).json({ error: "غير مصرح بإنشاء عمولة لهذا الفرع" });
+      }
       const commission = await storage.createProductCommission({ ...req.body, createdBy: (req as any).user?.id });
       res.json(commission);
     } catch (error) {
@@ -7095,9 +7186,23 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/smart-incentives/product-commissions/:id", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
+  app.patch("/api/smart-incentives/product-commissions/:id", isAuthenticated, requirePermission("smart_incentives_commissions", "edit"), async (req, res) => {
     try {
+      const user = getCurrentUser(req);
       const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      if (req.body.targetQuantity !== undefined && (isNaN(Number(req.body.targetQuantity)) || Number(req.body.targetQuantity) < 0)) {
+        return res.status(400).json({ error: "الكمية المستهدفة يجب أن تكون رقماً موجباً" });
+      }
+      if (req.body.pointsOnTarget !== undefined && (isNaN(Number(req.body.pointsOnTarget)) || Number(req.body.pointsOnTarget) < 0)) {
+        return res.status(400).json({ error: "النقاط على الهدف يجب أن تكون رقماً موجباً" });
+      }
+      if (req.body.productName && String(req.body.productName).length > 200) {
+        return res.status(400).json({ error: "اسم المنتج يجب ألا يتجاوز 200 حرف" });
+      }
+      if (user.role !== 'admin' && req.body.branchId && !(await canAccessBranch(req, req.body.branchId))) {
+        return res.status(403).json({ error: "غير مصرح بتعديل عمولة لهذا الفرع" });
+      }
       const commission = await storage.updateProductCommission(id, req.body);
       if (!commission) return res.status(404).json({ error: "عمولة الصنف غير موجودة" });
       res.json(commission);
@@ -7107,9 +7212,10 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/smart-incentives/product-commissions/:id", isAuthenticated, requirePermission("operations", "delete"), async (req, res) => {
+  app.delete("/api/smart-incentives/product-commissions/:id", isAuthenticated, requirePermission("smart_incentives_commissions", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
       await storage.deleteProductCommission(id);
       res.json({ success: true });
     } catch (error) {
@@ -7119,9 +7225,13 @@ export async function registerRoutes(
   });
 
   // Branch Achievement Bonus CRUD
-  app.get("/api/smart-incentives/branch-bonus", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+  app.get("/api/smart-incentives/branch-bonus", isAuthenticated, requirePermission("smart_incentives_bonus", "view"), async (req, res) => {
     try {
-      const bonuses = await storage.getAllBranchBonuses();
+      const user = getCurrentUser(req);
+      let bonuses = await storage.getAllBranchBonuses();
+      if (user.role !== 'admin') {
+        bonuses = bonuses.filter((b: any) => b.branchId === user.branchId);
+      }
       res.json(bonuses);
     } catch (error) {
       console.error("Error fetching branch bonuses:", error);
@@ -7129,8 +7239,25 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/smart-incentives/branch-bonus", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
+  app.post("/api/smart-incentives/branch-bonus", isAuthenticated, requirePermission("smart_incentives_bonus", "create"), async (req, res) => {
     try {
+      const user = getCurrentUser(req);
+      const { branchId, targetAmount, bonusPool, yearMonth, notes } = req.body;
+      if (targetAmount !== undefined && (isNaN(Number(targetAmount)) || Number(targetAmount) < 0)) {
+        return res.status(400).json({ error: "المبلغ المستهدف يجب أن يكون رقماً موجباً" });
+      }
+      if (bonusPool !== undefined && (isNaN(Number(bonusPool)) || Number(bonusPool) < 0)) {
+        return res.status(400).json({ error: "مبلغ المكافأة يجب أن يكون رقماً موجباً" });
+      }
+      if (yearMonth && !/^\d{4}-\d{2}$/.test(yearMonth)) {
+        return res.status(400).json({ error: "صيغة الشهر غير صالحة (YYYY-MM)" });
+      }
+      if (notes && String(notes).length > 500) {
+        return res.status(400).json({ error: "الملاحظات يجب ألا تتجاوز 500 حرف" });
+      }
+      if (user.role !== 'admin' && branchId && !(await canAccessBranch(req, branchId))) {
+        return res.status(403).json({ error: "غير مصرح بإنشاء مكافأة لهذا الفرع" });
+      }
       const bonus = await storage.createBranchBonus({ ...req.body, createdBy: (req as any).user?.id });
       res.json(bonus);
     } catch (error) {
@@ -7139,9 +7266,23 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/smart-incentives/branch-bonus/:id", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
+  app.patch("/api/smart-incentives/branch-bonus/:id", isAuthenticated, requirePermission("smart_incentives_bonus", "edit"), async (req, res) => {
     try {
+      const user = getCurrentUser(req);
       const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      if (req.body.targetAmount !== undefined && (isNaN(Number(req.body.targetAmount)) || Number(req.body.targetAmount) < 0)) {
+        return res.status(400).json({ error: "المبلغ المستهدف يجب أن يكون رقماً موجباً" });
+      }
+      if (req.body.bonusPool !== undefined && (isNaN(Number(req.body.bonusPool)) || Number(req.body.bonusPool) < 0)) {
+        return res.status(400).json({ error: "مبلغ المكافأة يجب أن يكون رقماً موجباً" });
+      }
+      if (req.body.notes && String(req.body.notes).length > 500) {
+        return res.status(400).json({ error: "الملاحظات يجب ألا تتجاوز 500 حرف" });
+      }
+      if (user.role !== 'admin' && req.body.branchId && !(await canAccessBranch(req, req.body.branchId))) {
+        return res.status(403).json({ error: "غير مصرح بتعديل مكافأة لهذا الفرع" });
+      }
       const bonus = await storage.updateBranchBonus(id, req.body);
       if (!bonus) return res.status(404).json({ error: "عمولة الفرع غير موجودة" });
       res.json(bonus);
@@ -7151,9 +7292,10 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/smart-incentives/branch-bonus/:id", isAuthenticated, requirePermission("operations", "delete"), async (req, res) => {
+  app.delete("/api/smart-incentives/branch-bonus/:id", isAuthenticated, requirePermission("smart_incentives_bonus", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
       await storage.deleteBranchBonus(id);
       res.json({ success: true });
     } catch (error) {
@@ -7163,9 +7305,10 @@ export async function registerRoutes(
   });
 
   // Branch Bonus End-of-Month Calculation
-  app.post("/api/smart-incentives/branch-bonus/:id/calculate", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
+  app.post("/api/smart-incentives/branch-bonus/:id/calculate", isAuthenticated, requirePermission("smart_incentives_bonus", "approve"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
       const userId = (req as any).user?.id;
 
       const allBonuses = await storage.getAllBranchBonuses();
@@ -7305,9 +7448,10 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/smart-incentives/branch-bonus/:id/reset-calculation", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
+  app.post("/api/smart-incentives/branch-bonus/:id/reset-calculation", isAuthenticated, requirePermission("smart_incentives_bonus", "approve"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
       const bonus = (await storage.getAllBranchBonuses()).find(b => b.id === id);
       if (!bonus) return res.status(404).json({ error: "عمولة الفرع غير موجودة" });
 
@@ -7334,9 +7478,10 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/smart-incentives/branch-bonus/:id/manual-adjust", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
+  app.post("/api/smart-incentives/branch-bonus/:id/manual-adjust", isAuthenticated, requirePermission("smart_incentives_bonus", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
       const userId = (req as any).user?.id;
       const { adjustments, comment } = req.body;
 
@@ -7425,15 +7570,25 @@ export async function registerRoutes(
   });
 
   // Cashier Points Ledger
-  app.get("/api/smart-incentives/points-ledger", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+  app.get("/api/smart-incentives/points-ledger", isAuthenticated, requirePermission("smart_incentives_wallet", "view"), async (req, res) => {
     try {
       res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
       res.set('Pragma', 'no-cache');
+      const user = getCurrentUser(req);
       const { cashierId, branchId, dateFrom, dateTo } = req.query as any;
+      if (user.role !== 'admin' && branchId && !(await canAccessBranch(req, branchId))) {
+        return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      }
       let ledger;
       if (cashierId) {
         ledger = await storage.getCashierPointsLedger(cashierId, dateFrom, dateTo);
+        if (user.role !== 'admin') {
+          ledger = ledger.filter((e: any) => e.branchId === user.branchId);
+        }
       } else if (branchId) {
+        if (user.role !== 'admin' && branchId !== user.branchId) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لبيانات هذا الفرع" });
+        }
         ledger = await storage.getBranchPointsLedger(branchId, dateFrom, dateTo);
       } else {
         return res.status(400).json({ error: "يجب تحديد الكاشير أو الفرع" });
@@ -7447,10 +7602,14 @@ export async function registerRoutes(
 
   app.get("/api/smart-incentives/top-cashiers", isAuthenticated, async (req, res) => {
     try {
+      const user = getCurrentUser(req);
       const yearMonth = req.query.yearMonth as string;
       const limit = parseInt(req.query.limit as string) || 10;
       if (!yearMonth) return res.status(400).json({ error: "yearMonth مطلوب" });
-      const topCashiers = await storage.getTopCashiersByPoints(yearMonth, limit);
+      let topCashiers = await storage.getTopCashiersByPoints(yearMonth, limit);
+      if (user.role !== 'admin') {
+        topCashiers = topCashiers.filter((c: any) => c.branchId === user.branchId);
+      }
       res.json(topCashiers);
     } catch (error) {
       console.error("Error fetching top cashiers:", error);
@@ -7458,13 +7617,17 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/smart-incentives/points-summary/:cashierId", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+  app.get("/api/smart-incentives/points-summary/:cashierId", isAuthenticated, requirePermission("smart_incentives_wallet", "view"), async (req, res) => {
     try {
       res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
       res.set('Pragma', 'no-cache');
+      const user = getCurrentUser(req);
       const { cashierId } = req.params;
       const yearMonth = req.query.yearMonth as string | undefined;
       const summary = await storage.getCashierPointsSummary(cashierId, yearMonth);
+      if (user.role !== 'admin' && summary && (summary as any).branchId && (summary as any).branchId !== user.branchId) {
+        return res.status(403).json({ error: "غير مصرح بالوصول لبيانات هذا الكاشير" });
+      }
       res.json(summary);
     } catch (error) {
       console.error("Error fetching points summary:", error);
@@ -7472,8 +7635,28 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/smart-incentives/points-ledger", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
+  app.post("/api/smart-incentives/points-ledger", isAuthenticated, requirePermission("smart_incentives_wallet", "create"), async (req, res) => {
     try {
+      const user = getCurrentUser(req);
+      const { cashierId, branchId, pointsEarned, amountEarned, transactionDate, notes, pointValue } = req.body;
+      if (pointsEarned !== undefined && (isNaN(Number(pointsEarned)) || Number(pointsEarned) < 0)) {
+        return res.status(400).json({ error: "النقاط يجب أن تكون رقماً موجباً" });
+      }
+      if (amountEarned !== undefined && (isNaN(Number(amountEarned)) || Number(amountEarned) < 0)) {
+        return res.status(400).json({ error: "المبلغ يجب أن يكون رقماً موجباً" });
+      }
+      if (pointValue !== undefined && (isNaN(Number(pointValue)) || Number(pointValue) < 0)) {
+        return res.status(400).json({ error: "قيمة النقطة يجب أن تكون رقماً موجباً" });
+      }
+      if (transactionDate && isNaN(Date.parse(transactionDate))) {
+        return res.status(400).json({ error: "تاريخ المعاملة غير صالح" });
+      }
+      if (notes && String(notes).length > 500) {
+        return res.status(400).json({ error: "الملاحظات يجب ألا تتجاوز 500 حرف" });
+      }
+      if (user.role !== 'admin' && branchId && !(await canAccessBranch(req, branchId))) {
+        return res.status(403).json({ error: "غير مصرح بإنشاء قيد لهذا الفرع" });
+      }
       const entry = await storage.createPointsEntry(req.body);
       res.json(entry);
     } catch (error) {
@@ -7482,10 +7665,14 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/smart-incentives/points-ledger/:id/status", isAuthenticated, requirePermission("operations", "approve"), async (req, res) => {
+  app.patch("/api/smart-incentives/points-ledger/:id/status", isAuthenticated, requirePermission("smart_incentives_wallet", "approve"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
       const { status } = req.body;
+      if (!status || !['earned', 'redeemed', 'cancelled', 'expired'].includes(status)) {
+        return res.status(400).json({ error: "حالة غير صالحة" });
+      }
       const userId = (req as any).user?.id;
       const entry = await storage.updatePointsEntryStatus(id, status, userId);
       if (!entry) return res.status(404).json({ error: "القيد غير موجود" });
@@ -7497,10 +7684,20 @@ export async function registerRoutes(
   });
 
   // Cashier Incentive Statements - كشف حساب حوافز الكاشير
-  app.get("/api/smart-incentives/incentive-statements", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+  app.get("/api/smart-incentives/incentive-statements", isAuthenticated, requirePermission("smart_incentives_statements", "view"), async (req, res) => {
     try {
-      const { branchId, cashierId, status } = req.query as any;
-      const statements = await storage.getIncentiveStatements(branchId, cashierId, status);
+      const user = getCurrentUser(req);
+      let { branchId, cashierId, status } = req.query as any;
+      if (user.role !== 'admin' && !branchId) {
+        branchId = user.branchId;
+      }
+      if (user.role !== 'admin' && branchId && !(await canAccessBranch(req, branchId))) {
+        return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      }
+      let statements = await storage.getIncentiveStatements(branchId, cashierId, status);
+      if (user.role !== 'admin') {
+        statements = statements.filter((s: any) => s.branchId === user.branchId);
+      }
       res.json(statements);
     } catch (error) {
       console.error("Error fetching incentive statements:", error);
@@ -7508,11 +7705,16 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/smart-incentives/incentive-statements/:id", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+  app.get("/api/smart-incentives/incentive-statements/:id", isAuthenticated, requirePermission("smart_incentives_statements", "view"), async (req, res) => {
     try {
+      const user = getCurrentUser(req);
       const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
       const stmt = await storage.getIncentiveStatement(id);
       if (!stmt) return res.status(404).json({ error: "الكشف غير موجود" });
+      if (user.role !== 'admin' && (stmt as any).branchId !== user.branchId) {
+        return res.status(403).json({ error: "غير مصرح بالوصول لهذا الكشف" });
+      }
       res.json(stmt);
     } catch (error) {
       console.error("Error fetching incentive statement:", error);
@@ -7520,11 +7722,24 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/smart-incentives/incentive-statements", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
+  app.post("/api/smart-incentives/incentive-statements", isAuthenticated, requirePermission("smart_incentives_statements", "create"), async (req, res) => {
     try {
+      const user = getCurrentUser(req);
       const { cashierId, branchId, periodFrom, periodTo, notes } = req.body;
       if (!cashierId || !branchId || !periodFrom || !periodTo) {
         return res.status(400).json({ error: "بيانات ناقصة - يجب تحديد الكاشير والفرع والفترة" });
+      }
+      if (periodFrom && isNaN(Date.parse(periodFrom))) {
+        return res.status(400).json({ error: "تاريخ البداية غير صالح" });
+      }
+      if (periodTo && isNaN(Date.parse(periodTo))) {
+        return res.status(400).json({ error: "تاريخ النهاية غير صالح" });
+      }
+      if (notes && String(notes).length > 500) {
+        return res.status(400).json({ error: "الملاحظات يجب ألا تتجاوز 500 حرف" });
+      }
+      if (user.role !== 'admin' && branchId && !(await canAccessBranch(req, branchId))) {
+        return res.status(403).json({ error: "غير مصرح بإنشاء كشف لهذا الفرع" });
       }
 
       const ledger = await storage.getCashierPointsLedger(cashierId, periodFrom, periodTo);
@@ -7596,9 +7811,10 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/smart-incentives/incentive-statements/:id/status", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+  app.patch("/api/smart-incentives/incentive-statements/:id/status", isAuthenticated, requireAnyPermission("smart_incentives_statements", ["view", "create", "submit", "approve"]), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
       const { status, rejectionReason } = req.body;
       const userId = (req as any).user?.id;
 
@@ -7606,8 +7822,29 @@ export async function registerRoutes(
         return res.status(400).json({ error: "حالة غير صالحة" });
       }
 
+      if (rejectionReason && String(rejectionReason).length > 500) {
+        return res.status(400).json({ error: "سبب الرفض يجب ألا يتجاوز 500 حرف" });
+      }
+
+      const user = (req as any).currentUser;
+      if (['approved', 'rejected', 'paid'].includes(status) && user.role !== 'admin') {
+        const perms = await storage.getUserPermissions(user.id);
+        const stmtPerm = perms.find((p: any) => p.module === 'smart_incentives_statements');
+        if (!stmtPerm || !stmtPerm.actions.includes('approve')) {
+          return res.status(403).json({ message: "غير مسموح - تحتاج صلاحية الاعتماد لتنفيذ هذا الإجراء" });
+        }
+      }
+
       const stmt = await storage.getIncentiveStatement(id);
       if (!stmt) return res.status(404).json({ error: "الكشف غير موجود" });
+
+      if ((status === 'approved' || status === 'rejected' || status === 'paid') && (stmt as any).createdBy === userId) {
+        return res.status(403).json({ error: "لا يمكنك اعتماد أو رفض أو صرف كشف قمت بإنشائه بنفسك - فصل الصلاحيات" });
+      }
+
+      if (user.role !== 'admin' && (stmt as any).branchId && !(await canAccessBranch(req, (stmt as any).branchId))) {
+        return res.status(403).json({ error: "غير مصرح بتعديل حالة كشف لفرع آخر" });
+      }
 
       if (status === 'submitted' && stmt.status !== 'draft') {
         return res.status(400).json({ error: "يمكن تقديم الكشفات المسودة فقط" });
@@ -7631,18 +7868,26 @@ export async function registerRoutes(
   });
 
   // Cashier Product Sales
-  app.get("/api/smart-incentives/product-sales", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+  app.get("/api/smart-incentives/product-sales", isAuthenticated, requirePermission("smart_incentives_commissions", "view"), async (req, res) => {
     try {
+      const user = getCurrentUser(req);
       const { cashierId, date, branchId } = req.query as any;
       if (!cashierId && !branchId) return res.status(400).json({ error: "يجب تحديد الكاشير أو الفرع" });
+      if (user.role !== 'admin' && branchId && !(await canAccessBranch(req, branchId))) {
+        return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      }
       
       if (cashierId) {
-        const sales = await storage.getCashierProductSales(cashierId, date);
+        let sales = await storage.getCashierProductSales(cashierId, date);
+        if (user.role !== 'admin') {
+          sales = sales.filter((s: any) => s.branchId === user.branchId);
+        }
         res.json(sales);
       } else {
+        const effectiveBranchId = user.role !== 'admin' ? (user.branchId || branchId) : branchId;
         const allSales = await db.select().from(cashierProductSales)
           .where(and(
-            eq(cashierProductSales.branchId, branchId),
+            eq(cashierProductSales.branchId, effectiveBranchId),
             date ? eq(cashierProductSales.salesDate, date) : undefined
           ))
           .orderBy(desc(cashierProductSales.createdAt));
@@ -7654,8 +7899,22 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/smart-incentives/product-sales", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
+  app.post("/api/smart-incentives/product-sales", isAuthenticated, requirePermission("smart_incentives_commissions", "create"), async (req, res) => {
     try {
+      const user = getCurrentUser(req);
+      const { branchId, quantitySold, salesDate, notes } = req.body;
+      if (quantitySold !== undefined && (isNaN(Number(quantitySold)) || Number(quantitySold) < 0)) {
+        return res.status(400).json({ error: "الكمية المباعة يجب أن تكون رقماً موجباً" });
+      }
+      if (salesDate && isNaN(Date.parse(salesDate))) {
+        return res.status(400).json({ error: "تاريخ المبيعات غير صالح" });
+      }
+      if (notes && String(notes).length > 500) {
+        return res.status(400).json({ error: "الملاحظات يجب ألا تتجاوز 500 حرف" });
+      }
+      if (user.role !== 'admin' && branchId && !(await canAccessBranch(req, branchId))) {
+        return res.status(403).json({ error: "غير مصرح بتسجيل مبيعات لهذا الفرع" });
+      }
       const sale = await storage.createCashierProductSale({ ...req.body, recordedBy: (req as any).user?.id });
       res.json(sale);
     } catch (error) {
@@ -7664,9 +7923,17 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/smart-incentives/product-sales/:id", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
+  app.patch("/api/smart-incentives/product-sales/:id", isAuthenticated, requirePermission("smart_incentives_commissions", "edit"), async (req, res) => {
     try {
+      const user = getCurrentUser(req);
       const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      if (req.body.quantitySold !== undefined && (isNaN(Number(req.body.quantitySold)) || Number(req.body.quantitySold) < 0)) {
+        return res.status(400).json({ error: "الكمية المباعة يجب أن تكون رقماً موجباً" });
+      }
+      if (user.role !== 'admin' && req.body.branchId && !(await canAccessBranch(req, req.body.branchId))) {
+        return res.status(403).json({ error: "غير مصرح بتعديل مبيعات لهذا الفرع" });
+      }
       const sale = await storage.updateCashierProductSale(id, req.body);
       if (!sale) return res.status(404).json({ error: "السجل غير موجود" });
       res.json(sale);
@@ -7678,9 +7945,38 @@ export async function registerRoutes(
 
   app.post("/api/smart-incentives/product-commission-achievement", isAuthenticated, async (req, res) => {
     try {
+      const user = getCurrentUser(req);
       const { cashierId, commissionId, date, shiftType, quantitySold } = req.body;
       if (!cashierId || !commissionId || !date || quantitySold === undefined) {
         return res.status(400).json({ error: "بيانات ناقصة" });
+      }
+
+      const isSelfRecording = String(cashierId) === String(user.id);
+      if (!isSelfRecording && user.role !== 'admin') {
+        const perms = await storage.getUserPermissions(user.id);
+        const commPerm = perms.find((p: any) => p.module === 'smart_incentives_commissions');
+        if (!commPerm) {
+          return res.status(403).json({ error: "غير مصرح - تحتاج صلاحية عمولات الأصناف" });
+        }
+        let actionsArray: string[] = [];
+        const rawActions = commPerm.actions as unknown;
+        if (Array.isArray(rawActions)) actionsArray = rawActions;
+        else if (typeof rawActions === 'string') actionsArray = rawActions.replace(/[{}]/g, '').split(',').map((a: string) => a.trim());
+        if (!actionsArray.includes('create') && !actionsArray.includes('edit')) {
+          return res.status(403).json({ error: "غير مصرح - تحتاج صلاحية إنشاء أو تعديل عمولات الأصناف" });
+        }
+      }
+
+      const parsedCommissionId = parseInt(String(commissionId));
+      if (isNaN(parsedCommissionId)) {
+        return res.status(400).json({ error: "معرف العمولة غير صالح" });
+      }
+      if (isNaN(Date.parse(date))) {
+        return res.status(400).json({ error: "التاريخ غير صالح" });
+      }
+      const parsedQty = parseInt(String(quantitySold));
+      if (isNaN(parsedQty) || parsedQty < 0) {
+        return res.status(400).json({ error: "الكمية المباعة يجب أن تكون رقماً موجباً" });
       }
 
       const commission = await storage.getProductCommission(commissionId);
@@ -7760,9 +8056,10 @@ export async function registerRoutes(
   });
 
   // Calculate incentives from journal
-  app.post("/api/smart-incentives/calculate/:journalId", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
+  app.post("/api/smart-incentives/calculate/:journalId", isAuthenticated, requirePermission("smart_incentives_wallet", "create"), async (req, res) => {
     try {
       const journalId = parseInt(req.params.journalId);
+      if (isNaN(journalId)) return res.status(400).json({ error: "معرف اليومية غير صالح" });
       const result = await storage.calculateJournalIncentives(journalId);
       res.json(result);
     } catch (error: any) {
@@ -7772,11 +8069,21 @@ export async function registerRoutes(
   });
 
   // Calculate incentives for all approved journals in a date range
-  app.post("/api/smart-incentives/calculate-batch", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
+  app.post("/api/smart-incentives/calculate-batch", isAuthenticated, requirePermission("smart_incentives_wallet", "create"), async (req, res) => {
     try {
+      const user = getCurrentUser(req);
       const { branchId, dateFrom, dateTo } = req.body;
       if (!branchId || !dateFrom || !dateTo) {
         return res.status(400).json({ error: "يجب تحديد الفرع وتاريخ البداية والنهاية" });
+      }
+      if (isNaN(Date.parse(dateFrom))) {
+        return res.status(400).json({ error: "تاريخ البداية غير صالح" });
+      }
+      if (isNaN(Date.parse(dateTo))) {
+        return res.status(400).json({ error: "تاريخ النهاية غير صالح" });
+      }
+      if (user.role !== 'admin' && !(await canAccessBranch(req, branchId))) {
+        return res.status(403).json({ error: "غير مصرح بالاحتساب لهذا الفرع" });
       }
       
       const { journals: approvedJournals } = await storage.getCashierJournalsFiltered({

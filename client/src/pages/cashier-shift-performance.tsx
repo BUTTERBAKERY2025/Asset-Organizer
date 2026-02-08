@@ -106,7 +106,7 @@ export default function CashierShiftPerformance() {
 
   const { user } = useAuth();
   const { branches, userBranchId, canSelectBranch } = useBranches();
-  const { canCreate, canEdit, canDelete, canApprove } = usePermissions();
+  const { canView, canCreate, canEdit, canDelete, canApprove } = usePermissions();
   
   // Check if user can view all cashiers' data (admin/manager or has approve permission ONLY on cashier_performance or cashier_journal)
   const canViewAllCashiers = useMemo(() => {
@@ -114,6 +114,23 @@ export default function CashierShiftPerformance() {
     return user.role === 'admin' || user.role === 'manager' 
       || canApprove("cashier_performance") || canApprove("cashier_journal");
   }, [user, canApprove]);
+
+  const canViewChallenges = canView("smart_incentives_challenges");
+  const canCreateChallenges = canCreate("smart_incentives_challenges");
+  const canEditChallenges = canEdit("smart_incentives_challenges");
+  const canDeleteChallenges = canDelete("smart_incentives_challenges");
+  const canViewCommissions = canView("smart_incentives_commissions");
+  const canCreateCommissions = canCreate("smart_incentives_commissions");
+  const canEditCommissions = canEdit("smart_incentives_commissions");
+  const canDeleteCommissions = canDelete("smart_incentives_commissions");
+  const canViewBonus = canView("smart_incentives_bonus");
+  const canApproveBonus = canApprove("smart_incentives_bonus");
+  const canViewWallet = canView("smart_incentives_wallet");
+  const canApproveWallet = canApprove("smart_incentives_wallet");
+  const canViewStatements = canView("smart_incentives_statements");
+  const canCreateStatements = canCreate("smart_incentives_statements");
+  const canApproveStatements = canApprove("smart_incentives_statements");
+  const canViewSettings = canView("smart_incentives_settings");
 
   const selectedBranchData = useMemo(() => {
     if (selectedBranch === "all") return null;
@@ -999,10 +1016,12 @@ export default function CashierShiftPerformance() {
                 <Badge className="mr-1 bg-red-500 text-white text-xs">{summaryStats.alertCount}</Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="incentive-statements" data-testid="tab-incentive-statements" className="text-xs sm:text-sm">
-              <FileText className="h-3 w-3 sm:h-4 sm:w-4 ml-1" />
-              كشف حساب الحوافز
-            </TabsTrigger>
+            {canViewStatements && (
+              <TabsTrigger value="incentive-statements" data-testid="tab-incentive-statements" className="text-xs sm:text-sm">
+                <FileText className="h-3 w-3 sm:h-4 sm:w-4 ml-1" />
+                كشف حساب الحوافز
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="targets" className="space-y-4">
@@ -1968,9 +1987,11 @@ export default function CashierShiftPerformance() {
                           </Popover>
                         </div>
                         <div className="flex items-end gap-2">
-                          <Button onClick={handleCreateStatement} disabled={createStatementMutation.isPending || !stmtCashierId || !selectedBranch || selectedBranch === "all"} className="bg-amber-600 hover:bg-amber-700 h-9 text-xs flex-1" data-testid="button-create-statement">
-                            {createStatementMutation.isPending ? "جاري الإنشاء..." : "إنشاء كشف"}
-                          </Button>
+                          {canCreateStatements && (
+                            <Button onClick={handleCreateStatement} disabled={createStatementMutation.isPending || !stmtCashierId || !selectedBranch || selectedBranch === "all"} className="bg-amber-600 hover:bg-amber-700 h-9 text-xs flex-1" data-testid="button-create-statement">
+                              {createStatementMutation.isPending ? "جاري الإنشاء..." : "إنشاء كشف"}
+                            </Button>
+                          )}
                         </div>
                       </div>
                       {stmtCashierId && (
@@ -2023,12 +2044,12 @@ export default function CashierShiftPerformance() {
                                       <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleExportStatementExcel(stmt)} title="تصدير Excel" data-testid={`button-export-stmt-${stmt.id}`}>
                                         <FileSpreadsheet className="h-3.5 w-3.5 text-green-600" />
                                       </Button>
-                                      {stmt.status === 'draft' && (
+                                      {stmt.status === 'draft' && canCreateStatements && (
                                         <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => updateStatementStatusMutation.mutate({ id: stmt.id, status: 'submitted' })} title="تقديم للاعتماد" data-testid={`button-submit-stmt-${stmt.id}`}>
                                           <CheckCircle2 className="h-3.5 w-3.5 text-blue-600" />
                                         </Button>
                                       )}
-                                      {stmt.status === 'submitted' && (
+                                      {stmt.status === 'submitted' && canApproveStatements && (
                                         <>
                                           <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => updateStatementStatusMutation.mutate({ id: stmt.id, status: 'approved' })} title="اعتماد" data-testid={`button-approve-stmt-${stmt.id}`}>
                                             <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
@@ -2038,7 +2059,7 @@ export default function CashierShiftPerformance() {
                                           </Button>
                                         </>
                                       )}
-                                      {stmt.status === 'approved' && (
+                                      {stmt.status === 'approved' && canApproveStatements && (
                                         <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => updateStatementStatusMutation.mutate({ id: stmt.id, status: 'paid' })} title="صرف" data-testid={`button-pay-stmt-${stmt.id}`}>
                                           <DollarSign className="h-3.5 w-3.5 text-purple-600" />
                                         </Button>
@@ -2171,13 +2192,13 @@ export default function CashierShiftPerformance() {
                         <FileSpreadsheet className="h-3.5 w-3.5 ml-1 text-green-600" />
                         تصدير Excel
                       </Button>
-                      {selectedStatement.status === 'draft' && (
+                      {selectedStatement.status === 'draft' && canCreateStatements && (
                         <Button size="sm" className="text-xs bg-blue-600 hover:bg-blue-700" onClick={() => updateStatementStatusMutation.mutate({ id: selectedStatement.id, status: 'submitted' })} data-testid="button-detail-submit">
                           <CheckCircle2 className="h-3.5 w-3.5 ml-1" />
                           تقديم للاعتماد
                         </Button>
                       )}
-                      {selectedStatement.status === 'submitted' && (
+                      {selectedStatement.status === 'submitted' && canApproveStatements && (
                         <>
                           <Button size="sm" className="text-xs bg-green-600 hover:bg-green-700" onClick={() => updateStatementStatusMutation.mutate({ id: selectedStatement.id, status: 'approved' })} data-testid="button-detail-approve">
                             <CheckCircle2 className="h-3.5 w-3.5 ml-1" />
@@ -2189,7 +2210,7 @@ export default function CashierShiftPerformance() {
                           </Button>
                         </>
                       )}
-                      {selectedStatement.status === 'approved' && (
+                      {selectedStatement.status === 'approved' && canApproveStatements && (
                         <Button size="sm" className="text-xs bg-purple-600 hover:bg-purple-700" onClick={() => updateStatementStatusMutation.mutate({ id: selectedStatement.id, status: 'paid' })} data-testid="button-detail-pay">
                           <DollarSign className="h-3.5 w-3.5 ml-1" />
                           تأكيد الصرف
