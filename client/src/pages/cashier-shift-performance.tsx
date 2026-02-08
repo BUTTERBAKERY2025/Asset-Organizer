@@ -85,6 +85,8 @@ export default function CashierShiftPerformance() {
   const [showProductAchievementDialog, setShowProductAchievementDialog] = useState(false);
   const [selectedProductCommission, setSelectedProductCommission] = useState<any>(null);
   const [achievedQuantity, setAchievedQuantity] = useState("");
+  const [achievementShiftDate, setAchievementShiftDate] = useState("");
+  const [achievementShiftType, setAchievementShiftType] = useState("");
   const [submittingAchievement, setSubmittingAchievement] = useState(false);
 
   const { user } = useAuth();
@@ -496,7 +498,28 @@ export default function CashierShiftPerformance() {
   };
 
   const handleSubmitProductAchievement = async () => {
-    if (!selectedProductCommission || !achievedQuantity) return;
+    if (!selectedProductCommission || !achievedQuantity || !achievementShiftDate || !achievementShiftType) {
+      toast.error("يرجى تعبئة جميع الحقول المطلوبة");
+      return;
+    }
+    const qty = parseInt(achievedQuantity);
+    const targetQty = selectedProductCommission.productCommission.targetQuantity;
+    if (qty < targetQty) {
+      toast.error(`لم تكمل الهدف - الكمية المطلوبة ${targetQty} قطعة وأنت أدخلت ${qty} فقط`);
+      return;
+    }
+
+    const existingSale = productSales.find((s: any) =>
+      s.commissionId === selectedProductCommission.productCommission.commissionId &&
+      s.salesDate === achievementShiftDate &&
+      s.shiftType === achievementShiftType &&
+      s.cashierId === selectedProductCommission.cashierId
+    );
+    if (existingSale) {
+      toast.error("تم تسجيل الإنجاز مسبقاً لهذا التاريخ والشفت - لا يمكن التكرار");
+      return;
+    }
+
     setSubmittingAchievement(true);
     try {
       const res = await fetch("/api/smart-incentives/product-commission-achievement", {
@@ -505,22 +528,25 @@ export default function CashierShiftPerformance() {
         body: JSON.stringify({
           cashierId: selectedProductCommission.cashierId,
           commissionId: selectedProductCommission.productCommission.commissionId,
-          date: selectedDate,
-          shiftType: selectedProductCommission.shiftType,
-          quantitySold: parseInt(achievedQuantity),
+          date: achievementShiftDate,
+          shiftType: achievementShiftType,
+          quantitySold: qty,
         }),
       });
-      if (!res.ok) throw new Error("Failed");
       const result = await res.json();
+      if (!res.ok) {
+        toast.error(result.error || "فشل في تسجيل الإنجاز");
+        return;
+      }
       if (result.isTargetMet) {
         toast.success(`تم تحقيق الهدف! 🎉 ${result.pointsAwarded > 0 ? `تم منح ${result.pointsAwarded} نقطة` : ''}`);
-      } else {
-        toast.info(result.pointsAwarded > 0 ? `تم تسجيل الإنجاز - تم منح ${result.pointsAwarded} نقطة` : "تم تسجيل الإنجاز - لم يتم تحقيق الهدف بعد");
       }
       refetchProductSales();
       queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/challenges-as-targets"] });
       setShowProductAchievementDialog(false);
       setAchievedQuantity("");
+      setAchievementShiftDate("");
+      setAchievementShiftType("");
       setSelectedProductCommission(null);
     } catch (e) {
       toast.error("خطأ في تسجيل الإنجاز");
@@ -1142,8 +1168,14 @@ export default function CashierShiftPerformance() {
                             key={`pc-${pc.commissionId}-${target.cashierId}-${target.shiftType}`}
                             className={`border rounded-lg p-3 cursor-pointer transition-all hover:shadow-md ${isCompleted ? 'bg-green-50 border-green-300' : 'bg-white hover:bg-purple-50 border-purple-200'}`}
                             onClick={() => {
+                              if (isCompleted) {
+                                toast.info("تم تسجيل الإنجاز مسبقاً لهذا الصنف");
+                                return;
+                              }
                               setSelectedProductCommission(target);
-                              setAchievedQuantity(soldQty > 0 ? String(soldQty) : "");
+                              setAchievedQuantity("");
+                              setAchievementShiftDate(selectedDate);
+                              setAchievementShiftType(target.shiftType || "morning");
                               setShowProductAchievementDialog(true);
                             }}
                             data-testid={`product-commission-${pc.commissionId}-${target.cashierId}`}
@@ -1724,7 +1756,7 @@ export default function CashierShiftPerformance() {
         </Tabs>
 
         <Dialog open={showProductAchievementDialog} onOpenChange={setShowProductAchievementDialog}>
-          <DialogContent className="max-w-sm" dir="rtl">
+          <DialogContent className="max-w-md" dir="rtl">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Package className="h-5 w-5 text-purple-500" />
@@ -1749,8 +1781,42 @@ export default function CashierShiftPerformance() {
                     {selectedProductCommission.productCommission.bonusPointsPerExtra > 0 && ` + ${selectedProductCommission.productCommission.bonusPointsPerExtra} نقطة لكل قطعة إضافية`}
                   </div>
                 </div>
+
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5">
+                  <p className="text-xs text-amber-800 font-medium flex items-center gap-1">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    يتم إدخال الأصناف نهاية الشفت فقط - مرة واحدة لكل تاريخ وشفت
+                  </p>
+                  <p className="text-[10px] text-amber-700 mt-1">لا يتم تسجيل الإنجاز إذا كانت الكمية أقل من الهدف المحدد</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs font-bold">تاريخ الشفت</Label>
+                    <Input
+                      type="date"
+                      value={achievementShiftDate}
+                      onChange={(e) => setAchievementShiftDate(e.target.value)}
+                      className="h-10 text-sm"
+                      data-testid="input-achievement-date"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs font-bold">نوع الشفت</Label>
+                    <Select value={achievementShiftType} onValueChange={setAchievementShiftType}>
+                      <SelectTrigger className="h-10" data-testid="select-achievement-shift">
+                        <SelectValue placeholder="اختر الشفت" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="morning">صباحي</SelectItem>
+                        <SelectItem value="evening">مسائي</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
                 <div>
-                  <Label>الكمية المباعة</Label>
+                  <Label className="text-xs font-bold">الكمية المباعة</Label>
                   <Input
                     type="number"
                     value={achievedQuantity}
@@ -1764,15 +1830,27 @@ export default function CashierShiftPerformance() {
                     <p className="text-green-600 text-xs mt-1 text-center font-medium">✅ الهدف محقق!</p>
                   )}
                   {achievedQuantity && parseInt(achievedQuantity) > 0 && parseInt(achievedQuantity) < selectedProductCommission.productCommission.targetQuantity && (
-                    <p className="text-amber-600 text-xs mt-1 text-center">متبقي {selectedProductCommission.productCommission.targetQuantity - parseInt(achievedQuantity)} قطعة للهدف</p>
+                    <p className="text-red-600 text-xs mt-1 text-center font-medium">❌ لم تكمل الهدف - يجب بيع {selectedProductCommission.productCommission.targetQuantity} قطعة على الأقل</p>
                   )}
                 </div>
+
+                {achievementShiftDate && (
+                  <div className="text-center text-xs text-gray-500 bg-gray-50 rounded p-1.5">
+                    📅 التاريخ: {achievementShiftDate} • {achievementShiftType === 'morning' ? '☀️ صباحي' : '🌙 مسائي'}
+                  </div>
+                )}
               </div>
             )}
             <DialogFooter>
               <Button
                 onClick={handleSubmitProductAchievement}
-                disabled={submittingAchievement || !achievedQuantity || parseInt(achievedQuantity) < 0}
+                disabled={
+                  submittingAchievement ||
+                  !achievedQuantity ||
+                  !achievementShiftDate ||
+                  !achievementShiftType ||
+                  parseInt(achievedQuantity) < (selectedProductCommission?.productCommission?.targetQuantity || 0)
+                }
                 className="bg-purple-600 hover:bg-purple-700 w-full"
                 data-testid="button-submit-achievement"
               >

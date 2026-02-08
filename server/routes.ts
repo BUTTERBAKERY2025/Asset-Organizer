@@ -7569,50 +7569,38 @@ export async function registerRoutes(
 
       const qty = parseInt(String(quantitySold));
       const targetQty = commission.targetQuantity;
-      const isTargetMet = qty >= targetQty;
-      let pointsAwarded = 0;
 
-      if (isTargetMet) {
-        pointsAwarded = commission.pointsOnTarget;
-        const extraQty = qty - targetQty;
-        if (extraQty > 0 && commission.bonusPointsPerExtra) {
-          pointsAwarded += Math.floor(extraQty * commission.bonusPointsPerExtra);
-        }
+      if (qty < targetQty) {
+        return res.status(400).json({ error: `لم تكمل الهدف - الكمية المطلوبة ${targetQty} قطعة وأنت أدخلت ${qty} فقط` });
       }
 
-      let saleRecord;
       if (existingRecord) {
-        saleRecord = await storage.updateCashierProductSale(existingRecord.id, {
-          quantitySold: qty,
-          isTargetMet,
-          pointsAwarded,
-        });
-      } else {
-        saleRecord = await storage.createCashierProductSale({
-          cashierId,
-          branchId,
-          commissionId,
-          salesDate: date,
-          shiftType: shiftType || null,
-          quantitySold: qty,
-          targetQuantity: targetQty,
-          isTargetMet,
-          pointsAwarded,
-          recordedBy: (req as any).user?.id || null,
-        });
+        return res.status(400).json({ error: "تم تسجيل الإنجاز مسبقاً لهذا التاريخ والشفت - لا يمكن التكرار" });
       }
+
+      const isTargetMet = true;
+      let pointsAwarded = commission.pointsOnTarget;
+      const extraQty = qty - targetQty;
+      if (extraQty > 0 && commission.bonusPointsPerExtra) {
+        pointsAwarded += Math.floor(extraQty * commission.bonusPointsPerExtra);
+      }
+
+      const saleRecord = await storage.createCashierProductSale({
+        cashierId,
+        branchId,
+        commissionId,
+        salesDate: date,
+        shiftType: shiftType || null,
+        quantitySold: qty,
+        targetQuantity: targetQty,
+        isTargetMet,
+        pointsAwarded,
+        recordedBy: (req as any).user?.id || null,
+      });
 
       if (pointsAwarded > 0) {
         const settings = await storage.getPointSettings();
         const pointValue = settings?.pointValue || 1;
-
-        if (existingRecord) {
-          const existingLedger = await storage.getCashierPointsLedger(cashierId, undefined, undefined);
-          const existingEntry = existingLedger.find((e: any) => e.sourceId === commissionId && e.pointsType === 'product_commission' && e.transactionDate === date && e.shiftType === (shiftType || null));
-          if (existingEntry) {
-            await storage.updatePointsEntryStatus(existingEntry.id, 'cancelled');
-          }
-        }
 
         await storage.createPointsEntry({
           cashierId,
