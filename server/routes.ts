@@ -7100,6 +7100,178 @@ export async function registerRoutes(
     }
   });
 
+  // Branch Bonus End-of-Month Calculation
+  app.post("/api/smart-incentives/branch-bonus/:id/calculate", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const userId = (req as any).user?.id;
+
+      const allBonuses = await storage.getAllBranchBonuses();
+      const bonus = allBonuses.find(b => b.id === id);
+      if (!bonus) return res.status(404).json({ error: "عمولة الفرع غير موجودة" });
+
+      if (bonus.calculationStatus === "calculated") {
+        return res.status(400).json({ error: "تم احتساب هذه المكافأة مسبقاً" });
+      }
+
+      const [year, month] = bonus.yearMonth.split("-").map(Number);
+      const startDate = `${bonus.yearMonth}-01`;
+      const lastDay = new Date(year, month, 0).getDate();
+      const endDate = `${bonus.yearMonth}-${String(lastDay).padStart(2, "0")}`;
+
+      const journals = await storage.getCashierSalesJournals({ branchId: bonus.branchId, startDate, endDate });
+
+      const totalActualSales = journals.reduce((sum, j) => sum + (j.totalSales || 0), 0);
+      const achievementPercent = bonus.targetAmount > 0 ? Math.round((totalActualSales / bonus.targetAmount) * 100 * 100) / 100 : 0;
+
+      let matchedTierAmount = 0;
+      let matchedTierLabel = "";
+      let tiers: any[] = [];
+      try {
+        if (bonus.bonusTiers) tiers = JSON.parse(bonus.bonusTiers);
+      } catch {}
+
+      if (tiers && tiers.length > 0) {
+        const sortedTiers = [...tiers].sort((a, b) => (b.fromPercent || 0) - (a.fromPercent || 0));
+        for (const tier of sortedTiers) {
+          const from = tier.fromPercent || 0;
+          const to = tier.toPercent || null;
+          if (achievementPercent >= from && (to === null || achievementPercent <= to)) {
+            matchedTierAmount = tier.bonusAmount || 0;
+            matchedTierLabel = `${tier.fromPercent}%${tier.toPercent ? ` - ${tier.toPercent}%` : ' فأعلى'}`;
+            break;
+          }
+        }
+      } else {
+        if (achievementPercent >= 100) {
+          matchedTierAmount = bonus.bonusPool;
+          matchedTierLabel = "100% فأعلى";
+        }
+      }
+
+      const cashierSales: Record<string, { name: string; total: number }> = {};
+      for (const j of journals) {
+        if (!cashierSales[j.cashierId]) {
+          cashierSales[j.cashierId] = { name: j.cashierName, total: 0 };
+        }
+        cashierSales[j.cashierId].total += (j.totalSales || 0);
+      }
+
+      const cashierIds = Object.keys(cashierSales);
+      const distribution: Array<{ cashierId: string; name: string; sales: number; share: number; amount: number }> = [];
+
+      if (matchedTierAmount > 0 && cashierIds.length > 0) {
+        const settings = await storage.getPointSettings();
+        const pointValue = settings?.pointValue || 0.5;
+
+        if (bonus.distributionMethod === "equal") {
+          const perCashier = matchedTierAmount / cashierIds.length;
+          for (const cid of cashierIds) {
+            distribution.push({
+              cashierId: cid,
+              name: cashierSales[cid].name,
+              sales: cashierSales[cid].total,
+              share: Math.round(10000 / cashierIds.length) / 100,
+              amount: Math.round(perCashier * 100) / 100,
+            });
+          }
+        } else {
+          for (const cid of cashierIds) {
+            const contributionRatio = totalActualSales > 0 ? cashierSales[cid].total / totalActualSales : 0;
+            const amount = matchedTierAmount * contributionRatio;
+            distribution.push({
+              cashierId: cid,
+              name: cashierSales[cid].name,
+              sales: cashierSales[cid].total,
+              share: Math.round(contributionRatio * 10000) / 100,
+              amount: Math.round(amount * 100) / 100,
+            });
+          }
+        }
+
+        for (const d of distribution) {
+          if (d.amount > 0) {
+            const points = Math.round(d.amount / pointValue);
+            await storage.createPointsEntry({
+              cashierId: d.cashierId,
+              branchId: bonus.branchId,
+              transactionDate: endDate,
+              pointsType: "branch_bonus",
+              sourceId: bonus.id,
+              sourceName: `مكافأة فرع - ${bonus.yearMonth} (${matchedTierLabel})`,
+              pointsEarned: points,
+              pointValue: pointValue,
+              amountEarned: d.amount,
+              status: "earned",
+              notes: `نسبة الإنجاز: ${achievementPercent}% | الشريحة: ${matchedTierLabel} | نسبة المساهمة: ${d.share}%`,
+            });
+          }
+        }
+      }
+
+      const details = JSON.stringify({
+        totalActualSales,
+        achievementPercent,
+        matchedTierAmount,
+        matchedTierLabel,
+        cashierCount: cashierIds.length,
+        distribution,
+      });
+
+      await storage.updateBranchBonus(id, {
+        calculationStatus: "calculated",
+        actualSales: totalActualSales,
+        achievementPercent,
+        matchedTierAmount,
+        calculationDetails: details,
+        calculatedAt: new Date(),
+        calculatedBy: userId,
+      } as any);
+
+      res.json({
+        success: true,
+        totalActualSales,
+        achievementPercent,
+        matchedTierAmount,
+        matchedTierLabel,
+        cashierCount: cashierIds.length,
+        distribution,
+      });
+    } catch (error) {
+      console.error("Error calculating branch bonus:", error);
+      res.status(500).json({ error: "فشل في احتساب مكافأة الفرع" });
+    }
+  });
+
+  app.post("/api/smart-incentives/branch-bonus/:id/reset-calculation", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const bonus = (await storage.getAllBranchBonuses()).find(b => b.id === id);
+      if (!bonus) return res.status(404).json({ error: "عمولة الفرع غير موجودة" });
+
+      const ledger = await storage.getBranchPointsLedger(bonus.branchId);
+      const bonusEntries = ledger.filter(e => e.pointsType === "branch_bonus" && e.sourceId === id);
+      for (const entry of bonusEntries) {
+        await storage.updatePointsEntryStatus(entry.id, "cancelled");
+      }
+
+      await storage.updateBranchBonus(id, {
+        calculationStatus: "pending",
+        actualSales: null,
+        achievementPercent: null,
+        matchedTierAmount: null,
+        calculationDetails: null,
+        calculatedAt: null,
+        calculatedBy: null,
+      } as any);
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error resetting branch bonus calculation:", error);
+      res.status(500).json({ error: "فشل في إعادة تعيين الاحتساب" });
+    }
+  });
+
   // Cashier Points Ledger
   app.get("/api/smart-incentives/points-ledger", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {

@@ -425,6 +425,50 @@ export default function IncentivesManagement() {
     },
   });
 
+  const [calculationResult, setCalculationResult] = useState<any>(null);
+  const [showCalculationResult, setShowCalculationResult] = useState(false);
+  const [calculatingBonusId, setCalculatingBonusId] = useState<number | null>(null);
+
+  const calculateBonusMutation = useMutation({
+    mutationFn: async (id: number) => {
+      setCalculatingBonusId(id);
+      const res = await fetch(`/api/smart-incentives/branch-bonus/${id}/calculate`, { method: "POST" });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "فشل في الاحتساب");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/branch-bonus"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/points-ledger"] });
+      setCalculationResult(data);
+      setShowCalculationResult(true);
+      setCalculatingBonusId(null);
+      toast({ title: "تم احتساب المكافأة بنجاح وتوزيعها على الكاشيرات" });
+    },
+    onError: (error: any) => {
+      setCalculatingBonusId(null);
+      toast({ title: error.message || "خطأ في احتساب المكافأة", variant: "destructive" });
+    },
+  });
+
+  const resetCalculationMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/smart-incentives/branch-bonus/${id}/reset-calculation`, { method: "POST" });
+      if (!res.ok) throw new Error("فشل في إعادة التعيين");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/branch-bonus"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/points-ledger"] });
+      toast({ title: "تم إعادة تعيين الاحتساب - يمكنك إعادة الاحتساب" });
+    },
+    onError: () => {
+      toast({ title: "خطأ في إعادة التعيين", variant: "destructive" });
+    },
+  });
+
   const createTierMutation = useMutation({
     mutationFn: async (data: typeof newTier) => {
       const res = await fetch("/api/incentives/tiers", {
@@ -1701,8 +1745,12 @@ export default function IncentivesManagement() {
                       {branchBonuses.map((b) => {
                         let tiers: any[] | null = null;
                         try { if (b.bonusTiers) tiers = JSON.parse(b.bonusTiers); } catch { tiers = null; }
+                        let calcDetails: any = null;
+                        try { if (b.calculationDetails) calcDetails = JSON.parse(b.calculationDetails); } catch { calcDetails = null; }
+                        const isCalculated = b.calculationStatus === "calculated";
+                        const isCalculating = calculatingBonusId === b.id;
                         return (
-                          <div key={b.id} className="border rounded-lg p-4 hover:shadow-sm transition-shadow" data-testid={`row-branch-bonus-${b.id}`}>
+                          <div key={b.id} className={`border rounded-lg p-4 hover:shadow-sm transition-shadow ${isCalculated ? "border-green-300 bg-green-50/30" : ""}`} data-testid={`row-branch-bonus-${b.id}`}>
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center gap-3">
                                 <div>
@@ -1710,19 +1758,60 @@ export default function IncentivesManagement() {
                                   <span className="text-xs text-gray-500 mr-2">| {b.yearMonth}</span>
                                 </div>
                                 <Badge variant="outline" className="text-[10px] h-5">{b.distributionMethod === "contribution_ratio" ? "حسب المساهمة" : "توزيع متساوي"}</Badge>
+                                {isCalculated && <Badge className="bg-green-600 text-[10px] h-5">تم الاحتساب</Badge>}
                               </div>
-                              <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700 h-8 w-8 p-0" onClick={() => deleteBranchBonusMutation.mutate(b.id)} data-testid={`button-delete-branch-bonus-${b.id}`}>
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+                              <div className="flex items-center gap-1">
+                                {!isCalculated ? (
+                                  <Button
+                                    size="sm"
+                                    className="bg-blue-600 hover:bg-blue-700 text-white h-8 text-xs px-3"
+                                    onClick={() => {
+                                      if (window.confirm("هل تريد احتساب المكافأة لهذا الشهر؟ سيتم حساب المبيعات الفعلية ومقارنتها بالهدف وتوزيع المكافأة على الكاشيرات.")) {
+                                        calculateBonusMutation.mutate(b.id);
+                                      }
+                                    }}
+                                    disabled={isCalculating || calculateBonusMutation.isPending}
+                                    data-testid={`button-calculate-bonus-${b.id}`}
+                                  >
+                                    {isCalculating ? (
+                                      <><RefreshCw className="h-3.5 w-3.5 ml-1.5 animate-spin" /> جاري الاحتساب...</>
+                                    ) : (
+                                      <><Calculator className="h-3.5 w-3.5 ml-1.5" /> احتساب نهاية الشهر</>
+                                    )}
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-orange-600 border-orange-300 hover:bg-orange-50 h-8 text-xs px-3"
+                                    onClick={() => {
+                                      if (window.confirm("هل تريد إعادة تعيين الاحتساب؟ سيتم إلغاء جميع النقاط الموزعة على الكاشيرات.")) {
+                                        resetCalculationMutation.mutate(b.id);
+                                      }
+                                    }}
+                                    disabled={resetCalculationMutation.isPending}
+                                    data-testid={`button-reset-bonus-${b.id}`}
+                                  >
+                                    <RefreshCw className="h-3.5 w-3.5 ml-1.5" /> إعادة الاحتساب
+                                  </Button>
+                                )}
+                                <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700 h-8 w-8 p-0" onClick={() => deleteBranchBonusMutation.mutate(b.id)} data-testid={`button-delete-branch-bonus-${b.id}`}>
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
                             </div>
                             <div className="flex items-center gap-2 text-xs text-gray-600 mb-2">
                               <Target className="h-3.5 w-3.5 text-green-600" />
                               <span>الهدف: <span className="font-bold text-green-700">{formatCurrency(b.targetAmount)}</span></span>
                             </div>
                             {tiers && tiers.length > 0 ? (
-                              <div className="flex flex-wrap gap-2">
+                              <div className="flex flex-wrap gap-2 mb-2">
                                 {tiers.map((tier: any, idx: number) => (
-                                  <div key={idx} className="bg-amber-50 border border-amber-200 rounded px-2.5 py-1.5 text-xs">
+                                  <div key={idx} className={`border rounded px-2.5 py-1.5 text-xs ${
+                                    isCalculated && calcDetails && b.achievementPercent >= tier.fromPercent && (!tier.toPercent || b.achievementPercent <= tier.toPercent)
+                                      ? "bg-green-100 border-green-400 ring-1 ring-green-400"
+                                      : "bg-amber-50 border-amber-200"
+                                  }`}>
                                     <span className="text-gray-600">{tier.fromPercent}%{tier.toPercent ? ` - ${tier.toPercent}%` : ' فأعلى'}</span>
                                     <span className="mx-1.5">=</span>
                                     <span className="font-bold text-amber-700">{formatCurrency(tier.bonusAmount)}</span>
@@ -1730,8 +1819,58 @@ export default function IncentivesManagement() {
                                 ))}
                               </div>
                             ) : (
-                              <div className="text-xs text-gray-500">
+                              <div className="text-xs text-gray-500 mb-2">
                                 <span>المكافأة: <span className="font-bold text-green-600">{formatCurrency(b.bonusPool)}</span></span>
+                              </div>
+                            )}
+
+                            {isCalculated && (
+                              <div className="mt-3 border-t pt-3 space-y-2">
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                  <div className="bg-blue-50 rounded p-2 text-center">
+                                    <div className="text-[10px] text-blue-600">المبيعات الفعلية</div>
+                                    <div className="font-bold text-sm text-blue-800">{formatCurrency(b.actualSales || 0)}</div>
+                                  </div>
+                                  <div className="bg-purple-50 rounded p-2 text-center">
+                                    <div className="text-[10px] text-purple-600">نسبة الإنجاز</div>
+                                    <div className={`font-bold text-sm ${(b.achievementPercent || 0) >= 100 ? "text-green-700" : "text-purple-800"}`}>{b.achievementPercent || 0}%</div>
+                                  </div>
+                                  <div className="bg-green-50 rounded p-2 text-center">
+                                    <div className="text-[10px] text-green-600">المكافأة المستحقة</div>
+                                    <div className="font-bold text-sm text-green-800">{formatCurrency(b.matchedTierAmount || 0)}</div>
+                                  </div>
+                                  <div className="bg-amber-50 rounded p-2 text-center">
+                                    <div className="text-[10px] text-amber-600">عدد الكاشيرات</div>
+                                    <div className="font-bold text-sm text-amber-800">{calcDetails?.cashierCount || 0}</div>
+                                  </div>
+                                </div>
+
+                                {calcDetails?.distribution && calcDetails.distribution.length > 0 && (
+                                  <div className="mt-2">
+                                    <div className="text-xs font-semibold text-gray-700 mb-1.5">توزيع المكافأة على الكاشيرات:</div>
+                                    <div className="space-y-1">
+                                      {calcDetails.distribution.map((d: any, idx: number) => (
+                                        <div key={idx} className="flex items-center justify-between bg-white border rounded px-3 py-1.5 text-xs">
+                                          <div className="flex items-center gap-2">
+                                            <Users className="h-3 w-3 text-gray-400" />
+                                            <span className="font-medium">{d.name}</span>
+                                            <span className="text-gray-400">({d.share}%)</span>
+                                          </div>
+                                          <div className="flex items-center gap-3">
+                                            <span className="text-gray-500">مبيعات: {formatCurrency(d.sales)}</span>
+                                            <span className="font-bold text-green-700">{formatCurrency(d.amount)} ريال</span>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {(b.matchedTierAmount || 0) === 0 && (
+                                  <div className="bg-orange-50 border border-orange-200 rounded p-2 text-xs text-orange-700">
+                                    <span className="font-semibold">ملاحظة:</span> نسبة الإنجاز لم تصل لأي شريحة من شرائح المكافأة. لم يتم توزيع أي مكافأة.
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
