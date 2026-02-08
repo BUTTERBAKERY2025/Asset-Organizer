@@ -15054,6 +15054,14 @@ export async function registerRoutes(
     try {
       const { branchId, date, shiftType } = req.query;
       
+      if (date && typeof date === 'string' && isNaN(Date.parse(date))) {
+        return res.status(400).json({ error: "التاريخ غير صالح" });
+      }
+      const validShiftTypes = ['morning', 'evening', 'night', 'all'];
+      if (shiftType && typeof shiftType === 'string' && shiftType !== 'all' && !validShiftTypes.includes(shiftType)) {
+        return res.status(400).json({ error: "نوع الشفت غير صالح" });
+      }
+      
       console.log("[cashier-performance-sales] Request:", { branchId, date, shiftType });
       
       // SECURITY: Apply branch filter
@@ -15143,6 +15151,13 @@ export async function registerRoutes(
         return res.status(401).json({ error: "غير مسجل الدخول" });
       }
       const { branchId, startDate, endDate, cashierId } = req.query;
+      
+      if (startDate && typeof startDate === 'string' && isNaN(Date.parse(startDate))) {
+        return res.status(400).json({ error: "تاريخ البداية غير صالح" });
+      }
+      if (endDate && typeof endDate === 'string' && isNaN(Date.parse(endDate))) {
+        return res.status(400).json({ error: "تاريخ النهاية غير صالح" });
+      }
       
       const branchFilter = getEffectiveBranchFilter(req, branchId as string);
       if (!branchFilter.hasAccess) {
@@ -15367,6 +15382,11 @@ export async function registerRoutes(
   app.get("/api/performance-alerts", isAuthenticated, requirePermission("cashier_performance", "view"), async (req, res) => {
     try {
       const { branchId, date, isRead } = req.query;
+      
+      if (date && typeof date === 'string' && isNaN(Date.parse(date))) {
+        return res.status(400).json({ error: "التاريخ غير صالح" });
+      }
+      
       const filters: any = {};
       if (branchId) filters.branchId = branchId;
       if (date) filters.date = date;
@@ -15404,6 +15424,10 @@ export async function registerRoutes(
     try {
       const { branchId } = req.params;
       
+      if (!branchId || branchId.trim() === '') {
+        return res.status(400).json({ error: "معرف الفرع مطلوب" });
+      }
+      
       // SECURITY: Apply branch filter
       const branchFilter = getEffectiveBranchFilter(req, branchId);
 
@@ -15422,6 +15446,9 @@ export async function registerRoutes(
   app.get("/api/performance-alerts/:id", isAuthenticated, requirePermission("cashier_performance", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
       const alert = await storage.getPerformanceAlert(id);
       if (!alert) {
         return res.status(404).json({ error: "التنبيه غير موجود" });
@@ -15444,6 +15471,17 @@ export async function registerRoutes(
 
   app.post("/api/performance-alerts", isAuthenticated, requirePermission("cashier_performance", "create"), async (req, res) => {
     try {
+      const { type, message, branchId } = req.body;
+      if (!branchId || typeof branchId !== 'string') {
+        return res.status(400).json({ error: "معرف الفرع مطلوب" });
+      }
+      if (type && typeof type === 'string' && type.length > 100) {
+        return res.status(400).json({ error: "نوع التنبيه طويل جداً" });
+      }
+      if (message && typeof message === 'string' && message.length > 500) {
+        return res.status(400).json({ error: "النص طويل جداً" });
+      }
+      
       // SECURITY: Apply branch filter
       const branchFilter = getEffectiveBranchFilter(req, req.body.branchId);
 
@@ -15462,6 +15500,9 @@ export async function registerRoutes(
   app.patch("/api/performance-alerts/:id/read", isAuthenticated, requirePermission("cashier_performance", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
       
       // SECURITY: Verify branch access for non-admin users
       const alert = await storage.getPerformanceAlert(id);
@@ -15487,6 +15528,9 @@ export async function registerRoutes(
   app.patch("/api/performance-alerts/:id/acknowledge", isAuthenticated, requirePermission("cashier_performance", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
       const currentUser = getCurrentUser(req);
       
       // SECURITY: Verify branch access for non-admin users
@@ -15515,6 +15559,9 @@ export async function registerRoutes(
       const { ids } = req.body;
       if (!Array.isArray(ids)) {
         return res.status(400).json({ error: "قائمة المعرفات مطلوبة" });
+      }
+      if (ids.some((id: any) => typeof id !== 'number' || isNaN(id) || !Number.isInteger(id))) {
+        return res.status(400).json({ error: "جميع المعرفات يجب أن تكون أرقام صحيحة" });
       }
       
       // SECURITY: Verify branch access for non-admin users
@@ -15546,6 +15593,11 @@ export async function registerRoutes(
   app.get("/api/shift-performance-tracking", isAuthenticated, requirePermission("cashier_performance", "view"), async (req, res) => {
     try {
       const { branchId, date } = req.query;
+      
+      if (date && typeof date === 'string' && isNaN(Date.parse(date))) {
+        return res.status(400).json({ error: "التاريخ غير صالح" });
+      }
+      
       const filters: any = {};
       if (branchId) filters.branchId = branchId;
       if (date) filters.date = date;
@@ -15575,6 +15627,17 @@ export async function registerRoutes(
     try {
       const { branchId, date, shiftType } = req.params;
       
+      if (!branchId || branchId.trim() === '') {
+        return res.status(400).json({ error: "معرف الفرع مطلوب" });
+      }
+      if (!date || isNaN(Date.parse(date))) {
+        return res.status(400).json({ error: "التاريخ غير صالح" });
+      }
+      const validShiftTypes = ['morning', 'evening', 'night'];
+      if (!shiftType || !validShiftTypes.includes(shiftType)) {
+        return res.status(400).json({ error: "نوع الشفت غير صالح" });
+      }
+      
       // SECURITY: Apply branch filter
       const branchFilter = getEffectiveBranchFilter(req, branchId);
 
@@ -15596,6 +15659,9 @@ export async function registerRoutes(
   app.get("/api/shift-performance-tracking/:id", isAuthenticated, requirePermission("cashier_performance", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
       const tracking = await storage.getShiftPerformanceTracking(id);
       if (!tracking) {
         return res.status(404).json({ error: "التتبع غير موجود" });
@@ -15618,6 +15684,27 @@ export async function registerRoutes(
 
   app.post("/api/shift-performance-tracking", isAuthenticated, requirePermission("cashier_performance", "create"), async (req, res) => {
     try {
+      const { branchId, date, shiftType, cashierId } = req.body;
+      if (!branchId || typeof branchId !== 'string') {
+        return res.status(400).json({ error: "معرف الفرع مطلوب" });
+      }
+      if (!date || isNaN(Date.parse(date))) {
+        return res.status(400).json({ error: "التاريخ غير صالح" });
+      }
+      const validShiftTypes = ['morning', 'evening', 'night'];
+      if (!shiftType || !validShiftTypes.includes(shiftType)) {
+        return res.status(400).json({ error: "نوع الشفت غير صالح" });
+      }
+      if (!cashierId) {
+        return res.status(400).json({ error: "معرف الكاشير مطلوب" });
+      }
+      const numericFields = ['totalSales', 'transactionCount', 'averageTicket', 'targetAmount'];
+      for (const field of numericFields) {
+        if (req.body[field] !== undefined && req.body[field] !== null && isNaN(Number(req.body[field]))) {
+          return res.status(400).json({ error: `القيمة الرقمية غير صالحة: ${field}` });
+        }
+      }
+      
       // SECURITY: Apply branch filter
       const branchFilter = getEffectiveBranchFilter(req, req.body.branchId);
 
@@ -15636,6 +15723,18 @@ export async function registerRoutes(
   app.patch("/api/shift-performance-tracking/:id", isAuthenticated, requirePermission("cashier_performance", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "معرف غير صالح" });
+      }
+      if (req.body.date && isNaN(Date.parse(req.body.date))) {
+        return res.status(400).json({ error: "التاريخ غير صالح" });
+      }
+      const numericFields = ['totalSales', 'transactionCount', 'averageTicket', 'targetAmount'];
+      for (const field of numericFields) {
+        if (req.body[field] !== undefined && req.body[field] !== null && isNaN(Number(req.body[field]))) {
+          return res.status(400).json({ error: `القيمة الرقمية غير صالحة: ${field}` });
+        }
+      }
       
       // SECURITY: Verify branch access for non-admin users
       const existing = await storage.getShiftPerformanceTracking(id);
@@ -15665,6 +15764,27 @@ export async function registerRoutes(
 
   app.put("/api/shift-performance-tracking/upsert", isAuthenticated, requirePermission("cashier_performance", "edit"), async (req, res) => {
     try {
+      const { branchId, date, shiftType, cashierId } = req.body;
+      if (!branchId || typeof branchId !== 'string') {
+        return res.status(400).json({ error: "معرف الفرع مطلوب" });
+      }
+      if (!date || isNaN(Date.parse(date))) {
+        return res.status(400).json({ error: "التاريخ غير صالح" });
+      }
+      const validShiftTypes = ['morning', 'evening', 'night'];
+      if (!shiftType || !validShiftTypes.includes(shiftType)) {
+        return res.status(400).json({ error: "نوع الشفت غير صالح" });
+      }
+      if (!cashierId) {
+        return res.status(400).json({ error: "معرف الكاشير مطلوب" });
+      }
+      const numericFields = ['totalSales', 'transactionCount', 'averageTicket', 'targetAmount'];
+      for (const field of numericFields) {
+        if (req.body[field] !== undefined && req.body[field] !== null && isNaN(Number(req.body[field]))) {
+          return res.status(400).json({ error: `القيمة الرقمية غير صالحة: ${field}` });
+        }
+      }
+      
       // SECURITY: Apply branch filter
       const branchFilter = getEffectiveBranchFilter(req, req.body.branchId);
 
