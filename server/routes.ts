@@ -7596,7 +7596,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/smart-incentives/incentive-statements/:id/status", isAuthenticated, requirePermission("operations", "approve"), async (req, res) => {
+  app.patch("/api/smart-incentives/incentive-statements/:id/status", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const { status, rejectionReason } = req.body;

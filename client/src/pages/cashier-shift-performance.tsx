@@ -403,7 +403,7 @@ export default function CashierShiftPerformance() {
       const params = new URLSearchParams();
       if (selectedBranch && selectedBranch !== "all") params.set("branchId", selectedBranch);
       if (stmtCashierId) params.set("cashierId", stmtCashierId);
-      const res = await fetch(`/api/smart-incentives/incentive-statements?${params}`);
+      const res = await fetch(`/api/smart-incentives/incentive-statements?${params}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -414,12 +414,20 @@ export default function CashierShiftPerformance() {
       const res = await apiRequest("POST", "/api/smart-incentives/incentive-statements", data);
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       toast.success("تم إنشاء كشف الحوافز بنجاح");
       refetchStatements();
+      setStmtNotes("");
     },
     onError: (err: any) => {
-      toast.error(err.message || "فشل في إنشاء الكشف");
+      const msg = err.message || "";
+      const cleanMsg = msg.includes(":") ? msg.split(":").slice(1).join(":").trim() : msg;
+      try {
+        const parsed = JSON.parse(cleanMsg);
+        toast.error(parsed.error || "فشل في إنشاء الكشف");
+      } catch {
+        toast.error(cleanMsg || "فشل في إنشاء الكشف");
+      }
     },
   });
 
@@ -428,15 +436,25 @@ export default function CashierShiftPerformance() {
       const res = await apiRequest("PATCH", `/api/smart-incentives/incentive-statements/${id}/status`, { status, rejectionReason });
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       toast.success("تم تحديث حالة الكشف بنجاح");
       refetchStatements();
-      setSelectedStatement(null);
+      if (data && selectedStatement && data.id === selectedStatement.id) {
+        setSelectedStatement(data);
+      }
       setShowRejectDialog(false);
       setRejectionReason("");
+      setRejectingStmtId(null);
     },
     onError: (err: any) => {
-      toast.error(err.message || "فشل في تحديث الحالة");
+      const msg = err.message || "";
+      const cleanMsg = msg.includes(":") ? msg.split(":").slice(1).join(":").trim() : msg;
+      try {
+        const parsed = JSON.parse(cleanMsg);
+        toast.error(parsed.error || "فشل في تحديث الحالة");
+      } catch {
+        toast.error(cleanMsg || "فشل في تحديث الحالة");
+      }
     },
   });
 
