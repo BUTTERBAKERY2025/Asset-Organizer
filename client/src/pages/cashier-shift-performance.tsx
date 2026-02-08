@@ -1008,6 +1008,50 @@ export default function CashierShiftPerformance() {
               </div>
             )}
 
+            {/* Incentive Points Summary Section */}
+            {topCashierPoints.length > 0 && (
+              <Card className="border-emerald-200 mb-4" data-testid="incentive-points-summary">
+                <CardHeader className="bg-gradient-to-l from-emerald-50 to-transparent pb-3">
+                  <CardTitle className="flex items-center gap-2 text-emerald-700">
+                    <Star className="h-5 w-5 text-emerald-500" />
+                    نقاط الحوافز الذكية - {currentYearMonth}
+                  </CardTitle>
+                  <CardDescription>نقاط الحوافز المكتسبة للكاشيرين خلال الشهر الحالي</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                    {topCashierPoints
+                      .filter(c => targetCashierId === 'all' || c.cashierId === targetCashierId)
+                      .map((cashier) => (
+                      <div key={cashier.cashierId} className="border rounded-lg p-3 bg-emerald-50/50 text-center" data-testid={`incentive-card-${cashier.cashierId}`}>
+                        <div className="flex items-center justify-center gap-1 mb-1">
+                          <UserIcon className="h-3.5 w-3.5 text-emerald-600" />
+                          <span className="text-sm font-medium text-emerald-800 truncate">{cashier.cashierName}</span>
+                        </div>
+                        <div className="text-xs text-gray-500 mb-2">{cashier.branchName}</div>
+                        <div className="flex items-center justify-center gap-1">
+                          <Star className="h-4 w-4 text-amber-500" />
+                          <span className="text-lg font-bold text-emerald-700">{cashier.totalPoints}</span>
+                          <span className="text-xs text-gray-500">نقطة</span>
+                        </div>
+                        <div className="text-xs text-emerald-600 mt-1">
+                          SAR {cashier.totalAmount.toFixed(0)}
+                        </div>
+                        <div className="text-[10px] text-gray-400 mt-0.5">
+                          {cashier.challengeCount} تحدي
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {topCashierPoints.filter(c => targetCashierId === 'all' || c.cashierId === targetCashierId).length === 0 && (
+                    <div className="text-center py-4 text-muted-foreground text-sm">
+                      لا توجد نقاط حوافز للكاشير المحدد
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card className="border-amber-200">
                 <CardHeader className="bg-gradient-to-l from-amber-50 to-transparent pb-3">
