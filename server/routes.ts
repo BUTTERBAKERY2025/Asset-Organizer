@@ -10664,11 +10664,28 @@ export async function registerRoutes(
       const multer = (await import("multer")).default;
       const XLSX = (await import("xlsx")).default;
       
-      const upload = multer({ storage: multer.memoryStorage() });
+      const allowedExcelTypes = [
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'text/csv',
+        'application/csv',
+      ];
+      const upload = multer({
+        storage: multer.memoryStorage(),
+        limits: { fileSize: 10 * 1024 * 1024 },
+        fileFilter: (_req: any, file: any, cb: any) => {
+          const ext = file.originalname.toLowerCase();
+          if (allowedExcelTypes.includes(file.mimetype) || ext.endsWith('.xlsx') || ext.endsWith('.xls') || ext.endsWith('.csv')) {
+            cb(null, true);
+          } else {
+            cb(new Error('نوع الملف غير مسموح. يرجى رفع ملف Excel أو CSV فقط'));
+          }
+        }
+      });
       
       upload.single("file")(req, res, async (err: any) => {
         if (err) {
-          return res.status(400).json({ error: "فشل رفع الملف" });
+          return res.status(400).json({ error: err.message || "فشل رفع الملف" });
         }
         
         const file = req.file;
@@ -19172,7 +19189,7 @@ export async function registerRoutes(
   });
 
   // Sign timesheet report (employee or manager)
-  app.post("/api/timesheet-reports/:id/sign", isAuthenticated, async (req, res) => {
+  app.post("/api/timesheet-reports/:id/sign", isAuthenticated, requirePermission("attendance", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -19210,7 +19227,7 @@ export async function registerRoutes(
   });
 
   // Delete timesheet report
-  app.delete("/api/timesheet-reports/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/timesheet-reports/:id", isAuthenticated, requirePermission("attendance", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -19450,10 +19467,22 @@ export async function registerRoutes(
   });
 
   // Get attendance records for branch employee
-  app.get("/api/branch-employees/:id/attendance", isAuthenticated, async (req, res) => {
+  app.get("/api/branch-employees/:id/attendance", isAuthenticated, requirePermission("attendance", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      // SECURITY: Verify employee exists and branch access
+      const employee = await storage.getBranchEmployee(id);
+      if (!employee) {
+        return res.status(404).json({ error: "الموظف غير موجود" });
+      }
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, employee.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لبيانات هذا الفرع" });
+        }
+      }
       
       const attendance = await storage.getAttendanceByBranchEmployeeId(id);
       res.json(attendance);
@@ -19464,10 +19493,22 @@ export async function registerRoutes(
   });
 
   // Get timesheet reports for branch employee
-  app.get("/api/branch-employees/:id/timesheets", isAuthenticated, async (req, res) => {
+  app.get("/api/branch-employees/:id/timesheets", isAuthenticated, requirePermission("attendance", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      
+      // SECURITY: Verify employee exists and branch access
+      const employee = await storage.getBranchEmployee(id);
+      if (!employee) {
+        return res.status(404).json({ error: "الموظف غير موجود" });
+      }
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, employee.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لبيانات هذا الفرع" });
+        }
+      }
       
       const timesheets = await storage.getTimesheetsByBranchEmployeeId(id);
       res.json(timesheets);
@@ -20232,7 +20273,7 @@ export async function registerRoutes(
   });
 
   // PDF Generation endpoint for today's attendance report
-  app.post("/api/reports/today-attendance-pdf", isAuthenticated, async (req, res) => {
+  app.post("/api/reports/today-attendance-pdf", isAuthenticated, requirePermission("attendance", "view"), async (req, res) => {
     try {
       const { branchName, date, dateArabic, summary, employees } = req.body;
       if (!branchName || !date || !summary || !employees || !Array.isArray(employees)) {
@@ -20281,7 +20322,7 @@ export async function registerRoutes(
   });
 
   // PDF Generation endpoint for employee attendance report with signatures
-  app.post("/api/reports/employee-attendance-pdf", isAuthenticated, async (req, res) => {
+  app.post("/api/reports/employee-attendance-pdf", isAuthenticated, requirePermission("attendance", "view"), async (req, res) => {
     try {
       const data: EmployeeAttendanceReportPdfData = req.body;
       if (!data.employeeName || !data.branchName || !data.periodStart || !data.periodEnd || !data.records || !Array.isArray(data.records)) {
