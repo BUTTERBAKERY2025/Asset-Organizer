@@ -184,6 +184,17 @@ export async function registerRoutes(
         return res.status(400).json({ error: "اسم المستخدم وكلمة المرور مطلوبان" });
       }
       
+      if (username.length < 3 || username.length > 50) {
+        return res.status(400).json({ error: "اسم المستخدم يجب أن يكون بين 3 و 50 حرفاً" });
+      }
+      
+      if (password.length < 6) {
+        return res.status(400).json({ error: "كلمة المرور يجب أن تكون 6 أحرف على الأقل" });
+      }
+      if (password.length > 128) {
+        return res.status(400).json({ error: "كلمة المرور طويلة جداً" });
+      }
+      
       const existingUser = await storage.getUserByUsername(username);
       if (existingUser) {
         return res.status(400).json({ error: "اسم المستخدم مسجل مسبقاً" });
@@ -3509,6 +3520,17 @@ export async function registerRoutes(
       
       if (!username || !password) {
         return res.status(400).json({ error: "اسم المستخدم وكلمة المرور مطلوبان" });
+      }
+      
+      if (username.length < 3 || username.length > 50) {
+        return res.status(400).json({ error: "اسم المستخدم يجب أن يكون بين 3 و 50 حرفاً" });
+      }
+      
+      if (password.length < 6) {
+        return res.status(400).json({ error: "كلمة المرور يجب أن تكون 6 أحرف على الأقل" });
+      }
+      if (password.length > 128) {
+        return res.status(400).json({ error: "كلمة المرور طويلة جداً" });
       }
       
       if (!branchId) {
@@ -18289,7 +18311,7 @@ export async function registerRoutes(
   });
 
   // Attendance Records - سجلات الحضور
-  app.get("/api/attendance", isAuthenticated, async (req, res) => {
+  app.get("/api/attendance", isAuthenticated, requirePermission("attendance", "view"), async (req, res) => {
     try {
       const { branchId, employeeId, startDate, endDate, status } = req.query;
       
@@ -18325,7 +18347,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/attendance/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/attendance/:id", isAuthenticated, requirePermission("attendance", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -18347,7 +18369,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/attendance", isAuthenticated, async (req, res) => {
+  app.post("/api/attendance", isAuthenticated, requirePermission("attendance", "create"), async (req, res) => {
     try {
       // SECURITY: Verify branch access for non-admins
       if (!isUserAdmin(req) && req.body.branchId) {
@@ -18368,7 +18390,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/attendance/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/attendance/:id", isAuthenticated, requirePermission("attendance", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -18618,7 +18640,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/attendance/:id/approve", isAuthenticated, async (req, res) => {
+  app.post("/api/attendance/:id/approve", isAuthenticated, requirePermission("attendance", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -18688,7 +18710,7 @@ export async function registerRoutes(
   });
 
   // Attendance Summary - ملخص الحضور
-  app.get("/api/attendance-summary", isAuthenticated, async (req, res) => {
+  app.get("/api/attendance-summary", isAuthenticated, requirePermission("attendance", "view"), async (req, res) => {
     try {
       const { branchId, month } = req.query;
       
@@ -18712,7 +18734,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/attendance-summary/:employeeId/:month", isAuthenticated, async (req, res) => {
+  app.get("/api/attendance-summary/:employeeId/:month", isAuthenticated, requirePermission("attendance", "view"), async (req, res) => {
     try {
       const { employeeId, month } = req.params;
       
@@ -18738,7 +18760,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/attendance-summary/calculate/:employeeId/:month", isAuthenticated, async (req, res) => {
+  app.post("/api/attendance-summary/calculate/:employeeId/:month", isAuthenticated, requirePermission("attendance", "edit"), async (req, res) => {
     try {
       const { employeeId, month } = req.params;
       
@@ -18762,7 +18784,7 @@ export async function registerRoutes(
   });
 
   // Attendance Statistics
-  app.get("/api/attendance/stats/today", isAuthenticated, async (req, res) => {
+  app.get("/api/attendance/stats/today", isAuthenticated, requirePermission("attendance", "view"), async (req, res) => {
     try {
       // SECURITY: Apply branch filter
       const queryBranchId = req.query.branchId as string | undefined;
@@ -18804,7 +18826,7 @@ export async function registerRoutes(
 
   // ==================== Attendance Dashboard Stats - إحصائيات لوحة الحضور ====================
   
-  app.get("/api/attendance-dashboard-stats", isAuthenticated, async (req, res) => {
+  app.get("/api/attendance-dashboard-stats", isAuthenticated, requirePermission("attendance", "view"), async (req, res) => {
     try {
       // SECURITY: Apply branch filter
       const queryBranchId = req.query.branchId as string | undefined;
@@ -18891,7 +18913,7 @@ export async function registerRoutes(
   // ==================== Timesheet Reports - تقارير التايم شيت ====================
   
   // Get all timesheet reports with filters
-  app.get("/api/timesheet-reports", isAuthenticated, async (req, res) => {
+  app.get("/api/timesheet-reports", isAuthenticated, requirePermission("timesheet", "view"), async (req, res) => {
     try {
       const { employeeId, branchId, status } = req.query;
       
@@ -18925,7 +18947,7 @@ export async function registerRoutes(
   });
 
   // Get single timesheet report by ID
-  app.get("/api/timesheet-reports/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/timesheet-reports/:id", isAuthenticated, requirePermission("timesheet", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -18949,7 +18971,7 @@ export async function registerRoutes(
   });
 
   // Get timesheet report entries
-  app.get("/api/timesheet-reports/:id/entries", isAuthenticated, async (req, res) => {
+  app.get("/api/timesheet-reports/:id/entries", isAuthenticated, requirePermission("timesheet", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -18974,7 +18996,7 @@ export async function registerRoutes(
   });
 
   // Generate timesheet report for an employee
-  app.post("/api/timesheet-reports/generate", isAuthenticated, async (req, res) => {
+  app.post("/api/timesheet-reports/generate", isAuthenticated, requirePermission("timesheet", "create"), async (req, res) => {
     try {
       const { employeeId, branchId, startDate, endDate } = req.body;
       
