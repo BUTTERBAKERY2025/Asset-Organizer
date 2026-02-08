@@ -96,6 +96,7 @@ export default function CashierShiftPerformance() {
   });
   const [stmtPeriodTo, setStmtPeriodTo] = useState(() => new Date().toISOString().split('T')[0]);
   const [stmtCashierId, setStmtCashierId] = useState<string>("");
+  const [stmtCashierOpen, setStmtCashierOpen] = useState(false);
   const [stmtViewMode, setStmtViewMode] = useState<'list' | 'detail'>('list');
   const [selectedStatement, setSelectedStatement] = useState<any>(null);
   const [stmtNotes, setStmtNotes] = useState("");
@@ -1941,16 +1942,28 @@ export default function CashierShiftPerformance() {
                         </div>
                         <div>
                           <Label className="text-xs font-bold">الكاشير</Label>
-                          <Select value={stmtCashierId} onValueChange={setStmtCashierId}>
-                            <SelectTrigger className="h-9 text-xs" data-testid="select-stmt-cashier">
-                              <SelectValue placeholder="اختر الكاشير" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {reportBranchCashiers.map((c: any) => (
-                                <SelectItem key={c.id} value={c.id}>{c.firstName || c.username || c.id} {c.lastName || ''}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <Popover open={stmtCashierOpen} onOpenChange={setStmtCashierOpen}>
+                            <PopoverTrigger asChild>
+                              <Button variant="outline" role="combobox" aria-expanded={stmtCashierOpen} className="w-full h-9 text-xs bg-white justify-between font-normal" data-testid="select-stmt-cashier">
+                                {stmtCashierId ? (() => { const c = reportBranchCashiers.find((c: any) => c.id === stmtCashierId); return c ? `${c.firstName || c.username || c.id} ${c.lastName || ''}` : "اختر الكاشير"; })() : "اختر الكاشير"}
+                                <ChevronsUpDown className="mr-2 h-3 w-3 shrink-0 opacity-50" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-64 p-0" align="start">
+                              <Command>
+                                <CommandInput placeholder="بحث عن كاشير..." />
+                                <CommandEmpty>لا يوجد كاشير</CommandEmpty>
+                                <CommandGroup>
+                                  {reportBranchCashiers.map((c: any) => (
+                                    <CommandItem key={c.id} value={`${c.firstName || c.username} ${c.lastName || ''}`} onSelect={() => { setStmtCashierId(c.id); setStmtCashierOpen(false); }}>
+                                      <Check className={`ml-2 h-3 w-3 ${stmtCashierId === c.id ? "opacity-100" : "opacity-0"}`} />
+                                      {c.firstName || c.username || c.id} {c.lastName || ''}
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
                         </div>
                         <div className="flex items-end gap-2">
                           <Button onClick={handleCreateStatement} disabled={createStatementMutation.isPending || !stmtCashierId || !selectedBranch || selectedBranch === "all"} className="bg-amber-600 hover:bg-amber-700 h-9 text-xs flex-1" data-testid="button-create-statement">
