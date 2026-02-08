@@ -793,6 +793,8 @@ export interface IStorage {
   updatePointsEntryStatus(id: number, status: string, approvedBy?: string): Promise<CashierPointsLedger | undefined>;
   getCashierPointsSummary(cashierId: string, yearMonth?: string): Promise<{ totalPoints: number; totalAmount: number; pendingPoints: number; pendingAmount: number; approvedPoints: number; approvedAmount: number }>;
   
+  getTopCashiersByPoints(yearMonth: string, limit?: number): Promise<Array<{ cashierId: string; cashierName: string; branchId: string; branchName: string; totalPoints: number; totalAmount: number; challengeCount: number }>>;
+
   calculateJournalIncentives(journalId: number): Promise<{ challengePoints: CashierPointsLedger[]; totalPoints: number; totalAmount: number; diagnostics: Array<{challengeName: string; challengeType: string; targetValue: number; actualValue: number; met: boolean; reason?: string}> }>;
 
   // Cashier Product Sales - مبيعات الأصناف
@@ -12340,6 +12342,57 @@ export class DatabaseStorage implements IStorage {
       return result;
     } catch (error: any) {
       if (error?.code === '42P01') return { totalPoints: 0, totalAmount: 0, pendingPoints: 0, pendingAmount: 0, approvedPoints: 0, approvedAmount: 0 };
+      throw error;
+    }
+  }
+
+  async getTopCashiersByPoints(yearMonth: string, limit: number = 10): Promise<Array<{ cashierId: string; cashierName: string; branchId: string; branchName: string; totalPoints: number; totalAmount: number; challengeCount: number }>> {
+    try {
+      const [year, month] = yearMonth.split('-');
+      const startDate = `${year}-${month}-01`;
+      const endDate = `${year}-${month}-31`;
+      
+      const entries = await db.select().from(cashierPointsLedger).where(
+        and(
+          gte(cashierPointsLedger.transactionDate, startDate),
+          lte(cashierPointsLedger.transactionDate, endDate),
+        )
+      );
+      
+      const cashierMap = new Map<string, { totalPoints: number; totalAmount: number; challengeCount: number; branchId: string }>();
+      for (const entry of entries) {
+        if (entry.status === 'cancelled') continue;
+        const existing = cashierMap.get(entry.cashierId) || { totalPoints: 0, totalAmount: 0, challengeCount: 0, branchId: entry.branchId };
+        existing.totalPoints += entry.pointsEarned;
+        existing.totalAmount += entry.amountEarned;
+        existing.challengeCount += 1;
+        existing.branchId = entry.branchId;
+        cashierMap.set(entry.cashierId, existing);
+      }
+      
+      const allUsers = await this.getUsers();
+      const allBranches = await this.getBranches();
+      const userMap = new Map(allUsers.map((u: any) => [u.id, u]));
+      const branchMap = new Map(allBranches.map((b: any) => [b.id, b]));
+      
+      const results = Array.from(cashierMap.entries()).map(([cashierId, data]) => {
+        const user = userMap.get(cashierId) as any;
+        const branch = branchMap.get(data.branchId) as any;
+        return {
+          cashierId,
+          cashierName: user ? (user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : user.username) : cashierId,
+          branchId: data.branchId,
+          branchName: branch ? branch.name : data.branchId,
+          totalPoints: data.totalPoints,
+          totalAmount: data.totalAmount,
+          challengeCount: data.challengeCount,
+        };
+      });
+      
+      results.sort((a, b) => b.totalPoints - a.totalPoints);
+      return results.slice(0, limit);
+    } catch (error: any) {
+      if (error?.code === '42P01') return [];
       throw error;
     }
   }

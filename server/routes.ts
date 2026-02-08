@@ -7042,6 +7042,19 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/smart-incentives/top-cashiers", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const yearMonth = req.query.yearMonth as string;
+      const limit = parseInt(req.query.limit as string) || 10;
+      if (!yearMonth) return res.status(400).json({ error: "yearMonth مطلوب" });
+      const topCashiers = await storage.getTopCashiersByPoints(yearMonth, limit);
+      res.json(topCashiers);
+    } catch (error) {
+      console.error("Error fetching top cashiers:", error);
+      res.status(500).json({ error: "فشل في جلب ترتيب الكاشير" });
+    }
+  });
+
   app.get("/api/smart-incentives/points-summary/:cashierId", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
       res.set('Cache-Control', 'no-store, no-cache, must-revalidate');

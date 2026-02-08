@@ -20,7 +20,7 @@ import {
   Target, TrendingUp, TrendingDown, Users, Trophy, ChevronLeft, Calendar, 
   Award, AlertTriangle, Bell, Clock, CheckCircle2, Plus, Settings, 
   Sun, Moon, DollarSign, Receipt, User as UserIcon, RefreshCw, BarChart as BarChartIcon,
-  Pencil
+  Pencil, Star
 } from "lucide-react";
 import { Link } from "wouter";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line, Legend, PieChart, Pie, Cell } from "recharts";
@@ -200,6 +200,21 @@ export default function CashierShiftPerformance() {
       return data.filter((t: IncentiveTier) => t.isActive).sort((a: IncentiveTier, b: IncentiveTier) => (a.sortOrder || 0) - (b.sortOrder || 0));
     }
   });
+
+  const currentYearMonth = selectedDate.substring(0, 7);
+  const { data: topCashierPoints = [] } = useQuery<Array<{ cashierId: string; cashierName: string; branchId: string; branchName: string; totalPoints: number; totalAmount: number; challengeCount: number }>>({
+    queryKey: ["/api/smart-incentives/top-cashiers", currentYearMonth],
+    queryFn: async () => {
+      const res = await fetch(`/api/smart-incentives/top-cashiers?yearMonth=${currentYearMonth}&limit=50`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const getCashierPoints = (cashierId: string) => {
+    const found = topCashierPoints.find(c => c.cashierId === cashierId);
+    return found ? { totalPoints: found.totalPoints, totalAmount: found.totalAmount, challengeCount: found.challengeCount } : null;
+  };
 
   // Calculate incentive based on achievement percentage
   const calculateIncentive = (achievementPercent: number, excessSales: number = 0): { tier: IncentiveTier | null; reward: number } => {
@@ -592,11 +607,17 @@ export default function CashierShiftPerformance() {
               <p className="text-xs sm:text-sm text-muted-foreground">مراقبة الأهداف والأداء لكل كاشير حسب الشفت</p>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button variant="outline" onClick={handleRefresh} data-testid="button-refresh" className="h-11 sm:h-9 text-sm">
               <RefreshCw className="h-4 w-4 ml-1 sm:ml-2" />
               <span className="hidden sm:inline">تحديث</span>
             </Button>
+            <Link href="/incentives-management">
+              <Button variant="outline" className="h-11 sm:h-9 text-sm bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100" data-testid="btn-goto-incentives">
+                <Award className="h-4 w-4 ml-1" />
+                <span className="hidden sm:inline">الحوافز الذكية</span>
+              </Button>
+            </Link>
             {/* Only show add target button if user has create permission */}
             {canCreate("cashier_performance") && (
             <Dialog open={showTargetDialog} onOpenChange={(open) => {
@@ -1020,11 +1041,19 @@ export default function CashierShiftPerformance() {
                         return (
                           <div key={target.id} className="border rounded-lg p-4" data-testid={`target-morning-${target.id}`}>
                             <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 <UserIcon className="h-4 w-4" />
                                 <span className="font-medium">{getCashierName(target.cashierId)}</span>
                                 <Badge variant="outline">{CASHIER_ROLES.find(r => r.value === target.cashierRole)?.label}</Badge>
                                 <Badge variant="secondary" className="text-xs">{periodLabel}</Badge>
+                                {(() => {
+                                  const pts = getCashierPoints(target.cashierId || '');
+                                  return pts && pts.totalPoints > 0 ? (
+                                    <Badge className="bg-emerald-500 text-white text-[10px]" data-testid={`points-morning-${target.id}`}>
+                                      <Star className="h-3 w-3 ml-0.5" />{pts.totalPoints} نقطة
+                                    </Badge>
+                                  ) : null;
+                                })()}
                               </div>
                               <div className="flex items-center gap-2">
                                 <Badge className={ALERT_COLORS[getAlertLevel(percent)].badge}>
@@ -1158,11 +1187,19 @@ export default function CashierShiftPerformance() {
                         return (
                           <div key={target.id} className="border rounded-lg p-4" data-testid={`target-evening-${target.id}`}>
                             <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 <UserIcon className="h-4 w-4" />
                                 <span className="font-medium">{getCashierName(target.cashierId)}</span>
                                 <Badge variant="outline">{CASHIER_ROLES.find(r => r.value === target.cashierRole)?.label}</Badge>
                                 <Badge variant="secondary" className="text-xs">{periodLabel}</Badge>
+                                {(() => {
+                                  const pts = getCashierPoints(target.cashierId || '');
+                                  return pts && pts.totalPoints > 0 ? (
+                                    <Badge className="bg-emerald-500 text-white text-[10px]" data-testid={`points-evening-${target.id}`}>
+                                      <Star className="h-3 w-3 ml-0.5" />{pts.totalPoints} نقطة
+                                    </Badge>
+                                  ) : null;
+                                })()}
                               </div>
                               <div className="flex items-center gap-2">
                                 <Badge className={ALERT_COLORS[getAlertLevel(percent)].badge}>

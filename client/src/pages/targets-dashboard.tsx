@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Target, TrendingUp, TrendingDown, Building2, Users, Trophy, ChevronLeft, Calendar, Award, AlertTriangle, Bell, Clock, CheckCircle2, FileSpreadsheet, FileText, ArrowRight } from "lucide-react";
+import { Target, TrendingUp, TrendingDown, Building2, Users, Trophy, ChevronLeft, Calendar, Award, AlertTriangle, Bell, Clock, CheckCircle2, FileSpreadsheet, FileText, ArrowRight, Star, Gift, DollarSign } from "lucide-react";
 import { Link } from "wouter";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend, PieChart, Pie, Cell } from "recharts";
 import * as XLSX from "xlsx";
@@ -197,6 +197,15 @@ export default function TargetsDashboard() {
       return res.json();
     },
     enabled: selectedBranch !== "all"
+  });
+
+  const { data: topCashiersByPoints = [], isLoading: pointsLeaderboardLoading } = useQuery<Array<{ cashierId: string; cashierName: string; branchId: string; branchName: string; totalPoints: number; totalAmount: number; challengeCount: number }>>({
+    queryKey: ["/api/smart-incentives/top-cashiers", selectedMonth],
+    queryFn: async () => {
+      const res = await fetch(`/api/smart-incentives/top-cashiers?yearMonth=${selectedMonth}&limit=20`);
+      if (!res.ok) return [];
+      return res.json();
+    },
   });
 
   const formatCurrency = (amount: number) => {
@@ -543,6 +552,13 @@ export default function TargetsDashboard() {
                 <span className="hidden sm:inline">أداء الشفتات</span>
               </Button>
             </Link>
+
+            <Link href="/incentives-management">
+              <Button variant="default" className="h-11 sm:h-9 bg-emerald-600 hover:bg-emerald-700" data-testid="button-goto-incentives">
+                <Award className="h-4 w-4 sm:ml-2" />
+                <span className="hidden sm:inline">الحوافز الذكية</span>
+              </Button>
+            </Link>
           </div>
         </div>
 
@@ -623,6 +639,16 @@ export default function TargetsDashboard() {
               <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">تفاصيل الفرع</span>
               <span className="sm:hidden">التفاصيل</span>
+            </TabsTrigger>
+            <TabsTrigger value="incentives" className="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs md:text-sm px-2 sm:px-3">
+              <Star className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">ترتيب الحوافز</span>
+              <span className="sm:hidden">الحوافز</span>
+              {topCashiersByPoints.length > 0 && (
+                <Badge className="h-4 w-4 sm:h-5 sm:w-5 p-0 flex items-center justify-center text-[10px] sm:text-xs bg-emerald-500">
+                  {topCashiersByPoints.length}
+                </Badge>
+              )}
             </TabsTrigger>
           </TabsList>
 
@@ -1083,6 +1109,100 @@ export default function TargetsDashboard() {
                 </Card>
               )}
             </div>
+          </TabsContent>
+
+          <TabsContent value="incentives">
+            <Card>
+              <CardHeader className="p-3 sm:p-4 md:p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2 text-sm sm:text-base md:text-lg">
+                      <Star className="h-4 w-4 sm:h-5 sm:w-5 text-amber-500" />
+                      ترتيب الكاشيرين حسب نقاط الحوافز
+                    </CardTitle>
+                    <CardDescription className="text-xs sm:text-sm mt-1">النقاط المكتسبة من التحديات اليومية والعمولات</CardDescription>
+                  </div>
+                  <Link href="/incentives-management">
+                    <Button variant="outline" size="sm" className="text-xs" data-testid="btn-manage-incentives">
+                      <Gift className="h-3 w-3 ml-1" />
+                      إدارة الحوافز
+                    </Button>
+                  </Link>
+                </div>
+              </CardHeader>
+              <CardContent className="p-3 sm:p-4 md:p-6">
+                {pointsLeaderboardLoading ? (
+                  <div className="text-center py-8 text-gray-500 text-xs sm:text-sm">جاري التحميل...</div>
+                ) : topCashiersByPoints.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <Star className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                    <p className="text-xs sm:text-sm">لا توجد نقاط حوافز لهذا الشهر</p>
+                    <Link href="/incentives-management">
+                      <Button variant="link" size="sm" className="mt-2 text-amber-600">ابدأ بإعداد التحديات والحوافز</Button>
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                      <Card className="border-amber-300 bg-amber-50">
+                        <CardContent className="p-3 text-center">
+                          <Star className="h-5 w-5 text-amber-600 mx-auto mb-1" />
+                          <p className="text-xs text-amber-700">إجمالي النقاط</p>
+                          <p className="text-lg font-bold text-amber-900" data-testid="text-incentives-total-points">
+                            {topCashiersByPoints.reduce((s, c) => s + c.totalPoints, 0).toLocaleString()}
+                          </p>
+                        </CardContent>
+                      </Card>
+                      <Card className="border-green-300 bg-green-50">
+                        <CardContent className="p-3 text-center">
+                          <DollarSign className="h-5 w-5 text-green-600 mx-auto mb-1" />
+                          <p className="text-xs text-green-700">إجمالي المبالغ</p>
+                          <p className="text-lg font-bold text-green-900" data-testid="text-incentives-total-amount">
+                            {formatCurrency(topCashiersByPoints.reduce((s, c) => s + c.totalAmount, 0))}
+                          </p>
+                        </CardContent>
+                      </Card>
+                      <Card className="border-blue-300 bg-blue-50">
+                        <CardContent className="p-3 text-center">
+                          <Users className="h-5 w-5 text-blue-600 mx-auto mb-1" />
+                          <p className="text-xs text-blue-700">عدد الكاشيرين</p>
+                          <p className="text-lg font-bold text-blue-900" data-testid="text-incentives-cashier-count">
+                            {topCashiersByPoints.length}
+                          </p>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-4">
+                      {topCashiersByPoints.map((cashier, index) => (
+                        <Card key={cashier.cashierId} className={`${index < 3 ? 'border-amber-400 border-2' : ''}`} data-testid={`points-rank-${cashier.cashierId}`}>
+                          <CardContent className="p-2 sm:p-3 md:p-4">
+                            <div className="flex items-start justify-between mb-1 sm:mb-2">
+                              <div className="flex items-center gap-1">
+                                {index === 0 && <span className="text-lg">🥇</span>}
+                                {index === 1 && <span className="text-lg">🥈</span>}
+                                {index === 2 && <span className="text-lg">🥉</span>}
+                                {index > 2 && <Badge variant="outline" className="text-[10px]">{index + 1}</Badge>}
+                              </div>
+                              <div className="text-left">
+                                <span className="text-sm sm:text-lg font-bold text-amber-600">{cashier.totalPoints}</span>
+                                <span className="text-[10px] text-amber-500 block">نقطة</span>
+                              </div>
+                            </div>
+                            <div className="font-medium text-xs sm:text-sm truncate">{cashier.cashierName}</div>
+                            <div className="text-[10px] sm:text-xs text-gray-500 truncate">{cashier.branchName}</div>
+                            <div className="mt-1 flex items-center justify-between text-[10px]">
+                              <span className="text-green-600 font-medium">{formatCurrency(cashier.totalAmount)}</span>
+                              <span className="text-gray-400">{cashier.challengeCount} تحدي</span>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>

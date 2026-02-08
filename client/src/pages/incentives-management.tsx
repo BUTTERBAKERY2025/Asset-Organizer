@@ -635,6 +635,20 @@ export default function IncentivesManagement() {
               <span className="hidden sm:inline">تصدير Excel</span>
               <span className="sm:hidden">Excel</span>
             </Button>
+
+            <Link href="/targets-dashboard">
+              <Button variant="outline" className="h-11 sm:h-9" data-testid="btn-goto-targets-dashboard">
+                <TrendingUp className="h-4 w-4 ml-1" />
+                <span className="hidden sm:inline">لوحة الأهداف</span>
+              </Button>
+            </Link>
+
+            <Link href="/cashier-shift-performance">
+              <Button variant="outline" className="h-11 sm:h-9" data-testid="btn-goto-shift-performance">
+                <Users className="h-4 w-4 ml-1" />
+                <span className="hidden sm:inline">أداء الشفتات</span>
+              </Button>
+            </Link>
           </div>
         </div>
 
