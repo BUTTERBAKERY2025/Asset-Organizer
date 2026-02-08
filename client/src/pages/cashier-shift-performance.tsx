@@ -771,11 +771,11 @@ export default function CashierShiftPerformance() {
                 </CardHeader>
                 <CardContent>
                   {shiftTargets.filter(t => t.shiftType === 'morning' && (targetCashierId === 'all' || t.cashierId === targetCashierId)).length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
+                    <div className="text-center py-4 text-muted-foreground text-sm">
                       لم يتم تعيين تحديات يومية للشفت الصباحي
                     </div>
                   ) : (
-                    <div className="space-y-4">
+                    <div className="space-y-2">
                       {shiftTargets.filter(t => t.shiftType === 'morning' && (targetCashierId === 'all' || t.cashierId === targetCashierId)).map((target) => {
                         const actualSales = getCashierActualSales(target.cashierId || '', 'morning');
                         const achieved = actualSales.totalSales;
@@ -791,106 +791,64 @@ export default function CashierShiftPerformance() {
                         const periodLabel = periodType === 'weekly' ? 'أسبوعي' : periodType === 'monthly' ? 'شهري' : 'يومي';
                         
                         return (
-                          <div key={target.id} className="border rounded-lg p-4" data-testid={`target-morning-${target.id}`}>
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <UserIcon className="h-4 w-4" />
-                                <span className="font-medium">{getCashierName(target.cashierId)}</span>
-                                <Badge variant="outline">{CASHIER_ROLES.find(r => r.value === target.cashierRole)?.label}</Badge>
-                                <Badge variant="secondary" className="text-xs">{periodLabel}</Badge>
+                          <div key={target.id} className="border rounded-md p-2.5 hover:bg-gray-50/50 transition-colors" data-testid={`target-morning-${target.id}`}>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <UserIcon className="h-3.5 w-3.5 text-gray-500" />
+                                <span className="text-sm font-medium">{getCashierName(target.cashierId)}</span>
                                 {(() => {
                                   const pts = getCashierPoints(target.cashierId || '');
                                   return pts && pts.totalPoints > 0 ? (
-                                    <Badge className="bg-emerald-500 text-white text-[10px]" data-testid={`points-morning-${target.id}`}>
-                                      <Star className="h-3 w-3 ml-0.5" />{pts.totalPoints} نقطة
+                                    <Badge className="bg-emerald-500 text-white text-[9px] h-4 px-1" data-testid={`points-morning-${target.id}`}>
+                                      <Star className="h-2.5 w-2.5 ml-0.5" />{pts.totalPoints}
                                     </Badge>
                                   ) : null;
                                 })()}
-                              </div>
-                              <Badge className={ALERT_COLORS[getAlertLevel(percent)].badge}>
-                                  {percent.toFixed(0)}%
-                                </Badge>
-                            </div>
-                            {(target as any).challenges && (
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {(target as any).challenges.map((ch: any) => (
-                                  <Badge key={ch.id} variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200">
+                                {(target as any).challenges && (target as any).challenges.map((ch: any) => (
+                                  <Badge key={ch.id} variant="outline" className="text-[9px] h-4 px-1 bg-emerald-50 text-emerald-700 border-emerald-200">
                                     {ch.name}
                                   </Badge>
                                 ))}
                               </div>
-                            )}
-                            
-                            {/* Period info */}
-                            {periodType !== 'daily' && (
-                              <div className="text-xs text-gray-400 mb-2">
-                                الفترة: {startDate} إلى {endDate}
-                              </div>
-                            )}
-                            
-                            <div className="space-y-3">
-                              {/* Sales Progress */}
-                              <div>
-                                <div className="flex justify-between text-sm mb-1">
-                                  <span className="text-muted-foreground">المبيعات اليومية</span>
-                                  <span className={getPercentColor(percent)}>{percent.toFixed(0)}%</span>
+                              <Badge className={`${ALERT_COLORS[getAlertLevel(percent)].badge} text-[10px] h-5`}>
+                                {percent.toFixed(0)}%
+                              </Badge>
+                            </div>
+                            <div className="space-y-1.5">
+                              {dailyTarget > 0 && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] text-gray-500 w-16 shrink-0">المبيعات</span>
+                                  <Progress value={Math.min(percent, 100)} className="h-1.5 flex-1" />
+                                  <span className="text-[10px] text-gray-600 w-28 text-left shrink-0">{formatCurrency(achieved)} / {formatCurrency(dailyTarget)}</span>
                                 </div>
-                                <Progress value={Math.min(percent, 100)} className="h-2" />
-                                <div className="flex justify-between text-xs text-gray-500 mt-1">
-                                  <span>الهدف: {formatCurrency(dailyTarget)}</span>
-                                  <span>المحقق: {formatCurrency(achieved)}</span>
-                                </div>
-                              </div>
-                              
-                              {/* Transactions Progress */}
+                              )}
                               {dailyTransactions > 0 && (
-                                <div>
-                                  <div className="flex justify-between text-sm mb-1">
-                                    <span className="text-muted-foreground">عدد الحركات</span>
-                                    <span className={getPercentColor(transactionsPercent)}>{transactionsPercent.toFixed(0)}%</span>
-                                  </div>
-                                  <Progress value={Math.min(transactionsPercent, 100)} className="h-1.5" />
-                                  <div className="flex justify-between text-xs text-gray-500 mt-1">
-                                    <span>الهدف: {dailyTransactions}</span>
-                                    <span>المحقق: {actualSales.transactionCount}</span>
-                                  </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] text-gray-500 w-16 shrink-0">الحركات</span>
+                                  <Progress value={Math.min(transactionsPercent, 100)} className="h-1.5 flex-1" />
+                                  <span className="text-[10px] text-gray-600 w-28 text-left shrink-0">{actualSales.transactionCount} / {dailyTransactions}</span>
                                 </div>
                               )}
-                              
-                              {/* Average Ticket Progress */}
                               {targetTicket > 0 && (
-                                <div>
-                                  <div className="flex justify-between text-sm mb-1">
-                                    <span className="text-muted-foreground">متوسط الفاتورة</span>
-                                    <span className={getPercentColor(ticketPercent)}>{ticketPercent.toFixed(0)}%</span>
-                                  </div>
-                                  <Progress value={Math.min(ticketPercent, 100)} className="h-1.5" />
-                                  <div className="flex justify-between text-xs text-gray-500 mt-1">
-                                    <span>الهدف: {formatCurrency(targetTicket)}</span>
-                                    <span>الفعلي: {formatCurrency(actualSales.averageTicket)}</span>
-                                  </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] text-gray-500 w-16 shrink-0">م. الفاتورة</span>
+                                  <Progress value={Math.min(ticketPercent, 100)} className="h-1.5 flex-1" />
+                                  <span className="text-[10px] text-gray-600 w-28 text-left shrink-0">{formatCurrency(actualSales.averageTicket)} / {formatCurrency(targetTicket)}</span>
                                 </div>
                               )}
-                              
-                              {/* Incentive Calculation */}
                               {(() => {
                                 const excessSales = Math.max(0, achieved - dailyTarget);
                                 const { tier, reward } = calculateIncentive(percent, excessSales);
                                 if (!tier) return null;
                                 return (
-                                  <div className="mt-3 pt-3 border-t border-dashed">
-                                    <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-2">
-                                        <Trophy className="h-4 w-4 text-amber-500" />
-                                        <span className="text-sm font-medium text-amber-700">{tier.name}</span>
-                                      </div>
-                                      <Badge className="bg-green-500 text-white">
-                                        حافز: {formatCurrency(reward)}
-                                      </Badge>
+                                  <div className="flex items-center justify-between pt-1 border-t border-dashed">
+                                    <div className="flex items-center gap-1">
+                                      <Trophy className="h-3 w-3 text-amber-500" />
+                                      <span className="text-[10px] font-medium text-amber-700">{tier.name}</span>
                                     </div>
-                                    {tier.description && (
-                                      <p className="text-xs text-gray-500 mt-1">{tier.description}</p>
-                                    )}
+                                    <Badge className="bg-green-500 text-white text-[9px] h-4 px-1">
+                                      {formatCurrency(reward)}
+                                    </Badge>
                                   </div>
                                 );
                               })()}
@@ -913,11 +871,11 @@ export default function CashierShiftPerformance() {
                 </CardHeader>
                 <CardContent>
                   {shiftTargets.filter(t => t.shiftType === 'evening' && (targetCashierId === 'all' || t.cashierId === targetCashierId)).length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
+                    <div className="text-center py-4 text-muted-foreground text-sm">
                       لم يتم تعيين تحديات يومية للشفت المسائي
                     </div>
                   ) : (
-                    <div className="space-y-4">
+                    <div className="space-y-2">
                       {shiftTargets.filter(t => t.shiftType === 'evening' && (targetCashierId === 'all' || t.cashierId === targetCashierId)).map((target) => {
                         const actualSales = getCashierActualSales(target.cashierId || '', 'evening');
                         const achieved = actualSales.totalSales;
@@ -933,106 +891,64 @@ export default function CashierShiftPerformance() {
                         const periodLabel = periodType === 'weekly' ? 'أسبوعي' : periodType === 'monthly' ? 'شهري' : 'يومي';
                         
                         return (
-                          <div key={target.id} className="border rounded-lg p-4" data-testid={`target-evening-${target.id}`}>
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <UserIcon className="h-4 w-4" />
-                                <span className="font-medium">{getCashierName(target.cashierId)}</span>
-                                <Badge variant="outline">{CASHIER_ROLES.find(r => r.value === target.cashierRole)?.label}</Badge>
-                                <Badge variant="secondary" className="text-xs">{periodLabel}</Badge>
+                          <div key={target.id} className="border rounded-md p-2.5 hover:bg-gray-50/50 transition-colors" data-testid={`target-evening-${target.id}`}>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <UserIcon className="h-3.5 w-3.5 text-gray-500" />
+                                <span className="text-sm font-medium">{getCashierName(target.cashierId)}</span>
                                 {(() => {
                                   const pts = getCashierPoints(target.cashierId || '');
                                   return pts && pts.totalPoints > 0 ? (
-                                    <Badge className="bg-emerald-500 text-white text-[10px]" data-testid={`points-evening-${target.id}`}>
-                                      <Star className="h-3 w-3 ml-0.5" />{pts.totalPoints} نقطة
+                                    <Badge className="bg-emerald-500 text-white text-[9px] h-4 px-1" data-testid={`points-evening-${target.id}`}>
+                                      <Star className="h-2.5 w-2.5 ml-0.5" />{pts.totalPoints}
                                     </Badge>
                                   ) : null;
                                 })()}
-                              </div>
-                              <Badge className={ALERT_COLORS[getAlertLevel(percent)].badge}>
-                                  {percent.toFixed(0)}%
-                                </Badge>
-                            </div>
-                            {(target as any).challenges && (
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {(target as any).challenges.map((ch: any) => (
-                                  <Badge key={ch.id} variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200">
+                                {(target as any).challenges && (target as any).challenges.map((ch: any) => (
+                                  <Badge key={ch.id} variant="outline" className="text-[9px] h-4 px-1 bg-emerald-50 text-emerald-700 border-emerald-200">
                                     {ch.name}
                                   </Badge>
                                 ))}
                               </div>
-                            )}
-                            
-                            {/* Period info */}
-                            {periodType !== 'daily' && (
-                              <div className="text-xs text-gray-400 mb-2">
-                                الفترة: {startDate} إلى {endDate}
-                              </div>
-                            )}
-                            
-                            <div className="space-y-3">
-                              {/* Sales Progress */}
-                              <div>
-                                <div className="flex justify-between text-sm mb-1">
-                                  <span className="text-muted-foreground">المبيعات اليومية</span>
-                                  <span className={getPercentColor(percent)}>{percent.toFixed(0)}%</span>
+                              <Badge className={`${ALERT_COLORS[getAlertLevel(percent)].badge} text-[10px] h-5`}>
+                                {percent.toFixed(0)}%
+                              </Badge>
+                            </div>
+                            <div className="space-y-1.5">
+                              {dailyTarget > 0 && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] text-gray-500 w-16 shrink-0">المبيعات</span>
+                                  <Progress value={Math.min(percent, 100)} className="h-1.5 flex-1" />
+                                  <span className="text-[10px] text-gray-600 w-28 text-left shrink-0">{formatCurrency(achieved)} / {formatCurrency(dailyTarget)}</span>
                                 </div>
-                                <Progress value={Math.min(percent, 100)} className="h-2" />
-                                <div className="flex justify-between text-xs text-gray-500 mt-1">
-                                  <span>الهدف: {formatCurrency(dailyTarget)}</span>
-                                  <span>المحقق: {formatCurrency(achieved)}</span>
-                                </div>
-                              </div>
-                              
-                              {/* Transactions Progress */}
+                              )}
                               {dailyTransactions > 0 && (
-                                <div>
-                                  <div className="flex justify-between text-sm mb-1">
-                                    <span className="text-muted-foreground">عدد الحركات</span>
-                                    <span className={getPercentColor(transactionsPercent)}>{transactionsPercent.toFixed(0)}%</span>
-                                  </div>
-                                  <Progress value={Math.min(transactionsPercent, 100)} className="h-1.5" />
-                                  <div className="flex justify-between text-xs text-gray-500 mt-1">
-                                    <span>الهدف: {dailyTransactions}</span>
-                                    <span>المحقق: {actualSales.transactionCount}</span>
-                                  </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] text-gray-500 w-16 shrink-0">الحركات</span>
+                                  <Progress value={Math.min(transactionsPercent, 100)} className="h-1.5 flex-1" />
+                                  <span className="text-[10px] text-gray-600 w-28 text-left shrink-0">{actualSales.transactionCount} / {dailyTransactions}</span>
                                 </div>
                               )}
-                              
-                              {/* Average Ticket Progress */}
                               {targetTicket > 0 && (
-                                <div>
-                                  <div className="flex justify-between text-sm mb-1">
-                                    <span className="text-muted-foreground">متوسط الفاتورة</span>
-                                    <span className={getPercentColor(ticketPercent)}>{ticketPercent.toFixed(0)}%</span>
-                                  </div>
-                                  <Progress value={Math.min(ticketPercent, 100)} className="h-1.5" />
-                                  <div className="flex justify-between text-xs text-gray-500 mt-1">
-                                    <span>الهدف: {formatCurrency(targetTicket)}</span>
-                                    <span>الفعلي: {formatCurrency(actualSales.averageTicket)}</span>
-                                  </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] text-gray-500 w-16 shrink-0">م. الفاتورة</span>
+                                  <Progress value={Math.min(ticketPercent, 100)} className="h-1.5 flex-1" />
+                                  <span className="text-[10px] text-gray-600 w-28 text-left shrink-0">{formatCurrency(actualSales.averageTicket)} / {formatCurrency(targetTicket)}</span>
                                 </div>
                               )}
-                              
-                              {/* Incentive Calculation */}
                               {(() => {
                                 const excessSales = Math.max(0, achieved - dailyTarget);
                                 const { tier, reward } = calculateIncentive(percent, excessSales);
                                 if (!tier) return null;
                                 return (
-                                  <div className="mt-3 pt-3 border-t border-dashed">
-                                    <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-2">
-                                        <Trophy className="h-4 w-4 text-amber-500" />
-                                        <span className="text-sm font-medium text-amber-700">{tier.name}</span>
-                                      </div>
-                                      <Badge className="bg-green-500 text-white">
-                                        حافز: {formatCurrency(reward)}
-                                      </Badge>
+                                  <div className="flex items-center justify-between pt-1 border-t border-dashed">
+                                    <div className="flex items-center gap-1">
+                                      <Trophy className="h-3 w-3 text-amber-500" />
+                                      <span className="text-[10px] font-medium text-amber-700">{tier.name}</span>
                                     </div>
-                                    {tier.description && (
-                                      <p className="text-xs text-gray-500 mt-1">{tier.description}</p>
-                                    )}
+                                    <Badge className="bg-green-500 text-white text-[9px] h-4 px-1">
+                                      {formatCurrency(reward)}
+                                    </Badge>
                                   </div>
                                 );
                               })()}

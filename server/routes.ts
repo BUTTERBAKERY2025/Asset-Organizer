@@ -6948,7 +6948,8 @@ export async function registerRoutes(
 
       for (const ch of validChallenges) {
         if (!ch.cashierId || !ch.branchId) continue;
-        const shift = ch.shiftType || 'morning';
+        if (!ch.shiftType) continue;
+        const shift = ch.shiftType;
         const key = `${ch.cashierId}_${ch.branchId}_${shift}`;
         if (!grouped[key]) {
           grouped[key] = { cashierId: ch.cashierId, branchId: ch.branchId, shiftType: shift, targetAmount: 0, targetTransactions: 0, targetTicketValue: 0, challenges: [] };

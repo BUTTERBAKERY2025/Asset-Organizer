@@ -1013,6 +1013,18 @@ export default function IncentivesManagement() {
                             <p className="text-xs text-blue-600 mt-1">يعرض فقط موظفي الفرع المحدد</p>
                           )}
                         </div>
+                        <div className="grid gap-1">
+                          <Label className="text-xs">الشفت <span className="text-red-500">*</span></Label>
+                          <Select value={newChallenge.shiftType} onValueChange={(v) => setNewChallenge({...newChallenge, shiftType: v})}>
+                            <SelectTrigger className="h-9" data-testid="select-challenge-shift">
+                              <SelectValue placeholder="اختر الشفت" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="morning">صباحي</SelectItem>
+                              <SelectItem value="evening">مسائي</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
                         <div className="grid grid-cols-3 gap-3">
                           <div>
                             <Label className="font-bold text-sm">الهدف</Label>
@@ -1237,6 +1249,18 @@ export default function IncentivesManagement() {
                           </SelectContent>
                         </Select>
                       </div>
+                      <div className="grid gap-1">
+                        <Label className="text-xs">الشفت <span className="text-red-500">*</span></Label>
+                        <Select value={editChallenge.shiftType || ""} onValueChange={(v) => setEditChallenge({...editChallenge, shiftType: v})}>
+                          <SelectTrigger className="h-9" data-testid="select-edit-challenge-shift">
+                            <SelectValue placeholder="اختر الشفت" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="morning">صباحي</SelectItem>
+                            <SelectItem value="evening">مسائي</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                       <div className="grid grid-cols-3 gap-3">
                         <div>
                           <Label className="font-bold text-sm">الهدف</Label>
@@ -1291,6 +1315,7 @@ export default function IncentivesManagement() {
                             targetValue: editChallenge.targetValue,
                             basePoints: editChallenge.basePoints,
                             bonusPointsPerUnit: editChallenge.bonusPointsPerUnit || 0,
+                            shiftType: editChallenge.shiftType || null,
                             validFrom: editChallenge.validFrom,
                             validTo: editChallenge.validTo || null,
                             isActive: editChallenge.isActive,
