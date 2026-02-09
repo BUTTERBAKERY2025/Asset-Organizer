@@ -467,6 +467,31 @@ export default function CashierShiftPerformance() {
     },
   });
 
+  const { data: myIncentiveSummary, isLoading: loadingMyIncentive } = useQuery<{
+    cashierId: string;
+    pointValue: number;
+    challenges: Array<{ id: number; name: string; challengeType: string; targetValue: number; basePoints: number; shiftType: string; validFrom: string; validTo: string | null }>;
+    dailyDetails: Array<{
+      date: string;
+      challenges: Array<{ name: string; type: string; targetValue: number; actualValue: number; achievementPercent: number; achieved: boolean; basePoints: number; shiftType: string | null }>;
+      ledgerEntries: Array<{ pointsType: string; sourceName: string | null; pointsEarned: number; amountEarned: number; status: string; shiftType: string | null }>;
+      totalPoints: number;
+      totalAmount: number;
+    }>;
+    totals: { totalPoints: number; totalAmount: number; earnedAmount: number; approvedAmount: number; paidAmount: number };
+  }>({
+    queryKey: ["/api/smart-incentives/my-incentive-summary", stmtPeriodFrom, stmtPeriodTo],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("dateFrom", stmtPeriodFrom);
+      params.set("dateTo", stmtPeriodTo);
+      const res = await fetch(`/api/smart-incentives/my-incentive-summary?${params}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    enabled: !canViewAllCashiers,
+  });
+
   const createStatementMutation = useMutation({
     mutationFn: async (data: any) => {
       const res = await apiRequest("POST", "/api/smart-incentives/incentive-statements", data);
@@ -1978,6 +2003,200 @@ export default function CashierShiftPerformance() {
           </TabsContent>
 
           <TabsContent value="incentive-statements" className="space-y-4">
+            {!canViewAllCashiers ? (
+              <div className="space-y-4">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <FileText className="h-5 w-5 text-amber-600" />
+                      كشف حساب حوافزي
+                    </CardTitle>
+                    <CardDescription className="text-xs mt-1">
+                      ملخص التحديات والنقاط المحققة خلال الفترة المحددة
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-wrap items-end gap-3 mb-4 p-3 bg-gradient-to-l from-amber-50 to-gray-50 rounded-lg border border-amber-100">
+                      <div>
+                        <Label className="text-xs font-bold">من تاريخ</Label>
+                        <Input type="date" value={stmtPeriodFrom} onChange={(e) => setStmtPeriodFrom(e.target.value)} className="h-9 text-xs" data-testid="input-my-stmt-from" />
+                      </div>
+                      <div>
+                        <Label className="text-xs font-bold">إلى تاريخ</Label>
+                        <Input type="date" value={stmtPeriodTo} onChange={(e) => setStmtPeriodTo(e.target.value)} className="h-9 text-xs" data-testid="input-my-stmt-to" />
+                      </div>
+                    </div>
+
+                    {loadingMyIncentive ? (
+                      <div className="text-center py-8 text-muted-foreground">جاري التحميل...</div>
+                    ) : !myIncentiveSummary ? (
+                      <div className="text-center py-8 text-muted-foreground">لا توجد بيانات</div>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-center">
+                            <p className="text-[10px] text-emerald-600 font-medium">إجمالي النقاط</p>
+                            <p className="text-xl font-bold text-emerald-700" data-testid="text-total-points">{myIncentiveSummary.totals.totalPoints}</p>
+                            <p className="text-[10px] text-emerald-500">نقطة</p>
+                          </div>
+                          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-center">
+                            <p className="text-[10px] text-amber-600 font-medium">القيمة بالريال</p>
+                            <p className="text-xl font-bold text-amber-700" data-testid="text-total-amount">{myIncentiveSummary.totals.totalAmount.toFixed(2)}</p>
+                            <p className="text-[10px] text-amber-500">ر.س</p>
+                          </div>
+                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
+                            <p className="text-[10px] text-blue-600 font-medium">معتمدة</p>
+                            <p className="text-xl font-bold text-blue-700" data-testid="text-approved-amount">{myIncentiveSummary.totals.approvedAmount.toFixed(2)}</p>
+                            <p className="text-[10px] text-blue-500">ر.س</p>
+                          </div>
+                          <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-center">
+                            <p className="text-[10px] text-purple-600 font-medium">مصروفة</p>
+                            <p className="text-xl font-bold text-purple-700" data-testid="text-paid-amount">{myIncentiveSummary.totals.paidAmount.toFixed(2)}</p>
+                            <p className="text-[10px] text-purple-500">ر.س</p>
+                          </div>
+                        </div>
+
+                        {myIncentiveSummary.challenges.length > 0 && (
+                          <Card className="border-amber-200">
+                            <CardHeader className="pb-2">
+                              <CardTitle className="text-sm flex items-center gap-2">
+                                <Target className="h-4 w-4 text-amber-600" />
+                                التحديات المعينة لك حالياً
+                              </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {myIncentiveSummary.challenges.map(ch => (
+                                  <div key={ch.id} className="flex items-center justify-between p-2 bg-amber-50/50 rounded-md border border-amber-100" data-testid={`my-challenge-${ch.id}`}>
+                                    <div>
+                                      <span className="text-xs font-medium">{ch.name}</span>
+                                      <div className="flex items-center gap-2 mt-0.5">
+                                        <Badge variant="outline" className="text-[9px] h-4 px-1">
+                                          {ch.challengeType === 'avg_ticket' ? 'متوسط فاتورة' : ch.challengeType === 'customer_count' ? 'عدد العملاء' : 'مبيعات'}
+                                        </Badge>
+                                        <span className="text-[10px] text-gray-500">
+                                          الهدف: {ch.targetValue} {ch.challengeType === 'customer_count' ? 'عميل' : 'ر.س'}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <div className="text-left">
+                                      <Badge className="bg-amber-500 text-white text-[10px]">{ch.basePoints} نقطة</Badge>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )}
+
+                        <Card>
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-sm flex items-center gap-2">
+                              <CalendarDays className="h-4 w-4 text-amber-600" />
+                              سجل الأداء اليومي
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            {myIncentiveSummary.dailyDetails.length === 0 ? (
+                              <div className="text-center py-6 text-muted-foreground text-sm">
+                                لا توجد بيانات في الفترة المحددة
+                              </div>
+                            ) : (
+                              <div className="space-y-3">
+                                {myIncentiveSummary.dailyDetails.map(day => (
+                                  <div key={day.date} className="border rounded-lg overflow-hidden" data-testid={`day-summary-${day.date}`}>
+                                    <div className="flex items-center justify-between p-2.5 bg-gradient-to-l from-gray-50 to-white">
+                                      <div className="flex items-center gap-2">
+                                        <CalendarDays className="h-3.5 w-3.5 text-gray-500" />
+                                        <span className="text-sm font-medium">{new Date(day.date + 'T00:00:00').toLocaleDateString('ar-SA', { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' })}</span>
+                                      </div>
+                                      {day.totalPoints > 0 && (
+                                        <div className="flex items-center gap-2">
+                                          <Badge className="bg-emerald-500 text-white text-[10px]">
+                                            <Star className="h-2.5 w-2.5 ml-0.5" />{day.totalPoints} نقطة
+                                          </Badge>
+                                          <Badge className="bg-amber-500 text-white text-[10px]">
+                                            {day.totalAmount.toFixed(2)} ر.س
+                                          </Badge>
+                                        </div>
+                                      )}
+                                    </div>
+                                    {day.challenges.length > 0 && (
+                                      <div className="px-3 py-2 bg-gray-50/50 border-t">
+                                        <p className="text-[10px] text-gray-500 font-medium mb-1.5">التحديات والإنجاز</p>
+                                        <div className="space-y-1.5">
+                                          {day.challenges.map((ch, idx) => (
+                                            <div key={idx} className="flex items-center justify-between text-xs">
+                                              <div className="flex items-center gap-2">
+                                                <span className={`w-2 h-2 rounded-full ${ch.achieved ? 'bg-green-500' : 'bg-red-400'}`}></span>
+                                                <span className="text-gray-700">{ch.name}</span>
+                                                <Badge variant="outline" className="text-[9px] h-4 px-1">
+                                                  {ch.type === 'avg_ticket' ? 'متوسط فاتورة' : ch.type === 'customer_count' ? 'عدد العملاء' : 'مبيعات'}
+                                                </Badge>
+                                              </div>
+                                              <div className="flex items-center gap-2">
+                                                <span className="text-[10px] text-gray-500">
+                                                  {ch.actualValue.toFixed(ch.type === 'customer_count' ? 0 : 2)} / {ch.targetValue.toFixed(ch.type === 'customer_count' ? 0 : 2)}
+                                                </span>
+                                                <span className={`font-bold text-xs min-w-[40px] text-left ${ch.achievementPercent >= 100 ? 'text-green-600' : ch.achievementPercent >= 75 ? 'text-amber-600' : 'text-red-500'}`}>
+                                                  {ch.achievementPercent}%
+                                                </span>
+                                                {ch.achieved ? (
+                                                  <Badge className="bg-green-100 text-green-700 border-green-200 text-[9px] h-4 px-1">{ch.basePoints} نقطة</Badge>
+                                                ) : (
+                                                  <Badge variant="outline" className="text-gray-400 text-[9px] h-4 px-1">لم يتحقق</Badge>
+                                                )}
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {day.ledgerEntries.length > 0 && (
+                                      <div className="divide-y border-t">
+                                        {day.ledgerEntries.map((entry, idx) => (
+                                          <div key={idx} className="flex items-center justify-between px-3 py-1.5 text-xs hover:bg-gray-50/50">
+                                            <div className="flex items-center gap-2">
+                                              <span className={`w-1.5 h-1.5 rounded-full ${entry.status === 'paid' ? 'bg-green-500' : entry.status === 'approved' ? 'bg-blue-500' : 'bg-amber-500'}`}></span>
+                                              <span className="text-gray-700">{entry.sourceName || (() => {
+                                                switch(entry.pointsType) {
+                                                  case 'challenge_avg_ticket': return 'تحدي متوسط الفاتورة';
+                                                  case 'challenge_customers': return 'تحدي عدد العملاء';
+                                                  case 'challenge_sales': return 'تحدي المبيعات';
+                                                  case 'product_commission': return 'عمولة منتج';
+                                                  case 'branch_bonus': return 'مكافأة فرع';
+                                                  default: return entry.pointsType;
+                                                }
+                                              })()}</span>
+                                              {entry.shiftType && (
+                                                <Badge variant="outline" className="text-[9px] h-3.5 px-1">
+                                                  {entry.shiftType === 'morning' ? 'صباحي' : 'مسائي'}
+                                                </Badge>
+                                              )}
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                              <span className="text-emerald-600 font-medium">+{entry.pointsEarned}</span>
+                                              <span className="text-amber-600 font-medium w-16 text-left">{entry.amountEarned.toFixed(2)} ر.س</span>
+                                              <Badge variant="outline" className={`text-[9px] h-4 px-1 ${entry.status === 'paid' ? 'bg-green-50 text-green-700 border-green-200' : entry.status === 'approved' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                                                {entry.status === 'paid' ? 'مصروف' : entry.status === 'approved' ? 'معتمد' : 'مكتسب'}
+                                              </Badge>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            ) : (
             <Card>
               <CardHeader className="pb-3">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -2282,6 +2501,7 @@ export default function CashierShiftPerformance() {
                 ) : null}
               </CardContent>
             </Card>
+            )}
           </TabsContent>
         </Tabs>
 

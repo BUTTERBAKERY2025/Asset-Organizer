@@ -7795,6 +7795,274 @@ export async function registerRoutes(
   });
 
   // Cashier Incentive Statements - كشف حساب حوافز الكاشير
+
+// My Incentive Summary - ملخص حوافز الكاشير الخاص (متاح لجميع المستخدمين المسجلين)
+  app.get("/api/smart-incentives/my-incentive-summary", isAuthenticated, async (req, res) => {
+    try {
+      const user = getCurrentUser(req);
+      const { dateFrom, dateTo } = req.query as any;
+      const effectiveDateFrom = dateFrom || new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0];
+      const effectiveDateTo = dateTo || new Date().toISOString().split('T')[0];
+      const userBranch = user.branchId;
+      
+      // Get cashier's points ledger - filtered by branch
+      let ledger = await storage.getCashierPointsLedger(user.id, effectiveDateFrom, effectiveDateTo);
+      if (userBranch) {
+        ledger = ledger.filter((e: any) => e.branchId === userBranch);
+      }
+      
+      // Get active challenges assigned to this cashier in their branch
+      const allChallenges = await storage.getActiveDailyChallenges(userBranch || undefined);
+      const myChallenges = allChallenges.filter(c => c.cashierId === user.id);
+      
+      // Get point settings for value conversion
+      const settings = await storage.getPointSettings();
+      const pointValue = settings?.pointValue || 0.5;
+      
+      // Get cashier's sales journals for the period to compute achievement %
+      const journals = await storage.getCashierSalesJournals({
+        branchId: userBranch || undefined,
+        startDate: effectiveDateFrom,
+        endDate: effectiveDateTo,
+      });
+      const myJournals = journals.filter(j => j.cashierId === user.id);
+      
+      // Build daily data: combine journal data with ledger and challenges
+      // Include all dates in range where challenges are active (even without journals)
+      const allDates = new Set<string>();
+      myJournals.forEach(j => allDates.add(j.journalDate));
+      ledger.forEach(e => allDates.add(e.transactionDate));
+      if (myChallenges.length > 0) {
+        const today = new Date().toISOString().split('T')[0];
+        const rangeEnd = effectiveDateTo < today ? effectiveDateTo : today;
+        let cursor = new Date(effectiveDateFrom + 'T00:00:00');
+        const endDate = new Date(rangeEnd + 'T00:00:00');
+        while (cursor <= endDate) {
+          const dateStr = cursor.toISOString().split('T')[0];
+          const hasActiveChallenge = myChallenges.some(c => {
+            if (c.validFrom > dateStr) return false;
+            if (c.validTo && c.validTo < dateStr) return false;
+            return true;
+          });
+          if (hasActiveChallenge) allDates.add(dateStr);
+          cursor.setDate(cursor.getDate() + 1);
+        }
+      }
+      
+      // For each date, compute challenge assignments and achievement
+      const dailyDetails: Array<{
+        date: string;
+        challenges: Array<{
+          name: string;
+          type: string;
+          targetValue: number;
+          actualValue: number;
+          achievementPercent: number;
+          achieved: boolean;
+          basePoints: number;
+          shiftType: string | null;
+        }>;
+        ledgerEntries: Array<{
+          pointsType: string;
+          sourceName: string | null;
+          pointsEarned: number;
+          amountEarned: number;
+          status: string;
+          shiftType: string | null;
+        }>;
+        totalPoints: number;
+        totalAmount: number;
+      }> = [];
+      
+      const sortedDates = Array.from(allDates).sort((a, b) => b.localeCompare(a));
+      
+      for (const date of sortedDates) {
+        const dayJournals = myJournals.filter(j => j.journalDate === date);
+        const dayLedger = ledger.filter(e => e.transactionDate === date);
+        
+        // Get challenges active on this date
+        const dayChallenges = myChallenges.filter(c => {
+          if (c.validFrom > date) return false;
+          if (c.validTo && c.validTo < date) return false;
+          return true;
+        });
+        
+        const challengeDetails = dayChallenges.map(ch => {
+          let actualValue = 0;
+          const targetValue = Number(ch.targetValue);
+          
+          // Find the best matching journal for this challenge
+          for (const j of dayJournals) {
+            if (ch.shiftType && ch.shiftType !== 'null' && ch.shiftType !== j.shiftType) continue;
+            let val = 0;
+            switch (ch.challengeType) {
+              case 'avg_ticket':
+                val = Number(j.averageTicket) || 0;
+                if (val === 0 && Number(j.totalSales) > 0) {
+                  const txCount = Number(j.transactionCount) || 0;
+                  const custCount = Number(j.customerCount) || 0;
+                  const divisor = txCount > 0 ? txCount : (custCount > 0 ? custCount : 0);
+                  if (divisor > 0) val = Math.round((Number(j.totalSales) / divisor) * 100) / 100;
+                }
+                break;
+              case 'customer_count':
+                val = Number(j.customerCount) || 0;
+                break;
+              case 'shift_sales':
+                val = Number(j.totalSales) || 0;
+                break;
+            }
+            if (val > actualValue) actualValue = val;
+          }
+          
+          const achievementPercent = targetValue > 0 ? Math.min(Math.round((actualValue / targetValue) * 100), 999) : 0;
+          const achieved = actualValue >= targetValue;
+          
+          return {
+            name: ch.name,
+            type: ch.challengeType,
+            targetValue,
+            actualValue,
+            achievementPercent,
+            achieved,
+            basePoints: ch.basePoints,
+            shiftType: ch.shiftType,
+          };
+        });
+        
+        const ledgerEntries = dayLedger.map(e => ({
+          pointsType: e.pointsType,
+          sourceName: e.sourceName,
+          pointsEarned: e.pointsEarned,
+          amountEarned: e.amountEarned,
+          status: e.status,
+          shiftType: e.shiftType,
+        }));
+        
+        const totalPoints = dayLedger.reduce((sum, e) => sum + e.pointsEarned, 0);
+        const totalAmount = dayLedger.reduce((sum, e) => sum + e.amountEarned, 0);
+        
+        // Only include days that have challenges or ledger entries
+        if (challengeDetails.length > 0 || ledgerEntries.length > 0) {
+          dailyDetails.push({ date, challenges: challengeDetails, ledgerEntries, totalPoints, totalAmount });
+        }
+      }
+      
+      // Calculate totals
+      const totalPoints = ledger.reduce((sum, e) => sum + e.pointsEarned, 0);
+      const totalAmount = ledger.reduce((sum, e) => sum + e.amountEarned, 0);
+      const earnedAmount = ledger.filter(e => e.status === 'earned').reduce((sum, e) => sum + e.amountEarned, 0);
+      const approvedAmount = ledger.filter(e => e.status === 'approved').reduce((sum, e) => sum + e.amountEarned, 0);
+      const paidAmount = ledger.filter(e => e.status === 'paid').reduce((sum, e) => sum + e.amountEarned, 0);
+      
+      res.json({
+        cashierId: user.id,
+        pointValue,
+        challenges: myChallenges.map(c => ({
+          id: c.id,
+          name: c.name,
+          challengeType: c.challengeType,
+          targetValue: c.targetValue,
+          basePoints: c.basePoints,
+          shiftType: c.shiftType,
+          validFrom: c.validFrom,
+          validTo: c.validTo,
+        })),
+        dailyDetails,
+        totals: { totalPoints, totalAmount, earnedAmount, approvedAmount, paidAmount },
+      });
+    } catch (error) {
+      console.error("Error fetching my incentive summary:", error);
+      res.status(500).json({ error: "فشل في جلب ملخص الحوافز" });
+    }
+  });
+
+  // Cashier Incentive Statements - كشف حساب حوافز الكاشير
+
+  // My Incentive Summary - ملخص حوافز الكاشير الخاص (متاح لجميع المستخدمين المسجلين)
+  app.get("/api/smart-incentives/my-incentive-summary", isAuthenticated, async (req, res) => {
+    try {
+      const user = getCurrentUser(req);
+      const { dateFrom, dateTo } = req.query as any;
+      const effectiveDateFrom = dateFrom || new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0];
+      const effectiveDateTo = dateTo || new Date().toISOString().split('T')[0];
+      
+      // Get cashier's points ledger
+      const ledger = await storage.getCashierPointsLedger(user.id, effectiveDateFrom, effectiveDateTo);
+      
+      // Get active challenges assigned to this cashier
+      const allChallenges = await storage.getActiveDailyChallenges(user.branchId || undefined);
+      const myChallenges = allChallenges.filter(c => c.cashierId === user.id);
+      
+      // Get point settings for value conversion
+      const settings = await storage.getPointSettings();
+      const pointValue = settings?.pointValue || 0.5;
+      
+      // Build daily summary from points ledger
+      const dailySummary: Record<string, { 
+        date: string; 
+        entries: typeof ledger;
+        totalPoints: number;
+        totalAmount: number;
+      }> = {};
+      
+      for (const entry of ledger) {
+        if (!dailySummary[entry.transactionDate]) {
+          dailySummary[entry.transactionDate] = {
+            date: entry.transactionDate,
+            entries: [],
+            totalPoints: 0,
+            totalAmount: 0,
+          };
+        }
+        dailySummary[entry.transactionDate].entries.push(entry);
+        dailySummary[entry.transactionDate].totalPoints += entry.pointsEarned;
+        dailySummary[entry.transactionDate].totalAmount += entry.amountEarned;
+      }
+      
+      // Calculate totals
+      const totalPoints = ledger.reduce((sum, e) => sum + e.pointsEarned, 0);
+      const totalAmount = ledger.reduce((sum, e) => sum + e.amountEarned, 0);
+      const earnedPoints = ledger.filter(e => e.status === 'earned').reduce((sum, e) => sum + e.pointsEarned, 0);
+      const approvedPoints = ledger.filter(e => e.status === 'approved').reduce((sum, e) => sum + e.pointsEarned, 0);
+      const paidPoints = ledger.filter(e => e.status === 'paid').reduce((sum, e) => sum + e.pointsEarned, 0);
+      const earnedAmount = ledger.filter(e => e.status === 'earned').reduce((sum, e) => sum + e.amountEarned, 0);
+      const approvedAmount = ledger.filter(e => e.status === 'approved').reduce((sum, e) => sum + e.amountEarned, 0);
+      const paidAmount = ledger.filter(e => e.status === 'paid').reduce((sum, e) => sum + e.amountEarned, 0);
+      
+      res.json({
+        cashierId: user.id,
+        dateFrom: effectiveDateFrom,
+        dateTo: effectiveDateTo,
+        pointValue,
+        challenges: myChallenges.map(c => ({
+          id: c.id,
+          name: c.name,
+          challengeType: c.challengeType,
+          targetValue: c.targetValue,
+          basePoints: c.basePoints,
+          bonusPointsPerUnit: c.bonusPointsPerUnit,
+          shiftType: c.shiftType,
+          validFrom: c.validFrom,
+          validTo: c.validTo,
+        })),
+        dailySummary: Object.values(dailySummary).sort((a, b) => b.date.localeCompare(a.date)),
+        totals: {
+          totalPoints,
+          totalAmount,
+          earnedPoints,
+          earnedAmount,
+          approvedPoints,
+          approvedAmount,
+          paidPoints,
+          paidAmount,
+        }
+      });
+    } catch (error) {
+      console.error("Error fetching my incentive summary:", error);
+      res.status(500).json({ error: "فشل في جلب ملخص الحوافز" });
+    }
+  });
   app.get("/api/smart-incentives/incentive-statements", isAuthenticated, async (req, res) => {
     try {
       const user = getCurrentUser(req);
