@@ -7,7 +7,7 @@ import * as NotificationService from "./notification-service";
 import type { AuthenticatedRequest } from "./types/express";
 import { eq, and, desc, inArray, gte, lte, sql, or, isNull, type SQL } from "drizzle-orm";
 import type { User } from "@shared/schema";
-import { shifts as shiftsTable } from "@shared/schema";
+import { shifts as shiftsTable, cashierPointsLedger } from "@shared/schema";
 
 // Helper to safely get current user from authenticated request
 function getCurrentUser(req: Request): User {
@@ -7016,6 +7016,12 @@ export async function registerRoutes(
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const user = getCurrentUser(req);
+      const challenge = await storage.getDailyChallenge(id);
+      if (!challenge) return res.status(404).json({ error: "التحدي غير موجود" });
+      if (user.role !== 'admin' && challenge.branchId && !(await canAccessBranch(req, challenge.branchId))) {
+        return res.status(403).json({ error: "غير مصرح بحذف تحدي لفرع آخر" });
+      }
       await storage.deleteDailyChallenge(id);
       res.json({ success: true });
     } catch (error) {
@@ -7255,6 +7261,12 @@ export async function registerRoutes(
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const user = getCurrentUser(req);
+      const commission = await storage.getProductCommission(id);
+      if (!commission) return res.status(404).json({ error: "العمولة غير موجودة" });
+      if (user.role !== 'admin' && commission.branchId && !(await canAccessBranch(req, commission.branchId))) {
+        return res.status(403).json({ error: "غير مصرح بحذف عمولة لفرع آخر" });
+      }
       await storage.deleteProductCommission(id);
       res.json({ success: true });
     } catch (error) {
@@ -7727,7 +7739,13 @@ export async function registerRoutes(
       if (!status || !['earned', 'redeemed', 'cancelled', 'expired'].includes(status)) {
         return res.status(400).json({ error: "حالة غير صالحة" });
       }
-      const userId = (req as any).user?.id;
+      const user = getCurrentUser(req);
+      const userId = user.id;
+      const [existingEntry] = await db.select({ branchId: cashierPointsLedger.branchId }).from(cashierPointsLedger).where(eq(cashierPointsLedger.id, id)).limit(1);
+      if (!existingEntry) return res.status(404).json({ error: "القيد غير موجود" });
+      if (user.role !== 'admin' && existingEntry.branchId && !(await canAccessBranch(req, existingEntry.branchId))) {
+        return res.status(403).json({ error: "غير مصرح بتعديل قيد لفرع آخر" });
+      }
       const entry = await storage.updatePointsEntryStatus(id, status, userId);
       if (!entry) return res.status(404).json({ error: "القيد غير موجود" });
       res.json(entry);
@@ -7865,7 +7883,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/smart-incentives/incentive-statements/:id/status", isAuthenticated, requireAnyPermission("smart_incentives_statements", ["view", "create", "submit", "approve"]), async (req, res) => {
+  app.patch("/api/smart-incentives/incentive-statements/:id/status", isAuthenticated, requireAnyPermission("smart_incentives_statements", ["create", "submit", "approve"]), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
