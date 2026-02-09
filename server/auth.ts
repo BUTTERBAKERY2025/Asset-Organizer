@@ -488,10 +488,10 @@ export const requirePermission = (module: string, action: string): RequestHandle
     // SECURITY: Attendance clerk has ONLY attendance_check permissions
     if (user.role === "attendance_clerk") {
       if (module === "attendance_check" && ["view", "create", "edit"].includes(action)) {
-        console.log(`[Auth] ALLOWED: Attendance clerk ${user.username} accessing ${module}:${action}`);
+        
         return next();
       }
-      console.log(`[Auth] DENIED: Attendance clerk ${user.username} attempted ${module}:${action}`);
+      
       logSecurityAlert({
         alertType: 'permission_denied',
         severity: 'high',
@@ -522,10 +522,12 @@ export const requirePermission = (module: string, action: string): RequestHandle
       modulePerm = permissions.find((p: any) => p.module === 'attendance');
     }
     
-    console.log(`[Auth] Checking permission for ${user.username}: module=${module}, action=${action}, found=`, modulePerm);
+    // Backward compatibility: smart_incentives_* modules also accept parent "incentives" permission
+    if (!modulePerm && module.startsWith('smart_incentives_')) {
+      modulePerm = permissions.find((p: any) => p.module === 'incentives');
+    }
     
     if (!modulePerm) {
-      console.log(`[Auth] DENIED: No permission found for module ${module}`);
       // Log security alert
       logSecurityAlert({
         alertType: 'permission_denied',
@@ -550,14 +552,7 @@ export const requirePermission = (module: string, action: string): RequestHandle
       actionsArray = rawActions.replace(/[{}]/g, '').split(',').map((a: string) => a.trim());
     }
     
-    console.log(`[Auth] Actions for ${module}:`, actionsArray, `checking for: "${action}"`);
-    
-    // Debug: Check exact values
-    const foundAction = actionsArray.find((a: string) => a === action);
-    console.log(`[Auth] Found action "${action}" in array:`, foundAction !== undefined, `exact match check:`, actionsArray.map((a: string) => `"${a}"`).join(', '));
-    
     if (!actionsArray.includes(action)) {
-      console.log(`[Auth] DENIED: Action "${action}" not in actions`, actionsArray);
       // Log security alert
       logSecurityAlert({
         alertType: 'permission_denied',
@@ -573,7 +568,7 @@ export const requirePermission = (module: string, action: string): RequestHandle
       return res.status(403).json({ message: `غير مسموح - ليس لديك صلاحية ${action} على هذه الوحدة` });
     }
     
-    console.log(`[Auth] ALLOWED: Permission granted for ${user.username} on ${module}:${action}`);
+    
     next();
   };
 };
@@ -620,13 +615,18 @@ export const requireAnyPermission = (module: string, actions: string[]): Request
     
     // Check granular permissions from database
     const permissions = await storage.getUserPermissions(user.id);
-    const modulePerm = permissions.find((p: any) => p.module === module);
+    let modulePerm = permissions.find((p: any) => p.module === module);
+    
+    // Backward compatibility: smart_incentives_* modules also accept parent "incentives" permission
+    if (!modulePerm && module.startsWith('smart_incentives_')) {
+      modulePerm = permissions.find((p: any) => p.module === 'incentives');
+    }
     
     if (!modulePerm) {
       return res.status(403).json({ message: "غير مسموح - ليس لديك صلاحية على هذه الوحدة" });
     }
     
-    const hasAnyAction = actions.some(action => modulePerm.actions.includes(action));
+    const hasAnyAction = actions.some(action => modulePerm!.actions.includes(action));
     if (!hasAnyAction) {
       return res.status(403).json({ message: "غير مسموح - صلاحيات غير كافية" });
     }

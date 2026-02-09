@@ -46,6 +46,9 @@ export function usePermissions() {
       if (!perm && module === "attendance_check") {
         perm = permissions.find(p => p.module === "attendance");
       }
+      if (!perm && module.startsWith("smart_incentives_")) {
+        perm = permissions.find(p => p.module === "incentives");
+      }
       if (!perm) return false;
       return perm.actions.includes("view");
     }
@@ -56,17 +59,15 @@ export function usePermissions() {
     if (!perm && module === "attendance_check") {
       perm = permissions.find(p => p.module === "attendance");
     }
+    // Backward compatibility: smart_incentives_* also accepts parent "incentives" permission
+    if (!perm && module.startsWith("smart_incentives_")) {
+      perm = permissions.find(p => p.module === "incentives");
+    }
     if (!perm) return false;
     return perm.actions.includes(action);
   };
 
-  const canView = (module: SystemModule): boolean => {
-    const result = hasPermission(module, "view");
-    if (module === "documents" || module === "branch_closure") {
-      console.log(`[Permissions] canView ${module}:`, result, "isAdmin:", isAdmin, "permissions:", permissions.find(p => p.module === module));
-    }
-    return result;
-  };
+  const canView = (module: SystemModule): boolean => hasPermission(module, "view");
   const canCreate = (module: SystemModule): boolean => hasPermission(module, "create");
   const canEdit = (module: SystemModule): boolean => hasPermission(module, "edit");
   const canDelete = (module: SystemModule): boolean => hasPermission(module, "delete");
