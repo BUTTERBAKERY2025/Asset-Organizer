@@ -145,16 +145,19 @@ export default function CashierShiftPerformance() {
     }
   }, [userBranchId, canSelectBranch]);
 
-  // Reset cashier filters when branch changes
+  // Reset cashier filters when branch changes (only for admins)
   useEffect(() => {
-    setTargetCashierId("all");
+    if (canViewAllCashiers) {
+      setTargetCashierId("all");
+    }
     setReportCashierId("all");
-  }, [selectedBranch]);
+  }, [selectedBranch, canViewAllCashiers]);
 
-  // For non-admin cashiers, always lock stmtCashierId to their own ID
+  // For non-admin cashiers, always lock to their own ID
   useEffect(() => {
     if (user && !canViewAllCashiers) {
       setStmtCashierId(user.id);
+      setTargetCashierId(user.id);
     }
   }, [user, canViewAllCashiers]);
 
@@ -1133,8 +1136,8 @@ export default function CashierShiftPerformance() {
               </div>
             )}
 
-            {/* Incentive Points Summary Section */}
-            {topCashierPoints.length > 0 && (
+            {/* Incentive Points Summary Section - only for admins/managers */}
+            {canViewAllCashiers && topCashierPoints.length > 0 && (
               <Card className="border-emerald-200 mb-4" data-testid="incentive-points-summary">
                 <CardHeader className="bg-gradient-to-l from-emerald-50 to-transparent pb-3">
                   <CardTitle className="flex items-center gap-2 text-emerald-700">
