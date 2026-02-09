@@ -12471,7 +12471,7 @@ export class DatabaseStorage implements IStorage {
     if (!journal) throw new Error("اليومية غير موجودة");
 
     const settings = await this.getPointSettings();
-    if (!settings || !settings.isActive) {
+    if (!settings) {
       return { challengePoints: [], totalPoints: 0, totalAmount: 0, diagnostics: [] };
     }
 

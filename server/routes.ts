@@ -4134,6 +4134,17 @@ export async function registerRoutes(
       
       // Submit the journal
       const journal = await storage.submitCashierJournal(id);
+      
+      // Auto-calculate incentive points when journal is submitted
+      try {
+        const incentiveResult = await storage.calculateJournalIncentives(id);
+        if (incentiveResult.totalPoints > 0) {
+          console.log(`[Incentives] Auto-calculated ${incentiveResult.totalPoints} points for submitted journal #${id}`);
+        }
+      } catch (incentiveErr: any) {
+        console.warn(`[Incentives] Auto-calculation skipped for submitted journal #${id}: ${incentiveErr.message}`);
+      }
+
       const signatures = await storage.getCashierSignatures(id);
       
       res.json({ ...journal, signatures });
@@ -4186,6 +4197,16 @@ export async function registerRoutes(
       const journal = await storage.postCashierJournal(id);
       const signatures = await storage.getCashierSignatures(id);
       
+      
+      // Auto-calculate incentive points when journal is posted
+      try {
+        const incentiveResult = await storage.calculateJournalIncentives(id);
+        if (incentiveResult.totalPoints > 0) {
+          console.log(`[Incentives] Auto-calculated ${incentiveResult.totalPoints} points for posted journal #${id}`);
+        }
+      } catch (incentiveErr: any) {
+        console.warn(`[Incentives] Auto-calculation skipped for posted journal #${id}: ${incentiveErr.message}`);
+      }
       res.json({ ...journal, signatures });
     } catch (error) {
       console.error("Error posting cashier journal:", error);
