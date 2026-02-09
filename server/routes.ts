@@ -6999,12 +6999,16 @@ export async function registerRoutes(
       if (body.basePoints !== undefined && (isNaN(Number(body.basePoints)) || Number(body.basePoints) < 0)) {
         return res.status(400).json({ error: "النقاط الأساسية يجب أن تكون رقماً موجباً" });
       }
+      const existingChallenge = await storage.getDailyChallenge(id);
+      if (!existingChallenge) return res.status(404).json({ error: "التحدي غير موجود" });
+      if (user.role !== 'admin' && existingChallenge.branchId && existingChallenge.branchId !== user.branchId) {
+        return res.status(403).json({ error: "غير مصرح بتعديل تحدي لفرع آخر" });
+      }
       if (user.role !== 'admin' && body.branchId && !(await canAccessBranch(req, body.branchId))) {
         return res.status(403).json({ error: "غير مصرح بتعديل تحدي لهذا الفرع" });
       }
       if (body.shiftType === 'null' || body.shiftType === '') body.shiftType = null;
       const challenge = await storage.updateDailyChallenge(id, body);
-      if (!challenge) return res.status(404).json({ error: "التحدي غير موجود" });
       res.json(challenge);
     } catch (error) {
       console.error("Error updating challenge:", error);
@@ -7031,7 +7035,7 @@ export async function registerRoutes(
   });
 
   // Daily Challenges as Targets - تحويل التحديات اليومية إلى أهداف
-  app.get("/api/smart-incentives/challenges-as-targets", isAuthenticated, async (req, res) => {
+  app.get("/api/smart-incentives/challenges-as-targets", isAuthenticated, requirePermission("smart_incentives_challenges", "view"), async (req, res) => {
     try {
       const user = getCurrentUser(req);
       let { branchId, date, shiftType } = req.query;
@@ -7245,11 +7249,15 @@ export async function registerRoutes(
       if (req.body.productName && String(req.body.productName).length > 200) {
         return res.status(400).json({ error: "اسم المنتج يجب ألا يتجاوز 200 حرف" });
       }
+      const existingCommission = await storage.getProductCommission(id);
+      if (!existingCommission) return res.status(404).json({ error: "عمولة الصنف غير موجودة" });
+      if (user.role !== 'admin' && existingCommission.branchId && existingCommission.branchId !== user.branchId) {
+        return res.status(403).json({ error: "غير مصرح بتعديل عمولة لفرع آخر" });
+      }
       if (user.role !== 'admin' && req.body.branchId && !(await canAccessBranch(req, req.body.branchId))) {
         return res.status(403).json({ error: "غير مصرح بتعديل عمولة لهذا الفرع" });
       }
       const commission = await storage.updateProductCommission(id, req.body);
-      if (!commission) return res.status(404).json({ error: "عمولة الصنف غير موجودة" });
       res.json(commission);
     } catch (error) {
       console.error("Error updating product commission:", error);
@@ -7331,11 +7339,15 @@ export async function registerRoutes(
       if (req.body.notes && String(req.body.notes).length > 500) {
         return res.status(400).json({ error: "الملاحظات يجب ألا تتجاوز 500 حرف" });
       }
+      const existingBonus = (await storage.getAllBranchBonuses()).find(b => b.id === id);
+      if (!existingBonus) return res.status(404).json({ error: "عمولة الفرع غير موجودة" });
+      if (user.role !== 'admin' && existingBonus.branchId !== user.branchId) {
+        return res.status(403).json({ error: "غير مصرح بتعديل مكافأة لفرع آخر" });
+      }
       if (user.role !== 'admin' && req.body.branchId && !(await canAccessBranch(req, req.body.branchId))) {
         return res.status(403).json({ error: "غير مصرح بتعديل مكافأة لهذا الفرع" });
       }
       const bonus = await storage.updateBranchBonus(id, req.body);
-      if (!bonus) return res.status(404).json({ error: "عمولة الفرع غير موجودة" });
       res.json(bonus);
     } catch (error) {
       console.error("Error updating branch bonus:", error);
@@ -7516,6 +7528,10 @@ export async function registerRoutes(
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
       const bonus = (await storage.getAllBranchBonuses()).find(b => b.id === id);
       if (!bonus) return res.status(404).json({ error: "عمولة الفرع غير موجودة" });
+      const resetUser = getCurrentUser(req);
+      if (resetUser.role !== 'admin' && bonus.branchId !== resetUser.branchId) {
+        return res.status(403).json({ error: "غير مصرح بإعادة تعيين احتساب فرع آخر" });
+      }
 
       const ledger = await storage.getBranchPointsLedger(bonus.branchId);
       const bonusEntries = ledger.filter(e => e.pointsType === "branch_bonus" && e.sourceId === id);
@@ -7666,7 +7682,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/smart-incentives/top-cashiers", isAuthenticated, async (req, res) => {
+  app.get("/api/smart-incentives/top-cashiers", isAuthenticated, requirePermission("smart_incentives_wallet", "view"), async (req, res) => {
     try {
       const user = getCurrentUser(req);
       const yearMonth = req.query.yearMonth as string;
@@ -8015,7 +8031,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/smart-incentives/product-commission-achievement", isAuthenticated, async (req, res) => {
+  app.post("/api/smart-incentives/product-commission-achievement", isAuthenticated, requirePermission("smart_incentives_commissions", "create"), async (req, res) => {
     try {
       const user = getCurrentUser(req);
       const { cashierId, commissionId, date, shiftType, quantitySold } = req.body;
