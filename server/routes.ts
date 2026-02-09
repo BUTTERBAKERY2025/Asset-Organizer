@@ -8335,7 +8335,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/smart-incentives/product-commission-achievement", isAuthenticated, requirePermission("smart_incentives_commissions", "create"), async (req, res) => {
+  app.post("/api/smart-incentives/product-commission-achievement", isAuthenticated, async (req, res) => {
     try {
       const user = getCurrentUser(req);
       const { cashierId, commissionId, date, shiftType, quantitySold } = req.body;
