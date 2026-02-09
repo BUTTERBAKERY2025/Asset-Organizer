@@ -114,6 +114,7 @@ const ExecutiveCorrespondencePage = lazy(() => import("@/pages/executive-corresp
 const DocumentsPage = lazy(() => import("@/pages/documents"));
 const SharedDocumentPage = lazy(() => import("@/pages/shared-document"));
 const DiscountCardPage = lazy(() => import("@/pages/discount-card"));
+const RsvpPage = lazy(() => import("@/pages/rsvp-page"));
 const GovernancePage = lazy(() => import("@/pages/governance"));
 const BoardMembersPage = lazy(() => import("@/pages/governance/board-members"));
 const ShareholdersPage = lazy(() => import("@/pages/governance/shareholders"));
@@ -207,6 +208,9 @@ function Router() {
       
       {/* Public discount card page - no auth required */}
       <Route path="/discount/:code">{() => <Suspense fallback={<PageLoadingFallback />}><DiscountCardPage /></Suspense>}</Route>
+      
+      {/* Public RSVP confirmation page - no auth required */}
+      <Route path="/rsvp/:token">{() => <Suspense fallback={<PageLoadingFallback />}><RsvpPage /></Suspense>}</Route>
       
       {/* HR - الموارد البشرية */}
       <Route path="/branch-employees">{() => <ModulePage component={BranchEmployeesPage} module="branch_employees" />}</Route>

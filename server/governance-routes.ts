@@ -39,6 +39,7 @@ import {
   insertDisclosureSchema,
   insertComplianceRequirementSchema,
   insertComplianceHistorySchema,
+  meetingRsvps,
 } from "@shared/schema";
 import crypto from "crypto";
 import { z } from "zod";
@@ -503,6 +504,29 @@ export function registerGovernanceRoutes(app: Express) {
       const shareholdersWithPhones = shareholdersList.filter(s => s.phone);
       const shareholdersWithoutPhones = shareholdersList.filter(s => !s.phone);
 
+      const existingRsvps = await db.select().from(meetingRsvps).where(eq(meetingRsvps.meetingId, meetingId));
+      const existingTokenMap = new Map(existingRsvps.map(r => [r.shareholderId, r]));
+      const rsvpTokenMap = new Map<number, string>();
+
+      for (const shareholder of shareholdersList) {
+        if (existingTokenMap.has(shareholder.id)) {
+          rsvpTokenMap.set(shareholder.id, existingTokenMap.get(shareholder.id)!.token);
+        } else {
+          const token = crypto.randomBytes(32).toString('hex');
+          await db.insert(meetingRsvps).values({
+            meetingId,
+            shareholderId: shareholder.id,
+            token,
+            status: 'pending',
+            shareholderName: shareholder.fullName,
+            shareholderPhone: shareholder.phone || null,
+          });
+          rsvpTokenMap.set(shareholder.id, token);
+        }
+      }
+
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+
       const meetingDateObj = new Date(meeting.meetingDate);
       const invitation = {
         meetingTitle: meeting.title,
@@ -535,13 +559,19 @@ export function registerGovernanceRoutes(app: Express) {
         ipAddress: req.ip || req.socket.remoteAddress || 'unknown',
       });
 
-      let whatsappLinks: any[] = [];
-      if (sendWhatsApp && invitationResults.failed > 0) {
-        whatsappLinks = generateWhatsAppLinks(
-          shareholdersWithPhones.map(s => ({ fullName: s.fullName, phone: s.phone || undefined })),
-          invitation
-        );
-      }
+      const whatsappLinks = shareholdersWithPhones.map(s => {
+        const rsvpToken = rsvpTokenMap.get(s.id);
+        const rsvpUrl = rsvpToken ? `${baseUrl}/rsvp/${rsvpToken}` : '';
+        return {
+          name: s.fullName,
+          phone: s.phone!,
+          rsvpUrl,
+          whatsappLink: generateWhatsAppLinks(
+            [{ fullName: s.fullName, phone: s.phone || undefined }],
+            { ...invitation, meetingLink: rsvpUrl || invitation.meetingLink }
+          )[0]?.whatsappLink || '',
+        };
+      });
 
       res.json({
         ...invitationResults,
@@ -2057,6 +2087,126 @@ export function registerGovernanceRoutes(app: Express) {
     } catch (error) {
       console.error("Error fetching voting audit log:", error);
       res.status(500).json({ error: "فشل في جلب سجل التدقيق" });
+    }
+  });
+
+  app.post("/api/governance/meetings/:id/generate-rsvp", isAuthenticated, requirePermission("governance_meetings", "edit"), async (req, res) => {
+    try {
+      const meetingId = parseInt(req.params.id);
+      const [meeting] = await db.select().from(governanceMeetings).where(eq(governanceMeetings.id, meetingId));
+      if (!meeting) {
+        return res.status(404).json({ error: "الاجتماع غير موجود" });
+      }
+
+      const shareholdersList = await db.select().from(shareholders).where(eq(shareholders.votingRights, true));
+      const existingRsvps = await db.select().from(meetingRsvps).where(eq(meetingRsvps.meetingId, meetingId));
+      const existingTokenMap = new Map(existingRsvps.map(r => [r.shareholderId, r]));
+
+      const rsvpResults = [];
+      for (const shareholder of shareholdersList) {
+        if (existingTokenMap.has(shareholder.id)) {
+          rsvpResults.push(existingTokenMap.get(shareholder.id)!);
+          continue;
+        }
+        const token = crypto.randomBytes(32).toString('hex');
+        const [rsvp] = await db.insert(meetingRsvps).values({
+          meetingId,
+          shareholderId: shareholder.id,
+          token,
+          status: 'pending',
+          shareholderName: shareholder.fullName,
+          shareholderPhone: shareholder.phone || null,
+        }).returning();
+        rsvpResults.push(rsvp);
+      }
+
+      res.json({ rsvps: rsvpResults, meetingTitle: meeting.title });
+    } catch (error) {
+      console.error("Error generating RSVP tokens:", error);
+      res.status(500).json({ error: "فشل في إنشاء روابط تأكيد الحضور" });
+    }
+  });
+
+  app.get("/api/governance/meetings/:id/rsvps", isAuthenticated, requirePermission("governance_meetings", "view"), async (req, res) => {
+    try {
+      const meetingId = parseInt(req.params.id);
+      const rsvps = await db.select().from(meetingRsvps).where(eq(meetingRsvps.meetingId, meetingId)).orderBy(desc(meetingRsvps.confirmedAt));
+      res.json(rsvps);
+    } catch (error) {
+      console.error("Error fetching RSVPs:", error);
+      res.status(500).json({ error: "فشل في جلب تأكيدات الحضور" });
+    }
+  });
+
+  app.get("/api/rsvp/:token", async (req, res) => {
+    try {
+      const { token } = req.params;
+      const [rsvp] = await db.select().from(meetingRsvps).where(eq(meetingRsvps.token, token));
+      if (!rsvp) {
+        return res.status(404).json({ error: "رابط غير صالح" });
+      }
+
+      const [meeting] = await db.select().from(governanceMeetings).where(eq(governanceMeetings.id, rsvp.meetingId));
+
+      res.json({
+        shareholderName: rsvp.shareholderName,
+        meetingTitle: meeting?.title || '',
+        meetingDate: meeting?.meetingDate || '',
+        meetingLocation: meeting?.location || '',
+        status: rsvp.status,
+        confirmedAt: rsvp.confirmedAt,
+        declinedAt: rsvp.declinedAt,
+      });
+    } catch (error) {
+      console.error("Error fetching RSVP:", error);
+      res.status(500).json({ error: "حدث خطأ" });
+    }
+  });
+
+  app.post("/api/rsvp/:token", async (req, res) => {
+    try {
+      const { token } = req.params;
+      const { action, note } = req.body;
+
+      const [rsvp] = await db.select().from(meetingRsvps).where(eq(meetingRsvps.token, token));
+      if (!rsvp) {
+        return res.status(404).json({ error: "رابط غير صالح" });
+      }
+
+      if (action === 'confirm') {
+        await db.update(meetingRsvps)
+          .set({ status: 'confirmed', confirmedAt: new Date(), responseNote: note || null })
+          .where(eq(meetingRsvps.token, token));
+
+        const existingAttendance = await db.select().from(meetingAttendance)
+          .where(and(
+            eq(meetingAttendance.meetingId, rsvp.meetingId),
+            eq(meetingAttendance.shareholderId, rsvp.shareholderId)
+          ));
+
+        if (existingAttendance.length === 0) {
+          await db.insert(meetingAttendance).values({
+            meetingId: rsvp.meetingId,
+            attendeeType: 'shareholder',
+            shareholderId: rsvp.shareholderId,
+            attendeeName: rsvp.shareholderName,
+            attendanceStatus: 'expected',
+            attendanceMethod: 'in_person',
+          });
+        }
+
+        res.json({ success: true, message: "تم تأكيد حضورك بنجاح" });
+      } else if (action === 'decline') {
+        await db.update(meetingRsvps)
+          .set({ status: 'declined', declinedAt: new Date(), responseNote: note || null })
+          .where(eq(meetingRsvps.token, token));
+        res.json({ success: true, message: "تم تسجيل اعتذارك" });
+      } else {
+        res.status(400).json({ error: "إجراء غير صالح" });
+      }
+    } catch (error) {
+      console.error("Error processing RSVP:", error);
+      res.status(500).json({ error: "حدث خطأ أثناء معالجة الطلب" });
     }
   });
 }

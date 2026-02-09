@@ -53,7 +53,11 @@ ${recipientName} المحترم/ة
 📍 المكان: ${invitation.location}`;
 
   if (invitation.meetingLink) {
-    message += `\n🔗 رابط الاجتماع: ${invitation.meetingLink}`;
+    if (invitation.meetingLink.includes('/rsvp/')) {
+      message += `\n\n✅ لتأكيد حضورك، يرجى الضغط على الرابط التالي:\n${invitation.meetingLink}`;
+    } else {
+      message += `\n🔗 رابط الاجتماع: ${invitation.meetingLink}`;
+    }
   }
 
   if (invitation.agenda) {

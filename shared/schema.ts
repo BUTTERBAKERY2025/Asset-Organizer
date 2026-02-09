@@ -8499,3 +8499,29 @@ export const insertDiscountUsageLogSchema = createInsertSchema(discountUsageLogs
 
 export type DiscountUsageLog = typeof discountUsageLogs.$inferSelect;
 export type InsertDiscountUsageLog = z.infer<typeof insertDiscountUsageLogSchema>;
+
+export const meetingRsvps = pgTable("meeting_rsvps", {
+  id: serial("id").primaryKey(),
+  meetingId: integer("meeting_id").notNull().references(() => governanceMeetings.id, { onDelete: "cascade" }),
+  shareholderId: integer("shareholder_id").notNull().references(() => shareholders.id, { onDelete: "cascade" }),
+  token: text("token").notNull().unique(),
+  status: text("status").default("pending"),
+  confirmedAt: timestamp("confirmed_at"),
+  declinedAt: timestamp("declined_at"),
+  responseNote: text("response_note"),
+  shareholderName: text("shareholder_name").notNull(),
+  shareholderPhone: text("shareholder_phone"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_meeting_rsvps_meeting").on(table.meetingId),
+  index("idx_meeting_rsvps_shareholder").on(table.shareholderId),
+  index("idx_meeting_rsvps_token").on(table.token),
+]);
+
+export const insertMeetingRsvpSchema = createInsertSchema(meetingRsvps).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type MeetingRsvp = typeof meetingRsvps.$inferSelect;
+export type InsertMeetingRsvp = z.infer<typeof insertMeetingRsvpSchema>;

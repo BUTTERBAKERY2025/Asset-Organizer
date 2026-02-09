@@ -136,6 +136,17 @@ export default function GeneralAssemblyPage() {
     queryKey: ["/api/governance/resolutions"],
   });
 
+  const { data: meetingRsvps = [] } = useQuery<any[]>({
+    queryKey: ["/api/governance/meetings", invitationMeetingId, "rsvps"],
+    queryFn: async () => {
+      if (!invitationMeetingId) return [];
+      const res = await fetch(`/api/governance/meetings/${invitationMeetingId}/rsvps`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!invitationMeetingId && showInvitations,
+  });
+
   const createMeetingMutation = useMutation({
     mutationFn: async (data: typeof newMeeting) => {
       const response = await fetch("/api/governance/meetings", {
@@ -195,9 +206,12 @@ export default function GeneralAssemblyPage() {
     },
     onSuccess: (data) => {
       setInvitationResults(data);
+      queryClient.invalidateQueries({ queryKey: ["/api/governance/meetings", invitationMeetingId, "rsvps"] });
       toast({ 
-        title: `تم إرسال ${data.sent} دعوة بنجاح${data.failed > 0 ? ` (${data.failed} فشل)` : ''}`,
-        variant: data.failed > 0 ? "destructive" : "default",
+        title: data.whatsappLinks?.length > 0 
+          ? `تم إنشاء روابط واتساب وتأكيد الحضور لـ ${data.whatsappLinks.length} مساهم`
+          : `تم إرسال ${data.sent} دعوة بنجاح${data.failed > 0 ? ` (${data.failed} فشل)` : ''}`,
+        variant: data.failed > 0 && !data.whatsappLinks?.length ? "destructive" : "default",
       });
     },
     onError: () => {
@@ -1272,6 +1286,7 @@ export default function GeneralAssemblyPage() {
                     <TableHead className="text-right">المساهم</TableHead>
                     <TableHead className="text-right">رقم الجوال</TableHead>
                     <TableHead className="text-right">النسبة</TableHead>
+                    <TableHead className="text-right w-28">تأكيد الحضور</TableHead>
                     <TableHead className="text-right w-24">حالة الإرسال</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1298,6 +1313,30 @@ export default function GeneralAssemblyPage() {
                           )}
                         </TableCell>
                         <TableCell>{shareholder.sharePercentage ? `${Number(shareholder.sharePercentage).toFixed(2)}%` : '-'}</TableCell>
+                        <TableCell>
+                          {(() => {
+                            const rsvp = meetingRsvps.find((r: any) => r.shareholderId === shareholder.id);
+                            if (!rsvp) return <span className="text-xs text-gray-400">-</span>;
+                            if (rsvp.status === 'confirmed') return (
+                              <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-300">
+                                <CheckCircle className="h-3 w-3 ml-1" />
+                                أكد الحضور
+                              </Badge>
+                            );
+                            if (rsvp.status === 'declined') return (
+                              <Badge variant="outline" className="text-xs bg-red-50 text-red-700 border-red-300">
+                                <XCircle className="h-3 w-3 ml-1" />
+                                اعتذر
+                              </Badge>
+                            );
+                            return (
+                              <Badge variant="outline" className="text-xs bg-yellow-50 text-yellow-700 border-yellow-300">
+                                <Clock className="h-3 w-3 ml-1" />
+                                بانتظار الرد
+                              </Badge>
+                            );
+                          })()}
+                        </TableCell>
                         <TableCell>
                           {invitationResults ? (
                             resultForShareholder && resultForShareholder.length > 0 ? (
@@ -1386,6 +1425,29 @@ export default function GeneralAssemblyPage() {
                     <p className="text-gray-600">{invitationResults.withoutPhones.map((s: any) => s.name).join('، ')}</p>
                   </div>
                 )}
+              </div>
+            )}
+
+            {meetingRsvps.length > 0 && (
+              <div className="p-4 rounded-lg border bg-blue-50 border-blue-200">
+                <div className="flex items-center gap-2 mb-3">
+                  <UserCheck className="h-5 w-5 text-blue-600" />
+                  <span className="font-semibold text-blue-800">ملخص تأكيدات الحضور</span>
+                </div>
+                <div className="grid grid-cols-3 gap-3 text-sm">
+                  <div className="text-center p-2 bg-white rounded border border-green-200">
+                    <p className="text-lg font-bold text-green-600">{meetingRsvps.filter((r: any) => r.status === 'confirmed').length}</p>
+                    <p className="text-xs text-gray-600">أكدوا الحضور</p>
+                  </div>
+                  <div className="text-center p-2 bg-white rounded border border-red-200">
+                    <p className="text-lg font-bold text-red-600">{meetingRsvps.filter((r: any) => r.status === 'declined').length}</p>
+                    <p className="text-xs text-gray-600">اعتذروا</p>
+                  </div>
+                  <div className="text-center p-2 bg-white rounded border border-yellow-200">
+                    <p className="text-lg font-bold text-yellow-600">{meetingRsvps.filter((r: any) => r.status === 'pending').length}</p>
+                    <p className="text-xs text-gray-600">بانتظار الرد</p>
+                  </div>
+                </div>
               </div>
             )}
           </div>
