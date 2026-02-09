@@ -1742,7 +1742,16 @@ export default function BranchEmployeesPage() {
                 <DialogTitle>{editingEmployee ? "تعديل بيانات الموظف" : "إضافة موظف جديد"}</DialogTitle>
                 <DialogDescription>أدخل بيانات الموظف الأساسية والرواتب والمستندات</DialogDescription>
               </DialogHeader>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              <form onSubmit={form.handleSubmit(onSubmit, (errors) => {
+                const errorMessages = Object.values(errors).map(e => e?.message).filter(Boolean);
+                if (errorMessages.length > 0) {
+                  toast({
+                    title: "يرجى تعبئة الحقول المطلوبة",
+                    description: errorMessages.join("، "),
+                    variant: "destructive",
+                  });
+                }
+              })} className="space-y-6">
                 <Tabs defaultValue="basic" className="w-full">
                   <TabsList className="grid grid-cols-4 w-full">
                     <TabsTrigger value="basic">البيانات الأساسية</TabsTrigger>
@@ -1755,8 +1764,8 @@ export default function BranchEmployeesPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>الفرع *</Label>
-                        <Select value={watchedBranchId} onValueChange={(v) => form.setValue("branchId", v)}>
-                          <SelectTrigger data-testid="select-branch">
+                        <Select value={watchedBranchId} onValueChange={(v) => form.setValue("branchId", v, { shouldValidate: true })}>
+                          <SelectTrigger data-testid="select-branch" className={form.formState.errors.branchId ? "border-red-500" : ""}>
                             <SelectValue placeholder="اختر الفرع" />
                           </SelectTrigger>
                           <SelectContent className="max-h-60 overflow-y-auto">
@@ -1771,6 +1780,9 @@ export default function BranchEmployeesPage() {
                             )}
                           </SelectContent>
                         </Select>
+                        {form.formState.errors.branchId && (
+                          <p className="text-sm text-red-500">{form.formState.errors.branchId.message}</p>
+                        )}
                       </div>
                       <div className="space-y-2">
                         <Label>الحالة</Label>
@@ -1790,6 +1802,9 @@ export default function BranchEmployeesPage() {
                       <div className="space-y-2">
                         <Label>اسم الموظف بالعربي *</Label>
                         <Input {...form.register("employeeName")} placeholder="أدخل الاسم بالعربي" data-testid="input-name-ar" />
+                        {form.formState.errors.employeeName && (
+                          <p className="text-sm text-red-500">{form.formState.errors.employeeName.message}</p>
+                        )}
                       </div>
                       <div className="space-y-2">
                         <Label>اسم الموظف بالإنجليزي</Label>
@@ -1799,8 +1814,8 @@ export default function BranchEmployeesPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>الوظيفة *</Label>
-                        <Select value={watchedJobTitle} onValueChange={(v) => form.setValue("jobTitle", v)}>
-                          <SelectTrigger data-testid="select-job">
+                        <Select value={watchedJobTitle} onValueChange={(v) => form.setValue("jobTitle", v, { shouldValidate: true })}>
+                          <SelectTrigger data-testid="select-job" className={form.formState.errors.jobTitle ? "border-red-500" : ""}>
                             <SelectValue placeholder="اختر الوظيفة" />
                           </SelectTrigger>
                           <SelectContent className="max-h-60 overflow-y-auto">
@@ -1815,20 +1830,22 @@ export default function BranchEmployeesPage() {
                             )}
                           </SelectContent>
                         </Select>
+                        {form.formState.errors.jobTitle && (
+                          <p className="text-sm text-red-500">{form.formState.errors.jobTitle.message}</p>
+                        )}
                       </div>
                       <div className="space-y-2">
                         <Label>الجنسية *</Label>
                         <Select 
                           value={watchedNationality} 
                           onValueChange={(v) => {
-                            form.setValue("nationality", v);
-                            // مسح خصم التأمينات إذا تم تغيير الجنسية من سعودي
+                            form.setValue("nationality", v, { shouldValidate: true });
                             if (v !== "سعودي") {
                               form.setValue("socialInsuranceDeduction", 0);
                             }
                           }}
                         >
-                          <SelectTrigger data-testid="select-nationality">
+                          <SelectTrigger data-testid="select-nationality" className={form.formState.errors.nationality ? "border-red-500" : ""}>
                             <SelectValue placeholder="اختر الجنسية" />
                           </SelectTrigger>
                           <SelectContent className="max-h-60 overflow-y-auto">
@@ -1843,6 +1860,9 @@ export default function BranchEmployeesPage() {
                             )}
                           </SelectContent>
                         </Select>
+                        {form.formState.errors.nationality && (
+                          <p className="text-sm text-red-500">{form.formState.errors.nationality.message}</p>
+                        )}
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
