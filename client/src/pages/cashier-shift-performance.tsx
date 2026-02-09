@@ -151,12 +151,12 @@ export default function CashierShiftPerformance() {
     setReportCashierId("all");
   }, [selectedBranch]);
 
-  // For non-admin cashiers, default stmtCashierId to their own ID
+  // For non-admin cashiers, always lock stmtCashierId to their own ID
   useEffect(() => {
-    if (user && !canViewAllCashiers && !stmtCashierId) {
+    if (user && !canViewAllCashiers) {
       setStmtCashierId(user.id);
     }
-  }, [user, canViewAllCashiers, stmtCashierId]);
+  }, [user, canViewAllCashiers]);
 
   const { data: allUsers = [] } = useQuery<User[]>({
     queryKey: ["/api/users"],
@@ -191,14 +191,18 @@ export default function CashierShiftPerformance() {
   // Filter cashiers for report tab: only show users who have journal entries in the data
   const reportBranchCashiers = useMemo(() => {
     const journalCashierIds = new Set(allBranchJournals.map(j => j.cashierId));
+    const usersPool = effectiveUsers;
     const branchFiltered = selectedBranch === "all"
-      ? allUsers.filter(u => u.isActive === 'active')
-      : allUsers.filter(u => u.branchId === selectedBranch && u.isActive === 'active');
+      ? usersPool.filter(u => u.isActive === 'active')
+      : usersPool.filter(u => (u.branchId === selectedBranch || !canViewAllCashiers) && u.isActive === 'active');
+    if (!canViewAllCashiers && branchFiltered.length > 0) {
+      return branchFiltered;
+    }
     if (journalCashierIds.size > 0) {
       return branchFiltered.filter(u => journalCashierIds.has(u.id));
     }
     return branchFiltered.filter(u => u.role === 'cashier' || (u as any).jobTitle === 'cashier');
-  }, [allUsers, selectedBranch, allBranchJournals]);
+  }, [effectiveUsers, selectedBranch, allBranchJournals, canViewAllCashiers]);
 
   const { data: shiftTargets = [], isLoading: targetsLoading, refetch: refetchTargets } = useQuery<any[]>({
     queryKey: ["/api/smart-incentives/challenges-as-targets", selectedBranch, selectedDate, selectedShift],
@@ -2009,30 +2013,39 @@ export default function CashierShiftPerformance() {
                         </div>
                         <div>
                           <Label className="text-xs font-bold">الكاشير</Label>
-                          <Popover open={stmtCashierOpen} onOpenChange={setStmtCashierOpen}>
-                            <PopoverTrigger asChild>
-                              <Button variant="outline" role="combobox" aria-expanded={stmtCashierOpen} className="w-full h-9 text-xs bg-white justify-between font-normal" data-testid="select-stmt-cashier">
-                                {stmtCashierId ? (() => { const c = reportBranchCashiers.find((c: any) => c.id === stmtCashierId); return c ? `${c.firstName || c.username || c.id} ${c.lastName || ''}` : "اختر الكاشير"; })() : "اختر الكاشير"}
-                                <ChevronsUpDown className="mr-2 h-3 w-3 shrink-0 opacity-50" />
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-64 p-0" align="start">
-                              <Command shouldFilter={true}>
-                                <CommandInput placeholder="ابحث عن كاشير..." data-testid="search-stmt-cashier" />
-                                <CommandList>
-                                  <CommandEmpty>لا توجد نتائج</CommandEmpty>
-                                  <CommandGroup>
-                                    {reportBranchCashiers.map((c: any) => (
-                                      <CommandItem key={c.id} value={`${c.firstName || c.username} ${c.lastName || ''}`} onSelect={() => { setStmtCashierId(c.id); setStmtCashierOpen(false); }}>
-                                        <Check className={`ml-2 h-3 w-3 ${stmtCashierId === c.id ? "opacity-100" : "opacity-0"}`} />
-                                        {c.firstName || c.username || c.id} {c.lastName || ''}
-                                      </CommandItem>
-                                    ))}
-                                  </CommandGroup>
-                                </CommandList>
-                              </Command>
-                            </PopoverContent>
-                          </Popover>
+                          {!canViewAllCashiers ? (
+                            <Input
+                              value={getCashierName(stmtCashierId)}
+                              disabled
+                              className="h-9 text-xs bg-gray-50"
+                              data-testid="select-stmt-cashier"
+                            />
+                          ) : (
+                            <Popover open={stmtCashierOpen} onOpenChange={setStmtCashierOpen}>
+                              <PopoverTrigger asChild>
+                                <Button variant="outline" role="combobox" aria-expanded={stmtCashierOpen} className="w-full h-9 text-xs bg-white justify-between font-normal" data-testid="select-stmt-cashier">
+                                  {stmtCashierId ? (() => { const c = reportBranchCashiers.find((c: any) => c.id === stmtCashierId); return c ? `${c.firstName || c.username || c.id} ${c.lastName || ''}` : "اختر الكاشير"; })() : "اختر الكاشير"}
+                                  <ChevronsUpDown className="mr-2 h-3 w-3 shrink-0 opacity-50" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-64 p-0" align="start">
+                                <Command shouldFilter={true}>
+                                  <CommandInput placeholder="ابحث عن كاشير..." data-testid="search-stmt-cashier" />
+                                  <CommandList>
+                                    <CommandEmpty>لا توجد نتائج</CommandEmpty>
+                                    <CommandGroup>
+                                      {reportBranchCashiers.map((c: any) => (
+                                        <CommandItem key={c.id} value={`${c.firstName || c.username} ${c.lastName || ''}`} onSelect={() => { setStmtCashierId(c.id); setStmtCashierOpen(false); }}>
+                                          <Check className={`ml-2 h-3 w-3 ${stmtCashierId === c.id ? "opacity-100" : "opacity-0"}`} />
+                                          {c.firstName || c.username || c.id} {c.lastName || ''}
+                                        </CommandItem>
+                                      ))}
+                                    </CommandGroup>
+                                  </CommandList>
+                                </Command>
+                              </PopoverContent>
+                            </Popover>
+                          )}
                         </div>
                         <div className="flex items-end gap-2">
                           {canCreateStatements && (
