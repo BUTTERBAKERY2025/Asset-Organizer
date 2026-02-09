@@ -7048,7 +7048,6 @@ export async function registerRoutes(
       const targetDate = (date as string) || new Date().toISOString().split('T')[0];
       
       console.log("[challenges-as-targets] branchId:", branchId, "targetDate:", targetDate, "shiftType:", shiftType);
-      console.log("[challenges-as-targets] allChallenges count:", allChallenges.length, "details:", JSON.stringify(allChallenges.map(c => ({ id: c.id, name: c.name, cashierId: c.cashierId, branchId: c.branchId, shiftType: c.shiftType, validFrom: c.validFrom, validTo: c.validTo, isActive: c.isActive }))));
 
       const allChallenges = await storage.getActiveDailyChallenges(branchId as string);
 
