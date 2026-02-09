@@ -767,7 +767,7 @@ export interface IStorage {
   
   // Daily Challenges - التحديات اليومية
   getAllDailyChallenges(): Promise<CashierDailyChallenge[]>;
-  getActiveDailyChallenges(branchId?: string): Promise<CashierDailyChallenge[]>;
+  getActiveDailyChallenges(branchId?: string, targetDate?: string): Promise<CashierDailyChallenge[]>;
   getDailyChallenge(id: number): Promise<CashierDailyChallenge | undefined>;
   createDailyChallenge(challenge: InsertCashierDailyChallenge): Promise<CashierDailyChallenge>;
   updateDailyChallenge(id: number, challenge: Partial<InsertCashierDailyChallenge>): Promise<CashierDailyChallenge | undefined>;
@@ -12181,12 +12181,12 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getActiveDailyChallenges(branchId?: string): Promise<CashierDailyChallenge[]> {
+  async getActiveDailyChallenges(branchId?: string, targetDate?: string): Promise<CashierDailyChallenge[]> {
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const dateToCheck = targetDate || new Date().toISOString().split('T')[0];
       const conditions = [
         eq(cashierDailyChallenges.isActive, true),
-        lte(cashierDailyChallenges.validFrom, today),
+        lte(cashierDailyChallenges.validFrom, dateToCheck),
       ];
       if (branchId) {
         conditions.push(or(eq(cashierDailyChallenges.branchId, branchId), isNull(cashierDailyChallenges.branchId))!);
@@ -12491,7 +12491,7 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    const activeChallenges = await this.getActiveDailyChallenges(journal.branchId);
+    const activeChallenges = await this.getActiveDailyChallenges(journal.branchId, journal.journalDate);
     const pointValue = Number(settings.pointValue) || 0.5;
     const seasonalMultiplier = Number(settings.seasonalMultiplier) || 1;
     const maxDailyPoints = settings.maxDailyPoints ? Number(settings.maxDailyPoints) : null;

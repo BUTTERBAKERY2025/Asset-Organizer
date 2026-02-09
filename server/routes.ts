@@ -7070,7 +7070,7 @@ export async function registerRoutes(
       
       console.log("[challenges-as-targets] branchId:", branchId, "targetDate:", targetDate, "shiftType:", shiftType);
 
-      const allChallenges = await storage.getActiveDailyChallenges(branchId as string);
+      const allChallenges = await storage.getActiveDailyChallenges(branchId as string, targetDate);
 
       const validChallenges = allChallenges.filter(c => {
         if (c.validFrom > targetDate) return false;
