@@ -625,6 +625,209 @@ export default function CashierShiftPerformance() {
     toast.success("تم تصدير الكشف بنجاح");
   };
 
+  const exportMyIncentivePDF = () => {
+    if (!myIncentiveSummary) return;
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast.error("يرجى السماح بفتح النوافذ المنبثقة لتحميل التقرير");
+      return;
+    }
+    const currentDate = new Date().toLocaleDateString('en-US');
+    const cashierName = user ? `${user.firstName || user.username || ''} ${user.lastName || ''}`.trim() : '';
+    const branchName = branches?.find((b: any) => b.id === (userBranchId || selectedBranch))?.name || '';
+    const logoUrl = '/attached_assets/logo_-5_1765206843638.png';
+
+    const challengeRows = myIncentiveSummary.challenges.map(ch => {
+      let totalAchieved = 0;
+      let totalTarget = 0;
+      let daysAchieved = 0;
+      let totalDays = 0;
+      myIncentiveSummary.dailyDetails.forEach(day => {
+        const match = day.challenges.find(dc => dc.name === ch.name && dc.type === ch.challengeType);
+        if (match) {
+          totalDays++;
+          totalTarget += match.targetValue;
+          totalAchieved += match.actualValue;
+          if (match.achieved) daysAchieved++;
+        }
+      });
+      const overallPercent = totalTarget > 0 ? Math.round((totalAchieved / totalTarget) * 100) : 0;
+      return {
+        name: ch.name,
+        type: ch.challengeType === 'avg_ticket' ? 'متوسط فاتورة' : ch.challengeType === 'customer_count' ? 'عدد العملاء' : 'مبيعات',
+        target: ch.targetValue,
+        validFrom: ch.validFrom,
+        validTo: ch.validTo || '-',
+        basePoints: ch.basePoints,
+        totalDays,
+        daysAchieved,
+        totalAchieved: ch.challengeType === 'customer_count' ? Math.round(totalAchieved) : totalAchieved.toFixed(2),
+        overallPercent,
+      };
+    });
+
+    const dailyRows = myIncentiveSummary.dailyDetails.map(day => {
+      const dateStr = new Date(day.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+      const challengeDetails = day.challenges.map(ch => {
+        const status = ch.achieved ? '✅' : '❌';
+        return `${status} ${ch.name}: ${ch.actualValue.toFixed(ch.type === 'customer_count' ? 0 : 2)}/${ch.targetValue.toFixed(ch.type === 'customer_count' ? 0 : 2)} (${ch.achievementPercent}%)`;
+      }).join('<br/>');
+      const ledgerDetails = day.ledgerEntries.map(e => {
+        const typeName = e.sourceName || (() => {
+          switch(e.pointsType) {
+            case 'challenge_avg_ticket': return 'تحدي متوسط الفاتورة';
+            case 'challenge_customers': return 'تحدي عدد العملاء';
+            case 'challenge_sales': return 'تحدي المبيعات';
+            case 'product_commission': return 'عمولة منتج';
+            case 'branch_bonus': return 'مكافأة فرع';
+            default: return e.pointsType;
+          }
+        })();
+        return `${typeName}: +${e.pointsEarned} نقطة (${e.amountEarned.toFixed(2)} ر.س)`;
+      }).join('<br/>');
+      return { dateStr, date: day.date, challengeDetails, ledgerDetails, totalPoints: day.totalPoints, totalAmount: day.totalAmount };
+    });
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>كشف حساب حوافزي - ${cashierName}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Cairo', sans-serif; direction: rtl; padding: 20px; background: white; color: #333; font-size: 11px; }
+    .header { text-align: center; margin-bottom: 15px; border-bottom: 3px solid #d4a853; padding-bottom: 12px; }
+    .header .logo { max-height: 55px; margin-bottom: 8px; }
+    .header h1 { font-size: 18px; color: #333; margin-bottom: 3px; }
+    .header .sub { color: #666; font-size: 12px; }
+    .info-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 15px; }
+    .info-box { background: #f9f9f9; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; text-align: center; }
+    .info-box .label { font-size: 10px; color: #666; margin-bottom: 2px; }
+    .info-box .value { font-size: 16px; font-weight: bold; color: #d4a853; }
+    .info-box .unit { font-size: 9px; color: #999; }
+    .info-box.green .value { color: #16a34a; }
+    .info-box.blue .value { color: #2563eb; }
+    .info-box.purple .value { color: #7c3aed; }
+    .section { margin-bottom: 15px; }
+    .section-title { font-size: 13px; font-weight: bold; color: #333; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 2px solid #f0d78c; display: flex; align-items: center; gap: 6px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+    th, td { border: 1px solid #ddd; padding: 6px 5px; text-align: right; font-size: 10px; }
+    th { background: #f5f0e0; font-weight: 700; color: #333; }
+    tr:nth-child(even) { background: #fafafa; }
+    .achieved { color: #16a34a; font-weight: bold; }
+    .not-achieved { color: #ef4444; }
+    .highlight { background: #fffbeb; font-weight: bold; }
+    .summary-row { background: #f5f0e0 !important; font-weight: bold; }
+    .cashier-info { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 15px; background: #fffbeb; border: 1px solid #d4a853; border-radius: 8px; padding: 12px; }
+    .cashier-info div { text-align: center; }
+    .cashier-info .ci-label { font-size: 10px; color: #92400e; }
+    .cashier-info .ci-value { font-size: 13px; font-weight: bold; color: #333; }
+    .footer { text-align: center; margin-top: 20px; padding-top: 10px; border-top: 1px solid #ddd; color: #888; font-size: 9px; }
+    .print-btn { position: fixed; top: 15px; left: 15px; background: #d4a853; color: white; border: none; padding: 8px 18px; border-radius: 8px; cursor: pointer; font-family: 'Cairo', sans-serif; font-size: 13px; font-weight: bold; z-index: 100; }
+    .print-btn:hover { background: #c49843; }
+    @media print { .no-print { display: none; } body { padding: 10px; } }
+  </style>
+</head>
+<body>
+  <button class="print-btn no-print" onclick="window.print()">طباعة / حفظ PDF</button>
+
+  <div class="header">
+    <img src="${logoUrl}" alt="Butter Bakery" class="logo" onerror="this.style.display='none'" />
+    <h1>كشف حساب الحوافز</h1>
+    <div class="sub">تقرير مفصل بالتحديات والإنجازات والنقاط المكتسبة</div>
+  </div>
+
+  <div class="cashier-info">
+    <div><div class="ci-label">اسم الكاشير</div><div class="ci-value">${cashierName}</div></div>
+    <div><div class="ci-label">الفرع</div><div class="ci-value">${branchName}</div></div>
+    <div><div class="ci-label">الفترة</div><div class="ci-value">${stmtPeriodFrom} → ${stmtPeriodTo}</div></div>
+  </div>
+
+  <div class="info-grid">
+    <div class="info-box"><div class="label">إجمالي النقاط</div><div class="value">${myIncentiveSummary.totals.totalPoints}</div><div class="unit">نقطة</div></div>
+    <div class="info-box green"><div class="label">القيمة بالريال</div><div class="value">${myIncentiveSummary.totals.totalAmount.toFixed(2)}</div><div class="unit">ر.س</div></div>
+    <div class="info-box blue"><div class="label">معتمدة</div><div class="value">${myIncentiveSummary.totals.approvedAmount.toFixed(2)}</div><div class="unit">ر.س</div></div>
+    <div class="info-box purple"><div class="label">مصروفة</div><div class="value">${myIncentiveSummary.totals.paidAmount.toFixed(2)}</div><div class="unit">ر.س</div></div>
+  </div>
+
+  ${challengeRows.length > 0 ? `
+  <div class="section">
+    <div class="section-title">🎯 ملخص التحديات المعينة</div>
+    <table>
+      <thead>
+        <tr>
+          <th>التحدي</th>
+          <th>النوع</th>
+          <th>الهدف اليومي</th>
+          <th>من تاريخ</th>
+          <th>إلى تاريخ</th>
+          <th>النقاط الأساسية</th>
+          <th>أيام الإنجاز</th>
+          <th>إجمالي المحقق</th>
+          <th>نسبة الإنجاز</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${challengeRows.map(r => `
+        <tr>
+          <td style="font-weight:bold">${r.name}</td>
+          <td>${r.type}</td>
+          <td>${r.target}</td>
+          <td>${r.validFrom}</td>
+          <td>${r.validTo}</td>
+          <td>${r.basePoints} نقطة</td>
+          <td><span class="${r.daysAchieved > 0 ? 'achieved' : 'not-achieved'}">${r.daysAchieved}</span> / ${r.totalDays} يوم</td>
+          <td>${r.totalAchieved}</td>
+          <td class="${r.overallPercent >= 100 ? 'achieved' : r.overallPercent >= 75 ? '' : 'not-achieved'}">${r.overallPercent}%</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>` : ''}
+
+  <div class="section">
+    <div class="section-title">📋 السجل اليومي التفصيلي</div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:90px">التاريخ</th>
+          <th>التحديات والإنجاز</th>
+          <th>القيود والنقاط</th>
+          <th style="width:60px">النقاط</th>
+          <th style="width:70px">المبلغ (ر.س)</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${dailyRows.map(r => `
+        <tr>
+          <td style="font-weight:bold; white-space:nowrap">${r.dateStr}</td>
+          <td style="font-size:9px; line-height:1.5">${r.challengeDetails || '<span style="color:#999">-</span>'}</td>
+          <td style="font-size:9px; line-height:1.5">${r.ledgerDetails || '<span style="color:#999">-</span>'}</td>
+          <td style="text-align:center; font-weight:bold; color:#d97706">${r.totalPoints}</td>
+          <td style="text-align:center; font-weight:bold; color:#16a34a">${r.totalAmount.toFixed(2)}</td>
+        </tr>`).join('')}
+        <tr class="summary-row">
+          <td colspan="3" style="text-align:left; font-size:11px">الإجمالي</td>
+          <td style="text-align:center; font-size:12px; color:#92400e">${myIncentiveSummary.totals.totalPoints}</td>
+          <td style="text-align:center; font-size:12px; color:#16a34a">${myIncentiveSummary.totals.totalAmount.toFixed(2)}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="footer">
+    <p>تاريخ الطباعة: ${currentDate} | نظام إدارة حوافز الكاشير - باتر</p>
+    <p style="margin-top:3px">هذا التقرير صادر آلياً من النظام</p>
+  </div>
+</body>
+</html>`;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    toast.success("تم فتح تقرير PDF للطباعة");
+  };
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', { 
       minimumFractionDigits: 0,
@@ -2028,6 +2231,10 @@ export default function CashierShiftPerformance() {
                         <Label className="text-xs font-bold">إلى تاريخ</Label>
                         <Input type="date" value={stmtPeriodTo} onChange={(e) => setStmtPeriodTo(e.target.value)} className="h-9 text-xs" data-testid="input-my-stmt-to" />
                       </div>
+                      <Button variant="outline" size="sm" onClick={exportMyIncentivePDF} disabled={!myIncentiveSummary || loadingMyIncentive} className="h-9 text-xs gap-1" data-testid="button-export-my-incentive-pdf">
+                        <Download className="h-3.5 w-3.5 text-red-600" />
+                        تصدير PDF
+                      </Button>
                     </div>
 
                     {loadingMyIncentive ? (
@@ -2363,7 +2570,7 @@ export default function CashierShiftPerformance() {
                       <div className="flex items-center justify-between mb-3">
                         <div>
                           <h3 className="font-bold text-lg text-amber-800">{selectedStatement.statementNumber}</h3>
-                          <p className="text-xs text-gray-500">تاريخ الإنشاء: {new Date(selectedStatement.createdAt).toLocaleDateString('ar-SA')}</p>
+                          <p className="text-xs text-gray-500">تاريخ الإنشاء: {new Date(selectedStatement.createdAt).toLocaleDateString('en-US')}</p>
                         </div>
                         <Badge className={`text-sm px-3 py-1 ${getStmtStatusInfo(selectedStatement.status).color}`}>
                           {getStmtStatusInfo(selectedStatement.status).icon} {getStmtStatusInfo(selectedStatement.status).label}
