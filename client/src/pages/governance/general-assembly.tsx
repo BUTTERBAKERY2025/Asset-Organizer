@@ -52,7 +52,8 @@ import {
   CheckSquare,
   XCircle,
   MinusCircle,
-  RefreshCw
+  RefreshCw,
+  ExternalLink
 } from "lucide-react";
 import { Link } from "wouter";
 
@@ -1301,11 +1302,31 @@ export default function GeneralAssemblyPage() {
                           {invitationResults ? (
                             resultForShareholder && resultForShareholder.length > 0 ? (
                               <div className="space-y-1">
-                                {resultForShareholder.map((r: any, i: number) => (
-                                  <Badge key={i} variant="outline" className={`text-xs ${r.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-                                    {r.channel === 'whatsapp' ? 'واتس' : 'SMS'}: {r.success ? 'تم' : 'فشل'}
-                                  </Badge>
-                                ))}
+                                {resultForShareholder.map((r: any, i: number) => {
+                                  const whatsappLink = invitationResults?.whatsappLinks?.find(
+                                    (l: any) => l.name === shareholder.fullName
+                                  );
+                                  if (!r.success && r.channel === 'whatsapp' && whatsappLink) {
+                                    return (
+                                      <a 
+                                        key={i}
+                                        href={whatsappLink.whatsappLink}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-green-100 text-green-800 hover:bg-green-200 transition-colors border border-green-300 cursor-pointer"
+                                        data-testid={`link-whatsapp-${shareholder.id}`}
+                                      >
+                                        <ExternalLink className="h-3 w-3" />
+                                        أرسل عبر واتساب
+                                      </a>
+                                    );
+                                  }
+                                  return (
+                                    <Badge key={i} variant="outline" className={`text-xs ${r.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                                      {r.channel === 'whatsapp' ? 'واتس' : 'SMS'}: {r.success ? 'تم' : 'فشل'}
+                                    </Badge>
+                                  );
+                                })}
                               </div>
                             ) : (
                               <Badge variant="outline" className="text-xs bg-gray-50 text-gray-500">
@@ -1348,6 +1369,17 @@ export default function GeneralAssemblyPage() {
                     <p className="text-xs text-gray-600">إجمالي المساهمين</p>
                   </div>
                 </div>
+                {invitationResults.whatsappLinks?.length > 0 && (
+                  <div className="mt-3 p-3 bg-green-50 rounded-lg border border-green-200">
+                    <p className="text-green-800 font-medium mb-2 text-sm flex items-center gap-2">
+                      <ExternalLink className="h-4 w-4" />
+                      يمكنك إرسال الدعوات يدوياً عبر واتساب بالضغط على الروابط أعلاه
+                    </p>
+                    <p className="text-green-700 text-xs">
+                      الإرسال التلقائي غير متاح حالياً. اضغط على "أرسل عبر واتساب" بجانب كل مساهم لفتح محادثة واتساب مع نص الدعوة جاهز.
+                    </p>
+                  </div>
+                )}
                 {invitationResults.withoutPhones?.length > 0 && (
                   <div className="mt-3 p-2 bg-white rounded text-xs">
                     <p className="text-red-600 font-medium mb-1">مساهمون بدون أرقام جوال:</p>

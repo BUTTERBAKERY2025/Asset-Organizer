@@ -156,3 +156,25 @@ export async function sendMeetingInvitations(
 export function isTwilioConfigured(): boolean {
   return !!(accountSid && authToken && twilioPhone);
 }
+
+export function generateWhatsAppLink(phone: string, message: string): string {
+  const formattedPhone = formatPhoneNumber(phone).replace('+', '');
+  const encodedMessage = encodeURIComponent(message);
+  return `https://wa.me/${formattedPhone}?text=${encodedMessage}`;
+}
+
+export function generateWhatsAppLinks(
+  shareholders: Array<{ fullName: string; phone?: string }>,
+  invitation: MeetingInvitation
+): Array<{ name: string; phone: string; whatsappLink: string }> {
+  return shareholders
+    .filter(s => s.phone)
+    .map(s => {
+      const message = formatMeetingInvitation(invitation, s.fullName);
+      return {
+        name: s.fullName,
+        phone: s.phone!,
+        whatsappLink: generateWhatsAppLink(s.phone!, message),
+      };
+    });
+}

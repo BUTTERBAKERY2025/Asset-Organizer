@@ -42,7 +42,7 @@ import {
 } from "@shared/schema";
 import crypto from "crypto";
 import { z } from "zod";
-import { sendMeetingInvitations, isTwilioConfigured } from "./twilio-service";
+import { sendMeetingInvitations, isTwilioConfigured, generateWhatsAppLinks } from "./twilio-service";
 
 const updateBoardMemberSchema = insertBoardMemberSchema.partial().omit({ createdBy: true });
 const updateShareholderSchema = insertShareholderSchema.partial().omit({ createdBy: true });
@@ -535,11 +535,20 @@ export function registerGovernanceRoutes(app: Express) {
         ipAddress: req.ip || req.socket.remoteAddress || 'unknown',
       });
 
+      let whatsappLinks: any[] = [];
+      if (sendWhatsApp && invitationResults.failed > 0) {
+        whatsappLinks = generateWhatsAppLinks(
+          shareholdersWithPhones.map(s => ({ fullName: s.fullName, phone: s.phone || undefined })),
+          invitation
+        );
+      }
+
       res.json({
         ...invitationResults,
         totalShareholders: shareholdersList.length,
         withPhones: shareholdersWithPhones.length,
         withoutPhones: shareholdersWithoutPhones.map(s => ({ name: s.fullName, id: s.id })),
+        whatsappLinks,
       });
     } catch (error) {
       console.error("Error sending invitations:", error);
