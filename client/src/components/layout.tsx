@@ -198,7 +198,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { href: "/sales-analytics", label: t("sidebar.salesAnalytics"), icon: PieChart, module: "sales_analytics", indent: true },
           { href: "/targets-planning", label: t("sidebar.targetsPlanning"), icon: Target, module: "targets_planning", indent: true },
           { href: "/targets-dashboard", label: t("sidebar.targetsDashboard"), icon: TrendingUp, module: "targets", indent: true },
-          { href: "/cashier-shift-performance", label: t("sidebar.cashierPerformance"), icon: BarChart3, module: "cashier_performance", indent: true },
+          { href: "/cashier-shift-performance", label: t("sidebar.cashierPerformance"), icon: BarChart3, indent: true },
           { href: "/incentives-management", label: t("sidebar.incentivesManagement"), icon: Gift, module: "incentives", indent: true },
           { href: "/pnl-dashboard", label: t("sidebar.pnlDashboard"), icon: TrendingUp, module: "pnl_dashboard", indent: true },
         ],

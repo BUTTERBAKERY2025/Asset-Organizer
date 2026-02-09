@@ -7056,7 +7056,7 @@ export async function registerRoutes(
   });
 
   // Daily Challenges as Targets - تحويل التحديات اليومية إلى أهداف
-  app.get("/api/smart-incentives/challenges-as-targets", isAuthenticated, requirePermission("smart_incentives_challenges", "view"), async (req, res) => {
+  app.get("/api/smart-incentives/challenges-as-targets", isAuthenticated, async (req, res) => {
     try {
       const user = getCurrentUser(req);
       let { branchId, date, shiftType } = req.query;
@@ -7705,7 +7705,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/smart-incentives/top-cashiers", isAuthenticated, requirePermission("smart_incentives_wallet", "view"), async (req, res) => {
+  app.get("/api/smart-incentives/top-cashiers", isAuthenticated, async (req, res) => {
     try {
       const user = getCurrentUser(req);
       const yearMonth = req.query.yearMonth as string;
@@ -7795,7 +7795,7 @@ export async function registerRoutes(
   });
 
   // Cashier Incentive Statements - كشف حساب حوافز الكاشير
-  app.get("/api/smart-incentives/incentive-statements", isAuthenticated, requirePermission("smart_incentives_statements", "view"), async (req, res) => {
+  app.get("/api/smart-incentives/incentive-statements", isAuthenticated, async (req, res) => {
     try {
       const user = getCurrentUser(req);
       let { branchId, cashierId, status } = req.query as any;
@@ -7979,7 +7979,7 @@ export async function registerRoutes(
   });
 
   // Cashier Product Sales
-  app.get("/api/smart-incentives/product-sales", isAuthenticated, requirePermission("smart_incentives_commissions", "view"), async (req, res) => {
+  app.get("/api/smart-incentives/product-sales", isAuthenticated, async (req, res) => {
     try {
       const user = getCurrentUser(req);
       const { cashierId, date, branchId } = req.query as any;
@@ -15153,7 +15153,7 @@ export async function registerRoutes(
   // Cashier Performance Sales Data API - بيانات مبيعات أداء الكاشير
   // ==========================================
 
-  app.get("/api/cashier-performance-sales", isAuthenticated, requirePermission("cashier_performance", "view"), async (req, res) => {
+  app.get("/api/cashier-performance-sales", isAuthenticated, async (req, res) => {
     try {
       const { branchId, date, shiftType } = req.query;
       
@@ -15247,7 +15247,7 @@ export async function registerRoutes(
 
   // API for detailed cashier journals report with date range
   // Security: Non-admin/manager users can only see their own journals
-  app.get("/api/cashier-journals-report", isAuthenticated, requirePermission("cashier_performance", "view"), async (req, res) => {
+  app.get("/api/cashier-journals-report", isAuthenticated, async (req, res) => {
     try {
       const user = (req as any).currentUser as User;
       if (!user) {
@@ -15478,7 +15478,7 @@ export async function registerRoutes(
   // Performance Alerts API - تنبيهات الأداء
   // ==========================================
 
-  app.get("/api/performance-alerts", isAuthenticated, requirePermission("cashier_performance", "view"), async (req, res) => {
+  app.get("/api/performance-alerts", isAuthenticated, async (req, res) => {
     try {
       const { branchId, date, isRead } = req.query;
       
@@ -15689,7 +15689,7 @@ export async function registerRoutes(
   // Shift Performance Tracking API - تتبع أداء الشفت
   // ==========================================
 
-  app.get("/api/shift-performance-tracking", isAuthenticated, requirePermission("cashier_performance", "view"), async (req, res) => {
+  app.get("/api/shift-performance-tracking", isAuthenticated, async (req, res) => {
     try {
       const { branchId, date } = req.query;
       
