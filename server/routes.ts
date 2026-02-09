@@ -2723,7 +2723,7 @@ export async function registerRoutes(
   });
 
   // Test Twilio Connection
-  app.post("/api/integrations/twilio/test", isAuthenticated, async (req, res) => {
+  app.post("/api/integrations/twilio/test", isAuthenticated, requirePermission("integrations", "edit"), async (req, res) => {
     try {
       const twilioSid = process.env.TWILIO_ACCOUNT_SID;
       const twilioToken = process.env.TWILIO_AUTH_TOKEN;
@@ -15916,7 +15916,7 @@ export async function registerRoutes(
   });
 
   // Marketing Campaigns - الحملات التسويقية
-  app.get("/api/marketing/campaigns", isAuthenticated, async (req, res) => {
+  app.get("/api/marketing/campaigns", isAuthenticated, requirePermission("marketing_campaigns", "view"), async (req, res) => {
     try {
       const { status, season, objective } = req.query;
       const filters: { status?: string; season?: string; objective?: string } = {};
@@ -15932,7 +15932,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/marketing/campaigns/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/marketing/campaigns/:id", isAuthenticated, requirePermission("marketing_campaigns", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -15949,7 +15949,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/marketing/campaigns", isAuthenticated, async (req, res) => {
+  app.post("/api/marketing/campaigns", isAuthenticated, requirePermission("marketing_campaigns", "create"), async (req, res) => {
     try {
       const validatedData = insertMarketingCampaignSchema.parse(req.body);
       const campaign = await storage.createMarketingCampaign(validatedData);
@@ -15963,7 +15963,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/marketing/campaigns/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/marketing/campaigns/:id", isAuthenticated, requirePermission("marketing_campaigns", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -15984,7 +15984,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/marketing/campaigns/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/marketing/campaigns/:id", isAuthenticated, requirePermission("marketing_campaigns", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -16002,7 +16002,7 @@ export async function registerRoutes(
   });
 
   // Campaign Budget Allocations - تخصيصات ميزانية الحملة
-  app.get("/api/marketing/campaigns/:campaignId/budget-allocations", isAuthenticated, async (req, res) => {
+  app.get("/api/marketing/campaigns/:campaignId/budget-allocations", isAuthenticated, requirePermission("marketing_campaigns", "view"), async (req, res) => {
     try {
       const campaignId = parseInt(req.params.campaignId);
       if (isNaN(campaignId)) {
@@ -16016,7 +16016,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/marketing/campaigns/:campaignId/budget-allocations", isAuthenticated, async (req, res) => {
+  app.post("/api/marketing/campaigns/:campaignId/budget-allocations", isAuthenticated, requirePermission("marketing_campaigns", "create"), async (req, res) => {
     try {
       const campaignId = parseInt(req.params.campaignId);
       if (isNaN(campaignId)) {
@@ -16034,7 +16034,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/marketing/budget-allocations/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/marketing/budget-allocations/:id", isAuthenticated, requirePermission("marketing_campaigns", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -16055,7 +16055,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/marketing/budget-allocations/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/marketing/budget-allocations/:id", isAuthenticated, requirePermission("marketing_campaigns", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -16073,7 +16073,7 @@ export async function registerRoutes(
   });
 
   // Campaign Goals - أهداف الحملة
-  app.get("/api/marketing/campaigns/:campaignId/goals", isAuthenticated, async (req, res) => {
+  app.get("/api/marketing/campaigns/:campaignId/goals", isAuthenticated, requirePermission("marketing_goals", "view"), async (req, res) => {
     try {
       const campaignId = parseInt(req.params.campaignId);
       if (isNaN(campaignId)) {
@@ -16087,7 +16087,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/marketing/campaigns/:campaignId/goals", isAuthenticated, async (req, res) => {
+  app.post("/api/marketing/campaigns/:campaignId/goals", isAuthenticated, requirePermission("marketing_goals", "create"), async (req, res) => {
     try {
       const campaignId = parseInt(req.params.campaignId);
       if (isNaN(campaignId)) {
@@ -16105,7 +16105,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/marketing/goals/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/marketing/goals/:id", isAuthenticated, requirePermission("marketing_goals", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -16126,7 +16126,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/marketing/goals/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/marketing/goals/:id", isAuthenticated, requirePermission("marketing_goals", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -16144,7 +16144,7 @@ export async function registerRoutes(
   });
 
   // Campaign Expenses - مصروفات الحملات
-  app.get("/api/marketing/expenses", isAuthenticated, async (req, res) => {
+  app.get("/api/marketing/expenses", isAuthenticated, requirePermission("marketing_expenses", "view"), async (req, res) => {
     try {
       const { campaignId, category, status, startDate, endDate } = req.query;
       const campaignIdStr = parseQueryString(campaignId);
@@ -16162,7 +16162,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/marketing/campaigns/:campaignId/expenses", isAuthenticated, async (req, res) => {
+  app.get("/api/marketing/campaigns/:campaignId/expenses", isAuthenticated, requirePermission("marketing_expenses", "view"), async (req, res) => {
     try {
       const campaignId = parseInt(req.params.campaignId);
       if (isNaN(campaignId)) {
@@ -16176,7 +16176,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/marketing/campaigns/:campaignId/expenses/total", isAuthenticated, async (req, res) => {
+  app.get("/api/marketing/campaigns/:campaignId/expenses/total", isAuthenticated, requirePermission("marketing_expenses", "view"), async (req, res) => {
     try {
       const campaignId = parseInt(req.params.campaignId);
       if (isNaN(campaignId)) {
@@ -16190,7 +16190,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/marketing/campaigns/:campaignId/expenses/by-category", isAuthenticated, async (req, res) => {
+  app.get("/api/marketing/campaigns/:campaignId/expenses/by-category", isAuthenticated, requirePermission("marketing_expenses", "view"), async (req, res) => {
     try {
       const campaignId = parseInt(req.params.campaignId);
       if (isNaN(campaignId)) {
@@ -16204,7 +16204,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/marketing/campaigns/:campaignId/expenses", isAuthenticated, async (req, res) => {
+  app.post("/api/marketing/campaigns/:campaignId/expenses", isAuthenticated, requirePermission("marketing_expenses", "create"), async (req, res) => {
     try {
       const campaignId = parseInt(req.params.campaignId);
       if (isNaN(campaignId)) {
@@ -16227,7 +16227,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/marketing/expenses/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/marketing/expenses/:id", isAuthenticated, requirePermission("marketing_expenses", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -16256,7 +16256,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/marketing/expenses/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/marketing/expenses/:id", isAuthenticated, requirePermission("marketing_expenses", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -16274,7 +16274,7 @@ export async function registerRoutes(
   });
 
   // Marketing Calendar Events - تقويم التسويق
-  app.get("/api/marketing/calendar-events", isAuthenticated, async (req, res) => {
+  app.get("/api/marketing/calendar-events", isAuthenticated, requirePermission("marketing_calendar", "view"), async (req, res) => {
     try {
       const { campaignId, startDate, endDate } = req.query;
       const filters: { campaignId?: number; startDate?: string; endDate?: string } = {};
@@ -16290,7 +16290,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/marketing/calendar-events", isAuthenticated, async (req, res) => {
+  app.post("/api/marketing/calendar-events", isAuthenticated, requirePermission("marketing_calendar", "create"), async (req, res) => {
     try {
       const validatedData = insertMarketingCalendarEventSchema.parse(req.body);
       const event = await storage.createMarketingCalendarEvent(validatedData);
@@ -16304,7 +16304,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/marketing/calendar-events/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/marketing/calendar-events/:id", isAuthenticated, requirePermission("marketing_calendar", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -16325,7 +16325,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/marketing/calendar-events/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/marketing/calendar-events/:id", isAuthenticated, requirePermission("marketing_calendar", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -16343,7 +16343,7 @@ export async function registerRoutes(
   });
 
   // Marketing Influencers - المؤثرين
-  app.get("/api/marketing/influencers", isAuthenticated, async (req, res) => {
+  app.get("/api/marketing/influencers", isAuthenticated, requirePermission("marketing_influencers", "view"), async (req, res) => {
     try {
       const { specialty, isActive } = req.query;
       const filters: { specialty?: string; isActive?: boolean } = {};
@@ -16359,7 +16359,7 @@ export async function registerRoutes(
   });
 
   // Export Influencers to Excel - MUST be before /:id route
-  app.get("/api/marketing/influencers/export/excel", isAuthenticated, async (req, res) => {
+  app.get("/api/marketing/influencers/export/excel", isAuthenticated, requirePermission("marketing_influencers", "view"), async (req, res) => {
     try {
       const influencers = await storage.getAllMarketingInfluencers({});
       
@@ -16402,7 +16402,7 @@ export async function registerRoutes(
   });
 
   // Export Influencers to PDF - MUST be before /:id route
-  app.get("/api/marketing/influencers/export/pdf", isAuthenticated, async (req, res) => {
+  app.get("/api/marketing/influencers/export/pdf", isAuthenticated, requirePermission("marketing_influencers", "view"), async (req, res) => {
     try {
       const influencers = await storage.getAllMarketingInfluencers({});
       const { generatePdfFromHtml } = await import("./pdf-generator");
@@ -16521,7 +16521,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/marketing/influencers/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/marketing/influencers/:id", isAuthenticated, requirePermission("marketing_influencers", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -16538,7 +16538,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/marketing/influencers", isAuthenticated, async (req, res) => {
+  app.post("/api/marketing/influencers", isAuthenticated, requirePermission("marketing_influencers", "create"), async (req, res) => {
     try {
       const validatedData = insertMarketingInfluencerSchema.parse(req.body);
       const influencer = await storage.createMarketingInfluencer(validatedData);
@@ -16552,7 +16552,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/marketing/influencers/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/marketing/influencers/:id", isAuthenticated, requirePermission("marketing_influencers", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -16573,7 +16573,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/marketing/influencers/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/marketing/influencers/:id", isAuthenticated, requirePermission("marketing_influencers", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -16591,7 +16591,7 @@ export async function registerRoutes(
   });
 
   // Import influencers from Excel - استيراد المؤثرين من Excel
-  app.post("/api/marketing/influencers/import", isAuthenticated, async (req, res) => {
+  app.post("/api/marketing/influencers/import", isAuthenticated, requirePermission("marketing_influencers", "create"), async (req, res) => {
     try {
       const { items } = req.body;
       if (!items || !Array.isArray(items) || items.length === 0) {
@@ -16649,7 +16649,7 @@ export async function registerRoutes(
   });
 
   // Influencer Campaign Links - روابط المؤثرين بالحملات
-  app.get("/api/marketing/influencer-links", isAuthenticated, async (req, res) => {
+  app.get("/api/marketing/influencer-links", isAuthenticated, requirePermission("marketing_influencers", "view"), async (req, res) => {
     try {
       const { campaignId, influencerId } = req.query;
       const filters: { campaignId?: number; influencerId?: number } = {};
@@ -16664,7 +16664,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/marketing/influencer-links", isAuthenticated, async (req, res) => {
+  app.post("/api/marketing/influencer-links", isAuthenticated, requirePermission("marketing_influencers", "create"), async (req, res) => {
     try {
       const validatedData = insertInfluencerCampaignLinkSchema.parse(req.body);
       const link = await storage.createInfluencerCampaignLink(validatedData);
@@ -16678,7 +16678,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/marketing/influencer-links/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/marketing/influencer-links/:id", isAuthenticated, requirePermission("marketing_influencers", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -16699,7 +16699,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/marketing/influencer-links/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/marketing/influencer-links/:id", isAuthenticated, requirePermission("marketing_influencers", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -16717,7 +16717,7 @@ export async function registerRoutes(
   });
 
   // Influencer Contacts - جهات اتصال المؤثرين
-  app.get("/api/marketing/influencers/:influencerId/contacts", isAuthenticated, async (req, res) => {
+  app.get("/api/marketing/influencers/:influencerId/contacts", isAuthenticated, requirePermission("marketing_influencers", "view"), async (req, res) => {
     try {
       const influencerId = parseInt(req.params.influencerId);
       if (isNaN(influencerId)) {
@@ -16731,7 +16731,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/marketing/influencer-contacts", isAuthenticated, async (req, res) => {
+  app.post("/api/marketing/influencer-contacts", isAuthenticated, requirePermission("marketing_influencers", "create"), async (req, res) => {
     try {
       const validatedData = insertInfluencerContactSchema.parse(req.body);
       const contact = await storage.createInfluencerContact(validatedData);
@@ -16745,7 +16745,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/marketing/influencer-contacts/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/marketing/influencer-contacts/:id", isAuthenticated, requirePermission("marketing_influencers", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -16763,7 +16763,7 @@ export async function registerRoutes(
   });
 
   // Influencer Payments - كشف حساب المؤثرين
-  app.get("/api/marketing/influencer-payments", isAuthenticated, async (req, res) => {
+  app.get("/api/marketing/influencer-payments", isAuthenticated, requirePermission("marketing_influencers", "view"), async (req, res) => {
     try {
       const { influencerId, campaignId, status, startDate, endDate } = req.query;
       const influencerIdStr = parseQueryString(influencerId);
@@ -16782,7 +16782,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/marketing/influencers/:influencerId/payments", isAuthenticated, async (req, res) => {
+  app.get("/api/marketing/influencers/:influencerId/payments", isAuthenticated, requirePermission("marketing_influencers", "view"), async (req, res) => {
     try {
       const influencerId = parseInt(req.params.influencerId);
       if (isNaN(influencerId)) {
@@ -16796,7 +16796,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/marketing/influencers/:influencerId/total-payments", isAuthenticated, async (req, res) => {
+  app.get("/api/marketing/influencers/:influencerId/total-payments", isAuthenticated, requirePermission("marketing_influencers", "view"), async (req, res) => {
     try {
       const influencerId = parseInt(req.params.influencerId);
       if (isNaN(influencerId)) {
@@ -16810,7 +16810,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/marketing/influencers/:influencerId/expenses", isAuthenticated, async (req, res) => {
+  app.get("/api/marketing/influencers/:influencerId/expenses", isAuthenticated, requirePermission("marketing_influencers", "view"), async (req, res) => {
     try {
       const influencerId = parseInt(req.params.influencerId);
       if (isNaN(influencerId)) {
@@ -16824,7 +16824,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/marketing/influencers/:influencerId/total-expenses", isAuthenticated, async (req, res) => {
+  app.get("/api/marketing/influencers/:influencerId/total-expenses", isAuthenticated, requirePermission("marketing_influencers", "view"), async (req, res) => {
     try {
       const influencerId = parseInt(req.params.influencerId);
       if (isNaN(influencerId)) {
@@ -16838,7 +16838,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/marketing/influencer-payments/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/marketing/influencer-payments/:id", isAuthenticated, requirePermission("marketing_influencers", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -16855,7 +16855,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/marketing/influencer-payments", isAuthenticated, async (req, res) => {
+  app.post("/api/marketing/influencer-payments", isAuthenticated, requirePermission("marketing_influencers", "create"), async (req, res) => {
     try {
       const currentUser = getCurrentUser(req);
       const data = { ...req.body, createdBy: currentUser?.id };
@@ -16871,7 +16871,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/marketing/influencer-payments/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/marketing/influencer-payments/:id", isAuthenticated, requirePermission("marketing_influencers", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -16888,7 +16888,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/marketing/influencer-payments/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/marketing/influencer-payments/:id", isAuthenticated, requirePermission("marketing_influencers", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -16906,7 +16906,7 @@ export async function registerRoutes(
   });
 
   // Influencer Contracts - عقود المؤثرين
-  app.get("/api/marketing/influencer-contracts", isAuthenticated, async (req, res) => {
+  app.get("/api/marketing/influencer-contracts", isAuthenticated, requirePermission("marketing_influencers", "view"), async (req, res) => {
     try {
       const { status, influencerId, branchId, paymentStatus } = req.query;
       const filters: { status?: string; influencerId?: number; branchId?: string; paymentStatus?: string } = {};
@@ -16923,7 +16923,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/marketing/influencer-contracts/generate-number", isAuthenticated, async (req, res) => {
+  app.get("/api/marketing/influencer-contracts/generate-number", isAuthenticated, requirePermission("marketing_influencers", "view"), async (req, res) => {
     try {
       const contractNumber = await storage.generateContractNumber();
       res.json({ contractNumber });
@@ -16933,7 +16933,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/marketing/influencer-contracts/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/marketing/influencer-contracts/:id", isAuthenticated, requirePermission("marketing_influencers", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -16950,7 +16950,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/marketing/influencer-contracts", isAuthenticated, async (req, res) => {
+  app.post("/api/marketing/influencer-contracts", isAuthenticated, requirePermission("marketing_influencers", "create"), async (req, res) => {
     try {
       const currentUser = getCurrentUser(req);
       const data = { ...req.body, createdBy: currentUser?.id };
@@ -16968,7 +16968,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/marketing/influencer-contracts/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/marketing/influencer-contracts/:id", isAuthenticated, requirePermission("marketing_influencers", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -16985,7 +16985,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/marketing/influencer-contracts/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/marketing/influencer-contracts/:id", isAuthenticated, requirePermission("marketing_influencers", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -17003,7 +17003,7 @@ export async function registerRoutes(
   });
 
   // Export Contract as PDF
-  app.get("/api/marketing/influencer-contracts/:id/pdf", isAuthenticated, async (req, res) => {
+  app.get("/api/marketing/influencer-contracts/:id/pdf", isAuthenticated, requirePermission("marketing_influencers", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -17217,7 +17217,7 @@ export async function registerRoutes(
   });
 
   // Marketing Tasks - مهام التسويق
-  app.get("/api/marketing/tasks", isAuthenticated, async (req, res) => {
+  app.get("/api/marketing/tasks", isAuthenticated, requirePermission("marketing_tasks", "view"), async (req, res) => {
     try {
       const { campaignId, assignedTo, status } = req.query;
       const filters: { campaignId?: number; assignedTo?: string; status?: string } = {};
@@ -17233,7 +17233,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/marketing/tasks/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/marketing/tasks/:id", isAuthenticated, requirePermission("marketing_tasks", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -17250,7 +17250,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/marketing/tasks", isAuthenticated, async (req, res) => {
+  app.post("/api/marketing/tasks", isAuthenticated, requirePermission("marketing_tasks", "create"), async (req, res) => {
     try {
       const validatedData = insertMarketingTaskSchema.parse(req.body);
       const task = await storage.createMarketingTask(validatedData);
@@ -17264,7 +17264,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/marketing/tasks/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/marketing/tasks/:id", isAuthenticated, requirePermission("marketing_tasks", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -17285,7 +17285,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/marketing/tasks/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/marketing/tasks/:id", isAuthenticated, requirePermission("marketing_tasks", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -17303,7 +17303,7 @@ export async function registerRoutes(
   });
 
   // Marketing Task Activities - نشاطات مهام التسويق
-  app.get("/api/marketing/tasks/:taskId/activities", isAuthenticated, async (req, res) => {
+  app.get("/api/marketing/tasks/:taskId/activities", isAuthenticated, requirePermission("marketing_tasks", "view"), async (req, res) => {
     try {
       const taskId = parseInt(req.params.taskId);
       if (isNaN(taskId)) {
@@ -17317,7 +17317,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/marketing/task-activities", isAuthenticated, async (req, res) => {
+  app.post("/api/marketing/task-activities", isAuthenticated, requirePermission("marketing_tasks", "create"), async (req, res) => {
     try {
       const validatedData = insertMarketingTaskActivitySchema.parse(req.body);
       const activity = await storage.createMarketingTaskActivity(validatedData);
@@ -17332,7 +17332,7 @@ export async function registerRoutes(
   });
 
   // Marketing Performance Reports - تقارير أداء التسويق
-  app.get("/api/marketing/reports", isAuthenticated, async (req, res) => {
+  app.get("/api/marketing/reports", isAuthenticated, requirePermission("marketing_reports", "view"), async (req, res) => {
     try {
       const { reportType, campaignId } = req.query;
       const filters: { reportType?: string; campaignId?: number } = {};
@@ -17347,7 +17347,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/marketing/reports/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/marketing/reports/:id", isAuthenticated, requirePermission("marketing_reports", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -17364,7 +17364,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/marketing/reports", isAuthenticated, async (req, res) => {
+  app.post("/api/marketing/reports", isAuthenticated, requirePermission("marketing_reports", "create"), async (req, res) => {
     try {
       const validatedData = insertMarketingPerformanceReportSchema.parse(req.body);
       const report = await storage.createMarketingPerformanceReport(validatedData);
@@ -17379,7 +17379,7 @@ export async function registerRoutes(
   });
 
   // Marketing Assets - أصول التسويق
-  app.get("/api/marketing/assets", isAuthenticated, async (req, res) => {
+  app.get("/api/marketing/assets", isAuthenticated, requirePermission("marketing_assets", "view"), async (req, res) => {
     try {
       const { campaignId, assetType } = req.query;
       const filters: { campaignId?: number; assetType?: string } = {};
@@ -17394,7 +17394,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/marketing/assets", isAuthenticated, async (req, res) => {
+  app.post("/api/marketing/assets", isAuthenticated, requirePermission("marketing_assets", "create"), async (req, res) => {
     try {
       const validatedData = insertMarketingAssetSchema.parse(req.body);
       const asset = await storage.createMarketingAsset(validatedData);
@@ -17408,7 +17408,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/marketing/assets/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/marketing/assets/:id", isAuthenticated, requirePermission("marketing_assets", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -17429,7 +17429,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/marketing/assets/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/marketing/assets/:id", isAuthenticated, requirePermission("marketing_assets", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -17447,7 +17447,7 @@ export async function registerRoutes(
   });
 
   // Marketing Team Members - فريق التسويق
-  app.get("/api/marketing/team", isAuthenticated, async (req, res) => {
+  app.get("/api/marketing/team", isAuthenticated, requirePermission("marketing_team", "view"), async (req, res) => {
     try {
       const { isActive } = req.query;
       const filters: { isActive?: boolean } = {};
@@ -17461,7 +17461,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/marketing/team", isAuthenticated, async (req, res) => {
+  app.post("/api/marketing/team", isAuthenticated, requirePermission("marketing_team", "create"), async (req, res) => {
     try {
       const validatedData = insertMarketingTeamMemberSchema.parse(req.body);
       const member = await storage.createMarketingTeamMember(validatedData);
@@ -17475,7 +17475,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/marketing/team/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/marketing/team/:id", isAuthenticated, requirePermission("marketing_team", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -17496,7 +17496,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/marketing/team/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/marketing/team/:id", isAuthenticated, requirePermission("marketing_team", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
@@ -17579,7 +17579,7 @@ export async function registerRoutes(
   });
 
   // Marketing Statistics API endpoint
-  app.get("/api/marketing/statistics", isAuthenticated, async (req, res) => {
+  app.get("/api/marketing/statistics", isAuthenticated, requirePermission("marketing_campaigns", "view"), async (req, res) => {
     try {
       const campaigns = await storage.getAllMarketingCampaigns({});
       const influencers = await storage.getAllMarketingInfluencers({});
@@ -17669,7 +17669,7 @@ export async function registerRoutes(
   // ==========================================
 
   // Branch Shift Profiles - إعدادات أوقات الورديات حسب الفرع
-  app.get("/api/shift-profiles/:branchId", isAuthenticated, async (req, res) => {
+  app.get("/api/shift-profiles/:branchId", isAuthenticated, requirePermission("shifts", "view"), async (req, res) => {
     try {
       const { branchId } = req.params;
       
@@ -17689,7 +17689,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/shift-profiles/:branchId/:shiftCode", isAuthenticated, async (req, res) => {
+  app.get("/api/shift-profiles/:branchId/:shiftCode", isAuthenticated, requirePermission("shifts", "view"), async (req, res) => {
     try {
       const { branchId, shiftCode } = req.params;
       
@@ -17710,7 +17710,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/shift-profiles", isAuthenticated, async (req, res) => {
+  app.post("/api/shift-profiles", isAuthenticated, requirePermission("shifts", "create"), async (req, res) => {
     try {
       const { branchId, shiftCode, displayName, startTime, endTime, breakMinutes, graceMinutesBefore, graceMinutesAfter, sortOrder } = req.body;
       if (!branchId || !shiftCode || !displayName || !startTime || !endTime) {
@@ -17744,7 +17744,7 @@ export async function registerRoutes(
     }
   });
 
-  app.put("/api/shift-profiles/:branchId", isAuthenticated, async (req, res) => {
+  app.put("/api/shift-profiles/:branchId", isAuthenticated, requirePermission("shifts", "edit"), async (req, res) => {
     try {
       const { branchId } = req.params;
       const { profiles } = req.body;
@@ -17768,7 +17768,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/shift-profiles/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/shift-profiles/:id", isAuthenticated, requirePermission("shifts", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -17793,7 +17793,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/shift-profiles/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/shift-profiles/:id", isAuthenticated, requirePermission("shifts", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -17818,7 +17818,7 @@ export async function registerRoutes(
   });
 
   // Schedule Templates - قوالب الجداول
-  app.get("/api/schedule-templates", isAuthenticated, async (req, res) => {
+  app.get("/api/schedule-templates", isAuthenticated, requirePermission("shifts", "view"), async (req, res) => {
     try {
       const { branchId } = req.query;
       const templates = await storage.getAllScheduleTemplates(branchId as string);
@@ -17829,7 +17829,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/schedule-templates/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/schedule-templates/:id", isAuthenticated, requirePermission("shifts", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -17851,7 +17851,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/schedule-templates", isAuthenticated, async (req, res) => {
+  app.post("/api/schedule-templates", isAuthenticated, requirePermission("shifts", "create"), async (req, res) => {
     try {
       const currentUser = getCurrentUser(req);
       const validatedData = insertScheduleTemplateSchema.parse({
@@ -17869,7 +17869,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/schedule-templates/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/schedule-templates/:id", isAuthenticated, requirePermission("shifts", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -17896,7 +17896,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/schedule-templates/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/schedule-templates/:id", isAuthenticated, requirePermission("shifts", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -17920,7 +17920,7 @@ export async function registerRoutes(
   });
 
   // Schedule Periods - فترات الجدول
-  app.get("/api/schedule-periods", isAuthenticated, async (req, res) => {
+  app.get("/api/schedule-periods", isAuthenticated, requirePermission("shifts", "view"), async (req, res) => {
     try {
       const { branchId } = req.query;
       const periods = await storage.getAllSchedulePeriods(branchId as string);
@@ -17931,7 +17931,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/schedule-periods/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/schedule-periods/:id", isAuthenticated, requirePermission("shifts", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -17953,7 +17953,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/schedule-periods", isAuthenticated, async (req, res) => {
+  app.post("/api/schedule-periods", isAuthenticated, requirePermission("shifts", "create"), async (req, res) => {
     try {
       const currentUser = getCurrentUser(req);
       const validatedData = insertSchedulePeriodSchema.parse({
@@ -17971,7 +17971,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/schedule-periods/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/schedule-periods/:id", isAuthenticated, requirePermission("shifts", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -17998,7 +17998,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/schedule-periods/:id/publish", isAuthenticated, async (req, res) => {
+  app.post("/api/schedule-periods/:id/publish", isAuthenticated, requirePermission("shifts", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -18022,7 +18022,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/schedule-periods/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/schedule-periods/:id", isAuthenticated, requirePermission("shifts", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -18046,7 +18046,7 @@ export async function registerRoutes(
   });
 
   // Employee Schedules - جداول الموظفين
-  app.get("/api/employee-schedules", isAuthenticated, async (req, res) => {
+  app.get("/api/employee-schedules", isAuthenticated, requirePermission("shifts", "view"), async (req, res) => {
     try {
       const { periodId, employeeId, date, branchId, startDate, endDate } = req.query;
       
@@ -18108,7 +18108,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/employee-schedules", isAuthenticated, async (req, res) => {
+  app.post("/api/employee-schedules", isAuthenticated, requirePermission("shifts", "create"), async (req, res) => {
     try {
       // SECURITY: Verify branch access for non-admin users
       if (!isUserAdmin(req) && req.body.branchId) {
@@ -18130,7 +18130,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/employee-schedules/bulk", isAuthenticated, async (req, res) => {
+  app.post("/api/employee-schedules/bulk", isAuthenticated, requirePermission("shifts", "create"), async (req, res) => {
     try {
       const { schedules } = req.body;
       if (!Array.isArray(schedules)) {
@@ -18174,7 +18174,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/employee-schedules/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/employee-schedules/:id", isAuthenticated, requirePermission("shifts", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -18210,7 +18210,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/employee-schedules/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/employee-schedules/:id", isAuthenticated, requirePermission("shifts", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -18261,7 +18261,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/weekly-schedule-locks", isAuthenticated, async (req, res) => {
+  app.post("/api/weekly-schedule-locks", isAuthenticated, requirePermission("shifts", "create"), async (req, res) => {
     try {
       const { branchId, weekStartDate, shiftProfile, notes } = req.body;
       
@@ -18350,7 +18350,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/schedule-change-audit", isAuthenticated, async (req, res) => {
+  app.post("/api/schedule-change-audit", isAuthenticated, requirePermission("shifts", "create"), async (req, res) => {
     try {
       const { branchId, weekStartDate, employeeId, employeeName, changeType, scheduleDate, oldValue, newValue, changeReason } = req.body;
       
@@ -18770,7 +18770,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/time-entries", isAuthenticated, async (req, res) => {
+  app.post("/api/time-entries", isAuthenticated, requirePermission("timesheet", "create"), async (req, res) => {
     try {
       const validatedData = insertTimeEntrySchema.parse(req.body);
       const entry = await storage.createTimeEntry(validatedData);
@@ -19312,7 +19312,7 @@ export async function registerRoutes(
   // =====================================================
   
   // Get all branch employees or filter by branch
-  app.get("/api/branch-employees", isAuthenticated, async (req, res) => {
+  app.get("/api/branch-employees", isAuthenticated, requirePermission("branch_employees", "view"), async (req, res) => {
     try {
       // SECURITY: Enforce branch filtering for non-admin users
       const queryBranchId = req.query.branchId as string | undefined;
@@ -19357,7 +19357,7 @@ export async function registerRoutes(
   });
 
   // Get branch employees statistics
-  app.get("/api/branch-employees/stats", isAuthenticated, async (req, res) => {
+  app.get("/api/branch-employees/stats", isAuthenticated, requirePermission("branch_employees", "view"), async (req, res) => {
     try {
       // SECURITY: Enforce branch filtering for non-admin users
       const queryBranchId = req.query.branchId as string | undefined;
@@ -19389,7 +19389,7 @@ export async function registerRoutes(
   });
 
   // Get single branch employee
-  app.get("/api/branch-employees/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/branch-employees/:id", isAuthenticated, requirePermission("branch_employees", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -19415,7 +19415,7 @@ export async function registerRoutes(
   });
 
   // Create branch employee
-  app.post("/api/branch-employees", isAuthenticated, async (req, res) => {
+  app.post("/api/branch-employees", isAuthenticated, requirePermission("branch_employees", "create"), async (req, res) => {
     try {
       const { insertBranchEmployeeSchema } = await import("@shared/schema");
       const parsed = insertBranchEmployeeSchema.safeParse(req.body);
@@ -19451,7 +19451,7 @@ export async function registerRoutes(
   });
 
   // Update branch employee
-  app.put("/api/branch-employees/:id", isAuthenticated, async (req, res) => {
+  app.put("/api/branch-employees/:id", isAuthenticated, requirePermission("branch_employees", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -19493,7 +19493,7 @@ export async function registerRoutes(
   });
 
   // Delete branch employee - مدير النظام فقط
-  app.delete("/api/branch-employees/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/branch-employees/:id", isAuthenticated, requirePermission("branch_employees", "delete"), async (req, res) => {
     try {
       // التحقق من صلاحية مدير النظام فقط
       const userRole = req.currentUser?.role;
@@ -19516,7 +19516,7 @@ export async function registerRoutes(
   });
 
   // Link branch employee to user account
-  app.put("/api/branch-employees/:id/link-user", isAuthenticated, async (req, res) => {
+  app.put("/api/branch-employees/:id/link-user", isAuthenticated, requirePermission("branch_employees", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -19588,7 +19588,7 @@ export async function registerRoutes(
   });
 
   // Get schedules for branch employee
-  app.get("/api/branch-employees/:id/schedules", isAuthenticated, async (req, res) => {
+  app.get("/api/branch-employees/:id/schedules", isAuthenticated, requirePermission("branch_employees", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -19602,7 +19602,7 @@ export async function registerRoutes(
   });
 
   // Get branch employee by linked user ID
-  app.get("/api/branch-employees/by-user/:userId", isAuthenticated, async (req, res) => {
+  app.get("/api/branch-employees/by-user/:userId", isAuthenticated, requirePermission("branch_employees", "view"), async (req, res) => {
     try {
       const userId = req.params.userId;
       const employee = await storage.getBranchEmployeeByLinkedUserId(userId);
@@ -19618,7 +19618,7 @@ export async function registerRoutes(
 
   // ==================== Org Job Roles - الهيكل الوظيفي ====================
   
-  app.get("/api/org-job-roles", isAuthenticated, async (req, res) => {
+  app.get("/api/org-job-roles", isAuthenticated, requirePermission("organizational_structure", "view"), async (req, res) => {
     try {
       const roles = await storage.getAllOrgJobRoles();
       res.json(roles);
@@ -19628,7 +19628,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/org-job-roles/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/org-job-roles/:id", isAuthenticated, requirePermission("organizational_structure", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -19644,7 +19644,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/org-job-roles", isAuthenticated, async (req, res) => {
+  app.post("/api/org-job-roles", isAuthenticated, requirePermission("organizational_structure", "create"), async (req, res) => {
     try {
       const role = await storage.createOrgJobRole(req.body);
       res.status(201).json(role);
@@ -19654,7 +19654,7 @@ export async function registerRoutes(
     }
   });
 
-  app.put("/api/org-job-roles/:id", isAuthenticated, async (req, res) => {
+  app.put("/api/org-job-roles/:id", isAuthenticated, requirePermission("organizational_structure", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -19670,7 +19670,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/org-job-roles/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/org-job-roles/:id", isAuthenticated, requirePermission("organizational_structure", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -19689,7 +19689,7 @@ export async function registerRoutes(
   // ==================== Employee Settings - إعدادات بيانات الموظفين ====================
   
   // Get all employee settings
-  app.get("/api/employee-settings", isAuthenticated, async (req, res) => {
+  app.get("/api/employee-settings", isAuthenticated, requirePermission("branch_employees", "view"), async (req, res) => {
     try {
       const { category } = req.query;
       if (category && typeof category === 'string') {
@@ -19705,7 +19705,7 @@ export async function registerRoutes(
   });
 
   // Get single employee setting
-  app.get("/api/employee-settings/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/employee-settings/:id", isAuthenticated, requirePermission("branch_employees", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -19722,7 +19722,7 @@ export async function registerRoutes(
   });
 
   // Create employee setting
-  app.post("/api/employee-settings", isAuthenticated, async (req, res) => {
+  app.post("/api/employee-settings", isAuthenticated, requirePermission("branch_employees", "edit"), async (req, res) => {
     try {
       const setting = await storage.createEmployeeSetting(req.body);
       res.status(201).json(setting);
@@ -19733,7 +19733,7 @@ export async function registerRoutes(
   });
 
   // Update employee setting
-  app.put("/api/employee-settings/:id", isAuthenticated, async (req, res) => {
+  app.put("/api/employee-settings/:id", isAuthenticated, requirePermission("branch_employees", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -19750,7 +19750,7 @@ export async function registerRoutes(
   });
 
   // Delete employee setting (soft delete)
-  app.delete("/api/employee-settings/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/employee-settings/:id", isAuthenticated, requirePermission("branch_employees", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
@@ -20308,7 +20308,7 @@ export async function registerRoutes(
   });
 
   // PDF Generation endpoint for shift schedule report
-  app.post("/api/reports/shift-schedule-pdf", isAuthenticated, async (req, res) => {
+  app.post("/api/reports/shift-schedule-pdf", isAuthenticated, requirePermission("shifts", "view"), async (req, res) => {
     try {
       const data: ShiftSchedulePdfData = req.body;
       if (!data.branchName || !data.periodStart || !data.periodEnd || !data.employees || !Array.isArray(data.employees)) {
@@ -20325,7 +20325,7 @@ export async function registerRoutes(
   });
 
   // PDF Generation endpoint for weekly schedule table
-  app.post("/api/reports/weekly-schedule-pdf", isAuthenticated, async (req, res) => {
+  app.post("/api/reports/weekly-schedule-pdf", isAuthenticated, requirePermission("shifts", "view"), async (req, res) => {
     try {
       const data: WeeklySchedulePdfData = req.body;
       if (!data.branchName || !data.periodStart || !data.periodEnd || !data.employees || !Array.isArray(data.employees)) {
@@ -20434,7 +20434,7 @@ export async function registerRoutes(
   // ==================== P&L (Profit & Loss) Dashboard Routes ====================
 
   // Get all financial periods with optional filters
-  app.get("/api/financials/periods", isAuthenticated, async (req, res) => {
+  app.get("/api/financials/periods", isAuthenticated, requirePermission("pnl_dashboard", "view"), async (req, res) => {
     try {
       const { branchId, year, month } = req.query;
       
@@ -20459,7 +20459,7 @@ export async function registerRoutes(
   });
 
   // Get a single financial period
-  app.get("/api/financials/periods/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/financials/periods/:id", isAuthenticated, requirePermission("pnl_dashboard", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const period = await storage.getFinancialPeriod(id);
@@ -20483,7 +20483,7 @@ export async function registerRoutes(
   });
 
   // Get complete P&L data for a period
-  app.get("/api/financials/periods/:id/complete", isAuthenticated, async (req, res) => {
+  app.get("/api/financials/periods/:id/complete", isAuthenticated, requirePermission("pnl_dashboard", "view"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const data = await storage.getCompletePnLData(id);
@@ -20507,7 +20507,7 @@ export async function registerRoutes(
   });
 
   // Create a new financial period
-  app.post("/api/financials/periods", isAuthenticated, async (req, res) => {
+  app.post("/api/financials/periods", isAuthenticated, requirePermission("pnl_dashboard", "create"), async (req, res) => {
     try {
       const { branchId, month, year, targetRevenue, targetGrossMargin, targetNetMargin, notes } = req.body;
       
@@ -20537,7 +20537,7 @@ export async function registerRoutes(
   });
 
   // Update a financial period
-  app.put("/api/financials/periods/:id", isAuthenticated, async (req, res) => {
+  app.put("/api/financials/periods/:id", isAuthenticated, requirePermission("pnl_dashboard", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const period = await storage.updateFinancialPeriod(id, req.body);
@@ -20552,7 +20552,7 @@ export async function registerRoutes(
   });
 
   // Delete a financial period
-  app.delete("/api/financials/periods/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/financials/periods/:id", isAuthenticated, requirePermission("pnl_dashboard", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const deleted = await storage.deleteFinancialPeriod(id);
@@ -20567,7 +20567,7 @@ export async function registerRoutes(
   });
 
   // Bulk update sales data for a period
-  app.post("/api/financials/periods/:id/sales", isAuthenticated, async (req, res) => {
+  app.post("/api/financials/periods/:id/sales", isAuthenticated, requirePermission("pnl_dashboard", "edit"), async (req, res) => {
     try {
       const periodId = parseInt(req.params.id);
       const { salesData } = req.body;
@@ -20585,7 +20585,7 @@ export async function registerRoutes(
   });
 
   // Bulk update COGS data for a period
-  app.post("/api/financials/periods/:id/cogs", isAuthenticated, async (req, res) => {
+  app.post("/api/financials/periods/:id/cogs", isAuthenticated, requirePermission("pnl_dashboard", "edit"), async (req, res) => {
     try {
       const periodId = parseInt(req.params.id);
       const { cogsData } = req.body;
@@ -20602,7 +20602,7 @@ export async function registerRoutes(
   });
 
   // Bulk update operating expenses for a period
-  app.post("/api/financials/periods/:id/operating-expenses", isAuthenticated, async (req, res) => {
+  app.post("/api/financials/periods/:id/operating-expenses", isAuthenticated, requirePermission("pnl_dashboard", "edit"), async (req, res) => {
     try {
       const periodId = parseInt(req.params.id);
       const { expensesData } = req.body;
@@ -20619,7 +20619,7 @@ export async function registerRoutes(
   });
 
   // Bulk update fixed costs for a period
-  app.post("/api/financials/periods/:id/fixed-costs", isAuthenticated, async (req, res) => {
+  app.post("/api/financials/periods/:id/fixed-costs", isAuthenticated, requirePermission("pnl_dashboard", "edit"), async (req, res) => {
     try {
       const periodId = parseInt(req.params.id);
       const { costsData } = req.body;
@@ -20636,7 +20636,7 @@ export async function registerRoutes(
   });
 
   // Calculate and save metrics for a period
-  app.post("/api/financials/periods/:id/calculate-metrics", isAuthenticated, async (req, res) => {
+  app.post("/api/financials/periods/:id/calculate-metrics", isAuthenticated, requirePermission("pnl_dashboard", "edit"), async (req, res) => {
     try {
       const periodId = parseInt(req.params.id);
       const data = await storage.getCompletePnLData(periodId);
@@ -20774,7 +20774,7 @@ export async function registerRoutes(
   });
 
   // Import all P&L data from Excel file and calculate metrics
-  app.post("/api/financials/periods/:id/import-excel", isAuthenticated, async (req, res) => {
+  app.post("/api/financials/periods/:id/import-excel", isAuthenticated, requirePermission("pnl_dashboard", "edit"), async (req, res) => {
     try {
       const periodId = parseInt(req.params.id);
       const { sales, cogs, operatingExpenses, fixedCosts } = req.body;
@@ -21078,7 +21078,7 @@ export async function registerRoutes(
   });
 
   // Get or create period for branch/date combination
-  app.post("/api/financials/periods/get-or-create", isAuthenticated, async (req, res) => {
+  app.post("/api/financials/periods/get-or-create", isAuthenticated, requirePermission("pnl_dashboard", "create"), async (req, res) => {
     try {
       const { branchId, year, month } = req.body;
       
@@ -21106,7 +21106,7 @@ export async function registerRoutes(
   });
 
   // Auto-import sales data from cashier journals for a period
-  app.post("/api/financials/periods/:id/import-sales", isAuthenticated, async (req, res) => {
+  app.post("/api/financials/periods/:id/import-sales", isAuthenticated, requirePermission("pnl_dashboard", "edit"), async (req, res) => {
     try {
       const periodId = parseInt(req.params.id);
       const period = await storage.getFinancialPeriod(periodId);
@@ -21166,7 +21166,7 @@ export async function registerRoutes(
   });
 
   // Get aggregated cashier data for a period (preview before import)
-  app.get("/api/financials/periods/:id/cashier-summary", isAuthenticated, async (req, res) => {
+  app.get("/api/financials/periods/:id/cashier-summary", isAuthenticated, requirePermission("pnl_dashboard", "view"), async (req, res) => {
     try {
       const periodId = parseInt(req.params.id);
       const period = await storage.getFinancialPeriod(periodId);
@@ -21223,7 +21223,7 @@ export async function registerRoutes(
   });
 
   // Get salary data from branch employees for a period
-  app.get("/api/financials/periods/:id/salary-summary", isAuthenticated, async (req, res) => {
+  app.get("/api/financials/periods/:id/salary-summary", isAuthenticated, requirePermission("pnl_dashboard", "view"), async (req, res) => {
     try {
       const periodId = parseInt(req.params.id);
       const period = await storage.getFinancialPeriod(periodId);
@@ -21261,7 +21261,7 @@ export async function registerRoutes(
   });
 
   // Compare current period with previous periods
-  app.get("/api/financials/periods/:id/comparison", isAuthenticated, async (req, res) => {
+  app.get("/api/financials/periods/:id/comparison", isAuthenticated, requirePermission("pnl_dashboard", "view"), async (req, res) => {
     try {
       const periodId = parseInt(req.params.id);
       const currentData = await storage.getCompletePnLData(periodId);
@@ -21345,7 +21345,7 @@ export async function registerRoutes(
   // ==========================================
 
   // Social Accounts
-  app.get("/api/social-accounts", isAuthenticated, async (req, res) => {
+  app.get("/api/social-accounts", isAuthenticated, requirePermission("marketing", "view"), async (req, res) => {
     try {
       const accounts = await storage.getAllSocialAccounts();
       res.json(accounts);
@@ -21355,7 +21355,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/social-accounts/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/social-accounts/:id", isAuthenticated, requirePermission("marketing", "view"), async (req, res) => {
     try {
       const account = await storage.getSocialAccount(parseInt(req.params.id));
       if (!account) {
@@ -21368,7 +21368,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/social-accounts", isAuthenticated, async (req, res) => {
+  app.post("/api/social-accounts", isAuthenticated, requirePermission("marketing", "create"), async (req, res) => {
     try {
       const account = await storage.createSocialAccount(req.body);
       res.status(201).json(account);
@@ -21378,7 +21378,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/social-accounts/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/social-accounts/:id", isAuthenticated, requirePermission("marketing", "edit"), async (req, res) => {
     try {
       const account = await storage.updateSocialAccount(parseInt(req.params.id), req.body);
       if (!account) {
@@ -21391,7 +21391,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/social-accounts/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/social-accounts/:id", isAuthenticated, requirePermission("marketing", "delete"), async (req, res) => {
     try {
       const success = await storage.deleteSocialAccount(parseInt(req.params.id));
       if (!success) {
@@ -21405,7 +21405,7 @@ export async function registerRoutes(
   });
 
   // Social Posts
-  app.get("/api/social-posts", isAuthenticated, async (req, res) => {
+  app.get("/api/social-posts", isAuthenticated, requirePermission("marketing", "view"), async (req, res) => {
     try {
       const { status } = req.query;
       const posts = status 
@@ -21418,7 +21418,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/social-posts/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/social-posts/:id", isAuthenticated, requirePermission("marketing", "view"), async (req, res) => {
     try {
       const post = await storage.getSocialPost(parseInt(req.params.id));
       if (!post) {
@@ -21431,7 +21431,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/social-posts", isAuthenticated, async (req, res) => {
+  app.post("/api/social-posts", isAuthenticated, requirePermission("marketing", "create"), async (req, res) => {
     try {
       const userId = req.currentUser?.id;
       const postData = { ...req.body, createdBy: userId };
@@ -21443,7 +21443,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/social-posts/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/social-posts/:id", isAuthenticated, requirePermission("marketing", "edit"), async (req, res) => {
     try {
       const post = await storage.updateSocialPost(parseInt(req.params.id), req.body);
       if (!post) {
@@ -21456,7 +21456,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/social-posts/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/social-posts/:id", isAuthenticated, requirePermission("marketing", "delete"), async (req, res) => {
     try {
       const success = await storage.deleteSocialPost(parseInt(req.params.id));
       if (!success) {
@@ -21470,7 +21470,7 @@ export async function registerRoutes(
   });
 
   // Social Media File Upload
-  app.post("/api/social-media/upload", isAuthenticated, async (req, res) => {
+  app.post("/api/social-media/upload", isAuthenticated, requirePermission("marketing", "create"), async (req, res) => {
     try {
       const multer = (await import("multer")).default;
       const path = await import("path");
@@ -21532,7 +21532,7 @@ export async function registerRoutes(
   });
 
   // Social Templates
-  app.get("/api/social-templates", isAuthenticated, async (req, res) => {
+  app.get("/api/social-templates", isAuthenticated, requirePermission("marketing", "view"), async (req, res) => {
     try {
       const templates = await storage.getAllSocialTemplates();
       res.json(templates);
@@ -21542,7 +21542,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/social-templates/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/social-templates/:id", isAuthenticated, requirePermission("marketing", "view"), async (req, res) => {
     try {
       const template = await storage.getSocialTemplate(parseInt(req.params.id));
       if (!template) {
@@ -21555,7 +21555,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/social-templates", isAuthenticated, async (req, res) => {
+  app.post("/api/social-templates", isAuthenticated, requirePermission("marketing", "create"), async (req, res) => {
     try {
       const userId = req.currentUser?.id;
       const templateData = { ...req.body, createdBy: userId };
@@ -21567,7 +21567,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/social-templates/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/social-templates/:id", isAuthenticated, requirePermission("marketing", "edit"), async (req, res) => {
     try {
       const template = await storage.updateSocialTemplate(parseInt(req.params.id), req.body);
       if (!template) {
@@ -21580,7 +21580,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/social-templates/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/social-templates/:id", isAuthenticated, requirePermission("marketing", "delete"), async (req, res) => {
     try {
       const success = await storage.deleteSocialTemplate(parseInt(req.params.id));
       if (!success) {
@@ -21593,7 +21593,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/social-templates/:id/use", isAuthenticated, async (req, res) => {
+  app.post("/api/social-templates/:id/use", isAuthenticated, requirePermission("marketing", "create"), async (req, res) => {
     try {
       await storage.incrementTemplateUsage(parseInt(req.params.id));
       res.json({ success: true });
@@ -21656,7 +21656,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/finished-goods-inventory/from-batch/:batchId", isAuthenticated, async (req, res) => {
+  app.post("/api/finished-goods-inventory/from-batch/:batchId", isAuthenticated, requirePermission("production", "create"), async (req, res) => {
     try {
       const user = req.currentUser;
       const batchId = parseInt(req.params.batchId);
@@ -21681,7 +21681,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/finished-goods-inventory/:id/transfer", isAuthenticated, async (req, res) => {
+  app.post("/api/finished-goods-inventory/:id/transfer", isAuthenticated, requirePermission("production", "edit"), async (req, res) => {
     try {
       const user = req.currentUser;
       const inventoryId = parseInt(req.params.id);
@@ -22567,7 +22567,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/purchasing/requests", isAuthenticated, async (req, res) => {
+  app.post("/api/purchasing/requests", isAuthenticated, requirePermission("warehouse", "create"), async (req, res) => {
     try {
       const purchasingRequestSchema = z.object({
         branchId: z.string(),
@@ -22629,7 +22629,7 @@ export async function registerRoutes(
     }
   });
 
-  app.put("/api/purchasing/requests/:id/status", isAuthenticated, async (req, res) => {
+  app.put("/api/purchasing/requests/:id/status", isAuthenticated, requirePermission("warehouse", "edit"), async (req, res) => {
     try {
       // SECURITY: Verify branch access for non-admin users
       const existingRequest = await storage.getPurchasingRequest(parseInt(req.params.id));
@@ -24498,7 +24498,7 @@ export async function registerRoutes(
   });
 
   // Update visitor
-  app.patch("/api/visitors/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/visitors/:id", isAuthenticated, requirePermission("executive_visitors", "edit"), async (req, res) => {
     try {
       // SECURITY: Verify branch access for non-admin users
       if (!isUserAdmin(req)) {
@@ -24547,7 +24547,7 @@ export async function registerRoutes(
   // Visitor Logs
 
   // Get visitor logs
-  app.get("/api/visitor-logs", isAuthenticated, async (req, res) => {
+  app.get("/api/visitor-logs", isAuthenticated, requirePermission("executive_visitors", "view"), async (req, res) => {
     try {
       const startDate = req.query.startDate ? new Date(req.query.startDate as string) : undefined;
       const endDate = req.query.endDate ? new Date(req.query.endDate as string) : undefined;
@@ -24567,7 +24567,7 @@ export async function registerRoutes(
   });
 
   // Get active visitors (currently checked in)
-  app.get("/api/visitor-logs/active", isAuthenticated, async (req, res) => {
+  app.get("/api/visitor-logs/active", isAuthenticated, requirePermission("executive_visitors", "view"), async (req, res) => {
     try {
       // SECURITY: Apply branch filter
       const branchFilter = getEffectiveBranchFilter(req, parseQueryString(req.query.branchId));
@@ -24601,7 +24601,7 @@ export async function registerRoutes(
   });
 
   // Get visitor log by ID
-  app.get("/api/visitor-logs/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/visitor-logs/:id", isAuthenticated, requirePermission("executive_visitors", "view"), async (req, res) => {
     try {
       const log = await storage.getVisitorLog(parseInt(req.params.id));
       if (!log) {
@@ -24646,7 +24646,7 @@ export async function registerRoutes(
   });
 
   // Check-in visitor (create visit log)
-  app.post("/api/visitor-logs", isAuthenticated, async (req, res) => {
+  app.post("/api/visitor-logs", isAuthenticated, requirePermission("executive_visitors", "create"), async (req, res) => {
     try {
       const user = getCurrentUser(req);
       
@@ -24676,7 +24676,7 @@ export async function registerRoutes(
   });
 
   // Update visitor log
-  app.patch("/api/visitor-logs/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/visitor-logs/:id", isAuthenticated, requirePermission("executive_visitors", "edit"), async (req, res) => {
     try {
       // SECURITY: Verify branch access for non-admin users
       if (!isUserAdmin(req)) {
@@ -24701,7 +24701,7 @@ export async function registerRoutes(
   });
 
   // Check-out visitor
-  app.post("/api/visitor-logs/:id/checkout", isAuthenticated, async (req, res) => {
+  app.post("/api/visitor-logs/:id/checkout", isAuthenticated, requirePermission("executive_visitors", "edit"), async (req, res) => {
     try {
       const user = getCurrentUser(req);
       
@@ -24813,7 +24813,7 @@ export async function registerRoutes(
   });
 
   // Update travel request
-  app.patch("/api/travel-requests/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/travel-requests/:id", isAuthenticated, requirePermission("executive_travel", "edit"), async (req, res) => {
     try {
       // SECURITY: Verify branch access for non-admin users
       const existingRequest = await storage.getTravelRequest(parseInt(req.params.id));
@@ -24960,7 +24960,7 @@ export async function registerRoutes(
   });
 
   // Update travel expense
-  app.patch("/api/travel-expenses/:id", isAuthenticated, async (req, res) => {
+  app.patch("/api/travel-expenses/:id", isAuthenticated, requirePermission("executive_travel", "edit"), async (req, res) => {
     try {
       const expense = await storage.updateTravelExpense(parseInt(req.params.id), req.body);
       if (!expense) {
