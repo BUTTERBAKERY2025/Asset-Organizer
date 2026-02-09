@@ -131,25 +131,31 @@ export const validateOrigin: RequestHandler = (req, res, next) => {
   }
   
   const origin = req.get("origin");
+  const referer = req.get("referer");
   const host = req.get("host");
   
-  if (origin) {
+  const sourceUrl = origin || referer;
+  
+  if (sourceUrl) {
     try {
-      const originUrl = new URL(origin);
+      const parsedUrl = new URL(sourceUrl);
       const expectedHosts = [
         host,
         "localhost:5000",
         "0.0.0.0:5000",
       ];
       
-      if (host && !expectedHosts.some(h => originUrl.host === h || originUrl.host.endsWith(`.${h}`))) {
-        console.warn(`Origin validation failed: ${origin} vs ${host}`);
+      if (host && !expectedHosts.some(h => parsedUrl.host === h || parsedUrl.host.endsWith(`.${h}`))) {
+        console.warn(`Origin validation failed: ${sourceUrl} vs ${host}`);
         return res.status(403).json({ error: "طلب غير مصرح من مصدر خارجي" });
       }
     } catch (e) {
-      console.warn(`Invalid origin header: ${origin}`);
+      console.warn(`Invalid origin/referer header: ${sourceUrl}`);
       return res.status(403).json({ error: "طلب غير مصرح" });
     }
+  } else if (isProduction) {
+    console.warn("Mutating request without Origin or Referer header blocked in production");
+    return res.status(403).json({ error: "طلب غير مصرح - مصدر الطلب غير معروف" });
   }
   
   next();

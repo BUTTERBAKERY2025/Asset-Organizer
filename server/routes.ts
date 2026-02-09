@@ -7998,90 +7998,6 @@ export async function registerRoutes(
 
   // Cashier Incentive Statements - كشف حساب حوافز الكاشير
 
-  // My Incentive Summary - ملخص حوافز الكاشير الخاص (متاح لجميع المستخدمين المسجلين)
-  app.get("/api/smart-incentives/my-incentive-summary", isAuthenticated, async (req, res) => {
-    try {
-      const user = getCurrentUser(req);
-      const { dateFrom, dateTo } = req.query as any;
-      const effectiveDateFrom = dateFrom || new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0];
-      const effectiveDateTo = dateTo || new Date().toISOString().split('T')[0];
-      
-      // Get cashier's points ledger
-      const ledger = await storage.getCashierPointsLedger(user.id, effectiveDateFrom, effectiveDateTo);
-      
-      // Get active challenges assigned to this cashier
-      const allChallenges = await storage.getActiveDailyChallenges(user.branchId || undefined);
-      const myChallenges = allChallenges.filter(c => c.cashierId === user.id);
-      
-      // Get point settings for value conversion
-      const settings = await storage.getPointSettings();
-      const pointValue = settings?.pointValue || 0.5;
-      
-      // Build daily summary from points ledger
-      const dailySummary: Record<string, { 
-        date: string; 
-        entries: typeof ledger;
-        totalPoints: number;
-        totalAmount: number;
-      }> = {};
-      
-      for (const entry of ledger) {
-        if (!dailySummary[entry.transactionDate]) {
-          dailySummary[entry.transactionDate] = {
-            date: entry.transactionDate,
-            entries: [],
-            totalPoints: 0,
-            totalAmount: 0,
-          };
-        }
-        dailySummary[entry.transactionDate].entries.push(entry);
-        dailySummary[entry.transactionDate].totalPoints += entry.pointsEarned;
-        dailySummary[entry.transactionDate].totalAmount += entry.amountEarned;
-      }
-      
-      // Calculate totals
-      const totalPoints = ledger.reduce((sum, e) => sum + e.pointsEarned, 0);
-      const totalAmount = ledger.reduce((sum, e) => sum + e.amountEarned, 0);
-      const earnedPoints = ledger.filter(e => e.status === 'earned').reduce((sum, e) => sum + e.pointsEarned, 0);
-      const approvedPoints = ledger.filter(e => e.status === 'approved').reduce((sum, e) => sum + e.pointsEarned, 0);
-      const paidPoints = ledger.filter(e => e.status === 'paid').reduce((sum, e) => sum + e.pointsEarned, 0);
-      const earnedAmount = ledger.filter(e => e.status === 'earned').reduce((sum, e) => sum + e.amountEarned, 0);
-      const approvedAmount = ledger.filter(e => e.status === 'approved').reduce((sum, e) => sum + e.amountEarned, 0);
-      const paidAmount = ledger.filter(e => e.status === 'paid').reduce((sum, e) => sum + e.amountEarned, 0);
-      
-      res.json({
-        cashierId: user.id,
-        dateFrom: effectiveDateFrom,
-        dateTo: effectiveDateTo,
-        pointValue,
-        challenges: myChallenges.map(c => ({
-          id: c.id,
-          name: c.name,
-          challengeType: c.challengeType,
-          targetValue: c.targetValue,
-          basePoints: c.basePoints,
-          bonusPointsPerUnit: c.bonusPointsPerUnit,
-          shiftType: c.shiftType,
-          validFrom: c.validFrom,
-          validTo: c.validTo,
-        })),
-        dailySummary: Object.values(dailySummary).sort((a, b) => b.date.localeCompare(a.date)),
-        totals: {
-          totalPoints,
-          totalAmount,
-          earnedPoints,
-          earnedAmount,
-          approvedPoints,
-          approvedAmount,
-          paidPoints,
-          paidAmount,
-        }
-      });
-    } catch (error) {
-      console.error("Error fetching my incentive summary:", error);
-      res.status(500).json({ error: "فشل في جلب ملخص الحوافز" });
-    }
-  });
   app.get("/api/smart-incentives/incentive-statements", isAuthenticated, async (req, res) => {
     try {
       const user = getCurrentUser(req);
@@ -8394,6 +8310,14 @@ export async function registerRoutes(
 
       const branchId = commission.branchId;
       if (!branchId) return res.status(400).json({ error: "الفرع غير محدد في العمولة" });
+
+      // Branch isolation: ensure cashier can only record for their own branch
+      if (isSelfRecording && user.branchId && user.branchId !== branchId) {
+        return res.status(403).json({ error: "غير مصرح - العمولة تنتمي لفرع آخر" });
+      }
+      if (!isSelfRecording && user.role !== 'admin' && user.branchId && user.branchId !== branchId) {
+        return res.status(403).json({ error: "غير مصرح بالوصول لعمولات فرع آخر" });
+      }
 
       const existingSales = await storage.getCashierProductSales(cashierId, date);
       const existingRecord = existingSales.find(s => s.commissionId === commissionId && s.shiftType === (shiftType || null));

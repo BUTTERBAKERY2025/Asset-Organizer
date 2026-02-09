@@ -625,6 +625,11 @@ export default function CashierShiftPerformance() {
     toast.success("تم تصدير الكشف بنجاح");
   };
 
+  const escapeHtml = (str: string | number | null | undefined): string => {
+    if (str === null || str === undefined) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  };
+
   const exportMyIncentivePDF = () => {
     if (!myIncentiveSummary) return;
     const printWindow = window.open('', '_blank');
@@ -633,8 +638,8 @@ export default function CashierShiftPerformance() {
       return;
     }
     const currentDate = new Date().toLocaleDateString('en-US');
-    const cashierName = user ? `${user.firstName || user.username || ''} ${user.lastName || ''}`.trim() : '';
-    const branchName = branches?.find((b: any) => b.id === (userBranchId || selectedBranch))?.name || '';
+    const cashierName = escapeHtml(user ? `${user.firstName || user.username || ''} ${user.lastName || ''}`.trim() : '');
+    const branchName = escapeHtml(branches?.find((b: any) => b.id === (userBranchId || selectedBranch))?.name || '');
     const logoUrl = '/attached_assets/logo_-5_1765206843638.png';
 
     const challengeRows = myIncentiveSummary.challenges.map(ch => {
@@ -653,11 +658,11 @@ export default function CashierShiftPerformance() {
       });
       const overallPercent = totalTarget > 0 ? Math.round((totalAchieved / totalTarget) * 100) : 0;
       return {
-        name: ch.name,
+        name: escapeHtml(ch.name),
         type: ch.challengeType === 'avg_ticket' ? 'متوسط فاتورة' : ch.challengeType === 'customer_count' ? 'عدد العملاء' : 'مبيعات',
         target: ch.targetValue,
-        validFrom: ch.validFrom,
-        validTo: ch.validTo || '-',
+        validFrom: escapeHtml(ch.validFrom),
+        validTo: escapeHtml(ch.validTo || '-'),
         basePoints: ch.basePoints,
         totalDays,
         daysAchieved,
@@ -670,10 +675,10 @@ export default function CashierShiftPerformance() {
       const dateStr = new Date(day.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
       const challengeDetails = day.challenges.map(ch => {
         const status = ch.achieved ? '✅' : '❌';
-        return `${status} ${ch.name}: ${ch.actualValue.toFixed(ch.type === 'customer_count' ? 0 : 2)}/${ch.targetValue.toFixed(ch.type === 'customer_count' ? 0 : 2)} (${ch.achievementPercent}%)`;
+        return `${status} ${escapeHtml(ch.name)}: ${ch.actualValue.toFixed(ch.type === 'customer_count' ? 0 : 2)}/${ch.targetValue.toFixed(ch.type === 'customer_count' ? 0 : 2)} (${ch.achievementPercent}%)`;
       }).join('<br/>');
       const ledgerDetails = day.ledgerEntries.map(e => {
-        const typeName = e.sourceName || (() => {
+        const typeName = escapeHtml(e.sourceName || (() => {
           switch(e.pointsType) {
             case 'challenge_avg_ticket': return 'تحدي متوسط الفاتورة';
             case 'challenge_customers': return 'تحدي عدد العملاء';
@@ -682,7 +687,7 @@ export default function CashierShiftPerformance() {
             case 'branch_bonus': return 'مكافأة فرع';
             default: return e.pointsType;
           }
-        })();
+        })());
         return `${typeName}: +${e.pointsEarned} نقطة (${e.amountEarned.toFixed(2)} ر.س)`;
       }).join('<br/>');
       return { dateStr, date: day.date, challengeDetails, ledgerDetails, totalPoints: day.totalPoints, totalAmount: day.totalAmount };
