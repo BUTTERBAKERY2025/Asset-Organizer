@@ -320,11 +320,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
   ];
 
   const checkNavPermission = (module: SystemModule): boolean => {
-    if (canView(module)) return true;
     if (module === ("incentives" as SystemModule)) {
       return SMART_INCENTIVES_MODULES.some(m => canView(m));
     }
-    return false;
+    return canView(module);
   };
 
   const filterItemsByPermission = (items: NavItem[]): NavItem[] => {

@@ -90,22 +90,22 @@ export default function IncentivesManagement() {
   const { isAdmin } = useAuth();
 
   const getDefaultTab = () => {
-    if (isAdmin || canView("smart_incentives_settings" as any)) return "point-settings";
-    if (isAdmin || canView("smart_incentives_challenges" as any)) return "challenges";
-    if (isAdmin || canView("smart_incentives_commissions" as any)) return "commissions";
-    if (isAdmin || canView("smart_incentives_bonus" as any)) return "branch-bonus";
-    if (isAdmin || canView("smart_incentives_wallet" as any)) return "wallet";
-    if (isAdmin || canView("smart_incentives_statements" as any)) return "awards";
+    if (isAdmin || canView("smart_incentives_settings")) return "point-settings";
+    if (isAdmin || canView("smart_incentives_challenges")) return "challenges";
+    if (isAdmin || canView("smart_incentives_commissions")) return "commissions";
+    if (isAdmin || canView("smart_incentives_bonus")) return "branch-bonus";
+    if (isAdmin || canView("smart_incentives_wallet")) return "wallet";
+    if (isAdmin || canView("smart_incentives_statements")) return "awards";
     return "point-settings";
   };
 
   const hasAnyAccess = isAdmin ||
-    canView("smart_incentives_settings" as any) ||
-    canView("smart_incentives_challenges" as any) ||
-    canView("smart_incentives_commissions" as any) ||
-    canView("smart_incentives_bonus" as any) ||
-    canView("smart_incentives_wallet" as any) ||
-    canView("smart_incentives_statements" as any);
+    canView("smart_incentives_settings") ||
+    canView("smart_incentives_challenges") ||
+    canView("smart_incentives_commissions") ||
+    canView("smart_incentives_bonus") ||
+    canView("smart_incentives_wallet") ||
+    canView("smart_incentives_statements");
 
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
@@ -901,43 +901,43 @@ export default function IncentivesManagement() {
         ) : (
         <Tabs defaultValue={getDefaultTab()} className="space-y-4">
           <TabsList className="flex flex-wrap h-auto gap-1">
-            {(isAdmin || canView("smart_incentives_settings" as any)) && (
+            {(isAdmin || canView("smart_incentives_settings")) && (
             <TabsTrigger value="point-settings" className="flex items-center gap-1 text-xs sm:text-sm" data-testid="tab-point-settings">
               <Settings className="h-3.5 w-3.5" />
               إعدادات النقاط
             </TabsTrigger>
             )}
-            {(isAdmin || canView("smart_incentives_challenges" as any)) && (
+            {(isAdmin || canView("smart_incentives_challenges")) && (
             <TabsTrigger value="challenges" className="flex items-center gap-1 text-xs sm:text-sm" data-testid="tab-challenges">
               <Target className="h-3.5 w-3.5" />
               التحديات اليومية
             </TabsTrigger>
             )}
-            {(isAdmin || canView("smart_incentives_commissions" as any)) && (
+            {(isAdmin || canView("smart_incentives_commissions")) && (
             <TabsTrigger value="commissions" className="flex items-center gap-1 text-xs sm:text-sm" data-testid="tab-commissions">
               <Trophy className="h-3.5 w-3.5" />
               عمولة الأصناف
             </TabsTrigger>
             )}
-            {(isAdmin || canView("smart_incentives_bonus" as any)) && (
+            {(isAdmin || canView("smart_incentives_bonus")) && (
             <TabsTrigger value="branch-bonus" className="flex items-center gap-1 text-xs sm:text-sm" data-testid="tab-branch-bonus">
               <TrendingUp className="h-3.5 w-3.5" />
               عمولة الفرع
             </TabsTrigger>
             )}
-            {(isAdmin || canView("smart_incentives_wallet" as any)) && (
+            {(isAdmin || canView("smart_incentives_wallet")) && (
             <TabsTrigger value="wallet" className="flex items-center gap-1 text-xs sm:text-sm" data-testid="tab-wallet">
               <Wallet className="h-3.5 w-3.5" />
               رصيد الكاشير
             </TabsTrigger>
             )}
-            {(isAdmin || canView("smart_incentives_statements" as any)) && (
+            {(isAdmin || canView("smart_incentives_statements")) && (
             <TabsTrigger value="awards" className="flex items-center gap-1 text-xs sm:text-sm" data-testid="tab-awards">
               <Award className="h-3.5 w-3.5" />
               سجل الحوافز
             </TabsTrigger>
             )}
-            {(isAdmin || canView("smart_incentives_wallet" as any)) && (
+            {(isAdmin || canView("smart_incentives_wallet")) && (
             <TabsTrigger value="calculate" className="flex items-center gap-1 text-xs sm:text-sm bg-green-50 text-green-700 data-[state=active]:bg-green-600 data-[state=active]:text-white" data-testid="tab-calculate">
               <Calculator className="h-3.5 w-3.5" />
               احتساب النقاط
@@ -946,7 +946,7 @@ export default function IncentivesManagement() {
           </TabsList>
 
           {/* Tab 1: Point Settings */}
-          {(isAdmin || canView("smart_incentives_settings" as any)) && <TabsContent value="point-settings">
+          {(isAdmin || canView("smart_incentives_settings")) && <TabsContent value="point-settings">
             <div className="space-y-6">
               <Card className="border-blue-200">
                 <CardHeader className="bg-blue-50 rounded-t-lg">
@@ -1060,7 +1060,7 @@ export default function IncentivesManagement() {
                     </div>
                   )}
 
-                  {(isAdmin || canEdit("smart_incentives_settings" as any)) && (
+                  {(isAdmin || canEdit("smart_incentives_settings")) && (
                   <Button
                     onClick={() => savePointSettingsMutation.mutate(pointSettingsForm)}
                     disabled={savePointSettingsMutation.isPending}
@@ -1076,7 +1076,7 @@ export default function IncentivesManagement() {
           </TabsContent>}
 
           {/* Tab 2: Daily Challenges */}
-          {(isAdmin || canView("smart_incentives_challenges" as any)) && <TabsContent value="challenges">
+          {(isAdmin || canView("smart_incentives_challenges")) && <TabsContent value="challenges">
             <div className="space-y-6">
               <Card className="border-blue-200">
                 <CardHeader className="bg-blue-50 rounded-t-lg">
@@ -1151,7 +1151,7 @@ export default function IncentivesManagement() {
                     <CardDescription>أنشئ تحديات للكاشير وحدد الأهداف والنقاط</CardDescription>
                   </div>
                   <Dialog open={showChallengeDialog} onOpenChange={setShowChallengeDialog}>
-                    {(isAdmin || canCreate("smart_incentives_challenges" as any)) && (
+                    {(isAdmin || canCreate("smart_incentives_challenges")) && (
                     <DialogTrigger asChild>
                       <Button data-testid="button-add-challenge" className="bg-amber-600 hover:bg-amber-700 h-11 sm:h-9">
                         <Plus className="h-4 w-4 ml-2" />
@@ -1302,12 +1302,12 @@ export default function IncentivesManagement() {
                                   <Button variant="ghost" size="sm" className="text-blue-500 hover:text-blue-700 h-8 w-8 p-0" onClick={() => setViewChallenge(c)} data-testid={`button-view-challenge-${c.id}`} title="عرض التفاصيل">
                                     <Eye className="h-4 w-4" />
                                   </Button>
-                                  {(isAdmin || canEdit("smart_incentives_challenges" as any)) && (
+                                  {(isAdmin || canEdit("smart_incentives_challenges")) && (
                                   <Button variant="ghost" size="sm" className="text-amber-500 hover:text-amber-700 h-8 w-8 p-0" onClick={() => setEditChallenge({ ...c })} data-testid={`button-edit-challenge-${c.id}`} title="تعديل">
                                     <Settings className="h-4 w-4" />
                                   </Button>
                                   )}
-                                  {(isAdmin || canDelete("smart_incentives_challenges" as any)) && (
+                                  {(isAdmin || canDelete("smart_incentives_challenges")) && (
                                   <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700 h-8 w-8 p-0" onClick={() => deleteChallengeMutation.mutate(c.id)} data-testid={`button-delete-challenge-${c.id}`} title="حذف">
                                     <Trash2 className="h-4 w-4" />
                                   </Button>
@@ -1540,7 +1540,7 @@ export default function IncentivesManagement() {
           </TabsContent>}
 
           {/* Tab 3: Product Commissions */}
-          {(isAdmin || canView("smart_incentives_commissions" as any)) && <TabsContent value="commissions">
+          {(isAdmin || canView("smart_incentives_commissions")) && <TabsContent value="commissions">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
@@ -1551,7 +1551,7 @@ export default function IncentivesManagement() {
                   <CardDescription>إدارة عمولات المنتجات المستهدفة</CardDescription>
                 </div>
                 <Dialog open={showCommissionDialog} onOpenChange={setShowCommissionDialog}>
-                  {(isAdmin || canCreate("smart_incentives_commissions" as any)) && (
+                  {(isAdmin || canCreate("smart_incentives_commissions")) && (
                   <DialogTrigger asChild>
                     <Button data-testid="button-add-commission" className="bg-amber-600 hover:bg-amber-700 h-11 sm:h-9">
                       <Plus className="h-4 w-4 ml-2" />
@@ -1683,7 +1683,7 @@ export default function IncentivesManagement() {
                             <TableCell className="font-mono text-xs hidden md:table-cell">{c.bonusPointsPerExtra || 0}</TableCell>
                             <TableCell className="text-xs hidden md:table-cell">{c.validFrom} {c.validTo ? `- ${c.validTo}` : ""}</TableCell>
                             <TableCell>
-                              {(isAdmin || canDelete("smart_incentives_commissions" as any)) && (
+                              {(isAdmin || canDelete("smart_incentives_commissions")) && (
                               <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700 h-8 w-8 p-0" onClick={() => deleteCommissionMutation.mutate(c.id)} data-testid={`button-delete-commission-${c.id}`}>
                                 <Trash2 className="h-4 w-4" />
                               </Button>
@@ -1700,7 +1700,7 @@ export default function IncentivesManagement() {
           </TabsContent>}
 
           {/* Tab 4: Branch Achievement Bonus */}
-          {(isAdmin || canView("smart_incentives_bonus" as any)) && <TabsContent value="branch-bonus">
+          {(isAdmin || canView("smart_incentives_bonus")) && <TabsContent value="branch-bonus">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
@@ -1711,7 +1711,7 @@ export default function IncentivesManagement() {
                   <CardDescription>مكافأة تحقيق هدف الفرع الشهري</CardDescription>
                 </div>
                 <Dialog open={showBranchBonusDialog} onOpenChange={setShowBranchBonusDialog}>
-                  {(isAdmin || canCreate("smart_incentives_bonus" as any)) && (
+                  {(isAdmin || canCreate("smart_incentives_bonus")) && (
                   <DialogTrigger asChild>
                     <Button data-testid="button-add-branch-bonus" className="bg-amber-600 hover:bg-amber-700 h-11 sm:h-9">
                       <Plus className="h-4 w-4 ml-2" />
@@ -2110,7 +2110,7 @@ export default function IncentivesManagement() {
                                     </Button>
                                   </DropdownMenuTrigger>
                                   <DropdownMenuContent align="end" className="w-56">
-                                    {(isAdmin || canEdit("smart_incentives_bonus" as any)) && (
+                                    {(isAdmin || canEdit("smart_incentives_bonus")) && (
                                     <DropdownMenuItem
                                       className="text-xs gap-2 cursor-pointer"
                                       onClick={() => {
@@ -2133,7 +2133,7 @@ export default function IncentivesManagement() {
                                       <span>تعديل الهدف والشرائح</span>
                                     </DropdownMenuItem>
                                     )}
-                                    {(isAdmin || canEdit("smart_incentives_bonus" as any)) && (
+                                    {(isAdmin || canEdit("smart_incentives_bonus")) && (
                                     <DropdownMenuItem
                                       className="text-xs gap-2 cursor-pointer"
                                       onClick={() => {
@@ -2156,7 +2156,7 @@ export default function IncentivesManagement() {
                                       <span>تغيير طريقة التوزيع</span>
                                     </DropdownMenuItem>
                                     )}
-                                    {isCalculated && (isAdmin || canEdit("smart_incentives_bonus" as any)) && (
+                                    {isCalculated && (isAdmin || canEdit("smart_incentives_bonus")) && (
                                       <>
                                         <DropdownMenuSeparator />
                                         <DropdownMenuItem
@@ -2187,7 +2187,7 @@ export default function IncentivesManagement() {
                                         </DropdownMenuItem>
                                       </>
                                     )}
-                                    {(isAdmin || canDelete("smart_incentives_bonus" as any)) && (
+                                    {(isAdmin || canDelete("smart_incentives_bonus")) && (
                                     <>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem
@@ -2381,7 +2381,7 @@ export default function IncentivesManagement() {
           </TabsContent>}
 
           {/* Tab 5: Cashier Wallet / Ledger */}
-          {(isAdmin || canView("smart_incentives_wallet" as any)) && <TabsContent value="wallet">
+          {(isAdmin || canView("smart_incentives_wallet")) && <TabsContent value="wallet">
             <div className="space-y-4">
               {topCashierPoints.length > 0 && (
                 <Card className="border-emerald-200" data-testid="wallet-top-performers">
@@ -2562,7 +2562,7 @@ export default function IncentivesManagement() {
           </TabsContent>}
 
           {/* Tab 6: Awards History */}
-          {(isAdmin || canView("smart_incentives_statements" as any)) && <TabsContent value="awards">
+          {(isAdmin || canView("smart_incentives_statements")) && <TabsContent value="awards">
             <div className="space-y-4">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
@@ -2574,7 +2574,7 @@ export default function IncentivesManagement() {
                     <CardDescription>تعريف مستويات المكافآت حسب نسبة تحقيق الهدف</CardDescription>
                   </div>
                   <Dialog open={showNewTierDialog} onOpenChange={setShowNewTierDialog}>
-                    {(isAdmin || canCreate("smart_incentives_statements" as any)) && (
+                    {(isAdmin || canCreate("smart_incentives_statements")) && (
                     <DialogTrigger asChild>
                       <Button data-testid="button-add-tier" className="h-11 sm:h-9">
                         <Plus className="h-4 w-4 ml-2" />
@@ -2774,12 +2774,12 @@ export default function IncentivesManagement() {
                               </TableCell>
                               <TableCell>
                                 <div className="flex items-center gap-2">
-                                  {award.status === "pending" && (isAdmin || canApprove("smart_incentives_statements" as any)) && (
+                                  {award.status === "pending" && (isAdmin || canApprove("smart_incentives_statements")) && (
                                     <Button size="sm" variant="outline" className="h-8 w-8 sm:h-9 sm:w-auto p-0 sm:px-3" onClick={() => approveAwardMutation.mutate(award.id)} data-testid={`button-approve-${award.id}`}>
                                       <Check className="h-4 w-4" />
                                     </Button>
                                   )}
-                                  {award.status === "approved" && (isAdmin || canApprove("smart_incentives_statements" as any)) && (
+                                  {award.status === "approved" && (isAdmin || canApprove("smart_incentives_statements")) && (
                                     <Button size="sm" variant="outline" className="text-green-600 h-8 w-8 sm:h-9 sm:w-auto p-0 sm:px-3" onClick={() => payAwardMutation.mutate(award.id)} data-testid={`button-pay-${award.id}`}>
                                       <DollarSign className="h-4 w-4" />
                                     </Button>
@@ -2798,7 +2798,7 @@ export default function IncentivesManagement() {
           </TabsContent>}
 
           {/* Tab 7: Calculate Points */}
-          {(isAdmin || canView("smart_incentives_wallet" as any)) && <TabsContent value="calculate">
+          {(isAdmin || canView("smart_incentives_wallet")) && <TabsContent value="calculate">
             <div className="space-y-6">
               <Card>
                 <CardHeader>
