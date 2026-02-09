@@ -522,6 +522,7 @@ export const requirePermission = (module: string, action: string): RequestHandle
       modulePerm = permissions.find((p: any) => p.module === 'attendance');
     }
     
+    
     if (!modulePerm) {
       logSecurityAlert({
         alertType: 'permission_denied',

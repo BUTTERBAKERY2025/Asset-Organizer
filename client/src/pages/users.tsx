@@ -400,22 +400,41 @@ export default function UsersPage() {
     });
   };
 
+  const SMART_INCENTIVES_SUBMODULES = [
+    "smart_incentives_settings",
+    "smart_incentives_challenges",
+    "smart_incentives_commissions",
+    "smart_incentives_bonus",
+    "smart_incentives_wallet",
+    "smart_incentives_statements",
+  ];
+
   const toggleAction = (module: string, action: string) => {
     setPermissionState(prev => {
       const currentActions = prev[module] || [];
       const hasAction = currentActions.includes(action);
+      const newState = { ...prev };
       
       if (hasAction) {
-        return {
-          ...prev,
-          [module]: currentActions.filter(a => a !== action),
-        };
+        newState[module] = currentActions.filter(a => a !== action);
       } else {
-        return {
-          ...prev,
-          [module]: [...currentActions, action],
-        };
+        newState[module] = [...currentActions, action];
       }
+
+      if (module === "incentives") {
+        for (const subModule of SMART_INCENTIVES_SUBMODULES) {
+          const subActions = newState[subModule] || [];
+          if (hasAction) {
+            newState[subModule] = subActions.filter(a => a !== action);
+          } else {
+            if (!subActions.includes(action)) {
+              newState[subModule] = [...subActions, action];
+            }
+          }
+        }
+      }
+
+      return newState;
     });
   };
 
@@ -423,18 +442,25 @@ export default function UsersPage() {
     setPermissionState(prev => {
       const currentActions = prev[module] || [];
       const allSelected = MODULE_ACTIONS.every(a => currentActions.includes(a));
+      const newState = { ...prev };
       
       if (allSelected) {
-        return {
-          ...prev,
-          [module]: [],
-        };
+        newState[module] = [];
       } else {
-        return {
-          ...prev,
-          [module]: [...MODULE_ACTIONS],
-        };
+        newState[module] = [...MODULE_ACTIONS];
       }
+
+      if (module === "incentives") {
+        for (const subModule of SMART_INCENTIVES_SUBMODULES) {
+          if (allSelected) {
+            newState[subModule] = [];
+          } else {
+            newState[subModule] = [...MODULE_ACTIONS];
+          }
+        }
+      }
+
+      return newState;
     });
   };
 
