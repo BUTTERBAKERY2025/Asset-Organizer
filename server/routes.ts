@@ -7047,6 +7047,9 @@ export async function registerRoutes(
       }
       const targetDate = (date as string) || new Date().toISOString().split('T')[0];
       
+      console.log("[challenges-as-targets] branchId:", branchId, "targetDate:", targetDate, "shiftType:", shiftType);
+      console.log("[challenges-as-targets] allChallenges count:", allChallenges.length, "details:", JSON.stringify(allChallenges.map(c => ({ id: c.id, name: c.name, cashierId: c.cashierId, branchId: c.branchId, shiftType: c.shiftType, validFrom: c.validFrom, validTo: c.validTo, isActive: c.isActive }))));
+
       const allChallenges = await storage.getActiveDailyChallenges(branchId as string);
 
       const validChallenges = allChallenges.filter(c => {
@@ -7056,6 +7059,7 @@ export async function registerRoutes(
         if (shiftType && shiftType !== "all" && cShift && cShift !== shiftType) return false;
         return true;
       });
+      console.log("[challenges-as-targets] validChallenges count:", validChallenges.length, "details:", JSON.stringify(validChallenges.map(c => ({ id: c.id, name: c.name, cashierId: c.cashierId, shiftType: c.shiftType, validFrom: c.validFrom, validTo: c.validTo }))));
 
       const grouped: Record<string, { cashierId: string; branchId: string; shiftType: string; targetAmount: number; targetTransactions: number; targetTicketValue: number; challenges: Array<{ id: number; name: string; type: string; targetValue: number; basePoints: number }> }> = {};
 
