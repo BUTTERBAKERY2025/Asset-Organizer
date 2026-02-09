@@ -2155,6 +2155,7 @@ export default function IncentivesManagement() {
                                       <Users className="h-3.5 w-3.5 text-green-600" />
                                       <span>تغيير طريقة التوزيع</span>
                                     </DropdownMenuItem>
+                                    )}
                                     {isCalculated && (isAdmin || canEdit("smart_incentives_bonus" as any)) && (
                                       <>
                                         <DropdownMenuSeparator />
