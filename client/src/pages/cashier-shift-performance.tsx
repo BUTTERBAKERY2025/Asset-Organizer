@@ -156,13 +156,33 @@ export default function CashierShiftPerformance() {
     enabled: canViewAllCashiers,
   });
 
-  // Filter cashiers for report tab (based on selected branch filter)
+  // Fetch all cashier IDs who have journal entries for the dropdown (independent of cashier filter)
+  const { data: allBranchJournals = [] } = useQuery<CashierJournalReport[]>({
+    queryKey: ["/api/cashier-journals-report-cashiers", selectedBranch, reportStartDate, reportEndDate],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (selectedBranch && selectedBranch !== "all") params.append("branchId", selectedBranch);
+      params.append("startDate", reportStartDate);
+      params.append("endDate", reportEndDate);
+      const res = await fetch(`/api/cashier-journals-report?${params}`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return data.journals || [];
+    },
+    enabled: !!reportStartDate && !!reportEndDate && canViewAllCashiers,
+  });
+
+  // Filter cashiers for report tab: only show users who have journal entries in the data
   const reportBranchCashiers = useMemo(() => {
-    if (selectedBranch === "all") {
-      return allUsers.filter(u => u.isActive === 'active');
+    const journalCashierIds = new Set(allBranchJournals.map(j => j.cashierId));
+    const branchFiltered = selectedBranch === "all"
+      ? allUsers.filter(u => u.isActive === 'active')
+      : allUsers.filter(u => u.branchId === selectedBranch && u.isActive === 'active');
+    if (journalCashierIds.size > 0) {
+      return branchFiltered.filter(u => journalCashierIds.has(u.id));
     }
-    return allUsers.filter(u => u.branchId === selectedBranch && u.isActive === 'active');
-  }, [allUsers, selectedBranch]);
+    return branchFiltered.filter(u => u.role === 'cashier' || (u as any).jobTitle === 'cashier');
+  }, [allUsers, selectedBranch, allBranchJournals]);
 
   const { data: shiftTargets = [], isLoading: targetsLoading, refetch: refetchTargets } = useQuery<any[]>({
     queryKey: ["/api/smart-incentives/challenges-as-targets", selectedBranch, selectedDate, selectedShift],

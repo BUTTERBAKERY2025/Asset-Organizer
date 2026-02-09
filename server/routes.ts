@@ -15287,8 +15287,8 @@ export async function registerRoutes(
         date: j.journalDate,
         shiftType: j.shiftType,
         totalSales: Number(j.totalSales) || 0,
-        cashSales: Number(j.cashSales) || 0,
-        cardSales: Number(j.cardSales) || 0,
+        cashSales: Number(j.cashTotal) || 0,
+        cardSales: Number(j.networkTotal) || 0,
         transactionCount: j.transactionCount || 0,
         averageTicket: j.transactionCount ? (Number(j.totalSales) / j.transactionCount) : 0,
       }));
