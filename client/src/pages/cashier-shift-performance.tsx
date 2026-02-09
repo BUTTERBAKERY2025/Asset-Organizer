@@ -127,7 +127,7 @@ export default function CashierShiftPerformance() {
   const canApproveBonus = canApprove("smart_incentives_bonus");
   const canViewWallet = canView("smart_incentives_wallet");
   const canApproveWallet = canApprove("smart_incentives_wallet");
-  const canViewStatements = canView("smart_incentives_statements");
+  const canViewStatements = canView("smart_incentives_statements") || !canViewAllCashiers;
   const canCreateStatements = canCreate("smart_incentives_statements");
   const canApproveStatements = canApprove("smart_incentives_statements");
   const canViewSettings = canView("smart_incentives_settings");
@@ -151,10 +151,26 @@ export default function CashierShiftPerformance() {
     setReportCashierId("all");
   }, [selectedBranch]);
 
+  // For non-admin cashiers, default stmtCashierId to their own ID
+  useEffect(() => {
+    if (user && !canViewAllCashiers && !stmtCashierId) {
+      setStmtCashierId(user.id);
+    }
+  }, [user, canViewAllCashiers, stmtCashierId]);
+
   const { data: allUsers = [] } = useQuery<User[]>({
     queryKey: ["/api/users"],
     enabled: canViewAllCashiers,
   });
+
+  const selfUser = useMemo(() => {
+    if (user && !canViewAllCashiers) {
+      return [user as User];
+    }
+    return [];
+  }, [user, canViewAllCashiers]);
+
+  const effectiveUsers = canViewAllCashiers ? allUsers : selfUser;
 
   // Fetch all cashier IDs who have journal entries for the dropdown (independent of cashier filter)
   const { data: allBranchJournals = [] } = useQuery<CashierJournalReport[]>({
@@ -760,9 +776,9 @@ export default function CashierShiftPerformance() {
   };
 
   const getCashierName = (cashierId: string) => {
-    const user = allUsers.find(u => u.id === cashierId);
-    if (user) {
-      return `${user.firstName || user.username || ''} ${user.lastName || ''}`.trim() || cashierId;
+    const found = effectiveUsers.find(u => u.id === cashierId);
+    if (found) {
+      return `${found.firstName || found.username || ''} ${found.lastName || ''}`.trim() || cashierId;
     }
     return cashierId;
   };
@@ -1154,9 +1170,15 @@ export default function CashierShiftPerformance() {
                         const dailyTarget = Number(target.targetAmount);
                         const dailyTransactions = Number(target.targetTransactions) || 0;
                         const targetTicket = Number(target.targetTicketValue) || 0;
-                        const percent = dailyTarget ? (achieved / dailyTarget) * 100 : 0;
+                        const salesPercent = dailyTarget ? (achieved / dailyTarget) * 100 : 0;
                         const transactionsPercent = dailyTransactions ? (actualSales.transactionCount / dailyTransactions) * 100 : 0;
                         const ticketPercent = targetTicket ? (actualSales.averageTicket / targetTicket) * 100 : 0;
+                        const availablePercents = [
+                          ...(dailyTarget > 0 ? [salesPercent] : []),
+                          ...(dailyTransactions > 0 ? [transactionsPercent] : []),
+                          ...(targetTicket > 0 ? [ticketPercent] : []),
+                        ];
+                        const percent = availablePercents.length > 0 ? Math.max(...availablePercents) : 0;
                         const periodType = (target as any).periodType || 'daily';
                         const startDate = (target as any).startDate || target.targetDate;
                         const endDate = (target as any).endDate || target.targetDate;
@@ -1190,7 +1212,7 @@ export default function CashierShiftPerformance() {
                               {dailyTarget > 0 && (
                                 <div className="flex items-center gap-2">
                                   <span className="text-[10px] text-gray-500 w-16 shrink-0">المبيعات</span>
-                                  <Progress value={Math.min(percent, 100)} className="h-1.5 flex-1" />
+                                  <Progress value={Math.min(salesPercent, 100)} className="h-1.5 flex-1" />
                                   <span className="text-[10px] text-gray-600 w-28 text-left shrink-0">{formatCurrency(achieved)} / {formatCurrency(dailyTarget)}</span>
                                 </div>
                               )}
@@ -1254,9 +1276,15 @@ export default function CashierShiftPerformance() {
                         const dailyTarget = Number(target.targetAmount);
                         const dailyTransactions = Number(target.targetTransactions) || 0;
                         const targetTicket = Number(target.targetTicketValue) || 0;
-                        const percent = dailyTarget ? (achieved / dailyTarget) * 100 : 0;
+                        const salesPercent = dailyTarget ? (achieved / dailyTarget) * 100 : 0;
                         const transactionsPercent = dailyTransactions ? (actualSales.transactionCount / dailyTransactions) * 100 : 0;
                         const ticketPercent = targetTicket ? (actualSales.averageTicket / targetTicket) * 100 : 0;
+                        const availablePercents = [
+                          ...(dailyTarget > 0 ? [salesPercent] : []),
+                          ...(dailyTransactions > 0 ? [transactionsPercent] : []),
+                          ...(targetTicket > 0 ? [ticketPercent] : []),
+                        ];
+                        const percent = availablePercents.length > 0 ? Math.max(...availablePercents) : 0;
                         const periodType = (target as any).periodType || 'daily';
                         const startDate = (target as any).startDate || target.targetDate;
                         const endDate = (target as any).endDate || target.targetDate;
@@ -1290,7 +1318,7 @@ export default function CashierShiftPerformance() {
                               {dailyTarget > 0 && (
                                 <div className="flex items-center gap-2">
                                   <span className="text-[10px] text-gray-500 w-16 shrink-0">المبيعات</span>
-                                  <Progress value={Math.min(percent, 100)} className="h-1.5 flex-1" />
+                                  <Progress value={Math.min(salesPercent, 100)} className="h-1.5 flex-1" />
                                   <span className="text-[10px] text-gray-600 w-28 text-left shrink-0">{formatCurrency(achieved)} / {formatCurrency(dailyTarget)}</span>
                                 </div>
                               )}

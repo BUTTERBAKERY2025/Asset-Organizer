@@ -7809,6 +7809,9 @@ export async function registerRoutes(
       if (user.role !== 'admin') {
         statements = statements.filter((s: any) => s.branchId === user.branchId);
       }
+      if (user.role !== 'admin' && user.role !== 'manager') {
+        statements = statements.filter((s: any) => s.cashierId === user.id);
+      }
       res.json(statements);
     } catch (error) {
       console.error("Error fetching incentive statements:", error);
