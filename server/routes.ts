@@ -7955,14 +7955,23 @@ export async function registerRoutes(
       const approvedAmount = ledger.filter(e => e.status === 'approved').reduce((sum, e) => sum + e.amountEarned, 0);
       const paidAmount = ledger.filter(e => e.status === 'paid').reduce((sum, e) => sum + e.amountEarned, 0);
       
-      // Also compute achieved challenge points from dailyDetails (covers case when ledger entries haven't been created yet)
+      // Compute achieved challenge points not already in ledger
+      // Ledger may contain product_commission entries but not challenge entries (or vice versa)
+      // We need to combine: ledger points + any challenge points not already recorded in ledger
+      const ledgerChallengePoints = ledger
+        .filter(e => e.pointsType.startsWith('challenge_'))
+        .reduce((sum, e) => sum + e.pointsEarned, 0);
+      const ledgerOtherPoints = ledgerTotalPoints - ledgerChallengePoints;
+      
       let challengeAchievedPoints = 0;
       for (const day of dailyDetails) {
         for (const ch of day.challenges) {
           if (ch.achieved) challengeAchievedPoints += ch.basePoints;
         }
       }
-      const totalPoints = Math.max(ledgerTotalPoints, challengeAchievedPoints);
+      // Use the higher of ledger challenge points vs computed challenge points, plus other ledger points
+      const effectiveChallengePoints = Math.max(ledgerChallengePoints, challengeAchievedPoints);
+      const totalPoints = ledgerOtherPoints + effectiveChallengePoints;
       const totalAmount = totalPoints * (Number(pointValue) || 0.5);
       
       res.json({
