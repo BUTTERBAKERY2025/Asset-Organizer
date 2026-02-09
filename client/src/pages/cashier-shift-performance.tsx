@@ -2108,7 +2108,7 @@ export default function CashierShiftPerformance() {
                                     <div className="flex items-center justify-between p-2.5 bg-gradient-to-l from-gray-50 to-white">
                                       <div className="flex items-center gap-2">
                                         <CalendarDays className="h-3.5 w-3.5 text-gray-500" />
-                                        <span className="text-sm font-medium">{new Date(day.date + 'T00:00:00').toLocaleDateString('ar-SA', { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' })}</span>
+                                        <span className="text-sm font-medium">{new Date(day.date + 'T00:00:00').toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' })}</span>
                                       </div>
                                       {day.totalPoints > 0 && (
                                         <div className="flex items-center gap-2">

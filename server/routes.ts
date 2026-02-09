@@ -7948,12 +7948,22 @@ export async function registerRoutes(
         }
       }
       
-      // Calculate totals
-      const totalPoints = ledger.reduce((sum, e) => sum + e.pointsEarned, 0);
-      const totalAmount = ledger.reduce((sum, e) => sum + e.amountEarned, 0);
+      // Calculate totals from ledger
+      const ledgerTotalPoints = ledger.reduce((sum, e) => sum + e.pointsEarned, 0);
+      const ledgerTotalAmount = ledger.reduce((sum, e) => sum + e.amountEarned, 0);
       const earnedAmount = ledger.filter(e => e.status === 'earned').reduce((sum, e) => sum + e.amountEarned, 0);
       const approvedAmount = ledger.filter(e => e.status === 'approved').reduce((sum, e) => sum + e.amountEarned, 0);
       const paidAmount = ledger.filter(e => e.status === 'paid').reduce((sum, e) => sum + e.amountEarned, 0);
+      
+      // Also compute achieved challenge points from dailyDetails (covers case when ledger entries haven't been created yet)
+      let challengeAchievedPoints = 0;
+      for (const day of dailyDetails) {
+        for (const ch of day.challenges) {
+          if (ch.achieved) challengeAchievedPoints += ch.basePoints;
+        }
+      }
+      const totalPoints = Math.max(ledgerTotalPoints, challengeAchievedPoints);
+      const totalAmount = totalPoints * (Number(pointValue) || 0.5);
       
       res.json({
         cashierId: user.id,
