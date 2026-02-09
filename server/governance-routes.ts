@@ -631,6 +631,21 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
+  app.delete("/api/governance/meetings/:id", isAuthenticated, requirePermission("governance_meetings", "delete"), async (req, res) => {
+    try {
+      const meetingId = parseInt(req.params.id);
+      const [meeting] = await db.select().from(governanceMeetings).where(eq(governanceMeetings.id, meetingId));
+      if (!meeting) {
+        return res.status(404).json({ error: "الاجتماع غير موجود" });
+      }
+      await db.delete(governanceMeetings).where(eq(governanceMeetings.id, meetingId));
+      res.json({ success: true, message: "تم حذف الاجتماع بنجاح" });
+    } catch (error) {
+      console.error("Error deleting meeting:", error);
+      res.status(500).json({ error: "فشل في حذف الاجتماع" });
+    }
+  });
+
   // =====================================================
   // Meeting Attendance - حضور الاجتماعات
   // =====================================================

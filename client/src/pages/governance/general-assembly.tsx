@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
@@ -53,7 +55,12 @@ import {
   XCircle,
   MinusCircle,
   RefreshCw,
-  ExternalLink
+  ExternalLink,
+  MoreVertical,
+  PlayCircle,
+  PauseCircle,
+  Ban,
+  CalendarCheck
 } from "lucide-react";
 import { Link } from "wouter";
 
@@ -77,6 +84,9 @@ interface GeneralAssembly {
   scheduledDate: string;
   meetingDate?: string;
   location: string;
+  locationType?: string;
+  virtualMeetingLink?: string;
+  description?: string;
   status: string;
   quorumRequired: number;
   agenda?: string;
@@ -107,6 +117,23 @@ export default function GeneralAssemblyPage() {
   const [invitationMeetingId, setInvitationMeetingId] = useState<number | null>(null);
   const [invitationChannels, setInvitationChannels] = useState({ sendWhatsApp: true, sendSMS: false });
   const [invitationResults, setInvitationResults] = useState<any>(null);
+  const [showEditMeeting, setShowEditMeeting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [editingMeeting, setEditingMeeting] = useState<GeneralAssembly | null>(null);
+  const [deletingMeeting, setDeletingMeeting] = useState<GeneralAssembly | null>(null);
+  const [editForm, setEditForm] = useState({
+    title: "",
+    meetingType: "ordinary",
+    meetingDate: "",
+    location: "",
+    quorumRequired: 50,
+    agenda: "",
+    virtualMeetingLink: "",
+    locationType: "in_person",
+    description: "",
+    notes: "",
+    status: "scheduled",
+  });
   const [newMeeting, setNewMeeting] = useState({
     title: "",
     meetingType: "ordinary",
@@ -218,6 +245,97 @@ export default function GeneralAssemblyPage() {
       toast({ title: "فشل في إرسال الدعوات", variant: "destructive" });
     },
   });
+
+  const updateMeetingMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const response = await fetch(`/api/governance/meetings/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to update meeting");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/governance/meetings"] });
+      setShowEditMeeting(false);
+      setEditingMeeting(null);
+      toast({ title: "تم تحديث الاجتماع بنجاح" });
+    },
+    onError: () => {
+      toast({ title: "فشل في تحديث الاجتماع", variant: "destructive" });
+    },
+  });
+
+  const deleteMeetingMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const response = await fetch(`/api/governance/meetings/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to delete meeting");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/governance/meetings"] });
+      setShowDeleteConfirm(false);
+      setDeletingMeeting(null);
+      toast({ title: "تم حذف الاجتماع بنجاح" });
+    },
+    onError: () => {
+      toast({ title: "فشل في حذف الاجتماع", variant: "destructive" });
+    },
+  });
+
+  const openEditDialog = (meeting: GeneralAssembly) => {
+    setEditingMeeting(meeting);
+    const dateStr = meeting.meetingDate || meeting.scheduledDate;
+    let formattedDate = "";
+    if (dateStr) {
+      try {
+        formattedDate = new Date(dateStr).toISOString().slice(0, 16);
+      } catch { formattedDate = ""; }
+    }
+    setEditForm({
+      title: meeting.title || "",
+      meetingType: meeting.meetingType || "ordinary",
+      meetingDate: formattedDate,
+      location: meeting.location || "",
+      quorumRequired: meeting.quorumRequired || 50,
+      agenda: meeting.agenda || "",
+      virtualMeetingLink: meeting.virtualMeetingLink || "",
+      locationType: meeting.locationType || "in_person",
+      description: meeting.description || "",
+      notes: meeting.notes || "",
+      status: meeting.status || "scheduled",
+    });
+    setShowEditMeeting(true);
+  };
+
+  const handleUpdateMeeting = () => {
+    if (!editingMeeting) return;
+    const updateData: any = {
+      title: editForm.title,
+      meetingType: editForm.meetingType,
+      location: editForm.location || null,
+      locationType: editForm.locationType,
+      quorumRequired: editForm.quorumRequired.toString(),
+      agenda: editForm.agenda || null,
+      notes: editForm.notes || null,
+      description: editForm.description || null,
+      virtualMeetingLink: editForm.virtualMeetingLink || null,
+      status: editForm.status,
+    };
+    if (editForm.meetingDate) {
+      updateData.meetingDate = new Date(editForm.meetingDate).toISOString();
+    }
+    updateMeetingMutation.mutate({ id: editingMeeting.id, data: updateData });
+  };
+
+  const handleChangeStatus = (meeting: GeneralAssembly, newStatus: string) => {
+    updateMeetingMutation.mutate({ id: meeting.id, data: { status: newStatus } });
+  };
 
   // حسابات المساهمين
   const shareholderStats = useMemo(() => {
@@ -637,36 +755,93 @@ export default function GeneralAssemblyPage() {
                         </TableCell>
                         <TableCell>{getStatusBadge(meeting.status)}</TableCell>
                         <TableCell>
-                          <div className="flex gap-1">
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={() => {
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm" data-testid={`button-actions-meeting-${meeting.id}`}>
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-52">
+                              <DropdownMenuItem onClick={() => openEditDialog(meeting)} data-testid={`button-edit-meeting-${meeting.id}`}>
+                                <Edit className="h-4 w-4 ml-2" />
+                                تعديل الاجتماع
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => {
                                 setSelectedMeeting(meeting);
                                 setShowAttendance(true);
-                              }}
-                            >
-                              <UserCheck className="h-4 w-4" />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={() => {
+                              }}>
+                                <UserCheck className="h-4 w-4 ml-2" />
+                                سجل الحضور
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => {
                                 setSelectedMeeting(meeting);
                                 setShowAgenda(true);
-                              }}
-                            >
-                              <ClipboardList className="h-4 w-4" />
-                            </Button>
-                            <Link href="/governance/voting">
-                              <Button variant="ghost" size="sm">
-                                <Vote className="h-4 w-4" />
-                              </Button>
-                            </Link>
-                            <Button variant="ghost" size="sm">
-                              <Printer className="h-4 w-4" />
-                            </Button>
-                          </div>
+                              }}>
+                                <ClipboardList className="h-4 w-4 ml-2" />
+                                جدول الأعمال
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => {
+                                setInvitationMeetingId(meeting.id);
+                                setShowInvitations(true);
+                                setInvitationResults(null);
+                              }}>
+                                <Send className="h-4 w-4 ml-2" />
+                                إرسال الدعوات
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuSub>
+                                <DropdownMenuSubTrigger>
+                                  <RefreshCw className="h-4 w-4 ml-2" />
+                                  تغيير الحالة
+                                </DropdownMenuSubTrigger>
+                                <DropdownMenuSubContent>
+                                  <DropdownMenuItem onClick={() => handleChangeStatus(meeting, 'scheduled')} disabled={meeting.status === 'scheduled'}>
+                                    <CalendarCheck className="h-4 w-4 ml-2 text-blue-600" />
+                                    مجدولة
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleChangeStatus(meeting, 'in_progress')} disabled={meeting.status === 'in_progress'}>
+                                    <PlayCircle className="h-4 w-4 ml-2 text-green-600" />
+                                    جاري الانعقاد
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleChangeStatus(meeting, 'completed')} disabled={meeting.status === 'completed'}>
+                                    <CheckCircle className="h-4 w-4 ml-2 text-emerald-600" />
+                                    مكتمل
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleChangeStatus(meeting, 'postponed')} disabled={meeting.status === 'postponed'}>
+                                    <PauseCircle className="h-4 w-4 ml-2 text-yellow-600" />
+                                    مؤجل
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleChangeStatus(meeting, 'cancelled')} disabled={meeting.status === 'cancelled'}>
+                                    <Ban className="h-4 w-4 ml-2 text-red-600" />
+                                    ملغي
+                                  </DropdownMenuItem>
+                                </DropdownMenuSubContent>
+                              </DropdownMenuSub>
+                              <DropdownMenuSeparator />
+                              <Link href="/governance/voting">
+                                <DropdownMenuItem>
+                                  <Vote className="h-4 w-4 ml-2" />
+                                  التصويت
+                                </DropdownMenuItem>
+                              </Link>
+                              <DropdownMenuItem>
+                                <Printer className="h-4 w-4 ml-2" />
+                                طباعة
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem 
+                                className="text-red-600 focus:text-red-600"
+                                onClick={() => {
+                                  setDeletingMeeting(meeting);
+                                  setShowDeleteConfirm(true);
+                                }}
+                                data-testid={`button-delete-meeting-${meeting.id}`}
+                              >
+                                <Trash2 className="h-4 w-4 ml-2" />
+                                حذف الاجتماع
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -1481,6 +1656,199 @@ export default function GeneralAssemblyPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* نافذة تعديل الاجتماع */}
+      <Dialog open={showEditMeeting} onOpenChange={(open) => { setShowEditMeeting(open); if (!open) setEditingMeeting(null); }}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit className="h-5 w-5 text-blue-600" />
+              تعديل الاجتماع
+            </DialogTitle>
+            <DialogDescription>تعديل بيانات اجتماع الجمعية العمومية</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2">
+              <Label>عنوان الاجتماع *</Label>
+              <Input
+                value={editForm.title}
+                onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                data-testid="input-edit-meeting-title"
+              />
+            </div>
+            <div>
+              <Label>نوع الاجتماع</Label>
+              <Select
+                value={editForm.meetingType}
+                onValueChange={(v) => setEditForm({ ...editForm, meetingType: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ordinary">عادية</SelectItem>
+                  <SelectItem value="extraordinary">غير عادية</SelectItem>
+                  <SelectItem value="board">مجلس إدارة</SelectItem>
+                  <SelectItem value="committee">لجنة</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>حالة الاجتماع</Label>
+              <Select
+                value={editForm.status}
+                onValueChange={(v) => setEditForm({ ...editForm, status: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="scheduled">مجدولة</SelectItem>
+                  <SelectItem value="in_progress">جاري الانعقاد</SelectItem>
+                  <SelectItem value="completed">مكتمل</SelectItem>
+                  <SelectItem value="postponed">مؤجل</SelectItem>
+                  <SelectItem value="cancelled">ملغي</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>تاريخ ووقت الاجتماع</Label>
+              <Input
+                type="datetime-local"
+                value={editForm.meetingDate}
+                onChange={(e) => setEditForm({ ...editForm, meetingDate: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>مكان الانعقاد</Label>
+              <Input
+                value={editForm.location}
+                onChange={(e) => setEditForm({ ...editForm, location: e.target.value })}
+                placeholder="مثال: المقر الرئيسي - قاعة الاجتماعات"
+              />
+            </div>
+            <div>
+              <Label>نوع الموقع</Label>
+              <Select
+                value={editForm.locationType}
+                onValueChange={(v) => setEditForm({ ...editForm, locationType: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="in_person">حضوري</SelectItem>
+                  <SelectItem value="virtual">افتراضي (أون لاين)</SelectItem>
+                  <SelectItem value="hybrid">مختلط</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>نسبة النصاب المطلوب (%)</Label>
+              <Input
+                type="number"
+                min="1"
+                max="100"
+                value={editForm.quorumRequired}
+                onChange={(e) => setEditForm({ ...editForm, quorumRequired: parseInt(e.target.value) || 50 })}
+              />
+            </div>
+            {(editForm.locationType === 'virtual' || editForm.locationType === 'hybrid') && (
+              <div className="col-span-2">
+                <Label>رابط الاجتماع الإلكتروني</Label>
+                <Input
+                  value={editForm.virtualMeetingLink}
+                  onChange={(e) => setEditForm({ ...editForm, virtualMeetingLink: e.target.value })}
+                  placeholder="https://..."
+                  dir="ltr"
+                />
+              </div>
+            )}
+            <div className="col-span-2">
+              <Label>الوصف</Label>
+              <Textarea
+                value={editForm.description}
+                onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                placeholder="وصف تفصيلي للاجتماع..."
+                rows={2}
+              />
+            </div>
+            <div className="col-span-2">
+              <Label>جدول الأعمال</Label>
+              <Textarea
+                value={editForm.agenda}
+                onChange={(e) => setEditForm({ ...editForm, agenda: e.target.value })}
+                placeholder="1. الافتتاح والترحيب&#10;2. التحقق من النصاب&#10;3. ..."
+                rows={4}
+              />
+            </div>
+            <div className="col-span-2">
+              <Label>ملاحظات</Label>
+              <Textarea
+                value={editForm.notes}
+                onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                placeholder="ملاحظات إضافية..."
+                rows={2}
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2 mt-4">
+            <Button variant="outline" onClick={() => { setShowEditMeeting(false); setEditingMeeting(null); }}>إلغاء</Button>
+            <Button 
+              onClick={handleUpdateMeeting}
+              disabled={!editForm.title || updateMeetingMutation.isPending}
+              className="gap-2"
+              data-testid="button-save-edit-meeting"
+            >
+              {updateMeetingMutation.isPending ? (
+                <RefreshCw className="h-4 w-4 animate-spin" />
+              ) : (
+                <CheckCircle className="h-4 w-4" />
+              )}
+              حفظ التعديلات
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* نافذة تأكيد الحذف */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-red-600">
+              <Trash2 className="h-5 w-5" />
+              تأكيد حذف الاجتماع
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-right">
+              هل أنت متأكد من حذف الاجتماع "{deletingMeeting?.title}"؟
+              <br />
+              <span className="text-red-500 font-medium">هذا الإجراء لا يمكن التراجع عنه وسيتم حذف جميع البيانات المرتبطة بالاجتماع.</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel onClick={() => { setShowDeleteConfirm(false); setDeletingMeeting(null); }}>
+              إلغاء
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 gap-2"
+              onClick={() => {
+                if (deletingMeeting) {
+                  deleteMeetingMutation.mutate(deletingMeeting.id);
+                }
+              }}
+              disabled={deleteMeetingMutation.isPending}
+              data-testid="button-confirm-delete-meeting"
+            >
+              {deleteMeetingMutation.isPending ? (
+                <RefreshCw className="h-4 w-4 animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4" />
+              )}
+              حذف الاجتماع
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
