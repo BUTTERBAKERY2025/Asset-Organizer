@@ -310,21 +310,35 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const allBottomItems: NavItem[] = [];
 
+  const SMART_INCENTIVES_MODULES: SystemModule[] = [
+    "smart_incentives_settings" as SystemModule,
+    "smart_incentives_challenges" as SystemModule,
+    "smart_incentives_commissions" as SystemModule,
+    "smart_incentives_bonus" as SystemModule,
+    "smart_incentives_wallet" as SystemModule,
+    "smart_incentives_statements" as SystemModule,
+  ];
+
+  const checkNavPermission = (module: SystemModule): boolean => {
+    if (canView(module)) return true;
+    if (module === ("incentives" as SystemModule)) {
+      return SMART_INCENTIVES_MODULES.some(m => canView(m));
+    }
+    return false;
+  };
+
   const filterItemsByPermission = (items: NavItem[]): NavItem[] => {
     return items.filter(item => {
       if (!item.module) return true;
-      return canView(item.module);
+      return checkNavPermission(item.module);
     });
   };
 
-  // For groups: filter items but keep group visible if ANY non-header item has permission
   const filterGroupItems = (items: NavItem[]): NavItem[] => {
     return items.filter(item => {
       if (!item.module) return true;
-      // If hideIfNoPermission is set (for headers), hide if no permission
-      if (item.hideIfNoPermission && !canView(item.module)) return false;
-      // For regular items, check permission normally
-      return canView(item.module);
+      if (item.hideIfNoPermission && !checkNavPermission(item.module)) return false;
+      return checkNavPermission(item.module);
     });
   };
 

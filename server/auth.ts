@@ -522,13 +522,7 @@ export const requirePermission = (module: string, action: string): RequestHandle
       modulePerm = permissions.find((p: any) => p.module === 'attendance');
     }
     
-    // Backward compatibility: smart_incentives_* modules also accept parent "incentives" permission
-    if (!modulePerm && module.startsWith('smart_incentives_')) {
-      modulePerm = permissions.find((p: any) => p.module === 'incentives');
-    }
-    
     if (!modulePerm) {
-      // Log security alert
       logSecurityAlert({
         alertType: 'permission_denied',
         severity: 'medium',
@@ -615,18 +609,13 @@ export const requireAnyPermission = (module: string, actions: string[]): Request
     
     // Check granular permissions from database
     const permissions = await storage.getUserPermissions(user.id);
-    let modulePerm = permissions.find((p: any) => p.module === module);
-    
-    // Backward compatibility: smart_incentives_* modules also accept parent "incentives" permission
-    if (!modulePerm && module.startsWith('smart_incentives_')) {
-      modulePerm = permissions.find((p: any) => p.module === 'incentives');
-    }
+    const modulePerm = permissions.find((p: any) => p.module === module);
     
     if (!modulePerm) {
       return res.status(403).json({ message: "غير مسموح - ليس لديك صلاحية على هذه الوحدة" });
     }
     
-    const hasAnyAction = actions.some(action => modulePerm!.actions.includes(action));
+    const hasAnyAction = actions.some(action => modulePerm.actions.includes(action));
     if (!hasAnyAction) {
       return res.status(403).json({ message: "غير مسموح - صلاحيات غير كافية" });
     }
