@@ -115,11 +115,11 @@ export default function ShiftManagementPage() {
   });
   const { data: users } = useQuery<User[]>({ queryKey: ["/api/users"] });
   const { data: branchEmployees } = useQuery<BranchEmployee[]>({
-    queryKey: ["/api/branch-employees", selectedBranch],
+    queryKey: ["/api/branch-employees", selectedBranch, "active"],
     queryFn: async () => {
       const url = selectedBranch !== "all" 
-        ? `/api/branch-employees?branchId=${selectedBranch}` 
-        : "/api/branch-employees";
+        ? `/api/branch-employees?branchId=${selectedBranch}&status=active` 
+        : "/api/branch-employees?status=active";
       const res = await apiRequest("GET", url);
       return res.json();
     },

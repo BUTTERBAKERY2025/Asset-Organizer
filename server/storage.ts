@@ -7469,7 +7469,6 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getEmployeeSchedulesByBranchAndDateRange(branchId: string, startDate: string, endDate: string): Promise<EmployeeSchedule[]> {
-    // Get schedules directly by branchId on the schedule table (for branch employees)
     const branchSchedules = await db.select().from(employeeSchedules)
       .where(and(
         eq(employeeSchedules.branchId, branchId),
@@ -7478,30 +7477,48 @@ export class DatabaseStorage implements IStorage {
       ))
       .orderBy(employeeSchedules.employeeId, employeeSchedules.scheduleDate);
     
-    // Also get schedules for users assigned to this branch (legacy support)
-    const branchUsers = await db.select().from(users).where(eq(users.branchId, branchId));
-    const userIds = branchUsers.map(u => u.id);
+    const activeBranchEmps = await db.select().from(branchEmployees)
+      .where(and(
+        eq(branchEmployees.branchId, branchId),
+        eq(branchEmployees.status, "active")
+      ));
+    const activeBranchEmpIds = new Set(activeBranchEmps.map(e => e.id));
     
-    if (userIds.length > 0) {
+    const branchUsers = await db.select().from(users).where(eq(users.branchId, branchId));
+    const activeUserIds = new Set(branchUsers.map(u => u.id));
+    
+    const filteredSchedules = branchSchedules.filter(schedule => {
+      if (schedule.branchEmployeeId) {
+        return activeBranchEmpIds.has(schedule.branchEmployeeId);
+      }
+      if (schedule.employeeId.startsWith("branch_emp_")) {
+        const empId = parseInt(schedule.employeeId.replace("branch_emp_", ""), 10);
+        return !isNaN(empId) && activeBranchEmpIds.has(empId);
+      }
+      return activeUserIds.has(schedule.employeeId);
+    });
+    
+    if (activeUserIds.size > 0) {
       const userSchedules = await db.select().from(employeeSchedules)
         .where(and(
-          inArray(employeeSchedules.employeeId, userIds),
+          inArray(employeeSchedules.employeeId, Array.from(activeUserIds)),
           gte(employeeSchedules.scheduleDate, startDate),
           lte(employeeSchedules.scheduleDate, endDate)
         ))
         .orderBy(employeeSchedules.employeeId, employeeSchedules.scheduleDate);
       
-      // Merge and deduplicate by schedule id
-      const allSchedules = [...branchSchedules];
+      const allSchedules = [...filteredSchedules];
       for (const schedule of userSchedules) {
         if (!allSchedules.some(s => s.id === schedule.id)) {
-          allSchedules.push(schedule);
+          if (!schedule.branchId || schedule.branchId === branchId) {
+            allSchedules.push(schedule);
+          }
         }
       }
       return allSchedules;
     }
     
-    return branchSchedules;
+    return filteredSchedules;
   }
 
   async createEmployeeSchedule(schedule: InsertEmployeeSchedule): Promise<EmployeeSchedule> {
