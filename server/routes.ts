@@ -19408,6 +19408,17 @@ export async function registerRoutes(
         }
       }
       
+      const allEmployees = await storage.getAllBranchEmployees();
+      const duplicate = allEmployees.find((e: any) => 
+        e.employeeName?.trim() === parsed.data.employeeName?.trim() && 
+        e.status === "active"
+      );
+      if (duplicate) {
+        return res.status(400).json({ 
+          error: `الموظف "${parsed.data.employeeName}" مسجل بالفعل كموظف نشط. يرجى نقله من صفحة الموظفين بدلاً من إضافة سجل جديد.`
+        });
+      }
+
       const employee = await storage.createBranchEmployee(parsed.data);
       res.status(201).json(employee);
     } catch (error) {
