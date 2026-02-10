@@ -488,7 +488,7 @@ import {
 } from "@shared/schema";
 
 type TransferHistory = typeof transferHistory.$inferSelect;
-import { db } from "./db";
+import { db, pool } from "./db";
 import { eq, and, gte, lte, desc, or, inArray, sql, isNull, ilike } from "drizzle-orm";
 import bcrypt from "bcrypt";
 
@@ -7630,38 +7630,122 @@ export class DatabaseStorage implements IStorage {
 
   // Attendance Records - سجلات الحضور
   async getAllAttendanceRecords(filters?: { branchId?: string; employeeId?: string; startDate?: string; endDate?: string; status?: string }): Promise<AttendanceRecord[]> {
-    const conditions = [];
-    if (filters?.branchId) conditions.push(eq(attendanceRecords.branchId, filters.branchId));
-    if (filters?.employeeId) conditions.push(eq(attendanceRecords.employeeId, filters.employeeId));
-    if (filters?.startDate) conditions.push(gte(attendanceRecords.attendanceDate, filters.startDate));
-    if (filters?.endDate) conditions.push(lte(attendanceRecords.attendanceDate, filters.endDate));
-    if (filters?.status) conditions.push(eq(attendanceRecords.status, filters.status));
-    
-    if (conditions.length > 0) {
-      return await db.select().from(attendanceRecords).where(and(...conditions)).orderBy(desc(attendanceRecords.attendanceDate));
+    try {
+      const conditions = [];
+      if (filters?.branchId) conditions.push(eq(attendanceRecords.branchId, filters.branchId));
+      if (filters?.employeeId) conditions.push(eq(attendanceRecords.employeeId, filters.employeeId));
+      if (filters?.startDate) conditions.push(gte(attendanceRecords.attendanceDate, filters.startDate));
+      if (filters?.endDate) conditions.push(lte(attendanceRecords.attendanceDate, filters.endDate));
+      if (filters?.status) conditions.push(eq(attendanceRecords.status, filters.status));
+      
+      if (conditions.length > 0) {
+        return await db.select().from(attendanceRecords).where(and(...conditions)).orderBy(desc(attendanceRecords.attendanceDate));
+      }
+      return await db.select().from(attendanceRecords).orderBy(desc(attendanceRecords.attendanceDate));
+    } catch (error: any) {
+      if (error?.code === '42703') {
+        const whereClauses = [];
+        const params: any[] = [];
+        let paramIndex = 1;
+        if (filters?.branchId) { whereClauses.push(`branch_id = $${paramIndex++}`); params.push(filters.branchId); }
+        if (filters?.employeeId) { whereClauses.push(`employee_id = $${paramIndex++}`); params.push(filters.employeeId); }
+        if (filters?.startDate) { whereClauses.push(`attendance_date >= $${paramIndex++}`); params.push(filters.startDate); }
+        if (filters?.endDate) { whereClauses.push(`attendance_date <= $${paramIndex++}`); params.push(filters.endDate); }
+        if (filters?.status) { whereClauses.push(`status = $${paramIndex++}`); params.push(filters.status); }
+        const whereStr = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+        const result = await pool.query(`SELECT id, employee_id, employee_name, branch_id, branch_employee_id, schedule_id, attendance_date, scheduled_start_time, scheduled_end_time, actual_check_in, actual_check_out, check_in_signature, check_out_signature, status, late_minutes, early_leave_minutes, overtime_minutes, working_hours, device_info, location_info, notes, approved_by, approved_at, created_at, updated_at FROM attendance_records ${whereStr} ORDER BY attendance_date DESC`, params);
+        return result.rows.map((r: any) => ({
+          ...r,
+          employeeId: r.employee_id, employeeName: r.employee_name, branchId: r.branch_id,
+          branchEmployeeId: r.branch_employee_id, scheduleId: r.schedule_id, attendanceDate: r.attendance_date,
+          scheduledStartTime: r.scheduled_start_time, scheduledEndTime: r.scheduled_end_time,
+          actualCheckIn: r.actual_check_in, actualCheckOut: r.actual_check_out,
+          checkInSignature: r.check_in_signature, checkOutSignature: r.check_out_signature,
+          lateMinutes: r.late_minutes, earlyLeaveMinutes: r.early_leave_minutes,
+          overtimeMinutes: r.overtime_minutes, workingHours: r.working_hours,
+          biometricVerified: false, biometricCheckIn: false, biometricCheckOut: false,
+          deviceInfo: r.device_info, locationInfo: r.location_info,
+          approvedBy: r.approved_by, approvedAt: r.approved_at,
+          createdAt: r.created_at, updatedAt: r.updated_at,
+        }));
+      }
+      throw error;
     }
-    return await db.select().from(attendanceRecords).orderBy(desc(attendanceRecords.attendanceDate));
   }
 
   async getAttendanceRecord(id: number): Promise<AttendanceRecord | undefined> {
-    const [record] = await db.select().from(attendanceRecords).where(eq(attendanceRecords.id, id));
-    return record;
+    try {
+      const [record] = await db.select().from(attendanceRecords).where(eq(attendanceRecords.id, id));
+      return record;
+    } catch (error: any) {
+      if (error?.code === '42703') {
+        const result = await pool.query(`SELECT * FROM attendance_records WHERE id = $1 LIMIT 1`, [id]);
+        if (result.rows.length === 0) return undefined;
+        const r = result.rows[0];
+        return this.mapRawAttendanceRecord(r);
+      }
+      throw error;
+    }
   }
 
   async getAttendanceByEmployeeAndDate(employeeId: string, date: string): Promise<AttendanceRecord | undefined> {
-    const [record] = await db.select().from(attendanceRecords)
-      .where(and(eq(attendanceRecords.employeeId, employeeId), eq(attendanceRecords.attendanceDate, date)));
-    return record;
+    try {
+      const [record] = await db.select().from(attendanceRecords)
+        .where(and(eq(attendanceRecords.employeeId, employeeId), eq(attendanceRecords.attendanceDate, date)));
+      return record;
+    } catch (error: any) {
+      if (error?.code === '42703') {
+        const result = await pool.query(`SELECT * FROM attendance_records WHERE employee_id = $1 AND attendance_date = $2 LIMIT 1`, [employeeId, date]);
+        if (result.rows.length === 0) return undefined;
+        return this.mapRawAttendanceRecord(result.rows[0]);
+      }
+      throw error;
+    }
+  }
+
+  private mapRawAttendanceRecord(r: any): AttendanceRecord {
+    return {
+      id: r.id, employeeId: r.employee_id, employeeName: r.employee_name, branchId: r.branch_id,
+      branchEmployeeId: r.branch_employee_id, scheduleId: r.schedule_id, attendanceDate: r.attendance_date,
+      scheduledStartTime: r.scheduled_start_time, scheduledEndTime: r.scheduled_end_time,
+      actualCheckIn: r.actual_check_in, actualCheckOut: r.actual_check_out,
+      checkInSignature: r.check_in_signature, checkOutSignature: r.check_out_signature,
+      status: r.status, lateMinutes: r.late_minutes, earlyLeaveMinutes: r.early_leave_minutes,
+      overtimeMinutes: r.overtime_minutes, workingHours: r.working_hours,
+      biometricVerified: r.biometric_verified ?? false, biometricCheckIn: r.biometric_check_in ?? false,
+      biometricCheckOut: r.biometric_check_out ?? false,
+      deviceInfo: r.device_info, locationInfo: r.location_info, notes: r.notes,
+      approvedBy: r.approved_by, approvedAt: r.approved_at,
+      createdAt: r.created_at, updatedAt: r.updated_at,
+    };
   }
 
   async createAttendanceRecord(record: InsertAttendanceRecord): Promise<AttendanceRecord> {
-    const [created] = await db.insert(attendanceRecords).values(record).returning();
-    return created;
+    try {
+      const [created] = await db.insert(attendanceRecords).values(record).returning();
+      return created;
+    } catch (error: any) {
+      if (error?.code === '42703') {
+        const { biometricVerified, biometricCheckIn, biometricCheckOut, ...safeRecord } = record as any;
+        const [created] = await db.insert(attendanceRecords).values(safeRecord).returning();
+        return { ...created, biometricVerified: false, biometricCheckIn: false, biometricCheckOut: false };
+      }
+      throw error;
+    }
   }
 
   async updateAttendanceRecord(id: number, record: Partial<InsertAttendanceRecord>): Promise<AttendanceRecord | undefined> {
-    const [updated] = await db.update(attendanceRecords).set({ ...record, updatedAt: new Date() }).where(eq(attendanceRecords.id, id)).returning();
-    return updated;
+    try {
+      const [updated] = await db.update(attendanceRecords).set({ ...record, updatedAt: new Date() }).where(eq(attendanceRecords.id, id)).returning();
+      return updated;
+    } catch (error: any) {
+      if (error?.code === '42703') {
+        const { biometricVerified, biometricCheckIn, biometricCheckOut, ...safeRecord } = record as any;
+        const [updated] = await db.update(attendanceRecords).set({ ...safeRecord, updatedAt: new Date() }).where(eq(attendanceRecords.id, id)).returning();
+        return updated ? { ...updated, biometricVerified: false, biometricCheckIn: false, biometricCheckOut: false } : undefined;
+      }
+      throw error;
+    }
   }
 
   async checkIn(employeeId: string, branchId: string, signature?: string, deviceInfo?: string): Promise<AttendanceRecord> {
@@ -7687,27 +7771,44 @@ export class DatabaseStorage implements IStorage {
     }
     
     if (existing) {
-      const [updated] = await db.update(attendanceRecords).set({
+      try {
+        const [updated] = await db.update(attendanceRecords).set({
+          actualCheckIn: now,
+          checkInSignature: signature,
+          deviceInfo,
+          status: 'present',
+          updatedAt: new Date()
+        }).where(eq(attendanceRecords.id, existing.id)).returning();
+        return updated;
+      } catch (error: any) {
+        if (error?.code === '42703') {
+          await pool.query(`UPDATE attendance_records SET actual_check_in = $1, check_in_signature = $2, device_info = $3, status = 'present', updated_at = NOW() WHERE id = $4`, [now, signature, deviceInfo, existing.id]);
+          const record = await this.getAttendanceRecord(existing.id);
+          return record!;
+        }
+        throw error;
+      }
+    }
+    
+    try {
+      const [created] = await db.insert(attendanceRecords).values({
+        employeeId,
+        employeeName,
+        branchId,
+        attendanceDate: today,
         actualCheckIn: now,
         checkInSignature: signature,
         deviceInfo,
-        status: 'present',
-        updatedAt: new Date()
-      }).where(eq(attendanceRecords.id, existing.id)).returning();
-      return updated;
+        status: 'present'
+      }).returning();
+      return created;
+    } catch (error: any) {
+      if (error?.code === '42703') {
+        const result = await pool.query(`INSERT INTO attendance_records (employee_id, employee_name, branch_id, attendance_date, actual_check_in, check_in_signature, device_info, status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, 'present', NOW(), NOW()) RETURNING *`, [employeeId, employeeName, branchId, today, now, signature, deviceInfo]);
+        return this.mapRawAttendanceRecord(result.rows[0]);
+      }
+      throw error;
     }
-    
-    const [created] = await db.insert(attendanceRecords).values({
-      employeeId,
-      employeeName,
-      branchId,
-      attendanceDate: today,
-      actualCheckIn: now,
-      checkInSignature: signature,
-      deviceInfo,
-      status: 'present'
-    }).returning();
-    return created;
   }
 
   async checkOut(employeeId: string, signature?: string): Promise<AttendanceRecord | undefined> {
@@ -7726,13 +7827,22 @@ export class DatabaseStorage implements IStorage {
       workingHours = (checkOutTime.getTime() - checkInTime.getTime()) / (1000 * 60 * 60);
     }
     
-    const [updated] = await db.update(attendanceRecords).set({
-      actualCheckOut: now,
-      checkOutSignature: signature,
-      workingHours: Math.round(workingHours * 100) / 100,
-      updatedAt: new Date()
-    }).where(and(eq(attendanceRecords.id, existing.id), eq(attendanceRecords.employeeId, employeeId))).returning();
-    return updated;
+    try {
+      const [updated] = await db.update(attendanceRecords).set({
+        actualCheckOut: now,
+        checkOutSignature: signature,
+        workingHours: Math.round(workingHours * 100) / 100,
+        updatedAt: new Date()
+      }).where(and(eq(attendanceRecords.id, existing.id), eq(attendanceRecords.employeeId, employeeId))).returning();
+      return updated;
+    } catch (error: any) {
+      if (error?.code === '42703') {
+        await pool.query(`UPDATE attendance_records SET actual_check_out = $1, check_out_signature = $2, working_hours = $3, updated_at = NOW() WHERE id = $4 AND employee_id = $5`, [now, signature, Math.round(workingHours * 100) / 100, existing.id, employeeId]);
+        const record = await this.getAttendanceRecord(existing.id);
+        return record;
+      }
+      throw error;
+    }
   }
 
   async getScheduledEmployeesForAttendance(branchId: string, shiftType: string, date: string): Promise<any[]> {
@@ -7975,17 +8085,25 @@ export class DatabaseStorage implements IStorage {
     const status = lateMinutes > 0 ? 'late' : 'present';
     
     if (existing) {
-      const [updated] = await db.update(attendanceRecords).set({
-        actualCheckIn: now,
-        checkInSignature: signature,
-        scheduleId: scheduleId,
-        scheduledStartTime: scheduledStartTime,
-        scheduledEndTime: scheduledEndTime,
-        lateMinutes,
-        status,
-        updatedAt: new Date()
-      }).where(eq(attendanceRecords.id, existing.id)).returning();
-      return updated;
+      try {
+        const [updated] = await db.update(attendanceRecords).set({
+          actualCheckIn: now,
+          checkInSignature: signature,
+          scheduleId: scheduleId,
+          scheduledStartTime: scheduledStartTime,
+          scheduledEndTime: scheduledEndTime,
+          lateMinutes,
+          status,
+          updatedAt: new Date()
+        }).where(eq(attendanceRecords.id, existing.id)).returning();
+        return updated;
+      } catch (error: any) {
+        if (error?.code === '42703') {
+          await pool.query(`UPDATE attendance_records SET actual_check_in = $1, check_in_signature = $2, schedule_id = $3, scheduled_start_time = $4, scheduled_end_time = $5, late_minutes = $6, status = $7, updated_at = NOW() WHERE id = $8`, [now, signature, scheduleId, scheduledStartTime, scheduledEndTime, lateMinutes, status, existing.id]);
+          return (await this.getAttendanceRecord(existing.id))!;
+        }
+        throw error;
+      }
     }
     
     let branchEmployeeId: number | undefined = undefined;
@@ -7994,21 +8112,29 @@ export class DatabaseStorage implements IStorage {
       if (!isNaN(parsedId)) branchEmployeeId = parsedId;
     }
     
-    const [created] = await db.insert(attendanceRecords).values({
-      employeeId,
-      employeeName,
-      branchId,
-      branchEmployeeId: branchEmployeeId,
-      scheduleId: scheduleId,
-      attendanceDate: today,
-      actualCheckIn: now,
-      checkInSignature: signature,
-      scheduledStartTime: scheduledStartTime,
-      scheduledEndTime: scheduledEndTime,
-      lateMinutes,
-      status
-    }).returning();
-    return created;
+    try {
+      const [created] = await db.insert(attendanceRecords).values({
+        employeeId,
+        employeeName,
+        branchId,
+        branchEmployeeId: branchEmployeeId,
+        scheduleId: scheduleId,
+        attendanceDate: today,
+        actualCheckIn: now,
+        checkInSignature: signature,
+        scheduledStartTime: scheduledStartTime,
+        scheduledEndTime: scheduledEndTime,
+        lateMinutes,
+        status
+      }).returning();
+      return created;
+    } catch (error: any) {
+      if (error?.code === '42703') {
+        const result = await pool.query(`INSERT INTO attendance_records (employee_id, employee_name, branch_id, branch_employee_id, schedule_id, attendance_date, actual_check_in, check_in_signature, scheduled_start_time, scheduled_end_time, late_minutes, status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW()) RETURNING *`, [employeeId, employeeName, branchId, branchEmployeeId || null, scheduleId, today, now, signature, scheduledStartTime, scheduledEndTime, lateMinutes, status]);
+        return this.mapRawAttendanceRecord(result.rows[0]);
+      }
+      throw error;
+    }
   }
 
   async checkOutEmployee(employeeId: string, signature?: string, scheduleId?: number, attendanceDate?: string): Promise<AttendanceRecord | undefined> {
@@ -8036,23 +8162,39 @@ export class DatabaseStorage implements IStorage {
       }
     }
     
-    const [updated] = await db.update(attendanceRecords).set({
-      actualCheckOut: now,
-      checkOutSignature: signature,
-      workingHours: Math.round(workingHours * 100) / 100,
-      earlyLeaveMinutes,
-      updatedAt: new Date()
-    }).where(and(eq(attendanceRecords.id, existing.id), eq(attendanceRecords.employeeId, employeeId))).returning();
-    return updated;
+    try {
+      const [updated] = await db.update(attendanceRecords).set({
+        actualCheckOut: now,
+        checkOutSignature: signature,
+        workingHours: Math.round(workingHours * 100) / 100,
+        earlyLeaveMinutes,
+        updatedAt: new Date()
+      }).where(and(eq(attendanceRecords.id, existing.id), eq(attendanceRecords.employeeId, employeeId))).returning();
+      return updated;
+    } catch (error: any) {
+      if (error?.code === '42703') {
+        await pool.query(`UPDATE attendance_records SET actual_check_out = $1, check_out_signature = $2, working_hours = $3, early_leave_minutes = $4, updated_at = NOW() WHERE id = $5 AND employee_id = $6`, [now, signature, Math.round(workingHours * 100) / 100, earlyLeaveMinutes, existing.id, employeeId]);
+        return await this.getAttendanceRecord(existing.id);
+      }
+      throw error;
+    }
   }
 
   async approveAttendance(id: number, approvedBy: string): Promise<AttendanceRecord | undefined> {
-    const [updated] = await db.update(attendanceRecords).set({
-      approvedBy,
-      approvedAt: new Date(),
-      updatedAt: new Date()
-    }).where(eq(attendanceRecords.id, id)).returning();
-    return updated;
+    try {
+      const [updated] = await db.update(attendanceRecords).set({
+        approvedBy,
+        approvedAt: new Date(),
+        updatedAt: new Date()
+      }).where(eq(attendanceRecords.id, id)).returning();
+      return updated;
+    } catch (error: any) {
+      if (error?.code === '42703') {
+        await pool.query(`UPDATE attendance_records SET approved_by = $1, approved_at = NOW(), updated_at = NOW() WHERE id = $2`, [approvedBy, id]);
+        return await this.getAttendanceRecord(id);
+      }
+      throw error;
+    }
   }
 
   // Time Entries - التوقيعات
@@ -8429,9 +8571,17 @@ export class DatabaseStorage implements IStorage {
 
   // Branch Employee Integration - ربط موظفي الفروع بالحضور والدوام
   async getAttendanceByBranchEmployeeId(branchEmployeeId: number): Promise<AttendanceRecord[]> {
-    return await db.select().from(attendanceRecords)
-      .where(eq(attendanceRecords.branchEmployeeId, branchEmployeeId))
-      .orderBy(attendanceRecords.attendanceDate);
+    try {
+      return await db.select().from(attendanceRecords)
+        .where(eq(attendanceRecords.branchEmployeeId, branchEmployeeId))
+        .orderBy(attendanceRecords.attendanceDate);
+    } catch (error: any) {
+      if (error?.code === '42703') {
+        const result = await pool.query(`SELECT * FROM attendance_records WHERE branch_employee_id = $1 ORDER BY attendance_date`, [branchEmployeeId]);
+        return result.rows.map((r: any) => this.mapRawAttendanceRecord(r));
+      }
+      throw error;
+    }
   }
 
   async getTimesheetsByBranchEmployeeId(branchEmployeeId: number): Promise<TimesheetReport[]> {
@@ -12647,33 +12797,63 @@ export class DatabaseStorage implements IStorage {
 
   // Biometric Credentials
   async getBiometricCredentials(employeeId: string): Promise<BiometricCredential[]> {
-    return db.select().from(biometricCredentials)
-      .where(and(eq(biometricCredentials.employeeId, employeeId), eq(biometricCredentials.isActive, true)));
+    try {
+      return await db.select().from(biometricCredentials)
+        .where(and(eq(biometricCredentials.employeeId, employeeId), eq(biometricCredentials.isActive, true)));
+    } catch (error: any) {
+      if (error?.code === '42P01') return [];
+      throw error;
+    }
   }
 
   async getBiometricCredentialsByBranch(branchId: string): Promise<BiometricCredential[]> {
-    return db.select().from(biometricCredentials)
-      .where(and(eq(biometricCredentials.branchId, branchId), eq(biometricCredentials.isActive, true)));
+    try {
+      return await db.select().from(biometricCredentials)
+        .where(and(eq(biometricCredentials.branchId, branchId), eq(biometricCredentials.isActive, true)));
+    } catch (error: any) {
+      if (error?.code === '42P01') return [];
+      throw error;
+    }
   }
 
   async getBiometricCredentialByCredentialId(credentialId: string): Promise<BiometricCredential | undefined> {
-    const [cred] = await db.select().from(biometricCredentials)
-      .where(and(eq(biometricCredentials.credentialId, credentialId), eq(biometricCredentials.isActive, true)));
-    return cred;
+    try {
+      const [cred] = await db.select().from(biometricCredentials)
+        .where(and(eq(biometricCredentials.credentialId, credentialId), eq(biometricCredentials.isActive, true)));
+      return cred;
+    } catch (error: any) {
+      if (error?.code === '42P01') return undefined;
+      throw error;
+    }
   }
 
   async createBiometricCredential(credential: InsertBiometricCredential): Promise<BiometricCredential> {
-    const [created] = await db.insert(biometricCredentials).values(credential).returning();
-    return created;
+    try {
+      const [created] = await db.insert(biometricCredentials).values(credential).returning();
+      return created;
+    } catch (error: any) {
+      if (error?.code === '42P01') throw new Error("جدول البصمات غير موجود في قاعدة البيانات. يرجى تنفيذ أوامر SQL أولاً");
+      throw error;
+    }
   }
 
   async deleteBiometricCredential(id: number): Promise<boolean> {
-    const [deleted] = await db.update(biometricCredentials).set({ isActive: false }).where(eq(biometricCredentials.id, id)).returning();
-    return !!deleted;
+    try {
+      const [deleted] = await db.update(biometricCredentials).set({ isActive: false }).where(eq(biometricCredentials.id, id)).returning();
+      return !!deleted;
+    } catch (error: any) {
+      if (error?.code === '42P01') return false;
+      throw error;
+    }
   }
 
   async updateBiometricCredentialCounter(id: number, counter: number): Promise<void> {
-    await db.update(biometricCredentials).set({ counter, lastUsedAt: new Date() }).where(eq(biometricCredentials.id, id));
+    try {
+      await db.update(biometricCredentials).set({ counter, lastUsedAt: new Date() }).where(eq(biometricCredentials.id, id));
+    } catch (error: any) {
+      if (error?.code === '42P01') return;
+      throw error;
+    }
   }
 }
 
