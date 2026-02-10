@@ -19245,19 +19245,15 @@ export async function registerRoutes(
         }
       }
 
-      if (signature && signature.length > 500000) {
+      if (!signature || signature.length < 100) {
+        return res.status(400).json({ error: "التوقيع مطلوب لتسجيل الحضور" });
+      }
+
+      if (signature.length > 500000) {
         return res.status(400).json({ error: "حجم التوقيع كبير جداً" });
       }
 
-      const targetDate = attendanceDate || new Date().toISOString().split('T')[0];
-      const existingRecord = await storage.getAttendanceByEmployeeAndDate(employeeId, targetDate);
-      if (existingRecord && existingRecord.actualCheckIn) {
-        return res.status(400).json({ error: "تم تسجيل حضور هذا الموظف مسبقاً اليوم" });
-      }
-      
-      const record = await storage.checkInEmployee(employeeId, branchId, signature, scheduleId, scheduledStartTime, scheduledEndTime, employeeName, targetDate);
-      
-      // SECURITY: Validate biometric verification token server-side
+      // SECURITY: Validate biometric verification token server-side (REQUIRED)
       let serverBiometricVerified = false;
       if (biometricVerified && req.body.biometricToken) {
         const tokenKey = `token_${req.body.biometricToken}`;
@@ -19270,12 +19266,24 @@ export async function registerRoutes(
           }
         }
       }
+
+      if (!serverBiometricVerified) {
+        return res.status(400).json({ error: "التحقق من البصمة مطلوب لتسجيل الحضور. يرجى وضع البصمة أولاً" });
+      }
+
+      const targetDate = attendanceDate || new Date().toISOString().split('T')[0];
+      const existingRecord = await storage.getAttendanceByEmployeeAndDate(employeeId, targetDate);
+      if (existingRecord && existingRecord.actualCheckIn) {
+        return res.status(400).json({ error: "تم تسجيل حضور هذا الموظف مسبقاً اليوم" });
+      }
       
-      if (serverBiometricVerified && record.id) {
+      const record = await storage.checkInEmployee(employeeId, branchId, signature, scheduleId, scheduledStartTime, scheduledEndTime, employeeName, targetDate);
+      
+      if (record.id) {
         await storage.updateAttendanceRecord(record.id, { biometricVerified: true, biometricCheckIn: true });
       }
       
-      res.status(201).json({ ...record, biometricVerified: serverBiometricVerified });
+      res.status(201).json({ ...record, biometricVerified: true });
     } catch (error) {
       console.error("Error checking in employee:", error);
       res.status(500).json({ error: "فشل في تسجيل الحضور" });
@@ -19323,16 +19331,15 @@ export async function registerRoutes(
         }
       }
 
-      if (signature && signature.length > 500000) {
+      if (!signature || signature.length < 100) {
+        return res.status(400).json({ error: "التوقيع مطلوب لتسجيل الانصراف" });
+      }
+
+      if (signature.length > 500000) {
         return res.status(400).json({ error: "حجم التوقيع كبير جداً" });
       }
-      
-      const record = await storage.checkOutEmployee(employeeId, signature, scheduleId, targetDate);
-      if (!record) {
-        return res.status(404).json({ error: "لم يتم تسجيل حضور هذا الموظف اليوم" });
-      }
-      
-      // SECURITY: Validate biometric verification token server-side
+
+      // SECURITY: Validate biometric verification token server-side (REQUIRED)
       let serverBiometricVerified = false;
       if (biometricVerified && req.body.biometricToken) {
         const tokenKey = `token_${req.body.biometricToken}`;
@@ -19345,12 +19352,21 @@ export async function registerRoutes(
           }
         }
       }
+
+      if (!serverBiometricVerified) {
+        return res.status(400).json({ error: "التحقق من البصمة مطلوب لتسجيل الانصراف. يرجى وضع البصمة أولاً" });
+      }
       
-      if (serverBiometricVerified && record.id) {
+      const record = await storage.checkOutEmployee(employeeId, signature, scheduleId, targetDate);
+      if (!record) {
+        return res.status(404).json({ error: "لم يتم تسجيل حضور هذا الموظف اليوم" });
+      }
+      
+      if (record.id) {
         await storage.updateAttendanceRecord(record.id, { biometricCheckOut: true, biometricVerified: true });
       }
       
-      res.json({ ...record, biometricVerified: serverBiometricVerified });
+      res.json({ ...record, biometricVerified: true });
     } catch (error) {
       console.error("Error checking out employee:", error);
       res.status(500).json({ error: "فشل في تسجيل الانصراف" });

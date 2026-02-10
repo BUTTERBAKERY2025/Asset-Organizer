@@ -387,12 +387,18 @@ export default function AttendanceCheckPage() {
   };
 
   const handleSubmitSignature = () => {
-    if (!hasSignature || !selectedEmployee) {
-      toast({ title: t("attendanceCheck.pleaseSign"), variant: "destructive" });
+    if (!selectedEmployee) return;
+
+    if (!hasSignature) {
+      toast({ title: "التوقيع مطلوب", description: "يرجى وضع توقيعك أولاً", variant: "destructive" });
+      return;
+    }
+
+    if (biometricStatus !== "verified") {
+      toast({ title: "البصمة مطلوبة", description: "يجب التحقق من البصمة قبل تسجيل الحضور أو الانصراف", variant: "destructive" });
       return;
     }
     
-    // التحقق من الموقع - منع التسجيل إذا كان الموقع غير صحيح
     if (locationStatus === "invalid") {
       toast({ 
         title: "تسجيل الحضور مرفوض", 
@@ -751,7 +757,7 @@ export default function AttendanceCheckPage() {
                 )}
               </DialogTitle>
               <DialogDescription className="text-xs sm:text-sm">
-                {t("attendanceCheck.signatureRequired")}
+                يجب التحقق من البصمة والتوقيع معاً لإتمام التسجيل
               </DialogDescription>
             </DialogHeader>
 
@@ -842,7 +848,7 @@ export default function AttendanceCheckPage() {
                          "التحقق بالبصمة"}
                       </p>
                       {biometricStatus === "unavailable" && (
-                        <p className="text-xs text-muted-foreground">يمكن المتابعة بالتوقيع فقط</p>
+                        <p className="text-xs text-red-600 font-medium">يجب تسجيل البصمة أولاً من قائمة الموظفين</p>
                       )}
                     </div>
                   </div>
@@ -914,6 +920,21 @@ export default function AttendanceCheckPage() {
               </div>
             </div>
 
+            <div className="flex items-center gap-3 px-1 shrink-0">
+              <div className="flex items-center gap-1.5">
+                <div className={`w-3 h-3 rounded-full ${biometricStatus === "verified" ? "bg-green-500" : "bg-gray-300"}`} />
+                <span className={`text-xs font-medium ${biometricStatus === "verified" ? "text-green-700" : "text-gray-500"}`}>
+                  {biometricStatus === "verified" ? "البصمة ✓" : "البصمة مطلوبة"}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className={`w-3 h-3 rounded-full ${hasSignature ? "bg-green-500" : "bg-gray-300"}`} />
+                <span className={`text-xs font-medium ${hasSignature ? "text-green-700" : "text-gray-500"}`}>
+                  {hasSignature ? "التوقيع ✓" : "التوقيع مطلوب"}
+                </span>
+              </div>
+            </div>
+
             <div className="flex gap-2 sm:gap-3 shrink-0 pt-2">
               <Button
                 variant="outline"
@@ -924,7 +945,7 @@ export default function AttendanceCheckPage() {
               </Button>
               <Button
                 onClick={handleSubmitSignature}
-                disabled={(signatureMode === "check_in" ? checkInMutation.isPending : checkOutMutation.isPending) || !hasSignature}
+                disabled={(signatureMode === "check_in" ? checkInMutation.isPending : checkOutMutation.isPending) || !hasSignature || biometricStatus !== "verified"}
                 className={`flex-1 gap-1.5 h-9 sm:h-10 text-xs sm:text-sm ${signatureMode === "check_in" ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700"}`}
                 data-testid="btn-submit-signature"
               >
