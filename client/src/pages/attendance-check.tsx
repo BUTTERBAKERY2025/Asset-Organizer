@@ -267,6 +267,9 @@ export default function AttendanceCheckPage() {
       toast({ title: "غير مدعوم", description: "هذا الجهاز لا يدعم البصمة البيومترية", variant: "destructive" });
       return;
     }
+
+    const isAvailable = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable?.();
+    console.log("[Biometric] Platform authenticator available:", isAvailable);
     
     setBiometricRegistering(true);
     try {
@@ -274,6 +277,7 @@ export default function AttendanceCheckPage() {
         employeeId, employeeName, branchId: selectedBranch,
       });
       const { options, challengeKey } = await optionsRes.json();
+      console.log("[Biometric] Received options, rpId:", options.rp?.id);
       
       const publicKeyOptions: PublicKeyCredentialCreationOptions = {
         challenge: Uint8Array.from(atob(options.challenge.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)),
@@ -289,8 +293,10 @@ export default function AttendanceCheckPage() {
         attestation: options.attestation,
       };
       
+      console.log("[Biometric] Calling navigator.credentials.create...");
       const credential = await navigator.credentials.create({ publicKey: publicKeyOptions }) as PublicKeyCredential;
       if (!credential) throw new Error("فشل في إنشاء البصمة");
+      console.log("[Biometric] Credential created successfully");
       
       const credentialId = btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(credential.rawId))))
         .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
@@ -312,8 +318,11 @@ export default function AttendanceCheckPage() {
       toast({ title: "تم تسجيل البصمة", description: `تم تسجيل بصمة ${employeeName} بنجاح` });
       setShowBiometricRegister(null);
     } catch (error: any) {
+      console.error("[Biometric] Registration error:", error.name, error.message);
       if (error.name === "NotAllowedError") {
-        toast({ title: "تم الإلغاء", description: "تم إلغاء تسجيل البصمة", variant: "destructive" });
+        toast({ title: "تم الإلغاء", description: "تم إلغاء تسجيل البصمة. تأكد من فتح الموقع مباشرة (ليس داخل إطار) وأن الجهاز يدعم البصمة", variant: "destructive" });
+      } else if (error.name === "SecurityError") {
+        toast({ title: "خطأ أمني", description: "يجب فتح الموقع عبر HTTPS أو من الرابط المباشر للتطبيق", variant: "destructive" });
       } else {
         toast({ title: "خطأ", description: error.message || "فشل في تسجيل البصمة", variant: "destructive" });
       }

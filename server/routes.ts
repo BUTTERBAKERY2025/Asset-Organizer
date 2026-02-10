@@ -18872,7 +18872,14 @@ export async function registerRoutes(
       const challengeKey = `reg_${employeeId}_${Date.now()}`;
       biometricChallenges.set(challengeKey, { challenge, employeeId, type: "register", timestamp: Date.now() });
 
-      const rpId = (req.headers.origin ? new URL(req.headers.origin).hostname : req.headers.host?.split(':')[0]) || "localhost";
+      const origin = req.headers.origin || `https://${req.headers.host}`;
+      let rpId: string;
+      try {
+        rpId = new URL(origin).hostname;
+      } catch {
+        rpId = req.headers.host?.split(':')[0] || "localhost";
+      }
+      console.log(`[Biometric] Register rpId: ${rpId}, origin: ${origin}`);
 
       const options = {
         challenge,
@@ -18883,11 +18890,10 @@ export async function registerRoutes(
           { alg: -257, type: "public-key" },
         ],
         authenticatorSelection: {
-          authenticatorAttachment: "platform",
-          userVerification: "required",
+          userVerification: "preferred",
           residentKey: "preferred",
         },
-        timeout: 60000,
+        timeout: 120000,
         attestation: "none",
       };
 
