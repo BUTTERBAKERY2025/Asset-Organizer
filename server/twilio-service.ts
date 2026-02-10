@@ -3,6 +3,7 @@ import twilio from 'twilio';
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
 const twilioPhone = process.env.TWILIO_PHONE_NUMBER;
+const whatsappSandboxNumber = process.env.TWILIO_WHATSAPP_NUMBER || '+14155238886';
 
 let client: twilio.Twilio | null = null;
 
@@ -78,13 +79,14 @@ export async function sendWhatsAppMessage(to: string, message: string): Promise<
 
   try {
     const formattedPhone = formatPhoneNumber(to);
+    const fromNumber = whatsappSandboxNumber;
     const result = await client.messages.create({
       body: message,
-      from: `whatsapp:${twilioPhone}`,
+      from: `whatsapp:${fromNumber}`,
       to: `whatsapp:${formattedPhone}`,
     });
 
-    console.log(`WhatsApp message sent to ${formattedPhone}: ${result.sid}`);
+    console.log(`WhatsApp message sent to ${formattedPhone} from ${fromNumber}: ${result.sid}`);
     return { success: true, messageId: result.sid };
   } catch (error: any) {
     console.error('Error sending WhatsApp message:', error.message);

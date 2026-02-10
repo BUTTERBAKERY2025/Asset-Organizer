@@ -2807,6 +2807,33 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/integrations/twilio/test-whatsapp", isAuthenticated, requirePermission("integrations", "edit"), async (req, res) => {
+    try {
+      const { phone, message } = req.body;
+      if (!phone) {
+        return res.status(400).json({ error: "رقم الهاتف مطلوب" });
+      }
+
+      const { sendWhatsAppMessage, isTwilioConfigured } = await import("./twilio-service");
+
+      if (!isTwilioConfigured()) {
+        return res.status(400).json({ error: "Twilio غير مكوّن" });
+      }
+
+      const testMessage = message || "رسالة تجريبية من نظام باتر عبر واتساب \u{1F389}";
+      const result = await sendWhatsAppMessage(phone, testMessage);
+
+      if (result.success) {
+        res.json({ success: true, messageId: result.messageId });
+      } else {
+        res.status(400).json({ success: false, error: result.error });
+      }
+    } catch (error: any) {
+      console.error("Error sending test WhatsApp:", error);
+      res.status(500).json({ error: error.message || "فشل في إرسال رسالة واتساب التجريبية" });
+    }
+  });
+
   // Test Twilio Connection
   app.post("/api/integrations/twilio/test", isAuthenticated, requirePermission("integrations", "edit"), async (req, res) => {
     try {
