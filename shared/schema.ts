@@ -1001,6 +1001,22 @@ export const ROLE_PERMISSION_TEMPLATES: Record<
     { module: "smart_incentives_statements", actions: ["view"] },
   ],
 
+  // Financial Accountant: View reports, cashier, sales, closures, operations
+  financial_accountant: [
+    { module: "dashboard", actions: ["view"] },
+    { module: "cashier", actions: ["view", "export", "print"] },
+    { module: "cashier_journal", actions: ["view", "export", "print"] },
+    { module: "branch_closure", actions: ["view"] },
+    { module: "reports", actions: ["view", "export", "print", "advanced"] },
+    { module: "production", actions: ["view", "export", "print"] },
+    { module: "operations", actions: ["view"] },
+    { module: "inventory", actions: ["view", "export", "print"] },
+    { module: "waste", actions: ["view"] },
+    { module: "quality", actions: ["view"] },
+    { module: "shifts", actions: ["view"] },
+    { module: "branches", actions: ["view"] },
+  ],
+
   // Viewer: View-only access to all modules
   viewer: SYSTEM_MODULES.filter((m) => m !== "users").map((module) => ({
     module,
