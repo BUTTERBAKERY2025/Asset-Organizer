@@ -12795,6 +12795,23 @@ export class DatabaseStorage implements IStorage {
     return updated || undefined;
   }
 
+  private mapRawBiometricCredential(row: any): BiometricCredential {
+    return {
+      id: row.id,
+      employeeId: row.employee_id || '',
+      employeeName: row.employee_name || '',
+      branchId: row.branch_id || '',
+      credentialId: row.credential_id || '',
+      publicKey: row.public_key || '',
+      counter: row.counter || 0,
+      deviceInfo: row.device_info || null,
+      registeredBy: row.registered_by || null,
+      isActive: row.is_active !== undefined ? row.is_active : true,
+      lastUsedAt: row.last_used_at ? new Date(row.last_used_at) : null,
+      createdAt: row.created_at ? new Date(row.created_at) : new Date(),
+    };
+  }
+
   // Biometric Credentials
   async getBiometricCredentials(employeeId: string): Promise<BiometricCredential[]> {
     try {
@@ -12802,6 +12819,19 @@ export class DatabaseStorage implements IStorage {
         .where(and(eq(biometricCredentials.employeeId, employeeId), eq(biometricCredentials.isActive, true)));
     } catch (error: any) {
       if (error?.code === '42P01') return [];
+      if (error?.code === '42703') {
+        try {
+          const result = await pool.query(`SELECT * FROM biometric_credentials WHERE employee_id = $1 AND (is_active = true OR is_active IS NULL)`, [employeeId]);
+          return result.rows.map((r: any) => this.mapRawBiometricCredential(r));
+        } catch (e: any) {
+          if (e?.code === '42P01') return [];
+          if (e?.code === '42703') {
+            const result = await pool.query(`SELECT id, employee_id, credential_id, public_key, counter, created_at FROM biometric_credentials WHERE employee_id = $1`, [employeeId]);
+            return result.rows.map((r: any) => this.mapRawBiometricCredential(r));
+          }
+          throw e;
+        }
+      }
       throw error;
     }
   }
@@ -12812,6 +12842,19 @@ export class DatabaseStorage implements IStorage {
         .where(and(eq(biometricCredentials.branchId, branchId), eq(biometricCredentials.isActive, true)));
     } catch (error: any) {
       if (error?.code === '42P01') return [];
+      if (error?.code === '42703') {
+        try {
+          const result = await pool.query(`SELECT * FROM biometric_credentials WHERE branch_id = $1 AND (is_active = true OR is_active IS NULL)`, [branchId]);
+          return result.rows.map((r: any) => this.mapRawBiometricCredential(r));
+        } catch (e: any) {
+          if (e?.code === '42P01') return [];
+          if (e?.code === '42703') {
+            const result = await pool.query(`SELECT id, employee_id, credential_id, public_key, counter, created_at FROM biometric_credentials WHERE employee_id IS NOT NULL`, []);
+            return result.rows.map((r: any) => this.mapRawBiometricCredential(r));
+          }
+          throw e;
+        }
+      }
       throw error;
     }
   }
@@ -12823,6 +12866,19 @@ export class DatabaseStorage implements IStorage {
       return cred;
     } catch (error: any) {
       if (error?.code === '42P01') return undefined;
+      if (error?.code === '42703') {
+        try {
+          const result = await pool.query(`SELECT * FROM biometric_credentials WHERE credential_id = $1 AND (is_active = true OR is_active IS NULL) LIMIT 1`, [credentialId]);
+          return result.rows.length > 0 ? this.mapRawBiometricCredential(result.rows[0]) : undefined;
+        } catch (e: any) {
+          if (e?.code === '42P01') return undefined;
+          if (e?.code === '42703') {
+            const result = await pool.query(`SELECT id, employee_id, credential_id, public_key, counter, created_at FROM biometric_credentials WHERE credential_id = $1 LIMIT 1`, [credentialId]);
+            return result.rows.length > 0 ? this.mapRawBiometricCredential(result.rows[0]) : undefined;
+          }
+          throw e;
+        }
+      }
       throw error;
     }
   }
@@ -12833,6 +12889,13 @@ export class DatabaseStorage implements IStorage {
       return created;
     } catch (error: any) {
       if (error?.code === '42P01') throw new Error("جدول البصمات غير موجود في قاعدة البيانات. يرجى تنفيذ أوامر SQL أولاً");
+      if (error?.code === '42703') {
+        const result = await pool.query(
+          `INSERT INTO biometric_credentials (employee_id, credential_id, public_key, counter, created_at) VALUES ($1, $2, $3, $4, NOW()) RETURNING *`,
+          [credential.employeeId, credential.credentialId, credential.publicKey, credential.counter || 0]
+        );
+        return this.mapRawBiometricCredential(result.rows[0]);
+      }
       throw error;
     }
   }
@@ -12843,6 +12906,10 @@ export class DatabaseStorage implements IStorage {
       return !!deleted;
     } catch (error: any) {
       if (error?.code === '42P01') return false;
+      if (error?.code === '42703') {
+        await pool.query(`DELETE FROM biometric_credentials WHERE id = $1`, [id]);
+        return true;
+      }
       throw error;
     }
   }
@@ -12852,7 +12919,9 @@ export class DatabaseStorage implements IStorage {
       await db.update(biometricCredentials).set({ counter, lastUsedAt: new Date() }).where(eq(biometricCredentials.id, id));
     } catch (error: any) {
       if (error?.code === '42P01') return;
-      throw error;
+      if (error?.code === '42703') {
+        await pool.query(`UPDATE biometric_credentials SET counter = $1 WHERE id = $2`, [counter, id]);
+      }
     }
   }
 }
