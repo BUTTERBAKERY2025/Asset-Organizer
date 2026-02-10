@@ -88,14 +88,20 @@ export async function uploadToSupabase(
   }
   
   try {
-    console.log('Uploading to Supabase:', { filename, mimeType, bufferSize: buffer.length });
+    const crypto = await import('crypto');
+    const timestamp = Date.now();
+    const randomSuffix = crypto.randomBytes(4).toString('hex');
+    const ext = filename.split('.').pop()?.toLowerCase() || 'bin';
+    const baseName = filename.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9\u0600-\u06FF._-]/g, '_').substring(0, 100);
+    const uniqueFilename = `${baseName}_${timestamp}_${randomSuffix}.${ext}`;
     
-    // Upload directly to bucket root (no subfolder)
+    console.log('Uploading to Supabase:', { originalFilename: filename, uniqueFilename, mimeType, bufferSize: buffer.length });
+    
     const { data, error } = await supabase.storage
       .from(DOCUMENTS_BUCKET)
-      .upload(filename, buffer, {
+      .upload(uniqueFilename, buffer, {
         contentType: mimeType,
-        upsert: true,
+        upsert: false,
       });
     
     if (error) {
@@ -106,7 +112,7 @@ export async function uploadToSupabase(
     console.log('Supabase upload success:', data.path);
     
     return {
-      path: filename,
+      path: uniqueFilename,
       storedPath: data.path,
     };
   } catch (error) {

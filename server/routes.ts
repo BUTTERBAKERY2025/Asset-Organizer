@@ -91,6 +91,7 @@ import {
 import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertInfluencerContractSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema, isMadeToOrderCategory, suggestCategoryFromProductName, userBranchAccess } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, isUserAdmin, getAllowedBranchIds, getEffectiveBranchFilter } from "./auth";
+import { authRateLimiter, biometricRateLimiter, uploadRateLimiter, validateFileUpload, sanitizeFilename, trackLoginAttempt } from "./security";
 import { registerGovernanceRoutes } from "./governance-routes";
 import { registerSocialResponsibilityRoutes } from "./social-responsibility-routes";
 import { registerSecurityRoutes } from "./security-routes";
@@ -18849,7 +18850,7 @@ export async function registerRoutes(
   }, 60000);
 
   // Get biometric registration options (challenge) for an employee
-  app.post("/api/biometric/register-options", isAuthenticated, requirePermission("attendance_check", "create"), async (req, res) => {
+  app.post("/api/biometric/register-options", biometricRateLimiter, isAuthenticated, requirePermission("attendance_check", "create"), async (req, res) => {
     try {
       const { employeeId, employeeName, branchId } = req.body;
       if (!employeeId || !employeeName || !branchId) {
@@ -18905,7 +18906,7 @@ export async function registerRoutes(
   });
 
   // Register biometric credential for an employee
-  app.post("/api/biometric/register", isAuthenticated, requirePermission("attendance_check", "create"), async (req, res) => {
+  app.post("/api/biometric/register", biometricRateLimiter, isAuthenticated, requirePermission("attendance_check", "create"), async (req, res) => {
     try {
       const { employeeId, employeeName, branchId, credentialId, publicKey, deviceInfo, challengeKey } = req.body;
       const currentUser = getCurrentUser(req);
@@ -18957,7 +18958,7 @@ export async function registerRoutes(
   });
 
   // Get verification options (challenge) for biometric verification
-  app.post("/api/biometric/verify-options", isAuthenticated, async (req, res) => {
+  app.post("/api/biometric/verify-options", biometricRateLimiter, isAuthenticated, async (req, res) => {
     try {
       const { employeeId } = req.body;
       if (!employeeId) {
@@ -18998,7 +18999,7 @@ export async function registerRoutes(
   });
 
   // Verify biometric credential - returns a server-signed verification token
-  app.post("/api/biometric/verify", isAuthenticated, async (req, res) => {
+  app.post("/api/biometric/verify", biometricRateLimiter, isAuthenticated, async (req, res) => {
     try {
       const { credentialId, employeeId, challengeKey } = req.body;
       if (!credentialId || !employeeId) {
@@ -24570,7 +24571,7 @@ export async function registerRoutes(
   });
 
   // General-purpose file upload endpoint - Uses Supabase Storage
-  app.post("/api/uploads", isAuthenticated, async (req, res) => {
+  app.post("/api/uploads", uploadRateLimiter, isAuthenticated, async (req, res) => {
     try {
       const multer = (await import("multer")).default;
       const path = await import("path");

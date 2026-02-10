@@ -7,9 +7,15 @@ import path from "path";
 import helmet from "helmet";
 import { db, pool } from "./db";
 import { sql } from "drizzle-orm";
+import { securityHeaders, csrfProtection, apiRateLimiter } from "./security";
 
 const app = express();
 const httpServer = createServer(app);
+
+app.set('trust proxy', 1);
+app.use(securityHeaders);
+app.use('/api/', apiRateLimiter);
+app.use('/api/', csrfProtection);
 
 // Helmet disabled in development to allow Replit iframe embedding
 if (process.env.NODE_ENV === "production") {

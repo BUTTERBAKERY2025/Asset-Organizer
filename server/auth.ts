@@ -5,6 +5,7 @@ import rateLimit from "express-rate-limit";
 import { storage } from "./storage";
 import { db } from "./db";
 import { systemAuditLogs } from "@shared/schema";
+import { isLoginBlocked, trackLoginAttempt } from "./security";
 
 declare module "express-session" {
   interface SessionData {
@@ -165,8 +166,7 @@ export async function setupAuth(app: Express) {
   app.set("trust proxy", 1);
   app.use(getSession());
   
-  app.use("/api", apiRateLimiter);
-  app.use("/api", validateOrigin);
+  // Rate limiting and CSRF/origin validation are applied globally in index.ts
 
   app.post("/api/auth/login", loginRateLimiter, async (req, res) => {
     try {
@@ -176,10 +176,21 @@ export async function setupAuth(app: Express) {
         return res.status(400).json({ error: "اسم المستخدم وكلمة المرور مطلوبان" });
       }
 
+      const clientIp = req.ip || req.socket?.remoteAddress || 'unknown';
+      const blockCheck = isLoginBlocked(clientIp);
+      if (blockCheck.blocked) {
+        return res.status(429).json({ 
+          error: `تم حظر تسجيل الدخول مؤقتاً. يرجى الانتظار ${blockCheck.remainingMinutes} دقيقة` 
+        });
+      }
+
       const user = await storage.verifyPassword(username, password);
       if (!user) {
+        trackLoginAttempt(clientIp, false);
         return res.status(401).json({ error: "اسم المستخدم أو كلمة المرور غير صحيحة" });
       }
+
+      trackLoginAttempt(clientIp, true);
 
       // Security check: Prevent inactive users from logging in
       if (user.isActive === "inactive") {
