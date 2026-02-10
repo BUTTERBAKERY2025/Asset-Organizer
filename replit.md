@@ -79,6 +79,11 @@ The system uses a modern web architecture with a React-based frontend and a Node
 ### Fonts
 - **Google Fonts**: Cairo (Arabic) and Plus Jakarta Sans (Latin).
 
+### File Storage
+- **Unified Supabase Storage**: All file uploads (documents, shareholder files, general uploads) use Supabase Storage as the single backend. Replit Object Storage integration is disabled.
+- **Upload Flow**: Frontend sends FormData to `POST /api/uploads?folder=<folder>`, backend validates and uploads to Supabase Storage bucket, returns download URL.
+- **Download Flow**: Authenticated `GET /api/uploads/file/<path>` or `GET /api/documents/file/<filename>` serves files from Supabase Storage.
+
 ### External System Integrations
 - **Accounting Integration**: API endpoints for exporting inventory valuation, asset movements, and project cost reports.
 - **SMS/WhatsApp Notifications**: Notification queue system ready for Twilio integration.
