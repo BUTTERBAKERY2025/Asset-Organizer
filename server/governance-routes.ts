@@ -248,7 +248,7 @@ export function registerGovernanceRoutes(app: Express) {
   app.post("/api/governance/shareholders/:shareholderId/documents", isAuthenticated, requirePermission("governance_shareholders", "edit"), async (req, res) => {
     try {
       const shareholderId = parseInt(req.params.shareholderId);
-      const userId = (req as any).user?.id;
+      const userId = (req as any).currentUser?.id;
       const validatedData = insertShareholderDocumentSchema.parse({
         ...req.body,
         shareholderId,
@@ -835,7 +835,7 @@ export function registerGovernanceRoutes(app: Express) {
 
   app.delete("/api/governance/resolutions/:id", isAuthenticated, async (req, res) => {
     try {
-      const user = (req as any).user;
+      const user = (req as any).currentUser;
       if (user?.role !== 'admin') {
         return res.status(403).json({ error: "فقط المسؤول يمكنه حذف القرارات" });
       }
