@@ -24142,31 +24142,149 @@ export async function registerRoutes(
     }
   });
 
-  // Upload Document File - Uses Object Storage for permanent storage
+  // General-purpose file upload endpoint - Uses Supabase Storage
+  app.post("/api/uploads", isAuthenticated, async (req, res) => {
+    try {
+      const multer = (await import("multer")).default;
+      const path = await import("path");
+      const { uploadToSupabase, isSupabaseAvailable } = await import("./supabase-storage");
+
+      if (!isSupabaseAvailable()) {
+        return res.status(503).json({ error: "خدمة التخزين غير متاحة حالياً. يرجى التحقق من إعدادات Supabase." });
+      }
+
+      const allowedTypes = [
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.ms-powerpoint",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+        "text/plain",
+        "text/csv",
+        "application/zip",
+        "application/x-rar-compressed",
+      ];
+
+      const blockedExtensions = ['.exe', '.bat', '.cmd', '.sh', '.ps1', '.vbs', '.js', '.msi', '.dll', '.scr', '.com'];
+
+      const upload = multer({
+        storage: multer.memoryStorage(),
+        limits: { fileSize: 50 * 1024 * 1024 },
+        fileFilter: (_req, file, cb) => {
+          if (!allowedTypes.includes(file.mimetype)) {
+            cb(new Error("نوع الملف غير مسموح") as any, false);
+            return;
+          }
+          const ext = path.extname(file.originalname).toLowerCase();
+          if (blockedExtensions.includes(ext)) {
+            cb(new Error("امتداد الملف محظور لأسباب أمنية") as any, false);
+            return;
+          }
+          const sanitizedName = file.originalname.replace(/[^a-zA-Z0-9\u0600-\u06FF._-]/g, '_');
+          file.originalname = sanitizedName;
+          cb(null, true);
+        },
+      });
+
+      upload.single("file")(req, res, async (err: any) => {
+        if (err) {
+          console.error("Upload error:", err);
+          if (err.code === "LIMIT_FILE_SIZE") {
+            return res.status(400).json({ error: "حجم الملف يتجاوز الحد المسموح (50MB)" });
+          }
+          return res.status(400).json({ error: err.message || "فشل في رفع الملف" });
+        }
+
+        const file = (req as any).file;
+        if (!file) {
+          return res.status(400).json({ error: "لم يتم تحديد ملف للرفع" });
+        }
+
+        try {
+          const folder = (typeof req.query.folder === 'string' ? req.query.folder : 'general').replace(/[^a-zA-Z0-9_-]/g, '_');
+          const ext = path.extname(file.originalname).toLowerCase().replace(".", "");
+          const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+          const objectName = `${folder}/${uniqueSuffix}.${ext}`;
+
+          const supabaseResult = await uploadToSupabase(file.buffer, objectName, file.mimetype);
+          if (!supabaseResult) {
+            throw new Error("Supabase upload failed");
+          }
+
+          console.log("File uploaded to Supabase Storage:", objectName);
+
+          res.json({
+            fileName: file.originalname,
+            fileType: ext,
+            fileSize: file.size,
+            filePath: objectName,
+            mimeType: file.mimetype,
+            downloadUrl: `/api/uploads/file/${objectName}`,
+          });
+        } catch (uploadError) {
+          console.error("Storage upload error:", uploadError);
+          res.status(500).json({ error: "فشل في رفع الملف إلى التخزين السحابي" });
+        }
+      });
+    } catch (error) {
+      console.error("Error uploading file:", error);
+      res.status(500).json({ error: "فشل في رفع الملف" });
+    }
+  });
+
+  // Serve general uploaded files (authenticated)
+  app.get("/api/uploads/file/*", isAuthenticated, async (req, res) => {
+    try {
+      const { downloadFromSupabase, isSupabaseAvailable } = await import("./supabase-storage");
+
+      if (!isSupabaseAvailable()) {
+        return res.status(503).json({ error: "خدمة التخزين غير متاحة حالياً" });
+      }
+      const pathModule = await import("path");
+
+      const rawPath = req.params[0];
+      if (!rawPath || rawPath.includes('..') || rawPath.includes('\0')) {
+        return res.status(400).json({ error: "اسم ملف غير صالح" });
+      }
+
+      const filename = rawPath.split('/').map((p: string) => pathModule.basename(p)).join('/');
+
+      const result = await downloadFromSupabase(filename);
+      if (!result) {
+        return res.status(404).json({ error: "الملف غير موجود" });
+      }
+
+      const arrayBuffer = await result.data.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+
+      res.set({
+        "Content-Type": result.mimeType || "application/octet-stream",
+        "Content-Length": buffer.length.toString(),
+        "Content-Disposition": "inline",
+        "Cache-Control": "private, max-age=3600",
+      });
+
+      res.send(buffer);
+    } catch (error) {
+      console.error("Error serving uploaded file:", error);
+      res.status(500).json({ error: "فشل في جلب الملف" });
+    }
+  });
+
+  // Upload Document File - Uses Supabase Storage
   app.post("/api/documents/upload", isAuthenticated, requirePermission("documents", "create"), async (req, res) => {
     try {
       const multer = (await import("multer")).default;
       const path = await import("path");
       const crypto = await import("crypto");
-      const { uploadToSupabase, isSupabaseAvailable } = await import("./supabase-storage");
-      
-      // Fallback to Replit Object Storage if Supabase not available
-      let objectStorageService: any = null;
-      let objectStorageClient: any = null;
-      const useSupabase = isSupabaseAvailable();
-      
-      if (!useSupabase) {
-        try {
-          const { ObjectStorageService } = await import("./replit_integrations/object_storage");
-          const objStorage = await import("./replit_integrations/object_storage/objectStorage");
-          objectStorageService = new ObjectStorageService();
-          objectStorageClient = objStorage.objectStorageClient;
-        } catch (e) {
-          console.log("Replit Object Storage not available");
-        }
-      }
+      const { uploadToSupabase } = await import("./supabase-storage");
 
-      // Allowed file types with magic bytes validation
       const allowedTypes = [
         "application/pdf",
         "application/msword",
@@ -24238,40 +24356,12 @@ export async function registerRoutes(
           const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
           const objectName = `doc-${uniqueSuffix}.${ext}`;
           
-          let filePath = "";
-          
-          // Try Supabase Storage first
-          if (useSupabase) {
-            const supabaseResult = await uploadToSupabase(file.buffer, objectName, file.mimetype);
-            if (supabaseResult) {
-              filePath = objectName;
-              console.log("File uploaded to Supabase Storage:", objectName);
-            } else {
-              throw new Error("Supabase upload failed");
-            }
-          } else if (objectStorageService && objectStorageClient) {
-            // Fallback to Replit Object Storage
-            const privateDir = objectStorageService.getPrivateObjectDir();
-            const fullPath = `${privateDir}/documents/${objectName}`;
-            const pathParts = fullPath.split("/").filter((p: string) => p);
-            const bucketName = pathParts[0];
-            const objectPath = pathParts.slice(1).join("/");
-            
-            const bucket = objectStorageClient.bucket(bucketName);
-            const blob = bucket.file(objectPath);
-            
-            await blob.save(file.buffer, {
-              contentType: file.mimetype,
-              metadata: {
-                originalName: file.originalname,
-                checksum: checksum,
-              },
-            });
-            filePath = objectName;
-            console.log("File uploaded to Replit Object Storage:", objectName);
-          } else {
-            throw new Error("No storage backend available");
+          const supabaseResult = await uploadToSupabase(file.buffer, objectName, file.mimetype);
+          if (!supabaseResult) {
+            throw new Error("Supabase upload failed");
           }
+          const filePath = objectName;
+          console.log("File uploaded to Supabase Storage:", objectName);
 
           res.json({
             fileName: file.originalname,
@@ -24295,72 +24385,29 @@ export async function registerRoutes(
   // Serve uploaded files (authenticated) - From Object Storage
   app.get("/api/documents/file/:filename", isAuthenticated, requirePermission("documents", "view"), async (req, res) => {
     try {
-      const { downloadFromSupabase, isSupabaseAvailable } = await import("./supabase-storage");
+      const { downloadFromSupabase } = await import("./supabase-storage");
       const pathModule = await import("path");
       const filename = pathModule.basename(req.params.filename);
       if (!filename || filename === '.' || filename === '..' || filename.includes('\0')) {
         return res.status(400).json({ error: "اسم ملف غير صالح" });
       }
       
-      // Try Supabase Storage first
-      if (isSupabaseAvailable()) {
-        const result = await downloadFromSupabase(filename);
-        if (result) {
-          const arrayBuffer = await result.data.arrayBuffer();
-          const buffer = Buffer.from(arrayBuffer);
-          
-          res.set({
-            "Content-Type": result.mimeType || "application/octet-stream",
-            "Content-Length": buffer.length.toString(),
-            "Content-Disposition": "inline",
-            "X-Frame-Options": "SAMEORIGIN",
-            "Cache-Control": "private, max-age=3600",
-          });
-          
-          res.send(buffer);
-          return;
-        }
-      }
-      
-      // Fallback to Replit Object Storage
-      try {
-        const { ObjectStorageService } = await import("./replit_integrations/object_storage");
-        const { objectStorageClient } = await import("./replit_integrations/object_storage/objectStorage");
+      // Download from Supabase Storage
+      const result = await downloadFromSupabase(filename);
+      if (result) {
+        const arrayBuffer = await result.data.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
         
-        const objectStorageService = new ObjectStorageService();
-        const privateDir = objectStorageService.getPrivateObjectDir();
-        const fullPath = `${privateDir}/documents/${filename}`;
-        const pathParts = fullPath.split("/").filter((p: string) => p);
-        const bucketName = pathParts[0];
-        const objectPath = pathParts.slice(1).join("/");
+        res.set({
+          "Content-Type": result.mimeType || "application/octet-stream",
+          "Content-Length": buffer.length.toString(),
+          "Content-Disposition": "inline",
+          "X-Frame-Options": "SAMEORIGIN",
+          "Cache-Control": "private, max-age=3600",
+        });
         
-        const bucket = objectStorageClient.bucket(bucketName);
-        const blob = bucket.file(objectPath);
-        const [exists] = await blob.exists();
-        
-        if (exists) {
-          const [metadata] = await blob.getMetadata();
-          
-          res.set({
-            "Content-Type": metadata.contentType || "application/octet-stream",
-            "Content-Length": metadata.size,
-            "Content-Disposition": "inline",
-            "X-Frame-Options": "SAMEORIGIN",
-            "Cache-Control": "private, max-age=3600",
-          });
-          
-          const stream = blob.createReadStream();
-          stream.on("error", (err: Error) => {
-            console.error("Stream error:", err);
-            if (!res.headersSent) {
-              res.status(500).json({ error: "Error streaming file" });
-            }
-          });
-          stream.pipe(res);
-          return;
-        }
-      } catch (storageError) {
-        console.log("Object Storage lookup failed:", storageError);
+        res.send(buffer);
+        return;
       }
       
       // Fallback to local storage for old files
@@ -24417,28 +24464,23 @@ export async function registerRoutes(
         return res.status(403).json({ error: "غير مصرح بالوصول لهذا الملف" });
       }
       
-      const { ObjectStorageService } = await import("./replit_integrations/object_storage");
-      const { objectStorageClient } = await import("./replit_integrations/object_storage/objectStorage");
-      const objectStorageService = new ObjectStorageService();
+      const { downloadFromSupabase } = await import("./supabase-storage");
       
-      // Try Object Storage first
-      try {
-        const privateDir = objectStorageService.getPrivateObjectDir();
-        const fullPath = `${privateDir}/documents/${safeFilename}`;
-        const pathParts = fullPath.split("/").filter(p => p);
-        const bucketName = pathParts[0];
-        const objectPath = pathParts.slice(1).join("/");
+      // Try Supabase Storage first
+      const supabaseResult = await downloadFromSupabase(safeFilename);
+      if (supabaseResult) {
+        const arrayBuffer = await supabaseResult.data.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
         
-        const bucket = objectStorageClient.bucket(bucketName);
-        const blob = bucket.file(objectPath);
-        const [exists] = await blob.exists();
+        res.set({
+          "Content-Type": supabaseResult.mimeType || "application/octet-stream",
+          "Content-Length": buffer.length.toString(),
+          "Content-Disposition": "inline",
+          "Cache-Control": "private, max-age=3600",
+        });
         
-        if (exists) {
-          await objectStorageService.downloadObject(blob, res);
-          return;
-        }
-      } catch (storageError) {
-        console.log("Object Storage lookup failed, trying local fallback");
+        res.send(buffer);
+        return;
       }
       
       // Fallback to local storage for old files

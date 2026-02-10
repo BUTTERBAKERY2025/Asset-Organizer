@@ -189,7 +189,7 @@ function OverviewSection({ onNavigate }: { onNavigate: (tab: string) => void }) 
       description: "رفع وحفظ الملفات",
       status: "مفعّل",
       statusColor: "bg-green-100 text-green-800",
-      provider: "Replit Object Storage",
+      provider: "Supabase Storage",
       tab: "storage"
     },
     {
@@ -948,31 +948,27 @@ function StorageSection() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Cloud className="h-5 w-5 text-blue-600" />
-              Replit Storage
+              Supabase Storage
             </CardTitle>
-            <CardDescription>التخزين المدمج</CardDescription>
+            <CardDescription>التخزين السحابي الأساسي</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
               <div className="flex items-center gap-2">
                 <CheckCircle className="h-5 w-5 text-green-600" />
-                <span className="font-medium text-green-800">مفعّل</span>
+                <span className="font-medium text-green-800">مفعّل - أساسي</span>
               </div>
             </div>
 
             <div className="space-y-2 text-sm">
               <div className="flex justify-between py-2 border-b">
-                <span className="text-muted-foreground">المستخدم</span>
-                <span className="font-medium">2.5 GB</span>
+                <span className="text-muted-foreground">المزود</span>
+                <span className="font-medium">Supabase</span>
               </div>
               <div className="flex justify-between py-2">
-                <span className="text-muted-foreground">الحد الأقصى</span>
-                <span className="font-medium">10 GB</span>
+                <span className="text-muted-foreground">الحالة</span>
+                <span className="font-medium text-green-600">متصل</span>
               </div>
-            </div>
-
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div className="bg-blue-600 h-2 rounded-full" style={{ width: '25%' }}></div>
             </div>
           </CardContent>
         </Card>

@@ -16,7 +16,7 @@ function isValidUrl(url: string | undefined): boolean {
 const hasValidCredentials = isValidUrl(supabaseUrl) && !!supabaseKey;
 
 if (!hasValidCredentials) {
-  console.warn('Supabase credentials not found or invalid. File storage will use Replit Object Storage fallback.');
+  console.warn('Supabase credentials not found or invalid. File upload/download will be unavailable until SUPABASE_URL and SUPABASE_ANON_KEY are configured.');
 }
 
 let supabase: SupabaseClient | null = null;

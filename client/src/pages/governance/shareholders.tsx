@@ -196,33 +196,20 @@ export default function ShareholdersPage() {
     
     setUploadingDoc(true);
     try {
-      // Step 1: Get presigned upload URL
-      const presignedRes = await fetch('/api/uploads/request-url', {
+      const formData = new FormData();
+      formData.append("file", file);
+      
+      const uploadRes = await fetch('/api/uploads?folder=shareholders', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: file.name,
-          size: file.size,
-          contentType: file.type,
-        }),
+        credentials: 'include',
+        body: formData,
       });
       
-      if (!presignedRes.ok) throw new Error('Failed to get upload URL');
-      const { uploadURL, objectPath } = await presignedRes.json();
-      
-      // Step 2: Upload file directly to presigned URL
-      const uploadRes = await fetch(uploadURL, {
-        method: 'PUT',
-        body: file,
-        headers: {
-          'Content-Type': file.type,
-        },
-      });
-      
-      if (!uploadRes.ok) throw new Error('Upload failed');
-      
-      // Step 3: Save document metadata with protected path
-      const fileUrl = `/api/protected-files${objectPath}`;
+      if (!uploadRes.ok) {
+        const errorData = await uploadRes.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to upload file');
+      }
+      const { downloadUrl } = await uploadRes.json();
       
       const docRes = await fetch(`/api/governance/shareholders/${selectedShareholder.id}/documents`, {
         method: 'POST',
@@ -231,7 +218,7 @@ export default function ShareholdersPage() {
           documentType: docType,
           documentName: documentTypes.find(d => d.value === docType)?.label || docType,
           originalFileName: file.name,
-          fileUrl: fileUrl,
+          fileUrl: downloadUrl,
           fileSize: file.size,
           mimeType: file.type,
         }),
