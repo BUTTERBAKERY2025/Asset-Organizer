@@ -4458,7 +4458,7 @@ export const attendanceRecords = pgTable("attendance_records", {
   employeeName: text("employee_name").notNull(),
   branchId: varchar("branch_id").notNull().references(() => branches.id),
   branchEmployeeId: integer("branch_employee_id"), // ربط مع موظف الفرع (اختياري)
-  scheduleId: integer("schedule_id").references(() => employeeSchedules.id),
+  scheduleId: integer("schedule_id"),
   attendanceDate: text("attendance_date").notNull(), // YYYY-MM-DD
   scheduledStartTime: text("scheduled_start_time"), // الوقت المجدول للحضور
   scheduledEndTime: text("scheduled_end_time"), // الوقت المجدول للانصراف
@@ -4477,7 +4477,7 @@ export const attendanceRecords = pgTable("attendance_records", {
   deviceInfo: text("device_info"), // معلومات الجهاز (iPad, etc.)
   locationInfo: text("location_info"), // معلومات الموقع
   notes: text("notes"),
-  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedBy: varchar("approved_by"),
   approvedAt: timestamp("approved_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

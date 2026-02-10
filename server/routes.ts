@@ -19191,6 +19191,7 @@ export async function registerRoutes(
   // Check-in employee by manager or attendance clerk
   app.post("/api/attendance/check-in-employee", isAuthenticated, requirePermission("attendance_check", "create"), async (req, res) => {
     try {
+      console.log("[Check-in-employee] Request body keys:", Object.keys(req.body), "employeeId:", req.body.employeeId, "branchId:", req.body.branchId, "scheduleId:", req.body.scheduleId, "hasSignature:", !!req.body.signature, "sigLength:", req.body.signature?.length);
       const { employeeId, branchId, signature, scheduleId, scheduledStartTime, scheduledEndTime, employeeName, userLatitude, userLongitude, attendanceDate, biometricVerified } = req.body;
       
       if (!employeeId || !branchId) {
@@ -19286,16 +19287,29 @@ export async function registerRoutes(
         return res.status(400).json({ error: "تم تسجيل حضور هذا الموظف مسبقاً اليوم" });
       }
       
-      const record = await storage.checkInEmployee(employeeId, branchId, signature, scheduleId, scheduledStartTime, scheduledEndTime, employeeName, targetDate);
+      let record;
+      try {
+        record = await storage.checkInEmployee(employeeId, branchId, signature, scheduleId, scheduledStartTime, scheduledEndTime, employeeName, targetDate);
+      } catch (checkInError: any) {
+        console.error("[Check-in] checkInEmployee failed:", checkInError?.message || checkInError);
+        if (checkInError?.message?.includes('مسبقاً') || checkInError?.message?.includes('لا ينتمي') || checkInError?.message?.includes('غير نشط')) {
+          return res.status(400).json({ error: checkInError.message });
+        }
+        return res.status(500).json({ error: "فشل في تسجيل الحضور: " + (checkInError?.message || "خطأ غير معروف") });
+      }
       
-      if (record.id) {
-        await storage.updateAttendanceRecord(record.id, { biometricVerified: true, biometricCheckIn: true });
+      if (record && record.id) {
+        try {
+          await storage.updateAttendanceRecord(record.id, { biometricVerified: true, biometricCheckIn: true });
+        } catch (updateError: any) {
+          console.error("[Check-in] updateAttendanceRecord biometric failed:", updateError?.message || updateError);
+        }
       }
       
       res.status(201).json({ ...record, biometricVerified: true });
-    } catch (error) {
-      console.error("Error checking in employee:", error);
-      res.status(500).json({ error: "فشل في تسجيل الحضور" });
+    } catch (error: any) {
+      console.error("[Check-in] Unexpected error:", error?.message || error, error?.stack);
+      res.status(500).json({ error: "فشل في تسجيل الحضور: " + (error?.message || "خطأ في الخادم") });
     }
   });
 
@@ -19373,19 +19387,29 @@ export async function registerRoutes(
         return res.status(400).json({ error: "التحقق من البصمة مطلوب لتسجيل الانصراف. يرجى وضع البصمة أولاً" });
       }
       
-      const record = await storage.checkOutEmployee(employeeId, signature, scheduleId, targetDate);
+      let record;
+      try {
+        record = await storage.checkOutEmployee(employeeId, signature, scheduleId, targetDate);
+      } catch (checkOutError: any) {
+        console.error("[Check-out] checkOutEmployee failed:", checkOutError?.message || checkOutError);
+        return res.status(500).json({ error: "فشل في تسجيل الانصراف: " + (checkOutError?.message || "خطأ غير معروف") });
+      }
       if (!record) {
         return res.status(404).json({ error: "لم يتم تسجيل حضور هذا الموظف اليوم" });
       }
       
       if (record.id) {
-        await storage.updateAttendanceRecord(record.id, { biometricCheckOut: true, biometricVerified: true });
+        try {
+          await storage.updateAttendanceRecord(record.id, { biometricCheckOut: true, biometricVerified: true });
+        } catch (updateError: any) {
+          console.error("[Check-out] updateAttendanceRecord biometric failed:", updateError?.message || updateError);
+        }
       }
       
       res.json({ ...record, biometricVerified: true });
-    } catch (error) {
-      console.error("Error checking out employee:", error);
-      res.status(500).json({ error: "فشل في تسجيل الانصراف" });
+    } catch (error: any) {
+      console.error("[Check-out] Unexpected error:", error?.message || error, error?.stack);
+      res.status(500).json({ error: "فشل في تسجيل الانصراف: " + (error?.message || "خطأ في الخادم") });
     }
   });
 

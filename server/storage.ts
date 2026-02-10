@@ -8113,20 +8113,24 @@ export class DatabaseStorage implements IStorage {
     }
     
     try {
-      const [created] = await db.insert(attendanceRecords).values({
+      const insertValues: any = {
         employeeId,
         employeeName,
         branchId,
-        branchEmployeeId: branchEmployeeId,
-        scheduleId: scheduleId,
+        scheduleId: scheduleId || null,
         attendanceDate: today,
         actualCheckIn: now,
-        checkInSignature: signature,
-        scheduledStartTime: scheduledStartTime,
-        scheduledEndTime: scheduledEndTime,
-        lateMinutes,
+        checkInSignature: signature || null,
+        scheduledStartTime: scheduledStartTime || null,
+        scheduledEndTime: scheduledEndTime || null,
+        lateMinutes: lateMinutes || 0,
         status
-      }).returning();
+      };
+      if (branchEmployeeId !== undefined) {
+        insertValues.branchEmployeeId = branchEmployeeId;
+      }
+      console.log("[checkInEmployee] Inserting record for:", employeeId, "branch:", branchId, "date:", today, "time:", now);
+      const [created] = await db.insert(attendanceRecords).values(insertValues).returning();
       return created;
     } catch (error: any) {
       if (error?.code === '42703') {
