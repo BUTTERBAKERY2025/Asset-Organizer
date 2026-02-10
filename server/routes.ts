@@ -328,6 +328,26 @@ export async function registerRoutes(
           });
         }
       }
+
+      // Auto-apply role permissions when role changes
+      if (role !== undefined && role !== 'admin') {
+        const { ROLE_PERMISSION_TEMPLATES } = await import("@shared/schema");
+        const template = ROLE_PERMISSION_TEMPLATES[role];
+        if (template) {
+          // Clear existing direct permissions
+          await storage.deleteUserPermissions(req.params.id);
+          // Apply template permissions
+          for (const entry of template) {
+            await storage.setUserPermission({
+              userId: req.params.id,
+              module: entry.module,
+              actions: entry.actions,
+            });
+          }
+          // Clear permissions cache
+          storage.clearPermissionsCache?.(req.params.id);
+        }
+      }
       
       const { password: _, ...safeUser } = user;
       res.json(safeUser);
