@@ -18844,8 +18844,10 @@ export async function registerRoutes(
   const biometricChallenges = new Map<string, { challenge: string; employeeId: string; type: string; timestamp: number }>();
   setInterval(() => {
     const now = Date.now();
-    for (const [key, val] of biometricChallenges) {
-      if (now - val.timestamp > 5 * 60 * 1000) biometricChallenges.delete(key);
+    const keys = Array.from(biometricChallenges.keys());
+    for (const key of keys) {
+      const val = biometricChallenges.get(key);
+      if (val && now - val.timestamp > 10 * 60 * 1000) biometricChallenges.delete(key);
     }
   }, 60000);
 
@@ -19255,11 +19257,17 @@ export async function registerRoutes(
 
       // SECURITY: Validate biometric verification token server-side (REQUIRED)
       let serverBiometricVerified = false;
-      if (biometricVerified && req.body.biometricToken) {
-        const tokenKey = `token_${req.body.biometricToken}`;
+      const biometricTokenValue = req.body.biometricToken;
+      console.log("[Biometric Check-in] biometricVerified:", biometricVerified, "biometricToken:", biometricTokenValue ? `${biometricTokenValue.substring(0, 20)}...` : "null");
+      console.log("[Biometric Check-in] Available tokens:", Array.from(biometricChallenges.keys()).filter(k => k.startsWith("token_")).length);
+      
+      if (biometricVerified && biometricTokenValue) {
+        const tokenKey = `token_${biometricTokenValue}`;
         const tokenData = biometricChallenges.get(tokenKey);
+        console.log("[Biometric Check-in] Token lookup:", tokenKey.substring(0, 30), "found:", !!tokenData, tokenData ? `employeeId=${tokenData.employeeId} type=${tokenData.type}` : "");
         if (tokenData && tokenData.employeeId === employeeId && tokenData.type === "verified_token") {
           const tokenAge = Date.now() - tokenData.timestamp;
+          console.log("[Biometric Check-in] Token age:", Math.round(tokenAge / 1000), "seconds");
           if (tokenAge < 10 * 60 * 1000) {
             serverBiometricVerified = true;
             biometricChallenges.delete(tokenKey);
@@ -19268,6 +19276,7 @@ export async function registerRoutes(
       }
 
       if (!serverBiometricVerified) {
+        console.warn("[Biometric Check-in] REJECTED: biometricVerified=", biometricVerified, "hasToken=", !!biometricTokenValue, "employeeId=", employeeId);
         return res.status(400).json({ error: "التحقق من البصمة مطلوب لتسجيل الحضور. يرجى وضع البصمة أولاً" });
       }
 
@@ -19341,11 +19350,17 @@ export async function registerRoutes(
 
       // SECURITY: Validate biometric verification token server-side (REQUIRED)
       let serverBiometricVerified = false;
-      if (biometricVerified && req.body.biometricToken) {
-        const tokenKey = `token_${req.body.biometricToken}`;
+      const biometricTokenValue = req.body.biometricToken;
+      console.log("[Biometric Check-out] biometricVerified:", biometricVerified, "biometricToken:", biometricTokenValue ? `${biometricTokenValue.substring(0, 20)}...` : "null");
+      console.log("[Biometric Check-out] Available tokens:", Array.from(biometricChallenges.keys()).filter(k => k.startsWith("token_")).length);
+      
+      if (biometricVerified && biometricTokenValue) {
+        const tokenKey = `token_${biometricTokenValue}`;
         const tokenData = biometricChallenges.get(tokenKey);
+        console.log("[Biometric Check-out] Token lookup:", tokenKey.substring(0, 30), "found:", !!tokenData, tokenData ? `employeeId=${tokenData.employeeId} type=${tokenData.type}` : "");
         if (tokenData && tokenData.employeeId === employeeId && tokenData.type === "verified_token") {
           const tokenAge = Date.now() - tokenData.timestamp;
+          console.log("[Biometric Check-out] Token age:", Math.round(tokenAge / 1000), "seconds");
           if (tokenAge < 10 * 60 * 1000) {
             serverBiometricVerified = true;
             biometricChallenges.delete(tokenKey);
@@ -19354,6 +19369,7 @@ export async function registerRoutes(
       }
 
       if (!serverBiometricVerified) {
+        console.warn("[Biometric Check-out] REJECTED: biometricVerified=", biometricVerified, "hasToken=", !!biometricTokenValue, "employeeId=", employeeId);
         return res.status(400).json({ error: "التحقق من البصمة مطلوب لتسجيل الانصراف. يرجى وضع البصمة أولاً" });
       }
       
