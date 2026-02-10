@@ -4471,6 +4471,9 @@ export const attendanceRecords = pgTable("attendance_records", {
   earlyLeaveMinutes: integer("early_leave_minutes").default(0), // دقائق الخروج المبكر
   overtimeMinutes: integer("overtime_minutes").default(0), // دقائق العمل الإضافي
   workingHours: real("working_hours").default(0), // ساعات العمل الفعلية
+  biometricVerified: boolean("biometric_verified").default(false),
+  biometricCheckIn: boolean("biometric_check_in").default(false),
+  biometricCheckOut: boolean("biometric_check_out").default(false),
   deviceInfo: text("device_info"), // معلومات الجهاز (iPad, etc.)
   locationInfo: text("location_info"), // معلومات الموقع
   notes: text("notes"),
@@ -8541,3 +8544,32 @@ export const insertMeetingRsvpSchema = createInsertSchema(meetingRsvps).omit({
 
 export type MeetingRsvp = typeof meetingRsvps.$inferSelect;
 export type InsertMeetingRsvp = z.infer<typeof insertMeetingRsvpSchema>;
+
+// WebAuthn Biometric Credentials - بيانات البصمة البيومترية
+export const biometricCredentials = pgTable("biometric_credentials", {
+  id: serial("id").primaryKey(),
+  employeeId: varchar("employee_id").notNull(),
+  employeeName: text("employee_name").notNull(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  credentialId: text("credential_id").notNull(),
+  publicKey: text("public_key").notNull(),
+  counter: integer("counter").default(0).notNull(),
+  deviceInfo: text("device_info"),
+  registeredBy: varchar("registered_by").references(() => users.id),
+  isActive: boolean("is_active").default(true).notNull(),
+  lastUsedAt: timestamp("last_used_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_biometric_employee").on(table.employeeId),
+  index("idx_biometric_branch").on(table.branchId),
+  index("idx_biometric_credential").on(table.credentialId),
+]);
+
+export const insertBiometricCredentialSchema = createInsertSchema(biometricCredentials).omit({
+  id: true,
+  lastUsedAt: true,
+  createdAt: true,
+});
+
+export type BiometricCredential = typeof biometricCredentials.$inferSelect;
+export type InsertBiometricCredential = z.infer<typeof insertBiometricCredentialSchema>;

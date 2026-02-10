@@ -13,7 +13,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
-import { Clock, LogIn, LogOut, Check, Pencil, RotateCcw, Building2, User, Timer, ArrowRight, Users, Calendar, Sun, Moon, Sunrise, Loader2, MapPin, AlertTriangle, ChevronLeft, ChevronRight, ShieldAlert } from "lucide-react";
+import { Clock, LogIn, LogOut, Check, Pencil, RotateCcw, Building2, User, Timer, ArrowRight, Users, Calendar, Sun, Moon, Sunrise, Loader2, MapPin, AlertTriangle, ChevronLeft, ChevronRight, ShieldAlert, Fingerprint } from "lucide-react";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
@@ -44,6 +44,10 @@ export default function AttendanceCheckPage() {
   const [locationDistance, setLocationDistance] = useState<number | null>(null);
   const [isCheckingLocation, setIsCheckingLocation] = useState(false);
   const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [biometricStatus, setBiometricStatus] = useState<"idle" | "verifying" | "verified" | "failed" | "unavailable">("idle");
+  const [showBiometricRegister, setShowBiometricRegister] = useState<{ employeeId: string; employeeName: string } | null>(null);
+  const [biometricRegistering, setBiometricRegistering] = useState(false);
+  const [biometricToken, setBiometricToken] = useState<string | null>(null);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -76,6 +80,17 @@ export default function AttendanceCheckPage() {
     enabled: !!selectedBranch && !!selectedShift,
   });
 
+  const { data: biometricStatusMap } = useQuery<Record<string, { hasCredential: boolean; credentialCount: number; lastUsed: string | null }>>({
+    queryKey: ["/api/biometric/branch", selectedBranch],
+    queryFn: async () => {
+      if (!selectedBranch) return {};
+      const res = await fetch(`/api/biometric/branch/${selectedBranch}`);
+      if (!res.ok) return {};
+      return res.json();
+    },
+    enabled: !!selectedBranch,
+  });
+
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
@@ -103,7 +118,7 @@ export default function AttendanceCheckPage() {
   }, [selectedEmployee, signatureMode]);
 
   const checkInMutation = useMutation({
-    mutationFn: async (data: { employeeId: string; branchId: string; signature: string; scheduleId: number; scheduledStartTime?: string; scheduledEndTime?: string; employeeName?: string; userLatitude?: number; userLongitude?: number; attendanceDate?: string }) => {
+    mutationFn: async (data: { employeeId: string; branchId: string; signature: string; scheduleId: number; scheduledStartTime?: string; scheduledEndTime?: string; employeeName?: string; userLatitude?: number; userLongitude?: number; attendanceDate?: string; biometricVerified?: boolean; biometricToken?: string | null }) => {
       return apiRequest("POST", "/api/attendance/check-in-employee", data);
     },
     onSuccess: () => {
@@ -117,7 +132,7 @@ export default function AttendanceCheckPage() {
   });
 
   const checkOutMutation = useMutation({
-    mutationFn: async (data: { employeeId: string; scheduleId: number; signature: string; attendanceDate?: string }) => {
+    mutationFn: async (data: { employeeId: string; scheduleId: number; signature: string; attendanceDate?: string; biometricVerified?: boolean; biometricToken?: string | null }) => {
       return apiRequest("POST", "/api/attendance/check-out-employee", data);
     },
     onSuccess: () => {
@@ -236,6 +251,8 @@ export default function AttendanceCheckPage() {
     setHasSignature(false);
     setLocationStatus("idle");
     setLocationDistance(null);
+    setBiometricStatus("idle");
+    setBiometricToken(null);
     checkLocationValidity();
   };
 
@@ -243,6 +260,121 @@ export default function AttendanceCheckPage() {
     setSelectedEmployee(null);
     setSignatureMode(null);
     setHasSignature(false);
+  };
+
+  const handleBiometricRegister = async (employeeId: string, employeeName: string) => {
+    if (!window.PublicKeyCredential) {
+      toast({ title: "غير مدعوم", description: "هذا الجهاز لا يدعم البصمة البيومترية", variant: "destructive" });
+      return;
+    }
+    
+    setBiometricRegistering(true);
+    try {
+      const optionsRes = await apiRequest("POST", "/api/biometric/register-options", {
+        employeeId, employeeName, branchId: selectedBranch,
+      });
+      const { options, challengeKey } = await optionsRes.json();
+      
+      const publicKeyOptions: PublicKeyCredentialCreationOptions = {
+        challenge: Uint8Array.from(atob(options.challenge.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)),
+        rp: options.rp,
+        user: {
+          id: Uint8Array.from(atob(options.user.id.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)),
+          name: options.user.name,
+          displayName: options.user.displayName,
+        },
+        pubKeyCredParams: options.pubKeyCredParams,
+        authenticatorSelection: options.authenticatorSelection,
+        timeout: options.timeout,
+        attestation: options.attestation,
+      };
+      
+      const credential = await navigator.credentials.create({ publicKey: publicKeyOptions }) as PublicKeyCredential;
+      if (!credential) throw new Error("فشل في إنشاء البصمة");
+      
+      const credentialId = btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(credential.rawId))))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+      
+      const response = credential.response as AuthenticatorAttestationResponse;
+      const pubKeyBytes = response.getPublicKey?.() || new ArrayBuffer(0);
+      const publicKey = btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(pubKeyBytes))))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+      
+      await apiRequest("POST", "/api/biometric/register", {
+        employeeId, employeeName, branchId: selectedBranch,
+        credentialId,
+        publicKey: publicKey || credentialId,
+        deviceInfo: navigator.userAgent,
+        challengeKey,
+      });
+      
+      queryClient.invalidateQueries({ queryKey: ["/api/biometric/branch"] });
+      toast({ title: "تم تسجيل البصمة", description: `تم تسجيل بصمة ${employeeName} بنجاح` });
+      setShowBiometricRegister(null);
+    } catch (error: any) {
+      if (error.name === "NotAllowedError") {
+        toast({ title: "تم الإلغاء", description: "تم إلغاء تسجيل البصمة", variant: "destructive" });
+      } else {
+        toast({ title: "خطأ", description: error.message || "فشل في تسجيل البصمة", variant: "destructive" });
+      }
+    } finally {
+      setBiometricRegistering(false);
+    }
+  };
+
+  const handleBiometricVerify = async (employeeId: string) => {
+    if (!window.PublicKeyCredential) {
+      setBiometricStatus("unavailable");
+      return;
+    }
+    
+    setBiometricStatus("verifying");
+    try {
+      const optionsRes = await apiRequest("POST", "/api/biometric/verify-options", { employeeId });
+      const optionsData = await optionsRes.json();
+      
+      if (optionsData.noBiometric) {
+        setBiometricStatus("unavailable");
+        return;
+      }
+      
+      const { options, challengeKey } = optionsData;
+      
+      const publicKeyOptions: PublicKeyCredentialRequestOptions = {
+        challenge: Uint8Array.from(atob(options.challenge.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)),
+        rpId: options.rpId,
+        allowCredentials: options.allowCredentials.map((c: any) => ({
+          id: Uint8Array.from(atob(c.id.replace(/-/g, '+').replace(/_/g, '/')), c2 => c2.charCodeAt(0)),
+          type: c.type,
+          transports: c.transports,
+        })),
+        userVerification: options.userVerification,
+        timeout: options.timeout,
+      };
+      
+      const assertion = await navigator.credentials.get({ publicKey: publicKeyOptions }) as PublicKeyCredential;
+      if (!assertion) throw new Error("فشل التحقق");
+      
+      const credentialId = btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(assertion.rawId))))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+      
+      const verifyRes = await apiRequest("POST", "/api/biometric/verify", { credentialId, employeeId, challengeKey });
+      const verifyData = await verifyRes.json();
+      
+      if (verifyData.verified) {
+        setBiometricStatus("verified");
+        setBiometricToken(verifyData.verificationToken || null);
+        toast({ title: "تم التحقق", description: "تم التحقق من البصمة بنجاح" });
+      } else {
+        setBiometricStatus("failed");
+      }
+    } catch (error: any) {
+      if (error.name === "NotAllowedError") {
+        setBiometricStatus("idle");
+      } else {
+        setBiometricStatus("failed");
+      }
+    }
   };
 
   const handleSubmitSignature = () => {
@@ -291,6 +423,8 @@ export default function AttendanceCheckPage() {
         userLatitude: userCoords?.latitude,
         userLongitude: userCoords?.longitude,
         attendanceDate: selectedDate,
+        biometricVerified: biometricStatus === "verified",
+        biometricToken: biometricToken,
       });
     } else {
       checkOutMutation.mutate({
@@ -298,6 +432,8 @@ export default function AttendanceCheckPage() {
         scheduleId: selectedEmployee.id,
         signature: getSignatureData(),
         attendanceDate: selectedDate,
+        biometricVerified: biometricStatus === "verified",
+        biometricToken: biometricToken,
       });
     }
   };
@@ -470,7 +606,7 @@ export default function AttendanceCheckPage() {
                 </div>
               ) : (
                 <div className="rounded-md border overflow-x-auto">
-                  <Table className="min-w-[600px]">
+                  <Table className="min-w-[700px]">
                     <TableHeader>
                       <TableRow>
                         <TableHead className={isRTL ? "text-right" : "text-left"}>{t("attendanceCheck.employee")}</TableHead>
@@ -478,6 +614,7 @@ export default function AttendanceCheckPage() {
                         <TableHead className="text-center">{t("attendanceCheck.endTime")}</TableHead>
                         <TableHead className="text-center hidden md:table-cell">{t("attendanceCheck.checkIn")}</TableHead>
                         <TableHead className="text-center hidden md:table-cell">{t("attendanceCheck.checkOut")}</TableHead>
+                        <TableHead className="text-center">{"البصمة"}</TableHead>
                         <TableHead className="text-center">{t("attendanceCheck.status")}</TableHead>
                         <TableHead className="text-center">{t("attendanceCheck.actions")}</TableHead>
                       </TableRow>
@@ -511,6 +648,26 @@ export default function AttendanceCheckPage() {
                               {emp.attendance?.actualCheckOut ? (
                                 <span className="font-mono text-red-600 text-xs sm:text-sm">{emp.attendance.actualCheckOut}</span>
                               ) : "-"}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {biometricStatusMap?.[emp.employeeId]?.hasCredential ? (
+                                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 gap-1">
+                                  <Fingerprint className="w-3 h-3" />
+                                  مسجّلة
+                                </Badge>
+                              ) : (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-xs text-muted-foreground hover:text-primary gap-1"
+                                  onClick={() => handleBiometricRegister(emp.employeeId, emp.employeeName)}
+                                  disabled={biometricRegistering}
+                                  data-testid={`btn-register-biometric-${emp.employeeId}`}
+                                >
+                                  <Fingerprint className="w-3 h-3" />
+                                  تسجيل بصمة
+                                </Button>
+                              )}
                             </TableCell>
                             <TableCell className="text-center">
                               <Badge className={`${status.color} text-[10px] sm:text-xs`}>{status.label}</Badge>
@@ -650,6 +807,50 @@ export default function AttendanceCheckPage() {
                     <p className="text-xs sm:text-sm text-muted-foreground">في انتظار التحقق من الموقع</p>
                   </>
                 )}
+              </div>
+
+              <div className={`p-3 rounded-lg border ${
+                biometricStatus === "verified" ? "bg-green-50 border-green-200" :
+                biometricStatus === "failed" ? "bg-red-50 border-red-200" :
+                biometricStatus === "verifying" ? "bg-blue-50 border-blue-200" :
+                biometricStatus === "unavailable" ? "bg-gray-50 border-gray-200" :
+                "bg-amber-50 border-amber-200"
+              }`}>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Fingerprint className={`w-5 h-5 ${
+                      biometricStatus === "verified" ? "text-green-600" :
+                      biometricStatus === "failed" ? "text-red-600" :
+                      biometricStatus === "verifying" ? "text-blue-600 animate-pulse" :
+                      "text-amber-600"
+                    }`} />
+                    <div>
+                      <p className="text-sm font-medium">
+                        {biometricStatus === "verified" ? "تم التحقق من البصمة ✓" :
+                         biometricStatus === "failed" ? "فشل التحقق من البصمة" :
+                         biometricStatus === "verifying" ? "جاري التحقق..." :
+                         biometricStatus === "unavailable" ? "لا توجد بصمة مسجلة" :
+                         "التحقق بالبصمة"}
+                      </p>
+                      {biometricStatus === "unavailable" && (
+                        <p className="text-xs text-muted-foreground">يمكن المتابعة بالتوقيع فقط</p>
+                      )}
+                    </div>
+                  </div>
+                  {(biometricStatus === "idle" || biometricStatus === "failed") && selectedEmployee && (
+                    <Button
+                      size="sm"
+                      variant={biometricStatus === "failed" ? "destructive" : "default"}
+                      onClick={() => selectedEmployee && handleBiometricVerify(selectedEmployee.employeeId)}
+                      disabled={false}
+                      data-testid="btn-verify-biometric"
+                      className="gap-1"
+                    >
+                      <Fingerprint className="w-4 h-4" />
+                      {biometricStatus === "failed" ? "إعادة المحاولة" : "ضع بصمتك"}
+                    </Button>
+                  )}
+                </div>
               </div>
 
               <div className="text-center p-2 sm:p-3 bg-muted rounded-lg">

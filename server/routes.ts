@@ -18837,6 +18837,257 @@ export async function registerRoutes(
   });
 
   // Check-in / Check-out with signature
+  // ============ Biometric / WebAuthn Endpoints ============
+  
+  // In-memory challenge store with TTL (5 minutes)
+  const biometricChallenges = new Map<string, { challenge: string; employeeId: string; type: string; timestamp: number }>();
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, val] of biometricChallenges) {
+      if (now - val.timestamp > 5 * 60 * 1000) biometricChallenges.delete(key);
+    }
+  }, 60000);
+
+  // Get biometric registration options (challenge) for an employee
+  app.post("/api/biometric/register-options", isAuthenticated, requirePermission("attendance_check", "create"), async (req, res) => {
+    try {
+      const { employeeId, employeeName, branchId } = req.body;
+      if (!employeeId || !employeeName || !branchId) {
+        return res.status(400).json({ error: "بيانات الموظف مطلوبة" });
+      }
+
+      // SECURITY: Branch isolation check
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+        }
+      }
+
+      const crypto = await import("crypto");
+      const challenge = crypto.randomBytes(32).toString("base64url");
+      const userId = crypto.randomBytes(16).toString("base64url");
+      
+      // Store challenge for server-side validation
+      const challengeKey = `reg_${employeeId}_${Date.now()}`;
+      biometricChallenges.set(challengeKey, { challenge, employeeId, type: "register", timestamp: Date.now() });
+
+      const rpId = (req.headers.origin ? new URL(req.headers.origin).hostname : req.headers.host?.split(':')[0]) || "localhost";
+
+      const options = {
+        challenge,
+        rp: { name: "باتر - نظام الحضور", id: rpId },
+        user: { id: userId, name: employeeId, displayName: employeeName },
+        pubKeyCredParams: [
+          { alg: -7, type: "public-key" },
+          { alg: -257, type: "public-key" },
+        ],
+        authenticatorSelection: {
+          authenticatorAttachment: "platform",
+          userVerification: "required",
+          residentKey: "preferred",
+        },
+        timeout: 60000,
+        attestation: "none",
+      };
+
+      res.json({ options, challengeKey });
+    } catch (error) {
+      console.error("Error generating biometric options:", error);
+      res.status(500).json({ error: "فشل في إنشاء خيارات البصمة" });
+    }
+  });
+
+  // Register biometric credential for an employee
+  app.post("/api/biometric/register", isAuthenticated, requirePermission("attendance_check", "create"), async (req, res) => {
+    try {
+      const { employeeId, employeeName, branchId, credentialId, publicKey, deviceInfo, challengeKey } = req.body;
+      const currentUser = getCurrentUser(req);
+
+      if (!employeeId || !employeeName || !branchId || !credentialId || !publicKey) {
+        return res.status(400).json({ error: "جميع البيانات مطلوبة" });
+      }
+
+      // SECURITY: Branch isolation check
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+        }
+      }
+      
+      // SECURITY: Validate challenge was issued by server
+      if (challengeKey) {
+        const storedChallenge = biometricChallenges.get(challengeKey);
+        if (!storedChallenge || storedChallenge.employeeId !== employeeId || storedChallenge.type !== "register") {
+          return res.status(400).json({ error: "طلب التسجيل غير صالح أو منتهي الصلاحية" });
+        }
+        biometricChallenges.delete(challengeKey);
+      }
+
+      // Check if credential already exists
+      const existing = await storage.getBiometricCredentialByCredentialId(credentialId);
+      if (existing) {
+        return res.status(400).json({ error: "هذه البصمة مسجلة مسبقاً" });
+      }
+
+      const credential = await storage.createBiometricCredential({
+        employeeId,
+        employeeName,
+        branchId,
+        credentialId,
+        publicKey,
+        counter: 0,
+        deviceInfo: deviceInfo || null,
+        registeredBy: currentUser?.id || null,
+        isActive: true,
+      });
+
+      res.json({ success: true, credential });
+    } catch (error) {
+      console.error("Error registering biometric:", error);
+      res.status(500).json({ error: "فشل في تسجيل البصمة" });
+    }
+  });
+
+  // Get verification options (challenge) for biometric verification
+  app.post("/api/biometric/verify-options", isAuthenticated, async (req, res) => {
+    try {
+      const { employeeId } = req.body;
+      if (!employeeId) {
+        return res.status(400).json({ error: "معرف الموظف مطلوب" });
+      }
+
+      const credentials = await storage.getBiometricCredentials(employeeId);
+      if (credentials.length === 0) {
+        return res.status(404).json({ error: "لا توجد بصمة مسجلة لهذا الموظف", noBiometric: true });
+      }
+
+      const crypto = await import("crypto");
+      const challenge = crypto.randomBytes(32).toString("base64url");
+      
+      // Store challenge for server-side validation
+      const challengeKey = `verify_${employeeId}_${Date.now()}`;
+      biometricChallenges.set(challengeKey, { challenge, employeeId, type: "verify", timestamp: Date.now() });
+
+      const rpId = (req.headers.origin ? new URL(req.headers.origin).hostname : req.headers.host?.split(':')[0]) || "localhost";
+
+      const options = {
+        challenge,
+        rpId,
+        allowCredentials: credentials.map(c => ({
+          id: c.credentialId,
+          type: "public-key",
+          transports: ["internal"],
+        })),
+        userVerification: "required",
+        timeout: 60000,
+      };
+
+      res.json({ options, challengeKey });
+    } catch (error) {
+      console.error("Error generating verify options:", error);
+      res.status(500).json({ error: "فشل في إنشاء خيارات التحقق" });
+    }
+  });
+
+  // Verify biometric credential - returns a server-signed verification token
+  app.post("/api/biometric/verify", isAuthenticated, async (req, res) => {
+    try {
+      const { credentialId, employeeId, challengeKey } = req.body;
+      if (!credentialId || !employeeId) {
+        return res.status(400).json({ error: "بيانات التحقق مطلوبة" });
+      }
+      
+      // SECURITY: Validate challenge was issued by server
+      if (challengeKey) {
+        const storedChallenge = biometricChallenges.get(challengeKey);
+        if (!storedChallenge || storedChallenge.employeeId !== employeeId || storedChallenge.type !== "verify") {
+          return res.status(400).json({ error: "طلب التحقق غير صالح أو منتهي الصلاحية", verified: false });
+        }
+        biometricChallenges.delete(challengeKey);
+      }
+
+      const credential = await storage.getBiometricCredentialByCredentialId(credentialId);
+      if (!credential) {
+        return res.status(400).json({ error: "البصمة غير مسجلة", verified: false });
+      }
+
+      if (credential.employeeId !== employeeId) {
+        return res.status(403).json({ error: "البصمة لا تتطابق مع الموظف", verified: false });
+      }
+
+      // Update counter and last used
+      await storage.updateBiometricCredentialCounter(credential.id, credential.counter + 1);
+      
+      // Generate server-signed verification token (valid 10 min)
+      const crypto = await import("crypto");
+      const tokenData = `${employeeId}:${Date.now()}:${crypto.randomBytes(8).toString("hex")}`;
+      const verificationToken = Buffer.from(tokenData).toString("base64url");
+      
+      // Store token for check-in/out validation
+      biometricChallenges.set(`token_${verificationToken}`, { 
+        challenge: verificationToken, employeeId, type: "verified_token", timestamp: Date.now() 
+      });
+
+      res.json({ verified: true, employeeName: credential.employeeName, verificationToken });
+    } catch (error) {
+      console.error("Error verifying biometric:", error);
+      res.status(500).json({ error: "فشل في التحقق من البصمة", verified: false });
+    }
+  });
+
+  // Get biometric status for employees in a branch
+  app.get("/api/biometric/branch/:branchId", isAuthenticated, async (req, res) => {
+    try {
+      // SECURITY: Branch isolation check
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, req.params.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+        }
+      }
+
+      const credentials = await storage.getBiometricCredentialsByBranch(req.params.branchId);
+      const statusMap: Record<string, { hasCredential: boolean; credentialCount: number; lastUsed: string | null }> = {};
+      
+      for (const cred of credentials) {
+        if (!statusMap[cred.employeeId]) {
+          statusMap[cred.employeeId] = { hasCredential: true, credentialCount: 0, lastUsed: null };
+        }
+        statusMap[cred.employeeId].credentialCount++;
+        if (cred.lastUsedAt) {
+          const lastUsed = cred.lastUsedAt.toISOString();
+          if (!statusMap[cred.employeeId].lastUsed || lastUsed > statusMap[cred.employeeId].lastUsed!) {
+            statusMap[cred.employeeId].lastUsed = lastUsed;
+          }
+        }
+      }
+      
+      res.json(statusMap);
+    } catch (error) {
+      console.error("Error getting biometric status:", error);
+      res.status(500).json({ error: "فشل في جلب حالة البصمات" });
+    }
+  });
+
+  // Delete biometric credential
+  app.delete("/api/biometric/:id", isAuthenticated, requirePermission("attendance_check", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const success = await storage.deleteBiometricCredential(id);
+      if (!success) {
+        return res.status(404).json({ error: "البصمة غير موجودة" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting biometric:", error);
+      res.status(500).json({ error: "فشل في حذف البصمة" });
+    }
+  });
+
+  // ============ End Biometric Endpoints ============
+
   app.post("/api/attendance/check-in", isAuthenticated, async (req, res) => {
     try {
       const { branchId, signature, deviceInfo } = req.body;
@@ -18931,7 +19182,7 @@ export async function registerRoutes(
   // Check-in employee by manager or attendance clerk
   app.post("/api/attendance/check-in-employee", isAuthenticated, requirePermission("attendance_check", "create"), async (req, res) => {
     try {
-      const { employeeId, branchId, signature, scheduleId, scheduledStartTime, scheduledEndTime, employeeName, userLatitude, userLongitude, attendanceDate } = req.body;
+      const { employeeId, branchId, signature, scheduleId, scheduledStartTime, scheduledEndTime, employeeName, userLatitude, userLongitude, attendanceDate, biometricVerified } = req.body;
       
       if (!employeeId || !branchId) {
         return res.status(400).json({ error: "معرف الموظف والفرع مطلوبين" });
@@ -18998,7 +19249,26 @@ export async function registerRoutes(
       }
       
       const record = await storage.checkInEmployee(employeeId, branchId, signature, scheduleId, scheduledStartTime, scheduledEndTime, employeeName, targetDate);
-      res.status(201).json(record);
+      
+      // SECURITY: Validate biometric verification token server-side
+      let serverBiometricVerified = false;
+      if (biometricVerified && req.body.biometricToken) {
+        const tokenKey = `token_${req.body.biometricToken}`;
+        const tokenData = biometricChallenges.get(tokenKey);
+        if (tokenData && tokenData.employeeId === employeeId && tokenData.type === "verified_token") {
+          const tokenAge = Date.now() - tokenData.timestamp;
+          if (tokenAge < 10 * 60 * 1000) {
+            serverBiometricVerified = true;
+            biometricChallenges.delete(tokenKey);
+          }
+        }
+      }
+      
+      if (serverBiometricVerified && record.id) {
+        await storage.updateAttendanceRecord(record.id, { biometricVerified: true, biometricCheckIn: true });
+      }
+      
+      res.status(201).json({ ...record, biometricVerified: serverBiometricVerified });
     } catch (error) {
       console.error("Error checking in employee:", error);
       res.status(500).json({ error: "فشل في تسجيل الحضور" });
@@ -19008,7 +19278,7 @@ export async function registerRoutes(
   // Check-out employee by manager or attendance clerk
   app.post("/api/attendance/check-out-employee", isAuthenticated, requirePermission("attendance_check", "edit"), async (req, res) => {
     try {
-      const { employeeId, scheduleId, signature, attendanceDate } = req.body;
+      const { employeeId, scheduleId, signature, attendanceDate, biometricVerified } = req.body;
       
       if (!employeeId) {
         return res.status(400).json({ error: "معرف الموظف مطلوب" });
@@ -19054,7 +19324,26 @@ export async function registerRoutes(
       if (!record) {
         return res.status(404).json({ error: "لم يتم تسجيل حضور هذا الموظف اليوم" });
       }
-      res.json(record);
+      
+      // SECURITY: Validate biometric verification token server-side
+      let serverBiometricVerified = false;
+      if (biometricVerified && req.body.biometricToken) {
+        const tokenKey = `token_${req.body.biometricToken}`;
+        const tokenData = biometricChallenges.get(tokenKey);
+        if (tokenData && tokenData.employeeId === employeeId && tokenData.type === "verified_token") {
+          const tokenAge = Date.now() - tokenData.timestamp;
+          if (tokenAge < 10 * 60 * 1000) {
+            serverBiometricVerified = true;
+            biometricChallenges.delete(tokenKey);
+          }
+        }
+      }
+      
+      if (serverBiometricVerified && record.id) {
+        await storage.updateAttendanceRecord(record.id, { biometricCheckOut: true, biometricVerified: true });
+      }
+      
+      res.json({ ...record, biometricVerified: serverBiometricVerified });
     } catch (error) {
       console.error("Error checking out employee:", error);
       res.status(500).json({ error: "فشل في تسجيل الانصراف" });

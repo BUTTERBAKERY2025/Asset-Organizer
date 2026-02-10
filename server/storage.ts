@@ -482,6 +482,9 @@ import {
   cashierIncentiveStatements,
   type CashierIncentiveStatement,
   type InsertCashierIncentiveStatement,
+  biometricCredentials,
+  type BiometricCredential,
+  type InsertBiometricCredential,
 } from "@shared/schema";
 
 type TransferHistory = typeof transferHistory.$inferSelect;
@@ -658,6 +661,14 @@ export interface IStorage {
   deleteBackup(id: number): Promise<boolean>;
   
   // Global Search
+  // Biometric Credentials
+  getBiometricCredentials(employeeId: string): Promise<BiometricCredential[]>;
+  getBiometricCredentialsByBranch(branchId: string): Promise<BiometricCredential[]>;
+  getBiometricCredentialByCredentialId(credentialId: string): Promise<BiometricCredential | undefined>;
+  createBiometricCredential(credential: InsertBiometricCredential): Promise<BiometricCredential>;
+  deleteBiometricCredential(id: number): Promise<boolean>;
+  updateBiometricCredentialCounter(id: number, counter: number): Promise<void>;
+
   globalSearch(query: string): Promise<{
     inventory: InventoryItem[];
     projects: ConstructionProject[];
@@ -12632,6 +12643,37 @@ export class DatabaseStorage implements IStorage {
     }
     const [updated] = await db.update(cashierIncentiveStatements).set(updateData).where(eq(cashierIncentiveStatements.id, id)).returning();
     return updated || undefined;
+  }
+
+  // Biometric Credentials
+  async getBiometricCredentials(employeeId: string): Promise<BiometricCredential[]> {
+    return db.select().from(biometricCredentials)
+      .where(and(eq(biometricCredentials.employeeId, employeeId), eq(biometricCredentials.isActive, true)));
+  }
+
+  async getBiometricCredentialsByBranch(branchId: string): Promise<BiometricCredential[]> {
+    return db.select().from(biometricCredentials)
+      .where(and(eq(biometricCredentials.branchId, branchId), eq(biometricCredentials.isActive, true)));
+  }
+
+  async getBiometricCredentialByCredentialId(credentialId: string): Promise<BiometricCredential | undefined> {
+    const [cred] = await db.select().from(biometricCredentials)
+      .where(and(eq(biometricCredentials.credentialId, credentialId), eq(biometricCredentials.isActive, true)));
+    return cred;
+  }
+
+  async createBiometricCredential(credential: InsertBiometricCredential): Promise<BiometricCredential> {
+    const [created] = await db.insert(biometricCredentials).values(credential).returning();
+    return created;
+  }
+
+  async deleteBiometricCredential(id: number): Promise<boolean> {
+    const [deleted] = await db.update(biometricCredentials).set({ isActive: false }).where(eq(biometricCredentials.id, id)).returning();
+    return !!deleted;
+  }
+
+  async updateBiometricCredentialCounter(id: number, counter: number): Promise<void> {
+    await db.update(biometricCredentials).set({ counter, lastUsedAt: new Date() }).where(eq(biometricCredentials.id, id));
   }
 }
 
