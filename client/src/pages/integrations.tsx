@@ -321,40 +321,20 @@ function SMSSection({ notifications }: { notifications: NotificationQueueItem[] 
   const [message, setMessage] = useState("");
   const [channel, setChannel] = useState("sms");
   const [testStatus, setTestStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
-  const [twilioInfo, setTwilioInfo] = useState<{
-    connected: boolean;
-    accountName?: string;
-    status?: string;
-    type?: string;
-  }>({ connected: false });
+  const [testSmsPhone, setTestSmsPhone] = useState("");
+  const [testSmsResult, setTestSmsResult] = useState<{ success: boolean; message: string } | null>(null);
 
-  // Check Twilio status on mount
-  const { isLoading: isTwilioLoading } = useQuery({
+  const { data: twilioStatus, isLoading: isTwilioLoading, refetch: refetchStatus } = useQuery({
     queryKey: ["/api/integrations/twilio/status"],
     queryFn: async () => {
-      try {
-        const res = await fetch("/api/integrations/twilio/test", {
-          method: "POST",
-          credentials: "include",
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setTwilioInfo({
-            connected: true,
-            accountName: data.accountName,
-            status: data.status,
-            type: data.type,
-          });
-          return data;
-        }
-        setTwilioInfo({ connected: false });
-        return null;
-      } catch {
-        setTwilioInfo({ connected: false });
-        return null;
-      }
+      const res = await fetch("/api/integrations/twilio/status", {
+        method: "GET",
+        credentials: "include",
+      });
+      if (!res.ok) return { configured: false, connected: false };
+      return res.json();
     },
-    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    staleTime: 5 * 60 * 1000,
   });
 
   const sendNotificationMutation = useMutation({
@@ -373,9 +353,15 @@ function SMSSection({ notifications }: { notifications: NotificationQueueItem[] 
       if (!res.ok) throw new Error("فشل في إرسال الإشعار");
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
-      toast.success("تم إضافة الإشعار لقائمة الإرسال");
+      if (data?.status === "failed") {
+        toast.error("فشل في إرسال الرسالة");
+      } else if (data?.status === "sent") {
+        toast.success("تم إرسال الرسالة بنجاح");
+      } else {
+        toast.success("تم إضافة الرسالة لقائمة الإرسال");
+      }
       setRecipientPhone("");
       setRecipientName("");
       setMessage("");
@@ -393,12 +379,36 @@ function SMSSection({ notifications }: { notifications: NotificationQueueItem[] 
       if (res.ok) {
         setTestStatus("success");
         toast.success("اتصال Twilio يعمل بنجاح!");
+        refetchStatus();
       } else {
         setTestStatus("error");
         toast.error("فشل في الاتصال بـ Twilio");
       }
     } catch {
       setTestStatus("error");
+      toast.error("خطأ في الاتصال");
+    }
+  };
+
+  const sendTestSms = async () => {
+    setTestSmsResult(null);
+    try {
+      const res = await fetch("/api/integrations/twilio/test-sms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ phone: testSmsPhone, message: "رسالة اختبار من نظام باتر 🧈" }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setTestSmsResult({ success: true, message: data.message || "تم إرسال رسالة الاختبار بنجاح" });
+        toast.success("تم إرسال رسالة الاختبار بنجاح");
+      } else {
+        setTestSmsResult({ success: false, message: data.message || "فشل في إرسال رسالة الاختبار" });
+        toast.error(data.message || "فشل في إرسال رسالة الاختبار");
+      }
+    } catch {
+      setTestSmsResult({ success: false, message: "خطأ في الاتصال" });
       toast.error("خطأ في الاتصال");
     }
   };
@@ -432,7 +442,7 @@ function SMSSection({ notifications }: { notifications: NotificationQueueItem[] 
                 <RefreshCw className="h-5 w-5 animate-spin text-gray-400 ml-2" />
                 <span className="text-gray-600">جاري التحقق...</span>
               </div>
-            ) : twilioInfo.connected ? (
+            ) : twilioStatus?.connected ? (
               <>
                 <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
                   <div className="flex items-center gap-2">
@@ -440,20 +450,24 @@ function SMSSection({ notifications }: { notifications: NotificationQueueItem[] 
                     <span className="font-medium text-green-800">متصل</span>
                   </div>
                   <Badge className="bg-green-100 text-green-800">
-                    {twilioInfo.type === 'Trial' ? 'حساب تجريبي' : 'حساب مدفوع'}
+                    {twilioStatus.type === 'Trial' ? 'حساب تجريبي' : 'حساب مدفوع'}
                   </Badge>
                 </div>
                 
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between py-2 border-b">
                     <span className="text-muted-foreground">اسم الحساب</span>
-                    <span className="font-medium">{twilioInfo.accountName || '-'}</span>
+                    <span className="font-medium">{twilioStatus.accountName || '-'}</span>
+                  </div>
+                  <div className="flex justify-between py-2 border-b">
+                    <span className="text-muted-foreground">حالة الحساب</span>
+                    <span className="font-medium text-green-600">
+                      {twilioStatus.status === 'active' ? 'نشط' : twilioStatus.status}
+                    </span>
                   </div>
                   <div className="flex justify-between py-2">
-                    <span className="text-muted-foreground">الحالة</span>
-                    <span className="font-medium text-green-600">
-                      {twilioInfo.status === 'active' ? 'نشط' : twilioInfo.status}
-                    </span>
+                    <span className="text-muted-foreground">رقم الهاتف</span>
+                    <span className="font-medium" dir="ltr">{twilioStatus.phoneNumber || '-'}</span>
                   </div>
                 </div>
               </>
@@ -461,7 +475,9 @@ function SMSSection({ notifications }: { notifications: NotificationQueueItem[] 
               <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg border border-yellow-200">
                 <div className="flex items-center gap-2">
                   <AlertCircle className="h-5 w-5 text-yellow-600" />
-                  <span className="font-medium text-yellow-800">غير متصل</span>
+                  <span className="font-medium text-yellow-800">
+                    {twilioStatus?.configured === false ? 'غير مُعدّ' : 'غير متصل'}
+                  </span>
                 </div>
               </div>
             )}
@@ -486,32 +502,43 @@ function SMSSection({ notifications }: { notifications: NotificationQueueItem[] 
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <MessageSquare className="h-5 w-5 text-green-600" />
-              WhatsApp Business
+              <Smartphone className="h-5 w-5 text-blue-600" />
+              اختبار إرسال SMS
             </CardTitle>
-            <CardDescription>إرسال رسائل واتساب</CardDescription>
+            <CardDescription>إرسال رسالة اختبار للتأكد من عمل الخدمة</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-              <div className="flex items-center gap-2">
-                <AlertCircle className="h-5 w-5 text-yellow-600" />
-                <span className="font-medium text-yellow-800">يتطلب إعداد</span>
-              </div>
+            <div className="space-y-2">
+              <Label>رقم الهاتف</Label>
+              <Input
+                placeholder="05XXXXXXXX"
+                value={testSmsPhone}
+                onChange={(e) => setTestSmsPhone(e.target.value)}
+                data-testid="input-test-sms-phone"
+                dir="ltr"
+              />
             </div>
-            
-            <p className="text-sm text-muted-foreground">
-              لتفعيل WhatsApp Business، تحتاج إلى:
-            </p>
-            <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
-              <li>حساب WhatsApp Business API</li>
-              <li>ربط الحساب مع Twilio</li>
-              <li>الموافقة على قوالب الرسائل</li>
-            </ul>
 
-            <Button variant="outline" className="w-full" data-testid="btn-setup-whatsapp">
-              <ExternalLink className="h-4 w-4 ml-2" />
-              إعداد WhatsApp
+            <Button
+              className="w-full"
+              onClick={sendTestSms}
+              disabled={!testSmsPhone}
+              data-testid="btn-send-test-sms"
+            >
+              <Send className="h-4 w-4 ml-2" />
+              إرسال رسالة اختبار
             </Button>
+
+            {testSmsResult && (
+              <div className={`flex items-center gap-2 p-3 rounded-lg border ${testSmsResult.success ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`} data-testid="test-sms-result">
+                {testSmsResult.success ? (
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                ) : (
+                  <XCircle className="h-5 w-5 text-red-600" />
+                )}
+                <span className="text-sm font-medium">{testSmsResult.message}</span>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -527,25 +554,17 @@ function SMSSection({ notifications }: { notifications: NotificationQueueItem[] 
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-            <div className="flex items-center gap-2 text-amber-800">
-              <AlertCircle className="h-5 w-5" />
-              <span className="font-medium">ملاحظة - حساب تجريبي:</span>
-            </div>
-            <p className="text-sm text-amber-700 mt-1">
-              يمكنك إرسال الرسائل فقط للأرقام المُفعّلة في لوحة Twilio. للإرسال لأي رقم، يجب ترقية الحساب.
-            </p>
-          </div>
-
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label>رقم الهاتف</Label>
               <Input 
-                placeholder="+966xxxxxxxxx" 
+                placeholder="05XXXXXXXX" 
                 value={recipientPhone}
                 onChange={(e) => setRecipientPhone(e.target.value)}
                 data-testid="input-recipient-phone"
+                dir="ltr"
               />
+              <p className="text-xs text-muted-foreground">صيغة سعودية: 05XXXXXXXX أو +966XXXXXXXXX</p>
             </div>
             <div className="space-y-2">
               <Label>اسم المستلم</Label>
@@ -566,7 +585,7 @@ function SMSSection({ notifications }: { notifications: NotificationQueueItem[] 
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="sms">SMS</SelectItem>
-                <SelectItem value="whatsapp" disabled>WhatsApp (يتطلب إعداد)</SelectItem>
+                <SelectItem value="whatsapp">WhatsApp</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -595,7 +614,10 @@ function SMSSection({ notifications }: { notifications: NotificationQueueItem[] 
 
       <Card>
         <CardHeader>
-          <CardTitle>سجل الرسائل</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <MessageSquare className="h-5 w-5" />
+            سجل الرسائل
+          </CardTitle>
           <CardDescription>جميع الرسائل المرسلة والمنتظرة</CardDescription>
         </CardHeader>
         <CardContent>

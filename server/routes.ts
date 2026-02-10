@@ -2690,8 +2690,15 @@ export async function registerRoutes(
   app.post("/api/notifications/send", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
     try {
       const { recipientPhone, recipientName, channel, message, relatedModule, relatedEntityId } = req.body;
-      
-      // Create notification in queue
+
+      if (!recipientPhone || !message) {
+        return res.status(400).json({ error: "رقم الهاتف ونص الرسالة مطلوبان" });
+      }
+
+      if (!['sms', 'whatsapp'].includes(channel)) {
+        return res.status(400).json({ error: "قناة الإرسال يجب أن تكون sms أو whatsapp" });
+      }
+
       const notification = await storage.createNotification({
         recipientPhone,
         recipientName,
@@ -2702,23 +2709,101 @@ export async function registerRoutes(
         relatedEntityId,
       });
 
-      // Check for Twilio credentials
-      const twilioSid = process.env.TWILIO_ACCOUNT_SID;
-      const twilioToken = process.env.TWILIO_AUTH_TOKEN;
-      const twilioPhone = process.env.TWILIO_PHONE_NUMBER;
+      const { sendSMS, sendWhatsAppMessage, isTwilioConfigured } = await import("./twilio-service");
 
-      if (twilioSid && twilioToken && twilioPhone && channel === 'sms') {
-        // TODO: Implement actual Twilio SMS sending when credentials are available
-        // For now, mark as pending - requires Twilio setup
-        await storage.updateNotificationStatus(notification.id, 'pending', 'Twilio غير مكوّن - الرسالة في قائمة الانتظار');
-      } else {
-        await storage.updateNotificationStatus(notification.id, 'pending', 'في انتظار إعداد خدمة الإرسال');
+      if (!isTwilioConfigured()) {
+        await storage.updateNotificationStatus(notification.id, 'failed', 'Twilio غير مكوّن - يرجى إدخال بيانات الاعتماد');
+        return res.status(201).json({ ...notification, status: 'failed', errorMessage: 'Twilio غير مكوّن' });
       }
 
-      res.status(201).json(notification);
+      let result: { success: boolean; error?: string; messageId?: string };
+
+      if (channel === 'whatsapp') {
+        result = await sendWhatsAppMessage(recipientPhone, message);
+      } else {
+        result = await sendSMS(recipientPhone, message);
+      }
+
+      if (result.success) {
+        const updated = await storage.updateNotificationStatus(notification.id, 'sent');
+        res.status(201).json(updated || notification);
+      } else {
+        const updated = await storage.updateNotificationStatus(notification.id, 'failed', result.error || 'فشل في الإرسال');
+        res.status(201).json(updated || notification);
+      }
     } catch (error) {
       console.error("Error sending notification:", error);
-      res.status(500).json({ error: "Failed to send notification" });
+      res.status(500).json({ error: "فشل في إرسال الإشعار" });
+    }
+  });
+
+  // Twilio Status - GET endpoint for checking connection status
+  app.get("/api/integrations/twilio/status", isAuthenticated, async (req, res) => {
+    try {
+      const { isTwilioConfigured } = await import("./twilio-service");
+      const configured = isTwilioConfigured();
+      const twilioPhone = process.env.TWILIO_PHONE_NUMBER;
+
+      if (!configured) {
+        return res.json({
+          configured: false,
+          connected: false,
+          phoneNumber: null,
+        });
+      }
+
+      try {
+        const Twilio = (await import('twilio')).default;
+        const client = Twilio(process.env.TWILIO_ACCOUNT_SID!, process.env.TWILIO_AUTH_TOKEN!);
+        const account = await client.api.accounts(process.env.TWILIO_ACCOUNT_SID!).fetch();
+
+        res.json({
+          configured: true,
+          connected: true,
+          accountName: account.friendlyName,
+          status: account.status,
+          type: account.type,
+          phoneNumber: twilioPhone || null,
+        });
+      } catch (error: any) {
+        res.json({
+          configured: true,
+          connected: false,
+          error: error.message,
+          phoneNumber: twilioPhone || null,
+        });
+      }
+    } catch (error) {
+      console.error("Error checking Twilio status:", error);
+      res.status(500).json({ error: "فشل في التحقق من حالة Twilio" });
+    }
+  });
+
+  // Send Test SMS
+  app.post("/api/integrations/twilio/test-sms", isAuthenticated, requirePermission("integrations", "edit"), async (req, res) => {
+    try {
+      const { phone, message } = req.body;
+      if (!phone) {
+        return res.status(400).json({ error: "رقم الهاتف مطلوب" });
+      }
+
+      const { sendSMS, isTwilioConfigured } = await import("./twilio-service");
+
+      if (!isTwilioConfigured()) {
+        return res.status(400).json({ error: "Twilio غير مكوّن" });
+      }
+
+      const testMessage = message || "رسالة تجريبية من نظام باتر - Twilio يعمل بنجاح!";
+      const result = await sendSMS(phone, testMessage);
+
+      if (result.success) {
+        res.json({ success: true, messageId: result.messageId });
+      } else {
+        res.status(400).json({ success: false, error: result.error });
+      }
+    } catch (error: any) {
+      console.error("Error sending test SMS:", error);
+      res.status(500).json({ error: error.message || "فشل في إرسال الرسالة التجريبية" });
     }
   });
 
