@@ -8106,6 +8106,20 @@ export class DatabaseStorage implements IStorage {
       }
     }
     
+    // Validate scheduleId exists if provided
+    if (scheduleId) {
+      try {
+        const [schedule] = await db.select({ id: employeeSchedules.id }).from(employeeSchedules).where(eq(employeeSchedules.id, scheduleId)).limit(1);
+        if (!schedule) {
+          console.warn("[checkInEmployee] Invalid scheduleId:", scheduleId, "- setting to null");
+          scheduleId = undefined;
+        }
+      } catch (e) {
+        console.warn("[checkInEmployee] Schedule validation failed, setting to null");
+        scheduleId = undefined;
+      }
+    }
+    
     let branchEmployeeId: number | undefined = undefined;
     if (employeeId.startsWith('branch_emp_')) {
       const parsedId = parseInt(employeeId.replace('branch_emp_', ''), 10);

@@ -18925,14 +18925,20 @@ export async function registerRoutes(
         }
       }
       
-      // SECURITY: Validate challenge was issued by server
-      if (challengeKey) {
-        const storedChallenge = biometricChallenges.get(challengeKey);
-        if (!storedChallenge || storedChallenge.employeeId !== employeeId || storedChallenge.type !== "register") {
-          return res.status(400).json({ error: "طلب التسجيل غير صالح أو منتهي الصلاحية" });
-        }
-        biometricChallenges.delete(challengeKey);
+      // SECURITY: Validate challenge was issued by server (REQUIRED - prevents replay attacks)
+      if (!challengeKey) {
+        return res.status(400).json({ error: "مفتاح التسجيل مطلوب" });
       }
+      const storedChallenge = biometricChallenges.get(challengeKey);
+      if (!storedChallenge || storedChallenge.employeeId !== employeeId || storedChallenge.type !== "register") {
+        return res.status(400).json({ error: "طلب التسجيل غير صالح أو منتهي الصلاحية" });
+      }
+      const challengeAge = Date.now() - storedChallenge.timestamp;
+      if (challengeAge > 5 * 60 * 1000) {
+        biometricChallenges.delete(challengeKey);
+        return res.status(400).json({ error: "انتهت صلاحية طلب التسجيل، يرجى المحاولة مجدداً" });
+      }
+      biometricChallenges.delete(challengeKey);
 
       // Check if credential already exists
       const existing = await storage.getBiometricCredentialByCredentialId(credentialId);
@@ -19008,14 +19014,20 @@ export async function registerRoutes(
         return res.status(400).json({ error: "بيانات التحقق مطلوبة" });
       }
       
-      // SECURITY: Validate challenge was issued by server
-      if (challengeKey) {
-        const storedChallenge = biometricChallenges.get(challengeKey);
-        if (!storedChallenge || storedChallenge.employeeId !== employeeId || storedChallenge.type !== "verify") {
-          return res.status(400).json({ error: "طلب التحقق غير صالح أو منتهي الصلاحية", verified: false });
-        }
-        biometricChallenges.delete(challengeKey);
+      // SECURITY: Validate challenge was issued by server (REQUIRED - prevents replay attacks)
+      if (!challengeKey) {
+        return res.status(400).json({ error: "مفتاح التحقق مطلوب", verified: false });
       }
+      const storedChallenge = biometricChallenges.get(challengeKey);
+      if (!storedChallenge || storedChallenge.employeeId !== employeeId || storedChallenge.type !== "verify") {
+        return res.status(400).json({ error: "طلب التحقق غير صالح أو منتهي الصلاحية", verified: false });
+      }
+      const challengeAge = Date.now() - storedChallenge.timestamp;
+      if (challengeAge > 5 * 60 * 1000) {
+        biometricChallenges.delete(challengeKey);
+        return res.status(400).json({ error: "انتهت صلاحية طلب التحقق، يرجى المحاولة مجدداً", verified: false });
+      }
+      biometricChallenges.delete(challengeKey);
 
       const credential = await storage.getBiometricCredentialByCredentialId(credentialId);
       if (!credential) {
@@ -19191,11 +19203,19 @@ export async function registerRoutes(
   // Check-in employee by manager or attendance clerk
   app.post("/api/attendance/check-in-employee", isAuthenticated, requirePermission("attendance_check", "create"), async (req, res) => {
     try {
-      console.log("[Check-in-employee] Request body keys:", Object.keys(req.body), "employeeId:", req.body.employeeId, "branchId:", req.body.branchId, "scheduleId:", req.body.scheduleId, "hasSignature:", !!req.body.signature, "sigLength:", req.body.signature?.length);
+
       const { employeeId, branchId, signature, scheduleId, scheduledStartTime, scheduledEndTime, employeeName, userLatitude, userLongitude, attendanceDate, biometricVerified } = req.body;
       
       if (!employeeId || !branchId) {
         return res.status(400).json({ error: "معرف الموظف والفرع مطلوبين" });
+      }
+      
+      // SECURITY: Input format validation
+      if (typeof employeeId !== 'string' || employeeId.length > 200) {
+        return res.status(400).json({ error: "معرف الموظف غير صالح" });
+      }
+      if (typeof branchId !== 'string' || branchId.length > 100) {
+        return res.status(400).json({ error: "معرف الفرع غير صالح" });
       }
       
       // Validate attendanceDate: only today or yesterday allowed (Saudi time)
@@ -19220,8 +19240,13 @@ export async function registerRoutes(
         }
       }
       
-      // SECURITY: Server-side geolocation verification
+      // SECURITY: Validate branch exists (application-level FK replacement)
       const [branch] = await db.select().from(branches).where(eq(branches.id, branchId));
+      if (!branch) {
+        return res.status(400).json({ error: "الفرع غير موجود" });
+      }
+      
+      // SECURITY: Server-side geolocation verification
       if (branch && branch.latitude && branch.longitude) {
         if (!userLatitude || !userLongitude) {
           return res.status(400).json({ error: "الموقع الجغرافي مطلوب للتحقق من موقع الفرع" });
@@ -19259,16 +19284,15 @@ export async function registerRoutes(
       // SECURITY: Validate biometric verification token server-side (REQUIRED)
       let serverBiometricVerified = false;
       const biometricTokenValue = req.body.biometricToken;
-      console.log("[Biometric Check-in] biometricVerified:", biometricVerified, "biometricToken:", biometricTokenValue ? `${biometricTokenValue.substring(0, 20)}...` : "null");
-      console.log("[Biometric Check-in] Available tokens:", Array.from(biometricChallenges.keys()).filter(k => k.startsWith("token_")).length);
+
       
       if (biometricVerified && biometricTokenValue) {
         const tokenKey = `token_${biometricTokenValue}`;
         const tokenData = biometricChallenges.get(tokenKey);
-        console.log("[Biometric Check-in] Token lookup:", tokenKey.substring(0, 30), "found:", !!tokenData, tokenData ? `employeeId=${tokenData.employeeId} type=${tokenData.type}` : "");
+
         if (tokenData && tokenData.employeeId === employeeId && tokenData.type === "verified_token") {
           const tokenAge = Date.now() - tokenData.timestamp;
-          console.log("[Biometric Check-in] Token age:", Math.round(tokenAge / 1000), "seconds");
+
           if (tokenAge < 10 * 60 * 1000) {
             serverBiometricVerified = true;
             biometricChallenges.delete(tokenKey);
@@ -19281,7 +19305,8 @@ export async function registerRoutes(
         return res.status(400).json({ error: "التحقق من البصمة مطلوب لتسجيل الحضور. يرجى وضع البصمة أولاً" });
       }
 
-      const targetDate = attendanceDate || new Date().toISOString().split('T')[0];
+      const saudiToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Riyadh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+      const targetDate = attendanceDate || saudiToday;
       const existingRecord = await storage.getAttendanceByEmployeeAndDate(employeeId, targetDate);
       if (existingRecord && existingRecord.actualCheckIn) {
         return res.status(400).json({ error: "تم تسجيل حضور هذا الموظف مسبقاً اليوم" });
@@ -19295,7 +19320,7 @@ export async function registerRoutes(
         if (checkInError?.message?.includes('مسبقاً') || checkInError?.message?.includes('لا ينتمي') || checkInError?.message?.includes('غير نشط')) {
           return res.status(400).json({ error: checkInError.message });
         }
-        return res.status(500).json({ error: "فشل في تسجيل الحضور: " + (checkInError?.message || "خطأ غير معروف") });
+        return res.status(500).json({ error: "فشل في تسجيل الحضور" });
       }
       
       if (record && record.id) {
@@ -19309,7 +19334,7 @@ export async function registerRoutes(
       res.status(201).json({ ...record, biometricVerified: true });
     } catch (error: any) {
       console.error("[Check-in] Unexpected error:", error?.message || error, error?.stack);
-      res.status(500).json({ error: "فشل في تسجيل الحضور: " + (error?.message || "خطأ في الخادم") });
+      res.status(500).json({ error: "فشل في تسجيل الحضور" });
     }
   });
 
@@ -19320,6 +19345,11 @@ export async function registerRoutes(
       
       if (!employeeId) {
         return res.status(400).json({ error: "معرف الموظف مطلوب" });
+      }
+      
+      // SECURITY: Input format validation
+      if (typeof employeeId !== 'string' || employeeId.length > 200) {
+        return res.status(400).json({ error: "معرف الموظف غير صالح" });
       }
       
       // Validate attendanceDate: only today or yesterday allowed (Saudi time)
@@ -19337,7 +19367,8 @@ export async function registerRoutes(
       }
       
       // SECURITY: Verify branch access for non-admin users based on employee's branch
-      const targetDate = attendanceDate || new Date().toISOString().split('T')[0];
+      const saudiToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Riyadh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+      const targetDate = attendanceDate || saudiToday;
       const existingRecord = await storage.getAttendanceByEmployeeAndDate(employeeId, targetDate);
       
       // If no record exists, reject early
@@ -19365,16 +19396,15 @@ export async function registerRoutes(
       // SECURITY: Validate biometric verification token server-side (REQUIRED)
       let serverBiometricVerified = false;
       const biometricTokenValue = req.body.biometricToken;
-      console.log("[Biometric Check-out] biometricVerified:", biometricVerified, "biometricToken:", biometricTokenValue ? `${biometricTokenValue.substring(0, 20)}...` : "null");
-      console.log("[Biometric Check-out] Available tokens:", Array.from(biometricChallenges.keys()).filter(k => k.startsWith("token_")).length);
+
       
       if (biometricVerified && biometricTokenValue) {
         const tokenKey = `token_${biometricTokenValue}`;
         const tokenData = biometricChallenges.get(tokenKey);
-        console.log("[Biometric Check-out] Token lookup:", tokenKey.substring(0, 30), "found:", !!tokenData, tokenData ? `employeeId=${tokenData.employeeId} type=${tokenData.type}` : "");
+
         if (tokenData && tokenData.employeeId === employeeId && tokenData.type === "verified_token") {
           const tokenAge = Date.now() - tokenData.timestamp;
-          console.log("[Biometric Check-out] Token age:", Math.round(tokenAge / 1000), "seconds");
+
           if (tokenAge < 10 * 60 * 1000) {
             serverBiometricVerified = true;
             biometricChallenges.delete(tokenKey);
@@ -19392,7 +19422,7 @@ export async function registerRoutes(
         record = await storage.checkOutEmployee(employeeId, signature, scheduleId, targetDate);
       } catch (checkOutError: any) {
         console.error("[Check-out] checkOutEmployee failed:", checkOutError?.message || checkOutError);
-        return res.status(500).json({ error: "فشل في تسجيل الانصراف: " + (checkOutError?.message || "خطأ غير معروف") });
+        return res.status(500).json({ error: "فشل في تسجيل الانصراف" });
       }
       if (!record) {
         return res.status(404).json({ error: "لم يتم تسجيل حضور هذا الموظف اليوم" });
@@ -19409,7 +19439,7 @@ export async function registerRoutes(
       res.json({ ...record, biometricVerified: true });
     } catch (error: any) {
       console.error("[Check-out] Unexpected error:", error?.message || error, error?.stack);
-      res.status(500).json({ error: "فشل في تسجيل الانصراف: " + (error?.message || "خطأ في الخادم") });
+      res.status(500).json({ error: "فشل في تسجيل الانصراف" });
     }
   });
 
