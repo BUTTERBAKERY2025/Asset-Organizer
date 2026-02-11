@@ -408,8 +408,9 @@ export function registerGovernanceRoutes(app: Express) {
   app.post("/api/governance/meetings", isAuthenticated, requirePermission("governance_meetings", "create"), async (req, res) => {
     try {
       const year = new Date().getFullYear();
-      const count = await db.select({ count: sql<number>`count(*)` }).from(governanceMeetings);
-      const meetingNumber = `MTG-${year}-${String((count[0]?.count || 0) + 1).padStart(4, '0')}`;
+      const maxResult = await db.select({ maxNum: sql<string>`MAX(meeting_number)` }).from(governanceMeetings);
+      const lastNum = maxResult[0]?.maxNum ? parseInt(maxResult[0].maxNum.replace(/\D/g, '').slice(-4)) : 0;
+      const meetingNumber = `MTG-${year}-${String(lastNum + 1).padStart(4, '0')}`;
       
       const { sendWhatsApp, sendEmail, sendSMS, invitationMessage, meetingLink, meetingPlatform, scheduledDate, quorumRequired, ...meetingData } = req.body;
       
@@ -751,8 +752,9 @@ export function registerGovernanceRoutes(app: Express) {
   app.post("/api/governance/minutes", isAuthenticated, requirePermission("governance_meetings", "create"), async (req, res) => {
     try {
       const year = new Date().getFullYear();
-      const count = await db.select({ count: sql<number>`count(*)` }).from(meetingMinutes);
-      const minutesNumber = `MIN-${year}-${String((count[0]?.count || 0) + 1).padStart(4, '0')}`;
+      const maxMinResult = await db.select({ maxNum: sql<string>`MAX(minutes_number)` }).from(meetingMinutes);
+      const lastMinNum = maxMinResult[0]?.maxNum ? parseInt(maxMinResult[0].maxNum.replace(/\D/g, '').slice(-4)) : 0;
+      const minutesNumber = `MIN-${year}-${String(lastMinNum + 1).padStart(4, '0')}`;
       
       const data = insertMeetingMinutesSchema.parse({
         ...req.body,
@@ -829,8 +831,9 @@ export function registerGovernanceRoutes(app: Express) {
   app.post("/api/governance/resolutions", isAuthenticated, requirePermission("governance_resolutions", "create"), async (req, res) => {
     try {
       const year = new Date().getFullYear();
-      const count = await db.select({ count: sql<number>`count(*)` }).from(boardResolutions);
-      const resolutionNumber = `RES-${year}-${String((count[0]?.count || 0) + 1).padStart(4, '0')}`;
+      const maxResResult = await db.select({ maxNum: sql<string>`MAX(resolution_number)` }).from(boardResolutions);
+      const lastResNum = maxResResult[0]?.maxNum ? parseInt(maxResResult[0].maxNum.replace(/\D/g, '').slice(-4)) : 0;
+      const resolutionNumber = `RES-${year}-${String(lastResNum + 1).padStart(4, '0')}`;
       
       const data = insertBoardResolutionSchema.parse({
         ...req.body,

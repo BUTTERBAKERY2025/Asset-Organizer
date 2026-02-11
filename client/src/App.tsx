@@ -119,6 +119,7 @@ const GovernancePage = lazy(() => import("@/pages/governance"));
 const BoardMembersPage = lazy(() => import("@/pages/governance/board-members"));
 const ShareholdersPage = lazy(() => import("@/pages/governance/shareholders"));
 const GovernanceMeetingsPage = lazy(() => import("@/pages/governance/meetings"));
+const AssemblyMinutesPage = lazy(() => import("@/pages/governance/assembly-minutes"));
 const ResolutionsPage = lazy(() => import("@/pages/governance/resolutions"));
 const CompliancePage = lazy(() => import("@/pages/governance/compliance"));
 const ShareTransfersPage = lazy(() => import("@/pages/governance/share-transfers"));
@@ -334,6 +335,7 @@ function Router() {
       <Route path="/governance/board">{() => <ModulePage component={BoardMembersPage} module="governance_board" />}</Route>
       <Route path="/governance/shareholders">{() => <ModulePage component={ShareholdersPage} module="governance_shareholders" />}</Route>
       <Route path="/governance/meetings">{() => <ModulePage component={GovernanceMeetingsPage} module="governance_meetings" />}</Route>
+      <Route path="/governance/assembly-minutes">{() => <ModulePage component={AssemblyMinutesPage} module="governance_meetings" />}</Route>
       <Route path="/governance/resolutions">{() => <ModulePage component={ResolutionsPage} module="governance_resolutions" />}</Route>
       <Route path="/governance/compliance">{() => <ModulePage component={CompliancePage} module="governance_compliance" />}</Route>
       <Route path="/governance/transfers">{() => <ModulePage component={ShareTransfersPage} module="governance_transfers" />}</Route>

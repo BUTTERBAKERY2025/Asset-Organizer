@@ -64,7 +64,7 @@ const governanceModules: GovernanceModule[] = [
     icon: FileText,
     color: "text-emerald-600",
     bgColor: "bg-emerald-100",
-    href: "/governance/meetings",
+    href: "/governance/assembly-minutes",
   },
   {
     id: "shareholders",
