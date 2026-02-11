@@ -313,19 +313,43 @@ export default function AssemblyMinutesPage() {
     return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
   };
 
+  const fixHijriInContent = (content: string, meetingDate: Date): string => {
+    const correctHijri = computeHijriDate(meetingDate);
+    const correctParts = correctHijri.split('/');
+    const correctDay = parseInt(correctParts[0]);
+    const correctMonth = parseInt(correctParts[1]);
+    const correctYear = correctParts[2];
+    
+    const fixed = content.replace(
+      /(\d{1,2})\/(\d{1,2})\/(\d{4})هـ/g,
+      (match, d, m, y) => {
+        if (y === correctYear) {
+          return `${correctDay.toString().padStart(2, '0')}/${correctMonth.toString().padStart(2, '0')}/${correctYear}هـ`;
+        }
+        return match;
+      }
+    );
+    return fixed;
+  };
+
   const printMinutes = (m: MeetingMinutes) => {
     const meeting = getMeetingForMinutes(m.meetingId);
     const meetingDate = meeting?.meetingDate ? new Date(meeting.meetingDate) : new Date();
     const hijriDate = computeHijriDate(meetingDate);
     const hijriFull = formatHijriFull(meetingDate);
     const gregorianDate = meetingDate.toLocaleDateString('ar-SA-u-ca-gregory', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+    const gregorianShort = meetingDate.toLocaleDateString('en-GB');
+    const dayName = meetingDate.toLocaleDateString('ar-SA', { weekday: 'long' });
     const locationText = meeting?.locationType === "virtual" ? "عن بُعد عبر الوسائل الإلكترونية" : meeting?.locationType === "hybrid" ? "حضوري وعن بُعد" : "حضوري";
     const locationDetail = meeting?.location || meeting?.virtualMeetingLink || "";
     const assemblyType = meeting ? getAssemblyTypeLabel(meeting.meetingType) : "";
+    const timeText = meeting?.startTime ? `في تمام الساعة ${meeting.startTime} مساءً` : "";
 
     const attendees = Array.isArray(m.attendanceList) ? m.attendanceList : [];
     const decisions = Array.isArray(m.decisions) ? m.decisions : [];
     const discussionPoints = Array.isArray(m.discussionPoints) ? m.discussionPoints : [];
+
+    const contentWithFixedHijri = m.content ? fixHijriInContent(sanitize(m.content), meetingDate) : "";
 
     const attendeesRows = attendees.map((a: any, i: number) =>
       `<tr><td style="text-align:center;">${i + 1}</td><td>${sanitize(a.name)}</td><td style="text-align:center;">${(a.shares || 0).toLocaleString()}</td><td style="text-align:center;">${a.percentage || '0'}%</td><td style="text-align:center;">${a.status === 'present' ? 'حاضر' : a.status === 'proxy' ? 'بالوكالة' : 'غائب'}</td></tr>`
@@ -425,10 +449,23 @@ export default function AssemblyMinutesPage() {
     </div>
   </div>
 
-  ${m.content ? `
+  <div class="section">
+    <div class="section-title">الديباجة الرسمية</div>
+    <div class="content-text" style="text-align: center; font-size: 14px; line-height: 2.2;">
+      <strong>محضر ${sanitize(assemblyType)}</strong><br>
+      المنعقدة يوم ${dayName} ${hijriDate}هـ الموافق ${gregorianShort}م<br>
+      ${timeText} (${locationText})<br>
+      ${locationDetail ? `المكان: ${sanitize(locationDetail)}` : ''}
+    </div>
+    <div style="margin-top: 10px; padding: 8px 15px; background: #fafafa; border: 1px solid #eee; border-radius: 6px; line-height: 2; text-align: justify;">
+      بناءً على دعوة مجلس الإدارة الموجهة إلى مساهمي الشركة على عناوينهم المعتمدة لدى الشركة، انعقد اجتماع ${sanitize(assemblyType)} ${locationText} ${timeText} من التاريخ أعلاه، وذلك للنظر في جدول الأعمال التالي:
+    </div>
+  </div>
+
+  ${contentWithFixedHijri ? `
   <div class="section">
     <div class="section-title">محتوى المحضر</div>
-    <div class="content-text">${sanitize(m.content)}</div>
+    <div class="content-text">${contentWithFixedHijri}</div>
   </div>` : ''}
 
   ${discussionPoints.length > 0 ? `

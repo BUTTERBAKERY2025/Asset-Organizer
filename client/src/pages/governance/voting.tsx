@@ -290,6 +290,21 @@ export default function VotingPage() {
     
     const hijriDateStr = computeHijriDate(new Date());
     
+    const fixHijriInText = (text: string): string => {
+      return text.replace(
+        /(\d{1,2})\/(\d{1,2})\/(\d{4})هـ/g,
+        (match, d, m, y) => {
+          const origDate = new Date();
+          const correctHijri = computeHijriDate(origDate);
+          const parts = correctHijri.split('/');
+          if (y === parts[2]) {
+            return `${parts[0]}/${parts[1]}/${parts[2]}هـ`;
+          }
+          return match;
+        }
+      );
+    };
+    
     const sanitize = (text: string | undefined | null): string => {
       if (!text) return '';
       return text
@@ -505,7 +520,7 @@ export default function VotingPage() {
         
         <div class="resolution-section">
           <div class="resolution-title">نص القرار: ${sanitize(resolution.title)}</div>
-          <div class="resolution-text">${sanitize(resolution.description)}</div>
+          <div class="resolution-text">${fixHijriInText(sanitize(resolution.description))}</div>
         </div>
         
         ${pagesHtml}
