@@ -296,6 +296,221 @@ export default function AssemblyMinutesPage() {
     return type;
   };
 
+  const computeHijriDate = (date: Date): string => {
+    const gYear = date.getFullYear();
+    const gMonth = date.getMonth() + 1;
+    const gDay = date.getDate();
+    let y = gYear, m = gMonth;
+    if (m <= 2) { y -= 1; m += 12; }
+    const A = Math.floor(y / 100);
+    const B = 2 - A + Math.floor(A / 4);
+    const jd = Math.floor(365.25 * (y + 4716)) + Math.floor(30.6001 * (m + 1)) + gDay + B - 1524.5;
+    const jd1 = Math.floor(jd) + 0.5;
+    const hYear = Math.floor((30 * (jd1 - 1948439.5) + 10646) / 10631);
+    const hjd = (y2: number, m2: number, d2: number) => Math.floor((11 * y2 + 3) / 30) + 354 * y2 + 30 * m2 - Math.floor((m2 - 1) / 2) + d2 + 1948440 - 385;
+    const hMonth = Math.min(12, Math.ceil((jd1 - (29 + hjd(hYear, 1, 1))) / 29.5) + 1);
+    const hDay = Math.floor(jd1 - hjd(hYear, hMonth, 1)) + 1;
+    return `${hDay.toString().padStart(2, '0')}/${hMonth.toString().padStart(2, '0')}/${hYear}`;
+  };
+
+  const hijriMonths = ["محرم", "صفر", "ربيع الأول", "ربيع الثاني", "جمادى الأولى", "جمادى الآخرة", "رجب", "شعبان", "رمضان", "شوال", "ذو القعدة", "ذو الحجة"];
+  const hijriDays = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+
+  const formatHijriFull = (date: Date): string => {
+    const parts = computeHijriDate(date).split('/');
+    const day = parseInt(parts[0]);
+    const month = parseInt(parts[1]) - 1;
+    const year = parts[2];
+    const dayName = hijriDays[date.getDay()];
+    return `${dayName} ${day} ${hijriMonths[month] || ''} ${year}هـ`;
+  };
+
+  const sanitize = (text: string | undefined | null): string => {
+    if (!text) return '';
+    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+  };
+
+  const printMinutes = (m: MeetingMinutes) => {
+    const meeting = getMeetingForMinutes(m.meetingId);
+    const meetingDate = meeting?.meetingDate ? new Date(meeting.meetingDate) : new Date();
+    const hijriDate = computeHijriDate(meetingDate);
+    const hijriFull = formatHijriFull(meetingDate);
+    const gregorianDate = meetingDate.toLocaleDateString('ar-SA-u-ca-gregory', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+    const locationText = meeting?.locationType === "virtual" ? "عن بُعد عبر الوسائل الإلكترونية" : meeting?.locationType === "hybrid" ? "حضوري وعن بُعد" : "حضوري";
+    const locationDetail = meeting?.location || meeting?.virtualMeetingLink || "";
+    const assemblyType = meeting ? getAssemblyTypeLabel(meeting.meetingType) : "";
+
+    const attendees = Array.isArray(m.attendanceList) ? m.attendanceList : [];
+    const decisions = Array.isArray(m.decisions) ? m.decisions : [];
+    const discussionPoints = Array.isArray(m.discussionPoints) ? m.discussionPoints : [];
+
+    const attendeesRows = attendees.map((a: any, i: number) =>
+      `<tr><td style="text-align:center;">${i + 1}</td><td>${sanitize(a.name)}</td><td style="text-align:center;">${(a.shares || 0).toLocaleString()}</td><td style="text-align:center;">${a.percentage || '0'}%</td><td style="text-align:center;">${a.status === 'present' ? 'حاضر' : a.status === 'proxy' ? 'بالوكالة' : 'غائب'}</td></tr>`
+    ).join('');
+
+    const decisionsHtml = decisions.map((d: any, i: number) =>
+      `<div style="margin-bottom:8px;"><strong>${d.number || i + 1}.</strong> ${sanitize(d.description)}${d.responsible ? ` <span style="color:#666;">(المسؤول: ${sanitize(d.responsible)})</span>` : ''}</div>`
+    ).join('');
+
+    const printContent = `<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="utf-8">
+  <title>محضر ${sanitize(m.minutesNumber)} - شركة الزبد الأفضل التجارية</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Cairo', sans-serif; padding: 30px 40px; color: #1a1a1a; line-height: 1.8; font-size: 13px; direction: rtl; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #b8860b; padding-bottom: 15px; margin-bottom: 20px; }
+    .header-right { text-align: right; }
+    .header-left { text-align: left; }
+    .logo { font-size: 22px; font-weight: 800; color: #b8860b; letter-spacing: 2px; }
+    .company-name { font-size: 16px; font-weight: 700; color: #333; margin-top: 2px; }
+    .company-name-en { font-size: 11px; color: #888; }
+    .cr-number { font-size: 10px; color: #999; margin-top: 3px; }
+    .date-box { text-align: left; font-size: 11px; }
+    .date-box .label { color: #888; font-size: 9px; }
+    .date-box .value { font-weight: 600; color: #333; }
+    .doc-title { text-align: center; font-size: 18px; font-weight: 700; color: #b8860b; margin: 15px 0 5px; padding: 10px; background: linear-gradient(135deg, #fdf6e3 0%, #fff8e7 100%); border: 1px solid #e8d5a3; border-radius: 8px; }
+    .doc-subtitle { text-align: center; font-size: 13px; color: #666; margin-bottom: 15px; }
+    .doc-number { text-align: center; font-size: 12px; color: #666; margin-bottom: 20px; font-family: monospace; }
+    .info-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+    .info-item { background: #f9f9f9; border: 1px solid #e5e5e5; border-radius: 6px; padding: 10px; text-align: center; }
+    .info-item .label { font-size: 10px; color: #888; margin-bottom: 3px; }
+    .info-item .value { font-size: 12px; font-weight: 600; color: #333; }
+    .section { margin-bottom: 20px; }
+    .section-title { font-size: 14px; font-weight: 700; color: #b8860b; padding: 8px 12px; background: #fdf6e3; border-right: 4px solid #b8860b; border-radius: 0 6px 6px 0; margin-bottom: 10px; }
+    .content-text { padding: 10px 15px; background: #fafafa; border: 1px solid #eee; border-radius: 6px; line-height: 2; text-align: justify; white-space: pre-wrap; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+    th { background: #b8860b; color: white; padding: 8px 10px; font-size: 11px; font-weight: 600; }
+    td { padding: 7px 10px; border-bottom: 1px solid #eee; font-size: 11px; }
+    tr:nth-child(even) td { background: #fafafa; }
+    .signatures { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 30px; padding-top: 20px; border-top: 2px solid #e5e5e5; }
+    .sig-box { text-align: center; padding: 15px; }
+    .sig-label { font-size: 10px; color: #888; margin-bottom: 5px; }
+    .sig-name { font-size: 12px; font-weight: 600; margin-bottom: 20px; }
+    .sig-line { border-bottom: 1px solid #999; width: 80%; margin: 0 auto; padding-top: 40px; }
+    .footer { border-top: 2px solid #b8860b; padding-top: 10px; margin-top: 30px; display: flex; justify-content: space-between; font-size: 9px; color: #999; }
+    .watermark { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-45deg); font-size: 80px; color: rgba(184,134,11,0.04); font-weight: 800; pointer-events: none; z-index: -1; }
+    @media print {
+      body { padding: 15px 25px; }
+      .watermark { display: block; }
+      @page { margin: 10mm; size: A4; }
+    }
+  </style>
+</head>
+<body>
+  <div class="watermark">BUTTER BAKERY</div>
+  
+  <div class="header">
+    <div class="header-right">
+      <div class="logo">BUTTER BAKERY</div>
+      <div class="company-name">شركة الزبد الأفضل التجارية</div>
+      <div class="company-name-en">Butter Bakery Trading Co.</div>
+      <div class="cr-number">سجل تجاري: 7026155296</div>
+    </div>
+    <div class="header-left">
+      <div class="date-box">
+        <div class="label">التاريخ الهجري</div>
+        <div class="value">${hijriDate}هـ</div>
+        <div class="label" style="margin-top:5px;">التاريخ الميلادي</div>
+        <div class="value">${meetingDate.toLocaleDateString('en-GB')}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="doc-title">محضر ${sanitize(assemblyType)}</div>
+  <div class="doc-subtitle">${sanitize(m.summary || meeting?.title || '')}</div>
+  <div class="doc-number">رقم المحضر: ${sanitize(m.minutesNumber)}</div>
+
+  <div class="info-grid">
+    <div class="info-item">
+      <div class="label">التاريخ</div>
+      <div class="value">${gregorianDate}</div>
+    </div>
+    <div class="info-item">
+      <div class="label">الوقت</div>
+      <div class="value">${meeting?.startTime || '-'} - ${meeting?.endTime || '-'}</div>
+    </div>
+    <div class="info-item">
+      <div class="label">نوع الانعقاد</div>
+      <div class="value">${locationText}</div>
+    </div>
+    <div class="info-item">
+      <div class="label">المكان</div>
+      <div class="value">${sanitize(locationDetail) || '-'}</div>
+    </div>
+  </div>
+
+  ${m.content ? `
+  <div class="section">
+    <div class="section-title">محتوى المحضر</div>
+    <div class="content-text">${sanitize(m.content)}</div>
+  </div>` : ''}
+
+  ${discussionPoints.length > 0 ? `
+  <div class="section">
+    <div class="section-title">جدول الأعمال</div>
+    <div class="content-text">${discussionPoints.map((p: any, i: number) => `${i + 1}. ${sanitize(p.topic)}`).join('<br>')}</div>
+  </div>` : ''}
+
+  ${attendees.length > 0 ? `
+  <div class="section">
+    <div class="section-title">قائمة الحضور (${attendees.length} مساهم)</div>
+    <table>
+      <thead>
+        <tr><th>#</th><th>اسم المساهم</th><th>عدد الأسهم</th><th>النسبة</th><th>الحالة</th></tr>
+      </thead>
+      <tbody>${attendeesRows}</tbody>
+    </table>
+  </div>` : ''}
+
+  ${decisions.length > 0 ? `
+  <div class="section">
+    <div class="section-title">القرارات المتخذة (${decisions.length})</div>
+    <div class="content-text">${decisionsHtml}</div>
+  </div>` : ''}
+
+  <div class="signatures">
+    <div class="sig-box">
+      <div class="sig-label">رئيس مجلس الإدارة</div>
+      <div class="sig-name">________________</div>
+      <div class="sig-line"></div>
+      <div style="font-size:9px;color:#999;margin-top:5px;">التوقيع</div>
+    </div>
+    <div class="sig-box">
+      <div class="sig-label">أمين السر</div>
+      <div class="sig-name">________________</div>
+      <div class="sig-line"></div>
+      <div style="font-size:9px;color:#999;margin-top:5px;">التوقيع</div>
+    </div>
+    <div class="sig-box">
+      <div class="sig-label">جامع الأصوات</div>
+      <div class="sig-name">________________</div>
+      <div class="sig-line"></div>
+      <div style="font-size:9px;color:#999;margin-top:5px;">التوقيع</div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <span>شركة الزبد الأفضل التجارية | سجل تجاري: 7026155296</span>
+    <span>رقم المحضر: ${sanitize(m.minutesNumber)} | ${hijriFull} الموافق ${meetingDate.toLocaleDateString('en-GB')}</span>
+  </div>
+</body>
+</html>`;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+      setTimeout(() => printWindow.print(), 500);
+    }
+  };
+
+  const exportMinutesAsPdf = (m: MeetingMinutes) => {
+    printMinutes(m);
+  };
+
   const assemblyMeetingIds = new Set(
     meetings
       .filter(m => m.meetingType === "ordinary_assembly" || m.meetingType === "extraordinary_assembly")
@@ -454,6 +669,26 @@ export default function AssemblyMinutesPage() {
                             >
                               <Eye className="h-4 w-4" />
                               عرض
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-1"
+                              onClick={() => printMinutes(m)}
+                              data-testid={`print-minutes-${m.id}`}
+                            >
+                              <Printer className="h-4 w-4" />
+                              طباعة
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-1"
+                              onClick={() => exportMinutesAsPdf(m)}
+                              data-testid={`export-minutes-${m.id}`}
+                            >
+                              <Download className="h-4 w-4" />
+                              تصدير
                             </Button>
                             <Button
                               variant="outline"
@@ -772,6 +1007,29 @@ export default function AssemblyMinutesPage() {
                       {meeting && <Badge variant="outline">{getAssemblyTypeLabel(meeting.meetingType)}</Badge>}
                     </DialogDescription>
                   </DialogHeader>
+
+                  <div className="flex gap-2 mb-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1"
+                      onClick={() => printMinutes(selectedMinutes)}
+                      data-testid="detail-print-minutes"
+                    >
+                      <Printer className="h-4 w-4" />
+                      طباعة المحضر
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1"
+                      onClick={() => exportMinutesAsPdf(selectedMinutes)}
+                      data-testid="detail-export-minutes"
+                    >
+                      <Download className="h-4 w-4" />
+                      تصدير PDF
+                    </Button>
+                  </div>
 
                   <div className="space-y-4">
                     {meeting && (

@@ -276,11 +276,29 @@ export default function VotingPage() {
     window.open(`mailto:${token.shareholderEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
   };
 
+  const computeHijriDate = (date: Date): string => {
+    const gYear = date.getFullYear();
+    const gMonth = date.getMonth() + 1;
+    const gDay = date.getDate();
+    let y = gYear, m = gMonth;
+    if (m <= 2) { y -= 1; m += 12; }
+    const A = Math.floor(y / 100);
+    const B = 2 - A + Math.floor(A / 4);
+    const jd = Math.floor(365.25 * (y + 4716)) + Math.floor(30.6001 * (m + 1)) + gDay + B - 1524.5;
+    const jd1 = Math.floor(jd) + 0.5;
+    const hYear = Math.floor((30 * (jd1 - 1948439.5) + 10646) / 10631);
+    const hjd = (y2: number, m2: number, d2: number) => Math.floor((11 * y2 + 3) / 30) + 354 * y2 + 30 * m2 - Math.floor((m2 - 1) / 2) + d2 + 1948440 - 385;
+    const hMonth = Math.min(12, Math.ceil((jd1 - (29 + hjd(hYear, 1, 1))) / 29.5) + 1);
+    const hDay = Math.floor(jd1 - hjd(hYear, hMonth, 1)) + 1;
+    return `${hDay.toString().padStart(2, '0')}/${hMonth.toString().padStart(2, '0')}/${hYear}`;
+  };
+
   const printResolutionWithSignatures = (resolution: BoardResolution, tokens: VotingTokenData[]) => {
     const votedTokens = tokens.filter(t => t.status === 'voted');
     const voteLabels: Record<string, string> = { for: 'موافق', against: 'رافض', abstain: 'ممتنع' };
     
-    // Sanitize text to prevent XSS/HTML injection
+    const hijriDateStr = computeHijriDate(new Date());
+    
     const sanitize = (text: string | undefined | null): string => {
       if (!text) return '';
       return text
@@ -466,7 +484,7 @@ export default function VotingPage() {
           </div>
           <div class="header-left">
             <div style="color: #666; font-size: 10px;">التاريخ الهجري</div>
-            <div style="font-weight: 600;">${new Date().toLocaleDateString('en-GB-u-ca-islamic')}</div>
+            <div style="font-weight: 600;">${hijriDateStr}هـ</div>
             <div style="color: #666; font-size: 10px; margin-top: 5px;">التاريخ الميلادي</div>
             <div style="font-weight: 600;">${new Date().toLocaleDateString('en-GB')}</div>
           </div>
