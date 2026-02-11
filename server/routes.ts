@@ -19133,9 +19133,37 @@ export async function registerRoutes(
         return res.status(403).json({ error: "لا يمكنك عرض بيانات فرع آخر" });
       }
 
-      const employees = await db.select().from(branchEmployees).where(
+      const branchEmps = await db.select().from(branchEmployees).where(
         and(eq(branchEmployees.branchId, branchId), eq(branchEmployees.status, "active"))
       ).orderBy(branchEmployees.employeeName);
+
+      const branchUsersList = await storage.getAllUsers();
+      const branchUsersFiltered = branchUsersList.filter(u => u.branchId === branchId && u.isActive !== false);
+
+      const branchEmpIds = new Set(branchEmps.map(e => String(e.id)));
+      const allEmployeeEntries: Array<{ id: number; employeeName: string; employeeNumber?: string; position?: string; source: string }> = [];
+
+      for (const emp of branchEmps) {
+        allEmployeeEntries.push({
+          id: emp.id,
+          employeeName: emp.employeeName,
+          employeeNumber: emp.employeeNumber || undefined,
+          position: emp.position || undefined,
+          source: "branch_employee",
+        });
+      }
+
+      for (const u of branchUsersFiltered) {
+        if (!branchEmpIds.has(String(u.id))) {
+          allEmployeeEntries.push({
+            id: u.id,
+            employeeName: [u.firstName, u.lastName].filter(Boolean).join(" ") || u.username,
+            employeeNumber: undefined,
+            position: u.jobTitle || u.role || undefined,
+            source: "user",
+          });
+        }
+      }
 
       const credentials = await db.select().from(biometricCredentials).where(
         eq(biometricCredentials.branchId, branchId)
@@ -19148,7 +19176,7 @@ export async function registerRoutes(
         credentialMap.get(key).push(cred);
       }
 
-      const result = employees.map(emp => {
+      const result = allEmployeeEntries.map(emp => {
         const empCredentials = credentialMap.get(String(emp.id)) || [];
         const activeCredentials = empCredentials.filter(c => c.isActive);
         return {
