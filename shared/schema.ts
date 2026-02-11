@@ -7530,9 +7530,12 @@ export type InsertResolutionVote = z.infer<typeof insertResolutionVoteSchema>;
 export const resolutionSignatures = pgTable("resolution_signatures", {
   id: serial("id").primaryKey(),
   resolutionId: integer("resolution_id").notNull().references(() => boardResolutions.id, { onDelete: "cascade" }),
-  boardMemberId: integer("board_member_id").notNull().references(() => boardMembers.id, { onDelete: "cascade" }),
-  signatureToken: text("signature_token").notNull().unique(), // رمز فريد للتوقيع عبر الرابط
-  signatureData: text("signature_data"), // بيانات التوقيع (base64 encoded)
+  boardMemberId: integer("board_member_id").references(() => boardMembers.id, { onDelete: "cascade" }),
+  shareholderId: integer("shareholder_id").references(() => shareholders.id, { onDelete: "cascade" }),
+  signerName: text("signer_name"),
+  signerType: text("signer_type").default("board_member"), // board_member, shareholder
+  signatureToken: text("signature_token").notNull().unique(),
+  signatureData: text("signature_data"),
   signatureType: text("signature_type").default("draw"), // draw, type, upload
   status: text("status").default("pending").notNull(), // pending, signed, declined, expired
   signedAt: timestamp("signed_at"),
@@ -7548,9 +7551,9 @@ export const resolutionSignatures = pgTable("resolution_signatures", {
 }, (table) => [
   index("idx_resolution_signatures_resolution").on(table.resolutionId),
   index("idx_resolution_signatures_member").on(table.boardMemberId),
+  index("idx_resolution_signatures_shareholder").on(table.shareholderId),
   index("idx_resolution_signatures_token").on(table.signatureToken),
   index("idx_resolution_signatures_status").on(table.status),
-  unique("idx_resolution_signatures_unique").on(table.resolutionId, table.boardMemberId),
 ]);
 
 export const insertResolutionSignatureSchema = createInsertSchema(resolutionSignatures).omit({
