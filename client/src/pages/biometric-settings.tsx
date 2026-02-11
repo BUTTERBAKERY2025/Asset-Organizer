@@ -39,6 +39,9 @@ import {
   Tablet,
   MoreVertical,
   Info,
+  Plus,
+  Scan,
+  ShieldCheck,
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Link } from "wouter";
@@ -116,8 +119,13 @@ export default function BiometricSettingsPage() {
   const [deactivateCredentialId, setDeactivateCredentialId] = useState<number | null>(null);
   const [deactivateReason, setDeactivateReason] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [showRegisterDialog, setShowRegisterDialog] = useState(false);
+  const [registerEmployee, setRegisterEmployee] = useState<EmployeeBiometricData | null>(null);
+  const [registerMethod, setRegisterMethod] = useState<string>("fingerprint");
+  const [registerStep, setRegisterStep] = useState<"choose" | "scanning" | "success" | "error">("choose");
+  const [registerError, setRegisterError] = useState("");
   const { toast } = useToast();
-  const { isAdmin } = useAuth();
+  const { isAdmin, user: currentUser } = useAuth();
   const queryClient = useQueryClient();
 
   const { data: branches = [] } = useQuery<Branch[]>({
@@ -237,6 +245,132 @@ export default function BiometricSettingsPage() {
 
   const registeredCount = employeesData.filter(e => e.biometricStatus === "registered").length;
   const notRegisteredCount = employeesData.filter(e => e.biometricStatus === "not_registered").length;
+
+  const openRegisterDialog = (emp: EmployeeBiometricData) => {
+    setRegisterEmployee(emp);
+    setRegisterMethod("fingerprint");
+    setRegisterStep("choose");
+    setRegisterError("");
+    setShowRegisterDialog(true);
+  };
+
+  const detectDeviceType = (): string => {
+    const ua = navigator.userAgent.toLowerCase();
+    if (/ipad/.test(ua)) return "tablet";
+    if (/iphone/.test(ua)) return "mobile_ios";
+    if (/android/.test(ua) && /mobile/.test(ua)) return "mobile_android";
+    if (/android/.test(ua)) return "tablet";
+    return "desktop";
+  };
+
+  const detectDeviceModel = (): string => {
+    const ua = navigator.userAgent;
+    if (/iPhone/.test(ua)) return "iPhone";
+    if (/iPad/.test(ua)) return "iPad";
+    const androidMatch = ua.match(/;\s*([^;)]+)\s*Build/);
+    if (androidMatch) return androidMatch[1].trim();
+    if (/Mac/.test(ua)) return "Mac";
+    if (/Windows/.test(ua)) return "Windows PC";
+    return "جهاز غير معروف";
+  };
+
+  const handleStartRegistration = async () => {
+    if (!registerEmployee || !selectedBranch) return;
+    setRegisterStep("scanning");
+    setRegisterError("");
+
+    try {
+      const challengeRes = await fetch("/api/biometric-settings/register/challenge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          employeeId: String(registerEmployee.employee.id),
+          employeeName: registerEmployee.employee.employeeName,
+          branchId: selectedBranch,
+        }),
+      });
+
+      if (!challengeRes.ok) {
+        const err = await challengeRes.json();
+        throw new Error(err.error || "فشل في إنشاء تحدي التسجيل");
+      }
+
+      const options = await challengeRes.json();
+
+      if (!window.PublicKeyCredential) {
+        throw new Error("متصفحك لا يدعم تسجيل البصمة. استخدم متصفح حديث مثل Chrome أو Safari");
+      }
+
+      const challengeBuffer = Uint8Array.from(atob(options.challenge.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
+      const userIdBuffer = Uint8Array.from(atob(options.user.id.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
+
+      const createOptions: PublicKeyCredentialCreationOptions = {
+        challenge: challengeBuffer,
+        rp: { name: options.rp.name, id: window.location.hostname },
+        user: {
+          id: userIdBuffer,
+          name: options.user.name,
+          displayName: options.user.displayName,
+        },
+        pubKeyCredParams: options.pubKeyCredParams,
+        authenticatorSelection: {
+          authenticatorAttachment: "platform" as AuthenticatorAttachment,
+          userVerification: "required" as UserVerificationRequirement,
+          residentKey: "preferred" as ResidentKeyRequirement,
+        },
+        timeout: 60000,
+        attestation: "none" as AttestationConveyancePreference,
+      };
+
+      const credential = await navigator.credentials.create({
+        publicKey: createOptions,
+      }) as PublicKeyCredential;
+
+      if (!credential) throw new Error("تم إلغاء عملية التسجيل");
+
+      const response = credential.response as AuthenticatorAttestationResponse;
+      const credentialIdBase64 = btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(credential.rawId))));
+      const pubKeyData = response.getPublicKey?.() || response.attestationObject;
+      const publicKeyBase64 = btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(pubKeyData))));
+
+      const completeRes = await fetch("/api/biometric-settings/register/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          employeeId: String(registerEmployee.employee.id),
+          employeeName: registerEmployee.employee.employeeName,
+          branchId: selectedBranch,
+          credentialId: credentialIdBase64,
+          publicKey: publicKeyBase64,
+          registrationMethod: registerMethod,
+          deviceType: detectDeviceType(),
+          deviceModel: detectDeviceModel(),
+        }),
+      });
+
+      if (!completeRes.ok) {
+        const err = await completeRes.json();
+        throw new Error(err.error || "فشل في حفظ البصمة");
+      }
+
+      setRegisterStep("success");
+      queryClient.invalidateQueries({ queryKey: ["/api/biometric-settings/branch", selectedBranch] });
+      queryClient.invalidateQueries({ queryKey: ["/api/biometric-settings/stats"] });
+      toast({ title: "تم تسجيل البصمة بنجاح", description: `تم تسجيل بصمة ${registerEmployee.employee.employeeName}` });
+    } catch (err: any) {
+      console.error("Biometric registration error:", err);
+      if (err.name === "NotAllowedError") {
+        setRegisterError("تم رفض الوصول للبصمة. تأكد من السماح بالبصمة في إعدادات الجهاز");
+      } else if (err.name === "NotSupportedError") {
+        setRegisterError("جهازك لا يدعم هذا النوع من التسجيل البيومتري");
+      } else {
+        setRegisterError(err.message || "حدث خطأ أثناء تسجيل البصمة");
+      }
+      setRegisterStep("error");
+    }
+  };
 
   const openEditDialog = (cred: BiometricCredentialInfo) => {
     setEditingCredential(cred);
@@ -493,6 +627,15 @@ export default function BiometricSettingsPage() {
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-52">
+                                  <DropdownMenuItem
+                                    onClick={() => openRegisterDialog(item)}
+                                    className="text-purple-700 focus:text-purple-700 focus:bg-purple-50"
+                                    data-testid={`register-btn-${item.employee.id}`}
+                                  >
+                                    <Plus className="h-4 w-4 ml-2" />
+                                    تسجيل بصمة جديدة
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
                                   <DropdownMenuItem onClick={() => { setSelectedEmployee(item); setShowDetailsDialog(true); }}>
                                     <Eye className="h-4 w-4 ml-2" />
                                     عرض التفاصيل
@@ -831,6 +974,189 @@ export default function BiometricSettingsPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        <Dialog open={showRegisterDialog} onOpenChange={(open) => { if (!open) { setShowRegisterDialog(false); setRegisterStep("choose"); } }}>
+          <DialogContent dir="rtl" className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-xl">
+                <div className="p-2 bg-purple-100 rounded-lg">
+                  <Fingerprint className="h-6 w-6 text-purple-600" />
+                </div>
+                تسجيل بصمة جديدة
+              </DialogTitle>
+            </DialogHeader>
+
+            {registerEmployee && (
+              <div className="bg-gray-50 rounded-lg p-3 mb-2">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+                    <Users className="h-5 w-5 text-purple-600" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-sm">{registerEmployee.employee.employeeName}</p>
+                    <p className="text-xs text-gray-500">
+                      {registerEmployee.employee.employeeNumber && `رقم: ${registerEmployee.employee.employeeNumber} • `}
+                      {(registerEmployee.employee as any).position || registerEmployee.employee.jobTitle || "موظف"}
+                    </p>
+                  </div>
+                  {registerEmployee.totalCredentials > 0 && (
+                    <Badge variant="outline" className="mr-auto text-xs">
+                      {registerEmployee.totalCredentials} بصمة مسجلة
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {registerStep === "choose" && (
+              <div className="space-y-4">
+                <div>
+                  <Label className="text-sm font-medium mb-3 block">اختر نوع التسجيل البيومتري</Label>
+                  <div className="grid grid-cols-3 gap-3">
+                    <button
+                      onClick={() => setRegisterMethod("fingerprint")}
+                      className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
+                        registerMethod === "fingerprint"
+                          ? "border-purple-500 bg-purple-50 shadow-md"
+                          : "border-gray-200 hover:border-purple-300 hover:bg-purple-50/50"
+                      }`}
+                      data-testid="method-fingerprint"
+                    >
+                      <Fingerprint className={`h-8 w-8 ${registerMethod === "fingerprint" ? "text-purple-600" : "text-gray-400"}`} />
+                      <span className={`text-xs font-medium ${registerMethod === "fingerprint" ? "text-purple-700" : "text-gray-600"}`}>
+                        بصمة الإصبع
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => setRegisterMethod("face")}
+                      className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
+                        registerMethod === "face"
+                          ? "border-blue-500 bg-blue-50 shadow-md"
+                          : "border-gray-200 hover:border-blue-300 hover:bg-blue-50/50"
+                      }`}
+                      data-testid="method-face"
+                    >
+                      <ScanFace className={`h-8 w-8 ${registerMethod === "face" ? "text-blue-600" : "text-gray-400"}`} />
+                      <span className={`text-xs font-medium ${registerMethod === "face" ? "text-blue-700" : "text-gray-600"}`}>
+                        التعرف على الوجه
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => setRegisterMethod("pin")}
+                      className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
+                        registerMethod === "pin"
+                          ? "border-amber-500 bg-amber-50 shadow-md"
+                          : "border-gray-200 hover:border-amber-300 hover:bg-amber-50/50"
+                      }`}
+                      data-testid="method-pin"
+                    >
+                      <KeyRound className={`h-8 w-8 ${registerMethod === "pin" ? "text-amber-600" : "text-gray-400"}`} />
+                      <span className={`text-xs font-medium ${registerMethod === "pin" ? "text-amber-700" : "text-gray-600"}`}>
+                        رمز PIN
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-blue-50 rounded-lg p-3 flex gap-2">
+                  <Info className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
+                  <div className="text-xs text-blue-700">
+                    <p className="font-medium mb-1">كيف يعمل التسجيل؟</p>
+                    <p>عند الضغط على "بدء التسجيل"، سيطلب منك الجهاز استخدام {
+                      registerMethod === "fingerprint" ? "بصمة الإصبع" :
+                      registerMethod === "face" ? "التعرف على الوجه" : "رمز PIN الخاص بالجهاز"
+                    } لتأكيد الهوية. تأكد أن الموظف موجود لتنفيذ العملية.</p>
+                  </div>
+                </div>
+
+                <Button
+                  className="w-full bg-purple-600 hover:bg-purple-700 h-12 text-base"
+                  onClick={handleStartRegistration}
+                  data-testid="start-registration-btn"
+                >
+                  <Scan className="h-5 w-5 ml-2" />
+                  بدء التسجيل
+                </Button>
+              </div>
+            )}
+
+            {registerStep === "scanning" && (
+              <div className="text-center py-8 space-y-4">
+                <div className="relative mx-auto w-24 h-24">
+                  <div className="absolute inset-0 bg-purple-100 rounded-full animate-ping opacity-30" />
+                  <div className="relative w-24 h-24 bg-purple-100 rounded-full flex items-center justify-center">
+                    {registerMethod === "face" ? (
+                      <ScanFace className="h-12 w-12 text-purple-600 animate-pulse" />
+                    ) : registerMethod === "pin" ? (
+                      <KeyRound className="h-12 w-12 text-purple-600 animate-pulse" />
+                    ) : (
+                      <Fingerprint className="h-12 w-12 text-purple-600 animate-pulse" />
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-800">جاري التسجيل...</h3>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {registerMethod === "fingerprint" && "ضع إصبعك على مستشعر البصمة"}
+                    {registerMethod === "face" && "وجّه الكاميرا نحو وجهك"}
+                    {registerMethod === "pin" && "أدخل رمز PIN الخاص بالجهاز"}
+                  </p>
+                </div>
+                <Loader2 className="h-6 w-6 text-purple-500 animate-spin mx-auto" />
+              </div>
+            )}
+
+            {registerStep === "success" && (
+              <div className="text-center py-8 space-y-4">
+                <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+                  <ShieldCheck className="h-10 w-10 text-green-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-green-700">تم التسجيل بنجاح!</h3>
+                  <p className="text-sm text-gray-500 mt-1">
+                    تم حفظ بصمة {registerEmployee?.employee.employeeName} بنجاح
+                  </p>
+                </div>
+                <Button
+                  className="bg-green-600 hover:bg-green-700"
+                  onClick={() => { setShowRegisterDialog(false); setRegisterStep("choose"); }}
+                  data-testid="close-success-btn"
+                >
+                  <CheckCircle className="h-4 w-4 ml-2" />
+                  إغلاق
+                </Button>
+              </div>
+            )}
+
+            {registerStep === "error" && (
+              <div className="text-center py-6 space-y-4">
+                <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto">
+                  <AlertTriangle className="h-10 w-10 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-red-700">فشل التسجيل</h3>
+                  <p className="text-sm text-red-600 mt-2 bg-red-50 rounded-lg p-3">{registerError}</p>
+                </div>
+                <div className="flex gap-2 justify-center">
+                  <Button
+                    variant="outline"
+                    onClick={() => { setShowRegisterDialog(false); setRegisterStep("choose"); }}
+                  >
+                    إغلاق
+                  </Button>
+                  <Button
+                    className="bg-purple-600 hover:bg-purple-700"
+                    onClick={() => setRegisterStep("choose")}
+                    data-testid="retry-registration-btn"
+                  >
+                    <RefreshCw className="h-4 w-4 ml-2" />
+                    إعادة المحاولة
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );
