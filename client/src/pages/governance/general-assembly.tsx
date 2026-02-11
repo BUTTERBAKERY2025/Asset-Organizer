@@ -62,7 +62,7 @@ import {
   Ban,
   CalendarCheck
 } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 
 interface Shareholder {
   id: number;
@@ -150,6 +150,7 @@ export default function GeneralAssemblyPage() {
   });
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
 
   const { data: meetings = [], isLoading: meetingsLoading } = useQuery<GeneralAssembly[]>({
     queryKey: ["/api/governance/meetings"],
@@ -1012,17 +1013,41 @@ export default function GeneralAssemblyPage() {
                         <TableCell>
                           <Badge variant="outline">
                             {resolution.resolutionType === 'ordinary' ? 'عادي' : 
-                             resolution.resolutionType === 'extraordinary' ? 'غير عادي' : resolution.resolutionType}
+                             resolution.resolutionType === 'extraordinary' ? 'غير عادي' :
+                             resolution.resolutionType === 'general_assembly' ? 'جمعية عمومية' :
+                             resolution.resolutionType === 'extraordinary_assembly' ? 'جمعية غير عادية' :
+                             resolution.resolutionType}
                           </Badge>
                         </TableCell>
                         <TableCell>{getStatusBadge(resolution.status)}</TableCell>
                         <TableCell>
-                          <Link href="/governance/voting">
-                            <Button variant="outline" size="sm" className="gap-2">
-                              <Vote className="h-4 w-4" />
-                              تصويت
-                            </Button>
-                          </Link>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="gap-2"
+                            onClick={async () => {
+                              if (resolution.status !== 'voting' && resolution.status !== 'approved' && resolution.status !== 'rejected') {
+                                try {
+                                  const res = await fetch(`/api/governance/resolutions/${resolution.id}`, {
+                                    method: 'PATCH',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    credentials: 'include',
+                                    body: JSON.stringify({ status: 'voting' }),
+                                  });
+                                  if (res.ok) {
+                                    queryClient.invalidateQueries({ queryKey: ["/api/governance/resolutions"] });
+                                    toast({ title: "تم فتح التصويت على القرار بنجاح" });
+                                  }
+                                } catch (e) {
+                                  console.error('Failed to update status:', e);
+                                }
+                              }
+                              setLocation('/governance/voting');
+                            }}
+                          >
+                            <Vote className="h-4 w-4" />
+                            تصويت
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}
