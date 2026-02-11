@@ -332,7 +332,7 @@ export default function AssemblyMinutesPage() {
     return fixed;
   };
 
-  const printMinutes = (m: MeetingMinutes) => {
+  const printMinutes = async (m: MeetingMinutes) => {
     const meeting = getMeetingForMinutes(m.meetingId);
     const meetingDate = meeting?.meetingDate ? new Date(meeting.meetingDate) : new Date();
     const hijriDate = computeHijriDate(meetingDate);
@@ -358,6 +358,136 @@ export default function AssemblyMinutesPage() {
     const decisionsHtml = decisions.map((d: any, i: number) =>
       `<div style="margin-bottom:8px;"><strong>${d.number || i + 1}.</strong> ${sanitize(d.description)}${d.responsible ? ` <span style="color:#666;">(المسؤول: ${sanitize(d.responsible)})</span>` : ''}</div>`
     ).join('');
+
+    let votingResultsHtml = '';
+    let shareholderSignaturesHtml = '';
+    try {
+      const resolutionsRes = await fetch(`/api/governance/resolutions`, { credentials: 'include' });
+      if (resolutionsRes.ok) {
+        const allResolutions = await resolutionsRes.json();
+        const meetingResolutions = allResolutions.filter((r: any) => r.meetingId === m.meetingId);
+
+        if (meetingResolutions.length > 0) {
+          const perResolutionSections: string[] = [];
+          let allSignedTokens: any[] = [];
+
+          for (const resolution of meetingResolutions) {
+            try {
+              const tokensRes = await fetch(`/api/governance/resolutions/${resolution.id}/voting-tokens`, { credentials: 'include' });
+              if (!tokensRes.ok) continue;
+              const tokens = await tokensRes.json();
+              if (tokens.length === 0) continue;
+
+              const votedTokens = tokens.filter((t: any) => t.status === 'voted');
+              const forVotes = votedTokens.filter((t: any) => t.vote === 'for');
+              const againstVotes = votedTokens.filter((t: any) => t.vote === 'against');
+              const abstainVotes = votedTokens.filter((t: any) => t.vote === 'abstain');
+
+              const totalWeight = tokens.reduce((sum: number, t: any) => sum + (t.voteWeight || 0), 0);
+              const forWeight = forVotes.reduce((sum: number, t: any) => sum + (t.voteWeight || 0), 0);
+              const againstWeight = againstVotes.reduce((sum: number, t: any) => sum + (t.voteWeight || 0), 0);
+              const abstainWeight = abstainVotes.reduce((sum: number, t: any) => sum + (t.voteWeight || 0), 0);
+
+              const forPercent = totalWeight > 0 ? ((forWeight / totalWeight) * 100).toFixed(2) : '0';
+              const againstPercent = totalWeight > 0 ? ((againstWeight / totalWeight) * 100).toFixed(2) : '0';
+              const abstainPercent = totalWeight > 0 ? ((abstainWeight / totalWeight) * 100).toFixed(2) : '0';
+
+              const reqMajority = parseFloat(resolution.requiredMajority || '50');
+              const isApproved = parseFloat(forPercent) >= reqMajority;
+
+              const voteResultBadge = isApproved
+                ? '<span style="background:#dcfce7;color:#166534;padding:4px 12px;border-radius:12px;font-weight:700;font-size:12px;">✓ تمت الموافقة</span>'
+                : '<span style="background:#fee2e2;color:#991b1b;padding:4px 12px;border-radius:12px;font-weight:700;font-size:12px;">✕ لم تتم الموافقة</span>';
+
+              const votingDetailsRows = tokens.map((t: any, i: number) => {
+                const voteLabel = t.vote === 'for' ? 'موافق' : t.vote === 'against' ? 'معارض' : t.vote === 'abstain' ? 'ممتنع' : 'لم يصوت';
+                const voteColor = t.vote === 'for' ? '#166534' : t.vote === 'against' ? '#991b1b' : t.vote === 'abstain' ? '#92400e' : '#6b7280';
+                const votedDate = t.votedAt ? new Date(t.votedAt).toLocaleDateString('ar-SA-u-ca-gregory') : '-';
+                return `<tr>
+                  <td style="text-align:center;">${i + 1}</td>
+                  <td>${sanitize(t.shareholderName)}</td>
+                  <td style="text-align:center;">${(t.voteWeight || 0).toLocaleString()}</td>
+                  <td style="text-align:center;color:${voteColor};font-weight:600;">${voteLabel}</td>
+                  <td style="text-align:center;">${votedDate}</td>
+                </tr>`;
+              }).join('');
+
+              perResolutionSections.push(`
+    <div style="margin-bottom:20px;border:1px solid #e5e5e5;border-radius:8px;padding:15px;">
+      <div style="font-size:13px;font-weight:700;color:#333;margin-bottom:5px;">${sanitize(resolution.resolutionNumber)} - ${sanitize(resolution.title)}</div>
+      <div style="font-size:10px;color:#888;margin-bottom:10px;">الأغلبية المطلوبة: ${reqMajority}%</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;">
+        <div style="background:#dcfce7;border:1px solid #bbf7d0;border-radius:6px;padding:8px;text-align:center;">
+          <div style="font-size:9px;color:#166534;">موافق</div>
+          <div style="font-size:16px;font-weight:700;color:#166534;">${forWeight.toLocaleString()}</div>
+          <div style="font-size:9px;color:#166534;">${forPercent}%</div>
+        </div>
+        <div style="background:#fee2e2;border:1px solid #fecaca;border-radius:6px;padding:8px;text-align:center;">
+          <div style="font-size:9px;color:#991b1b;">معارض</div>
+          <div style="font-size:16px;font-weight:700;color:#991b1b;">${againstWeight.toLocaleString()}</div>
+          <div style="font-size:9px;color:#991b1b;">${againstPercent}%</div>
+        </div>
+        <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:6px;padding:8px;text-align:center;">
+          <div style="font-size:9px;color:#92400e;">ممتنع</div>
+          <div style="font-size:16px;font-weight:700;color:#92400e;">${abstainWeight.toLocaleString()}</div>
+          <div style="font-size:9px;color:#92400e;">${abstainPercent}%</div>
+        </div>
+        <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;padding:8px;text-align:center;">
+          <div style="font-size:9px;color:#0c4a6e;">النتيجة</div>
+          <div style="margin-top:3px;">${voteResultBadge}</div>
+        </div>
+      </div>
+      <div style="font-size:10px;color:#666;margin-bottom:6px;">المصوتون: ${votedTokens.length} من ${tokens.length} مساهم | إجمالي الأصوات: ${totalWeight.toLocaleString()} سهم</div>
+      <table>
+        <thead>
+          <tr><th>#</th><th>اسم المساهم</th><th>قوة التصويت (أسهم)</th><th>التصويت</th><th>تاريخ التصويت</th></tr>
+        </thead>
+        <tbody>${votingDetailsRows}</tbody>
+      </table>
+    </div>`);
+
+              const signed = votedTokens.filter((t: any) => t.signatureData);
+              allSignedTokens = [...allSignedTokens, ...signed];
+            } catch {}
+          }
+
+          if (perResolutionSections.length > 0) {
+            votingResultsHtml = `
+  <div class="section" style="page-break-before: auto;">
+    <div class="section-title">نتائج التصويت الإلكتروني (${perResolutionSections.length} قرار)</div>
+    ${perResolutionSections.join('')}
+  </div>`;
+          }
+
+          if (allSignedTokens.length > 0) {
+            const uniqueSigned = allSignedTokens.filter((t: any, i: number, arr: any[]) =>
+              arr.findIndex((x: any) => x.shareholderId === t.shareholderId) === i
+            );
+            const sigGridItems = uniqueSigned.map((t: any) => `
+              <div style="border:1px solid #e5e5e5;border-radius:8px;padding:12px;text-align:center;background:#fafafa;">
+                <div style="font-size:11px;font-weight:600;color:#333;margin-bottom:5px;">${sanitize(t.shareholderName)}</div>
+                <div style="font-size:9px;color:#888;margin-bottom:8px;">عدد الأسهم: ${(t.voteWeight || 0).toLocaleString()} | التصويت: ${t.vote === 'for' ? 'موافق' : t.vote === 'against' ? 'معارض' : 'ممتنع'}</div>
+                <img src="${t.signatureData}" alt="توقيع ${sanitize(t.shareholderName)}" style="max-width:180px;max-height:80px;border:1px solid #ddd;border-radius:4px;background:white;padding:4px;" />
+                <div style="font-size:8px;color:#aaa;margin-top:5px;">تم التوقيع: ${t.votedAt ? new Date(t.votedAt).toLocaleDateString('ar-SA-u-ca-gregory') + ' ' + new Date(t.votedAt).toLocaleTimeString('ar-SA') : '-'}</div>
+              </div>
+            `).join('');
+
+            shareholderSignaturesHtml = `
+  <div class="section" style="page-break-before: auto;">
+    <div class="section-title">توقيعات المساهمين الإلكترونية (${uniqueSigned.length} توقيع)</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+      ${sigGridItems}
+    </div>
+    <div style="margin-top:10px;padding:8px 12px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;font-size:10px;color:#0c4a6e;text-align:center;">
+      جميع التوقيعات أعلاه تم التحقق منها إلكترونياً عبر نظام التصويت الآمن لشركة الزبد الأفضل التجارية
+    </div>
+  </div>`;
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching voting data for print:', err);
+    }
 
     const printContent = `<!DOCTYPE html>
 <html dir="rtl" lang="ar">
@@ -490,6 +620,10 @@ export default function AssemblyMinutesPage() {
     <div class="section-title">القرارات المتخذة (${decisions.length})</div>
     <div class="content-text">${decisionsHtml}</div>
   </div>` : ''}
+
+  ${votingResultsHtml}
+
+  ${shareholderSignaturesHtml}
 
   <div class="signatures">
     <div class="sig-box">

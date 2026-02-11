@@ -15,7 +15,7 @@ const httpServer = createServer(app);
 app.set('trust proxy', 1);
 app.use(securityHeaders);
 app.use('/api/', (req, res, next) => {
-  if (req.path.startsWith('/public/')) {
+  if (req.path.startsWith('/public/') && req.method === 'GET') {
     return next();
   }
   return apiRateLimiter(req, res, next);
