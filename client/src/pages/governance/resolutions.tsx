@@ -57,6 +57,8 @@ const resolutionTypes = [
   { value: "emergency", label: "قرار طارئ" },
   { value: "administrative", label: "قرار إداري" },
   { value: "financial", label: "قرار مالي" },
+  { value: "general_assembly", label: "محضر الجمعية العمومية" },
+  { value: "extraordinary_assembly", label: "محضر الجمعية العمومية غير العادية" },
 ];
 
 const resolutionStatuses = [

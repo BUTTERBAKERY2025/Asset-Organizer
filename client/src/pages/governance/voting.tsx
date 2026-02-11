@@ -178,7 +178,7 @@ export default function VotingPage() {
     const savedMajority = Number(resolution.requiredMajority);
     
     // تحديد النوع والنسبة بناءً على نوع القرار
-    const isExtraordinary = resolution.resolutionType === 'extraordinary';
+    const isExtraordinary = resolution.resolutionType === 'extraordinary' || resolution.resolutionType === 'extraordinary_assembly';
     
     if (isExtraordinary) {
       // للقرارات غير العادية: نتحقق إذا كانت النسبة المحددة 75% (قرار جوهري)
@@ -475,7 +475,7 @@ export default function VotingPage() {
         <div class="info-grid">
           <div class="info-box">
             <div class="info-box-header">بيانات القرار</div>
-            <div class="info-row"><span class="info-label">نوع القرار:</span><span class="info-value">${resolution.resolutionType === 'ordinary' ? 'عادي' : resolution.resolutionType === 'extraordinary' ? 'غير عادي' : resolution.resolutionType === 'urgent' ? 'عاجل' : 'كتابي'}</span></div>
+            <div class="info-row"><span class="info-label">نوع القرار:</span><span class="info-value">${resolution.resolutionType === 'ordinary' || resolution.resolutionType === 'regular' ? 'قرار عادي' : resolution.resolutionType === 'extraordinary' || resolution.resolutionType === 'extraordinary_assembly' ? 'جمعية عمومية غير عادية' : resolution.resolutionType === 'general_assembly' ? 'محضر جمعية عمومية' : resolution.resolutionType === 'emergency' ? 'قرار طارئ' : resolution.resolutionType === 'administrative' ? 'قرار إداري' : resolution.resolutionType === 'financial' ? 'قرار مالي' : resolution.resolutionType === 'circular' ? 'قرار بالتمرير' : resolution.resolutionType}</span></div>
             <div class="info-row"><span class="info-label">الأغلبية المطلوبة:</span><span class="info-value">${requiredMajorityInfo.label} (${requiredMajorityInfo.percentage}%)</span></div>
             <div class="info-row"><span class="info-label">تاريخ انتهاء التصويت:</span><span class="info-value">${resolution.votingDeadline ? new Date(resolution.votingDeadline).toLocaleDateString('en-GB') : '-'}</span></div>
           </div>
