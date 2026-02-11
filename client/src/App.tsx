@@ -87,6 +87,7 @@ const MarketingExpensesPage = lazy(() => import("@/pages/marketing-expenses"));
 const MarketingSocialPage = lazy(() => import("@/pages/marketing-social"));
 const SocialResponsibilityPage = lazy(() => import("@/pages/marketing/social-responsibility"));
 const SettingsDashboardPage = lazy(() => import("@/pages/settings-dashboard"));
+const BiometricSettingsPage = lazy(() => import("@/pages/biometric-settings"));
 const ShiftManagementPage = lazy(() => import("@/pages/shift-management"));
 const AttendanceCheckPage = lazy(() => import("@/pages/attendance-check"));
 const TimesheetPage = lazy(() => import("@/pages/timesheet"));
@@ -305,6 +306,7 @@ function Router() {
       <Route path="/integrations">{() => <AdminPage component={IntegrationsPage} module="integrations" />}</Route>
       <Route path="/audit-logs">{() => <AdminPage component={AuditLogsPage} module="audit_logs" />}</Route>
       <Route path="/backups">{() => <AdminPage component={BackupsPage} module="backups" />}</Route>
+      <Route path="/biometric-settings">{() => <AdminPage component={BiometricSettingsPage} module="settings" />}</Route>
       
       {/* Warehouse - المخازن والتحويلات */}
       <Route path="/warehouse">{() => <ModulePage component={WarehouseDashboardPage} module="warehouse" />}</Route>

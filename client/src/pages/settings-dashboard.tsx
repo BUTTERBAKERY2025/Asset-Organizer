@@ -55,6 +55,7 @@ import {
   AlertTriangle,
   ChevronDown,
   ExternalLink,
+  Fingerprint,
 } from "lucide-react";
 
 interface SettingItem {
@@ -216,6 +217,17 @@ const settingsSections: SettingSection[] = [
         icon: FileText,
         path: "/employee-reports",
         keywords: ["تقرير", "موظف", "أداء", "reports"],
+      },
+      {
+        id: "biometric-settings",
+        title: "إعدادات بصمة الموظفين",
+        description: "إدارة تسجيل البصمة والأجهزة والتحكم الكامل بالبصمات",
+        icon: Fingerprint,
+        path: "/biometric-settings",
+        badge: "جديد",
+        badgeVariant: "default",
+        adminOnly: true,
+        keywords: ["بصمة", "وجه", "حضور", "جهاز", "موبايل", "biometric", "fingerprint"],
       },
     ],
   },

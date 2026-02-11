@@ -8558,9 +8558,17 @@ export const biometricCredentials = pgTable("biometric_credentials", {
   publicKey: text("public_key").notNull(),
   counter: integer("counter").default(0).notNull(),
   deviceInfo: text("device_info"),
+  deviceType: text("device_type"), // mobile_android, mobile_ios, tablet, desktop
+  deviceModel: text("device_model"), // Samsung Galaxy S24, iPhone 15, etc.
+  registrationMethod: text("registration_method").default("fingerprint"), // fingerprint, face, pin
   registeredBy: varchar("registered_by").references(() => users.id),
+  registeredByName: text("registered_by_name"),
   isActive: boolean("is_active").default(true).notNull(),
+  deactivatedAt: timestamp("deactivated_at"),
+  deactivatedBy: varchar("deactivated_by"),
+  deactivationReason: text("deactivation_reason"),
   lastUsedAt: timestamp("last_used_at"),
+  usageCount: integer("usage_count").default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   index("idx_biometric_employee").on(table.employeeId),
@@ -8571,6 +8579,10 @@ export const biometricCredentials = pgTable("biometric_credentials", {
 export const insertBiometricCredentialSchema = createInsertSchema(biometricCredentials).omit({
   id: true,
   lastUsedAt: true,
+  usageCount: true,
+  deactivatedAt: true,
+  deactivatedBy: true,
+  deactivationReason: true,
   createdAt: true,
 });
 

@@ -69,6 +69,8 @@ import {
   weeklyScheduleLocks,
   scheduleChangeAudit,
   cashierProductSales,
+  branchEmployees,
+  biometricCredentials,
 } from "@shared/schema";
 import { 
   generateSalaryClosingPdf, type SalaryClosingPdfData,
@@ -19108,6 +19110,239 @@ export async function registerRoutes(
   });
 
   // ============ End Biometric Endpoints ============
+
+  // Biometric Settings Admin APIs - إعدادات البصمة للمسؤول
+  const VALID_REGISTRATION_METHODS = ["fingerprint", "face", "pin"];
+  const VALID_DEVICE_TYPES = ["mobile_android", "mobile_ios", "tablet", "desktop"];
+
+  async function verifyBiometricOwnership(credentialId: number, currentUser: any): Promise<{ credential: any; error?: string }> {
+    const [credential] = await db.select().from(biometricCredentials).where(eq(biometricCredentials.id, credentialId));
+    if (!credential) return { credential: null, error: "البصمة غير موجودة" };
+    if (currentUser.role !== "admin" && currentUser.branchId !== credential.branchId) {
+      return { credential: null, error: "لا يمكنك تعديل بصمات فرع آخر" };
+    }
+    return { credential };
+  }
+
+  app.get("/api/biometric-settings/branch/:branchId", isAuthenticated, async (req, res) => {
+    try {
+      const { branchId } = req.params;
+      const currentUser = getCurrentUser(req);
+      
+      if (currentUser?.role !== "admin" && currentUser?.branchId !== branchId) {
+        return res.status(403).json({ error: "لا يمكنك عرض بيانات فرع آخر" });
+      }
+
+      const employees = await db.select().from(branchEmployees).where(
+        and(eq(branchEmployees.branchId, branchId), eq(branchEmployees.status, "active"))
+      ).orderBy(branchEmployees.employeeName);
+
+      const credentials = await db.select().from(biometricCredentials).where(
+        eq(biometricCredentials.branchId, branchId)
+      );
+
+      const credentialMap = new Map();
+      for (const cred of credentials) {
+        const key = cred.employeeId;
+        if (!credentialMap.has(key)) credentialMap.set(key, []);
+        credentialMap.get(key).push(cred);
+      }
+
+      const result = employees.map(emp => {
+        const empCredentials = credentialMap.get(String(emp.id)) || [];
+        const activeCredentials = empCredentials.filter(c => c.isActive);
+        return {
+          employee: emp,
+          biometricStatus: activeCredentials.length > 0 ? "registered" : "not_registered",
+          credentials: empCredentials.map(c => ({
+            id: c.id,
+            registrationMethod: c.registrationMethod || "fingerprint",
+            deviceType: c.deviceType,
+            deviceModel: c.deviceModel,
+            deviceInfo: c.deviceInfo,
+            isActive: c.isActive,
+            registeredByName: c.registeredByName,
+            lastUsedAt: c.lastUsedAt,
+            usageCount: c.usageCount || 0,
+            deactivatedAt: c.deactivatedAt,
+            deactivatedBy: c.deactivatedBy,
+            deactivationReason: c.deactivationReason,
+            createdAt: c.createdAt,
+          })),
+          totalCredentials: empCredentials.length,
+          activeCredentials: activeCredentials.length,
+        };
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error getting biometric settings:", error);
+      res.status(500).json({ error: "فشل في جلب إعدادات البصمة" });
+    }
+  });
+
+  app.patch("/api/biometric-settings/:id/toggle", isAuthenticated, async (req, res) => {
+    try {
+      const currentUser = getCurrentUser(req);
+      if (currentUser?.role !== "admin") {
+        return res.status(403).json({ error: "فقط المسؤول يمكنه تعديل إعدادات البصمة" });
+      }
+
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+
+      const { credential: existingCred, error: ownershipError } = await verifyBiometricOwnership(id, currentUser);
+      if (ownershipError) return res.status(existingCred ? 403 : 404).json({ error: ownershipError });
+
+      const { isActive, reason } = req.body;
+      if (typeof isActive !== "boolean") return res.status(400).json({ error: "قيمة التفعيل مطلوبة" });
+      if (reason && typeof reason !== "string") return res.status(400).json({ error: "السبب يجب أن يكون نصاً" });
+
+      const updateData: any = { isActive };
+      if (!isActive) {
+        updateData.deactivatedAt = new Date();
+        updateData.deactivatedBy = currentUser.id;
+        updateData.deactivationReason = reason || "تعطيل بواسطة المسؤول";
+      } else {
+        updateData.deactivatedAt = null;
+        updateData.deactivatedBy = null;
+        updateData.deactivationReason = null;
+      }
+
+      const [updated] = await db.update(biometricCredentials)
+        .set(updateData)
+        .where(eq(biometricCredentials.id, id))
+        .returning();
+
+      res.json({ success: true, credential: updated });
+    } catch (error) {
+      console.error("Error toggling biometric:", error);
+      res.status(500).json({ error: "فشل في تعديل حالة البصمة" });
+    }
+  });
+
+  app.patch("/api/biometric-settings/:id/update", isAuthenticated, async (req, res) => {
+    try {
+      const currentUser = getCurrentUser(req);
+      if (currentUser?.role !== "admin") {
+        return res.status(403).json({ error: "فقط المسؤول يمكنه تعديل إعدادات البصمة" });
+      }
+
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+
+      const { credential: existingCred, error: ownershipError } = await verifyBiometricOwnership(id, currentUser);
+      if (ownershipError) return res.status(existingCred ? 403 : 404).json({ error: ownershipError });
+
+      const { registrationMethod, deviceType, deviceModel } = req.body;
+
+      if (registrationMethod && !VALID_REGISTRATION_METHODS.includes(registrationMethod)) {
+        return res.status(400).json({ error: "نوع التسجيل غير صالح. القيم المتاحة: fingerprint, face, pin" });
+      }
+      if (deviceType && !VALID_DEVICE_TYPES.includes(deviceType)) {
+        return res.status(400).json({ error: "نوع الجهاز غير صالح" });
+      }
+      if (deviceModel && (typeof deviceModel !== "string" || deviceModel.length > 100)) {
+        return res.status(400).json({ error: "موديل الجهاز غير صالح" });
+      }
+
+      const updateData: any = {};
+      if (registrationMethod) updateData.registrationMethod = registrationMethod;
+      if (deviceType !== undefined) updateData.deviceType = deviceType;
+      if (deviceModel !== undefined) updateData.deviceModel = deviceModel;
+
+      const [updated] = await db.update(biometricCredentials)
+        .set(updateData)
+        .where(eq(biometricCredentials.id, id))
+        .returning();
+
+      res.json({ success: true, credential: updated });
+    } catch (error) {
+      console.error("Error updating biometric settings:", error);
+      res.status(500).json({ error: "فشل في تحديث إعدادات البصمة" });
+    }
+  });
+
+  app.delete("/api/biometric-settings/:id", isAuthenticated, async (req, res) => {
+    try {
+      const currentUser = getCurrentUser(req);
+      if (currentUser?.role !== "admin") {
+        return res.status(403).json({ error: "فقط المسؤول يمكنه حذف البصمة" });
+      }
+
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+
+      const { credential: existingCred, error: ownershipError } = await verifyBiometricOwnership(id, currentUser);
+      if (ownershipError) return res.status(existingCred ? 403 : 404).json({ error: ownershipError });
+
+      await db.delete(biometricCredentials).where(eq(biometricCredentials.id, id));
+
+      res.json({ success: true, message: "تم حذف البصمة بنجاح" });
+    } catch (error) {
+      console.error("Error deleting biometric setting:", error);
+      res.status(500).json({ error: "فشل في حذف البصمة" });
+    }
+  });
+
+  app.delete("/api/biometric-settings/employee/:employeeId/reset", isAuthenticated, async (req, res) => {
+    try {
+      const currentUser = getCurrentUser(req);
+      if (currentUser?.role !== "admin") {
+        return res.status(403).json({ error: "فقط المسؤول يمكنه إعادة تعيين البصمة" });
+      }
+
+      const { employeeId } = req.params;
+      const empCredentials = await db.select().from(biometricCredentials).where(eq(biometricCredentials.employeeId, employeeId));
+      if (empCredentials.length > 0 && currentUser.branchId && currentUser.role !== "admin") {
+        const hasOtherBranch = empCredentials.some(c => c.branchId !== currentUser.branchId);
+        if (hasOtherBranch) return res.status(403).json({ error: "لا يمكنك إعادة تعيين بصمات فرع آخر" });
+      }
+
+      const deleted = await db.delete(biometricCredentials)
+        .where(eq(biometricCredentials.employeeId, employeeId))
+        .returning();
+
+      res.json({ success: true, message: `تم إعادة تعيين ${deleted.length} بصمة`, count: deleted.length });
+    } catch (error) {
+      console.error("Error resetting biometric:", error);
+      res.status(500).json({ error: "فشل في إعادة تعيين البصمة" });
+    }
+  });
+
+  app.get("/api/biometric-settings/stats", isAuthenticated, async (req, res) => {
+    try {
+      const currentUser = getCurrentUser(req);
+      if (currentUser?.role !== "admin") {
+        return res.status(403).json({ error: "فقط المسؤول يمكنه عرض الإحصائيات" });
+      }
+
+      const allCredentials = await db.select().from(biometricCredentials);
+      const activeCount = allCredentials.filter(c => c.isActive).length;
+      const inactiveCount = allCredentials.filter(c => !c.isActive).length;
+
+      const methodCounts: Record<string, number> = {};
+      const deviceTypeCounts: Record<string, number> = {};
+      for (const cred of allCredentials) {
+        const method = cred.registrationMethod || "fingerprint";
+        methodCounts[method] = (methodCounts[method] || 0) + 1;
+        const device = cred.deviceType || "unknown";
+        deviceTypeCounts[device] = (deviceTypeCounts[device] || 0) + 1;
+      }
+
+      res.json({
+        total: allCredentials.length,
+        active: activeCount,
+        inactive: inactiveCount,
+        byMethod: methodCounts,
+        byDeviceType: deviceTypeCounts,
+      });
+    } catch (error) {
+      console.error("Error getting biometric stats:", error);
+      res.status(500).json({ error: "فشل في جلب الإحصائيات" });
+    }
+  });
+
 
   app.post("/api/attendance/check-in", isAuthenticated, async (req, res) => {
     try {
