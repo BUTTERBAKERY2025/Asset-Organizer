@@ -1343,7 +1343,41 @@ export default function GeneralAssemblyPage() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAttendance(false)}>إلغاء</Button>
-            <Button className="gap-2">
+            <Button 
+              className="gap-2"
+              onClick={async () => {
+                if (!selectedMeeting) return;
+                const attendees = shareholders.filter(s => s.votingRights).map(s => ({
+                  shareholderId: s.id,
+                  attendeeName: s.fullName,
+                  representedShares: s.numberOfShares || 0,
+                  present: attendanceList[s.id] || false,
+                  proxyName: proxyList[s.id] || null,
+                  votingPower: shareholderStats.totalShares > 0 
+                    ? ((s.numberOfShares || 0) / shareholderStats.totalShares * 100).toFixed(4)
+                    : "0",
+                }));
+                try {
+                  const res = await fetch(`/api/governance/meetings/${selectedMeeting.id}/attendance/bulk`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ attendees }),
+                  });
+                  if (res.ok) {
+                    const data = await res.json();
+                    toast({ title: `تم حفظ سجل الحضور بنجاح (${data.saved} مساهم)` });
+                    setShowAttendance(false);
+                    queryClient.invalidateQueries({ queryKey: ["/api/governance/meetings"] });
+                  } else {
+                    const err = await res.json();
+                    toast({ title: err.error || "فشل في حفظ سجل الحضور", variant: "destructive" });
+                  }
+                } catch (e) {
+                  toast({ title: "فشل في حفظ سجل الحضور", variant: "destructive" });
+                }
+              }}
+            >
               <CheckSquare className="h-4 w-4" />
               حفظ الحضور
             </Button>

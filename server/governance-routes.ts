@@ -675,6 +675,37 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
+  app.post("/api/governance/meetings/:meetingId/attendance/bulk", isAuthenticated, requirePermission("governance_meetings", "create"), async (req, res) => {
+    try {
+      const meetingId = parseInt(req.params.meetingId);
+      const { attendees } = req.body;
+
+      if (!Array.isArray(attendees) || attendees.length === 0) {
+        return res.status(400).json({ error: "يجب توفير قائمة الحضور" });
+      }
+
+      await db.delete(meetingAttendance).where(eq(meetingAttendance.meetingId, meetingId));
+
+      const records = attendees.map((a: any) => ({
+        meetingId,
+        attendeeType: "shareholder" as const,
+        shareholderId: a.shareholderId,
+        attendeeName: a.attendeeName,
+        representedShares: a.representedShares || 0,
+        attendanceStatus: a.present ? "present" : "absent",
+        attendanceMethod: a.proxyName ? "proxy" : "in_person",
+        proxyHolderName: a.proxyName || null,
+        votingPower: a.votingPower || null,
+      }));
+
+      const result = await db.insert(meetingAttendance).values(records).returning();
+      res.status(201).json({ saved: result.length, records: result });
+    } catch (error) {
+      console.error("Error saving bulk attendance:", error);
+      res.status(500).json({ error: "فشل في حفظ سجل الحضور" });
+    }
+  });
+
   app.patch("/api/governance/attendance/:id", isAuthenticated, requirePermission("governance_meetings", "edit"), async (req, res) => {
     try {
       const validatedData = updateMeetingAttendanceSchema.parse(req.body);
