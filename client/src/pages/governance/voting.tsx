@@ -13,10 +13,12 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import {
   Vote,
@@ -50,6 +52,11 @@ import {
   MessageCircle,
   Mail,
   ExternalLink,
+  MoreVertical,
+  Trash2,
+  Loader2,
+  Edit,
+  Archive,
 } from "lucide-react";
 import type { BoardResolution, ResolutionVote, Shareholder } from "@shared/schema";
 import { exportToExcel, exportToCSV, printAsPDF } from "@/lib/export-utils";
@@ -110,7 +117,9 @@ export default function VotingPage() {
   const [proxyHolderName, setProxyHolderName] = useState("");
   const [activeTab, setActiveTab] = useState("active");
   const [expandedResolution, setExpandedResolution] = useState<number | null>(null);
+  const [deleteResolutionId, setDeleteResolutionId] = useState<number | null>(null);
   const { toast } = useToast();
+  const { isAdmin } = useAuth();
   const queryClient = useQueryClient();
 
   const { data: resolutions = [], isLoading } = useQuery<BoardResolution[]>({
@@ -241,6 +250,28 @@ export default function VotingPage() {
     },
     onError: () => {
       toast({ title: "فشل في إنشاء روابط التصويت", variant: "destructive" });
+    },
+  });
+
+  const deleteResolutionMutation = useMutation({
+    mutationFn: async (resolutionId: number) => {
+      const res = await fetch(`/api/governance/resolutions/${resolutionId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "فشل في حذف القرار");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/governance/resolutions"] });
+      toast({ title: "تم حذف القرار بنجاح" });
+      setDeleteResolutionId(null);
+    },
+    onError: (error: Error) => {
+      toast({ title: "فشل في حذف القرار", description: error.message, variant: "destructive" });
     },
   });
 
@@ -844,6 +875,37 @@ export default function VotingPage() {
                                 <Share2 className="h-4 w-4 ml-1" />
                                 مشاركة روابط التصويت
                               </Button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="outline" size="sm" data-testid={`actions-btn-${resolution.id}`}>
+                                    <MoreVertical className="h-4 w-4 ml-1" />
+                                    إجراءات
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-48">
+                                  <DropdownMenuItem onClick={() => setExpandedResolution(isExpanded ? null : resolution.id)}>
+                                    <Eye className="h-4 w-4 ml-2" />
+                                    عرض التفاصيل
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => openVotingLinksDialog(resolution)}>
+                                    <Share2 className="h-4 w-4 ml-2" />
+                                    مشاركة الروابط
+                                  </DropdownMenuItem>
+                                  {isAdmin && (
+                                    <>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuItem
+                                        className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                                        onClick={() => setDeleteResolutionId(resolution.id)}
+                                        data-testid={`delete-resolution-${resolution.id}`}
+                                      >
+                                        <Trash2 className="h-4 w-4 ml-2" />
+                                        حذف القرار
+                                      </DropdownMenuItem>
+                                    </>
+                                  )}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
                           </div>
 
@@ -1508,6 +1570,37 @@ export default function VotingPage() {
           </DialogContent>
         </Dialog>
       </div>
+
+      <AlertDialog open={deleteResolutionId !== null} onOpenChange={(open) => !open && setDeleteResolutionId(null)}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>تأكيد حذف القرار</AlertDialogTitle>
+            <AlertDialogDescription>
+              هل أنت متأكد من حذف هذا القرار؟ سيتم حذف جميع بيانات التصويت والتوقيعات المرتبطة به نهائياً. لا يمكن التراجع عن هذا الإجراء.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex gap-2">
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => deleteResolutionId && deleteResolutionMutation.mutate(deleteResolutionId)}
+              disabled={deleteResolutionMutation.isPending}
+            >
+              {deleteResolutionMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 ml-2 animate-spin" />
+                  جاري الحذف...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 ml-2" />
+                  حذف القرار
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Layout>
   );
 }

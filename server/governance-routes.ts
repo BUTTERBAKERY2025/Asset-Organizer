@@ -927,6 +927,7 @@ export function registerGovernanceRoutes(app: Express) {
       
       const resolutionId = parseInt(req.params.id);
       
+      await db.delete(votingTokens).where(eq(votingTokens.resolutionId, resolutionId));
       await db.delete(resolutionSignatures).where(eq(resolutionSignatures.resolutionId, resolutionId));
       await db.delete(resolutionVotes).where(eq(resolutionVotes.resolutionId, resolutionId));
       
