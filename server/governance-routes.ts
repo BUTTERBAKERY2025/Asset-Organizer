@@ -1447,73 +1447,132 @@ export function registerGovernanceRoutes(app: Express) {
   // Resolution Signatures - التوقيعات الإلكترونية
   // ============================================
 
-  // Get signatures for a resolution
+  // Get signatures for a resolution (supports both board members and shareholders)
   app.get("/api/governance/resolutions/:resolutionId/signatures", isAuthenticated, async (req, res) => {
     try {
       const resolutionId = parseInt(req.params.resolutionId);
-      const signatures = await db
-        .select({
-          id: resolutionSignatures.id,
-          resolutionId: resolutionSignatures.resolutionId,
-          boardMemberId: resolutionSignatures.boardMemberId,
-          signatureToken: resolutionSignatures.signatureToken,
-          signatureData: resolutionSignatures.signatureData,
-          signatureType: resolutionSignatures.signatureType,
-          status: resolutionSignatures.status,
-          signedAt: resolutionSignatures.signedAt,
-          declinedAt: resolutionSignatures.declinedAt,
-          declineReason: resolutionSignatures.declineReason,
-          expiresAt: resolutionSignatures.expiresAt,
-          createdAt: resolutionSignatures.createdAt,
-          memberName: boardMembers.fullName,
-          memberPosition: boardMembers.position,
-          memberEmail: boardMembers.email,
-        })
+      const sigs = await db
+        .select()
         .from(resolutionSignatures)
-        .innerJoin(boardMembers, eq(resolutionSignatures.boardMemberId, boardMembers.id))
         .where(eq(resolutionSignatures.resolutionId, resolutionId))
         .orderBy(desc(resolutionSignatures.createdAt));
       
-      res.json(signatures);
+      const enriched = [];
+      for (const sig of sigs) {
+        let memberName = sig.signerName || '';
+        let memberPosition = '';
+        let memberEmail = '';
+        
+        if (sig.boardMemberId) {
+          const [member] = await db.select().from(boardMembers).where(eq(boardMembers.id, sig.boardMemberId)).limit(1);
+          if (member) {
+            memberName = member.fullName;
+            memberPosition = member.position || '';
+            memberEmail = member.email || '';
+          }
+        } else if (sig.shareholderId) {
+          const [sh] = await db.select().from(shareholders).where(eq(shareholders.id, sig.shareholderId)).limit(1);
+          if (sh) {
+            memberName = sh.fullName;
+            memberPosition = 'مساهم';
+            memberEmail = sh.email || '';
+          }
+        }
+        
+        enriched.push({
+          id: sig.id,
+          resolutionId: sig.resolutionId,
+          boardMemberId: sig.boardMemberId,
+          shareholderId: sig.shareholderId,
+          signerType: sig.signerType,
+          signatureToken: sig.signatureToken,
+          signatureData: sig.signatureData,
+          signatureType: sig.signatureType,
+          status: sig.status,
+          signedAt: sig.signedAt,
+          declinedAt: sig.declinedAt,
+          declineReason: sig.declineReason,
+          expiresAt: sig.expiresAt,
+          createdAt: sig.createdAt,
+          memberName,
+          memberPosition,
+          memberEmail,
+        });
+      }
+      
+      res.json(enriched);
     } catch (error) {
       console.error("Error fetching signatures:", error);
       res.status(500).json({ error: "فشل في جلب التوقيعات" });
     }
   });
 
-  // Create signature requests for all active board members
+  // Create signature requests - for board members OR shareholders based on resolution type
   app.post("/api/governance/resolutions/:resolutionId/signatures/create-requests", isAuthenticated, requirePermission("governance", "edit"), async (req, res) => {
     try {
       const resolutionId = parseInt(req.params.resolutionId);
       const { expiresInDays = 7 } = req.body;
       
-      // Get active board members
-      const members = await db.select().from(boardMembers).where(eq(boardMembers.status, "active"));
-      
-      if (members.length === 0) {
-        return res.status(400).json({ error: "لا يوجد أعضاء مجلس نشطين" });
+      const [resolution] = await db.select().from(boardResolutions).where(eq(boardResolutions.id, resolutionId)).limit(1);
+      if (!resolution) {
+        return res.status(404).json({ error: "القرار غير موجود" });
       }
       
-      // Check for existing pending signatures
+      const isAssemblyResolution = resolution.resolutionType === 'general_assembly' || resolution.resolutionType === 'extraordinary_assembly';
+      
       const existingSignatures = await db.select()
         .from(resolutionSignatures)
         .where(eq(resolutionSignatures.resolutionId, resolutionId));
       
-      const existingMemberIds = new Set(existingSignatures.map(s => s.boardMemberId));
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + expiresInDays);
+      const newSignatures: any[] = [];
       
-      const newSignatures = [];
-      for (const member of members) {
-        if (!existingMemberIds.has(member.id)) {
-          const signatureToken = crypto.randomBytes(32).toString('hex');
-          newSignatures.push({
-            resolutionId,
-            boardMemberId: member.id,
-            signatureToken,
-            status: "pending" as const,
-            expiresAt,
-          });
+      if (isAssemblyResolution) {
+        const activeShareholders = await db.select().from(shareholders).where(eq(shareholders.status, "active"));
+        
+        if (activeShareholders.length === 0) {
+          return res.status(400).json({ error: "لا يوجد مساهمين نشطين" });
+        }
+        
+        const existingShareholderIds = new Set(existingSignatures.filter(s => s.shareholderId).map(s => s.shareholderId));
+        
+        for (const sh of activeShareholders) {
+          if (!existingShareholderIds.has(sh.id)) {
+            const signatureToken = crypto.randomBytes(32).toString('hex');
+            newSignatures.push({
+              resolutionId,
+              shareholderId: sh.id,
+              signerName: sh.fullName,
+              signerType: "shareholder",
+              signatureToken,
+              status: "pending" as const,
+              expiresAt,
+            });
+          }
+        }
+      } else {
+        const members = await db.select().from(boardMembers).where(eq(boardMembers.status, "active"));
+        
+        if (members.length === 0) {
+          return res.status(400).json({ error: "لا يوجد أعضاء مجلس نشطين" });
+        }
+        
+        const existingMemberIds = new Set(existingSignatures.filter(s => s.boardMemberId).map(s => s.boardMemberId));
+        
+        for (const member of members) {
+          if (!existingMemberIds.has(member.id)) {
+            const signatureToken = crypto.randomBytes(32).toString('hex');
+            newSignatures.push({
+              resolutionId,
+              boardMemberId: member.id,
+              signerName: member.fullName,
+              signerType: "board_member",
+              signatureToken,
+              status: "pending" as const,
+              expiresAt,
+            });
+          }
         }
       }
       
@@ -1521,23 +1580,10 @@ export function registerGovernanceRoutes(app: Express) {
         await db.insert(resolutionSignatures).values(newSignatures);
       }
       
-      // Return all signatures with member info
-      const allSignatures = await db
-        .select({
-          id: resolutionSignatures.id,
-          signatureToken: resolutionSignatures.signatureToken,
-          status: resolutionSignatures.status,
-          memberName: boardMembers.fullName,
-          memberEmail: boardMembers.email,
-        })
-        .from(resolutionSignatures)
-        .innerJoin(boardMembers, eq(resolutionSignatures.boardMemberId, boardMembers.id))
-        .where(eq(resolutionSignatures.resolutionId, resolutionId));
-      
       res.json({ 
         created: newSignatures.length, 
-        total: allSignatures.length,
-        signatures: allSignatures 
+        total: existingSignatures.length + newSignatures.length,
+        signerType: isAssemblyResolution ? "shareholders" : "board_members",
       });
     } catch (error) {
       console.error("Error creating signature requests:", error);

@@ -1582,7 +1582,9 @@ export default function ResolutionsPage() {
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start gap-2">
                   <AlertTriangle className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
                   <p className="text-sm text-blue-800">
-                    التوقيع الإلكتروني معتمد قانونياً ويحمل صفة الإلزام. يمكنك إرسال روابط التوقيع لأعضاء المجلس عبر البريد أو واتساب.
+                    {selectedResolution.resolutionType === 'general_assembly' || selectedResolution.resolutionType === 'extraordinary_assembly'
+                      ? 'التوقيع الإلكتروني معتمد قانونياً ويحمل صفة الإلزام. يمكنك إرسال روابط التوقيع لجميع المساهمين عبر البريد أو واتساب.'
+                      : 'التوقيع الإلكتروني معتمد قانونياً ويحمل صفة الإلزام. يمكنك إرسال روابط التوقيع لأعضاء المجلس عبر البريد أو واتساب.'}
                   </p>
                 </div>
 
@@ -1601,7 +1603,9 @@ export default function ResolutionsPage() {
                       ) : (
                         <Send className="h-4 w-4" />
                       )}
-                      إنشاء طلبات التوقيع لجميع أعضاء المجلس
+                      {selectedResolution.resolutionType === 'general_assembly' || selectedResolution.resolutionType === 'extraordinary_assembly'
+                        ? 'إنشاء طلبات التوقيع لجميع المساهمين'
+                        : 'إنشاء طلبات التوقيع لجميع أعضاء المجلس'}
                     </Button>
                   </div>
                 ) : (
