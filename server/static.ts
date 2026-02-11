@@ -12,8 +12,14 @@ export function serveStatic(app: Express) {
 
   app.use(express.static(distPath));
 
-  // fall through to index.html if the file doesn't exist
+  // fall through to index.html if the file doesn't exist (SPA routing)
+  // but skip public HTML pages like vote-resolution.html
   app.use("*", (_req, res) => {
+    const requestedFile = path.basename(_req.originalUrl.split('?')[0].split('#')[0]);
+    const publicFilePath = path.resolve(distPath, requestedFile);
+    if (requestedFile.endsWith('.html') && fs.existsSync(publicFilePath)) {
+      return res.sendFile(publicFilePath);
+    }
     res.sendFile(path.resolve(distPath, "index.html"));
   });
 }

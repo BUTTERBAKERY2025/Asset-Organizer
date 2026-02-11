@@ -1972,8 +1972,20 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
+  // CORS for public voting endpoints
+  app.options("/api/public/vote/:token", (req, res) => {
+    res.set({
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Max-Age': '86400',
+    });
+    res.sendStatus(204);
+  });
+
   // Public endpoint - Get voting token info (no auth required)
   app.get("/api/public/vote/:token", async (req, res) => {
+    res.set('Access-Control-Allow-Origin', '*');
     try {
       const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
       if (!checkVotingRateLimit(clientIp)) {
@@ -2031,6 +2043,7 @@ export function registerGovernanceRoutes(app: Express) {
 
   // Public endpoint - Submit vote (no auth required)
   app.post("/api/public/vote/:token", async (req, res) => {
+    res.set('Access-Control-Allow-Origin', '*');
     try {
       const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
       if (!checkVotingRateLimit(clientIp)) {

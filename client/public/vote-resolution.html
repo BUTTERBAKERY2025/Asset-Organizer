@@ -532,8 +532,23 @@
       }
 
       try {
-        const response = await fetch(`/api/public/vote/${voteToken}`);
-        const data = await response.json();
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+        const apiBase = window.location.origin;
+        const response = await fetch(`${apiBase}/api/public/vote/${voteToken}`, {
+          signal: controller.signal,
+          headers: { 'Accept': 'application/json' }
+        });
+        clearTimeout(timeoutId);
+
+        let data;
+        try {
+          data = await response.json();
+        } catch (parseErr) {
+          showError('خطأ في البيانات', 'تعذر قراءة استجابة الخادم. الرجاء المحاولة مرة أخرى.');
+          return;
+        }
 
         if (!response.ok) {
           if (response.status === 400 && data.votedAt) {
@@ -545,6 +560,8 @@
             showError('رابط غير موجود', 'رابط التصويت غير صالح أو منتهي الصلاحية');
           } else if (response.status === 429) {
             showError('الحد الأقصى للطلبات', 'تم تجاوز الحد الأقصى للطلبات. حاول لاحقاً.');
+          } else if (response.status === 403) {
+            showError('طلب محظور', 'تم حظر الطلب بسبب إعدادات الأمان. الرجاء فتح الرابط مباشرة في المتصفح.');
           } else {
             showError('خطأ', data.error || 'فشل في تحميل بيانات التصويت');
           }
@@ -563,7 +580,11 @@
         showMain();
       } catch (error) {
         console.error('Error loading vote data:', error);
-        showError('خطأ في الاتصال', 'فشل في الاتصال بالخادم. تحقق من اتصالك بالإنترنت.');
+        if (error.name === 'AbortError') {
+          showError('انتهت المهلة', 'استغرق الاتصال بالخادم وقتاً طويلاً. الرجاء المحاولة مرة أخرى.');
+        } else {
+          showError('خطأ في الاتصال', 'فشل في الاتصال بالخادم. تحقق من اتصالك بالإنترنت وأعد المحاولة.');
+        }
       }
     }
 
@@ -726,7 +747,8 @@
       const signatureData = getSignatureData();
 
       try {
-        const response = await fetch(`/api/public/vote/${voteToken}`, {
+        const apiBase = window.location.origin;
+        const response = await fetch(`${apiBase}/api/public/vote/${voteToken}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ vote: selectedVote, comments, signatureData })

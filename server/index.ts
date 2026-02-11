@@ -14,12 +14,22 @@ const httpServer = createServer(app);
 
 app.set('trust proxy', 1);
 app.use(securityHeaders);
-app.use('/api/', apiRateLimiter);
-app.use('/api/', csrfProtection);
+app.use('/api/', (req, res, next) => {
+  if (req.path.startsWith('/public/')) {
+    return next();
+  }
+  return apiRateLimiter(req, res, next);
+});
+app.use('/api/', (req, res, next) => {
+  if (req.path.startsWith('/public/')) {
+    return next();
+  }
+  return csrfProtection(req, res, next);
+});
 
 // Helmet disabled in development to allow Replit iframe embedding
 if (process.env.NODE_ENV === "production") {
-  app.use(helmet({
+  const helmetMiddleware = helmet({
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
@@ -38,7 +48,13 @@ if (process.env.NODE_ENV === "production") {
     crossOriginResourcePolicy: { policy: "cross-origin" },
     frameguard: false,
     referrerPolicy: { policy: "strict-origin-when-cross-origin" },
-  }));
+  });
+  app.use((req, res, next) => {
+    if (req.path === '/vote-resolution.html' || req.path.startsWith('/api/public/')) {
+      return next();
+    }
+    return helmetMiddleware(req, res, next);
+  });
 }
 
 // Serve attached_assets statically for inventory images
