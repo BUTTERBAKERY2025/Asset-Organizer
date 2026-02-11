@@ -19371,6 +19371,106 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/biometric-settings/register/challenge", isAuthenticated, async (req, res) => {
+    try {
+      const currentUser = getCurrentUser(req);
+      if (currentUser?.role !== "admin") {
+        return res.status(403).json({ error: "فقط المسؤول يمكنه تسجيل البصمة" });
+      }
+
+      const { employeeId, employeeName, branchId } = req.body;
+      if (!employeeId || !employeeName || !branchId) {
+        return res.status(400).json({ error: "بيانات الموظف مطلوبة" });
+      }
+
+      if (currentUser.role !== "admin" && currentUser.branchId !== branchId) {
+        return res.status(403).json({ error: "لا يمكنك تسجيل بصمات فرع آخر" });
+      }
+
+      const crypto = await import("crypto");
+      const challenge = crypto.randomBytes(32).toString("base64url");
+      const userId = crypto.randomBytes(16).toString("base64url");
+
+      res.json({
+        challenge,
+        rp: { name: "نظام باتر - إدارة البصمة", id: req.hostname },
+        user: { id: userId, name: employeeName, displayName: employeeName },
+        pubKeyCredParams: [
+          { alg: -7, type: "public-key" },
+          { alg: -257, type: "public-key" },
+        ],
+        authenticatorSelection: {
+          authenticatorAttachment: "platform",
+          userVerification: "required",
+          residentKey: "preferred",
+        },
+        timeout: 60000,
+        attestation: "none",
+      });
+    } catch (error) {
+      console.error("Error creating registration challenge:", error);
+      res.status(500).json({ error: "فشل في إنشاء تحدي التسجيل" });
+    }
+  });
+
+  app.post("/api/biometric-settings/register/complete", isAuthenticated, async (req, res) => {
+    try {
+      const currentUser = getCurrentUser(req);
+      if (currentUser?.role !== "admin") {
+        return res.status(403).json({ error: "فقط المسؤول يمكنه تسجيل البصمة" });
+      }
+
+      const { employeeId, employeeName, branchId, credentialId, publicKey, registrationMethod, deviceType, deviceModel } = req.body;
+
+      if (!employeeId || !employeeName || !branchId || !credentialId || !publicKey) {
+        return res.status(400).json({ error: "بيانات التسجيل غير مكتملة" });
+      }
+
+      const VALID_REG_METHODS = ["fingerprint", "face", "pin"];
+      const VALID_DEV_TYPES = ["mobile_android", "mobile_ios", "tablet", "desktop"];
+
+      if (registrationMethod && !VALID_REG_METHODS.includes(registrationMethod)) {
+        return res.status(400).json({ error: "نوع التسجيل غير صالح" });
+      }
+      if (deviceType && !VALID_DEV_TYPES.includes(deviceType)) {
+        return res.status(400).json({ error: "نوع الجهاز غير صالح" });
+      }
+
+      if (currentUser.role !== "admin" && currentUser.branchId !== branchId) {
+        return res.status(403).json({ error: "لا يمكنك تسجيل بصمات فرع آخر" });
+      }
+
+      const existingCreds = await db.select().from(biometricCredentials).where(
+        and(eq(biometricCredentials.employeeId, String(employeeId)), eq(biometricCredentials.branchId, branchId))
+      );
+
+      if (existingCreds.length >= 5) {
+        return res.status(400).json({ error: "تم الوصول للحد الأقصى من البصمات المسجلة (5)" });
+      }
+
+      const [newCredential] = await db.insert(biometricCredentials).values({
+        employeeId: String(employeeId),
+        employeeName,
+        branchId,
+        credentialId,
+        publicKey,
+        counter: 0,
+        registrationMethod: registrationMethod || "fingerprint",
+        deviceType: deviceType || null,
+        deviceModel: deviceModel || null,
+        deviceInfo: req.headers["user-agent"] || null,
+        registeredBy: String(currentUser.id),
+        registeredByName: currentUser.username || currentUser.firstName || "مسؤول",
+        isActive: true,
+      }).returning();
+
+      res.json({ success: true, credential: newCredential, message: "تم تسجيل البصمة بنجاح" });
+    } catch (error) {
+      console.error("Error completing biometric registration:", error);
+      res.status(500).json({ error: "فشل في حفظ البصمة" });
+    }
+  });
+
 
   app.post("/api/attendance/check-in", isAuthenticated, async (req, res) => {
     try {
