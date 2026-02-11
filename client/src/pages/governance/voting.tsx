@@ -277,20 +277,11 @@ export default function VotingPage() {
   };
 
   const computeHijriDate = (date: Date): string => {
-    const gYear = date.getFullYear();
-    const gMonth = date.getMonth() + 1;
-    const gDay = date.getDate();
-    let y = gYear, m = gMonth;
-    if (m <= 2) { y -= 1; m += 12; }
-    const A = Math.floor(y / 100);
-    const B = 2 - A + Math.floor(A / 4);
-    const jd = Math.floor(365.25 * (y + 4716)) + Math.floor(30.6001 * (m + 1)) + gDay + B - 1524.5;
-    const jd1 = Math.floor(jd) + 0.5;
-    const hYear = Math.floor((30 * (jd1 - 1948439.5) + 10646) / 10631);
-    const hjd = (y2: number, m2: number, d2: number) => Math.floor((11 * y2 + 3) / 30) + 354 * y2 + 30 * m2 - Math.floor((m2 - 1) / 2) + d2 + 1948440 - 385;
-    const hMonth = Math.min(12, Math.ceil((jd1 - (29 + hjd(hYear, 1, 1))) / 29.5) + 1);
-    const hDay = Math.floor(jd1 - hjd(hYear, hMonth, 1)) + 1;
-    return `${hDay.toString().padStart(2, '0')}/${hMonth.toString().padStart(2, '0')}/${hYear}`;
+    const parts = new Intl.DateTimeFormat('en-u-ca-islamic-umalqura', { day: 'numeric', month: 'numeric', year: 'numeric' }).formatToParts(date);
+    const day = parts.find(p => p.type === 'day')?.value || '1';
+    const month = parts.find(p => p.type === 'month')?.value || '1';
+    const year = parts.find(p => p.type === 'year')?.value || '1447';
+    return `${day.padStart(2, '0')}/${month.padStart(2, '0')}/${year}`;
   };
 
   const printResolutionWithSignatures = (resolution: BoardResolution, tokens: VotingTokenData[]) => {

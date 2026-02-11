@@ -1,55 +1,34 @@
-const HIJRI_MONTHS = [
-  "محرم", "صفر", "ربيع الأول", "ربيع الثاني",
-  "جمادى الأولى", "جمادى الآخرة", "رجب", "شعبان",
-  "رمضان", "شوال", "ذو القعدة", "ذو الحجة"
-];
-
-const HIJRI_DAYS = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
-
-function gregorianToJulianDay(year: number, month: number, day: number): number {
-  if (month <= 2) {
-    year -= 1;
-    month += 12;
-  }
-  const A = Math.floor(year / 100);
-  const B = 2 - A + Math.floor(A / 4);
-  return Math.floor(365.25 * (year + 4716)) + Math.floor(30.6001 * (month + 1)) + day + B - 1524.5;
-}
-
-function julianDayToHijri(jd: number): { year: number; month: number; day: number } {
-  const jd1 = Math.floor(jd) + 0.5;
-  const year = Math.floor((30 * (jd1 - 1948439.5) + 10646) / 10631);
-  const month = Math.min(12, Math.ceil((jd1 - (29 + getHijriJD(year, 1, 1))) / 29.5) + 1);
-  const day = Math.floor(jd1 - getHijriJD(year, month, 1)) + 1;
-  return { year, month, day };
-}
-
-function getHijriJD(year: number, month: number, day: number): number {
-  return Math.floor((11 * year + 3) / 30) + 354 * year + 30 * month - Math.floor((month - 1) / 2) + day + 1948440 - 385;
-}
-
 export function toHijri(date: Date): { year: number; month: number; day: number; monthName: string; dayName: string } {
-  const jd = gregorianToJulianDay(date.getFullYear(), date.getMonth() + 1, date.getDate());
-  const hijri = julianDayToHijri(jd);
-  const dayOfWeek = date.getDay();
+  const parts = new Intl.DateTimeFormat('en-u-ca-islamic-umalqura', { day: 'numeric', month: 'numeric', year: 'numeric' }).formatToParts(date);
+  const day = parseInt(parts.find(p => p.type === 'day')?.value || '1');
+  const month = parseInt(parts.find(p => p.type === 'month')?.value || '1');
+  const year = parseInt(parts.find(p => p.type === 'year')?.value || '1447');
+
+  const monthNames = ["محرم", "صفر", "ربيع الأول", "ربيع الثاني", "جمادى الأولى", "جمادى الآخرة", "رجب", "شعبان", "رمضان", "شوال", "ذو القعدة", "ذو الحجة"];
+  const dayNames = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+
   return {
-    year: hijri.year,
-    month: hijri.month,
-    day: hijri.day,
-    monthName: HIJRI_MONTHS[hijri.month - 1] || "",
-    dayName: HIJRI_DAYS[dayOfWeek] || "",
+    year,
+    month,
+    day,
+    monthName: monthNames[month - 1] || "",
+    dayName: dayNames[date.getDay()] || "",
   };
 }
 
 export function formatHijriDate(date: Date, format: "full" | "short" | "numeric" = "full"): string {
-  const h = toHijri(date);
   if (format === "numeric") {
-    return `${h.day.toString().padStart(2, '0')}/${h.month.toString().padStart(2, '0')}/${h.year}`;
+    const parts = new Intl.DateTimeFormat('en-u-ca-islamic-umalqura', { day: 'numeric', month: 'numeric', year: 'numeric' }).formatToParts(date);
+    const day = (parts.find(p => p.type === 'day')?.value || '1').padStart(2, '0');
+    const month = (parts.find(p => p.type === 'month')?.value || '1').padStart(2, '0');
+    const year = parts.find(p => p.type === 'year')?.value || '1447';
+    return `${day}/${month}/${year}`;
   }
   if (format === "short") {
+    const h = toHijri(date);
     return `${h.day} ${h.monthName} ${h.year}هـ`;
   }
-  return `${h.dayName} ${h.day} ${h.monthName} ${h.year}هـ`;
+  return new Intl.DateTimeFormat('ar-SA-u-ca-islamic-umalqura', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(date);
 }
 
 export function formatHijriGregorian(date: Date): string {
