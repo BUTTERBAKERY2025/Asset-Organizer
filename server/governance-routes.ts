@@ -61,6 +61,38 @@ function getCurrentUserId(req: Request): string {
   return (req as any).currentUser?.id || "system";
 }
 
+function computeHijriServer(gregorianDate: Date): string | null {
+  try {
+    const parts = new Intl.DateTimeFormat('en-u-ca-islamic-umalqura', {
+      day: 'numeric', month: 'numeric', year: 'numeric'
+    }).formatToParts(gregorianDate);
+    const day = (parts.find(p => p.type === 'day')?.value || '1').padStart(2, '0');
+    const month = (parts.find(p => p.type === 'month')?.value || '1').padStart(2, '0');
+    const year = parts.find(p => p.type === 'year')?.value || '1447';
+    return `${day}/${month}/${year}`;
+  } catch {
+    return null;
+  }
+}
+
+function fixHijriInText(text: string): string {
+  if (!text) return text;
+  const gregorianMatch = text.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})م/);
+  if (gregorianMatch) {
+    const gDay = parseInt(gregorianMatch[1]);
+    const gMonth = parseInt(gregorianMatch[2]);
+    const gYear = parseInt(gregorianMatch[3]);
+    const gregorianDate = new Date(gYear, gMonth - 1, gDay);
+    if (!isNaN(gregorianDate.getTime())) {
+      const correctHijri = computeHijriServer(gregorianDate);
+      if (correctHijri) {
+        return text.replace(/(\d{1,2})\/(\d{1,2})\/(\d{4})هـ/g, correctHijri + 'هـ');
+      }
+    }
+  }
+  return text;
+}
+
 export function registerGovernanceRoutes(app: Express) {
   // =====================================================
   // Board Members - أعضاء مجلس الإدارة
@@ -2034,7 +2066,11 @@ export function registerGovernanceRoutes(app: Express) {
         return res.status(410).json({ error: "انتهت صلاحية رابط التصويت" });
       }
 
-      res.json(voteRecord);
+      const fixedRecord = { ...voteRecord };
+      if (fixedRecord.resolutionDescription) {
+        fixedRecord.resolutionDescription = fixHijriInText(fixedRecord.resolutionDescription);
+      }
+      res.json(fixedRecord);
     } catch (error) {
       console.error("Error fetching vote record:", error);
       res.status(500).json({ error: "فشل في جلب بيانات التصويت" });

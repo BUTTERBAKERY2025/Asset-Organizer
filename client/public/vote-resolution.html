@@ -521,6 +521,45 @@
       return types[type] || type;
     }
 
+    function computeHijriFromGregorian(gregorianDate) {
+      try {
+        const parts = new Intl.DateTimeFormat('en-u-ca-islamic-umalqura', {
+          day: 'numeric', month: 'numeric', year: 'numeric'
+        }).formatToParts(gregorianDate);
+        const day = (parts.find(p => p.type === 'day')?.value || '1').padStart(2, '0');
+        const month = (parts.find(p => p.type === 'month')?.value || '1').padStart(2, '0');
+        const year = parts.find(p => p.type === 'year')?.value || '1447';
+        return `${day}/${month}/${year}`;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function fixHijriInDescription(text) {
+      if (!text) return text;
+      const gregorianMatch = text.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})م/);
+      if (!gregorianMatch) {
+        return text.replace(
+          /(\d{1,2})\/(\d{1,2})\/(\d{4})هـ/g,
+          function(match) {
+            const correctHijri = computeHijriFromGregorian(new Date());
+            return correctHijri ? correctHijri + 'هـ' : match;
+          }
+        );
+      }
+      const gDay = parseInt(gregorianMatch[1]);
+      const gMonth = parseInt(gregorianMatch[2]);
+      const gYear = parseInt(gregorianMatch[3]);
+      const gregorianDate = new Date(gYear, gMonth - 1, gDay);
+      if (isNaN(gregorianDate.getTime())) return text;
+      const correctHijri = computeHijriFromGregorian(gregorianDate);
+      if (!correctHijri) return text;
+      return text.replace(
+        /(\d{1,2})\/(\d{1,2})\/(\d{4})هـ/g,
+        correctHijri + 'هـ'
+      );
+    }
+
     async function loadVoteData() {
       showLoading();
       voteToken = getToken();
@@ -572,7 +611,7 @@
         document.getElementById('resolutionNumber').textContent = data.resolutionNumber || '-';
         document.getElementById('resolutionTitle').textContent = data.resolutionTitle || '-';
         document.getElementById('resolutionType').textContent = getResolutionTypeLabel(data.resolutionType);
-        document.getElementById('resolutionDescription').textContent = data.resolutionDescription || '-';
+        document.getElementById('resolutionDescription').textContent = fixHijriInDescription(data.resolutionDescription) || '-';
         document.getElementById('requiredMajority').textContent = (data.requiredMajority || 50) + '%';
         document.getElementById('shareholderName').textContent = data.shareholderName || 'مساهم';
         document.getElementById('voteWeight').textContent = `قوة التصويت: ${data.voteWeight || 1} سهم`;

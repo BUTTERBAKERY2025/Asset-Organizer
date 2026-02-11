@@ -291,16 +291,23 @@ export default function VotingPage() {
     const hijriDateStr = computeHijriDate(new Date());
     
     const fixHijriInText = (text: string): string => {
+      if (!text) return text;
+      const gregorianMatch = text.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})م/);
+      if (gregorianMatch) {
+        const gDay = parseInt(gregorianMatch[1]);
+        const gMonth = parseInt(gregorianMatch[2]);
+        const gYear = parseInt(gregorianMatch[3]);
+        const refDate = new Date(gYear, gMonth - 1, gDay);
+        if (!isNaN(refDate.getTime())) {
+          const correctHijri = computeHijriDate(refDate);
+          return text.replace(/(\d{1,2})\/(\d{1,2})\/(\d{4})هـ/g, correctHijri + 'هـ');
+        }
+      }
       return text.replace(
         /(\d{1,2})\/(\d{1,2})\/(\d{4})هـ/g,
-        (match, d, m, y) => {
-          const origDate = new Date();
-          const correctHijri = computeHijriDate(origDate);
-          const parts = correctHijri.split('/');
-          if (y === parts[2]) {
-            return `${parts[0]}/${parts[1]}/${parts[2]}هـ`;
-          }
-          return match;
+        (match) => {
+          const correctHijri = computeHijriDate(new Date());
+          return correctHijri + 'هـ';
         }
       );
     };
