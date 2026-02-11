@@ -10,12 +10,15 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import {
   FileText,
   Plus,
@@ -37,6 +40,10 @@ import {
   Video,
   Send,
   Loader2,
+  MoreVertical,
+  Archive,
+  FileCheck,
+  FilePen,
 } from "lucide-react";
 
 interface Shareholder {
@@ -104,8 +111,10 @@ export default function AssemblyMinutesPage() {
   const [showDetails, setShowDetails] = useState(false);
   const [selectedMinutes, setSelectedMinutes] = useState<MeetingMinutes | null>(null);
   const [activeTab, setActiveTab] = useState("all");
+  const [deleteMinutesId, setDeleteMinutesId] = useState<number | null>(null);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { isAdmin } = useAuth();
   const queryClient = useQueryClient();
 
   const [form, setForm] = useState({
@@ -141,6 +150,51 @@ export default function AssemblyMinutesPage() {
   });
 
   const totalShares = shareholders.reduce((sum, s) => sum + (s.numberOfShares || 0), 0);
+
+  const deleteMinutesMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/governance/minutes/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "فشل في حذف المحضر");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/governance/minutes"] });
+      setDeleteMinutesId(null);
+      toast({ title: "تم حذف المحضر بنجاح" });
+    },
+    onError: (error: any) => {
+      toast({ title: error.message || "فشل في حذف المحضر", variant: "destructive" });
+    },
+  });
+
+  const updateMinutesStatusMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: number; status: string }) => {
+      const res = await fetch(`/api/governance/minutes/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "فشل في تحديث الحالة");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/governance/minutes"] });
+      toast({ title: "تم تحديث حالة المحضر بنجاح" });
+    },
+    onError: (error: any) => {
+      toast({ title: error.message || "فشل في تحديث الحالة", variant: "destructive" });
+    },
+  });
 
   const createMinutesMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -813,7 +867,7 @@ export default function AssemblyMinutesPage() {
                               )}
                             </div>
                           </div>
-                          <div className="flex gap-2 flex-wrap">
+                          <div className="flex gap-2 flex-wrap items-center">
                             <Button
                               variant="outline"
                               size="sm"
@@ -873,6 +927,73 @@ export default function AssemblyMinutesPage() {
                               <Vote className="h-4 w-4" />
                               التصويت
                             </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="sm" className="px-2" data-testid={`actions-minutes-${m.id}`}>
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-48">
+                                {m.status === "draft" && (
+                                  <DropdownMenuItem
+                                    onClick={() => updateMinutesStatusMutation.mutate({ id: m.id, status: "pending_review" })}
+                                    data-testid={`status-review-${m.id}`}
+                                  >
+                                    <FileCheck className="h-4 w-4 ml-2" />
+                                    إرسال للمراجعة
+                                  </DropdownMenuItem>
+                                )}
+                                {m.status === "pending_review" && (
+                                  <DropdownMenuItem
+                                    onClick={() => updateMinutesStatusMutation.mutate({ id: m.id, status: "pending_signature" })}
+                                    data-testid={`status-sign-${m.id}`}
+                                  >
+                                    <FilePen className="h-4 w-4 ml-2" />
+                                    جاهز للتوقيع
+                                  </DropdownMenuItem>
+                                )}
+                                {m.status === "pending_signature" && (
+                                  <DropdownMenuItem
+                                    onClick={() => updateMinutesStatusMutation.mutate({ id: m.id, status: "signed" })}
+                                    data-testid={`status-signed-${m.id}`}
+                                  >
+                                    <CheckCircle className="h-4 w-4 ml-2" />
+                                    تم التوقيع
+                                  </DropdownMenuItem>
+                                )}
+                                {m.status !== "archived" && m.status !== "draft" && (
+                                  <DropdownMenuItem
+                                    onClick={() => updateMinutesStatusMutation.mutate({ id: m.id, status: "archived" })}
+                                    data-testid={`status-archive-${m.id}`}
+                                  >
+                                    <Archive className="h-4 w-4 ml-2" />
+                                    أرشفة
+                                  </DropdownMenuItem>
+                                )}
+                                {m.status !== "draft" && (
+                                  <DropdownMenuItem
+                                    onClick={() => updateMinutesStatusMutation.mutate({ id: m.id, status: "draft" })}
+                                    data-testid={`status-draft-${m.id}`}
+                                  >
+                                    <Edit className="h-4 w-4 ml-2" />
+                                    إعادة لمسودة
+                                  </DropdownMenuItem>
+                                )}
+                                {isAdmin && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                      className="text-red-600 focus:text-red-600"
+                                      onClick={() => setDeleteMinutesId(m.id)}
+                                      data-testid={`delete-minutes-${m.id}`}
+                                    >
+                                      <Trash2 className="h-4 w-4 ml-2" />
+                                      حذف المحضر
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         </div>
                       </CardContent>
@@ -1287,6 +1408,30 @@ export default function AssemblyMinutesPage() {
             })()}
           </DialogContent>
         </Dialog>
+        <AlertDialog open={deleteMinutesId !== null} onOpenChange={(open) => !open && setDeleteMinutesId(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>تأكيد حذف المحضر</AlertDialogTitle>
+              <AlertDialogDescription>
+                هل أنت متأكد من حذف هذا المحضر؟ لا يمكن التراجع عن هذا الإجراء.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="gap-2">
+              <AlertDialogCancel>إلغاء</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-red-600 hover:bg-red-700"
+                onClick={() => deleteMinutesId && deleteMinutesMutation.mutate(deleteMinutesId)}
+                data-testid="confirm-delete-minutes"
+              >
+                {deleteMinutesMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  "حذف"
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </Layout>
   );

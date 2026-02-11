@@ -820,6 +820,25 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
+  app.delete("/api/governance/minutes/:id", isAuthenticated, async (req, res) => {
+    try {
+      const currentUser = (req as any).currentUser;
+      if (currentUser?.role !== "admin") {
+        return res.status(403).json({ error: "صلاحية الحذف متاحة للمدير فقط" });
+      }
+      const minutesId = parseInt(req.params.id);
+      const [existing] = await db.select().from(meetingMinutes).where(eq(meetingMinutes.id, minutesId));
+      if (!existing) {
+        return res.status(404).json({ error: "المحضر غير موجود" });
+      }
+      await db.delete(meetingMinutes).where(eq(meetingMinutes.id, minutesId));
+      res.json({ message: "تم حذف المحضر بنجاح" });
+    } catch (error) {
+      console.error("Error deleting minutes:", error);
+      res.status(500).json({ error: "فشل في حذف المحضر" });
+    }
+  });
+
   // =====================================================
   // Board Resolutions - قرارات مجلس الإدارة
   // =====================================================
