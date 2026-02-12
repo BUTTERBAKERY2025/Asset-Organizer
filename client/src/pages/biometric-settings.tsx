@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import {
   Fingerprint,
   ChevronLeft,
@@ -163,7 +164,14 @@ export default function BiometricSettingsPage() {
   const [registerError, setRegisterError] = useState("");
   const { toast } = useToast();
   const { isAdmin, user: currentUser } = useAuth();
+  const { canView, canCreate, canEdit, canDelete, hasPermission } = usePermissions();
   const queryClient = useQueryClient();
+
+  const canViewBiometric = canView("biometric_settings");
+  const canCreateBiometric = canCreate("biometric_settings");
+  const canEditBiometric = canEdit("biometric_settings");
+  const canDeleteBiometric = canDelete("biometric_settings");
+  const canChangeStatus = hasPermission("biometric_settings", "change_status");
 
   const { data: branches = [] } = useQuery<Branch[]>({
     queryKey: ["/api/branches"],
@@ -461,6 +469,26 @@ export default function BiometricSettingsPage() {
     });
   };
 
+  if (!canViewBiometric) {
+    return (
+      <Layout>
+        <div className="p-6 max-w-7xl mx-auto" dir="rtl">
+          <div className="flex flex-col items-center justify-center py-20">
+            <Shield className="h-16 w-16 text-red-400 mb-4" />
+            <h2 className="text-xl font-bold text-gray-700 mb-2">غير مصرح بالوصول</h2>
+            <p className="text-gray-500 mb-4">ليس لديك صلاحية للوصول إلى إعدادات البصمة</p>
+            <Link href="/settings">
+              <Button variant="outline">
+                <ChevronLeft className="h-4 w-4 ml-2" />
+                العودة للإعدادات
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
       <div className="p-6 max-w-7xl mx-auto" dir="rtl">
@@ -717,36 +745,39 @@ export default function BiometricSettingsPage() {
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-52">
-                                  <DropdownMenuItem
-                                    onClick={() => openRegisterDialog(item)}
-                                    className="text-purple-700 focus:text-purple-700 focus:bg-purple-50"
-                                    data-testid={`register-btn-${item.employee.id}`}
-                                  >
-                                    <Plus className="h-4 w-4 ml-2" />
-                                    تسجيل بصمة جديدة
-                                  </DropdownMenuItem>
+                                  {canCreateBiometric && (
+                                    <DropdownMenuItem
+                                      onClick={() => openRegisterDialog(item)}
+                                      className="text-purple-700 focus:text-purple-700 focus:bg-purple-50"
+                                      data-testid={`register-btn-${item.employee.id}`}
+                                    >
+                                      <Plus className="h-4 w-4 ml-2" />
+                                      تسجيل بصمة جديدة
+                                    </DropdownMenuItem>
+                                  )}
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem onClick={() => { setSelectedEmployee(item); setShowDetailsDialog(true); }}>
                                     <Eye className="h-4 w-4 ml-2" />
                                     عرض التفاصيل
                                   </DropdownMenuItem>
 
-                                  {activeCred && (
-                                    <>
-                                      <DropdownMenuItem onClick={() => openEditDialog(activeCred)}>
-                                        <Edit className="h-4 w-4 ml-2" />
-                                        تعديل إعدادات البصمة
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem
-                                        onClick={() => setDeactivateCredentialId(activeCred.id)}
-                                      >
-                                        <ToggleLeft className="h-4 w-4 ml-2 text-orange-500" />
-                                        تعطيل البصمة
-                                      </DropdownMenuItem>
-                                    </>
+                                  {activeCred && canEditBiometric && (
+                                    <DropdownMenuItem onClick={() => openEditDialog(activeCred)}>
+                                      <Edit className="h-4 w-4 ml-2" />
+                                      تعديل إعدادات البصمة
+                                    </DropdownMenuItem>
                                   )}
 
-                                  {!activeCred && item.credentials.length > 0 && (
+                                  {activeCred && canChangeStatus && (
+                                    <DropdownMenuItem
+                                      onClick={() => setDeactivateCredentialId(activeCred.id)}
+                                    >
+                                      <ToggleLeft className="h-4 w-4 ml-2 text-orange-500" />
+                                      تعطيل البصمة
+                                    </DropdownMenuItem>
+                                  )}
+
+                                  {!activeCred && item.credentials.length > 0 && canChangeStatus && (
                                     <DropdownMenuItem
                                       onClick={() => toggleMutation.mutate({ id: item.credentials[0].id, isActive: true })}
                                     >
@@ -755,7 +786,7 @@ export default function BiometricSettingsPage() {
                                     </DropdownMenuItem>
                                   )}
 
-                                  {isAdmin && item.credentials.length > 0 && (
+                                  {canDeleteBiometric && item.credentials.length > 0 && (
                                     <>
                                       <DropdownMenuSeparator />
                                       <DropdownMenuItem

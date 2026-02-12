@@ -520,6 +520,7 @@ export const SYSTEM_MODULES = [
   "shifts",
   "attendance",
   "attendance_check", // صفحة تسجيل الحضور والانصراف فقط
+  "biometric_settings", // إعدادات البصمة والتحقق البيومتري
   "timesheet",
   "branch_closure",
   
@@ -698,6 +699,7 @@ export const MODULE_LABELS: Record<SystemModule, string> = {
   shifts: "الورديات",
   attendance: "الحضور والانصراف",
   attendance_check: "تسجيل الحضور والانصراف",
+  biometric_settings: "إعدادات البصمة",
   timesheet: "كشوف الدوام",
   branch_closure: "فتح وإغلاق الفروع",
   
@@ -844,7 +846,7 @@ export const MODULE_GROUPS: { label: string; modules: SystemModule[] }[] = [
   },
   {
     label: "الورديات والحضور",
-    modules: ["shifts", "attendance", "attendance_check", "timesheet", "branch_closure"],
+    modules: ["shifts", "attendance", "attendance_check", "biometric_settings", "timesheet", "branch_closure"],
   },
   {
     label: "الموظفين والموارد البشرية",

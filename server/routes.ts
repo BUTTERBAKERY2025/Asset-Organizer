@@ -18959,7 +18959,7 @@ export async function registerRoutes(
         return res.status(400).json({ error: "هذه البصمة مسجلة مسبقاً" });
       }
 
-      const validMethods = ["fingerprint", "face", "pin"];
+      const validMethods = ["fingerprint", "face"];
       const validDeviceTypes = ["mobile_android", "mobile_ios", "tablet", "desktop"];
 
       const credential = await storage.createBiometricCredential({
@@ -19110,89 +19110,6 @@ export async function registerRoutes(
     }
   });
 
-  // Set PIN for employee biometric verification (works on any device)
-  app.post("/api/biometric/set-pin", biometricRateLimiter, isAuthenticated, requirePermission("attendance_check", "create"), async (req, res) => {
-    try {
-      const { employeeId, pin, branchId } = req.body;
-      if (!employeeId || !pin || !branchId) {
-        return res.status(400).json({ error: "جميع البيانات مطلوبة" });
-      }
-      if (!/^\d{4,6}$/.test(pin)) {
-        return res.status(400).json({ error: "رمز PIN يجب أن يكون 4-6 أرقام" });
-      }
-
-      if (!isUserAdmin(req)) {
-        const hasAccess = await canAccessBranch(req, branchId);
-        if (!hasAccess) return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
-      }
-
-      const crypto = await import("crypto");
-      const hashedPin = crypto.createHash("sha256").update(pin + employeeId).digest("hex");
-
-      const credentials = await storage.getBiometricCredentialsByEmployee(employeeId);
-      if (credentials.length > 0) {
-        // verificationPin column not yet in DB - skip update for now
-        // await db.update(biometricCredentials)
-        //   .set({ verificationPin: hashedPin })
-        //   .where(eq(biometricCredentials.employeeId, employeeId));
-      } else {
-        const credId = `pin_${employeeId}_${Date.now()}`;
-        await pool.query(
-          `INSERT INTO biometric_credentials (employee_id, employee_name, branch_id, credential_id, public_key, counter, registration_method, is_active, registered_by, registered_by_name, created_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())`,
-          [employeeId, req.body.employeeName || employeeId, branchId, credId, credId, 0, "pin", true, getCurrentUser(req)?.id || null, getCurrentUser(req)?.fullName || null]
-        );
-      }
-
-      res.json({ success: true, message: "تم تعيين رمز PIN بنجاح" });
-    } catch (error) {
-      console.error("Error setting PIN:", error);
-      res.status(500).json({ error: "فشل في تعيين رمز PIN" });
-    }
-  });
-
-  // Verify PIN for attendance (works on any device - no WebAuthn needed)
-  app.post("/api/biometric/verify-pin", biometricRateLimiter, isAuthenticated, async (req, res) => {
-    try {
-      const { employeeId, pin } = req.body;
-      if (!employeeId || !pin) {
-        return res.status(400).json({ error: "رقم الموظف ورمز PIN مطلوبان", verified: false });
-      }
-
-      const credentials = await storage.getBiometricCredentialsByEmployee(employeeId);
-      if (!credentials.length) {
-        return res.status(400).json({ error: "لا توجد بيانات بيومترية مسجلة لهذا الموظف", verified: false });
-      }
-
-      const crypto = await import("crypto");
-      const hashedPin = crypto.createHash("sha256").update(pin + employeeId).digest("hex");
-
-      const matchingCred = credentials.find(c => c.registrationMethod === "pin");
-      if (!matchingCred) {
-        return res.status(400).json({ error: "رمز PIN غير صحيح", verified: false });
-      }
-
-      await storage.updateBiometricCredentialCounter(matchingCred.id, matchingCred.counter + 1);
-
-      const tokenData = `${employeeId}:${Date.now()}:${crypto.randomBytes(8).toString("hex")}`;
-      const verificationToken = Buffer.from(tokenData).toString("base64url");
-
-      biometricChallenges.set(`token_${verificationToken}`, {
-        challenge: verificationToken, employeeId, type: "verified_token", timestamp: Date.now()
-      });
-
-      res.json({
-        verified: true,
-        employeeName: matchingCred.employeeName,
-        verificationToken,
-        registrationMethod: matchingCred.registrationMethod || "pin"
-      });
-    } catch (error) {
-      console.error("Error verifying PIN:", error);
-      res.status(500).json({ error: "فشل في التحقق من رمز PIN", verified: false });
-    }
-  });
-
   // Get biometric status for employees in a branch
   app.get("/api/biometric/branch/:branchId", isAuthenticated, async (req, res) => {
     try {
@@ -19251,10 +19168,11 @@ export async function registerRoutes(
   // ============ End Biometric Endpoints ============
 
   // Biometric Settings Admin APIs - إعدادات البصمة للمسؤول
-  const VALID_REGISTRATION_METHODS = ["fingerprint", "face", "pin"];
+  const VALID_REGISTRATION_METHODS = ["fingerprint", "face"];
   const VALID_DEVICE_TYPES = ["mobile_android", "mobile_ios", "tablet", "desktop"];
 
-  async function verifyBiometricOwnership(credentialId: number, currentUser: any): Promise<{ credential: any; error?: string }> {
+  async function verifyBiometricOwnership(credentialId: number, req: any): Promise<{ credential: any; error?: string }> {
+    const currentUser = getCurrentUser(req);
     const [credential] = await db.select({
       id: biometricCredentials.id,
       employeeId: biometricCredentials.employeeId,
@@ -19278,8 +19196,11 @@ export async function registerRoutes(
       usageCount: biometricCredentials.usageCount,
     }).from(biometricCredentials).where(eq(biometricCredentials.id, credentialId));
     if (!credential) return { credential: null, error: "البصمة غير موجودة" };
-    if (currentUser.role !== "admin" && currentUser.branchId !== credential.branchId) {
-      return { credential: null, error: "لا يمكنك تعديل بصمات فرع آخر" };
+    if (!isUserAdmin(req)) {
+      const hasAccess = await canAccessBranch(req, credential.branchId);
+      if (!hasAccess) {
+        return { credential: null, error: "لا يمكنك تعديل بصمات فرع آخر" };
+      }
     }
     return { credential };
   }
@@ -19309,13 +19230,16 @@ export async function registerRoutes(
     return { type, model, os, browser };
   }
 
-  app.get("/api/biometric-settings/branch/:branchId", isAuthenticated, async (req, res) => {
+  app.get("/api/biometric-settings/branch/:branchId", isAuthenticated, requirePermission("biometric_settings", "view"), async (req, res) => {
     try {
       const { branchId } = req.params;
       const currentUser = getCurrentUser(req);
       
-      if (currentUser?.role !== "admin" && currentUser?.branchId !== branchId) {
-        return res.status(403).json({ error: "لا يمكنك عرض بيانات فرع آخر" });
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "لا يمكنك عرض بيانات فرع آخر" });
+        }
       }
 
       const branchEmps = await db.select().from(branchEmployees).where(
@@ -19485,17 +19409,14 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/biometric-settings/:id/toggle", isAuthenticated, async (req, res) => {
+  app.patch("/api/biometric-settings/:id/toggle", isAuthenticated, requirePermission("biometric_settings", "change_status"), async (req, res) => {
     try {
       const currentUser = getCurrentUser(req);
-      if (currentUser?.role !== "admin") {
-        return res.status(403).json({ error: "فقط المسؤول يمكنه تعديل إعدادات البصمة" });
-      }
 
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
 
-      const { credential: existingCred, error: ownershipError } = await verifyBiometricOwnership(id, currentUser);
+      const { credential: existingCred, error: ownershipError } = await verifyBiometricOwnership(id, req);
       if (ownershipError) return res.status(existingCred ? 403 : 404).json({ error: ownershipError });
 
       const { isActive, reason } = req.body;
@@ -19535,23 +19456,20 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/biometric-settings/:id/update", isAuthenticated, async (req, res) => {
+  app.patch("/api/biometric-settings/:id/update", isAuthenticated, requirePermission("biometric_settings", "edit"), async (req, res) => {
     try {
       const currentUser = getCurrentUser(req);
-      if (currentUser?.role !== "admin") {
-        return res.status(403).json({ error: "فقط المسؤول يمكنه تعديل إعدادات البصمة" });
-      }
 
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
 
-      const { credential: existingCred, error: ownershipError } = await verifyBiometricOwnership(id, currentUser);
+      const { credential: existingCred, error: ownershipError } = await verifyBiometricOwnership(id, req);
       if (ownershipError) return res.status(existingCred ? 403 : 404).json({ error: ownershipError });
 
       const { registrationMethod, deviceType, deviceModel } = req.body;
 
       if (registrationMethod && !VALID_REGISTRATION_METHODS.includes(registrationMethod)) {
-        return res.status(400).json({ error: "نوع التسجيل غير صالح. القيم المتاحة: fingerprint, face, pin" });
+        return res.status(400).json({ error: "نوع التسجيل غير صالح. القيم المتاحة: fingerprint, face" });
       }
       if (deviceType && !VALID_DEVICE_TYPES.includes(deviceType)) {
         return res.status(400).json({ error: "نوع الجهاز غير صالح" });
@@ -19583,17 +19501,14 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/biometric-settings/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/biometric-settings/:id", isAuthenticated, requirePermission("biometric_settings", "delete"), async (req, res) => {
     try {
       const currentUser = getCurrentUser(req);
-      if (currentUser?.role !== "admin") {
-        return res.status(403).json({ error: "فقط المسؤول يمكنه حذف البصمة" });
-      }
 
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
 
-      const { credential: existingCred, error: ownershipError } = await verifyBiometricOwnership(id, currentUser);
+      const { credential: existingCred, error: ownershipError } = await verifyBiometricOwnership(id, req);
       if (ownershipError) return res.status(existingCred ? 403 : 404).json({ error: ownershipError });
 
       await pool.query(`DELETE FROM biometric_credentials WHERE id = $1`, [id]);
@@ -19605,12 +19520,9 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/biometric-settings/employee/:employeeId/reset", isAuthenticated, async (req, res) => {
+  app.delete("/api/biometric-settings/employee/:employeeId/reset", isAuthenticated, requirePermission("biometric_settings", "delete"), async (req, res) => {
     try {
       const currentUser = getCurrentUser(req);
-      if (currentUser?.role !== "admin") {
-        return res.status(403).json({ error: "فقط المسؤول يمكنه إعادة تعيين البصمة" });
-      }
 
       const { employeeId } = req.params;
       const empCredentials = await db.select({
@@ -19635,9 +19547,13 @@ export async function registerRoutes(
       deactivationReason: biometricCredentials.deactivationReason,
       usageCount: biometricCredentials.usageCount,
     }).from(biometricCredentials).where(eq(biometricCredentials.employeeId, employeeId));
-      if (empCredentials.length > 0 && currentUser.branchId && currentUser.role !== "admin") {
-        const hasOtherBranch = empCredentials.some(c => c.branchId !== currentUser.branchId);
-        if (hasOtherBranch) return res.status(403).json({ error: "لا يمكنك إعادة تعيين بصمات فرع آخر" });
+      if (empCredentials.length > 0 && !isUserAdmin(req)) {
+        for (const cred of empCredentials) {
+          const hasAccess = await canAccessBranch(req, cred.branchId);
+          if (!hasAccess) {
+            return res.status(403).json({ error: "لا يمكنك إعادة تعيين بصمات فرع آخر" });
+          }
+        }
       }
 
       const deleteResult = await pool.query(
@@ -19652,13 +19568,19 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/biometric-settings/stats", isAuthenticated, async (req, res) => {
+  app.get("/api/biometric-settings/stats", isAuthenticated, requirePermission("biometric_settings", "view"), async (req, res) => {
     try {
       const currentUser = getCurrentUser(req);
-      if (currentUser?.role !== "admin") {
-        return res.status(403).json({ error: "فقط المسؤول يمكنه عرض الإحصائيات" });
-      }
 
+      const conditions: SQL[] = [];
+      if (!isUserAdmin(req)) {
+        const allowedBranches = await getAllowedBranchIds(req);
+        if (allowedBranches.length > 0) {
+          conditions.push(inArray(biometricCredentials.branchId, allowedBranches));
+        } else if (currentUser?.branchId) {
+          conditions.push(eq(biometricCredentials.branchId, currentUser.branchId));
+        }
+      }
       const allCredentials = await db.select({
         id: biometricCredentials.id,
         employeeId: biometricCredentials.employeeId,
@@ -19666,7 +19588,7 @@ export async function registerRoutes(
         isActive: biometricCredentials.isActive,
         registrationMethod: biometricCredentials.registrationMethod,
         deviceType: biometricCredentials.deviceType,
-      }).from(biometricCredentials);
+      }).from(biometricCredentials).where(conditions.length > 0 ? and(...conditions) : undefined);
       const activeCount = allCredentials.filter(c => c.isActive).length;
       const inactiveCount = allCredentials.filter(c => !c.isActive).length;
 
@@ -19692,20 +19614,20 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/biometric-settings/register/challenge", isAuthenticated, async (req, res) => {
+  app.post("/api/biometric-settings/register/challenge", isAuthenticated, requirePermission("biometric_settings", "create"), async (req, res) => {
     try {
       const currentUser = getCurrentUser(req);
-      if (currentUser?.role !== "admin") {
-        return res.status(403).json({ error: "فقط المسؤول يمكنه تسجيل البصمة" });
-      }
 
       const { employeeId, employeeName, branchId } = req.body;
       if (!employeeId || !employeeName || !branchId) {
         return res.status(400).json({ error: "بيانات الموظف مطلوبة" });
       }
 
-      if (currentUser.role !== "admin" && currentUser.branchId !== branchId) {
-        return res.status(403).json({ error: "لا يمكنك تسجيل بصمات فرع آخر" });
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "لا يمكنك تسجيل بصمات فرع آخر" });
+        }
       }
 
       const crypto = await import("crypto");
@@ -19753,12 +19675,9 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/biometric-settings/register/complete", isAuthenticated, async (req, res) => {
+  app.post("/api/biometric-settings/register/complete", isAuthenticated, requirePermission("biometric_settings", "create"), async (req, res) => {
     try {
       const currentUser = getCurrentUser(req);
-      if (currentUser?.role !== "admin") {
-        return res.status(403).json({ error: "فقط المسؤول يمكنه تسجيل البصمة" });
-      }
 
       const { employeeId, employeeName, branchId, credentialId, publicKey, registrationMethod, deviceType, deviceModel } = req.body;
 
@@ -19766,7 +19685,7 @@ export async function registerRoutes(
         return res.status(400).json({ error: "بيانات التسجيل غير مكتملة" });
       }
 
-      const VALID_REG_METHODS = ["fingerprint", "face", "pin"];
+      const VALID_REG_METHODS = ["fingerprint", "face"];
       const VALID_DEV_TYPES = ["mobile_android", "mobile_ios", "tablet", "desktop"];
 
       if (registrationMethod && !VALID_REG_METHODS.includes(registrationMethod)) {
@@ -19776,8 +19695,11 @@ export async function registerRoutes(
         return res.status(400).json({ error: "نوع الجهاز غير صالح" });
       }
 
-      if (currentUser.role !== "admin" && currentUser.branchId !== branchId) {
-        return res.status(403).json({ error: "لا يمكنك تسجيل بصمات فرع آخر" });
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "لا يمكنك تسجيل بصمات فرع آخر" });
+        }
       }
 
       const existingCreds = await db.select({
