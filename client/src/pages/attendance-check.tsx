@@ -59,6 +59,24 @@ export default function AttendanceCheckPage() {
   const isRTL = i18n.language === "ar";
   const dateLocale = isRTL ? ar : enUS;
 
+  const DEVICE_BIOMETRIC_KEY = "biometric_registered_employees";
+  const getDeviceRegisteredEmployees = (): string[] => {
+    try {
+      const stored = localStorage.getItem(DEVICE_BIOMETRIC_KEY);
+      return stored ? JSON.parse(stored) : [];
+    } catch { return []; }
+  };
+  const markEmployeeRegisteredOnDevice = (employeeId: string) => {
+    const list = getDeviceRegisteredEmployees();
+    if (!list.includes(employeeId)) {
+      list.push(employeeId);
+      localStorage.setItem(DEVICE_BIOMETRIC_KEY, JSON.stringify(list));
+    }
+  };
+  const isEmployeeRegisteredOnDevice = (employeeId: string): boolean => {
+    return getDeviceRegisteredEmployees().includes(employeeId);
+  };
+
   const SHIFT_TYPES = [
     { value: "morning", label: t("attendanceCheck.morningShift"), icon: Sunrise, color: "text-amber-500" },
     { value: "evening", label: t("attendanceCheck.eveningShift"), icon: Sun, color: "text-orange-500" },
@@ -253,9 +271,18 @@ export default function AttendanceCheckPage() {
     setHasSignature(false);
     setLocationStatus("idle");
     setLocationDistance(null);
-    setBiometricStatus("idle");
     setBiometricToken(null);
-    setEmployeeBiometricMethod(biometricStatusMap?.[employee.employeeId]?.registrationMethod || null);
+    const empMethod = biometricStatusMap?.[employee.employeeId]?.registrationMethod || null;
+    setEmployeeBiometricMethod(empMethod);
+    
+    const hasServerCred = biometricStatusMap?.[employee.employeeId]?.hasCredential;
+    if (!hasServerCred) {
+      setBiometricStatus("unavailable");
+    } else if (!isEmployeeRegisteredOnDevice(employee.employeeId)) {
+      setBiometricStatus("device_mismatch");
+    } else {
+      setBiometricStatus("idle");
+    }
     checkLocationValidity();
   };
 
@@ -318,6 +345,7 @@ export default function AttendanceCheckPage() {
       });
       
       queryClient.invalidateQueries({ queryKey: ["/api/biometric/branch"] });
+      markEmployeeRegisteredOnDevice(employeeId);
       toast({ title: "تم تسجيل البصمة", description: `تم تسجيل بصمة ${employeeName} بنجاح` });
       setShowBiometricRegister(null);
     } catch (error: any) {
@@ -352,7 +380,7 @@ export default function AttendanceCheckPage() {
     return "ضع إصبعك على مستشعر البصمة";
   };
 
-  const handleBiometricVerify = async (employeeId: string) => {
+  const handleBiometricVerify = async (employeeId: string, forceAttempt: boolean = false) => {
     if (!window.PublicKeyCredential) {
       setBiometricStatus("unavailable");
       return;
@@ -360,6 +388,18 @@ export default function AttendanceCheckPage() {
     
     const empMethod = biometricStatusMap?.[employeeId]?.registrationMethod || null;
     setEmployeeBiometricMethod(empMethod);
+    
+    const hasServerCredential = biometricStatusMap?.[employeeId]?.hasCredential;
+    if (!hasServerCredential) {
+      setBiometricStatus("unavailable");
+      return;
+    }
+
+    if (!forceAttempt && !isEmployeeRegisteredOnDevice(employeeId)) {
+      console.log("[Biometric] Employee not registered on this device (localStorage hint), showing device_mismatch");
+      setBiometricStatus("device_mismatch");
+      return;
+    }
     
     setBiometricStatus("verifying");
     const verifyStartTime = Date.now();
@@ -391,13 +431,7 @@ export default function AttendanceCheckPage() {
         timeout: options.timeout,
       };
       
-      let assertion: PublicKeyCredential | null = null;
-      try {
-        assertion = await navigator.credentials.get({ publicKey: publicKeyOptions }) as PublicKeyCredential;
-      } catch (webauthnError: any) {
-        console.error("[Biometric] WebAuthn get error:", webauthnError.name, webauthnError.message);
-        throw webauthnError;
-      }
+      const assertion = await navigator.credentials.get({ publicKey: publicKeyOptions }) as PublicKeyCredential;
       if (!assertion) throw new Error("فشل التحقق");
       
       const credentialId = btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(assertion.rawId))))
@@ -409,6 +443,7 @@ export default function AttendanceCheckPage() {
       if (verifyData.verified) {
         setBiometricStatus("verified");
         setBiometricToken(verifyData.verificationToken || null);
+        markEmployeeRegisteredOnDevice(employeeId);
         const methodLabel = biometricMethodLabels[registrationMethod || empMethod || "fingerprint"] || "البصمة";
         toast({ title: "تم التحقق", description: `تم التحقق من ${methodLabel} بنجاح` });
       } else {
@@ -428,20 +463,20 @@ export default function AttendanceCheckPage() {
         setBiometricStatus("device_mismatch");
         toast({ 
           title: "البصمة غير موجودة على هذا الجهاز", 
-          description: "يجب تسجيل البصمة على جهاز الحضور. اضغط الزر أدناه.", 
+          description: "سجّل البصمة على هذا الجهاز أولاً باستخدام الزر أدناه", 
           variant: "destructive" 
         });
       } else if (error.name === "NotAllowedError") {
         if (elapsed < 3000) {
           setBiometricStatus("device_mismatch");
           toast({ 
-            title: "البصمة غير موجودة على هذا الجهاز", 
-            description: "لم يتم العثور على بصمة مسجلة. سجّل البصمة على هذا الجهاز أولاً.", 
+            title: "البصمة غير متاحة على هذا الجهاز", 
+            description: "سجّل البصمة على هذا الجهاز أولاً", 
             variant: "destructive" 
           });
         } else {
           setBiometricStatus("idle");
-          toast({ title: "تم الإلغاء", description: "تم إلغاء عملية التحقق. اضغط على الزر لإعادة المحاولة.", variant: "destructive" });
+          toast({ title: "تم الإلغاء", description: "تم إلغاء عملية التحقق. اضغط الزر لإعادة المحاولة.", variant: "destructive" });
         }
       } else {
         setBiometricStatus("failed");
@@ -509,8 +544,9 @@ export default function AttendanceCheckPage() {
       });
       
       queryClient.invalidateQueries({ queryKey: ["/api/biometric/branch"] });
+      markEmployeeRegisteredOnDevice(employeeId);
       
-      toast({ title: "تم تسجيل البصمة على هذا الجهاز", description: "الآن يمكنك التحقق من البصمة" });
+      toast({ title: "تم تسجيل البصمة على هذا الجهاز", description: "الآن سيتم التحقق تلقائياً..." });
       
       setBiometricStatus("idle");
       setTimeout(() => handleBiometricVerify(employeeId), 500);
@@ -1031,10 +1067,10 @@ export default function AttendanceCheckPage() {
                         )}
                       </div>
                       {biometricStatus === "device_mismatch" && selectedEmployee && (
-                        <div className="flex gap-2">
+                        <div className="flex flex-col gap-2">
                           <Button
                             size="sm"
-                            className="flex-1 gap-1 bg-purple-600 hover:bg-purple-700"
+                            className="w-full gap-1 bg-purple-600 hover:bg-purple-700"
                             onClick={handleRegisterOnThisDevice}
                             disabled={deviceRegisterLoading}
                             data-testid="btn-register-this-device"
@@ -1049,10 +1085,12 @@ export default function AttendanceCheckPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            className="gap-1"
-                            onClick={() => selectedEmployee && handleBiometricVerify(selectedEmployee.employeeId)}
+                            className="w-full gap-1 text-xs"
+                            onClick={() => selectedEmployee && handleBiometricVerify(selectedEmployee.employeeId, true)}
+                            data-testid="btn-force-verify"
                           >
-                            إعادة المحاولة
+                            <BiometricIcon className="w-3.5 h-3.5" />
+                            حاول التحقق مباشرة (إذا كانت البصمة متزامنة)
                           </Button>
                         </div>
                       )}
