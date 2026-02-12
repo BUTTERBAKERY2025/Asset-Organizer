@@ -12827,14 +12827,45 @@ export class DatabaseStorage implements IStorage {
       isActive: row.is_active !== undefined ? row.is_active : true,
       lastUsedAt: row.last_used_at ? new Date(row.last_used_at) : null,
       createdAt: row.created_at ? new Date(row.created_at) : new Date(),
+      deviceType: row.device_type || null,
+      deviceModel: row.device_model || null,
+      registrationMethod: row.registration_method || 'webauthn',
+      registeredByName: row.registered_by_name || null,
+      deactivatedAt: row.deactivated_at ? new Date(row.deactivated_at) : null,
+      deactivatedBy: row.deactivated_by || null,
+      deactivationReason: row.deactivation_reason || null,
+      usageCount: row.usage_count || null,
+      verificationPin: null,
     };
   }
 
   // Biometric Credentials
   async getBiometricCredentials(employeeId: string): Promise<BiometricCredential[]> {
     try {
-      return await db.select().from(biometricCredentials)
+      const rows = await db.select({
+        id: biometricCredentials.id,
+        employeeId: biometricCredentials.employeeId,
+        employeeName: biometricCredentials.employeeName,
+        branchId: biometricCredentials.branchId,
+        credentialId: biometricCredentials.credentialId,
+        publicKey: biometricCredentials.publicKey,
+        counter: biometricCredentials.counter,
+        deviceInfo: biometricCredentials.deviceInfo,
+        registeredBy: biometricCredentials.registeredBy,
+        isActive: biometricCredentials.isActive,
+        lastUsedAt: biometricCredentials.lastUsedAt,
+        createdAt: biometricCredentials.createdAt,
+        deviceType: biometricCredentials.deviceType,
+        deviceModel: biometricCredentials.deviceModel,
+        registrationMethod: biometricCredentials.registrationMethod,
+        registeredByName: biometricCredentials.registeredByName,
+        deactivatedAt: biometricCredentials.deactivatedAt,
+        deactivatedBy: biometricCredentials.deactivatedBy,
+        deactivationReason: biometricCredentials.deactivationReason,
+        usageCount: biometricCredentials.usageCount,
+      }).from(biometricCredentials)
         .where(and(eq(biometricCredentials.employeeId, employeeId), eq(biometricCredentials.isActive, true)));
+      return rows.map(r => ({ ...r, verificationPin: null })) as BiometricCredential[];
     } catch (error: any) {
       if (error?.code === '42P01') return [];
       if (error?.code === '42703') {
@@ -12856,8 +12887,30 @@ export class DatabaseStorage implements IStorage {
 
   async getBiometricCredentialsByBranch(branchId: string): Promise<BiometricCredential[]> {
     try {
-      return await db.select().from(biometricCredentials)
+      const rows = await db.select({
+      id: biometricCredentials.id,
+      employeeId: biometricCredentials.employeeId,
+      employeeName: biometricCredentials.employeeName,
+      branchId: biometricCredentials.branchId,
+      credentialId: biometricCredentials.credentialId,
+      publicKey: biometricCredentials.publicKey,
+      counter: biometricCredentials.counter,
+      deviceInfo: biometricCredentials.deviceInfo,
+      registeredBy: biometricCredentials.registeredBy,
+      isActive: biometricCredentials.isActive,
+      lastUsedAt: biometricCredentials.lastUsedAt,
+      createdAt: biometricCredentials.createdAt,
+      deviceType: biometricCredentials.deviceType,
+      deviceModel: biometricCredentials.deviceModel,
+      registrationMethod: biometricCredentials.registrationMethod,
+      registeredByName: biometricCredentials.registeredByName,
+      deactivatedAt: biometricCredentials.deactivatedAt,
+      deactivatedBy: biometricCredentials.deactivatedBy,
+      deactivationReason: biometricCredentials.deactivationReason,
+      usageCount: biometricCredentials.usageCount,
+    }).from(biometricCredentials)
         .where(and(eq(biometricCredentials.branchId, branchId), eq(biometricCredentials.isActive, true)));
+      return rows.map(r => ({ ...r, verificationPin: null })) as BiometricCredential[];
     } catch (error: any) {
       if (error?.code === '42P01') return [];
       if (error?.code === '42703') {
@@ -12879,9 +12932,30 @@ export class DatabaseStorage implements IStorage {
 
   async getBiometricCredentialByCredentialId(credentialId: string): Promise<BiometricCredential | undefined> {
     try {
-      const [cred] = await db.select().from(biometricCredentials)
+      const [row] = await db.select({
+      id: biometricCredentials.id,
+      employeeId: biometricCredentials.employeeId,
+      employeeName: biometricCredentials.employeeName,
+      branchId: biometricCredentials.branchId,
+      credentialId: biometricCredentials.credentialId,
+      publicKey: biometricCredentials.publicKey,
+      counter: biometricCredentials.counter,
+      deviceInfo: biometricCredentials.deviceInfo,
+      registeredBy: biometricCredentials.registeredBy,
+      isActive: biometricCredentials.isActive,
+      lastUsedAt: biometricCredentials.lastUsedAt,
+      createdAt: biometricCredentials.createdAt,
+      deviceType: biometricCredentials.deviceType,
+      deviceModel: biometricCredentials.deviceModel,
+      registrationMethod: biometricCredentials.registrationMethod,
+      registeredByName: biometricCredentials.registeredByName,
+      deactivatedAt: biometricCredentials.deactivatedAt,
+      deactivatedBy: biometricCredentials.deactivatedBy,
+      deactivationReason: biometricCredentials.deactivationReason,
+      usageCount: biometricCredentials.usageCount,
+    }).from(biometricCredentials)
         .where(and(eq(biometricCredentials.credentialId, credentialId), eq(biometricCredentials.isActive, true)));
-      return cred;
+      return row ? { ...row, verificationPin: null } as BiometricCredential : undefined;
     } catch (error: any) {
       if (error?.code === '42P01') return undefined;
       if (error?.code === '42703') {

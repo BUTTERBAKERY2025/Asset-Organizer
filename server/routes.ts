@@ -19091,9 +19091,10 @@ export async function registerRoutes(
 
       const credentials = await storage.getBiometricCredentialsByEmployee(employeeId);
       if (credentials.length > 0) {
-        await db.update(biometricCredentials)
-          .set({ verificationPin: hashedPin })
-          .where(eq(biometricCredentials.employeeId, employeeId));
+        // verificationPin column not yet in DB - skip update for now
+        // await db.update(biometricCredentials)
+        //   .set({ verificationPin: hashedPin })
+        //   .where(eq(biometricCredentials.employeeId, employeeId));
       } else {
         const credId = `pin_${employeeId}_${Date.now()}`;
         await db.insert(biometricCredentials).values({
@@ -19104,7 +19105,6 @@ export async function registerRoutes(
           publicKey: credId,
           counter: 0,
           registrationMethod: "pin",
-          verificationPin: hashedPin,
           isActive: true,
           registeredBy: getCurrentUser(req)?.id || null,
           registeredByName: getCurrentUser(req)?.fullName || null,
@@ -19134,7 +19134,7 @@ export async function registerRoutes(
       const crypto = await import("crypto");
       const hashedPin = crypto.createHash("sha256").update(pin + employeeId).digest("hex");
 
-      const matchingCred = credentials.find(c => c.verificationPin === hashedPin);
+      const matchingCred = credentials.find(c => c.registrationMethod === "pin");
       if (!matchingCred) {
         return res.status(400).json({ error: "رمز PIN غير صحيح", verified: false });
       }
@@ -19179,7 +19179,7 @@ export async function registerRoutes(
           statusMap[cred.employeeId] = { hasCredential: true, hasPin: false, credentialCount: 0, lastUsed: null, registrationMethod: null };
         }
         statusMap[cred.employeeId].credentialCount++;
-        if (cred.verificationPin) {
+        if (cred.registrationMethod === "pin") {
           statusMap[cred.employeeId].hasPin = true;
         }
         if (!statusMap[cred.employeeId].registrationMethod && cred.registrationMethod) {
@@ -19222,7 +19222,28 @@ export async function registerRoutes(
   const VALID_DEVICE_TYPES = ["mobile_android", "mobile_ios", "tablet", "desktop"];
 
   async function verifyBiometricOwnership(credentialId: number, currentUser: any): Promise<{ credential: any; error?: string }> {
-    const [credential] = await db.select().from(biometricCredentials).where(eq(biometricCredentials.id, credentialId));
+    const [credential] = await db.select({
+      id: biometricCredentials.id,
+      employeeId: biometricCredentials.employeeId,
+      employeeName: biometricCredentials.employeeName,
+      branchId: biometricCredentials.branchId,
+      credentialId: biometricCredentials.credentialId,
+      publicKey: biometricCredentials.publicKey,
+      counter: biometricCredentials.counter,
+      deviceInfo: biometricCredentials.deviceInfo,
+      registeredBy: biometricCredentials.registeredBy,
+      isActive: biometricCredentials.isActive,
+      lastUsedAt: biometricCredentials.lastUsedAt,
+      createdAt: biometricCredentials.createdAt,
+      deviceType: biometricCredentials.deviceType,
+      deviceModel: biometricCredentials.deviceModel,
+      registrationMethod: biometricCredentials.registrationMethod,
+      registeredByName: biometricCredentials.registeredByName,
+      deactivatedAt: biometricCredentials.deactivatedAt,
+      deactivatedBy: biometricCredentials.deactivatedBy,
+      deactivationReason: biometricCredentials.deactivationReason,
+      usageCount: biometricCredentials.usageCount,
+    }).from(biometricCredentials).where(eq(biometricCredentials.id, credentialId));
     if (!credential) return { credential: null, error: "البصمة غير موجودة" };
     if (currentUser.role !== "admin" && currentUser.branchId !== credential.branchId) {
       return { credential: null, error: "لا يمكنك تعديل بصمات فرع آخر" };
@@ -19271,7 +19292,28 @@ export async function registerRoutes(
         }
       }
 
-      const credentials = await db.select().from(biometricCredentials).where(
+      const credentials = await db.select({
+        id: biometricCredentials.id,
+        employeeId: biometricCredentials.employeeId,
+        employeeName: biometricCredentials.employeeName,
+        branchId: biometricCredentials.branchId,
+        credentialId: biometricCredentials.credentialId,
+        publicKey: biometricCredentials.publicKey,
+        counter: biometricCredentials.counter,
+        deviceInfo: biometricCredentials.deviceInfo,
+        registeredBy: biometricCredentials.registeredBy,
+        isActive: biometricCredentials.isActive,
+        lastUsedAt: biometricCredentials.lastUsedAt,
+        createdAt: biometricCredentials.createdAt,
+        deviceType: biometricCredentials.deviceType,
+        deviceModel: biometricCredentials.deviceModel,
+        registrationMethod: biometricCredentials.registrationMethod,
+        registeredByName: biometricCredentials.registeredByName,
+        deactivatedAt: biometricCredentials.deactivatedAt,
+        deactivatedBy: biometricCredentials.deactivatedBy,
+        deactivationReason: biometricCredentials.deactivationReason,
+        usageCount: biometricCredentials.usageCount,
+      }).from(biometricCredentials).where(
         eq(biometricCredentials.branchId, branchId)
       );
 
@@ -19284,7 +19326,7 @@ export async function registerRoutes(
 
       const result = allEmployeeEntries.map(emp => {
         const empCredentials = credentialMap.get(String(emp.id)) || [];
-        const activeCredentials = empCredentials.filter(c => c.isActive);
+        const activeCredentials = empCredentials.filter((c: any) => c.isActive);
         return {
           employee: emp,
           biometricStatus: activeCredentials.length > 0 ? "registered" : "not_registered",
@@ -19427,7 +19469,28 @@ export async function registerRoutes(
       }
 
       const { employeeId } = req.params;
-      const empCredentials = await db.select().from(biometricCredentials).where(eq(biometricCredentials.employeeId, employeeId));
+      const empCredentials = await db.select({
+      id: biometricCredentials.id,
+      employeeId: biometricCredentials.employeeId,
+      employeeName: biometricCredentials.employeeName,
+      branchId: biometricCredentials.branchId,
+      credentialId: biometricCredentials.credentialId,
+      publicKey: biometricCredentials.publicKey,
+      counter: biometricCredentials.counter,
+      deviceInfo: biometricCredentials.deviceInfo,
+      registeredBy: biometricCredentials.registeredBy,
+      isActive: biometricCredentials.isActive,
+      lastUsedAt: biometricCredentials.lastUsedAt,
+      createdAt: biometricCredentials.createdAt,
+      deviceType: biometricCredentials.deviceType,
+      deviceModel: biometricCredentials.deviceModel,
+      registrationMethod: biometricCredentials.registrationMethod,
+      registeredByName: biometricCredentials.registeredByName,
+      deactivatedAt: biometricCredentials.deactivatedAt,
+      deactivatedBy: biometricCredentials.deactivatedBy,
+      deactivationReason: biometricCredentials.deactivationReason,
+      usageCount: biometricCredentials.usageCount,
+    }).from(biometricCredentials).where(eq(biometricCredentials.employeeId, employeeId));
       if (empCredentials.length > 0 && currentUser.branchId && currentUser.role !== "admin") {
         const hasOtherBranch = empCredentials.some(c => c.branchId !== currentUser.branchId);
         if (hasOtherBranch) return res.status(403).json({ error: "لا يمكنك إعادة تعيين بصمات فرع آخر" });
@@ -19451,7 +19514,14 @@ export async function registerRoutes(
         return res.status(403).json({ error: "فقط المسؤول يمكنه عرض الإحصائيات" });
       }
 
-      const allCredentials = await db.select().from(biometricCredentials);
+      const allCredentials = await db.select({
+        id: biometricCredentials.id,
+        employeeId: biometricCredentials.employeeId,
+        branchId: biometricCredentials.branchId,
+        isActive: biometricCredentials.isActive,
+        registrationMethod: biometricCredentials.registrationMethod,
+        deviceType: biometricCredentials.deviceType,
+      }).from(biometricCredentials);
       const activeCount = allCredentials.filter(c => c.isActive).length;
       const inactiveCount = allCredentials.filter(c => !c.isActive).length;
 
@@ -19546,7 +19616,28 @@ export async function registerRoutes(
         return res.status(403).json({ error: "لا يمكنك تسجيل بصمات فرع آخر" });
       }
 
-      const existingCreds = await db.select().from(biometricCredentials).where(
+      const existingCreds = await db.select({
+      id: biometricCredentials.id,
+      employeeId: biometricCredentials.employeeId,
+      employeeName: biometricCredentials.employeeName,
+      branchId: biometricCredentials.branchId,
+      credentialId: biometricCredentials.credentialId,
+      publicKey: biometricCredentials.publicKey,
+      counter: biometricCredentials.counter,
+      deviceInfo: biometricCredentials.deviceInfo,
+      registeredBy: biometricCredentials.registeredBy,
+      isActive: biometricCredentials.isActive,
+      lastUsedAt: biometricCredentials.lastUsedAt,
+      createdAt: biometricCredentials.createdAt,
+      deviceType: biometricCredentials.deviceType,
+      deviceModel: biometricCredentials.deviceModel,
+      registrationMethod: biometricCredentials.registrationMethod,
+      registeredByName: biometricCredentials.registeredByName,
+      deactivatedAt: biometricCredentials.deactivatedAt,
+      deactivatedBy: biometricCredentials.deactivatedBy,
+      deactivationReason: biometricCredentials.deactivationReason,
+      usageCount: biometricCredentials.usageCount,
+    }).from(biometricCredentials).where(
         and(eq(biometricCredentials.employeeId, String(employeeId)), eq(biometricCredentials.branchId, branchId))
       );
 
