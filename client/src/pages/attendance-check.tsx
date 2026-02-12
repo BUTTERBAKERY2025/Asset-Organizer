@@ -13,7 +13,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
-import { Clock, LogIn, LogOut, Check, Pencil, RotateCcw, Building2, User, Timer, ArrowRight, Users, Calendar, Sun, Moon, Sunrise, Loader2, MapPin, AlertTriangle, ChevronLeft, ChevronRight, ShieldAlert, Fingerprint, ScanFace, KeyRound } from "lucide-react";
+import { Clock, LogIn, LogOut, Check, Pencil, RotateCcw, Building2, User, Timer, ArrowRight, Users, Calendar, Sun, Moon, Sunrise, Loader2, MapPin, AlertTriangle, ChevronLeft, ChevronRight, ShieldAlert, Fingerprint, KeyRound } from "lucide-react";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
@@ -44,12 +44,13 @@ export default function AttendanceCheckPage() {
   const [locationDistance, setLocationDistance] = useState<number | null>(null);
   const [isCheckingLocation, setIsCheckingLocation] = useState(false);
   const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [biometricStatus, setBiometricStatus] = useState<"idle" | "verifying" | "verified" | "failed" | "unavailable" | "device_mismatch">("idle");
+  const [biometricStatus, setBiometricStatus] = useState<"idle" | "verifying" | "verified" | "failed" | "unavailable" | "no_pin">("idle");
   const [showBiometricRegister, setShowBiometricRegister] = useState<{ employeeId: string; employeeName: string } | null>(null);
-  const [biometricRegistering, setBiometricRegistering] = useState(false);
   const [biometricToken, setBiometricToken] = useState<string | null>(null);
-  const [employeeBiometricMethod, setEmployeeBiometricMethod] = useState<string | null>(null);
-  const [deviceRegisterLoading, setDeviceRegisterLoading] = useState(false);
+  const [pinInput, setPinInput] = useState("");
+  const [pinVerifying, setPinVerifying] = useState(false);
+  const [showPinSetup, setShowPinSetup] = useState(false);
+  const [newPinInput, setNewPinInput] = useState("");
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -82,7 +83,7 @@ export default function AttendanceCheckPage() {
     enabled: !!selectedBranch && !!selectedShift,
   });
 
-  const { data: biometricStatusMap } = useQuery<Record<string, { hasCredential: boolean; credentialCount: number; lastUsed: string | null; registrationMethod: string | null }>>({
+  const { data: biometricStatusMap } = useQuery<Record<string, { hasCredential: boolean; hasPin: boolean; credentialCount: number; lastUsed: string | null; registrationMethod: string | null }>>({
     queryKey: ["/api/biometric/branch", selectedBranch],
     queryFn: async () => {
       if (!selectedBranch) return {};
@@ -254,12 +255,12 @@ export default function AttendanceCheckPage() {
     setLocationStatus("idle");
     setLocationDistance(null);
     setBiometricToken(null);
-    const empMethod = biometricStatusMap?.[employee.employeeId]?.registrationMethod || null;
-    setEmployeeBiometricMethod(empMethod);
-    
-    const hasServerCred = biometricStatusMap?.[employee.employeeId]?.hasCredential;
-    if (!hasServerCred) {
+    setPinInput("");
+    const empStatus = biometricStatusMap?.[employee.employeeId];
+    if (!empStatus?.hasCredential) {
       setBiometricStatus("unavailable");
+    } else if (!empStatus?.hasPin) {
+      setBiometricStatus("no_pin");
     } else {
       setBiometricStatus("idle");
     }
@@ -272,265 +273,51 @@ export default function AttendanceCheckPage() {
     setHasSignature(false);
   };
 
-  const handleBiometricRegister = async (employeeId: string, employeeName: string) => {
-    if (!window.PublicKeyCredential) {
-      toast({ title: "غير مدعوم", description: "هذا الجهاز لا يدعم البصمة البيومترية", variant: "destructive" });
-      return;
-    }
 
-    const isAvailable = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable?.();
-    console.log("[Biometric] Platform authenticator available:", isAvailable);
+
+  const handlePinVerify = async () => {
+    if (!selectedEmployee || !pinInput) return;
     
-    setBiometricRegistering(true);
-    try {
-      const optionsRes = await apiRequest("POST", "/api/biometric/register-options", {
-        employeeId, employeeName, branchId: selectedBranch,
-      });
-      const { options, challengeKey } = await optionsRes.json();
-      console.log("[Biometric] Received options, rpId:", options.rp?.id);
-      
-      const publicKeyOptions: PublicKeyCredentialCreationOptions = {
-        challenge: Uint8Array.from(atob(options.challenge.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)),
-        rp: options.rp,
-        user: {
-          id: Uint8Array.from(atob(options.user.id.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)),
-          name: options.user.name,
-          displayName: options.user.displayName,
-        },
-        pubKeyCredParams: options.pubKeyCredParams,
-        authenticatorSelection: options.authenticatorSelection,
-        timeout: options.timeout,
-        attestation: options.attestation,
-      };
-      
-      console.log("[Biometric] Calling navigator.credentials.create...");
-      const credential = await navigator.credentials.create({ publicKey: publicKeyOptions }) as PublicKeyCredential;
-      if (!credential) throw new Error("فشل في إنشاء البصمة");
-      console.log("[Biometric] Credential created successfully");
-      
-      const credentialId = btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(credential.rawId))))
-        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-      
-      const response = credential.response as AuthenticatorAttestationResponse;
-      const pubKeyBytes = response.getPublicKey?.() || new ArrayBuffer(0);
-      const publicKey = btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(pubKeyBytes))))
-        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-      
-      await apiRequest("POST", "/api/biometric/register", {
-        employeeId, employeeName, branchId: selectedBranch,
-        credentialId,
-        publicKey: publicKey || credentialId,
-        deviceInfo: navigator.userAgent,
-        challengeKey,
-      });
-      
-      queryClient.invalidateQueries({ queryKey: ["/api/biometric/branch"] });
-      toast({ title: "تم تسجيل البصمة", description: `تم تسجيل بصمة ${employeeName} بنجاح` });
-      setShowBiometricRegister(null);
-    } catch (error: any) {
-      console.error("[Biometric] Registration error:", error.name, error.message);
-      if (error.name === "NotAllowedError") {
-        toast({ title: "تم الإلغاء", description: "تم إلغاء تسجيل البصمة. تأكد من فتح الموقع مباشرة (ليس داخل إطار) وأن الجهاز يدعم البصمة", variant: "destructive" });
-      } else if (error.name === "SecurityError") {
-        toast({ title: "خطأ أمني", description: "يجب فتح الموقع عبر HTTPS أو من الرابط المباشر للتطبيق", variant: "destructive" });
-      } else {
-        toast({ title: "خطأ", description: error.message || "فشل في تسجيل البصمة", variant: "destructive" });
-      }
-    } finally {
-      setBiometricRegistering(false);
-    }
-  };
-
-  const biometricMethodLabels: Record<string, string> = {
-    fingerprint: "بصمة الإصبع",
-    face: "بصمة الوجه",
-    pin: "رمز PIN",
-  };
-
-  const getBiometricIcon = (method: string | null) => {
-    if (method === "face") return ScanFace;
-    if (method === "pin") return KeyRound;
-    return Fingerprint;
-  };
-
-  const getBiometricPrompt = (method: string | null) => {
-    if (method === "face") return "وجّه وجهك نحو الكاميرا للتحقق";
-    if (method === "pin") return "أدخل رمز PIN الخاص بجهازك";
-    return "ضع إصبعك على مستشعر البصمة";
-  };
-
-  const handleBiometricVerify = async (employeeId: string) => {
-    if (!window.PublicKeyCredential) {
-      setBiometricStatus("unavailable");
-      return;
-    }
-    
-    const empMethod = biometricStatusMap?.[employeeId]?.registrationMethod || null;
-    setEmployeeBiometricMethod(empMethod);
-    
-    const hasServerCredential = biometricStatusMap?.[employeeId]?.hasCredential;
-    if (!hasServerCredential) {
-      setBiometricStatus("unavailable");
-      return;
-    }
-    
+    const employeeId = selectedEmployee.employeeId;
+    setPinVerifying(true);
     setBiometricStatus("verifying");
-    const verifyStartTime = Date.now();
+    
     try {
-      const optionsRes = await apiRequest("POST", "/api/biometric/verify-options", { employeeId });
-      const optionsData = await optionsRes.json();
-      
-      if (optionsData.noBiometric) {
-        setBiometricStatus("unavailable");
-        return;
-      }
-      
-      const { options, challengeKey, registrationMethod } = optionsData;
-      if (registrationMethod) {
-        setEmployeeBiometricMethod(registrationMethod);
-      }
-      
-      const allowCreds = options.allowCredentials.map((c: any) => ({
-        id: Uint8Array.from(atob(c.id.replace(/-/g, '+').replace(/_/g, '/')), c2 => c2.charCodeAt(0)),
-        type: c.type as PublicKeyCredentialType,
-        transports: c.transports as AuthenticatorTransport[],
-      }));
-
-      const publicKeyOptions: PublicKeyCredentialRequestOptions = {
-        challenge: Uint8Array.from(atob(options.challenge.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)),
-        rpId: options.rpId,
-        allowCredentials: allowCreds,
-        userVerification: options.userVerification as UserVerificationRequirement,
-        timeout: options.timeout,
-      };
-      
-      const assertion = await navigator.credentials.get({ publicKey: publicKeyOptions }) as PublicKeyCredential;
-      if (!assertion) throw new Error("فشل التحقق");
-      
-      const credentialId = btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(assertion.rawId))))
-        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-      
-      const verifyRes = await apiRequest("POST", "/api/biometric/verify", { credentialId, employeeId, challengeKey });
+      const verifyRes = await apiRequest("POST", "/api/biometric/verify-pin", { employeeId, pin: pinInput });
       const verifyData = await verifyRes.json();
       
       if (verifyData.verified) {
         setBiometricStatus("verified");
         setBiometricToken(verifyData.verificationToken || null);
-        const methodLabel = biometricMethodLabels[registrationMethod || empMethod || "fingerprint"] || "البصمة";
-        toast({ title: "تم التحقق", description: `تم التحقق من ${methodLabel} بنجاح` });
+        toast({ title: "تم التحقق", description: "تم التحقق من رمز PIN بنجاح" });
       } else {
         setBiometricStatus("failed");
-        toast({ title: "فشل التحقق", description: "لم تتطابق البصمة مع المسجلة", variant: "destructive" });
+        setPinInput("");
+        toast({ title: "فشل التحقق", description: "رمز PIN غير صحيح", variant: "destructive" });
       }
     } catch (error: any) {
-      console.error("[Biometric Verify] Error:", error.name, error.message);
-      const errorMsg = (error.message || "").toLowerCase();
-      const elapsed = Date.now() - verifyStartTime;
-      
-      const isNoPasskeys = errorMsg.includes("no passkey") || errorMsg.includes("no credential") || 
-                           errorMsg.includes("not registered") || errorMsg.includes("no authenticator") ||
-                           errorMsg.includes("empty allow list") || errorMsg.includes("not found");
-      
-      if (isNoPasskeys || error.name === "InvalidStateError") {
-        setBiometricStatus("device_mismatch");
-        toast({ 
-          title: "البصمة غير موجودة على هذا الجهاز", 
-          description: "سجّل البصمة على هذا الجهاز أولاً باستخدام الزر أدناه", 
-          variant: "destructive" 
-        });
-      } else if (error.name === "NotAllowedError") {
-        if (elapsed < 3000) {
-          setBiometricStatus("device_mismatch");
-          toast({ 
-            title: "البصمة غير متاحة على هذا الجهاز", 
-            description: "سجّل البصمة على هذا الجهاز أولاً", 
-            variant: "destructive" 
-          });
-        } else {
-          setBiometricStatus("idle");
-          toast({ title: "تم الإلغاء", description: "تم إلغاء عملية التحقق. اضغط الزر لإعادة المحاولة.", variant: "destructive" });
-        }
-      } else {
-        setBiometricStatus("failed");
-        toast({ title: "خطأ", description: "فشل التحقق من البصمة، حاول مرة أخرى", variant: "destructive" });
-      }
+      console.error("[PIN Verify] Error:", error);
+      setBiometricStatus("failed");
+      setPinInput("");
+      const errorMsg = error?.message || "فشل في التحقق";
+      toast({ title: "خطأ", description: errorMsg, variant: "destructive" });
+    } finally {
+      setPinVerifying(false);
     }
   };
 
-  const handleRegisterOnThisDevice = async () => {
-    if (!selectedEmployee || !window.PublicKeyCredential) return;
-    
-    const employeeId = selectedEmployee.employeeId;
-    const employeeName = selectedEmployee.employeeName;
-    const method = employeeBiometricMethod || "fingerprint";
-    
-    setDeviceRegisterLoading(true);
+  const handleSetPin = async (employeeId: string, employeeName: string, pin: string) => {
     try {
-      const optionsRes = await apiRequest("POST", "/api/biometric/register-options", {
-        employeeId, employeeName, branchId: selectedBranch,
+      await apiRequest("POST", "/api/biometric/set-pin", { 
+        employeeId, employeeName, pin, branchId: selectedBranch 
       });
-      const { options, challengeKey } = await optionsRes.json();
-      
-      const publicKeyOptions: PublicKeyCredentialCreationOptions = {
-        challenge: Uint8Array.from(atob(options.challenge.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)),
-        rp: options.rp,
-        user: {
-          id: Uint8Array.from(atob(options.user.id.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)),
-          name: options.user.name,
-          displayName: options.user.displayName,
-        },
-        pubKeyCredParams: options.pubKeyCredParams,
-        authenticatorSelection: options.authenticatorSelection,
-        timeout: options.timeout,
-        attestation: options.attestation,
-      };
-      
-      const credential = await navigator.credentials.create({ publicKey: publicKeyOptions }) as PublicKeyCredential;
-      if (!credential) throw new Error("فشل في إنشاء البصمة");
-      
-      const credentialId = btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(credential.rawId))))
-        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-      
-      const response = credential.response as AuthenticatorAttestationResponse;
-      const pubKeyBytes = response.getPublicKey?.() || new ArrayBuffer(0);
-      const publicKey = btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(pubKeyBytes))))
-        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-
-      const ua = navigator.userAgent.toLowerCase();
-      let deviceType = "desktop";
-      let deviceModel = "Unknown";
-      if (/ipad/.test(ua)) { deviceType = "tablet"; deviceModel = "iPad"; }
-      else if (/iphone/.test(ua)) { deviceType = "mobile_ios"; deviceModel = "iPhone"; }
-      else if (/android/.test(ua) && /mobile/.test(ua)) { deviceType = "mobile_android"; }
-      else if (/android/.test(ua)) { deviceType = "tablet"; }
-      
-      await apiRequest("POST", "/api/biometric/register", {
-        employeeId, employeeName, branchId: selectedBranch,
-        credentialId,
-        publicKey: publicKey || credentialId,
-        deviceInfo: navigator.userAgent,
-        deviceType,
-        deviceModel,
-        registrationMethod: method,
-        challengeKey,
-      });
-      
       queryClient.invalidateQueries({ queryKey: ["/api/biometric/branch"] });
-      
-      toast({ title: "تم تسجيل البصمة على هذا الجهاز", description: "الآن سيتم التحقق تلقائياً..." });
-      
+      toast({ title: "تم تعيين رمز PIN", description: `تم تعيين رمز PIN للموظف ${employeeName}` });
+      setShowPinSetup(false);
+      setNewPinInput("");
       setBiometricStatus("idle");
-      setTimeout(() => handleBiometricVerify(employeeId), 500);
     } catch (error: any) {
-      console.error("[Device Register] Error:", error.name, error.message);
-      if (error.name === "NotAllowedError") {
-        toast({ title: "تم الإلغاء", description: "تم إلغاء تسجيل البصمة", variant: "destructive" });
-      } else {
-        toast({ title: "خطأ", description: error.message || "فشل في تسجيل البصمة على هذا الجهاز", variant: "destructive" });
-      }
-      setBiometricStatus("device_mismatch");
-    } finally {
-      setDeviceRegisterLoading(false);
+      toast({ title: "خطأ", description: error?.message || "فشل في تعيين رمز PIN", variant: "destructive" });
     }
   };
 
@@ -543,7 +330,7 @@ export default function AttendanceCheckPage() {
     }
 
     if (biometricStatus !== "verified") {
-      toast({ title: "البصمة مطلوبة", description: "يجب التحقق من البصمة قبل تسجيل الحضور أو الانصراف", variant: "destructive" });
+      toast({ title: "رمز PIN مطلوب", description: "يجب التحقق من رمز PIN قبل تسجيل الحضور أو الانصراف", variant: "destructive" });
       return;
     }
     
@@ -813,27 +600,25 @@ export default function AttendanceCheckPage() {
                               ) : "-"}
                             </TableCell>
                             <TableCell className="text-center">
-                              {biometricStatusMap?.[emp.employeeId]?.hasCredential ? (() => {
-                                const method = biometricStatusMap?.[emp.employeeId]?.registrationMethod;
-                                const MethodIcon = getBiometricIcon(method || null);
-                                const methodLabel = biometricMethodLabels[method || "fingerprint"] || "مسجّلة";
-                                return (
-                                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 gap-1">
-                                    <MethodIcon className="w-3 h-3" />
-                                    {methodLabel}
-                                  </Badge>
-                                );
-                              })() : (
+                              {biometricStatusMap?.[emp.employeeId]?.hasPin ? (
+                                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 gap-1">
+                                  <KeyRound className="w-3 h-3" />
+                                  رمز PIN
+                                </Badge>
+                              ) : (
                                 <Button
                                   variant="ghost"
                                   size="sm"
                                   className="text-xs text-muted-foreground hover:text-primary gap-1"
-                                  onClick={() => handleBiometricRegister(emp.employeeId, emp.employeeName)}
-                                  disabled={biometricRegistering}
-                                  data-testid={`btn-register-biometric-${emp.employeeId}`}
+                                  onClick={() => {
+                                    setShowPinSetup(true);
+                                    setShowBiometricRegister({ employeeId: emp.employeeId, employeeName: emp.employeeName });
+                                    setNewPinInput("");
+                                  }}
+                                  data-testid={`btn-set-pin-${emp.employeeId}`}
                                 >
-                                  <Fingerprint className="w-3 h-3" />
-                                  تسجيل بصمة
+                                  <KeyRound className="w-3 h-3" />
+                                  تعيين PIN
                                 </Button>
                               )}
                             </TableCell>
@@ -910,7 +695,7 @@ export default function AttendanceCheckPage() {
                 )}
               </DialogTitle>
               <DialogDescription className="text-xs sm:text-sm">
-                يجب التحقق من البصمة والتوقيع معاً لإتمام التسجيل
+                يجب التحقق من رمز PIN والتوقيع معاً لإتمام التسجيل
               </DialogDescription>
             </DialogHeader>
 
@@ -977,96 +762,112 @@ export default function AttendanceCheckPage() {
                 )}
               </div>
 
-              {(() => {
-                const method = employeeBiometricMethod || (selectedEmployee ? biometricStatusMap?.[selectedEmployee.employeeId]?.registrationMethod : null) || null;
-                const BiometricIcon = getBiometricIcon(method);
-                const methodLabel = biometricMethodLabels[method || "fingerprint"] || "البصمة";
-                const prompt = getBiometricPrompt(method);
-
-                return (
-                  <div className={`p-3 rounded-lg border ${
-                    biometricStatus === "verified" ? "bg-green-50 border-green-200" :
-                    biometricStatus === "failed" || biometricStatus === "device_mismatch" ? "bg-red-50 border-red-200" :
-                    biometricStatus === "verifying" ? "bg-blue-50 border-blue-200" :
-                    biometricStatus === "unavailable" ? "bg-gray-50 border-gray-200" :
-                    "bg-amber-50 border-amber-200"
-                  }`}>
+              <div className={`p-3 rounded-lg border ${
+                biometricStatus === "verified" ? "bg-green-50 border-green-200" :
+                biometricStatus === "verifying" ? "bg-blue-50 border-blue-200" :
+                biometricStatus === "unavailable" ? "bg-gray-50 border-gray-200" :
+                biometricStatus === "no_pin" ? "bg-amber-50 border-amber-200" :
+                "bg-amber-50 border-amber-200"
+              }`}>
+                <div className="flex flex-col gap-2">
+                  {biometricStatus === "verified" && (
+                    <div className="flex items-center gap-2">
+                      <KeyRound className="w-5 h-5 text-green-600" />
+                      <p className="text-sm font-medium text-green-700">تم التحقق من رمز PIN ✓</p>
+                    </div>
+                  )}
+                  {biometricStatus === "unavailable" && (
+                    <div className="flex items-center gap-2">
+                      <KeyRound className="w-5 h-5 text-gray-500" />
+                      <p className="text-sm font-medium text-gray-600">لا توجد بيانات مسجلة لهذا الموظف</p>
+                    </div>
+                  )}
+                  {biometricStatus === "no_pin" && (
                     <div className="flex flex-col gap-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <BiometricIcon className={`w-5 h-5 ${
-                            biometricStatus === "verified" ? "text-green-600" :
-                            biometricStatus === "failed" || biometricStatus === "device_mismatch" ? "text-red-600" :
-                            biometricStatus === "verifying" ? "text-blue-600 animate-pulse" :
-                            "text-amber-600"
-                          }`} />
-                          <div>
-                            <p className="text-sm font-medium">
-                              {biometricStatus === "verified" ? `تم التحقق من ${methodLabel} ✓` :
-                               biometricStatus === "device_mismatch" ? `البصمة غير مسجلة على هذا الجهاز` :
-                               biometricStatus === "failed" ? `فشل التحقق من ${methodLabel}` :
-                               biometricStatus === "verifying" ? `جاري التحقق من ${methodLabel}...` :
-                               biometricStatus === "unavailable" ? "لا توجد بصمة مسجلة" :
-                               `التحقق عبر ${methodLabel}`}
-                            </p>
-                            {biometricStatus === "unavailable" && (
-                              <p className="text-xs text-red-600 font-medium">يجب تسجيل البصمة أولاً من إعدادات البصمة</p>
-                            )}
-                            {biometricStatus === "device_mismatch" && (
-                              <p className="text-xs text-red-600 mt-0.5">البصمة مرتبطة بجهاز آخر. اضغط الزر أدناه لتسجيلها على هذا الجهاز (مرة واحدة فقط).</p>
-                            )}
-                            {biometricStatus === "verifying" && (
-                              <p className="text-xs text-blue-600 mt-0.5">{prompt}</p>
-                            )}
-                            {biometricStatus === "idle" && (
-                              <p className="text-xs text-amber-700 mt-0.5">{prompt}</p>
-                            )}
-                          </div>
-                        </div>
-                        {(biometricStatus === "idle" || biometricStatus === "failed") && selectedEmployee && (
-                          <Button
-                            size="sm"
-                            variant={biometricStatus === "failed" ? "destructive" : "default"}
-                            onClick={() => selectedEmployee && handleBiometricVerify(selectedEmployee.employeeId)}
-                            disabled={false}
-                            data-testid="btn-verify-biometric"
-                            className="gap-1"
-                          >
-                            <BiometricIcon className="w-4 h-4" />
-                            {biometricStatus === "failed" ? "إعادة المحاولة" : method === "face" ? "تحقق بالوجه" : method === "pin" ? "أدخل PIN" : "ضع بصمتك"}
-                          </Button>
-                        )}
+                      <div className="flex items-center gap-2">
+                        <KeyRound className="w-5 h-5 text-amber-600" />
+                        <p className="text-sm font-medium text-amber-700">لم يتم تعيين رمز PIN</p>
                       </div>
-                      {biometricStatus === "device_mismatch" && selectedEmployee && (
-                        <div className="flex gap-2">
+                      {showPinSetup ? (
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="password"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            maxLength={6}
+                            dir="ltr"
+                            placeholder="أدخل رمز PIN (4-6 أرقام)"
+                            value={newPinInput}
+                            onChange={(e) => setNewPinInput(e.target.value.replace(/\D/g, ''))}
+                            className="h-9 text-center text-lg tracking-widest flex-1"
+                            data-testid="input-new-pin"
+                          />
                           <Button
                             size="sm"
-                            className="flex-1 gap-1 bg-purple-600 hover:bg-purple-700"
-                            onClick={handleRegisterOnThisDevice}
-                            disabled={deviceRegisterLoading}
-                            data-testid="btn-register-this-device"
+                            disabled={newPinInput.length < 4}
+                            onClick={() => selectedEmployee && handleSetPin(selectedEmployee.employeeId, selectedEmployee.employeeName, newPinInput)}
+                            data-testid="btn-save-pin"
                           >
-                            {deviceRegisterLoading ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <BiometricIcon className="w-4 h-4" />
-                            )}
-                            {deviceRegisterLoading ? "جاري التسجيل..." : `سجّل ${methodLabel} على هذا الجهاز`}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="gap-1"
-                            onClick={() => selectedEmployee && handleBiometricVerify(selectedEmployee.employeeId)}
-                          >
-                            إعادة المحاولة
+                            حفظ
                           </Button>
                         </div>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1 w-fit"
+                          onClick={() => setShowPinSetup(true)}
+                          data-testid="btn-setup-pin"
+                        >
+                          <KeyRound className="w-4 h-4" />
+                          تعيين رمز PIN
+                        </Button>
                       )}
                     </div>
-                  </div>
-                );
-              })()}
+                  )}
+                  {biometricStatus === "verifying" && (
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
+                      <p className="text-sm font-medium text-blue-700">جاري التحقق من رمز PIN...</p>
+                    </div>
+                  )}
+                  {(biometricStatus === "idle" || biometricStatus === "failed") && (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center gap-2">
+                        <KeyRound className={`w-5 h-5 ${biometricStatus === "failed" ? "text-red-600" : "text-amber-600"}`} />
+                        <p className={`text-sm font-medium ${biometricStatus === "failed" ? "text-red-700" : "text-amber-700"}`}>
+                          {biometricStatus === "failed" ? "رمز PIN غير صحيح - حاول مرة أخرى" : "أدخل رمز PIN للتحقق"}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="password"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          maxLength={6}
+                          dir="ltr"
+                          placeholder="رمز PIN"
+                          value={pinInput}
+                          onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ''))}
+                          className="h-9 text-center text-lg tracking-widest flex-1"
+                          data-testid="input-pin-verify"
+                        />
+                        <Button
+                          size="sm"
+                          variant={biometricStatus === "failed" ? "destructive" : "default"}
+                          disabled={pinInput.length < 4 || pinVerifying}
+                          onClick={handlePinVerify}
+                          className="gap-1"
+                          data-testid="btn-verify-pin"
+                        >
+                          {pinVerifying ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
+                          تحقق
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
 
               <div className="text-center p-2 sm:p-3 bg-muted rounded-lg">
                 <div className="text-2xl sm:text-3xl font-mono font-bold text-primary">
@@ -1121,20 +922,13 @@ export default function AttendanceCheckPage() {
             </div>
 
             <div className="flex items-center gap-3 px-1 shrink-0">
-              {(() => {
-                const method = employeeBiometricMethod || (selectedEmployee ? biometricStatusMap?.[selectedEmployee.employeeId]?.registrationMethod : null) || null;
-                const methodLabel = biometricMethodLabels[method || "fingerprint"] || "البصمة";
-                const StatusBioIcon = getBiometricIcon(method);
-                return (
-                  <div className="flex items-center gap-1.5">
-                    <StatusBioIcon className={`w-3.5 h-3.5 ${biometricStatus === "verified" ? "text-green-600" : "text-gray-400"}`} />
-                    <div className={`w-3 h-3 rounded-full ${biometricStatus === "verified" ? "bg-green-500" : "bg-gray-300"}`} />
-                    <span className={`text-xs font-medium ${biometricStatus === "verified" ? "text-green-700" : "text-gray-500"}`}>
-                      {biometricStatus === "verified" ? `${methodLabel} ✓` : `${methodLabel} مطلوبة`}
-                    </span>
-                  </div>
-                );
-              })()}
+              <div className="flex items-center gap-1.5">
+                <KeyRound className={`w-3.5 h-3.5 ${biometricStatus === "verified" ? "text-green-600" : "text-gray-400"}`} />
+                <div className={`w-3 h-3 rounded-full ${biometricStatus === "verified" ? "bg-green-500" : "bg-gray-300"}`} />
+                <span className={`text-xs font-medium ${biometricStatus === "verified" ? "text-green-700" : "text-gray-500"}`}>
+                  {biometricStatus === "verified" ? "رمز PIN ✓" : "رمز PIN مطلوب"}
+                </span>
+              </div>
               <div className="flex items-center gap-1.5">
                 <div className={`w-3 h-3 rounded-full ${hasSignature ? "bg-green-500" : "bg-gray-300"}`} />
                 <span className={`text-xs font-medium ${hasSignature ? "text-green-700" : "text-gray-500"}`}>
@@ -1161,6 +955,39 @@ export default function AttendanceCheckPage() {
                 {(signatureMode === "check_in" ? checkInMutation.isPending : checkOutMutation.isPending) 
                   ? t("attendanceCheck.processing") 
                   : signatureMode === "check_in" ? t("attendanceCheck.confirmCheckIn") : t("attendanceCheck.confirmCheckOut")}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={!!showBiometricRegister && showPinSetup && !selectedEmployee} onOpenChange={(open) => { if (!open) { setShowBiometricRegister(null); setShowPinSetup(false); setNewPinInput(""); } }}>
+          <DialogContent className="max-w-sm p-4 sm:p-6">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <KeyRound className="w-5 h-5" />
+                تعيين رمز PIN - {showBiometricRegister?.employeeName}
+              </DialogTitle>
+              <DialogDescription>أدخل رمز PIN مكون من 4 إلى 6 أرقام</DialogDescription>
+            </DialogHeader>
+            <div className="flex items-center gap-2 mt-2">
+              <Input
+                type="password"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={6}
+                dir="ltr"
+                placeholder="رمز PIN (4-6 أرقام)"
+                value={newPinInput}
+                onChange={(e) => setNewPinInput(e.target.value.replace(/\D/g, ''))}
+                className="h-10 text-center text-lg tracking-widest flex-1"
+                data-testid="input-table-new-pin"
+              />
+              <Button
+                disabled={newPinInput.length < 4}
+                onClick={() => showBiometricRegister && handleSetPin(showBiometricRegister.employeeId, showBiometricRegister.employeeName, newPinInput)}
+                data-testid="btn-table-save-pin"
+              >
+                حفظ
               </Button>
             </div>
           </DialogContent>

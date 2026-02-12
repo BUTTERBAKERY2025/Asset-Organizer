@@ -8561,6 +8561,7 @@ export const biometricCredentials = pgTable("biometric_credentials", {
   deviceType: text("device_type"), // mobile_android, mobile_ios, tablet, desktop
   deviceModel: text("device_model"), // Samsung Galaxy S24, iPhone 15, etc.
   registrationMethod: text("registration_method").default("fingerprint"), // fingerprint, face, pin
+  verificationPin: text("verification_pin"), // hashed 4-6 digit PIN for cross-device verification
   registeredBy: varchar("registered_by").references(() => users.id),
   registeredByName: text("registered_by_name"),
   isActive: boolean("is_active").default(true).notNull(),

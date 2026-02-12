@@ -19070,6 +19070,96 @@ export async function registerRoutes(
     }
   });
 
+  // Set PIN for employee biometric verification (works on any device)
+  app.post("/api/biometric/set-pin", biometricRateLimiter, isAuthenticated, requirePermission("attendance_check", "create"), async (req, res) => {
+    try {
+      const { employeeId, pin, branchId } = req.body;
+      if (!employeeId || !pin || !branchId) {
+        return res.status(400).json({ error: "جميع البيانات مطلوبة" });
+      }
+      if (!/^\d{4,6}$/.test(pin)) {
+        return res.status(400).json({ error: "رمز PIN يجب أن يكون 4-6 أرقام" });
+      }
+
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, branchId);
+        if (!hasAccess) return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
+      }
+
+      const crypto = await import("crypto");
+      const hashedPin = crypto.createHash("sha256").update(pin + employeeId).digest("hex");
+
+      const credentials = await storage.getBiometricCredentialsByEmployee(employeeId);
+      if (credentials.length > 0) {
+        await db.update(biometricCredentials)
+          .set({ verificationPin: hashedPin })
+          .where(eq(biometricCredentials.employeeId, employeeId));
+      } else {
+        const credId = `pin_${employeeId}_${Date.now()}`;
+        await db.insert(biometricCredentials).values({
+          employeeId,
+          employeeName: req.body.employeeName || employeeId,
+          branchId,
+          credentialId: credId,
+          publicKey: credId,
+          counter: 0,
+          registrationMethod: "pin",
+          verificationPin: hashedPin,
+          isActive: true,
+          registeredBy: getCurrentUser(req)?.id || null,
+          registeredByName: getCurrentUser(req)?.fullName || null,
+        });
+      }
+
+      res.json({ success: true, message: "تم تعيين رمز PIN بنجاح" });
+    } catch (error) {
+      console.error("Error setting PIN:", error);
+      res.status(500).json({ error: "فشل في تعيين رمز PIN" });
+    }
+  });
+
+  // Verify PIN for attendance (works on any device - no WebAuthn needed)
+  app.post("/api/biometric/verify-pin", biometricRateLimiter, isAuthenticated, async (req, res) => {
+    try {
+      const { employeeId, pin } = req.body;
+      if (!employeeId || !pin) {
+        return res.status(400).json({ error: "رقم الموظف ورمز PIN مطلوبان", verified: false });
+      }
+
+      const credentials = await storage.getBiometricCredentialsByEmployee(employeeId);
+      if (!credentials.length) {
+        return res.status(400).json({ error: "لا توجد بيانات بيومترية مسجلة لهذا الموظف", verified: false });
+      }
+
+      const crypto = await import("crypto");
+      const hashedPin = crypto.createHash("sha256").update(pin + employeeId).digest("hex");
+
+      const matchingCred = credentials.find(c => c.verificationPin === hashedPin);
+      if (!matchingCred) {
+        return res.status(400).json({ error: "رمز PIN غير صحيح", verified: false });
+      }
+
+      await storage.updateBiometricCredentialCounter(matchingCred.id, matchingCred.counter + 1);
+
+      const tokenData = `${employeeId}:${Date.now()}:${crypto.randomBytes(8).toString("hex")}`;
+      const verificationToken = Buffer.from(tokenData).toString("base64url");
+
+      biometricChallenges.set(`token_${verificationToken}`, {
+        challenge: verificationToken, employeeId, type: "verified_token", timestamp: Date.now()
+      });
+
+      res.json({
+        verified: true,
+        employeeName: matchingCred.employeeName,
+        verificationToken,
+        registrationMethod: matchingCred.registrationMethod || "pin"
+      });
+    } catch (error) {
+      console.error("Error verifying PIN:", error);
+      res.status(500).json({ error: "فشل في التحقق من رمز PIN", verified: false });
+    }
+  });
+
   // Get biometric status for employees in a branch
   app.get("/api/biometric/branch/:branchId", isAuthenticated, async (req, res) => {
     try {
@@ -19082,13 +19172,16 @@ export async function registerRoutes(
       }
 
       const credentials = await storage.getBiometricCredentialsByBranch(req.params.branchId);
-      const statusMap: Record<string, { hasCredential: boolean; credentialCount: number; lastUsed: string | null; registrationMethod: string | null }> = {};
+      const statusMap: Record<string, { hasCredential: boolean; hasPin: boolean; credentialCount: number; lastUsed: string | null; registrationMethod: string | null }> = {};
       
       for (const cred of credentials) {
         if (!statusMap[cred.employeeId]) {
-          statusMap[cred.employeeId] = { hasCredential: true, credentialCount: 0, lastUsed: null, registrationMethod: null };
+          statusMap[cred.employeeId] = { hasCredential: true, hasPin: false, credentialCount: 0, lastUsed: null, registrationMethod: null };
         }
         statusMap[cred.employeeId].credentialCount++;
+        if (cred.verificationPin) {
+          statusMap[cred.employeeId].hasPin = true;
+        }
         if (!statusMap[cred.employeeId].registrationMethod && cred.registrationMethod) {
           statusMap[cred.employeeId].registrationMethod = cred.registrationMethod;
         }
