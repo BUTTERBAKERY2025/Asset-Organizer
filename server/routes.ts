@@ -18871,9 +18871,9 @@ export async function registerRoutes(
 
       const crypto = await import("crypto");
       const challenge = crypto.randomBytes(32).toString("base64url");
-      const userId = crypto.randomBytes(16).toString("base64url");
+      const stableUserId = crypto.createHash("sha256").update(`butter-employee-${employeeId}-${branchId}`).digest().slice(0, 16);
+      const userIdBase64 = stableUserId.toString("base64url");
       
-      // Store challenge for server-side validation
       const challengeKey = `reg_${employeeId}_${Date.now()}`;
       biometricChallenges.set(challengeKey, { challenge, employeeId, type: "register", timestamp: Date.now() });
 
@@ -18884,20 +18884,31 @@ export async function registerRoutes(
       } catch {
         rpId = req.headers.host?.split(':')[0] || "localhost";
       }
-      console.log(`[Biometric] Register rpId: ${rpId}, origin: ${origin}`);
+
+      const existingCreds = await pool.query(
+        `SELECT credential_id FROM biometric_credentials WHERE employee_id = $1 AND branch_id = $2 AND is_active = true`,
+        [String(employeeId), branchId]
+      );
+      const excludeCredentials = existingCreds.rows.map((row: any) => ({
+        id: row.credential_id,
+        type: "public-key",
+        transports: ["internal"],
+      }));
 
       const options = {
         challenge,
         rp: { name: "باتر - نظام الحضور", id: rpId },
-        user: { id: userId, name: employeeId, displayName: employeeName },
+        user: { id: userIdBase64, name: `${employeeName} (${employeeId})`, displayName: employeeName },
         pubKeyCredParams: [
           { alg: -7, type: "public-key" },
           { alg: -257, type: "public-key" },
         ],
         authenticatorSelection: {
-          userVerification: "preferred",
-          residentKey: "preferred",
+          userVerification: "required",
+          residentKey: "required",
+          requireResidentKey: true,
         },
+        excludeCredentials,
         timeout: 120000,
         attestation: "none",
       };
@@ -18977,7 +18988,27 @@ export async function registerRoutes(
   // Get verification options (challenge) for biometric verification
   app.post("/api/biometric/verify-options", biometricRateLimiter, isAuthenticated, async (req, res) => {
     try {
-      const { employeeId } = req.body;
+      const { employeeId, branchId, discoverMode } = req.body;
+
+      const crypto = await import("crypto");
+      const challenge = crypto.randomBytes(32).toString("base64url");
+      const rpId = (req.headers.origin ? new URL(req.headers.origin).hostname : req.headers.host?.split(':')[0]) || "localhost";
+
+      if (discoverMode && branchId) {
+        const challengeKey = `verify_discover_${branchId}_${Date.now()}`;
+        biometricChallenges.set(challengeKey, { challenge, employeeId: "discover", branchId, type: "verify_discover", timestamp: Date.now() });
+
+        const options = {
+          challenge,
+          rpId,
+          allowCredentials: [],
+          userVerification: "required",
+          timeout: 60000,
+        };
+
+        return res.json({ options, challengeKey, registrationMethod: "fingerprint", discoverMode: true });
+      }
+
       if (!employeeId) {
         return res.status(400).json({ error: "معرف الموظف مطلوب" });
       }
@@ -18988,14 +19019,9 @@ export async function registerRoutes(
       }
 
       const primaryMethod = credentials[0].registrationMethod || "fingerprint";
-
-      const crypto = await import("crypto");
-      const challenge = crypto.randomBytes(32).toString("base64url");
       
       const challengeKey = `verify_${employeeId}_${Date.now()}`;
       biometricChallenges.set(challengeKey, { challenge, employeeId, type: "verify", timestamp: Date.now() });
-
-      const rpId = (req.headers.origin ? new URL(req.headers.origin).hostname : req.headers.host?.split(':')[0]) || "localhost";
 
       const options = {
         challenge,
@@ -19020,18 +19046,23 @@ export async function registerRoutes(
   app.post("/api/biometric/verify", biometricRateLimiter, isAuthenticated, async (req, res) => {
     try {
       const { credentialId, employeeId, challengeKey } = req.body;
-      if (!credentialId || !employeeId) {
+      if (!credentialId) {
         return res.status(400).json({ error: "بيانات التحقق مطلوبة" });
       }
       
-      // SECURITY: Validate challenge was issued by server (REQUIRED - prevents replay attacks)
       if (!challengeKey) {
         return res.status(400).json({ error: "مفتاح التحقق مطلوب", verified: false });
       }
       const storedChallenge = biometricChallenges.get(challengeKey);
-      if (!storedChallenge || storedChallenge.employeeId !== employeeId || storedChallenge.type !== "verify") {
+      if (!storedChallenge) {
         return res.status(400).json({ error: "طلب التحقق غير صالح أو منتهي الصلاحية", verified: false });
       }
+
+      const isDiscoverMode = storedChallenge.type === "verify_discover";
+      if (!isDiscoverMode && (!employeeId || storedChallenge.employeeId !== employeeId || storedChallenge.type !== "verify")) {
+        return res.status(400).json({ error: "طلب التحقق غير صالح أو منتهي الصلاحية", verified: false });
+      }
+
       const challengeAge = Date.now() - storedChallenge.timestamp;
       if (challengeAge > 5 * 60 * 1000) {
         biometricChallenges.delete(challengeKey);
@@ -19044,25 +19075,34 @@ export async function registerRoutes(
         return res.status(400).json({ error: "البصمة غير مسجلة", verified: false });
       }
 
-      if (credential.employeeId !== employeeId) {
+      if (isDiscoverMode) {
+        const challengeBranchId = (storedChallenge as any).branchId;
+        if (challengeBranchId && credential.branchId !== challengeBranchId) {
+          return res.status(403).json({ error: "البصمة مسجلة في فرع آخر", verified: false });
+        }
+      } else if (credential.employeeId !== employeeId) {
         return res.status(403).json({ error: "البصمة لا تتطابق مع الموظف", verified: false });
       }
+
+      const resolvedEmployeeId = isDiscoverMode ? credential.employeeId : employeeId;
 
       await storage.updateBiometricCredentialCounter(credential.id, credential.counter + 1);
       
       const crypto = await import("crypto");
-      const tokenData = `${employeeId}:${Date.now()}:${crypto.randomBytes(8).toString("hex")}`;
+      const tokenData = `${resolvedEmployeeId}:${Date.now()}:${crypto.randomBytes(8).toString("hex")}`;
       const verificationToken = Buffer.from(tokenData).toString("base64url");
       
       biometricChallenges.set(`token_${verificationToken}`, { 
-        challenge: verificationToken, employeeId, type: "verified_token", timestamp: Date.now() 
+        challenge: verificationToken, employeeId: resolvedEmployeeId, type: "verified_token", timestamp: Date.now() 
       });
 
       res.json({ 
         verified: true, 
+        employeeId: resolvedEmployeeId,
         employeeName: credential.employeeName, 
         verificationToken,
-        registrationMethod: credential.registrationMethod || "fingerprint"
+        registrationMethod: credential.registrationMethod || "fingerprint",
+        discoverMode: isDiscoverMode,
       });
     } catch (error) {
       console.error("Error verifying biometric:", error);
@@ -19575,12 +19615,23 @@ export async function registerRoutes(
 
       const crypto = await import("crypto");
       const challenge = crypto.randomBytes(32).toString("base64url");
-      const userId = crypto.randomBytes(16).toString("base64url");
+      const stableUserId = crypto.createHash("sha256").update(`butter-employee-${employeeId}-${branchId}`).digest().slice(0, 16);
+      const userIdBase64 = stableUserId.toString("base64url");
+
+      const existingCreds = await pool.query(
+        `SELECT credential_id FROM biometric_credentials WHERE employee_id = $1 AND branch_id = $2 AND is_active = true`,
+        [String(employeeId), branchId]
+      );
+      const excludeCredentials = existingCreds.rows.map((row: any) => ({
+        id: row.credential_id,
+        type: "public-key",
+        transports: ["internal"],
+      }));
 
       res.json({
         challenge,
         rp: { name: "نظام باتر - إدارة البصمة", id: req.hostname },
-        user: { id: userId, name: employeeName, displayName: employeeName },
+        user: { id: userIdBase64, name: `${employeeName} (${employeeId})`, displayName: employeeName },
         pubKeyCredParams: [
           { alg: -7, type: "public-key" },
           { alg: -257, type: "public-key" },
@@ -19588,8 +19639,10 @@ export async function registerRoutes(
         authenticatorSelection: {
           authenticatorAttachment: "platform",
           userVerification: "required",
-          residentKey: "preferred",
+          residentKey: "required",
+          requireResidentKey: true,
         },
+        excludeCredentials,
         timeout: 60000,
         attestation: "none",
       });

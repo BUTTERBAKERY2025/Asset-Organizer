@@ -305,6 +305,12 @@ export default function BiometricSettingsPage() {
       const challengeBuffer = Uint8Array.from(atob(options.challenge.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
       const userIdBuffer = Uint8Array.from(atob(options.user.id.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
 
+      const excludeCredentials = (options.excludeCredentials || []).map((c: any) => ({
+        id: Uint8Array.from(atob(c.id.replace(/-/g, '+').replace(/_/g, '/')), (ch: string) => ch.charCodeAt(0)),
+        type: c.type as PublicKeyCredentialType,
+        transports: (c.transports || ["internal"]) as AuthenticatorTransport[],
+      }));
+
       const createOptions: PublicKeyCredentialCreationOptions = {
         challenge: challengeBuffer,
         rp: { name: options.rp.name, id: window.location.hostname },
@@ -317,8 +323,10 @@ export default function BiometricSettingsPage() {
         authenticatorSelection: {
           authenticatorAttachment: "platform" as AuthenticatorAttachment,
           userVerification: "required" as UserVerificationRequirement,
-          residentKey: "preferred" as ResidentKeyRequirement,
+          residentKey: "required" as ResidentKeyRequirement,
+          requireResidentKey: true,
         },
+        excludeCredentials,
         timeout: 60000,
         attestation: "none" as AttestationConveyancePreference,
       };

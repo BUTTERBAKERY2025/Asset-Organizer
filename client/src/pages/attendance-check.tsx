@@ -279,7 +279,7 @@ export default function AttendanceCheckPage() {
 
 
 
-  const handleFingerprintVerify = async (employeeId: string) => {
+  const handleFingerprintVerify = async (employeeId?: string) => {
     if (!window.PublicKeyCredential) {
       setVerificationMethod("pin");
       setBiometricStatus("pin_fallback");
@@ -287,15 +287,22 @@ export default function AttendanceCheckPage() {
       return;
     }
     
-    const empStatus = biometricStatusMap?.[employeeId];
-    if (!empStatus?.hasCredential) {
-      setBiometricStatus("no_credential");
-      return;
+    const isDiscoverMode = !employeeId;
+
+    if (!isDiscoverMode) {
+      const empStatus = biometricStatusMap?.[employeeId];
+      if (!empStatus?.hasCredential) {
+        setBiometricStatus("no_credential");
+        return;
+      }
     }
     
     setBiometricStatus("verifying");
     try {
-      const optionsRes = await apiRequest("POST", "/api/biometric/verify-options", { employeeId });
+      const requestBody = isDiscoverMode 
+        ? { branchId: selectedBranch, discoverMode: true }
+        : { employeeId };
+      const optionsRes = await apiRequest("POST", "/api/biometric/verify-options", requestBody);
       if (!optionsRes.ok) {
         const errData = await optionsRes.json().catch(() => ({}));
         if (errData.noBiometric) {
@@ -315,7 +322,7 @@ export default function AttendanceCheckPage() {
       
       const { options, challengeKey } = optionsData;
       
-      const allowCreds = options.allowCredentials.map((c: any) => ({
+      const allowCreds = (options.allowCredentials || []).map((c: any) => ({
         id: Uint8Array.from(atob(c.id.replace(/-/g, '+').replace(/_/g, '/')), (c2: string) => c2.charCodeAt(0)),
         type: c.type as PublicKeyCredentialType,
         transports: c.transports as AuthenticatorTransport[],
@@ -324,7 +331,7 @@ export default function AttendanceCheckPage() {
       const publicKeyOptions: PublicKeyCredentialRequestOptions = {
         challenge: Uint8Array.from(atob(options.challenge.replace(/-/g, '+').replace(/_/g, '/')), (c: string) => c.charCodeAt(0)),
         rpId: options.rpId,
-        allowCredentials: allowCreds,
+        ...(allowCreds.length > 0 ? { allowCredentials: allowCreds } : {}),
         userVerification: options.userVerification as UserVerificationRequirement,
         timeout: options.timeout,
       };
@@ -335,7 +342,11 @@ export default function AttendanceCheckPage() {
       const credentialId = btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(assertion.rawId))))
         .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
       
-      const verifyRes = await apiRequest("POST", "/api/biometric/verify", { credentialId, employeeId, challengeKey });
+      const verifyRes = await apiRequest("POST", "/api/biometric/verify", { 
+        credentialId, 
+        employeeId: isDiscoverMode ? undefined : employeeId, 
+        challengeKey 
+      });
       if (!verifyRes.ok) {
         const errData = await verifyRes.json().catch(() => ({}));
         setBiometricStatus("failed");
@@ -348,7 +359,18 @@ export default function AttendanceCheckPage() {
         setBiometricStatus("verified");
         setBiometricToken(verifyData.verificationToken || null);
         setVerificationMethod("fingerprint");
-        toast({ title: "تم التحقق", description: "تم التحقق من البصمة بنجاح ✓" });
+
+        if (isDiscoverMode && verifyData.employeeId) {
+          const discoveredEmpId = verifyData.employeeId;
+          const empList = scheduledEmployees || [];
+          const matchedEmp = empList.find((e: any) => String(e.employeeId) === String(discoveredEmpId));
+          if (matchedEmp) {
+            setSelectedEmployee(matchedEmp);
+          }
+          toast({ title: "تم التعرف على الموظف", description: `${verifyData.employeeName || discoveredEmpId} - تم التحقق بنجاح ✓` });
+        } else {
+          toast({ title: "تم التحقق", description: "تم التحقق من البصمة بنجاح ✓" });
+        }
       } else {
         setBiometricStatus("failed");
         toast({ title: "فشل التحقق", description: "لم تتطابق البصمة", variant: "destructive" });
@@ -382,6 +404,12 @@ export default function AttendanceCheckPage() {
       }
       const { options, challengeKey } = await optionsRes.json();
       
+      const excludeCreds = (options.excludeCredentials || []).map((c: any) => ({
+        id: Uint8Array.from(atob(c.id.replace(/-/g, '+').replace(/_/g, '/')), (ch: string) => ch.charCodeAt(0)),
+        type: c.type as PublicKeyCredentialType,
+        transports: (c.transports || ["internal"]) as AuthenticatorTransport[],
+      }));
+
       const publicKeyOptions: PublicKeyCredentialCreationOptions = {
         challenge: Uint8Array.from(atob(options.challenge.replace(/-/g, '+').replace(/_/g, '/')), (c: string) => c.charCodeAt(0)),
         rp: options.rp,
@@ -391,7 +419,12 @@ export default function AttendanceCheckPage() {
           displayName: options.user.displayName,
         },
         pubKeyCredParams: options.pubKeyCredParams,
-        authenticatorSelection: options.authenticatorSelection,
+        authenticatorSelection: {
+          ...options.authenticatorSelection,
+          residentKey: "required" as ResidentKeyRequirement,
+          requireResidentKey: true,
+        },
+        excludeCredentials: excludeCreds,
         timeout: options.timeout,
         attestation: options.attestation,
       };
@@ -708,6 +741,19 @@ export default function AttendanceCheckPage() {
               <CardDescription>
                 {t("attendanceCheck.scheduledEmployees")}
               </CardDescription>
+              {window.PublicKeyCredential && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-2 border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800 mt-2"
+                  onClick={() => handleFingerprintVerify()}
+                  disabled={biometricStatus === "verifying"}
+                  data-testid="btn-quick-fingerprint-scan"
+                >
+                  <Fingerprint className="w-5 h-5" />
+                  {biometricStatus === "verifying" ? "جاري المسح..." : "مسح البصمة السريع - تعرف تلقائي"}
+                </Button>
+              )}
             </CardHeader>
             <CardContent>
               {loadingEmployees ? (
