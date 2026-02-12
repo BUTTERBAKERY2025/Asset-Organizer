@@ -12977,43 +12977,40 @@ export class DatabaseStorage implements IStorage {
 
   async createBiometricCredential(credential: InsertBiometricCredential): Promise<BiometricCredential> {
     try {
-      const [created] = await db.insert(biometricCredentials).values(credential).returning();
-      return created;
+      const result = await pool.query(
+        `INSERT INTO biometric_credentials (employee_id, employee_name, branch_id, credential_id, public_key, counter, registration_method, device_type, device_model, device_info, registered_by, registered_by_name, is_active, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW()) RETURNING *`,
+        [
+          credential.employeeId, credential.employeeName || '', credential.branchId || '',
+          credential.credentialId, credential.publicKey, credential.counter || 0,
+          credential.registrationMethod || 'webauthn', credential.deviceType || null,
+          credential.deviceModel || null, credential.deviceInfo || null,
+          credential.registeredBy || null, credential.registeredByName || null,
+          credential.isActive !== undefined ? credential.isActive : true
+        ]
+      );
+      return this.mapRawBiometricCredential(result.rows[0]);
     } catch (error: any) {
       if (error?.code === '42P01') throw new Error("جدول البصمات غير موجود في قاعدة البيانات. يرجى تنفيذ أوامر SQL أولاً");
-      if (error?.code === '42703') {
-        const result = await pool.query(
-          `INSERT INTO biometric_credentials (employee_id, credential_id, public_key, counter, created_at) VALUES ($1, $2, $3, $4, NOW()) RETURNING *`,
-          [credential.employeeId, credential.credentialId, credential.publicKey, credential.counter || 0]
-        );
-        return this.mapRawBiometricCredential(result.rows[0]);
-      }
       throw error;
     }
   }
 
   async deleteBiometricCredential(id: number): Promise<boolean> {
     try {
-      const [deleted] = await db.update(biometricCredentials).set({ isActive: false }).where(eq(biometricCredentials.id, id)).returning();
-      return !!deleted;
+      const result = await pool.query(`UPDATE biometric_credentials SET is_active = false WHERE id = $1 RETURNING id`, [id]);
+      return (result.rowCount || 0) > 0;
     } catch (error: any) {
       if (error?.code === '42P01') return false;
-      if (error?.code === '42703') {
-        await pool.query(`DELETE FROM biometric_credentials WHERE id = $1`, [id]);
-        return true;
-      }
       throw error;
     }
   }
 
   async updateBiometricCredentialCounter(id: number, counter: number): Promise<void> {
     try {
-      await db.update(biometricCredentials).set({ counter, lastUsedAt: new Date() }).where(eq(biometricCredentials.id, id));
+      await pool.query(`UPDATE biometric_credentials SET counter = $1, last_used_at = NOW() WHERE id = $2`, [counter, id]);
     } catch (error: any) {
       if (error?.code === '42P01') return;
-      if (error?.code === '42703') {
-        await pool.query(`UPDATE biometric_credentials SET counter = $1 WHERE id = $2`, [counter, id]);
-      }
     }
   }
 }

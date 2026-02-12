@@ -2,7 +2,7 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import memoize from "memoizee";
 import { storage } from "./storage";
-import { db } from "./db";
+import { db, pool } from "./db";
 import * as NotificationService from "./notification-service";
 import type { AuthenticatedRequest } from "./types/express";
 import { eq, and, desc, inArray, gte, lte, sql, or, isNull, type SQL } from "drizzle-orm";
@@ -19097,18 +19097,11 @@ export async function registerRoutes(
         //   .where(eq(biometricCredentials.employeeId, employeeId));
       } else {
         const credId = `pin_${employeeId}_${Date.now()}`;
-        await db.insert(biometricCredentials).values({
-          employeeId,
-          employeeName: req.body.employeeName || employeeId,
-          branchId,
-          credentialId: credId,
-          publicKey: credId,
-          counter: 0,
-          registrationMethod: "pin",
-          isActive: true,
-          registeredBy: getCurrentUser(req)?.id || null,
-          registeredByName: getCurrentUser(req)?.fullName || null,
-        });
+        await pool.query(
+          `INSERT INTO biometric_credentials (employee_id, employee_name, branch_id, credential_id, public_key, counter, registration_method, is_active, registered_by, registered_by_name, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())`,
+          [employeeId, req.body.employeeName || employeeId, branchId, credId, credId, 0, "pin", true, getCurrentUser(req)?.id || null, getCurrentUser(req)?.fullName || null]
+        );
       }
 
       res.json({ success: true, message: "تم تعيين رمز PIN بنجاح" });
@@ -19385,10 +19378,20 @@ export async function registerRoutes(
         updateData.deactivationReason = null;
       }
 
-      const [updated] = await db.update(biometricCredentials)
-        .set(updateData)
-        .where(eq(biometricCredentials.id, id))
-        .returning();
+      const setClauses: string[] = [];
+      const setValues: any[] = [];
+      let paramIdx = 1;
+      for (const [key, val] of Object.entries(updateData)) {
+        const col = key.replace(/([A-Z])/g, '_$1').toLowerCase();
+        setClauses.push(`${col} = $${paramIdx++}`);
+        setValues.push(val);
+      }
+      setValues.push(id);
+      const updateResult = await pool.query(
+        `UPDATE biometric_credentials SET ${setClauses.join(', ')} WHERE id = $${paramIdx} RETURNING id, employee_id, employee_name, branch_id, credential_id, is_active, device_type, device_model, registration_method, deactivated_at, deactivated_by, deactivation_reason`,
+        setValues
+      );
+      const updated = updateResult.rows[0];
 
       res.json({ success: true, credential: updated });
     } catch (error) {
@@ -19422,15 +19425,21 @@ export async function registerRoutes(
         return res.status(400).json({ error: "موديل الجهاز غير صالح" });
       }
 
-      const updateData: any = {};
-      if (registrationMethod) updateData.registrationMethod = registrationMethod;
-      if (deviceType !== undefined) updateData.deviceType = deviceType;
-      if (deviceModel !== undefined) updateData.deviceModel = deviceModel;
+      const setClauses2: string[] = [];
+      const setValues2: any[] = [];
+      let pIdx = 1;
+      if (registrationMethod) { setClauses2.push(`registration_method = $${pIdx++}`); setValues2.push(registrationMethod); }
+      if (deviceType !== undefined) { setClauses2.push(`device_type = $${pIdx++}`); setValues2.push(deviceType); }
+      if (deviceModel !== undefined) { setClauses2.push(`device_model = $${pIdx++}`); setValues2.push(deviceModel); }
 
-      const [updated] = await db.update(biometricCredentials)
-        .set(updateData)
-        .where(eq(biometricCredentials.id, id))
-        .returning();
+      if (setClauses2.length === 0) return res.status(400).json({ error: "لا توجد بيانات للتحديث" });
+
+      setValues2.push(id);
+      const updateResult2 = await pool.query(
+        `UPDATE biometric_credentials SET ${setClauses2.join(', ')} WHERE id = $${pIdx} RETURNING id, employee_id, employee_name, branch_id, credential_id, is_active, device_type, device_model, registration_method`,
+        setValues2
+      );
+      const updated = updateResult2.rows[0];
 
       res.json({ success: true, credential: updated });
     } catch (error) {
@@ -19452,7 +19461,7 @@ export async function registerRoutes(
       const { credential: existingCred, error: ownershipError } = await verifyBiometricOwnership(id, currentUser);
       if (ownershipError) return res.status(existingCred ? 403 : 404).json({ error: ownershipError });
 
-      await db.delete(biometricCredentials).where(eq(biometricCredentials.id, id));
+      await pool.query(`DELETE FROM biometric_credentials WHERE id = $1`, [id]);
 
       res.json({ success: true, message: "تم حذف البصمة بنجاح" });
     } catch (error) {
@@ -19496,11 +19505,12 @@ export async function registerRoutes(
         if (hasOtherBranch) return res.status(403).json({ error: "لا يمكنك إعادة تعيين بصمات فرع آخر" });
       }
 
-      const deleted = await db.delete(biometricCredentials)
-        .where(eq(biometricCredentials.employeeId, employeeId))
-        .returning();
+      const deleteResult = await pool.query(
+        `DELETE FROM biometric_credentials WHERE employee_id = $1 RETURNING id`,
+        [employeeId]
+      );
 
-      res.json({ success: true, message: `تم إعادة تعيين ${deleted.length} بصمة`, count: deleted.length });
+      res.json({ success: true, message: `تم إعادة تعيين ${deleteResult.rowCount} بصمة`, count: deleteResult.rowCount });
     } catch (error) {
       console.error("Error resetting biometric:", error);
       res.status(500).json({ error: "فشل في إعادة تعيين البصمة" });
@@ -19645,21 +19655,18 @@ export async function registerRoutes(
         return res.status(400).json({ error: "تم الوصول للحد الأقصى من البصمات المسجلة (5)" });
       }
 
-      const [newCredential] = await db.insert(biometricCredentials).values({
-        employeeId: String(employeeId),
-        employeeName,
-        branchId,
-        credentialId,
-        publicKey,
-        counter: 0,
-        registrationMethod: registrationMethod || "fingerprint",
-        deviceType: deviceType || null,
-        deviceModel: deviceModel || null,
-        deviceInfo: req.headers["user-agent"] || null,
-        registeredBy: String(currentUser.id),
-        registeredByName: currentUser.username || currentUser.firstName || "مسؤول",
-        isActive: true,
-      }).returning();
+      const insertResult = await pool.query(
+        `INSERT INTO biometric_credentials (employee_id, employee_name, branch_id, credential_id, public_key, counter, registration_method, device_type, device_model, device_info, registered_by, registered_by_name, is_active, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
+         RETURNING id, employee_id, employee_name, branch_id, credential_id, public_key, counter, device_info, registered_by, is_active, last_used_at, created_at, device_type, device_model, registration_method, registered_by_name, usage_count`,
+        [
+          String(employeeId), employeeName, branchId, credentialId, publicKey, 0,
+          registrationMethod || "fingerprint", deviceType || null, deviceModel || null,
+          req.headers["user-agent"] || null, String(currentUser.id),
+          currentUser.username || currentUser.firstName || "مسؤول", true
+        ]
+      );
+      const newCredential = insertResult.rows[0];
 
       res.json({ success: true, credential: newCredential, message: "تم تسجيل البصمة بنجاح" });
     } catch (error) {
