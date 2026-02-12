@@ -13035,7 +13035,7 @@ export class DatabaseStorage implements IStorage {
 
   async updateBiometricCredentialCounter(id: number, counter: number): Promise<void> {
     try {
-      await pool.query(`UPDATE biometric_credentials SET counter = $1, last_used_at = NOW() WHERE id = $2`, [counter, id]);
+      await pool.query(`UPDATE biometric_credentials SET counter = $1, last_used_at = NOW(), usage_count = COALESCE(usage_count, 0) + 1 WHERE id = $2`, [counter, id]);
     } catch (error: any) {
       if (error?.code === '42P01') return;
     }

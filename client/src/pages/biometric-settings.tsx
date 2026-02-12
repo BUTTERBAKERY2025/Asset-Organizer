@@ -20,7 +20,6 @@ import {
   Users,
   Smartphone,
   ScanFace,
-  KeyRound,
   Shield,
   Trash2,
   RefreshCw,
@@ -42,6 +41,7 @@ import {
   Plus,
   Scan,
   ShieldCheck,
+  MapPin,
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Link } from "wouter";
@@ -118,13 +118,11 @@ interface Branch {
 const registrationMethodLabels: Record<string, string> = {
   fingerprint: "بصمة الإصبع",
   face: "التعرف على الوجه",
-  pin: "رمز PIN",
 };
 
 const registrationMethodIcons: Record<string, typeof Fingerprint> = {
   fingerprint: Fingerprint,
   face: ScanFace,
-  pin: KeyRound,
 };
 
 const deviceTypeLabels: Record<string, string> = {
@@ -601,13 +599,12 @@ export default function BiometricSettingsPage() {
                   <TableHeader>
                     <TableRow className="bg-gray-50">
                       <TableHead className="text-right">الموظف</TableHead>
-                      <TableHead className="text-right">الوظيفة</TableHead>
                       <TableHead className="text-right">حالة البصمة</TableHead>
-                      <TableHead className="text-right">نوع التسجيل</TableHead>
+                      <TableHead className="text-right">نوع البصمة</TableHead>
                       <TableHead className="text-right">الجهاز</TableHead>
-                      <TableHead className="text-right">سجّلها</TableHead>
+                      <TableHead className="text-right">الموقع</TableHead>
                       <TableHead className="text-right">آخر حضور</TableHead>
-                      <TableHead className="text-right">مرات الحضور</TableHead>
+                      <TableHead className="text-right">عدد الاستخدامات</TableHead>
                       <TableHead className="text-center">إجراءات</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -622,12 +619,12 @@ export default function BiometricSettingsPage() {
                           <TableCell>
                             <div>
                               <div className="font-medium">{item.employee.employeeName}</div>
-                              {item.employee.employeeNumber && (
-                                <div className="text-xs text-gray-500">{item.employee.employeeNumber}</div>
-                              )}
+                              <div className="text-xs text-gray-500">
+                                {item.employee.employeeNumber && <span>{item.employee.employeeNumber}</span>}
+                                {item.employee.jobTitle && <span className="mr-1">• {item.employee.jobTitle}</span>}
+                              </div>
                             </div>
                           </TableCell>
-                          <TableCell className="text-sm text-gray-600">{item.employee.jobTitle || "-"}</TableCell>
                           <TableCell>
                             {item.biometricStatus === "registered" ? (
                               <Badge className="bg-green-100 text-green-700 hover:bg-green-100">
@@ -640,17 +637,21 @@ export default function BiometricSettingsPage() {
                                 غير مسجلة
                               </Badge>
                             )}
-                            {item.totalCredentials > 1 && (
-                              <Badge variant="secondary" className="mr-1 text-xs">
-                                {item.activeCredentials}/{item.totalCredentials}
-                              </Badge>
-                            )}
                           </TableCell>
                           <TableCell>
                             {activeCred ? (
-                              <div className="flex items-center gap-1 text-sm">
-                                <MethodIcon className="h-4 w-4 text-purple-500" />
-                                <span>{registrationMethodLabels[activeCred.registrationMethod] || activeCred.registrationMethod}</span>
+                              <div className="flex items-center gap-2">
+                                {activeCred.registrationMethod === "face" ? (
+                                  <div className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded-lg px-2 py-1" data-testid={`biometric-type-${item.employee.id}`}>
+                                    <ScanFace className="h-5 w-5 text-blue-600" />
+                                    <span className="text-sm font-medium text-blue-700">بصمة وجه</span>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-1.5 bg-purple-50 border border-purple-200 rounded-lg px-2 py-1" data-testid={`biometric-type-${item.employee.id}`}>
+                                    <Fingerprint className="h-5 w-5 text-purple-600" />
+                                    <span className="text-sm font-medium text-purple-700">بصمة إصبع</span>
+                                  </div>
+                                )}
                               </div>
                             ) : (
                               <span className="text-gray-400 text-sm">-</span>
@@ -664,15 +665,22 @@ export default function BiometricSettingsPage() {
                                   <span>{activeCred.deviceModel || deviceTypeLabels[activeCred.deviceType || "unknown"]}</span>
                                 </div>
                                 {activeCred.deviceOS && activeCred.deviceOS !== "غير معروف" && (
-                                  <span className="text-xs text-gray-500">{activeCred.deviceOS} • {activeCred.deviceBrowser || ""}</span>
+                                  <span className="text-xs text-gray-500">{activeCred.deviceOS}</span>
                                 )}
                               </div>
                             ) : (
                               <span className="text-gray-400 text-sm">-</span>
                             )}
                           </TableCell>
-                          <TableCell className="text-sm text-gray-600">
-                            {activeCred?.registeredByName || "-"}
+                          <TableCell>
+                            {item.lastAttendance?.locationInfo ? (
+                              <div className="flex items-center gap-1 text-sm text-green-700">
+                                <MapPin className="h-3.5 w-3.5 text-green-500" />
+                                <span className="text-xs max-w-[120px] truncate">{item.lastAttendance.locationInfo}</span>
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 text-sm">-</span>
+                            )}
                           </TableCell>
                           <TableCell>
                             {item.lastAttendance ? (
@@ -680,12 +688,11 @@ export default function BiometricSettingsPage() {
                                 <span className="text-sm">{item.lastAttendance.date}</span>
                                 <span className="text-xs text-gray-500">
                                   {item.lastAttendance.checkIn && `دخول: ${item.lastAttendance.checkIn}`}
-                                  {item.lastAttendance.checkOut && ` | خروج: ${item.lastAttendance.checkOut}`}
                                 </span>
                                 {item.lastAttendance.biometricVerified && (
                                   <Badge className="bg-blue-50 text-blue-600 text-[10px] w-fit mt-0.5">
                                     <ShieldCheck className="h-2.5 w-2.5 ml-0.5" />
-                                    بصمة موثقة
+                                    موثقة
                                   </Badge>
                                 )}
                               </div>
@@ -694,12 +701,10 @@ export default function BiometricSettingsPage() {
                             )}
                           </TableCell>
                           <TableCell className="text-center">
-                            {item.attendanceStats ? (
+                            {activeCred ? (
                               <div className="flex flex-col items-center gap-0.5">
-                                <Badge variant="outline" className="text-xs">{item.attendanceStats.totalAttendance} حضور</Badge>
-                                {item.attendanceStats.biometricAttendance > 0 && (
-                                  <span className="text-[10px] text-green-600">{item.attendanceStats.biometricAttendance} ببصمة</span>
-                                )}
+                                <span className="text-lg font-bold text-purple-700">{activeCred.usageCount}</span>
+                                <span className="text-[10px] text-gray-500">مرة</span>
                               </div>
                             ) : "-"}
                           </TableCell>
@@ -1008,12 +1013,6 @@ export default function BiometricSettingsPage() {
                         التعرف على الوجه
                       </div>
                     </SelectItem>
-                    <SelectItem value="pin">
-                      <div className="flex items-center gap-2">
-                        <KeyRound className="h-4 w-4" />
-                        رمز PIN
-                      </div>
-                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1191,20 +1190,6 @@ export default function BiometricSettingsPage() {
                         التعرف على الوجه
                       </span>
                     </button>
-                    <button
-                      onClick={() => setRegisterMethod("pin")}
-                      className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
-                        registerMethod === "pin"
-                          ? "border-amber-500 bg-amber-50 shadow-md"
-                          : "border-gray-200 hover:border-amber-300 hover:bg-amber-50/50"
-                      }`}
-                      data-testid="method-pin"
-                    >
-                      <KeyRound className={`h-8 w-8 ${registerMethod === "pin" ? "text-amber-600" : "text-gray-400"}`} />
-                      <span className={`text-xs font-medium ${registerMethod === "pin" ? "text-amber-700" : "text-gray-600"}`}>
-                        رمز PIN
-                      </span>
-                    </button>
                   </div>
                 </div>
 
@@ -1213,8 +1198,7 @@ export default function BiometricSettingsPage() {
                   <div className="text-xs text-blue-700">
                     <p className="font-medium mb-1">كيف يعمل التسجيل؟</p>
                     <p>عند الضغط على "بدء التسجيل"، سيطلب منك الجهاز استخدام {
-                      registerMethod === "fingerprint" ? "بصمة الإصبع" :
-                      registerMethod === "face" ? "التعرف على الوجه" : "رمز PIN الخاص بالجهاز"
+                      registerMethod === "fingerprint" ? "بصمة الإصبع" : "التعرف على الوجه"
                     } لتأكيد الهوية. تأكد أن الموظف موجود لتنفيذ العملية.</p>
                   </div>
                 </div>
@@ -1237,8 +1221,6 @@ export default function BiometricSettingsPage() {
                   <div className="relative w-24 h-24 bg-purple-100 rounded-full flex items-center justify-center">
                     {registerMethod === "face" ? (
                       <ScanFace className="h-12 w-12 text-purple-600 animate-pulse" />
-                    ) : registerMethod === "pin" ? (
-                      <KeyRound className="h-12 w-12 text-purple-600 animate-pulse" />
                     ) : (
                       <Fingerprint className="h-12 w-12 text-purple-600 animate-pulse" />
                     )}
@@ -1249,7 +1231,6 @@ export default function BiometricSettingsPage() {
                   <p className="text-sm text-gray-500 mt-1">
                     {registerMethod === "fingerprint" && "ضع إصبعك على مستشعر البصمة"}
                     {registerMethod === "face" && "وجّه الكاميرا نحو وجهك"}
-                    {registerMethod === "pin" && "أدخل رمز PIN الخاص بالجهاز"}
                   </p>
                 </div>
                 <Loader2 className="h-6 w-6 text-purple-500 animate-spin mx-auto" />
