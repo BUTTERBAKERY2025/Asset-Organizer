@@ -178,13 +178,19 @@ export const backups = pgTable("backups", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   type: text("type").notNull(), // 'manual', 'auto', 'scheduled'
-  status: text("status").notNull().default("pending"), // 'pending', 'completed', 'failed'
+  status: text("status").notNull().default("pending"), // 'pending', 'completed', 'failed', 'in_progress', 'restoring'
   fileSize: integer("file_size"),
   filePath: text("file_path"),
-  tables: text("tables"), // JSON array of backed up tables
+  tables: text("tables"), // JSON array of backed up table names
+  tableCount: integer("table_count"),
+  rowCount: integer("row_count"),
+  backupData: text("backup_data"), // JSON string of actual backup data
+  errorMessage: text("error_message"),
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   completedAt: timestamp("completed_at"),
+  restoredAt: timestamp("restored_at"),
+  restoredBy: varchar("restored_by"),
 });
 
 export const insertBackupSchema = createInsertSchema(backups).omit({

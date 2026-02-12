@@ -2568,49 +2568,271 @@ export async function registerRoutes(
     }
   });
 
-  // Backups
+  // Backups - Real database backup system
+  const BACKUP_TABLES = [
+    'branches', 'users', 'inventory_items', 'products', 'construction_projects',
+    'contractors', 'construction_categories', 'project_work_items', 'project_budget_allocations',
+    'construction_contracts', 'contract_items', 'contract_payments', 'payment_requests',
+    'asset_transfers', 'asset_transfer_events', 'shifts', 'shift_employees',
+    'production_orders', 'quality_checks', 'daily_operations_summary',
+    'cashier_sales_journals', 'cashier_payment_breakdowns', 'cashier_signatures',
+    'journal_attachments', 'branch_daily_closures', 'branch_daily_closure_payments',
+    'branch_daily_sales', 'departments', 'roles', 'permissions', 'role_permissions',
+    'user_permissions', 'user_branch_access', 'user_assignments',
+    'branch_employees', 'employee_schedules', 'attendance_records',
+    'finished_goods_inventory', 'finished_goods_transfers', 'warehouse_items',
+    'material_transfers', 'material_transfer_items', 'documents', 'document_folders',
+    'document_categories', 'notification_templates', 'external_integrations',
+    'point_settings', 'cashier_daily_challenges', 'product_commissions',
+    'branch_achievement_bonus', 'cashier_points_ledger', 'cashier_incentive_statements',
+    'waste_reports', 'waste_items', 'display_bar_receipts', 'display_bar_daily_summary',
+    'marketing_campaigns', 'marketing_influencers', 'influencer_contracts',
+    'shareholders', 'board_members', 'board_resolutions', 'governance_meetings',
+    'social_initiatives', 'beneficiary_organizations', 'community_discounts',
+    'saved_filters', 'seasons_holidays',
+  ];
+
   app.get("/api/backups", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
     try {
-      const backups = await storage.getAllBackups();
-      res.json(backups);
+      const allBackups = await storage.getAllBackups();
+      const result = allBackups.map(b => ({
+        ...b,
+        backupData: undefined,
+      }));
+      res.json(result);
     } catch (error) {
       console.error("Error fetching backups:", error);
-      res.status(500).json({ error: "Failed to fetch backups" });
+      res.status(500).json({ error: "فشل في جلب النسخ الاحتياطية" });
+    }
+  });
+
+  app.get("/api/backups/tables", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
+    try {
+      const tablesResult = await db.execute(sql`
+        SELECT table_name, 
+          (SELECT count(*)::int FROM information_schema.columns c WHERE c.table_name = t.table_name AND c.table_schema = 'public') as column_count
+        FROM information_schema.tables t 
+        WHERE table_schema = 'public' 
+        ORDER BY table_name
+      `);
+      const tableStats = [];
+      for (const row of tablesResult.rows) {
+        const tableName = row.table_name as string;
+        try {
+          const countResult = await pool.query(`SELECT count(*)::int as cnt FROM "${tableName}"`);
+          tableStats.push({
+            name: tableName,
+            columns: row.column_count,
+            rows: countResult.rows[0]?.cnt || 0,
+            selected: BACKUP_TABLES.includes(tableName),
+          });
+        } catch {
+          tableStats.push({ name: tableName, columns: row.column_count, rows: 0, selected: false });
+        }
+      }
+      res.json(tableStats);
+    } catch (error) {
+      console.error("Error fetching table stats:", error);
+      res.status(500).json({ error: "فشل في جلب معلومات الجداول" });
     }
   });
 
   app.post("/api/backups", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
     try {
-      const { name, type } = req.body;
+      const { name, selectedTables } = req.body;
+      const tablesToBackup: string[] = selectedTables && Array.isArray(selectedTables) && selectedTables.length > 0
+        ? selectedTables
+        : BACKUP_TABLES;
+
       const backup = await storage.createBackup({
-        name: name || `نسخة احتياطية - ${new Date().toLocaleDateString('en-GB')}`,
-        type: type || 'manual',
-        status: 'completed',
+        name: name || `نسخة احتياطية - ${new Date().toLocaleDateString('ar-SA')}`,
+        type: 'manual',
+        status: 'in_progress',
         createdBy: req.currentUser?.id,
-        tables: JSON.stringify(['inventory_items', 'branches', 'construction_projects', 'contractors', 'asset_transfers']),
-        completedAt: new Date(),
+        tables: JSON.stringify(tablesToBackup),
+        tableCount: tablesToBackup.length,
       });
-      res.status(201).json(backup);
+
+      res.status(201).json({ ...backup, backupData: undefined });
+
+      (async () => {
+        try {
+          const backupPayload: Record<string, any[]> = {};
+          let totalRows = 0;
+
+          for (const tableName of tablesToBackup) {
+            try {
+              const result = await pool.query(`SELECT * FROM "${tableName}"`);
+              backupPayload[tableName] = result.rows;
+              totalRows += result.rows.length;
+            } catch (err) {
+              console.warn(`Skipping table ${tableName}:`, err);
+              backupPayload[tableName] = [];
+            }
+          }
+
+          const jsonData = JSON.stringify(backupPayload);
+          const sizeBytes = Buffer.byteLength(jsonData, 'utf8');
+
+          await storage.updateBackup(backup.id, {
+            status: 'completed',
+            backupData: jsonData,
+            fileSize: sizeBytes,
+            rowCount: totalRows,
+            completedAt: new Date(),
+          });
+        } catch (error) {
+          console.error("Backup failed:", error);
+          await storage.updateBackup(backup.id, {
+            status: 'failed',
+            errorMessage: error instanceof Error ? error.message : 'Unknown error',
+          });
+        }
+      })();
     } catch (error) {
       console.error("Error creating backup:", error);
-      res.status(500).json({ error: "Failed to create backup" });
+      res.status(500).json({ error: "فشل في إنشاء النسخة الاحتياطية" });
+    }
+  });
+
+  app.get("/api/backups/:id", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const backup = await storage.getBackup(id);
+      if (!backup) return res.status(404).json({ error: "النسخة غير موجودة" });
+      res.json({ ...backup, backupData: undefined });
+    } catch (error) {
+      console.error("Error fetching backup:", error);
+      res.status(500).json({ error: "فشل في جلب بيانات النسخة" });
+    }
+  });
+
+  app.get("/api/backups/:id/download", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const backup = await storage.getBackup(id);
+      if (!backup || !backup.backupData) {
+        return res.status(404).json({ error: "بيانات النسخة غير متوفرة" });
+      }
+      const fileName = `backup_${backup.id}_${backup.name.replace(/\s+/g, '_')}.json`;
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);
+      res.send(backup.backupData);
+    } catch (error) {
+      console.error("Error downloading backup:", error);
+      res.status(500).json({ error: "فشل في تحميل النسخة" });
+    }
+  });
+
+  app.post("/api/backups/:id/restore", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const backup = await storage.getBackup(id);
+      if (!backup || !backup.backupData) {
+        return res.status(404).json({ error: "بيانات النسخة غير متوفرة للاستعادة" });
+      }
+      if (backup.status !== 'completed') {
+        return res.status(400).json({ error: "يمكن استعادة النسخ المكتملة فقط" });
+      }
+
+      await storage.updateBackup(id, { status: 'restoring' });
+
+      const data = JSON.parse(backup.backupData);
+      const restoredTables: string[] = [];
+      const skippedTables = ['backups', 'sessions', 'user_sessions'];
+
+      const allowedTablesResult = await pool.query(
+        `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'`
+      );
+      const allowedTableNames = new Set(allowedTablesResult.rows.map((r: any) => r.table_name));
+
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+
+        for (const [tableName, rows] of Object.entries(data)) {
+          if (!Array.isArray(rows) || rows.length === 0) continue;
+          if (skippedTables.includes(tableName)) continue;
+          if (!allowedTableNames.has(tableName)) {
+            console.warn(`Skipping unknown table: ${tableName}`);
+            continue;
+          }
+          if (!/^[a-z_][a-z0-9_]*$/.test(tableName)) {
+            console.warn(`Skipping invalid table name: ${tableName}`);
+            continue;
+          }
+
+          await client.query(`DELETE FROM "${tableName}"`);
+          for (const row of rows) {
+            const columns = Object.keys(row).filter(k => row[k] !== null && row[k] !== undefined);
+            if (columns.length === 0) continue;
+            const colList = columns.map(c => `"${c}"`).join(', ');
+            const valList = columns.map((_, i) => `$${i + 1}`).join(', ');
+            const values = columns.map(c => {
+              const val = row[c];
+              if (typeof val === 'object' && val !== null) return JSON.stringify(val);
+              return val;
+            });
+            await client.query(`INSERT INTO "${tableName}" (${colList}) VALUES (${valList})`, values);
+          }
+          restoredTables.push(tableName);
+        }
+
+        for (const tableName of restoredTables) {
+          try {
+            const seqResult = await client.query(`
+              SELECT pg_get_serial_sequence('"${tableName}"', 'id') as seq_name
+            `);
+            const seqName = seqResult.rows[0]?.seq_name;
+            if (seqName) {
+              await client.query(`SELECT setval('${seqName}', COALESCE((SELECT MAX(id) FROM "${tableName}"), 1))`);
+            }
+          } catch {
+          }
+        }
+
+        await client.query('COMMIT');
+      } catch (err) {
+        await client.query('ROLLBACK');
+        await storage.updateBackup(id, {
+          status: 'completed',
+          errorMessage: `فشل في الاستعادة: ${err instanceof Error ? err.message : String(err)}`,
+        });
+        throw err;
+      } finally {
+        client.release();
+      }
+
+      await storage.updateBackup(id, {
+        status: 'completed',
+        restoredAt: new Date(),
+        restoredBy: req.currentUser?.id,
+      });
+
+      res.json({
+        success: true,
+        restoredTables,
+        message: `تم استعادة ${restoredTables.length} جدول بنجاح`,
+      });
+    } catch (error) {
+      console.error("Error restoring backup:", error);
+      res.status(500).json({ error: "فشل في استعادة النسخة الاحتياطية" });
     }
   });
 
   app.delete("/api/backups/:id", isAuthenticated, requirePermission("users", "delete"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
-      if (isNaN(id)) {
-        return res.status(400).json({ error: "Invalid backup ID" });
-      }
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
       const success = await storage.deleteBackup(id);
-      if (!success) {
-        return res.status(404).json({ error: "Backup not found" });
-      }
+      if (!success) return res.status(404).json({ error: "النسخة غير موجودة" });
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting backup:", error);
-      res.status(500).json({ error: "Failed to delete backup" });
+      res.status(500).json({ error: "فشل في حذف النسخة الاحتياطية" });
     }
   });
 
