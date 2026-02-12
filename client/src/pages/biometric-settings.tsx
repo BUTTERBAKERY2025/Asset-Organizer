@@ -678,40 +678,28 @@ export default function BiometricSettingsPage() {
                                     عرض التفاصيل
                                   </DropdownMenuItem>
 
-                                  {item.credentials.length > 0 && (
+                                  {activeCred && (
                                     <>
-                                      {item.credentials.map(cred => (
-                                        <DropdownMenuItem key={`edit-${cred.id}`} onClick={() => openEditDialog(cred)}>
-                                          <Edit className="h-4 w-4 ml-2" />
-                                          تعديل إعدادات البصمة
-                                        </DropdownMenuItem>
-                                      ))}
-
-                                      {item.credentials.map(cred => (
-                                        <DropdownMenuItem
-                                          key={`toggle-${cred.id}`}
-                                          onClick={() => {
-                                            if (cred.isActive) {
-                                              setDeactivateCredentialId(cred.id);
-                                            } else {
-                                              toggleMutation.mutate({ id: cred.id, isActive: true });
-                                            }
-                                          }}
-                                        >
-                                          {cred.isActive ? (
-                                            <>
-                                              <ToggleLeft className="h-4 w-4 ml-2 text-orange-500" />
-                                              تعطيل البصمة
-                                            </>
-                                          ) : (
-                                            <>
-                                              <ToggleRight className="h-4 w-4 ml-2 text-green-500" />
-                                              تفعيل البصمة
-                                            </>
-                                          )}
-                                        </DropdownMenuItem>
-                                      ))}
+                                      <DropdownMenuItem onClick={() => openEditDialog(activeCred)}>
+                                        <Edit className="h-4 w-4 ml-2" />
+                                        تعديل إعدادات البصمة
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        onClick={() => setDeactivateCredentialId(activeCred.id)}
+                                      >
+                                        <ToggleLeft className="h-4 w-4 ml-2 text-orange-500" />
+                                        تعطيل البصمة
+                                      </DropdownMenuItem>
                                     </>
+                                  )}
+
+                                  {!activeCred && item.credentials.length > 0 && (
+                                    <DropdownMenuItem
+                                      onClick={() => toggleMutation.mutate({ id: item.credentials[0].id, isActive: true })}
+                                    >
+                                      <ToggleRight className="h-4 w-4 ml-2 text-green-500" />
+                                      تفعيل البصمة
+                                    </DropdownMenuItem>
                                   )}
 
                                   {isAdmin && item.credentials.length > 0 && (
@@ -725,18 +713,8 @@ export default function BiometricSettingsPage() {
                                         }}
                                       >
                                         <RefreshCw className="h-4 w-4 ml-2" />
-                                        إعادة تعيين البصمة
+                                        إعادة تعيين جميع البصمات
                                       </DropdownMenuItem>
-                                      {item.credentials.map(cred => (
-                                        <DropdownMenuItem
-                                          key={`delete-${cred.id}`}
-                                          className="text-red-600 focus:text-red-600 focus:bg-red-50"
-                                          onClick={() => setDeleteCredentialId(cred.id)}
-                                        >
-                                          <Trash2 className="h-4 w-4 ml-2" />
-                                          حذف البصمة
-                                        </DropdownMenuItem>
-                                      ))}
                                     </>
                                   )}
                                 </DropdownMenuContent>

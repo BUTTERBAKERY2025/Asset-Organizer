@@ -19297,32 +19297,21 @@ export async function registerRoutes(
         and(eq(branchEmployees.branchId, branchId), eq(branchEmployees.status, "active"))
       ).orderBy(branchEmployees.employeeName);
 
-      const branchUsersList = await storage.getAllUsers();
-      const branchUsersFiltered = branchUsersList.filter(u => u.branchId === branchId && u.isActive !== false);
-
-      const branchEmpIds = new Set(branchEmps.map(e => String(e.id)));
-      const allEmployeeEntries: Array<{ id: number; employeeName: string; employeeNumber?: string; position?: string; source: string }> = [];
+      const seenNames = new Set<string>();
+      const allEmployeeEntries: Array<{ id: number; employeeName: string; employeeNumber?: string; jobTitle?: string; position?: string; source: string }> = [];
 
       for (const emp of branchEmps) {
+        const nameKey = emp.employeeName.trim().toLowerCase();
+        if (seenNames.has(nameKey)) continue;
+        seenNames.add(nameKey);
         allEmployeeEntries.push({
           id: emp.id,
           employeeName: emp.employeeName,
           employeeNumber: emp.employeeNumber || undefined,
-          position: emp.position || undefined,
+          jobTitle: emp.jobTitle || undefined,
+          position: emp.jobTitle || undefined,
           source: "branch_employee",
         });
-      }
-
-      for (const u of branchUsersFiltered) {
-        if (!branchEmpIds.has(String(u.id))) {
-          allEmployeeEntries.push({
-            id: u.id,
-            employeeName: [u.firstName, u.lastName].filter(Boolean).join(" ") || u.username,
-            employeeNumber: undefined,
-            position: u.jobTitle || u.role || undefined,
-            source: "user",
-          });
-        }
       }
 
       const credentials = await db.select({
