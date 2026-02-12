@@ -734,7 +734,14 @@ export default function SettingsDashboardPage() {
   };
 
   const filteredSections = useMemo(() => {
-    if (!searchQuery.trim()) return settingsSections;
+    if (!searchQuery.trim()) {
+      return settingsSections
+        .map((section) => ({
+          ...section,
+          items: section.items.filter(isItemVisible),
+        }))
+        .filter((section) => section.items.length > 0);
+    }
 
     const query = searchQuery.toLowerCase();
     return settingsSections
