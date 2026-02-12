@@ -12955,7 +12955,34 @@ export class DatabaseStorage implements IStorage {
       usageCount: biometricCredentials.usageCount,
     }).from(biometricCredentials)
         .where(and(eq(biometricCredentials.credentialId, credentialId), eq(biometricCredentials.isActive, true)));
-      return row ? { ...row, verificationPin: null } as BiometricCredential : undefined;
+      if (row) return { ...row, verificationPin: null } as BiometricCredential;
+      const altId = credentialId.includes('+') || credentialId.includes('/')
+        ? credentialId.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+        : credentialId.replace(/-/g, '+').replace(/_/g, '/');
+      const [altRow] = await db.select({
+      id: biometricCredentials.id,
+      employeeId: biometricCredentials.employeeId,
+      employeeName: biometricCredentials.employeeName,
+      branchId: biometricCredentials.branchId,
+      credentialId: biometricCredentials.credentialId,
+      publicKey: biometricCredentials.publicKey,
+      counter: biometricCredentials.counter,
+      deviceInfo: biometricCredentials.deviceInfo,
+      registeredBy: biometricCredentials.registeredBy,
+      isActive: biometricCredentials.isActive,
+      lastUsedAt: biometricCredentials.lastUsedAt,
+      createdAt: biometricCredentials.createdAt,
+      deviceType: biometricCredentials.deviceType,
+      deviceModel: biometricCredentials.deviceModel,
+      registrationMethod: biometricCredentials.registrationMethod,
+      registeredByName: biometricCredentials.registeredByName,
+      deactivatedAt: biometricCredentials.deactivatedAt,
+      deactivatedBy: biometricCredentials.deactivatedBy,
+      deactivationReason: biometricCredentials.deactivationReason,
+      usageCount: biometricCredentials.usageCount,
+    }).from(biometricCredentials)
+        .where(and(eq(biometricCredentials.credentialId, altId), eq(biometricCredentials.isActive, true)));
+      return altRow ? { ...altRow, verificationPin: null } as BiometricCredential : undefined;
     } catch (error: any) {
       if (error?.code === '42P01') return undefined;
       if (error?.code === '42703') {

@@ -47,6 +47,22 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Link } from "wouter";
 import type { BranchEmployee } from "@shared/schema";
 
+function base64urlToBuffer(base64url: string): Uint8Array {
+  let base64 = base64url.replace(/-/g, "+").replace(/_/g, "/");
+  while (base64.length % 4 !== 0) base64 += "=";
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+function bufferToBase64url(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
 interface BiometricCredentialInfo {
   id: number;
   registrationMethod: string;
@@ -302,18 +318,21 @@ export default function BiometricSettingsPage() {
         throw new Error("متصفحك لا يدعم تسجيل البصمة. استخدم متصفح حديث مثل Chrome أو Safari");
       }
 
-      const challengeBuffer = Uint8Array.from(atob(options.challenge.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
-      const userIdBuffer = Uint8Array.from(atob(options.user.id.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
+      const challengeBuffer = base64urlToBuffer(options.challenge);
+      const userIdBuffer = base64urlToBuffer(options.user.id);
 
       const excludeCredentials = (options.excludeCredentials || []).map((c: any) => ({
-        id: Uint8Array.from(atob(c.id.replace(/-/g, '+').replace(/_/g, '/')), (ch: string) => ch.charCodeAt(0)),
+        id: base64urlToBuffer(c.id),
         type: c.type as PublicKeyCredentialType,
         transports: (c.transports || ["internal"]) as AuthenticatorTransport[],
       }));
 
+      const rpId = window.location.hostname;
+      console.log("[Biometric] RP ID:", rpId, "Server RP ID:", options.rp.id);
+
       const createOptions: PublicKeyCredentialCreationOptions = {
         challenge: challengeBuffer,
-        rp: { name: options.rp.name, id: window.location.hostname },
+        rp: { name: options.rp.name, id: rpId },
         user: {
           id: userIdBuffer,
           name: options.user.name,
@@ -331,6 +350,12 @@ export default function BiometricSettingsPage() {
         attestation: "none" as AttestationConveyancePreference,
       };
 
+      console.log("[Biometric] Creating credential with options:", JSON.stringify({
+        rpId: createOptions.rp.id,
+        userName: createOptions.user.name,
+        excludeCount: excludeCredentials.length,
+      }));
+
       const credential = await navigator.credentials.create({
         publicKey: createOptions,
       }) as PublicKeyCredential;
@@ -338,9 +363,9 @@ export default function BiometricSettingsPage() {
       if (!credential) throw new Error("تم إلغاء عملية التسجيل");
 
       const response = credential.response as AuthenticatorAttestationResponse;
-      const credentialIdBase64 = btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(credential.rawId))));
+      const credentialIdBase64 = bufferToBase64url(credential.rawId);
       const pubKeyData = response.getPublicKey?.() || response.attestationObject;
-      const publicKeyBase64 = btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(pubKeyData))));
+      const publicKeyBase64 = bufferToBase64url(pubKeyData);
 
       const completeRes = await fetch("/api/biometric-settings/register/complete", {
         method: "POST",
@@ -368,11 +393,15 @@ export default function BiometricSettingsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/biometric-settings/stats"] });
       toast({ title: "تم تسجيل البصمة بنجاح", description: `تم تسجيل بصمة ${registerEmployee.employee.employeeName}` });
     } catch (err: any) {
-      console.error("Biometric registration error:", err);
+      console.error("[Biometric] Registration error:", err.name, err.message, err);
       if (err.name === "NotAllowedError") {
-        setRegisterError("تم رفض الوصول للبصمة. تأكد من السماح بالبصمة في إعدادات الجهاز");
+        setRegisterError("تم رفض الوصول للبصمة. تأكد من السماح بالبصمة في إعدادات الجهاز وأن الجهاز يدعم البصمة");
       } else if (err.name === "NotSupportedError") {
-        setRegisterError("جهازك لا يدعم هذا النوع من التسجيل البيومتري");
+        setRegisterError("جهازك لا يدعم هذا النوع من التسجيل البيومتري. تأكد من استخدام جهاز يدعم البصمة");
+      } else if (err.name === "SecurityError") {
+        setRegisterError("خطأ أمني: تأكد من استخدام اتصال HTTPS آمن");
+      } else if (err.name === "InvalidStateError") {
+        setRegisterError("البصمة مسجلة مسبقاً لهذا الموظف على هذا الجهاز");
       } else {
         setRegisterError(err.message || "حدث خطأ أثناء تسجيل البصمة");
       }

@@ -19628,9 +19628,15 @@ export async function registerRoutes(
         transports: ["internal"],
       }));
 
+      const origin = req.headers.origin || req.headers.referer || "";
+      let rpId = req.hostname;
+      try {
+        if (origin) rpId = new URL(origin).hostname;
+      } catch {}
+
       res.json({
         challenge,
-        rp: { name: "نظام باتر - إدارة البصمة", id: req.hostname },
+        rp: { name: "نظام باتر - إدارة البصمة", id: rpId },
         user: { id: userIdBase64, name: `${employeeName} (${employeeId})`, displayName: employeeName },
         pubKeyCredParams: [
           { alg: -7, type: "public-key" },

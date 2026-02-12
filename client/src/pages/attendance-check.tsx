@@ -19,6 +19,22 @@ import { format } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
 import type { Branch, EmployeeSchedule, AttendanceRecord } from "@shared/schema";
 
+function base64urlToBuffer(base64url: string): Uint8Array {
+  let base64 = base64url.replace(/-/g, "+").replace(/_/g, "/");
+  while (base64.length % 4 !== 0) base64 += "=";
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+function bufferToBase64url(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
 interface ScheduledEmployee {
   id: number;
   employeeId: string;
@@ -323,14 +339,14 @@ export default function AttendanceCheckPage() {
       const { options, challengeKey } = optionsData;
       
       const allowCreds = (options.allowCredentials || []).map((c: any) => ({
-        id: Uint8Array.from(atob(c.id.replace(/-/g, '+').replace(/_/g, '/')), (c2: string) => c2.charCodeAt(0)),
+        id: base64urlToBuffer(c.id),
         type: c.type as PublicKeyCredentialType,
         transports: c.transports as AuthenticatorTransport[],
       }));
 
       const publicKeyOptions: PublicKeyCredentialRequestOptions = {
-        challenge: Uint8Array.from(atob(options.challenge.replace(/-/g, '+').replace(/_/g, '/')), (c: string) => c.charCodeAt(0)),
-        rpId: options.rpId,
+        challenge: base64urlToBuffer(options.challenge),
+        rpId: options.rpId || window.location.hostname,
         ...(allowCreds.length > 0 ? { allowCredentials: allowCreds } : {}),
         userVerification: options.userVerification as UserVerificationRequirement,
         timeout: options.timeout,
@@ -339,8 +355,7 @@ export default function AttendanceCheckPage() {
       const assertion = await navigator.credentials.get({ publicKey: publicKeyOptions }) as PublicKeyCredential;
       if (!assertion) throw new Error("فشل التحقق");
       
-      const credentialId = btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(assertion.rawId))))
-        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+      const credentialId = bufferToBase64url(assertion.rawId);
       
       const verifyRes = await apiRequest("POST", "/api/biometric/verify", { 
         credentialId, 
@@ -405,16 +420,17 @@ export default function AttendanceCheckPage() {
       const { options, challengeKey } = await optionsRes.json();
       
       const excludeCreds = (options.excludeCredentials || []).map((c: any) => ({
-        id: Uint8Array.from(atob(c.id.replace(/-/g, '+').replace(/_/g, '/')), (ch: string) => ch.charCodeAt(0)),
+        id: base64urlToBuffer(c.id),
         type: c.type as PublicKeyCredentialType,
         transports: (c.transports || ["internal"]) as AuthenticatorTransport[],
       }));
 
+      const rpId = window.location.hostname;
       const publicKeyOptions: PublicKeyCredentialCreationOptions = {
-        challenge: Uint8Array.from(atob(options.challenge.replace(/-/g, '+').replace(/_/g, '/')), (c: string) => c.charCodeAt(0)),
-        rp: options.rp,
+        challenge: base64urlToBuffer(options.challenge),
+        rp: { ...options.rp, id: rpId },
         user: {
-          id: Uint8Array.from(atob(options.user.id.replace(/-/g, '+').replace(/_/g, '/')), (c: string) => c.charCodeAt(0)),
+          id: base64urlToBuffer(options.user.id),
           name: options.user.name,
           displayName: options.user.displayName,
         },
@@ -432,16 +448,14 @@ export default function AttendanceCheckPage() {
       const credential = await navigator.credentials.create({ publicKey: publicKeyOptions }) as PublicKeyCredential;
       if (!credential) throw new Error("فشل في تسجيل البصمة");
       
-      const credentialId = btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(credential.rawId))))
-        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+      const credentialId = bufferToBase64url(credential.rawId);
       
       const response = credential.response as AuthenticatorAttestationResponse;
       let publicKey = credentialId;
       try {
         const pubKeyBytes = response.getPublicKey?.();
         if (pubKeyBytes && pubKeyBytes.byteLength > 0) {
-          publicKey = btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(pubKeyBytes))))
-            .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+          publicKey = bufferToBase64url(pubKeyBytes);
         }
       } catch { /* fallback to credentialId */ }
 
