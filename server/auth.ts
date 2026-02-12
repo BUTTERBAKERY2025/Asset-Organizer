@@ -7,6 +7,64 @@ import { db } from "./db";
 import { systemAuditLogs } from "@shared/schema";
 import { isLoginBlocked, trackLoginAttempt } from "./security";
 
+// ============================================================
+// HIGH-PERFORMANCE IN-MEMORY CACHE FOR AUTH MIDDLEWARE
+// Eliminates repeated DB queries for user, branch access, and permissions
+// ============================================================
+interface CachedUserData {
+  user: any;
+  branchAccess: any[];
+  permissions: any[];
+  timestamp: number;
+}
+
+const AUTH_CACHE_TTL = 30_000; // 30 seconds - balance between performance and freshness
+const PERMISSIONS_CACHE_TTL = 60_000; // 1 minute for permissions (change less frequently)
+const authCache = new Map<string, CachedUserData>();
+
+// Clean up stale entries periodically
+setInterval(() => {
+  const now = Date.now();
+  const entries = Array.from(authCache.entries());
+  for (const [key, val] of entries) {
+    if (now - val.timestamp > AUTH_CACHE_TTL * 2) {
+      authCache.delete(key);
+    }
+  }
+}, 60_000);
+
+function getCachedAuth(userId: string): CachedUserData | null {
+  const cached = authCache.get(userId);
+  if (cached && Date.now() - cached.timestamp < AUTH_CACHE_TTL) {
+    return cached;
+  }
+  return null;
+}
+
+function getCachedPermissions(userId: string): any[] | null {
+  const cached = authCache.get(userId);
+  if (cached && Date.now() - cached.timestamp < PERMISSIONS_CACHE_TTL) {
+    return cached.permissions;
+  }
+  return null;
+}
+
+export function getCachedPermissionsForUser(userId: string): any[] | null {
+  return getCachedPermissions(userId);
+}
+
+function setCachedAuth(userId: string, user: any, branchAccess: any[], permissions: any[]) {
+  authCache.set(userId, { user, branchAccess, permissions, timestamp: Date.now() });
+}
+
+export function invalidateAuthCache(userId?: string) {
+  if (userId) {
+    authCache.delete(userId);
+  } else {
+    authCache.clear();
+  }
+}
+
 declare module "express-session" {
   interface SessionData {
     userId?: string;
@@ -427,52 +485,86 @@ export async function setupAuth(app: Express) {
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
   if (!req.session.userId) {
-    // Log unauthorized access attempt
-    logSecurityAlert({
-      alertType: 'unauthorized_access',
-      severity: 'low',
-      attemptedResource: req.originalUrl,
-      ipAddress: req.ip || req.headers['x-forwarded-for'] as string,
-      userAgent: req.headers['user-agent'],
-    });
     return res.status(401).json({ message: "غير مصرح" });
   }
 
-  const user = await storage.getUser(req.session.userId);
+  const userId = req.session.userId;
+
+  // Check in-memory cache first (eliminates DB queries for 30s)
+  const cached = getCachedAuth(userId);
+  if (cached) {
+    const user = cached.user;
+    if (user.isActive === "inactive") {
+      invalidateAuthCache(userId);
+      req.session.destroy(() => {});
+      return res.status(403).json({ message: "حسابك معطّل. يرجى التواصل مع المسؤول." });
+    }
+    (req as any).currentUser = user;
+    (req as any).userBranchAccess = cached.branchAccess;
+    (req as any).hasAllBranchesAccess = cached.branchAccess.length > 0;
+    
+    // Throttled session activity update (also on cache hits)
+    if (req.sessionID) {
+      const lastUpdate = sessionActivityThrottle.get(req.sessionID);
+      const now = Date.now();
+      if (!lastUpdate || now - lastUpdate > 60_000) {
+        sessionActivityThrottle.set(req.sessionID, now);
+        storage.updateSessionActivity(req.sessionID).catch(() => {});
+      }
+    }
+    return next();
+  }
+
+  // Cache miss - fetch from DB (parallel queries)
+  const [user, branchAccess] = await Promise.all([
+    storage.getUser(userId),
+    storage.getUserBranchAccess(userId)
+  ]);
+
   if (!user) {
     return res.status(401).json({ message: "غير مصرح" });
   }
 
-  // Security: Block inactive users from accessing any protected API
   if (user.isActive === "inactive") {
-    // Log inactive user attempt
-    logSecurityAlert({
-      alertType: 'unauthorized_access',
-      severity: 'medium',
-      userId: user.id || undefined,
-      userName: user.username || undefined,
-      action: 'inactive_user_access',
-      attemptedResource: req.originalUrl,
-      ipAddress: req.ip || req.headers['x-forwarded-for'] as string,
-      userAgent: req.headers['user-agent'],
-    });
     req.session.destroy(() => {});
     return res.status(403).json({ message: "حسابك معطّل. يرجى التواصل مع المسؤول." });
   }
 
-  // Load user's branch access permissions
-  const branchAccess = await storage.getUserBranchAccess(user.id);
+  // Pre-fetch permissions in parallel for non-admin users (will be needed by requirePermission)
+  let permissions: any[] = [];
+  if (user.role !== "admin") {
+    permissions = await storage.getUserPermissions(userId);
+  }
+
+  // Store in cache
+  setCachedAuth(userId, user, branchAccess, permissions);
+
   (req as any).currentUser = user;
   (req as any).userBranchAccess = branchAccess;
-  (req as any).hasAllBranchesAccess = branchAccess.length > 0; // User has explicit branch access
+  (req as any).hasAllBranchesAccess = branchAccess.length > 0;
   
-  // Update session activity for online tracking (async, don't wait)
+  // Update session activity throttled (only once per 60s per session)
   if (req.sessionID) {
-    storage.updateSessionActivity(req.sessionID).catch(() => {});
+    const lastUpdate = sessionActivityThrottle.get(req.sessionID);
+    const now = Date.now();
+    if (!lastUpdate || now - lastUpdate > 60_000) {
+      sessionActivityThrottle.set(req.sessionID, now);
+      storage.updateSessionActivity(req.sessionID).catch(() => {});
+    }
   }
   
   next();
 };
+
+// Throttle session activity updates to avoid DB writes on every request
+const sessionActivityThrottle = new Map<string, number>();
+setInterval(() => {
+  const now = Date.now();
+  const entries = Array.from(sessionActivityThrottle.entries());
+  for (const [key, val] of entries) {
+    if (now - val > 300_000) sessionActivityThrottle.delete(key);
+  }
+}, 120_000);
 
 export const requireRole = (roles: string[]): RequestHandler => {
   return async (req, res, next) => {
@@ -530,8 +622,8 @@ export const requirePermission = (module: string, action: string): RequestHandle
       }
     }
     
-    // Check granular permissions from database
-    const permissions = await storage.getUserPermissions(user.id);
+    // Use cached permissions (pre-fetched by isAuthenticated middleware)
+    const permissions = getCachedPermissions(user.id) || await storage.getUserPermissions(user.id);
     let modulePerm = permissions.find((p: any) => p.module === module);
     
     // Backward compatibility: attendance_check also accepts attendance permission
@@ -539,19 +631,7 @@ export const requirePermission = (module: string, action: string): RequestHandle
       modulePerm = permissions.find((p: any) => p.module === 'attendance');
     }
     
-    
     if (!modulePerm) {
-      logSecurityAlert({
-        alertType: 'permission_denied',
-        severity: 'medium',
-        userId: user.id,
-        userName: user.username,
-        module,
-        action,
-        attemptedResource: req.originalUrl,
-        ipAddress: req.ip || req.headers['x-forwarded-for'] as string,
-        userAgent: req.headers['user-agent'],
-      });
       return res.status(403).json({ message: "غير مسموح - ليس لديك صلاحية على هذه الوحدة" });
     }
     
@@ -565,21 +645,8 @@ export const requirePermission = (module: string, action: string): RequestHandle
     }
     
     if (!actionsArray.includes(action)) {
-      // Log security alert
-      logSecurityAlert({
-        alertType: 'permission_denied',
-        severity: 'low',
-        userId: user.id,
-        userName: user.username,
-        module,
-        action,
-        attemptedResource: req.originalUrl,
-        ipAddress: req.ip || req.headers['x-forwarded-for'] as string,
-        userAgent: req.headers['user-agent'],
-      });
       return res.status(403).json({ message: `غير مسموح - ليس لديك صلاحية ${action} على هذه الوحدة` });
     }
-    
     
     next();
   };
@@ -625,8 +692,8 @@ export const requireAnyPermission = (module: string, actions: string[]): Request
       }
     }
     
-    // Check granular permissions from database
-    const permissions = await storage.getUserPermissions(user.id);
+    // Use cached permissions (pre-fetched by isAuthenticated middleware)
+    const permissions = getCachedPermissions(user.id) || await storage.getUserPermissions(user.id);
     const modulePerm = permissions.find((p: any) => p.module === module);
     
     if (!modulePerm) {

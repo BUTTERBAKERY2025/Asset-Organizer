@@ -31,7 +31,8 @@ export const pool = new Pool({
   ssl: isSupabase ? { rejectUnauthorized: false } : undefined,
   connectionTimeoutMillis: 10000,
   idleTimeoutMillis: 30000,
-  max: 10,
+  max: 20,
+  min: 2,
 });
 
 pool.on('error', (err) => {

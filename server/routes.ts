@@ -27,7 +27,9 @@ function parseQueryString(value: unknown): string | undefined {
 async function canUserViewAllCashiers(req: Request): Promise<boolean> {
   const user = getCurrentUser(req);
   if (user.role === 'admin' || user.role === 'manager') return true;
-  const permissions = await storage.getUserPermissions(user.id);
+  // Use cached permissions from auth middleware when available
+  const { getCachedPermissionsForUser } = await import("./auth");
+  const permissions = getCachedPermissionsForUser(user.id) || await storage.getUserPermissions(user.id);
   for (const perm of permissions) {
     if (perm.module === 'cashier_performance' || perm.module === 'cashier_journal') {
       if (perm.actions.includes('approve')) return true;
@@ -92,7 +94,7 @@ import {
 } from "./pdf-generator";
 import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertInfluencerContractSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema, isMadeToOrderCategory, suggestCategoryFromProductName, userBranchAccess } from "@shared/schema";
 import { z } from "zod";
-import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, isUserAdmin, getAllowedBranchIds, getEffectiveBranchFilter } from "./auth";
+import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, isUserAdmin, getAllowedBranchIds, getEffectiveBranchFilter, invalidateAuthCache } from "./auth";
 import { authRateLimiter, biometricRateLimiter, uploadRateLimiter, validateFileUpload, sanitizeFilename, trackLoginAttempt } from "./security";
 import { registerGovernanceRoutes } from "./governance-routes";
 import { registerSocialResponsibilityRoutes } from "./social-responsibility-routes";
@@ -366,9 +368,11 @@ export async function registerRoutes(
           }
           // Clear permissions cache
           storage.clearPermissionsCache?.(req.params.id);
+          invalidateAuthCache(req.params.id);
         }
       }
       
+      invalidateAuthCache(req.params.id);
       const { password: _, ...safeUser } = user;
       res.json(safeUser);
     } catch (error) {
@@ -388,6 +392,7 @@ export async function registerRoutes(
       if (!success) {
         return res.status(404).json({ error: "User not found" });
       }
+      invalidateAuthCache(req.params.id);
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting user:", error);
@@ -478,6 +483,7 @@ export async function registerRoutes(
         inheritedOverrides
       );
       
+      invalidateAuthCache(req.params.id);
       res.json(savedPermissions);
     } catch (error) {
       console.error("Error updating user permissions:", error);
@@ -582,7 +588,12 @@ export async function registerRoutes(
         return res.json(attendancePermissions);
       }
       
-      // Use cached permissions for better performance
+      // Use auth cache first, then fall back to route-level cache
+      const { getCachedPermissionsForUser } = await import("./auth");
+      const authCachedPerms = getCachedPermissionsForUser(currentUser.id);
+      if (authCachedPerms && authCachedPerms.length > 0) {
+        return res.json(authCachedPerms);
+      }
       const permissions = await getCachedPermissions(currentUser.id);
       res.json(permissions);
     } catch (error) {
@@ -14662,6 +14673,7 @@ export async function registerRoutes(
         expiresAt: expiresAt ? new Date(expiresAt) : null,
       });
       
+      invalidateAuthCache(userId);
       res.status(201).json(override);
     } catch (error) {
       console.error("Error creating user permission override:", error);
@@ -14681,6 +14693,7 @@ export async function registerRoutes(
       
       const overrideId = parseInt(req.params.overrideId);
       await storage.deleteUserPermissionOverride(overrideId);
+      invalidateAuthCache(userId);
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting user permission override:", error);
@@ -14732,6 +14745,7 @@ export async function registerRoutes(
         accessLevel: accessLevel || 'full',
       });
       
+      invalidateAuthCache(userId);
       res.status(201).json(access);
     } catch (error) {
       console.error("Error adding user branch access:", error);
@@ -14751,6 +14765,7 @@ export async function registerRoutes(
       }
       
       await storage.removeUserBranchAccess(userId, branchId);
+      invalidateAuthCache(userId);
       res.status(204).send();
     } catch (error) {
       console.error("Error removing user branch access:", error);
@@ -14770,6 +14785,7 @@ export async function registerRoutes(
       }
       
       await storage.setUserDefaultBranch(userId, branchId);
+      invalidateAuthCache(userId);
       res.json({ success: true });
     } catch (error) {
       console.error("Error setting default branch:", error);
@@ -20703,7 +20719,30 @@ export async function registerRoutes(
     try {
       // SECURITY: Enforce branch filtering for non-admin users
       const queryBranchId = req.query.branchId as string | undefined;
+      const countOnly = req.query.countOnly === 'true';
       const allowedBranches = getAllowedBranchIds(req);
+      
+      // Fast count path - uses cached data or lightweight query
+      if (countOnly) {
+        const cacheKey = `branch_employees_count:${allowedBranches === null ? 'all' : allowedBranches.join(',')}`;
+        const cached = getCachedResponse(cacheKey, 60000);
+        if (cached !== null) return res.json(cached);
+        
+        let employees;
+        if (allowedBranches === null) {
+          employees = await storage.getAllBranchEmployees();
+        } else if (allowedBranches.length > 0) {
+          const allEmployees = await Promise.all(
+            allowedBranches.map(branchId => storage.getBranchEmployeesByBranch(branchId))
+          );
+          employees = allEmployees.flat();
+        } else {
+          return res.json(0);
+        }
+        const count = employees.filter((e: any) => e.status === 'active').length;
+        setCachedResponse(cacheKey, count);
+        return res.json(count);
+      }
       
       let employees;
       

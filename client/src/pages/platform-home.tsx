@@ -179,29 +179,27 @@ export default function PlatformHomePage() {
   });
 
   const { data: branchesCount } = useQuery({
-    queryKey: ["/api/branches/count"],
-    queryFn: async () => {
-      const res = await fetch("/api/branches");
-      if (!res.ok) return 0;
-      const branches = await res.json();
-      return branches.length;
-    },
-    enabled: isAuthenticated,
-    staleTime: 10 * 60 * 1000,
+    queryKey: ["/api/branches"],
+    staleTime: 1000 * 60 * 60,
     refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    select: (data: any[]) => data?.length || 0,
   });
 
   const { data: employeesCount } = useQuery({
     queryKey: ["/api/branch-employees/count"],
     queryFn: async () => {
-      const res = await fetch("/api/branch-employees");
+      const res = await fetch("/api/branch-employees?countOnly=true");
       if (!res.ok) return 0;
-      const employees = await res.json();
-      return employees.filter((e: any) => e.status === 'active').length;
+      const data = await res.json();
+      if (typeof data === 'number') return data;
+      if (Array.isArray(data)) return data.filter((e: any) => e.status === 'active').length;
+      return data?.count || 0;
     },
     enabled: isAuthenticated,
     staleTime: 10 * 60 * 1000,
     refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 
   const modules: (ModuleCardProps & { module?: SystemModule })[] = [
