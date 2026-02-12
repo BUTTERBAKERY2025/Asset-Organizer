@@ -301,7 +301,7 @@ export default function BiometricSettingsPage() {
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          employeeId: String(registerEmployee.employee.id),
+          employeeId: `branch_emp_${registerEmployee.employee.id}`,
           employeeName: registerEmployee.employee.employeeName,
           branchId: selectedBranch,
         }),
@@ -372,7 +372,7 @@ export default function BiometricSettingsPage() {
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          employeeId: String(registerEmployee.employee.id),
+          employeeId: `branch_emp_${registerEmployee.employee.id}`,
           employeeName: registerEmployee.employee.employeeName,
           branchId: selectedBranch,
           credentialId: credentialIdBase64,

@@ -19339,15 +19339,28 @@ export async function registerRoutes(
         eq(biometricCredentials.branchId, branchId)
       );
 
-      const credentialMap = new Map();
+      const credentialMap = new Map<string, typeof credentials>();
       for (const cred of credentials) {
         const key = cred.employeeId;
         if (!credentialMap.has(key)) credentialMap.set(key, []);
-        credentialMap.get(key).push(cred);
+        credentialMap.get(key)!.push(cred);
+      }
+
+      const nameCredentialMap = new Map<string, typeof credentials>();
+      for (const cred of credentials) {
+        const nameKey = (cred.employeeName || "").trim().toLowerCase();
+        if (nameKey) {
+          if (!nameCredentialMap.has(nameKey)) nameCredentialMap.set(nameKey, []);
+          nameCredentialMap.get(nameKey)!.push(cred);
+        }
       }
 
       const result = allEmployeeEntries.map(emp => {
-        const empCredentials = credentialMap.get(String(emp.id)) || [];
+        const idStr = String(emp.id);
+        const empCredentials = credentialMap.get(idStr)
+          || credentialMap.get(`branch_emp_${idStr}`)
+          || nameCredentialMap.get((emp.employeeName || "").trim().toLowerCase())
+          || [];
         const activeCredentials = empCredentials.filter((c: any) => c.isActive);
         return {
           employee: emp,
