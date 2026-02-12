@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Link } from "wouter";
 import { useState, useMemo } from "react";
 import {
@@ -67,6 +68,7 @@ interface SettingItem {
   badge?: string;
   badgeVariant?: "default" | "secondary" | "destructive" | "outline";
   adminOnly?: boolean;
+  requiredModule?: string;
   keywords?: string[];
 }
 
@@ -226,7 +228,7 @@ const settingsSections: SettingSection[] = [
         path: "/biometric-settings",
         badge: "جديد",
         badgeVariant: "default",
-        adminOnly: true,
+        requiredModule: "biometric_settings",
         keywords: ["بصمة", "وجه", "حضور", "جهاز", "موبايل", "biometric", "fingerprint"],
       },
     ],
@@ -709,6 +711,7 @@ const settingsSections: SettingSection[] = [
 
 export default function SettingsDashboardPage() {
   const { isAdmin } = useAuth();
+  const { canView } = usePermissions();
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
 
@@ -724,6 +727,12 @@ export default function SettingsDashboardPage() {
     });
   };
 
+  const isItemVisible = (item: SettingItem): boolean => {
+    if (item.adminOnly && !isAdmin) return false;
+    if (item.requiredModule && !isAdmin && !canView(item.requiredModule as any)) return false;
+    return true;
+  };
+
   const filteredSections = useMemo(() => {
     if (!searchQuery.trim()) return settingsSections;
 
@@ -732,7 +741,7 @@ export default function SettingsDashboardPage() {
       .map((section) => ({
         ...section,
         items: section.items.filter((item) => {
-          if (item.adminOnly && !isAdmin) return false;
+          if (!isItemVisible(item)) return false;
           return (
             item.title.toLowerCase().includes(query) ||
             item.description.toLowerCase().includes(query) ||
@@ -741,7 +750,7 @@ export default function SettingsDashboardPage() {
         }),
       }))
       .filter((section) => section.items.length > 0);
-  }, [searchQuery, isAdmin]);
+  }, [searchQuery, isAdmin, canView]);
 
   const visibleCriticalSettings = criticalSettings.filter(
     (item) => !item.adminOnly || isAdmin
@@ -822,9 +831,7 @@ export default function SettingsDashboardPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-6">
         {filteredSections.map((section) => {
-          const visibleItems = section.items.filter(
-            (item) => !item.adminOnly || isAdmin
-          );
+          const visibleItems = section.items.filter(isItemVisible);
           if (visibleItems.length === 0) return null;
 
           const isExpanded = expandedSections.has(section.id);
