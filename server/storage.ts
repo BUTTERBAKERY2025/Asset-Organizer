@@ -2882,6 +2882,27 @@ export class DatabaseStorage implements IStorage {
     return integration || undefined;
   }
 
+  async getExternalIntegrationByType(type: string): Promise<ExternalIntegration | undefined> {
+    const [integration] = await db.select().from(externalIntegrations).where(eq(externalIntegrations.type, type));
+    return integration || undefined;
+  }
+
+  async upsertExternalIntegration(type: string, data: Partial<InsertExternalIntegration>): Promise<ExternalIntegration> {
+    const existing = await this.getExternalIntegrationByType(type);
+    if (existing) {
+      const [updated] = await db.update(externalIntegrations)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(externalIntegrations.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db.insert(externalIntegrations)
+        .values({ name: data.name || type, type, ...data })
+        .returning();
+      return created;
+    }
+  }
+
   async createExternalIntegration(integration: InsertExternalIntegration): Promise<ExternalIntegration> {
     const [created] = await db.insert(externalIntegrations).values(integration).returning();
     return created;

@@ -2921,6 +2921,236 @@ export async function registerRoutes(
     }
   });
 
+  // Integration Settings - GET/PUT per type
+  const SENSITIVE_CONFIG_FIELDS = ['apiKey', 'secretKey', 'authToken', 'password', 'clientSecret', 'serviceAccountKey', 'accessToken', 'refreshToken', 'webhookSecret', 'appSecret'];
+
+  function redactConfig(config: any): any {
+    if (!config || typeof config !== 'object') return config;
+    const redacted: Record<string, any> = {};
+    for (const key of Object.keys(config)) {
+      if (SENSITIVE_CONFIG_FIELDS.includes(key) && config[key]) {
+        redacted[key] = '••••••••';
+        redacted[`${key}_configured`] = true;
+      } else if (typeof config[key] === 'object' && config[key] !== null) {
+        redacted[key] = redactConfig(config[key]);
+      } else {
+        redacted[key] = config[key];
+      }
+    }
+    return redacted;
+  }
+
+  const VALID_INTEGRATION_TYPES = ['sendgrid', 'smtp', 'stripe', 'tap', 'google_calendar', 'outlook', 'google_drive', 'dropbox', 'qoyod', 'zoho', 'sap', 'odoo'];
+
+  const REQUIRED_FIELDS: Record<string, string[]> = {
+    sendgrid: ['apiKey'],
+    smtp: ['host', 'port'],
+    stripe: ['secretKey'],
+    tap: ['secretKey'],
+    google_calendar: ['clientId'],
+    outlook: ['clientId'],
+    google_drive: ['serviceAccountKey'],
+    dropbox: ['accessToken'],
+    qoyod: ['apiKey'],
+    zoho: ['clientId'],
+    sap: ['serviceUrl'],
+    odoo: ['serverUrl'],
+  };
+
+  app.get("/api/integration-settings/:type", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
+    try {
+      const { type } = req.params;
+      const integration = await storage.getExternalIntegrationByType(type);
+      if (!integration) {
+        return res.json({ type, configured: false, config: {}, isActive: 'false' });
+      }
+      res.json({
+        type,
+        configured: true,
+        id: integration.id,
+        name: integration.name,
+        config: redactConfig(integration.config || {}),
+        isActive: integration.isActive,
+        lastSyncAt: integration.lastSyncAt,
+        updatedAt: integration.updatedAt,
+      });
+    } catch (error) {
+      console.error("Error fetching integration settings:", error);
+      res.status(500).json({ error: "فشل في جلب إعدادات التكامل" });
+    }
+  });
+
+  app.get("/api/integration-settings", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
+    try {
+      const integrations = await storage.getAllExternalIntegrations();
+      const result = integrations.map(i => ({
+        type: i.type,
+        configured: true,
+        id: i.id,
+        name: i.name,
+        isActive: i.isActive,
+        lastSyncAt: i.lastSyncAt,
+        updatedAt: i.updatedAt,
+      }));
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching all integration settings:", error);
+      res.status(500).json({ error: "فشل في جلب إعدادات التكاملات" });
+    }
+  });
+
+  app.put("/api/integration-settings/:type", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
+    try {
+      const { type } = req.params;
+      const { name, config, isActive } = req.body;
+
+      if (!VALID_INTEGRATION_TYPES.includes(type)) {
+        return res.status(400).json({ error: "نوع التكامل غير صالح" });
+      }
+
+      if (!config || typeof config !== 'object') {
+        return res.status(400).json({ error: "بيانات الإعدادات مطلوبة" });
+      }
+
+      const required = REQUIRED_FIELDS[type] || [];
+      const existing = await storage.getExternalIntegrationByType(type);
+      for (const field of required) {
+        const val = config[field];
+        const isRedacted = typeof val === 'string' && val.includes('••••');
+        const hasExisting = existing?.config && (existing.config as any)[field];
+        if (!val && !hasExisting) {
+          return res.status(400).json({ error: `الحقل المطلوب مفقود: ${field}` });
+        }
+        if (isRedacted && !hasExisting) {
+          return res.status(400).json({ error: `يرجى إدخال قيمة فعلية للحقل: ${field}` });
+        }
+      }
+
+      let mergedConfig = config;
+      if (existing && existing.config) {
+        mergedConfig = { ...(existing.config as any) };
+        for (const [key, value] of Object.entries(config)) {
+          if (SENSITIVE_CONFIG_FIELDS.includes(key) && typeof value === 'string' && value.includes('••••')) {
+            continue;
+          }
+          mergedConfig[key] = value;
+        }
+      }
+
+      const integration = await storage.upsertExternalIntegration(type, {
+        name: name || type,
+        type,
+        config: mergedConfig,
+        isActive: isActive || 'true',
+      });
+
+      res.json({
+        type,
+        configured: true,
+        id: integration.id,
+        name: integration.name,
+        config: redactConfig(integration.config || {}),
+        isActive: integration.isActive,
+        lastSyncAt: integration.lastSyncAt,
+        updatedAt: integration.updatedAt,
+      });
+    } catch (error) {
+      console.error("Error saving integration settings:", error);
+      res.status(500).json({ error: "فشل في حفظ إعدادات التكامل" });
+    }
+  });
+
+  app.post("/api/integration-settings/:type/test", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
+    try {
+      const { type } = req.params;
+      const integration = await storage.getExternalIntegrationByType(type);
+      const config = (integration?.config || {}) as any;
+
+      switch (type) {
+        case 'sendgrid': {
+          if (!config.apiKey) return res.json({ success: false, error: "مفتاح API غير مكوّن" });
+          try {
+            const response = await fetch('https://api.sendgrid.com/v3/user/profile', {
+              headers: { 'Authorization': `Bearer ${config.apiKey}` },
+            });
+            if (response.ok) {
+              const data = await response.json() as any;
+              await storage.upsertExternalIntegration(type, { lastSyncAt: new Date() });
+              return res.json({ success: true, accountName: data.first_name + ' ' + data.last_name });
+            }
+            return res.json({ success: false, error: "فشل في التحقق من مفتاح SendGrid" });
+          } catch (e: any) {
+            return res.json({ success: false, error: e.message });
+          }
+        }
+        case 'smtp': {
+          if (!config.host || !config.port) return res.json({ success: false, error: "خادم SMTP غير مكوّن" });
+          return res.json({ success: true, message: "تم حفظ الإعدادات - سيتم التحقق عند الإرسال" });
+        }
+        case 'stripe': {
+          if (!config.secretKey) return res.json({ success: false, error: "المفتاح السري غير مكوّن" });
+          try {
+            const response = await fetch('https://api.stripe.com/v1/balance', {
+              headers: { 'Authorization': `Bearer ${config.secretKey}` },
+            });
+            if (response.ok) {
+              const data = await response.json() as any;
+              await storage.upsertExternalIntegration(type, { lastSyncAt: new Date() });
+              return res.json({ success: true, message: "تم الاتصال بنجاح" });
+            }
+            return res.json({ success: false, error: "فشل في التحقق - تأكد من المفتاح السري" });
+          } catch (e: any) {
+            return res.json({ success: false, error: e.message });
+          }
+        }
+        case 'tap': {
+          if (!config.secretKey) return res.json({ success: false, error: "المفتاح السري غير مكوّن" });
+          try {
+            const response = await fetch('https://api.tap.company/v2/charges/list', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${config.secretKey}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ period: { date: { from: new Date().toISOString().split('T')[0] } }, limit: 1 }),
+            });
+            if (response.ok || response.status === 200) {
+              await storage.upsertExternalIntegration(type, { lastSyncAt: new Date() });
+              return res.json({ success: true, message: "تم الاتصال بـ Tap بنجاح" });
+            }
+            return res.json({ success: false, error: "فشل في التحقق - تأكد من المفتاح" });
+          } catch (e: any) {
+            return res.json({ success: false, error: e.message });
+          }
+        }
+        case 'qoyod': {
+          if (!config.apiKey || !config.apiUrl) return res.json({ success: false, error: "مفتاح API أو رابط API غير مكوّن" });
+          try {
+            const response = await fetch(`${config.apiUrl}/accounts`, {
+              headers: { 'API-KEY': config.apiKey, 'Accept': 'application/json' },
+            });
+            if (response.ok) {
+              await storage.upsertExternalIntegration(type, { lastSyncAt: new Date() });
+              return res.json({ success: true, message: "تم الاتصال بقيود بنجاح" });
+            }
+            return res.json({ success: false, error: "فشل في الاتصال بقيود" });
+          } catch (e: any) {
+            return res.json({ success: false, error: e.message });
+          }
+        }
+        case 'zoho': {
+          if (!config.clientId || !config.clientSecret) return res.json({ success: false, error: "معرّف العميل أو المفتاح السري غير مكوّن" });
+          return res.json({ success: true, message: "تم حفظ الإعدادات - يتطلب OAuth للتفعيل الكامل" });
+        }
+        default:
+          return res.json({ success: true, message: "تم حفظ الإعدادات بنجاح" });
+      }
+    } catch (error) {
+      console.error("Error testing integration:", error);
+      res.status(500).json({ error: "فشل في اختبار التكامل" });
+    }
+  });
+
   // Data Import Jobs
   app.get("/api/import-jobs", isAuthenticated, requirePermission("inventory", "view"), async (req, res) => {
     try {
