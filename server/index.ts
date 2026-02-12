@@ -5,7 +5,7 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import path from "path";
 import helmet from "helmet";
-import { db, pool } from "./db";
+import { db, pool, runStartupMigrations } from "./db";
 import { sql } from "drizzle-orm";
 import { securityHeaders, csrfProtection, apiRateLimiter } from "./security";
 
@@ -176,6 +176,7 @@ process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
 (async () => {
+  await runStartupMigrations();
   await registerRoutes(httpServer, app);
   
   // Ensure Supabase Storage bucket exists on startup

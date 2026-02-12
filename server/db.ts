@@ -40,3 +40,22 @@ pool.on('error', (err) => {
 });
 
 export const db = drizzle(pool, { schema });
+
+export async function runStartupMigrations() {
+  try {
+    const migrations = [
+      `ALTER TABLE backups ADD COLUMN IF NOT EXISTS table_count integer`,
+      `ALTER TABLE backups ADD COLUMN IF NOT EXISTS row_count integer`,
+      `ALTER TABLE backups ADD COLUMN IF NOT EXISTS backup_data text`,
+      `ALTER TABLE backups ADD COLUMN IF NOT EXISTS error_message text`,
+      `ALTER TABLE backups ADD COLUMN IF NOT EXISTS restored_at timestamp`,
+      `ALTER TABLE backups ADD COLUMN IF NOT EXISTS restored_by varchar`,
+    ];
+    for (const mig of migrations) {
+      await pool.query(mig);
+    }
+    console.log("Startup migrations completed successfully");
+  } catch (err) {
+    console.error("Startup migration error:", err);
+  }
+}
