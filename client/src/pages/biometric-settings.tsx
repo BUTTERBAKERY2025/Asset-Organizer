@@ -68,9 +68,12 @@ interface BiometricCredentialInfo {
   registrationMethod: string;
   deviceType: string | null;
   deviceModel: string | null;
+  deviceOS: string | null;
+  deviceBrowser: string | null;
   deviceInfo: string | null;
   isActive: boolean;
   registeredByName: string | null;
+  registeredById: string | null;
   lastUsedAt: string | null;
   usageCount: number;
   deactivatedAt: string | null;
@@ -79,12 +82,32 @@ interface BiometricCredentialInfo {
   createdAt: string;
 }
 
+interface AttendanceStats {
+  totalAttendance: number;
+  biometricAttendance: number;
+  onTimeCount: number;
+  lateCount: number;
+  lastAttendanceDate: string | null;
+}
+
+interface LastAttendance {
+  date: string;
+  checkIn: string | null;
+  checkOut: string | null;
+  locationInfo: string | null;
+  deviceInfo: string | null;
+  biometricVerified: boolean;
+  status: string;
+}
+
 interface EmployeeBiometricData {
   employee: BranchEmployee;
   biometricStatus: "registered" | "not_registered";
   credentials: BiometricCredentialInfo[];
   totalCredentials: number;
   activeCredentials: number;
+  attendanceStats: AttendanceStats | null;
+  lastAttendance: LastAttendance | null;
 }
 
 interface Branch {
@@ -582,8 +605,9 @@ export default function BiometricSettingsPage() {
                       <TableHead className="text-right">حالة البصمة</TableHead>
                       <TableHead className="text-right">نوع التسجيل</TableHead>
                       <TableHead className="text-right">الجهاز</TableHead>
-                      <TableHead className="text-right">آخر استخدام</TableHead>
-                      <TableHead className="text-right">عدد الاستخدامات</TableHead>
+                      <TableHead className="text-right">سجّلها</TableHead>
+                      <TableHead className="text-right">آخر حضور</TableHead>
+                      <TableHead className="text-right">مرات الحضور</TableHead>
                       <TableHead className="text-center">إجراءات</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -603,7 +627,7 @@ export default function BiometricSettingsPage() {
                               )}
                             </div>
                           </TableCell>
-                          <TableCell className="text-sm text-gray-600">{item.employee.jobTitle}</TableCell>
+                          <TableCell className="text-sm text-gray-600">{item.employee.jobTitle || "-"}</TableCell>
                           <TableCell>
                             {item.biometricStatus === "registered" ? (
                               <Badge className="bg-green-100 text-green-700 hover:bg-green-100">
@@ -637,10 +661,10 @@ export default function BiometricSettingsPage() {
                               <div className="flex flex-col">
                                 <div className="flex items-center gap-1 text-sm">
                                   <DeviceIcon className="h-4 w-4 text-blue-500" />
-                                  <span>{deviceTypeLabels[activeCred.deviceType || "unknown"]}</span>
+                                  <span>{activeCred.deviceModel || deviceTypeLabels[activeCred.deviceType || "unknown"]}</span>
                                 </div>
-                                {activeCred.deviceModel && (
-                                  <span className="text-xs text-gray-500">{activeCred.deviceModel}</span>
+                                {activeCred.deviceOS && activeCred.deviceOS !== "غير معروف" && (
+                                  <span className="text-xs text-gray-500">{activeCred.deviceOS} • {activeCred.deviceBrowser || ""}</span>
                                 )}
                               </div>
                             ) : (
@@ -648,11 +672,35 @@ export default function BiometricSettingsPage() {
                             )}
                           </TableCell>
                           <TableCell className="text-sm text-gray-600">
-                            {activeCred?.lastUsedAt ? formatDate(activeCred.lastUsedAt) : "-"}
+                            {activeCred?.registeredByName || "-"}
+                          </TableCell>
+                          <TableCell>
+                            {item.lastAttendance ? (
+                              <div className="flex flex-col">
+                                <span className="text-sm">{item.lastAttendance.date}</span>
+                                <span className="text-xs text-gray-500">
+                                  {item.lastAttendance.checkIn && `دخول: ${item.lastAttendance.checkIn}`}
+                                  {item.lastAttendance.checkOut && ` | خروج: ${item.lastAttendance.checkOut}`}
+                                </span>
+                                {item.lastAttendance.biometricVerified && (
+                                  <Badge className="bg-blue-50 text-blue-600 text-[10px] w-fit mt-0.5">
+                                    <ShieldCheck className="h-2.5 w-2.5 ml-0.5" />
+                                    بصمة موثقة
+                                  </Badge>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 text-sm">-</span>
+                            )}
                           </TableCell>
                           <TableCell className="text-center">
-                            {activeCred ? (
-                              <Badge variant="outline">{activeCred.usageCount}</Badge>
+                            {item.attendanceStats ? (
+                              <div className="flex flex-col items-center gap-0.5">
+                                <Badge variant="outline" className="text-xs">{item.attendanceStats.totalAttendance} حضور</Badge>
+                                {item.attendanceStats.biometricAttendance > 0 && (
+                                  <span className="text-[10px] text-green-600">{item.attendanceStats.biometricAttendance} ببصمة</span>
+                                )}
+                              </div>
                             ) : "-"}
                           </TableCell>
                           <TableCell>
@@ -732,27 +780,27 @@ export default function BiometricSettingsPage() {
         )}
 
         <Dialog open={showDetailsDialog} onOpenChange={setShowDetailsDialog}>
-          <DialogContent className="max-w-2xl" dir="rtl">
+          <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto" dir="rtl">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Fingerprint className="h-5 w-5 text-purple-600" />
-                تفاصيل بصمة: {selectedEmployee?.employee.employeeName}
+                مراقبة بصمة: {selectedEmployee?.employee.employeeName}
               </DialogTitle>
             </DialogHeader>
             {selectedEmployee && (
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4 bg-gray-50 rounded-lg p-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-gray-50 rounded-lg p-4">
                   <div>
                     <span className="text-xs text-gray-500">الاسم</span>
-                    <p className="font-medium">{selectedEmployee.employee.employeeName}</p>
+                    <p className="font-medium text-sm">{selectedEmployee.employee.employeeName}</p>
                   </div>
                   <div>
                     <span className="text-xs text-gray-500">الرقم الوظيفي</span>
-                    <p className="font-medium">{selectedEmployee.employee.employeeNumber || "-"}</p>
+                    <p className="font-medium text-sm">{selectedEmployee.employee.employeeNumber || "-"}</p>
                   </div>
                   <div>
                     <span className="text-xs text-gray-500">الوظيفة</span>
-                    <p className="font-medium">{selectedEmployee.employee.jobTitle}</p>
+                    <p className="font-medium text-sm">{selectedEmployee.employee.jobTitle || "-"}</p>
                   </div>
                   <div>
                     <span className="text-xs text-gray-500">حالة البصمة</span>
@@ -766,18 +814,102 @@ export default function BiometricSettingsPage() {
                   </div>
                 </div>
 
+                {selectedEmployee.attendanceStats && (
+                  <div>
+                    <h4 className="font-medium text-sm text-gray-700 mb-2 flex items-center gap-1">
+                      <Clock className="h-4 w-4 text-blue-500" />
+                      إحصائيات الحضور
+                    </h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div className="bg-blue-50 rounded-lg p-3 text-center">
+                        <div className="text-xl font-bold text-blue-700">{selectedEmployee.attendanceStats.totalAttendance}</div>
+                        <div className="text-xs text-blue-600">إجمالي الحضور</div>
+                      </div>
+                      <div className="bg-green-50 rounded-lg p-3 text-center">
+                        <div className="text-xl font-bold text-green-700">{selectedEmployee.attendanceStats.biometricAttendance}</div>
+                        <div className="text-xs text-green-600">حضور ببصمة</div>
+                      </div>
+                      <div className="bg-emerald-50 rounded-lg p-3 text-center">
+                        <div className="text-xl font-bold text-emerald-700">{selectedEmployee.attendanceStats.onTimeCount}</div>
+                        <div className="text-xs text-emerald-600">في الوقت</div>
+                      </div>
+                      <div className="bg-orange-50 rounded-lg p-3 text-center">
+                        <div className="text-xl font-bold text-orange-700">{selectedEmployee.attendanceStats.lateCount}</div>
+                        <div className="text-xs text-orange-600">تأخير</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {selectedEmployee.lastAttendance && (
+                  <div>
+                    <h4 className="font-medium text-sm text-gray-700 mb-2 flex items-center gap-1">
+                      <Eye className="h-4 w-4 text-purple-500" />
+                      آخر حضور مسجل
+                    </h4>
+                    <div className="bg-purple-50 rounded-lg p-4">
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                        <div>
+                          <span className="text-gray-500 text-xs">التاريخ:</span>
+                          <p className="font-medium">{selectedEmployee.lastAttendance.date}</p>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 text-xs">وقت الدخول:</span>
+                          <p className="font-medium">{selectedEmployee.lastAttendance.checkIn || "-"}</p>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 text-xs">وقت الخروج:</span>
+                          <p className="font-medium">{selectedEmployee.lastAttendance.checkOut || "لم يسجل بعد"}</p>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 text-xs">الحالة:</span>
+                          <p>
+                            {selectedEmployee.lastAttendance.status === "on_time" && <Badge className="bg-green-100 text-green-700">في الوقت</Badge>}
+                            {selectedEmployee.lastAttendance.status === "late" && <Badge className="bg-orange-100 text-orange-700">متأخر</Badge>}
+                            {selectedEmployee.lastAttendance.status === "absent" && <Badge className="bg-red-100 text-red-700">غائب</Badge>}
+                            {selectedEmployee.lastAttendance.status === "completed" && <Badge className="bg-blue-100 text-blue-700">مكتمل</Badge>}
+                            {!["on_time", "late", "absent", "completed"].includes(selectedEmployee.lastAttendance.status) && (
+                              <Badge variant="outline">{selectedEmployee.lastAttendance.status}</Badge>
+                            )}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 text-xs">تحقق البصمة:</span>
+                          <p>
+                            {selectedEmployee.lastAttendance.biometricVerified ? (
+                              <Badge className="bg-green-100 text-green-700"><ShieldCheck className="h-3 w-3 ml-1" /> موثقة</Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-gray-500">غير موثقة</Badge>
+                            )}
+                          </p>
+                        </div>
+                        {selectedEmployee.lastAttendance.locationInfo && (
+                          <div>
+                            <span className="text-gray-500 text-xs">الموقع الجغرافي:</span>
+                            <p className="font-medium text-xs">{selectedEmployee.lastAttendance.locationInfo}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {selectedEmployee.credentials.length > 0 ? (
                   <div className="space-y-3">
-                    <h4 className="font-medium text-sm text-gray-700">البصمات المسجلة ({selectedEmployee.credentials.length})</h4>
+                    <h4 className="font-medium text-sm text-gray-700 flex items-center gap-1">
+                      <Shield className="h-4 w-4 text-amber-500" />
+                      البصمات المسجلة ({selectedEmployee.credentials.length})
+                    </h4>
                     {selectedEmployee.credentials.map((cred, idx) => {
                       const MethodIcon = registrationMethodIcons[cred.registrationMethod] || Fingerprint;
+                      const DeviceIcon = cred.deviceType ? (deviceTypeIcons[cred.deviceType] || Monitor) : Smartphone;
                       return (
                         <Card key={cred.id} className={`${cred.isActive ? 'border-green-200' : 'border-red-200 bg-red-50/30'}`}>
                           <CardContent className="p-4">
                             <div className="flex items-center justify-between mb-3">
                               <div className="flex items-center gap-2">
                                 <MethodIcon className="h-5 w-5 text-purple-500" />
-                                <span className="font-medium">بصمة #{idx + 1}</span>
+                                <span className="font-medium">بصمة #{idx + 1} - {registrationMethodLabels[cred.registrationMethod] || cred.registrationMethod}</span>
                               </div>
                               {cred.isActive ? (
                                 <Badge className="bg-green-100 text-green-700">نشطة</Badge>
@@ -785,43 +917,46 @@ export default function BiometricSettingsPage() {
                                 <Badge variant="outline" className="text-red-600 border-red-300">معطلة</Badge>
                               )}
                             </div>
-                            <div className="grid grid-cols-2 gap-3 text-sm">
-                              <div>
-                                <span className="text-gray-500">نوع التسجيل:</span>
-                                <span className="mr-1 font-medium">{registrationMethodLabels[cred.registrationMethod] || cred.registrationMethod}</span>
-                              </div>
-                              <div>
-                                <span className="text-gray-500">الجهاز:</span>
-                                <span className="mr-1">{cred.deviceType ? deviceTypeLabels[cred.deviceType] : (cred.deviceInfo || "غير محدد")}</span>
-                              </div>
-                              {cred.deviceModel && (
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                              <div className="flex items-start gap-2">
+                                <DeviceIcon className="h-4 w-4 text-blue-500 mt-0.5 shrink-0" />
                                 <div>
-                                  <span className="text-gray-500">موديل الجهاز:</span>
-                                  <span className="mr-1">{cred.deviceModel}</span>
+                                  <span className="text-gray-500 text-xs block">الجهاز</span>
+                                  <span className="font-medium">{cred.deviceModel || deviceTypeLabels[cred.deviceType || "unknown"]}</span>
+                                </div>
+                              </div>
+                              {cred.deviceOS && cred.deviceOS !== "غير معروف" && (
+                                <div>
+                                  <span className="text-gray-500 text-xs block">نظام التشغيل</span>
+                                  <span className="font-medium">{cred.deviceOS}</span>
+                                </div>
+                              )}
+                              {cred.deviceBrowser && cred.deviceBrowser !== "غير معروف" && (
+                                <div>
+                                  <span className="text-gray-500 text-xs block">المتصفح</span>
+                                  <span className="font-medium">{cred.deviceBrowser}</span>
                                 </div>
                               )}
                               <div>
-                                <span className="text-gray-500">تاريخ التسجيل:</span>
-                                <span className="mr-1">{formatDate(cred.createdAt)}</span>
-                              </div>
-                              {cred.registeredByName && (
-                                <div>
-                                  <span className="text-gray-500">سجلها:</span>
-                                  <span className="mr-1">{cred.registeredByName}</span>
-                                </div>
-                              )}
-                              <div>
-                                <span className="text-gray-500">آخر استخدام:</span>
-                                <span className="mr-1">{formatDate(cred.lastUsedAt)}</span>
+                                <span className="text-gray-500 text-xs block">تاريخ التسجيل</span>
+                                <span className="font-medium">{formatDate(cred.createdAt)}</span>
                               </div>
                               <div>
-                                <span className="text-gray-500">عدد الاستخدامات:</span>
-                                <span className="mr-1 font-medium">{cred.usageCount}</span>
+                                <span className="text-gray-500 text-xs block">سجّلها</span>
+                                <span className="font-medium">{cred.registeredByName || "غير محدد"}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-500 text-xs block">آخر استخدام</span>
+                                <span className="font-medium">{formatDate(cred.lastUsedAt)}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-500 text-xs block">عدد الاستخدامات</span>
+                                <span className="font-bold text-lg text-purple-700">{cred.usageCount}</span>
                               </div>
                               {!cred.isActive && cred.deactivationReason && (
-                                <div className="col-span-2">
-                                  <span className="text-red-500">سبب التعطيل:</span>
-                                  <span className="mr-1">{cred.deactivationReason}</span>
+                                <div className="col-span-2 md:col-span-3 bg-red-50 rounded p-2">
+                                  <span className="text-red-500 text-xs">سبب التعطيل:</span>
+                                  <span className="mr-1 text-red-700">{cred.deactivationReason}</span>
                                 </div>
                               )}
                             </div>

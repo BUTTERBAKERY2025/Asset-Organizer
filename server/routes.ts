@@ -19284,6 +19284,31 @@ export async function registerRoutes(
     return { credential };
   }
 
+  function parseDeviceFromUA(ua: string | null): { type: string; model: string; os: string; browser: string } {
+    if (!ua) return { type: "unknown", model: "غير معروف", os: "غير معروف", browser: "غير معروف" };
+    let type = "desktop";
+    let model = "غير معروف";
+    let os = "غير معروف";
+    let browser = "غير معروف";
+    if (/iPad/i.test(ua)) { type = "tablet"; model = "iPad"; }
+    else if (/iPhone/i.test(ua)) { type = "mobile_ios"; model = "iPhone"; }
+    else if (/Android/i.test(ua) && /Mobile/i.test(ua)) { type = "mobile_android"; const m = ua.match(/;\s*([^;)]+)\s*Build/); model = m ? m[1].trim() : "Android"; }
+    else if (/Android/i.test(ua)) { type = "tablet"; model = "Android Tablet"; }
+    else if (/Mac/i.test(ua)) { model = "Mac"; }
+    else if (/Windows/i.test(ua)) { model = "Windows PC"; }
+    if (/iPhone OS (\d+[_\d]*)/i.test(ua)) os = "iOS " + ua.match(/iPhone OS (\d+[_\d]*)/i)![1].replace(/_/g, ".");
+    else if (/CPU OS (\d+[_\d]*)/i.test(ua)) os = "iPadOS " + ua.match(/CPU OS (\d+[_\d]*)/i)![1].replace(/_/g, ".");
+    else if (/Android (\d+[\.\d]*)/i.test(ua)) os = "Android " + ua.match(/Android (\d+[\.\d]*)/i)![1];
+    else if (/Mac OS X/i.test(ua)) os = "macOS";
+    else if (/Windows NT/i.test(ua)) os = "Windows";
+    if (/CriOS/i.test(ua)) browser = "Chrome (iOS)";
+    else if (/Chrome\/(\d+)/i.test(ua) && !/Edg/i.test(ua)) browser = "Chrome " + ua.match(/Chrome\/(\d+)/i)![1];
+    else if (/Safari/i.test(ua) && !/Chrome/i.test(ua)) browser = "Safari";
+    else if (/Edg/i.test(ua)) browser = "Edge";
+    else if (/Firefox/i.test(ua)) browser = "Firefox";
+    return { type, model, os, browser };
+  }
+
   app.get("/api/biometric-settings/branch/:branchId", isAuthenticated, async (req, res) => {
     try {
       const { branchId } = req.params;
@@ -19339,6 +19364,47 @@ export async function registerRoutes(
         eq(biometricCredentials.branchId, branchId)
       );
 
+      const allEmpIds = allEmployeeEntries.map(e => `branch_emp_${e.id}`);
+      const attendanceStats = await pool.query(
+        `SELECT employee_id, 
+          COUNT(*) as total_attendance,
+          COUNT(CASE WHEN biometric_verified = true THEN 1 END) as biometric_attendance,
+          COUNT(CASE WHEN status = 'on_time' THEN 1 END) as on_time_count,
+          COUNT(CASE WHEN status = 'late' THEN 1 END) as late_count,
+          MAX(attendance_date) as last_attendance_date,
+          MAX(CASE WHEN actual_check_in IS NOT NULL THEN created_at END) as last_check_in_time
+        FROM attendance_records 
+        WHERE branch_id = $1 AND employee_id = ANY($2)
+        GROUP BY employee_id`,
+        [branchId, allEmpIds]
+      );
+      const attendanceMap = new Map<string, any>();
+      for (const row of attendanceStats.rows) {
+        attendanceMap.set(row.employee_id, row);
+      }
+
+      const lastAttendanceDetails = await pool.query(
+        `SELECT DISTINCT ON (employee_id) employee_id, attendance_date, actual_check_in, actual_check_out, 
+          location_info, device_info, biometric_verified, status
+        FROM attendance_records 
+        WHERE branch_id = $1 AND employee_id = ANY($2)
+        ORDER BY employee_id, created_at DESC`,
+        [branchId, allEmpIds]
+      );
+      const lastAttendanceMap = new Map<string, any>();
+      for (const row of lastAttendanceDetails.rows) {
+        lastAttendanceMap.set(row.employee_id, row);
+      }
+
+      const registeredByIds = credentials.map(c => c.registeredBy).filter(Boolean);
+      const registeredByUsers = registeredByIds.length > 0 
+        ? await pool.query(`SELECT id, username, first_name, last_name FROM users WHERE id = ANY($1)`, [registeredByIds])
+        : { rows: [] };
+      const userMap = new Map<string, string>();
+      for (const u of registeredByUsers.rows) {
+        userMap.set(String(u.id), `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.username || String(u.id));
+      }
+
       const credentialMap = new Map<string, typeof credentials>();
       for (const cred of credentials) {
         const key = cred.employeeId;
@@ -19357,31 +19423,58 @@ export async function registerRoutes(
 
       const result = allEmployeeEntries.map(emp => {
         const idStr = String(emp.id);
+        const branchEmpId = `branch_emp_${idStr}`;
         const empCredentials = credentialMap.get(idStr)
-          || credentialMap.get(`branch_emp_${idStr}`)
+          || credentialMap.get(branchEmpId)
           || nameCredentialMap.get((emp.employeeName || "").trim().toLowerCase())
           || [];
         const activeCredentials = empCredentials.filter((c: any) => c.isActive);
+        const attStats = attendanceMap.get(branchEmpId);
+        const lastAtt = lastAttendanceMap.get(branchEmpId);
         return {
           employee: emp,
           biometricStatus: activeCredentials.length > 0 ? "registered" : "not_registered",
-          credentials: empCredentials.map(c => ({
-            id: c.id,
-            registrationMethod: c.registrationMethod || "fingerprint",
-            deviceType: c.deviceType,
-            deviceModel: c.deviceModel,
-            deviceInfo: c.deviceInfo,
-            isActive: c.isActive,
-            registeredByName: c.registeredByName,
-            lastUsedAt: c.lastUsedAt,
-            usageCount: c.usageCount || 0,
-            deactivatedAt: c.deactivatedAt,
-            deactivatedBy: c.deactivatedBy,
-            deactivationReason: c.deactivationReason,
-            createdAt: c.createdAt,
-          })),
+          credentials: empCredentials.map(c => {
+            const parsed = parseDeviceFromUA(c.deviceInfo);
+            const resolvedDeviceType = c.deviceType || parsed.type;
+            const resolvedDeviceModel = c.deviceModel || parsed.model;
+            return {
+              id: c.id,
+              registrationMethod: c.registrationMethod || "fingerprint",
+              deviceType: resolvedDeviceType,
+              deviceModel: resolvedDeviceModel,
+              deviceOS: parsed.os,
+              deviceBrowser: parsed.browser,
+              deviceInfo: c.deviceInfo,
+              isActive: c.isActive,
+              registeredByName: c.registeredByName || userMap.get(String(c.registeredBy)) || null,
+              registeredById: c.registeredBy,
+              lastUsedAt: c.lastUsedAt,
+              usageCount: c.usageCount || 0,
+              deactivatedAt: c.deactivatedAt,
+              deactivatedBy: c.deactivatedBy,
+              deactivationReason: c.deactivationReason,
+              createdAt: c.createdAt,
+            };
+          }),
           totalCredentials: empCredentials.length,
           activeCredentials: activeCredentials.length,
+          attendanceStats: attStats ? {
+            totalAttendance: parseInt(attStats.total_attendance) || 0,
+            biometricAttendance: parseInt(attStats.biometric_attendance) || 0,
+            onTimeCount: parseInt(attStats.on_time_count) || 0,
+            lateCount: parseInt(attStats.late_count) || 0,
+            lastAttendanceDate: attStats.last_attendance_date,
+          } : null,
+          lastAttendance: lastAtt ? {
+            date: lastAtt.attendance_date,
+            checkIn: lastAtt.actual_check_in,
+            checkOut: lastAtt.actual_check_out,
+            locationInfo: lastAtt.location_info,
+            deviceInfo: lastAtt.device_info,
+            biometricVerified: lastAtt.biometric_verified,
+            status: lastAtt.status,
+          } : null,
         };
       });
 
