@@ -1899,7 +1899,6 @@ export class DatabaseStorage implements IStorage {
     const cached = this.permissionsCache.get(userId);
     const now = Date.now();
     if (cached && (now - cached.timestamp) < this.PERMISSIONS_CACHE_TTL) {
-      console.log(`[Storage] Returning ${cached.data.length} cached permissions for user ${userId}`);
       return cached.data;
     }
     
@@ -1912,8 +1911,6 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(userPermissions)
       .where(eq(userPermissions.userId, userId));
-    
-    console.log(`[Storage] Direct permissions for user ${userId}: ${directPerms.length} records`);
     
     for (const perm of directPerms) {
       for (const action of perm.actions) {
@@ -1935,14 +1932,11 @@ export class DatabaseStorage implements IStorage {
         eq(userAssignments.isActive, true)
       ));
     
-    console.log(`[Storage] Role assignments permissions for user ${userId}: ${rolePermsFromAssignments.length} records`);
-    
     for (const rp of rolePermsFromAssignments) {
       permissionState.set(`${rp.module}:${rp.action}`, true);
     }
     
     // 3. Apply permission overrides (highest priority - can grant or deny)
-    console.log(`[Storage] Permission state size after direct+role: ${permissionState.size}`);
     const overrides = await db
       .select({
         module: permissions.module,
@@ -1995,9 +1989,6 @@ export class DatabaseStorage implements IStorage {
         updatedAt: new Date(),
       });
     });
-    
-    console.log(`[Storage] Fetched ${mergedPerms.length} merged permissions for user ${userId}:`, 
-      mergedPerms.map(p => `${p.module}(${p.actions.length})`).join(', '));
     
     this.permissionsCache.set(userId, { data: mergedPerms, timestamp: now });
     return mergedPerms;

@@ -129,7 +129,10 @@ export const auditLogs = pgTable("audit_logs", {
   newValue: text("new_value"),
   changedBy: text("changed_by"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_audit_logs_item_id").on(table.itemId),
+  index("idx_audit_logs_created_at").on(table.createdAt),
+]);
 
 export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({
   id: true,
@@ -154,7 +157,11 @@ export const systemAuditLogs = pgTable("system_audit_logs", {
   ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_system_audit_logs_module").on(table.module),
+  index("idx_system_audit_logs_entity_id").on(table.entityId),
+  index("idx_system_audit_logs_created_at").on(table.createdAt),
+]);
 
 export const insertSystemAuditLogSchema = createInsertSchema(
   systemAuditLogs,
@@ -659,7 +666,11 @@ export const userPermissions = pgTable("user_permissions", {
   actions: text("actions").array().notNull(), // e.g., ['view', 'create', 'edit', 'delete']
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_user_permissions_user_id").on(table.userId),
+  index("idx_user_permissions_module").on(table.module),
+  index("idx_user_permissions_user_module").on(table.userId, table.module),
+]);
 
 export const insertUserPermissionSchema = createInsertSchema(
   userPermissions,
@@ -1271,7 +1282,9 @@ export const assetTransferEvents = pgTable("asset_transfer_events", {
   actorId: varchar("actor_id").references(() => users.id),
   note: text("note"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_asset_transfer_events_transfer_id").on(table.transferId),
+]);
 
 export const insertAssetTransferEventSchema = createInsertSchema(
   assetTransferEvents,
@@ -1346,7 +1359,11 @@ export const notificationQueue = pgTable("notification_queue", {
   relatedEntityId: text("related_entity_id"),
   sentAt: timestamp("sent_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_notification_queue_status").on(table.status),
+  index("idx_notification_queue_created_at").on(table.createdAt),
+  index("idx_notification_queue_status_created_at").on(table.status, table.createdAt),
+]);
 
 export const insertNotificationQueueSchema = createInsertSchema(
   notificationQueue,
@@ -1467,7 +1484,11 @@ export const shifts = pgTable("shifts", {
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_shifts_branch_id").on(table.branchId),
+  index("idx_shifts_date").on(table.date),
+  index("idx_shifts_branch_date").on(table.branchId, table.date),
+]);
 
 export const insertShiftSchema = createInsertSchema(shifts).omit({
   id: true,
@@ -1491,7 +1512,10 @@ export const shiftEmployees = pgTable("shift_employees", {
   status: text("status").default("expected").notNull(), // expected, present, absent, late
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_shift_employees_shift_id").on(table.shiftId),
+  index("idx_shift_employees_status").on(table.status),
+]);
 
 export const insertShiftEmployeeSchema = createInsertSchema(
   shiftEmployees,
@@ -1528,7 +1552,12 @@ export const productionOrders = pgTable("production_orders", {
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_production_orders_branch_id").on(table.branchId),
+  index("idx_production_orders_status").on(table.status),
+  index("idx_production_orders_scheduled_date").on(table.scheduledDate),
+  index("idx_production_orders_branch_status").on(table.branchId, table.status),
+]);
 
 export const insertProductionOrderSchema = createInsertSchema(
   productionOrders,
@@ -2698,7 +2727,11 @@ export const displayBarReceipts = pgTable("display_bar_receipts", {
   productionBatch: text("production_batch"), // رقم دفعة الإنتاج
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_display_bar_receipts_branch_id").on(table.branchId),
+  index("idx_display_bar_receipts_receipt_date").on(table.receiptDate),
+  index("idx_display_bar_receipts_branch_date").on(table.branchId, table.receiptDate),
+]);
 
 export const insertDisplayBarReceiptSchema = createInsertSchema(
   displayBarReceipts,
@@ -2730,7 +2763,11 @@ export const displayBarDailySummary = pgTable("display_bar_daily_summary", {
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_display_bar_daily_summary_branch_id").on(table.branchId),
+  index("idx_display_bar_daily_summary_date").on(table.summaryDate),
+  index("idx_display_bar_daily_summary_branch_date").on(table.branchId, table.summaryDate),
+]);
 
 export const insertDisplayBarDailySummarySchema = createInsertSchema(
   displayBarDailySummary,
@@ -2764,7 +2801,12 @@ export const wasteReports = pgTable("waste_reports", {
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_waste_reports_branch_id").on(table.branchId),
+  index("idx_waste_reports_report_date").on(table.reportDate),
+  index("idx_waste_reports_status").on(table.status),
+  index("idx_waste_reports_branch_date").on(table.branchId, table.reportDate),
+]);
 
 export const insertWasteReportSchema = createInsertSchema(wasteReports).omit({
   id: true,
@@ -3140,7 +3182,11 @@ export const dailyProductionBatches = pgTable("daily_production_batches", {
   finishedAt: timestamp("finished_at"), // تاريخ اكتمال الإنتاج
   finishedById: varchar("finished_by_id").references(() => users.id), // من قام بإكمال الدفعة
   finishedByName: text("finished_by_name"), // اسم من قام بالإكمال
-});
+}, (table) => [
+  index("idx_daily_production_batches_branch_id").on(table.branchId),
+  index("idx_daily_production_batches_production_date").on(table.productionDate),
+  index("idx_daily_production_batches_branch_date").on(table.branchId, table.productionDate),
+]);
 
 export const insertDailyProductionBatchSchema = createInsertSchema(
   dailyProductionBatches,
@@ -3257,7 +3303,10 @@ export const userAssignments = pgTable("user_assignments", {
   endDate: timestamp("end_date"), // للتعيينات المؤقتة
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_user_assignments_user_id").on(table.userId),
+  index("idx_user_assignments_role_id").on(table.roleId),
+]);
 
 export const insertUserAssignmentSchema = createInsertSchema(userAssignments).omit({
   id: true,
@@ -3712,7 +3761,9 @@ export const marketingCampaigns = pgTable("marketing_campaigns", {
   metadata: jsonb("metadata"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_marketing_campaigns_status").on(table.status),
+]);
 
 export const insertMarketingCampaignSchema = createInsertSchema(marketingCampaigns).omit({
   id: true,
@@ -3969,7 +4020,9 @@ export const marketingInfluencers = pgTable("marketing_influencers", {
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_marketing_influencers_is_active").on(table.isActive),
+]);
 
 export const insertMarketingInfluencerSchema = createInsertSchema(marketingInfluencers).omit({
   id: true,
@@ -5980,6 +6033,7 @@ export const finishedGoodsInventory = pgTable("finished_goods_inventory", {
   index("idx_finished_goods_product").on(table.productId),
   index("idx_finished_goods_date").on(table.productionDate),
   index("idx_finished_goods_category").on(table.productCategory),
+  index("idx_finished_goods_product_name").on(table.productName),
   // Standard unique index for atomic UPSERT - uses normalized product name
   uniqueIndex("finished_goods_unique_idx").on(table.branchId, table.productNameNormalized, table.productionDate),
 ]);

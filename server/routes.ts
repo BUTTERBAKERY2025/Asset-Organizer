@@ -150,6 +150,23 @@ export async function registerRoutes(
   const getCachedPermissions = async (userId: string) => {
     return await storage.getUserPermissions(userId);
   };
+
+  const responseCache = new Map<string, { data: any; timestamp: number }>();
+  const getCachedResponse = (key: string, ttlMs: number): any | null => {
+    const cached = responseCache.get(key);
+    if (cached && Date.now() - cached.timestamp < ttlMs) return cached.data;
+    return null;
+  };
+  const setCachedResponse = (key: string, data: any) => {
+    responseCache.set(key, { data, timestamp: Date.now() });
+  };
+
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, val] of responseCache.entries()) {
+      if (now - val.timestamp > 120000) responseCache.delete(key);
+    }
+  }, 120000);
   
 
   // Admin routes for user management
@@ -649,7 +666,7 @@ export async function registerRoutes(
   });
 
   // Update branch location - Admin only
-  app.patch("/api/branches/:id/location", isAuthenticated, async (req, res) => {
+  app.patch("/api/branches/:id/location", isAuthenticated, requirePermission("branches", "edit"), async (req, res) => {
     try {
       // فقط المدير يمكنه تعديل موقع الفرع
       if (!isUserAdmin(req)) {
@@ -2826,7 +2843,7 @@ export async function registerRoutes(
       }
     } catch (error: any) {
       console.error("Error sending test SMS:", error);
-      res.status(500).json({ error: error.message || "فشل في إرسال الرسالة التجريبية" });
+      res.status(500).json({ error: "فشل في إرسال الرسالة التجريبية" });
     }
   });
 
@@ -2853,7 +2870,7 @@ export async function registerRoutes(
       }
     } catch (error: any) {
       console.error("Error sending test WhatsApp:", error);
-      res.status(500).json({ error: error.message || "فشل في إرسال رسالة واتساب التجريبية" });
+      res.status(500).json({ error: "فشل في إرسال رسالة واتساب التجريبية" });
     }
   });
 
@@ -7191,7 +7208,7 @@ export async function registerRoutes(
   });
 
   // Daily Challenges as Targets - تحويل التحديات اليومية إلى أهداف
-  app.get("/api/smart-incentives/challenges-as-targets", isAuthenticated, async (req, res) => {
+  app.get("/api/smart-incentives/challenges-as-targets", isAuthenticated, requirePermission("smart_incentives_challenges", "view"), async (req, res) => {
     try {
       const user = getCurrentUser(req);
       let { branchId, date, shiftType } = req.query;
@@ -7840,7 +7857,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/smart-incentives/top-cashiers", isAuthenticated, async (req, res) => {
+  app.get("/api/smart-incentives/top-cashiers", isAuthenticated, requirePermission("smart_incentives_wallet", "view"), async (req, res) => {
     try {
       const user = getCurrentUser(req);
       const yearMonth = req.query.yearMonth as string;
@@ -8320,7 +8337,7 @@ export async function registerRoutes(
   });
 
   // Cashier Product Sales
-  app.get("/api/smart-incentives/product-sales", isAuthenticated, async (req, res) => {
+  app.get("/api/smart-incentives/product-sales", isAuthenticated, requirePermission("smart_incentives_commissions", "view"), async (req, res) => {
     try {
       const user = getCurrentUser(req);
       const { cashierId, date, branchId } = req.query as any;
@@ -8395,7 +8412,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/smart-incentives/product-commission-achievement", isAuthenticated, async (req, res) => {
+  app.post("/api/smart-incentives/product-commission-achievement", isAuthenticated, requirePermission("smart_incentives_commissions", "view"), async (req, res) => {
     try {
       const user = getCurrentUser(req);
       const { cashierId, commissionId, date, shiftType, quantitySold } = req.body;
@@ -8524,7 +8541,7 @@ export async function registerRoutes(
       res.json(result);
     } catch (error: any) {
       console.error("Error calculating incentives:", error);
-      res.status(500).json({ error: error.message || "فشل في احتساب الحوافز" });
+      res.status(500).json({ error: "فشل في احتساب الحوافز" });
     }
   });
 
@@ -8598,7 +8615,7 @@ export async function registerRoutes(
       res.json({ processedCount, totalJournals: allJournals.length, totalPoints, totalAmount, journalDetails, errors: errors.length > 0 ? errors : undefined });
     } catch (error: any) {
       console.error("Error in batch calculation:", error);
-      res.status(500).json({ error: error.message || "فشل في الاحتساب الجماعي" });
+      res.status(500).json({ error: "فشل في الاحتساب الجماعي" });
     }
   });
 
@@ -14303,13 +14320,19 @@ export async function registerRoutes(
       
       const date = (req.query.date as string) || new Date().toISOString().split('T')[0];
       
+      const cacheKey = `command_center:${effectiveBranchId}:${date}`;
+      const cached = getCachedResponse(cacheKey, 30000);
+      if (cached) return res.json(cached);
+
       const data = await storage.getCommandCenterData(effectiveBranchId, date);
-      res.json({
+      const responseData = {
         ...data,
         branchId: effectiveBranchId,
         date,
         timestamp: new Date().toISOString(),
-      });
+      };
+      setCachedResponse(cacheKey, responseData);
+      res.json(responseData);
     } catch (error) {
       console.error("Error fetching command center data:", error);
       res.status(500).json({ error: "فشل في جلب بيانات مركز القيادة" });
@@ -14468,7 +14491,7 @@ export async function registerRoutes(
   });
 
   // User Assignments
-  app.get("/api/rbac/users/:userId/assignments", isAuthenticated, async (req, res) => {
+  app.get("/api/rbac/users/:userId/assignments", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
     try {
       const currentUser = getCurrentUser(req);
       const targetUserId = req.params.userId;
@@ -14593,7 +14616,7 @@ export async function registerRoutes(
   });
 
   // User Permission Overrides
-  app.get("/api/rbac/users/:userId/overrides", isAuthenticated, async (req, res) => {
+  app.get("/api/rbac/users/:userId/overrides", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
     try {
       const currentUser = getCurrentUser(req);
       const targetUserId = req.params.userId;
@@ -14666,7 +14689,7 @@ export async function registerRoutes(
   });
 
   // User Branch Access
-  app.get("/api/rbac/users/:userId/branches", isAuthenticated, async (req, res) => {
+  app.get("/api/rbac/users/:userId/branches", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
     try {
       const currentUser = getCurrentUser(req);
       const targetUserId = req.params.userId;
@@ -14755,7 +14778,7 @@ export async function registerRoutes(
   });
 
   // User Effective Permissions
-  app.get("/api/rbac/users/:userId/effective-permissions", isAuthenticated, async (req, res) => {
+  app.get("/api/rbac/users/:userId/effective-permissions", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
     try {
       const currentUser = getCurrentUser(req);
       const targetUserId = req.params.userId;
@@ -14813,7 +14836,7 @@ export async function registerRoutes(
   // ==========================================
 
   // Get user security settings
-  app.get("/api/security/users/:userId/settings", isAuthenticated, async (req, res) => {
+  app.get("/api/security/users/:userId/settings", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
     try {
       const currentUser = getCurrentUser(req);
       const { userId } = req.params;
@@ -14832,7 +14855,7 @@ export async function registerRoutes(
   });
 
   // Update user security settings
-  app.patch("/api/security/users/:userId/settings", isAuthenticated, async (req, res) => {
+  app.patch("/api/security/users/:userId/settings", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
     try {
       const currentUser = getCurrentUser(req);
       const { userId } = req.params;
@@ -14880,7 +14903,7 @@ export async function registerRoutes(
   });
 
   // Check if user is locked (requires authentication, admin only or self-check)
-  app.get("/api/security/users/:userId/locked", isAuthenticated, async (req, res) => {
+  app.get("/api/security/users/:userId/locked", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
     try {
       const currentUser = getCurrentUser(req);
       const { userId } = req.params;
@@ -14903,7 +14926,7 @@ export async function registerRoutes(
   // ==========================================
 
   // Get current user's active sessions
-  app.get("/api/security/sessions", isAuthenticated, async (req, res) => {
+  app.get("/api/security/sessions", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
     try {
       const currentUser = getCurrentUser(req);
       const sessions = await storage.getUserSessions(currentUser.id);
@@ -14927,7 +14950,7 @@ export async function registerRoutes(
   });
 
   // Invalidate a session (user can only invalidate their own sessions, admins can invalidate any)
-  app.delete("/api/security/sessions/:sessionId", isAuthenticated, async (req, res) => {
+  app.delete("/api/security/sessions/:sessionId", isAuthenticated, requirePermission("users", "delete"), async (req, res) => {
     try {
       const currentUser = getCurrentUser(req);
       const { sessionId } = req.params;
@@ -14962,7 +14985,7 @@ export async function registerRoutes(
   });
 
   // Invalidate all user sessions (logout everywhere)
-  app.delete("/api/security/users/:userId/sessions", isAuthenticated, async (req, res) => {
+  app.delete("/api/security/users/:userId/sessions", isAuthenticated, requirePermission("users", "delete"), async (req, res) => {
     try {
       const currentUser = getCurrentUser(req);
       const { userId } = req.params;
@@ -15502,7 +15525,7 @@ export async function registerRoutes(
   // Cashier Performance Sales Data API - بيانات مبيعات أداء الكاشير
   // ==========================================
 
-  app.get("/api/cashier-performance-sales", isAuthenticated, async (req, res) => {
+  app.get("/api/cashier-performance-sales", isAuthenticated, requirePermission("cashier_performance", "view"), async (req, res) => {
     try {
       const { branchId, date, shiftType } = req.query;
       
@@ -15596,7 +15619,7 @@ export async function registerRoutes(
 
   // API for detailed cashier journals report with date range
   // Security: Non-admin/manager users can only see their own journals
-  app.get("/api/cashier-journals-report", isAuthenticated, async (req, res) => {
+  app.get("/api/cashier-journals-report", isAuthenticated, requirePermission("cashier_journal", "view"), async (req, res) => {
     try {
       const user = (req as any).currentUser as User;
       if (!user) {
@@ -15827,7 +15850,7 @@ export async function registerRoutes(
   // Performance Alerts API - تنبيهات الأداء
   // ==========================================
 
-  app.get("/api/performance-alerts", isAuthenticated, async (req, res) => {
+  app.get("/api/performance-alerts", isAuthenticated, requirePermission("cashier_performance", "view"), async (req, res) => {
     try {
       const { branchId, date, isRead } = req.query;
       
@@ -16038,7 +16061,7 @@ export async function registerRoutes(
   // Shift Performance Tracking API - تتبع أداء الشفت
   // ==========================================
 
-  app.get("/api/shift-performance-tracking", isAuthenticated, async (req, res) => {
+  app.get("/api/shift-performance-tracking", isAuthenticated, requirePermission("shifts", "view"), async (req, res) => {
     try {
       const { branchId, date } = req.query;
       
@@ -20283,62 +20306,53 @@ export async function registerRoutes(
       }
       
       const effectiveBranchId = branchFilter.singleBranchId;
+
+      const cacheKey = `attendance_dashboard_stats:${effectiveBranchId || 'all'}`;
+      const cached = getCachedResponse(cacheKey, 30000);
+      if (cached) return res.json(cached);
+
       const today = new Date().toISOString().split('T')[0];
       
-      // Get total branch employees (active only) - filtered by branch
-      let branchEmployees;
-      if (effectiveBranchId) {
-        branchEmployees = await storage.getBranchEmployeesByBranch(effectiveBranchId);
-      } else {
-        branchEmployees = await storage.getAllBranchEmployees();
-      }
-      const activeEmployees = branchEmployees.filter(e => e.status === 'active');
-      const totalEmployees = activeEmployees.length;
-      
-      // Get today's attendance - filtered by branch
-      const todayRecords = await storage.getAllAttendanceRecords({ 
-        branchId: effectiveBranchId || undefined,
-        startDate: today, 
-        endDate: today 
-      });
-      const presentToday = todayRecords.filter(r => r.status === 'present' || r.status === 'late').length;
-      const lateToday = todayRecords.filter(r => r.status === 'late').length;
-      
-      // Calculate absent as total employees minus those who checked in
-      const absentToday = Math.max(0, totalEmployees - presentToday);
-      
-      // Get templates count
-      const templates = await storage.getAllScheduleTemplates(effectiveBranchId || undefined);
-      const templatesCount = templates.length;
-      
-      // Get periods count
-      const periods = await storage.getAllSchedulePeriods(effectiveBranchId || undefined);
-      const periodsCount = periods.length;
-      
-      // Get schedules count (this month)
       const startOfMonth = new Date();
       startOfMonth.setDate(1);
       const endOfMonth = new Date(startOfMonth);
       endOfMonth.setMonth(endOfMonth.getMonth() + 1);
       endOfMonth.setDate(0);
-      
-      const schedules = await storage.getEmployeeSchedulesByBranchAndDateRange(
-        effectiveBranchId || '',
-        startOfMonth.toISOString().split('T')[0],
-        endOfMonth.toISOString().split('T')[0]
-      );
+
+      const [branchEmployeesResult, todayRecords, templates, periods, schedules, reports] = await Promise.all([
+        effectiveBranchId 
+          ? storage.getBranchEmployeesByBranch(effectiveBranchId) 
+          : storage.getAllBranchEmployees(),
+        storage.getAllAttendanceRecords({ 
+          branchId: effectiveBranchId || undefined,
+          startDate: today, 
+          endDate: today 
+        }),
+        storage.getAllScheduleTemplates(effectiveBranchId || undefined),
+        storage.getAllSchedulePeriods(effectiveBranchId || undefined),
+        storage.getEmployeeSchedulesByBranchAndDateRange(
+          effectiveBranchId || '',
+          startOfMonth.toISOString().split('T')[0],
+          endOfMonth.toISOString().split('T')[0]
+        ),
+        storage.getTimesheetReports({})
+      ]);
+
+      const activeEmployees = branchEmployeesResult.filter(e => e.status === 'active');
+      const totalEmployees = activeEmployees.length;
+      const presentToday = todayRecords.filter(r => r.status === 'present' || r.status === 'late').length;
+      const lateToday = todayRecords.filter(r => r.status === 'late').length;
+      const absentToday = Math.max(0, totalEmployees - presentToday);
+      const templatesCount = templates.length;
+      const periodsCount = periods.length;
       const schedulesCount = schedules.length;
-      
-      // Get reports count
-      const reports = await storage.getTimesheetReports({});
       const reportsCount = reports.length;
       
-      // Calculate attendance rate based on total employees
       const attendanceRate = totalEmployees > 0 
         ? Math.round((presentToday / totalEmployees) * 100) 
         : 0;
       
-      res.json({
+      const responseData = {
         todayAttendance: todayRecords.length,
         presentToday,
         lateToday,
@@ -20349,7 +20363,9 @@ export async function registerRoutes(
         reportsCount,
         totalEmployees,
         attendanceRate
-      });
+      };
+      setCachedResponse(cacheKey, responseData);
+      res.json(responseData);
     } catch (error) {
       console.error("Error fetching attendance dashboard stats:", error);
       res.status(500).json({ error: "فشل في جلب إحصائيات لوحة الحضور" });
@@ -22332,7 +22348,7 @@ export async function registerRoutes(
   });
 
   // Get branch ranking - يستخدم البيانات المحسوبة تلقائياً من enhanced-summary
-  app.get("/api/financials/ranking", isAuthenticated, async (req, res) => {
+  app.get("/api/financials/ranking", isAuthenticated, requirePermission("dashboard", "view"), async (req, res) => {
     try {
       const { year, month, metric } = req.query;
       const yearNum = parseInt(year as string) || new Date().getFullYear();
@@ -22978,7 +22994,7 @@ export async function registerRoutes(
   // Finished Goods Inventory - مخزون الإنتاج النهائي
   // ==========================================
 
-  app.get("/api/finished-goods-inventory", isAuthenticated, async (req, res) => {
+  app.get("/api/finished-goods-inventory", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
       const filters: { branchId?: string; productId?: number; productionDate?: string; category?: string } = {};
       if (req.query.branchId) filters.branchId = req.query.branchId as string;
@@ -23005,7 +23021,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/finished-goods-inventory/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/finished-goods-inventory/:id", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
       const item = await storage.getFinishedGoodsInventoryItem(parseInt(req.params.id));
       if (!item) {
@@ -23138,7 +23154,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/finished-goods-transfers", isAuthenticated, async (req, res) => {
+  app.get("/api/finished-goods-transfers", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
       const filters: { sourceBranchId?: string; destinationType?: string; destinationBranchId?: string; transferDate?: string; status?: string; branchId?: string } = {};
       if (req.query.sourceBranchId) filters.sourceBranchId = req.query.sourceBranchId as string;
@@ -23174,7 +23190,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/production-inventory-logs", isAuthenticated, async (req, res) => {
+  app.get("/api/production-inventory-logs", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
       const filters: { branchId?: string; productId?: number; movementType?: string } = {};
       if (req.query.branchId) filters.branchId = req.query.branchId as string;
@@ -23902,7 +23918,7 @@ export async function registerRoutes(
   });
 
   // Purchasing Requests
-  app.get("/api/purchasing/requests", isAuthenticated, async (req, res) => {
+  app.get("/api/purchasing/requests", isAuthenticated, requirePermission("warehouse", "view"), async (req, res) => {
     try {
       const filters: { branchId?: string; status?: string } = {};
       if (req.query.branchId) filters.branchId = req.query.branchId as string;
@@ -23916,7 +23932,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/purchasing/requests/:id", isAuthenticated, async (req, res) => {
+  app.get("/api/purchasing/requests/:id", isAuthenticated, requirePermission("warehouse", "view"), async (req, res) => {
     try {
       const result = await storage.getPurchasingRequestWithItems(parseInt(req.params.id));
       if (!result) {
