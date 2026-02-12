@@ -13,7 +13,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
-import { Clock, LogIn, LogOut, Check, Pencil, RotateCcw, Building2, User, Timer, ArrowRight, Users, Calendar, Sun, Moon, Sunrise, Loader2, MapPin, AlertTriangle, ChevronLeft, ChevronRight, ShieldAlert, Fingerprint } from "lucide-react";
+import { Clock, LogIn, LogOut, Check, Pencil, RotateCcw, Building2, User, Timer, ArrowRight, Users, Calendar, Sun, Moon, Sunrise, Loader2, MapPin, AlertTriangle, ChevronLeft, ChevronRight, ShieldAlert, Fingerprint, ScanFace, KeyRound } from "lucide-react";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
@@ -48,6 +48,7 @@ export default function AttendanceCheckPage() {
   const [showBiometricRegister, setShowBiometricRegister] = useState<{ employeeId: string; employeeName: string } | null>(null);
   const [biometricRegistering, setBiometricRegistering] = useState(false);
   const [biometricToken, setBiometricToken] = useState<string | null>(null);
+  const [employeeBiometricMethod, setEmployeeBiometricMethod] = useState<string | null>(null);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -80,7 +81,7 @@ export default function AttendanceCheckPage() {
     enabled: !!selectedBranch && !!selectedShift,
   });
 
-  const { data: biometricStatusMap } = useQuery<Record<string, { hasCredential: boolean; credentialCount: number; lastUsed: string | null }>>({
+  const { data: biometricStatusMap } = useQuery<Record<string, { hasCredential: boolean; credentialCount: number; lastUsed: string | null; registrationMethod: string | null }>>({
     queryKey: ["/api/biometric/branch", selectedBranch],
     queryFn: async () => {
       if (!selectedBranch) return {};
@@ -253,6 +254,7 @@ export default function AttendanceCheckPage() {
     setLocationDistance(null);
     setBiometricStatus("idle");
     setBiometricToken(null);
+    setEmployeeBiometricMethod(biometricStatusMap?.[employee.employeeId]?.registrationMethod || null);
     checkLocationValidity();
   };
 
@@ -331,11 +333,32 @@ export default function AttendanceCheckPage() {
     }
   };
 
+  const biometricMethodLabels: Record<string, string> = {
+    fingerprint: "بصمة الإصبع",
+    face: "بصمة الوجه",
+    pin: "رمز PIN",
+  };
+
+  const getBiometricIcon = (method: string | null) => {
+    if (method === "face") return ScanFace;
+    if (method === "pin") return KeyRound;
+    return Fingerprint;
+  };
+
+  const getBiometricPrompt = (method: string | null) => {
+    if (method === "face") return "وجّه وجهك نحو الكاميرا للتحقق";
+    if (method === "pin") return "أدخل رمز PIN الخاص بجهازك";
+    return "ضع إصبعك على مستشعر البصمة";
+  };
+
   const handleBiometricVerify = async (employeeId: string) => {
     if (!window.PublicKeyCredential) {
       setBiometricStatus("unavailable");
       return;
     }
+    
+    const empMethod = biometricStatusMap?.[employeeId]?.registrationMethod || null;
+    setEmployeeBiometricMethod(empMethod);
     
     setBiometricStatus("verifying");
     try {
@@ -347,7 +370,10 @@ export default function AttendanceCheckPage() {
         return;
       }
       
-      const { options, challengeKey } = optionsData;
+      const { options, challengeKey, registrationMethod } = optionsData;
+      if (registrationMethod) {
+        setEmployeeBiometricMethod(registrationMethod);
+      }
       
       const publicKeyOptions: PublicKeyCredentialRequestOptions = {
         challenge: Uint8Array.from(atob(options.challenge.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)),
@@ -373,15 +399,19 @@ export default function AttendanceCheckPage() {
       if (verifyData.verified) {
         setBiometricStatus("verified");
         setBiometricToken(verifyData.verificationToken || null);
-        toast({ title: "تم التحقق", description: "تم التحقق من البصمة بنجاح" });
+        const methodLabel = biometricMethodLabels[registrationMethod || empMethod || "fingerprint"] || "البصمة";
+        toast({ title: "تم التحقق", description: `تم التحقق من ${methodLabel} بنجاح` });
       } else {
         setBiometricStatus("failed");
+        toast({ title: "فشل التحقق", description: "لم تتطابق البصمة مع المسجلة", variant: "destructive" });
       }
     } catch (error: any) {
       if (error.name === "NotAllowedError") {
         setBiometricStatus("idle");
+        toast({ title: "تم الإلغاء", description: "تم إلغاء عملية التحقق البيومتري", variant: "destructive" });
       } else {
         setBiometricStatus("failed");
+        toast({ title: "خطأ", description: "فشل التحقق من البصمة، حاول مرة أخرى", variant: "destructive" });
       }
     }
   };
@@ -665,12 +695,17 @@ export default function AttendanceCheckPage() {
                               ) : "-"}
                             </TableCell>
                             <TableCell className="text-center">
-                              {biometricStatusMap?.[emp.employeeId]?.hasCredential ? (
-                                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 gap-1">
-                                  <Fingerprint className="w-3 h-3" />
-                                  مسجّلة
-                                </Badge>
-                              ) : (
+                              {biometricStatusMap?.[emp.employeeId]?.hasCredential ? (() => {
+                                const method = biometricStatusMap?.[emp.employeeId]?.registrationMethod;
+                                const MethodIcon = getBiometricIcon(method || null);
+                                const methodLabel = biometricMethodLabels[method || "fingerprint"] || "مسجّلة";
+                                return (
+                                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 gap-1">
+                                    <MethodIcon className="w-3 h-3" />
+                                    {methodLabel}
+                                  </Badge>
+                                );
+                              })() : (
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -824,49 +859,64 @@ export default function AttendanceCheckPage() {
                 )}
               </div>
 
-              <div className={`p-3 rounded-lg border ${
-                biometricStatus === "verified" ? "bg-green-50 border-green-200" :
-                biometricStatus === "failed" ? "bg-red-50 border-red-200" :
-                biometricStatus === "verifying" ? "bg-blue-50 border-blue-200" :
-                biometricStatus === "unavailable" ? "bg-gray-50 border-gray-200" :
-                "bg-amber-50 border-amber-200"
-              }`}>
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <Fingerprint className={`w-5 h-5 ${
-                      biometricStatus === "verified" ? "text-green-600" :
-                      biometricStatus === "failed" ? "text-red-600" :
-                      biometricStatus === "verifying" ? "text-blue-600 animate-pulse" :
-                      "text-amber-600"
-                    }`} />
-                    <div>
-                      <p className="text-sm font-medium">
-                        {biometricStatus === "verified" ? "تم التحقق من البصمة ✓" :
-                         biometricStatus === "failed" ? "فشل التحقق من البصمة" :
-                         biometricStatus === "verifying" ? "جاري التحقق..." :
-                         biometricStatus === "unavailable" ? "لا توجد بصمة مسجلة" :
-                         "التحقق بالبصمة"}
-                      </p>
-                      {biometricStatus === "unavailable" && (
-                        <p className="text-xs text-red-600 font-medium">يجب تسجيل البصمة أولاً من قائمة الموظفين</p>
+              {(() => {
+                const method = employeeBiometricMethod || (selectedEmployee ? biometricStatusMap?.[selectedEmployee.employeeId]?.registrationMethod : null) || null;
+                const BiometricIcon = getBiometricIcon(method);
+                const methodLabel = biometricMethodLabels[method || "fingerprint"] || "البصمة";
+                const prompt = getBiometricPrompt(method);
+
+                return (
+                  <div className={`p-3 rounded-lg border ${
+                    biometricStatus === "verified" ? "bg-green-50 border-green-200" :
+                    biometricStatus === "failed" ? "bg-red-50 border-red-200" :
+                    biometricStatus === "verifying" ? "bg-blue-50 border-blue-200" :
+                    biometricStatus === "unavailable" ? "bg-gray-50 border-gray-200" :
+                    "bg-amber-50 border-amber-200"
+                  }`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <BiometricIcon className={`w-5 h-5 ${
+                          biometricStatus === "verified" ? "text-green-600" :
+                          biometricStatus === "failed" ? "text-red-600" :
+                          biometricStatus === "verifying" ? "text-blue-600 animate-pulse" :
+                          "text-amber-600"
+                        }`} />
+                        <div>
+                          <p className="text-sm font-medium">
+                            {biometricStatus === "verified" ? `تم التحقق من ${methodLabel} ✓` :
+                             biometricStatus === "failed" ? `فشل التحقق من ${methodLabel}` :
+                             biometricStatus === "verifying" ? `جاري التحقق من ${methodLabel}...` :
+                             biometricStatus === "unavailable" ? "لا توجد بصمة مسجلة" :
+                             `التحقق عبر ${methodLabel}`}
+                          </p>
+                          {biometricStatus === "unavailable" && (
+                            <p className="text-xs text-red-600 font-medium">يجب تسجيل البصمة أولاً من إعدادات البصمة</p>
+                          )}
+                          {biometricStatus === "verifying" && (
+                            <p className="text-xs text-blue-600 mt-0.5">{prompt}</p>
+                          )}
+                          {biometricStatus === "idle" && (
+                            <p className="text-xs text-amber-700 mt-0.5">{prompt}</p>
+                          )}
+                        </div>
+                      </div>
+                      {(biometricStatus === "idle" || biometricStatus === "failed") && selectedEmployee && (
+                        <Button
+                          size="sm"
+                          variant={biometricStatus === "failed" ? "destructive" : "default"}
+                          onClick={() => selectedEmployee && handleBiometricVerify(selectedEmployee.employeeId)}
+                          disabled={false}
+                          data-testid="btn-verify-biometric"
+                          className="gap-1"
+                        >
+                          <BiometricIcon className="w-4 h-4" />
+                          {biometricStatus === "failed" ? "إعادة المحاولة" : method === "face" ? "تحقق بالوجه" : method === "pin" ? "أدخل PIN" : "ضع بصمتك"}
+                        </Button>
                       )}
                     </div>
                   </div>
-                  {(biometricStatus === "idle" || biometricStatus === "failed") && selectedEmployee && (
-                    <Button
-                      size="sm"
-                      variant={biometricStatus === "failed" ? "destructive" : "default"}
-                      onClick={() => selectedEmployee && handleBiometricVerify(selectedEmployee.employeeId)}
-                      disabled={false}
-                      data-testid="btn-verify-biometric"
-                      className="gap-1"
-                    >
-                      <Fingerprint className="w-4 h-4" />
-                      {biometricStatus === "failed" ? "إعادة المحاولة" : "ضع بصمتك"}
-                    </Button>
-                  )}
-                </div>
-              </div>
+                );
+              })()}
 
               <div className="text-center p-2 sm:p-3 bg-muted rounded-lg">
                 <div className="text-2xl sm:text-3xl font-mono font-bold text-primary">
@@ -921,12 +971,20 @@ export default function AttendanceCheckPage() {
             </div>
 
             <div className="flex items-center gap-3 px-1 shrink-0">
-              <div className="flex items-center gap-1.5">
-                <div className={`w-3 h-3 rounded-full ${biometricStatus === "verified" ? "bg-green-500" : "bg-gray-300"}`} />
-                <span className={`text-xs font-medium ${biometricStatus === "verified" ? "text-green-700" : "text-gray-500"}`}>
-                  {biometricStatus === "verified" ? "البصمة ✓" : "البصمة مطلوبة"}
-                </span>
-              </div>
+              {(() => {
+                const method = employeeBiometricMethod || (selectedEmployee ? biometricStatusMap?.[selectedEmployee.employeeId]?.registrationMethod : null) || null;
+                const methodLabel = biometricMethodLabels[method || "fingerprint"] || "البصمة";
+                const StatusBioIcon = getBiometricIcon(method);
+                return (
+                  <div className="flex items-center gap-1.5">
+                    <StatusBioIcon className={`w-3.5 h-3.5 ${biometricStatus === "verified" ? "text-green-600" : "text-gray-400"}`} />
+                    <div className={`w-3 h-3 rounded-full ${biometricStatus === "verified" ? "bg-green-500" : "bg-gray-300"}`} />
+                    <span className={`text-xs font-medium ${biometricStatus === "verified" ? "text-green-700" : "text-gray-500"}`}>
+                      {biometricStatus === "verified" ? `${methodLabel} ✓` : `${methodLabel} مطلوبة`}
+                    </span>
+                  </div>
+                );
+              })()}
               <div className="flex items-center gap-1.5">
                 <div className={`w-3 h-3 rounded-full ${hasSignature ? "bg-green-500" : "bg-gray-300"}`} />
                 <span className={`text-xs font-medium ${hasSignature ? "text-green-700" : "text-gray-500"}`}>

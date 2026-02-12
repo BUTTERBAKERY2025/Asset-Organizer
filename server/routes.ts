@@ -18980,10 +18980,11 @@ export async function registerRoutes(
         return res.status(404).json({ error: "لا توجد بصمة مسجلة لهذا الموظف", noBiometric: true });
       }
 
+      const primaryMethod = credentials[0].registrationMethod || "fingerprint";
+
       const crypto = await import("crypto");
       const challenge = crypto.randomBytes(32).toString("base64url");
       
-      // Store challenge for server-side validation
       const challengeKey = `verify_${employeeId}_${Date.now()}`;
       biometricChallenges.set(challengeKey, { challenge, employeeId, type: "verify", timestamp: Date.now() });
 
@@ -19001,7 +19002,7 @@ export async function registerRoutes(
         timeout: 60000,
       };
 
-      res.json({ options, challengeKey });
+      res.json({ options, challengeKey, registrationMethod: primaryMethod });
     } catch (error) {
       console.error("Error generating verify options:", error);
       res.status(500).json({ error: "فشل في إنشاء خيارات التحقق" });
@@ -19040,20 +19041,22 @@ export async function registerRoutes(
         return res.status(403).json({ error: "البصمة لا تتطابق مع الموظف", verified: false });
       }
 
-      // Update counter and last used
       await storage.updateBiometricCredentialCounter(credential.id, credential.counter + 1);
       
-      // Generate server-signed verification token (valid 10 min)
       const crypto = await import("crypto");
       const tokenData = `${employeeId}:${Date.now()}:${crypto.randomBytes(8).toString("hex")}`;
       const verificationToken = Buffer.from(tokenData).toString("base64url");
       
-      // Store token for check-in/out validation
       biometricChallenges.set(`token_${verificationToken}`, { 
         challenge: verificationToken, employeeId, type: "verified_token", timestamp: Date.now() 
       });
 
-      res.json({ verified: true, employeeName: credential.employeeName, verificationToken });
+      res.json({ 
+        verified: true, 
+        employeeName: credential.employeeName, 
+        verificationToken,
+        registrationMethod: credential.registrationMethod || "fingerprint"
+      });
     } catch (error) {
       console.error("Error verifying biometric:", error);
       res.status(500).json({ error: "فشل في التحقق من البصمة", verified: false });
@@ -19072,13 +19075,16 @@ export async function registerRoutes(
       }
 
       const credentials = await storage.getBiometricCredentialsByBranch(req.params.branchId);
-      const statusMap: Record<string, { hasCredential: boolean; credentialCount: number; lastUsed: string | null }> = {};
+      const statusMap: Record<string, { hasCredential: boolean; credentialCount: number; lastUsed: string | null; registrationMethod: string | null }> = {};
       
       for (const cred of credentials) {
         if (!statusMap[cred.employeeId]) {
-          statusMap[cred.employeeId] = { hasCredential: true, credentialCount: 0, lastUsed: null };
+          statusMap[cred.employeeId] = { hasCredential: true, credentialCount: 0, lastUsed: null, registrationMethod: null };
         }
         statusMap[cred.employeeId].credentialCount++;
+        if (!statusMap[cred.employeeId].registrationMethod && cred.registrationMethod) {
+          statusMap[cred.employeeId].registrationMethod = cred.registrationMethod;
+        }
         if (cred.lastUsedAt) {
           const lastUsed = cred.lastUsedAt.toISOString();
           if (!statusMap[cred.employeeId].lastUsed || lastUsed > statusMap[cred.employeeId].lastUsed!) {
