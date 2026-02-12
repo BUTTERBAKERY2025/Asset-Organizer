@@ -44,11 +44,12 @@ export default function AttendanceCheckPage() {
   const [locationDistance, setLocationDistance] = useState<number | null>(null);
   const [isCheckingLocation, setIsCheckingLocation] = useState(false);
   const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [biometricStatus, setBiometricStatus] = useState<"idle" | "verifying" | "verified" | "failed" | "unavailable">("idle");
+  const [biometricStatus, setBiometricStatus] = useState<"idle" | "verifying" | "verified" | "failed" | "unavailable" | "device_mismatch">("idle");
   const [showBiometricRegister, setShowBiometricRegister] = useState<{ employeeId: string; employeeName: string } | null>(null);
   const [biometricRegistering, setBiometricRegistering] = useState(false);
   const [biometricToken, setBiometricToken] = useState<string | null>(null);
   const [employeeBiometricMethod, setEmployeeBiometricMethod] = useState<string | null>(null);
+  const [deviceRegisterLoading, setDeviceRegisterLoading] = useState(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -361,6 +362,7 @@ export default function AttendanceCheckPage() {
     setEmployeeBiometricMethod(empMethod);
     
     setBiometricStatus("verifying");
+    const verifyStartTime = Date.now();
     try {
       const optionsRes = await apiRequest("POST", "/api/biometric/verify-options", { employeeId });
       const optionsData = await optionsRes.json();
@@ -375,19 +377,27 @@ export default function AttendanceCheckPage() {
         setEmployeeBiometricMethod(registrationMethod);
       }
       
+      const allowCreds = options.allowCredentials.map((c: any) => ({
+        id: Uint8Array.from(atob(c.id.replace(/-/g, '+').replace(/_/g, '/')), c2 => c2.charCodeAt(0)),
+        type: c.type as PublicKeyCredentialType,
+        transports: c.transports as AuthenticatorTransport[],
+      }));
+
       const publicKeyOptions: PublicKeyCredentialRequestOptions = {
         challenge: Uint8Array.from(atob(options.challenge.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)),
         rpId: options.rpId,
-        allowCredentials: options.allowCredentials.map((c: any) => ({
-          id: Uint8Array.from(atob(c.id.replace(/-/g, '+').replace(/_/g, '/')), c2 => c2.charCodeAt(0)),
-          type: c.type,
-          transports: c.transports,
-        })),
-        userVerification: options.userVerification,
+        allowCredentials: allowCreds,
+        userVerification: options.userVerification as UserVerificationRequirement,
         timeout: options.timeout,
       };
       
-      const assertion = await navigator.credentials.get({ publicKey: publicKeyOptions }) as PublicKeyCredential;
+      let assertion: PublicKeyCredential | null = null;
+      try {
+        assertion = await navigator.credentials.get({ publicKey: publicKeyOptions }) as PublicKeyCredential;
+      } catch (webauthnError: any) {
+        console.error("[Biometric] WebAuthn get error:", webauthnError.name, webauthnError.message);
+        throw webauthnError;
+      }
       if (!assertion) throw new Error("فشل التحقق");
       
       const credentialId = btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(assertion.rawId))))
@@ -406,13 +416,114 @@ export default function AttendanceCheckPage() {
         toast({ title: "فشل التحقق", description: "لم تتطابق البصمة مع المسجلة", variant: "destructive" });
       }
     } catch (error: any) {
-      if (error.name === "NotAllowedError") {
-        setBiometricStatus("idle");
-        toast({ title: "تم الإلغاء", description: "تم إلغاء عملية التحقق البيومتري", variant: "destructive" });
+      console.error("[Biometric Verify] Error:", error.name, error.message);
+      const errorMsg = (error.message || "").toLowerCase();
+      const elapsed = Date.now() - verifyStartTime;
+      
+      const isNoPasskeys = errorMsg.includes("no passkey") || errorMsg.includes("no credential") || 
+                           errorMsg.includes("not registered") || errorMsg.includes("no authenticator") ||
+                           errorMsg.includes("empty allow list") || errorMsg.includes("not found");
+      
+      if (isNoPasskeys || error.name === "InvalidStateError") {
+        setBiometricStatus("device_mismatch");
+        toast({ 
+          title: "البصمة غير موجودة على هذا الجهاز", 
+          description: "يجب تسجيل البصمة على جهاز الحضور. اضغط الزر أدناه.", 
+          variant: "destructive" 
+        });
+      } else if (error.name === "NotAllowedError") {
+        if (elapsed < 3000) {
+          setBiometricStatus("device_mismatch");
+          toast({ 
+            title: "البصمة غير موجودة على هذا الجهاز", 
+            description: "لم يتم العثور على بصمة مسجلة. سجّل البصمة على هذا الجهاز أولاً.", 
+            variant: "destructive" 
+          });
+        } else {
+          setBiometricStatus("idle");
+          toast({ title: "تم الإلغاء", description: "تم إلغاء عملية التحقق. اضغط على الزر لإعادة المحاولة.", variant: "destructive" });
+        }
       } else {
         setBiometricStatus("failed");
         toast({ title: "خطأ", description: "فشل التحقق من البصمة، حاول مرة أخرى", variant: "destructive" });
       }
+    }
+  };
+
+  const handleRegisterOnThisDevice = async () => {
+    if (!selectedEmployee || !window.PublicKeyCredential) return;
+    
+    const employeeId = selectedEmployee.employeeId;
+    const employeeName = selectedEmployee.employeeName;
+    const method = employeeBiometricMethod || "fingerprint";
+    
+    setDeviceRegisterLoading(true);
+    try {
+      const optionsRes = await apiRequest("POST", "/api/biometric/register-options", {
+        employeeId, employeeName, branchId: selectedBranch,
+      });
+      const { options, challengeKey } = await optionsRes.json();
+      
+      const publicKeyOptions: PublicKeyCredentialCreationOptions = {
+        challenge: Uint8Array.from(atob(options.challenge.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)),
+        rp: options.rp,
+        user: {
+          id: Uint8Array.from(atob(options.user.id.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)),
+          name: options.user.name,
+          displayName: options.user.displayName,
+        },
+        pubKeyCredParams: options.pubKeyCredParams,
+        authenticatorSelection: options.authenticatorSelection,
+        timeout: options.timeout,
+        attestation: options.attestation,
+      };
+      
+      const credential = await navigator.credentials.create({ publicKey: publicKeyOptions }) as PublicKeyCredential;
+      if (!credential) throw new Error("فشل في إنشاء البصمة");
+      
+      const credentialId = btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(credential.rawId))))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+      
+      const response = credential.response as AuthenticatorAttestationResponse;
+      const pubKeyBytes = response.getPublicKey?.() || new ArrayBuffer(0);
+      const publicKey = btoa(String.fromCharCode.apply(null, Array.from(new Uint8Array(pubKeyBytes))))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+
+      const ua = navigator.userAgent.toLowerCase();
+      let deviceType = "desktop";
+      let deviceModel = "Unknown";
+      if (/ipad/.test(ua)) { deviceType = "tablet"; deviceModel = "iPad"; }
+      else if (/iphone/.test(ua)) { deviceType = "mobile_ios"; deviceModel = "iPhone"; }
+      else if (/android/.test(ua) && /mobile/.test(ua)) { deviceType = "mobile_android"; }
+      else if (/android/.test(ua)) { deviceType = "tablet"; }
+      
+      await apiRequest("POST", "/api/biometric/register", {
+        employeeId, employeeName, branchId: selectedBranch,
+        credentialId,
+        publicKey: publicKey || credentialId,
+        deviceInfo: navigator.userAgent,
+        deviceType,
+        deviceModel,
+        registrationMethod: method,
+        challengeKey,
+      });
+      
+      queryClient.invalidateQueries({ queryKey: ["/api/biometric/branch"] });
+      
+      toast({ title: "تم تسجيل البصمة على هذا الجهاز", description: "الآن يمكنك التحقق من البصمة" });
+      
+      setBiometricStatus("idle");
+      setTimeout(() => handleBiometricVerify(employeeId), 500);
+    } catch (error: any) {
+      console.error("[Device Register] Error:", error.name, error.message);
+      if (error.name === "NotAllowedError") {
+        toast({ title: "تم الإلغاء", description: "تم إلغاء تسجيل البصمة", variant: "destructive" });
+      } else {
+        toast({ title: "خطأ", description: error.message || "فشل في تسجيل البصمة على هذا الجهاز", variant: "destructive" });
+      }
+      setBiometricStatus("device_mismatch");
+    } finally {
+      setDeviceRegisterLoading(false);
     }
   };
 
@@ -868,50 +979,82 @@ export default function AttendanceCheckPage() {
                 return (
                   <div className={`p-3 rounded-lg border ${
                     biometricStatus === "verified" ? "bg-green-50 border-green-200" :
-                    biometricStatus === "failed" ? "bg-red-50 border-red-200" :
+                    biometricStatus === "failed" || biometricStatus === "device_mismatch" ? "bg-red-50 border-red-200" :
                     biometricStatus === "verifying" ? "bg-blue-50 border-blue-200" :
                     biometricStatus === "unavailable" ? "bg-gray-50 border-gray-200" :
                     "bg-amber-50 border-amber-200"
                   }`}>
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <BiometricIcon className={`w-5 h-5 ${
-                          biometricStatus === "verified" ? "text-green-600" :
-                          biometricStatus === "failed" ? "text-red-600" :
-                          biometricStatus === "verifying" ? "text-blue-600 animate-pulse" :
-                          "text-amber-600"
-                        }`} />
-                        <div>
-                          <p className="text-sm font-medium">
-                            {biometricStatus === "verified" ? `تم التحقق من ${methodLabel} ✓` :
-                             biometricStatus === "failed" ? `فشل التحقق من ${methodLabel}` :
-                             biometricStatus === "verifying" ? `جاري التحقق من ${methodLabel}...` :
-                             biometricStatus === "unavailable" ? "لا توجد بصمة مسجلة" :
-                             `التحقق عبر ${methodLabel}`}
-                          </p>
-                          {biometricStatus === "unavailable" && (
-                            <p className="text-xs text-red-600 font-medium">يجب تسجيل البصمة أولاً من إعدادات البصمة</p>
-                          )}
-                          {biometricStatus === "verifying" && (
-                            <p className="text-xs text-blue-600 mt-0.5">{prompt}</p>
-                          )}
-                          {biometricStatus === "idle" && (
-                            <p className="text-xs text-amber-700 mt-0.5">{prompt}</p>
-                          )}
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <BiometricIcon className={`w-5 h-5 ${
+                            biometricStatus === "verified" ? "text-green-600" :
+                            biometricStatus === "failed" || biometricStatus === "device_mismatch" ? "text-red-600" :
+                            biometricStatus === "verifying" ? "text-blue-600 animate-pulse" :
+                            "text-amber-600"
+                          }`} />
+                          <div>
+                            <p className="text-sm font-medium">
+                              {biometricStatus === "verified" ? `تم التحقق من ${methodLabel} ✓` :
+                               biometricStatus === "device_mismatch" ? `البصمة غير مسجلة على هذا الجهاز` :
+                               biometricStatus === "failed" ? `فشل التحقق من ${methodLabel}` :
+                               biometricStatus === "verifying" ? `جاري التحقق من ${methodLabel}...` :
+                               biometricStatus === "unavailable" ? "لا توجد بصمة مسجلة" :
+                               `التحقق عبر ${methodLabel}`}
+                            </p>
+                            {biometricStatus === "unavailable" && (
+                              <p className="text-xs text-red-600 font-medium">يجب تسجيل البصمة أولاً من إعدادات البصمة</p>
+                            )}
+                            {biometricStatus === "device_mismatch" && (
+                              <p className="text-xs text-red-600 mt-0.5">البصمة مسجلة على جهاز آخر. سجّل البصمة على هذا الجهاز للمتابعة.</p>
+                            )}
+                            {biometricStatus === "verifying" && (
+                              <p className="text-xs text-blue-600 mt-0.5">{prompt}</p>
+                            )}
+                            {biometricStatus === "idle" && (
+                              <p className="text-xs text-amber-700 mt-0.5">{prompt}</p>
+                            )}
+                          </div>
                         </div>
+                        {(biometricStatus === "idle" || biometricStatus === "failed") && selectedEmployee && (
+                          <Button
+                            size="sm"
+                            variant={biometricStatus === "failed" ? "destructive" : "default"}
+                            onClick={() => selectedEmployee && handleBiometricVerify(selectedEmployee.employeeId)}
+                            disabled={false}
+                            data-testid="btn-verify-biometric"
+                            className="gap-1"
+                          >
+                            <BiometricIcon className="w-4 h-4" />
+                            {biometricStatus === "failed" ? "إعادة المحاولة" : method === "face" ? "تحقق بالوجه" : method === "pin" ? "أدخل PIN" : "ضع بصمتك"}
+                          </Button>
+                        )}
                       </div>
-                      {(biometricStatus === "idle" || biometricStatus === "failed") && selectedEmployee && (
-                        <Button
-                          size="sm"
-                          variant={biometricStatus === "failed" ? "destructive" : "default"}
-                          onClick={() => selectedEmployee && handleBiometricVerify(selectedEmployee.employeeId)}
-                          disabled={false}
-                          data-testid="btn-verify-biometric"
-                          className="gap-1"
-                        >
-                          <BiometricIcon className="w-4 h-4" />
-                          {biometricStatus === "failed" ? "إعادة المحاولة" : method === "face" ? "تحقق بالوجه" : method === "pin" ? "أدخل PIN" : "ضع بصمتك"}
-                        </Button>
+                      {biometricStatus === "device_mismatch" && selectedEmployee && (
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            className="flex-1 gap-1 bg-purple-600 hover:bg-purple-700"
+                            onClick={handleRegisterOnThisDevice}
+                            disabled={deviceRegisterLoading}
+                            data-testid="btn-register-this-device"
+                          >
+                            {deviceRegisterLoading ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <BiometricIcon className="w-4 h-4" />
+                            )}
+                            {deviceRegisterLoading ? "جاري التسجيل..." : `سجّل ${methodLabel} على هذا الجهاز`}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1"
+                            onClick={() => selectedEmployee && handleBiometricVerify(selectedEmployee.employeeId)}
+                          >
+                            إعادة المحاولة
+                          </Button>
+                        </div>
                       )}
                     </div>
                   </div>

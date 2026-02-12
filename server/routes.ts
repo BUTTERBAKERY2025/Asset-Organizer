@@ -18912,7 +18912,7 @@ export async function registerRoutes(
   // Register biometric credential for an employee
   app.post("/api/biometric/register", biometricRateLimiter, isAuthenticated, requirePermission("attendance_check", "create"), async (req, res) => {
     try {
-      const { employeeId, employeeName, branchId, credentialId, publicKey, deviceInfo, challengeKey } = req.body;
+      const { employeeId, employeeName, branchId, credentialId, publicKey, deviceInfo, challengeKey, deviceType, deviceModel, registrationMethod, registeredByName } = req.body;
       const currentUser = getCurrentUser(req);
 
       if (!employeeId || !employeeName || !branchId || !credentialId || !publicKey) {
@@ -18948,6 +18948,9 @@ export async function registerRoutes(
         return res.status(400).json({ error: "هذه البصمة مسجلة مسبقاً" });
       }
 
+      const validMethods = ["fingerprint", "face", "pin"];
+      const validDeviceTypes = ["mobile_android", "mobile_ios", "tablet", "desktop"];
+
       const credential = await storage.createBiometricCredential({
         employeeId,
         employeeName,
@@ -18956,7 +18959,11 @@ export async function registerRoutes(
         publicKey,
         counter: 0,
         deviceInfo: deviceInfo || null,
+        deviceType: validDeviceTypes.includes(deviceType) ? deviceType : null,
+        deviceModel: deviceModel || null,
+        registrationMethod: validMethods.includes(registrationMethod) ? registrationMethod : "fingerprint",
         registeredBy: currentUser?.id || null,
+        registeredByName: registeredByName || currentUser?.fullName || currentUser?.username || null,
         isActive: true,
       });
 
