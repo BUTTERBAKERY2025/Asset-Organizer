@@ -23,6 +23,7 @@ import {
   Eye, Printer, FileDown, Hash, Image, Save, Search, RefreshCw, ArrowRight,
   ChevronDown, ChevronUp, Calculator, ExternalLink, BarChart3, Upload, Factory
 } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Link } from "wouter";
 import { TablePagination } from "@/components/ui/pagination";
 import { ExportButtons } from "@/components/export-buttons";
@@ -138,6 +139,14 @@ export default function DisplayBarWastePage() {
   const [historyPage, setHistoryPage] = useState(1);
   const [expandedReportId, setExpandedReportId] = useState<number | null>(null);
   const [showDailySummary, setShowDailySummary] = useState(true);
+  const [analyticsDateFrom, setAnalyticsDateFrom] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().split('T')[0];
+  });
+  const [analyticsDateTo, setAnalyticsDateTo] = useState(new Date().toISOString().split('T')[0]);
+  const [analyticsBranch, setAnalyticsBranch] = useState<string>("all");
+  const [analyticsCategory, setAnalyticsCategory] = useState<string>("all");
   
   const SHIFT_OPTIONS = [
     { value: "morning", label: "الوردية الصباحية", time: "06:00 - 14:00" },
@@ -301,6 +310,37 @@ export default function DisplayBarWastePage() {
     },
     enabled: activeTab === "comparison" && !!comparisonStartDate && !!comparisonEndDate && selectedBranch !== "all",
   });
+
+  const { data: detailedAnalytics, isLoading: isLoadingAnalytics } = useQuery({
+    queryKey: ["/api/waste-reports/analytics-detailed", analyticsBranch, analyticsDateFrom, analyticsDateTo, analyticsCategory],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (analyticsBranch !== "all") params.append("branchId", analyticsBranch);
+      params.append("dateFrom", analyticsDateFrom);
+      params.append("dateTo", analyticsDateTo);
+      if (analyticsCategory !== "all") params.append("category", analyticsCategory);
+      const res = await fetch(`/api/waste-reports/analytics-detailed?${params}`, { credentials: "include" });
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: activeTab === "reports",
+  });
+
+  const CATEGORY_LABELS: Record<string, string> = {
+    pastries: "معجنات", sweets: "حلويات", bread: "خبز", cakes: "كيك",
+    cookies: "كوكيز", drinks: "مشروبات", sandwiches: "ساندويتشات", other: "أخرى"
+  };
+
+  const CATEGORY_COLORS: Record<string, string> = {
+    pastries: "bg-amber-500", sweets: "bg-pink-500", bread: "bg-yellow-600",
+    cakes: "bg-purple-500", cookies: "bg-orange-500", drinks: "bg-blue-500",
+    sandwiches: "bg-green-500", other: "bg-gray-500"
+  };
+
+  const REASON_COLORS: Record<string, string> = {
+    expired: "bg-red-500", damaged: "bg-orange-500", quality_issue: "bg-amber-500",
+    overproduction: "bg-blue-500", other: "bg-gray-500"
+  };
 
   const paginatedHistory = wasteHistory.slice((historyPage - 1) * itemsPerPage, historyPage * itemsPerPage);
 
@@ -1174,6 +1214,10 @@ export default function DisplayBarWastePage() {
               <TabsTrigger value="comparison" className="gap-1" data-testid="tab-comparison">
                 <BarChart3 className="w-4 h-4" />
                 مقارنة المبيعات
+              </TabsTrigger>
+              <TabsTrigger value="reports" className="gap-1" data-testid="tab-reports">
+                <TrendingDown className="w-4 h-4" />
+                تقارير تفصيلية
               </TabsTrigger>
             </TabsList>
             <div className="flex gap-2">
@@ -2742,6 +2786,348 @@ export default function DisplayBarWastePage() {
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Detailed Reports Tab */}
+          <TabsContent value="reports" className="space-y-6">
+            {/* Filter Bar */}
+            <Card>
+              <CardContent className="p-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div>
+                    <Label className="text-xs mb-1 block">الفرع</Label>
+                    <Select value={analyticsBranch} onValueChange={setAnalyticsBranch}>
+                      <SelectTrigger data-testid="select-analytics-branch">
+                        <SelectValue placeholder="جميع الفروع" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">جميع الفروع</SelectItem>
+                        {branches.map(b => (
+                          <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs mb-1 block">من تاريخ</Label>
+                    <Input type="date" value={analyticsDateFrom} onChange={e => setAnalyticsDateFrom(e.target.value)} data-testid="input-analytics-date-from" />
+                  </div>
+                  <div>
+                    <Label className="text-xs mb-1 block">إلى تاريخ</Label>
+                    <Input type="date" value={analyticsDateTo} onChange={e => setAnalyticsDateTo(e.target.value)} data-testid="input-analytics-date-to" />
+                  </div>
+                  <div>
+                    <Label className="text-xs mb-1 block">الفئة</Label>
+                    <Select value={analyticsCategory} onValueChange={setAnalyticsCategory}>
+                      <SelectTrigger data-testid="select-analytics-category">
+                        <SelectValue placeholder="جميع الفئات" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">جميع الفئات</SelectItem>
+                        {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
+                          <SelectItem key={key} value={key}>{label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {isLoadingAnalytics ? (
+              <div className="flex items-center justify-center py-12">
+                <RefreshCw className="w-6 h-6 animate-spin text-muted-foreground" />
+                <span className="mr-2 text-muted-foreground">جاري تحميل التقارير...</span>
+              </div>
+            ) : !detailedAnalytics ? (
+              <Card>
+                <CardContent className="p-12 text-center text-muted-foreground">
+                  <TrendingDown className="w-12 h-12 mx-auto mb-4 opacity-30" />
+                  <p className="text-lg">لا توجد بيانات للفترة المحددة</p>
+                  <p className="text-sm mt-1">حاول تغيير الفلاتر أو توسيع نطاق التاريخ</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                {/* KPI Summary Cards */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <Card>
+                    <CardContent className="p-4 text-center">
+                      <div className="text-xs text-muted-foreground mb-1">إجمالي قيمة الهالك</div>
+                      <div className="text-2xl font-bold text-red-600" data-testid="kpi-total-value">
+                        {(detailedAnalytics.summary?.totalValue || 0).toLocaleString()} ر.س
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4 text-center">
+                      <div className="text-xs text-muted-foreground mb-1">إجمالي الكمية</div>
+                      <div className="text-2xl font-bold text-amber-600" data-testid="kpi-total-quantity">
+                        {(detailedAnalytics.summary?.totalQuantity || 0).toLocaleString()}
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4 text-center">
+                      <div className="text-xs text-muted-foreground mb-1">متوسط الهدر اليومي</div>
+                      <div className="text-2xl font-bold text-orange-600" data-testid="kpi-avg-daily">
+                        {(detailedAnalytics.summary?.avgWastePerDay || 0).toLocaleString()} ر.س
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4 text-center">
+                      <div className="text-xs text-muted-foreground mb-1">عدد التقارير</div>
+                      <div className="text-2xl font-bold text-blue-600" data-testid="kpi-report-count">
+                        {(detailedAnalytics.summary?.reportCount || 0).toLocaleString()}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Trend Chart */}
+                {detailedAnalytics.byDate && detailedAnalytics.byDate.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">اتجاه الهالك اليومي</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-[300px]" data-testid="chart-daily-trend">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={detailedAnalytics.byDate}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                            <YAxis tick={{ fontSize: 11 }} />
+                            <Tooltip formatter={(value: number) => [`${value.toLocaleString()} ر.س`, "قيمة الهالك"]} />
+                            <Bar dataKey="totalValue" fill="#dc2626" radius={[4, 4, 0, 0]} name="قيمة الهالك" />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Top 10 Most Wasted Products */}
+                {detailedAnalytics.topDamaged && detailedAnalytics.topDamaged.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">أكثر 10 أصناف هدراً</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-right border-collapse text-sm" data-testid="table-top-products">
+                          <thead>
+                            <tr className="bg-muted/50">
+                              <th className="p-3 border font-medium">#</th>
+                              <th className="p-3 border font-medium">الصنف</th>
+                              <th className="p-3 border font-medium">الفئة</th>
+                              <th className="p-3 border font-medium">الكمية</th>
+                              <th className="p-3 border font-medium">القيمة</th>
+                              <th className="p-3 border font-medium">مرات التكرار</th>
+                              <th className="p-3 border font-medium">آخر تاريخ</th>
+                              <th className="p-3 border font-medium">السبب الرئيسي</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {detailedAnalytics.topDamaged.map((item: any, index: number) => (
+                              <tr key={index} className="hover:bg-muted/30" data-testid={`row-top-product-${index}`}>
+                                <td className="p-3 border">{index + 1}</td>
+                                <td className="p-3 border font-medium">{item.productName || "-"}</td>
+                                <td className="p-3 border">
+                                  <Badge variant="outline">{CATEGORY_LABELS[item.category] || item.category || "-"}</Badge>
+                                </td>
+                                <td className="p-3 border">{(item.totalQuantity || 0).toLocaleString()}</td>
+                                <td className="p-3 border text-red-600 font-medium">{(item.totalValue || 0).toLocaleString()} ر.س</td>
+                                <td className="p-3 border">{item.occurrences || 0}</td>
+                                <td className="p-3 border">{item.lastWasteDate || "-"}</td>
+                                <td className="p-3 border">
+                                  {item.topReasonLabel || WASTE_REASONS.find(r => r.value === item.topReason)?.label || item.topReason || "-"}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Recurring Waste Patterns */}
+                {detailedAnalytics.recurring && detailedAnalytics.recurring.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base flex items-center gap-2">
+                        أنماط الهدر المتكررة
+                        <Badge className="bg-red-100 text-red-700">
+                          <AlertTriangle className="w-3 h-3 ml-1" />
+                          {detailedAnalytics.recurring.length} صنف متكرر
+                        </Badge>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-right border-collapse text-sm" data-testid="table-recurring-waste">
+                          <thead>
+                            <tr className="bg-muted/50">
+                              <th className="p-3 border font-medium">الصنف</th>
+                              <th className="p-3 border font-medium">الفئة</th>
+                              <th className="p-3 border font-medium">عدد المرات</th>
+                              <th className="p-3 border font-medium">الكمية الإجمالية</th>
+                              <th className="p-3 border font-medium">القيمة الإجمالية</th>
+                              <th className="p-3 border font-medium">السبب الرئيسي</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {detailedAnalytics.recurring.map((item: any, index: number) => (
+                              <tr key={index} className="hover:bg-muted/30" data-testid={`row-recurring-${index}`}>
+                                <td className="p-3 border font-medium">{item.productName || "-"}</td>
+                                <td className="p-3 border">
+                                  <Badge variant="outline">{CATEGORY_LABELS[item.category] || item.category || "-"}</Badge>
+                                </td>
+                                <td className="p-3 border">
+                                  <Badge className="bg-red-100 text-red-700">{item.occurrences}</Badge>
+                                </td>
+                                <td className="p-3 border">{(item.totalQuantity || 0).toLocaleString()}</td>
+                                <td className="p-3 border text-red-600 font-medium">{(item.totalValue || 0).toLocaleString()} ر.س</td>
+                                <td className="p-3 border">
+                                  {item.topReasonLabel || WASTE_REASONS.find(r => r.value === item.topReason)?.label || item.topReason || "-"}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Category Breakdown & Reason Breakdown */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Category Breakdown */}
+                  {detailedAnalytics.byCategory && detailedAnalytics.byCategory.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-base">توزيع الهالك حسب الفئة</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {detailedAnalytics.byCategory.map((data: any) => (
+                            <div key={data.category} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg" data-testid={`category-${data.category}`}>
+                              <div className="flex items-center gap-2">
+                                <div className={`w-3 h-3 rounded-full ${CATEGORY_COLORS[data.category] || "bg-gray-400"}`} />
+                                <span className="font-medium">{data.categoryLabel || CATEGORY_LABELS[data.category] || data.category}</span>
+                              </div>
+                              <div className="flex items-center gap-4 text-sm">
+                                <span>{(data.totalQuantity || 0).toLocaleString()} قطعة</span>
+                                <span className="text-red-600 font-medium">{(data.totalValue || 0).toLocaleString()} ر.س</span>
+                                <Badge variant="outline">{data.percentage || 0}%</Badge>
+                              </div>
+                            </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Reason Breakdown */}
+                  {detailedAnalytics.byReason && detailedAnalytics.byReason.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-base">توزيع الهالك حسب السبب</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {detailedAnalytics.byReason.map((data: any) => (
+                            <div key={data.reason} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg" data-testid={`reason-${data.reason}`}>
+                              <div className="flex items-center gap-2">
+                                <div className={`w-3 h-3 rounded-full ${REASON_COLORS[data.reason] || "bg-gray-400"}`} />
+                                <span className="font-medium">{data.reasonLabel || WASTE_REASONS.find(r => r.value === data.reason)?.label || data.reason}</span>
+                              </div>
+                              <div className="flex items-center gap-4 text-sm">
+                                <span>{(data.totalQuantity || 0).toLocaleString()} قطعة</span>
+                                <span className="text-red-600 font-medium">{(data.totalValue || 0).toLocaleString()} ر.س</span>
+                                <Badge variant="outline">{data.percentage || 0}%</Badge>
+                              </div>
+                            </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+
+                {/* Branch Comparison */}
+                {analyticsBranch === "all" && detailedAnalytics.byBranch && detailedAnalytics.byBranch.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">مقارنة الفروع</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-right border-collapse text-sm" data-testid="table-branch-comparison">
+                          <thead>
+                            <tr className="bg-muted/50">
+                              <th className="p-3 border font-medium">الفرع</th>
+                              <th className="p-3 border font-medium">الكمية</th>
+                              <th className="p-3 border font-medium">القيمة</th>
+                              <th className="p-3 border font-medium">عدد التقارير</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {detailedAnalytics.byBranch.map((data: any, index: number) => (
+                              <tr key={data.branchId} className="hover:bg-muted/30" data-testid={`row-branch-${index}`}>
+                                <td className="p-3 border font-medium">{data.branchName || getBranchName(data.branchId)}</td>
+                                <td className="p-3 border">{(data.totalQuantity || 0).toLocaleString()}</td>
+                                <td className="p-3 border text-red-600 font-medium">{(data.totalValue || 0).toLocaleString()} ر.س</td>
+                                <td className="p-3 border">{data.reportCount || 0}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Export Button */}
+                <div className="flex justify-end">
+                  <Button
+                    onClick={() => {
+                      if (!detailedAnalytics) return;
+                      const exportData = (detailedAnalytics.topDamaged || []).map((item: any, index: number) => ({
+                        rowNum: index + 1,
+                        productName: item.productName || "-",
+                        category: item.categoryLabel || CATEGORY_LABELS[item.category] || item.category || "-",
+                        quantity: item.totalQuantity || 0,
+                        value: item.totalValue || 0,
+                        frequency: item.occurrences || 0,
+                        lastDate: item.lastWasteDate || "-",
+                        mainReason: item.topReasonLabel || WASTE_REASONS.find(r => r.value === item.topReason)?.label || item.topReason || "-",
+                      }));
+                      const columns = [
+                        { header: "#", key: "rowNum", width: 5 },
+                        { header: "الصنف", key: "productName", width: 25 },
+                        { header: "الفئة", key: "category", width: 15 },
+                        { header: "الكمية", key: "quantity", width: 10 },
+                        { header: "القيمة", key: "value", width: 15 },
+                        { header: "مرات التكرار", key: "frequency", width: 12 },
+                        { header: "آخر تاريخ", key: "lastDate", width: 12 },
+                        { header: "السبب الرئيسي", key: "mainReason", width: 15 },
+                      ];
+                      const headerInfo = [
+                        { label: "الفترة", value: `${analyticsDateFrom} - ${analyticsDateTo}` },
+                        { label: "الفرع", value: analyticsBranch === "all" ? "جميع الفروع" : getBranchName(analyticsBranch) },
+                        { label: "إجمالي الهالك", value: `${(detailedAnalytics.summary?.totalValue || 0).toLocaleString()} ر.س` },
+                        { label: "عدد التقارير", value: String(detailedAnalytics.summary?.reportCount || 0) },
+                      ];
+                      exportToExcel(exportData, columns, `تقرير_تفصيلي_${analyticsDateFrom}_${analyticsDateTo}`, "التقرير التفصيلي", headerInfo);
+                      toast({ title: "تم تصدير التقرير بنجاح" });
+                    }}
+                    className="gap-2"
+                    data-testid="btn-export-analytics"
+                  >
+                    <FileDown className="w-4 h-4" />
+                    تصدير التقرير
+                  </Button>
+                </div>
+              </>
+            )}
           </TabsContent>
         </Tabs>
       </div>

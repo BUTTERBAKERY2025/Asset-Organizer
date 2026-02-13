@@ -10325,6 +10325,176 @@ export async function registerRoutes(
     }
   });
 
+  // Detailed Waste Analytics Reports
+  app.get("/api/waste-reports/analytics-detailed", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const queryBranchId = req.query.branchId as string | undefined;
+      const dateFrom = req.query.dateFrom as string || new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
+      const dateTo = req.query.dateTo as string || new Date().toISOString().split('T')[0];
+      const productIdFilter = req.query.productId ? Number(req.query.productId) : undefined;
+      const categoryFilter = req.query.category as string | undefined;
+
+      const branchFilter = getEffectiveBranchFilter(req, queryBranchId);
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بالوصول" });
+      }
+
+      const effectiveBranchId = branchFilter.singleBranchId;
+      const reports = await storage.getWasteReports(effectiveBranchId ?? undefined, dateFrom, dateTo);
+      const approvedReports = reports.filter(r => r.status === "approved" || r.status === "submitted" || r.status === "draft");
+
+      const allProducts = await storage.getAllProducts();
+      const productMap = new Map(allProducts.map((p: any) => [p.id, p]));
+      const allBranches = await storage.getAllBranches();
+      const branchMap = new Map(allBranches.map((b: any) => [b.id, b]));
+
+      const allItems: Array<{ item: any; report: any }> = [];
+      for (const report of approvedReports) {
+        const items = await storage.getWasteItems(report.id);
+        for (const item of items) {
+          if (productIdFilter && item.productId !== productIdFilter) continue;
+          const product = productMap.get(item.productId);
+          if (categoryFilter && categoryFilter !== "all" && product?.category !== categoryFilter) continue;
+          allItems.push({ item, report });
+        }
+      }
+
+      let totalValue = 0;
+      let totalQuantity = 0;
+      const byDateMap: Record<string, { date: string; totalValue: number; totalQuantity: number; itemCount: number }> = {};
+      const byProductMap: Record<number, { productId: number; productName: string; category: string; totalQuantity: number; totalValue: number; reportCount: number; dates: Set<string>; reasons: Record<string, number> }> = {};
+      const byCategoryMap: Record<string, { category: string; categoryLabel: string; totalQuantity: number; totalValue: number; productCount: Set<number> }> = {};
+      const byReasonMap: Record<string, { reason: string; totalQuantity: number; totalValue: number; productCount: Set<number> }> = {};
+      const byBranchMap: Record<string, { branchId: string; branchName: string; totalQuantity: number; totalValue: number; reportCount: number }> = {};
+
+      const categoryLabels: Record<string, string> = {
+        pastries: "معجنات", sweets: "حلويات", bread: "خبز", cakes: "كيك",
+        cookies: "كوكيز", drinks: "مشروبات", sandwiches: "ساندويتشات", other: "أخرى"
+      };
+      const reasonLabels: Record<string, string> = {
+        expired: "منتهي الصلاحية", damaged: "تالف", quality_issue: "مشكلة جودة",
+        overproduction: "إنتاج زائد", customer_return: "إرجاع عميل", other: "أخرى"
+      };
+
+      for (const { item, report } of allItems) {
+        const product = productMap.get(item.productId);
+        const productName = product?.name || "غير معروف";
+        const category = product?.category || "other";
+        const reason = item.wasteReason || "other";
+        const value = item.totalValue || 0;
+        const qty = item.quantity || 0;
+
+        totalValue += value;
+        totalQuantity += qty;
+
+        if (!byDateMap[report.reportDate]) {
+          byDateMap[report.reportDate] = { date: report.reportDate, totalValue: 0, totalQuantity: 0, itemCount: 0 };
+        }
+        byDateMap[report.reportDate].totalValue += value;
+        byDateMap[report.reportDate].totalQuantity += qty;
+        byDateMap[report.reportDate].itemCount += 1;
+
+        if (!byProductMap[item.productId]) {
+          byProductMap[item.productId] = { productId: item.productId, productName, category, totalQuantity: 0, totalValue: 0, reportCount: 0, dates: new Set(), reasons: {} };
+        }
+        byProductMap[item.productId].totalQuantity += qty;
+        byProductMap[item.productId].totalValue += value;
+        byProductMap[item.productId].dates.add(report.reportDate);
+        byProductMap[item.productId].reasons[reason] = (byProductMap[item.productId].reasons[reason] || 0) + qty;
+
+        if (!byCategoryMap[category]) {
+          byCategoryMap[category] = { category, categoryLabel: categoryLabels[category] || category, totalQuantity: 0, totalValue: 0, productCount: new Set() };
+        }
+        byCategoryMap[category].totalQuantity += qty;
+        byCategoryMap[category].totalValue += value;
+        byCategoryMap[category].productCount.add(item.productId);
+
+        if (!byReasonMap[reason]) {
+          byReasonMap[reason] = { reason, totalQuantity: 0, totalValue: 0, productCount: new Set() };
+        }
+        byReasonMap[reason].totalQuantity += qty;
+        byReasonMap[reason].totalValue += value;
+        byReasonMap[reason].productCount.add(item.productId);
+
+        if (!byBranchMap[report.branchId]) {
+          const branch = branchMap.get(report.branchId);
+          byBranchMap[report.branchId] = { branchId: report.branchId, branchName: branch?.name || report.branchId, totalQuantity: 0, totalValue: 0, reportCount: 0 };
+        }
+        byBranchMap[report.branchId].totalQuantity += qty;
+        byBranchMap[report.branchId].totalValue += value;
+      }
+
+      for (const { report } of allItems) {
+        if (byBranchMap[report.branchId]) {
+          byBranchMap[report.branchId].reportCount = approvedReports.filter(r => r.branchId === report.branchId).length;
+        }
+      }
+
+      const byDate = Object.values(byDateMap).sort((a, b) => a.date.localeCompare(b.date));
+      const dayCount = byDate.length || 1;
+
+      const byProduct = Object.values(byProductMap).map(p => ({
+        productId: p.productId,
+        productName: p.productName,
+        category: p.category,
+        categoryLabel: categoryLabels[p.category] || p.category,
+        totalQuantity: p.totalQuantity,
+        totalValue: Math.round(p.totalValue * 100) / 100,
+        occurrences: p.dates.size,
+        lastWasteDate: Array.from(p.dates).sort().pop() || "",
+        topReason: Object.entries(p.reasons).sort(([,a],[,b]) => b - a)[0]?.[0] || "other",
+        topReasonLabel: reasonLabels[Object.entries(p.reasons).sort(([,a],[,b]) => b - a)[0]?.[0] || "other"] || "أخرى",
+      })).sort((a, b) => b.totalValue - a.totalValue);
+
+      const recurring = byProduct
+        .filter(p => p.occurrences >= 3)
+        .sort((a, b) => b.occurrences - a.occurrences);
+
+      const byCategory = Object.values(byCategoryMap).map(c => ({
+        category: c.category,
+        categoryLabel: c.categoryLabel,
+        totalQuantity: c.totalQuantity,
+        totalValue: Math.round(c.totalValue * 100) / 100,
+        productCount: c.productCount.size,
+        percentage: totalValue > 0 ? Math.round((c.totalValue / totalValue) * 10000) / 100 : 0,
+      })).sort((a, b) => b.totalValue - a.totalValue);
+
+      const byReason = Object.values(byReasonMap).map(r => ({
+        reason: r.reason,
+        reasonLabel: reasonLabels[r.reason] || r.reason,
+        totalQuantity: r.totalQuantity,
+        totalValue: Math.round(r.totalValue * 100) / 100,
+        productCount: r.productCount.size,
+        percentage: totalValue > 0 ? Math.round((r.totalValue / totalValue) * 10000) / 100 : 0,
+      })).sort((a, b) => b.totalValue - a.totalValue);
+
+      const byBranch = Object.values(byBranchMap).sort((a, b) => b.totalValue - a.totalValue);
+
+      res.json({
+        filters: { branchId: effectiveBranchId || "all", dateFrom, dateTo, productId: productIdFilter, category: categoryFilter },
+        summary: {
+          totalValue: Math.round(totalValue * 100) / 100,
+          totalQuantity,
+          avgWastePerDay: Math.round((totalValue / dayCount) * 100) / 100,
+          avgQuantityPerDay: Math.round((totalQuantity / dayCount) * 100) / 100,
+          reportCount: approvedReports.length,
+          daysCovered: dayCount,
+          productCount: Object.keys(byProductMap).length,
+        },
+        byDate,
+        byProduct: byProduct.slice(0, 50),
+        topDamaged: byProduct.slice(0, 10),
+        recurring,
+        byCategory,
+        byReason,
+        byBranch,
+      });
+    } catch (error) {
+      console.error("Error fetching detailed waste analytics:", error);
+      res.status(500).json({ error: "فشل في جلب التقارير التفصيلية للهالك" });
+    }
+  });
+
   // Get Waste Stats - today's summary by branch (must be before /:id route)
   app.get("/api/waste-reports/stats", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
