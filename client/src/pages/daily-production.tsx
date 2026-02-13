@@ -25,7 +25,7 @@ import {
   BarChart3, TrendingUp, FileSpreadsheet, User, Shield, FileText,
   Printer, AlertTriangle, Timer, Activity, PieChart, Search, Zap,
   Sun, Moon, Sunset, Edit2, X, Check, ArrowUpDown, TrendingDown,
-  Repeat, CheckCircle, FileDown
+  Repeat, CheckCircle, FileDown, Coffee, UtensilsCrossed, Users
 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
@@ -110,7 +110,7 @@ const SHIFTS = [
   { value: "night", label: "ليلي", icon: Moon, time: "22:00 - 6:00", color: "bg-indigo-100 text-indigo-800" },
 ];
 
-const BAKERY_CATEGORIES = ["مخبوزات", "حلويات", "معجنات", "كيك", "خبز"];
+const BAKERY_CATEGORIES = ["مخبوزات", "حلويات", "إفطار", "باريستا", "بيتزا", "تجمعات"];
 
 const HOUR_LABELS: Record<string, string> = {
   "06": "6 صباحاً", "07": "7 صباحاً", "08": "8 صباحاً", "09": "9 صباحاً",
@@ -1169,9 +1169,10 @@ export default function DailyProductionPage() {
                     "الكل": Package,
                     "مخبوزات": Factory,
                     "حلويات": ChefHat,
-                    "معجنات": ChefHat,
-                    "كيك": ChefHat,
-                    "خبز": Factory,
+                    "إفطار": Coffee,
+                    "باريستا": Coffee,
+                    "بيتزا": UtensilsCrossed,
+                    "تجمعات": Users,
                   };
                   const CatIcon = catIcons[cat] || Package;
                   return (
@@ -1211,13 +1212,19 @@ export default function DailyProductionPage() {
                       data-testid={`btn-product-${product.id}`}
                     >
                       <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center mb-2 ${
-                        isSweets ? "bg-pink-100" : "bg-amber-100"
+                        isSweets ? "bg-pink-100" :
+                        product.category === "إفطار" ? "bg-orange-100" :
+                        product.category === "باريستا" ? "bg-blue-100" :
+                        product.category === "بيتزا" ? "bg-red-100" :
+                        product.category === "تجمعات" ? "bg-purple-100" :
+                        "bg-amber-100"
                       }`}>
-                        {isSweets ? (
-                          <ChefHat className="h-5 w-5 sm:h-6 sm:w-6 text-pink-600" />
-                        ) : (
-                          <Factory className="h-5 w-5 sm:h-6 sm:w-6 text-amber-600" />
-                        )}
+                        {isSweets ? <ChefHat className="h-5 w-5 sm:h-6 sm:w-6 text-pink-600" /> :
+                         product.category === "إفطار" ? <Coffee className="h-5 w-5 sm:h-6 sm:w-6 text-orange-600" /> :
+                         product.category === "باريستا" ? <Coffee className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" /> :
+                         product.category === "بيتزا" ? <UtensilsCrossed className="h-5 w-5 sm:h-6 sm:w-6 text-red-600" /> :
+                         product.category === "تجمعات" ? <Users className="h-5 w-5 sm:h-6 sm:w-6 text-purple-600" /> :
+                         <Factory className="h-5 w-5 sm:h-6 sm:w-6 text-amber-600" />}
                       </div>
                       <span className="text-xs sm:text-sm font-medium leading-tight line-clamp-2 min-h-[2rem]">{product.name}</span>
                       <span className="text-[10px] text-muted-foreground mt-1">{product.category}</span>
