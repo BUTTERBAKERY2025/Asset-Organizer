@@ -542,9 +542,13 @@ export default function DisplayBarWastePage() {
     onSuccess: (report: any) => {
       setSelectedWasteReportId(report.id);
       queryClient.invalidateQueries({ queryKey: ["/api/waste-reports"] });
-      toast({ title: "تم إنشاء تقرير الهالك" });
+      if (report.existing) {
+        toast({ title: "يوجد تقرير بالفعل لهذا التاريخ والوردية - تم فتحه" });
+      } else {
+        toast({ title: "تم إنشاء تقرير الهالك بنجاح" });
+      }
     },
-    onError: (err: any) => toast({ title: err.message || "حدث خطأ", variant: "destructive" }),
+    onError: (err: any) => toast({ title: err.message || "حدث خطأ في إنشاء التقرير", variant: "destructive" }),
   });
 
   const addWasteItemMutation = useMutation({
@@ -588,9 +592,15 @@ export default function DisplayBarWastePage() {
   };
 
   const handleCreateWasteReport = () => {
+    const branchId = wasteBranch || (selectedBranch !== "all" ? selectedBranch : "");
+    if (!branchId) {
+      toast({ title: "يرجى اختيار الفرع أولاً", variant: "destructive" });
+      return;
+    }
     createWasteReportMutation.mutate({
-      branchId: selectedBranch === "all" ? branches[0]?.id : selectedBranch,
+      branchId,
       reportDate: selectedDate,
+      shiftName: wasteShift || null,
       status: "draft",
     });
   };
@@ -1362,7 +1372,12 @@ export default function DisplayBarWastePage() {
                     title="تقرير الهالك اليومي"
                     subtitle={`التاريخ: ${selectedDate}`}
                   />
-                  <Dialog open={showWasteDialog} onOpenChange={setShowWasteDialog}>
+                  <Dialog open={showWasteDialog} onOpenChange={(open) => {
+                      setShowWasteDialog(open);
+                      if (!open) {
+                        setSelectedWasteReportId(null);
+                      }
+                    }}>
                     <DialogTrigger asChild>
                       <Button size="sm" variant="destructive" className="gap-1 h-11 sm:h-9" data-testid="btn-add-waste">
                         <AlertTriangle className="w-4 h-4" />
@@ -1375,10 +1390,29 @@ export default function DisplayBarWastePage() {
                       </DialogHeader>
                       <div className="space-y-4 pt-4">
                         {!selectedWasteReportId ? (
-                          <div className="text-center py-6">
-                            <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-3" />
-                            <p className="text-muted-foreground mb-4">سيتم إنشاء تقرير هالك جديد للتاريخ {selectedDate}</p>
-                            <Button onClick={handleCreateWasteReport} disabled={createWasteReportMutation.isPending}>
+                          <div className="space-y-4 py-4">
+                            <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-1" />
+                            <div>
+                              <Label>الفرع</Label>
+                              <Select value={wasteBranch || (selectedBranch !== "all" ? selectedBranch : "")} onValueChange={setWasteBranch}>
+                                <SelectTrigger data-testid="select-waste-dialog-branch"><SelectValue placeholder="اختر الفرع" /></SelectTrigger>
+                                <SelectContent>
+                                  {branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <Label>الوردية</Label>
+                              <Select value={wasteShift} onValueChange={setWasteShift}>
+                                <SelectTrigger data-testid="select-waste-dialog-shift"><SelectValue placeholder="اختر الوردية" /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="morning">صباحية</SelectItem>
+                                  <SelectItem value="evening">مسائية</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <p className="text-muted-foreground text-sm text-center">التاريخ: {selectedDate}</p>
+                            <Button onClick={handleCreateWasteReport} disabled={createWasteReportMutation.isPending || !(wasteBranch || (selectedBranch !== "all" ? selectedBranch : ""))} className="w-full">
                               {createWasteReportMutation.isPending ? "جاري الإنشاء..." : "إنشاء التقرير"}
                             </Button>
                           </div>
