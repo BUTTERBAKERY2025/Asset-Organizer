@@ -3495,6 +3495,233 @@ export async function registerRoutes(
   });
 
   // ============================================
+  // Accounting Integration - التكامل المحاسبي
+  // ============================================
+
+  app.get("/api/accounting/journal-entries", isAuthenticated, async (req, res) => {
+    try {
+      const { branchId, entryType, status, dateFrom, dateTo, reconciliationStatus } = req.query;
+      const entries = await storage.getAllJournalEntries({
+        branchId: branchId as string,
+        entryType: entryType as string,
+        status: status as string,
+        dateFrom: dateFrom as string,
+        dateTo: dateTo as string,
+        reconciliationStatus: reconciliationStatus as string,
+      });
+      res.json(entries);
+    } catch (error) {
+      console.error("Error fetching journal entries:", error);
+      res.status(500).json({ error: "Failed to fetch journal entries" });
+    }
+  });
+
+  app.get("/api/accounting/journal-entries/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const entry = await storage.getJournalEntry(id);
+      if (!entry) return res.status(404).json({ error: "Entry not found" });
+      const lines = await storage.getJournalEntryLines(id);
+      res.json({ ...entry, lines });
+    } catch (error) {
+      console.error("Error fetching journal entry:", error);
+      res.status(500).json({ error: "Failed to fetch journal entry" });
+    }
+  });
+
+  app.post("/api/accounting/journal-entries/generate-sales", isAuthenticated, async (req, res) => {
+    try {
+      const { dateFrom, dateTo, branchId } = req.body;
+      if (!dateFrom || !dateTo) return res.status(400).json({ error: "dateFrom and dateTo are required" });
+      const entries = await storage.generateSalesJournalEntries(dateFrom, dateTo, branchId);
+      res.json({ count: entries.length, entries });
+    } catch (error) {
+      console.error("Error generating sales journal entries:", error);
+      res.status(500).json({ error: "Failed to generate sales journal entries" });
+    }
+  });
+
+  app.post("/api/accounting/journal-entries/generate-waste", isAuthenticated, async (req, res) => {
+    try {
+      const { dateFrom, dateTo, branchId } = req.body;
+      if (!dateFrom || !dateTo) return res.status(400).json({ error: "dateFrom and dateTo are required" });
+      const entries = await storage.generateWasteJournalEntries(dateFrom, dateTo, branchId);
+      res.json({ count: entries.length, entries });
+    } catch (error) {
+      console.error("Error generating waste journal entries:", error);
+      res.status(500).json({ error: "Failed to generate waste journal entries" });
+    }
+  });
+
+  app.patch("/api/accounting/journal-entries/:id/status", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const { status, reconciliationStatus, reconciliationNotes } = req.body;
+      const updateData: any = {};
+      if (status) {
+        updateData.status = status;
+        if (status === 'posted') {
+          updateData.postedBy = req.currentUser?.id;
+          updateData.postedAt = new Date();
+        }
+      }
+      if (reconciliationStatus) updateData.reconciliationStatus = reconciliationStatus;
+      if (reconciliationNotes !== undefined) updateData.reconciliationNotes = reconciliationNotes;
+      const updated = await storage.updateJournalEntry(id, updateData);
+      if (!updated) return res.status(404).json({ error: "Entry not found" });
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating journal entry:", error);
+      res.status(500).json({ error: "Failed to update journal entry" });
+    }
+  });
+
+  app.get("/api/accounting/journal-entries-summary", isAuthenticated, async (req, res) => {
+    try {
+      const { dateFrom, dateTo, branchId } = req.query;
+      if (!dateFrom || !dateTo) return res.status(400).json({ error: "dateFrom and dateTo are required" });
+      const summary = await storage.getJournalEntrySummary(dateFrom as string, dateTo as string, branchId as string);
+      res.json(summary);
+    } catch (error) {
+      console.error("Error fetching journal entry summary:", error);
+      res.status(500).json({ error: "Failed to fetch summary" });
+    }
+  });
+
+  // Reconciliation routes
+  app.get("/api/accounting/reconciliations", isAuthenticated, async (req, res) => {
+    try {
+      const { branchId, status } = req.query;
+      const reconciliations = await storage.getAllReconciliations({
+        branchId: branchId as string,
+        status: status as string,
+      });
+      res.json(reconciliations);
+    } catch (error) {
+      console.error("Error fetching reconciliations:", error);
+      res.status(500).json({ error: "Failed to fetch reconciliations" });
+    }
+  });
+
+  app.post("/api/accounting/reconciliations/generate", isAuthenticated, async (req, res) => {
+    try {
+      const { periodFrom, periodTo, branchId } = req.body;
+      if (!periodFrom || !periodTo) return res.status(400).json({ error: "periodFrom and periodTo are required" });
+      const reconciliation = await storage.generateReconciliation(periodFrom, periodTo, branchId, req.currentUser?.id);
+      res.json(reconciliation);
+    } catch (error) {
+      console.error("Error generating reconciliation:", error);
+      res.status(500).json({ error: "Failed to generate reconciliation" });
+    }
+  });
+
+  app.patch("/api/accounting/reconciliations/:id/status", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const { status, notes } = req.body;
+      const updateData: any = { status };
+      if (notes !== undefined) updateData.notes = notes;
+      if (status === 'approved') {
+        updateData.approvedBy = req.currentUser?.id;
+        updateData.approvedAt = new Date();
+      }
+      const updated = await storage.updateReconciliation(id, updateData);
+      if (!updated) return res.status(404).json({ error: "Reconciliation not found" });
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating reconciliation:", error);
+      res.status(500).json({ error: "Failed to update reconciliation" });
+    }
+  });
+
+  // Chart of Accounts
+  app.get("/api/accounting/chart-of-accounts", isAuthenticated, async (req, res) => {
+    try {
+      const accounts = await storage.getAllChartOfAccounts();
+      res.json(accounts);
+    } catch (error) {
+      console.error("Error fetching chart of accounts:", error);
+      res.status(500).json({ error: "Failed to fetch chart of accounts" });
+    }
+  });
+
+  app.post("/api/accounting/chart-of-accounts", isAuthenticated, async (req, res) => {
+    try {
+      const account = await storage.createChartOfAccount(req.body);
+      res.json(account);
+    } catch (error) {
+      console.error("Error creating account:", error);
+      res.status(500).json({ error: "Failed to create account" });
+    }
+  });
+
+  // Export journal entries as CSV for accounting software
+  app.get("/api/accounting/export-csv", isAuthenticated, async (req, res) => {
+    try {
+      const { dateFrom, dateTo, branchId, format } = req.query;
+      const entries = await storage.getAllJournalEntries({
+        dateFrom: dateFrom as string,
+        dateTo: dateTo as string,
+        branchId: branchId as string,
+      });
+
+      const allLines: any[] = [];
+      for (const entry of entries) {
+        const lines = await storage.getJournalEntryLines(entry.id);
+        for (const line of lines) {
+          allLines.push({
+            entryNumber: entry.entryNumber,
+            entryDate: entry.entryDate,
+            entryType: entry.entryType,
+            accountCode: line.accountCode,
+            accountName: line.accountName,
+            description: line.description || entry.description,
+            debit: line.debitAmount,
+            credit: line.creditAmount,
+            costCenter: line.costCenter || '',
+            vatCode: line.vatCode || '',
+            vatRate: line.vatRate || '',
+            currency: entry.currency,
+            reference: `${entry.referenceType || ''}:${entry.referenceId || ''}`,
+          });
+        }
+      }
+
+      if (format === 'qoyod') {
+        const headers = ['رقم القيد', 'التاريخ', 'رمز الحساب', 'اسم الحساب', 'البيان', 'مدين', 'دائن', 'مركز التكلفة', 'العملة'];
+        const csvRows = [headers.join(',')];
+        for (const line of allLines) {
+          csvRows.push([line.entryNumber, line.entryDate, line.accountCode, `"${line.accountName}"`, `"${line.description}"`, line.debit, line.credit, `"${line.costCenter}"`, line.currency].join(','));
+        }
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename=journal-entries-qoyod-${dateFrom}-${dateTo}.csv`);
+        res.send('\ufeff' + csvRows.join('\n'));
+      } else if (format === 'zoho') {
+        const headers = ['Journal Number', 'Journal Date', 'Account Code', 'Account Name', 'Description', 'Debit', 'Credit', 'Cost Center', 'Currency', 'Tax Code'];
+        const csvRows = [headers.join(',')];
+        for (const line of allLines) {
+          csvRows.push([line.entryNumber, line.entryDate, line.accountCode, `"${line.accountName}"`, `"${line.description}"`, line.debit, line.credit, `"${line.costCenter}"`, line.currency, line.vatCode].join(','));
+        }
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename=journal-entries-zoho-${dateFrom}-${dateTo}.csv`);
+        res.send('\ufeff' + csvRows.join('\n'));
+      } else {
+        const headers = ['رقم القيد', 'التاريخ', 'النوع', 'رمز الحساب', 'اسم الحساب', 'البيان', 'مدين', 'دائن', 'مركز التكلفة', 'رمز الضريبة', 'نسبة الضريبة', 'العملة', 'المرجع'];
+        const csvRows = [headers.join(',')];
+        for (const line of allLines) {
+          csvRows.push([line.entryNumber, line.entryDate, line.entryType, line.accountCode, `"${line.accountName}"`, `"${line.description}"`, line.debit, line.credit, `"${line.costCenter}"`, line.vatCode, line.vatRate, line.currency, `"${line.reference}"`].join(','));
+        }
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename=journal-entries-${dateFrom}-${dateTo}.csv`);
+        res.send('\ufeff' + csvRows.join('\n'));
+      }
+    } catch (error) {
+      console.error("Error exporting CSV:", error);
+      res.status(500).json({ error: "Failed to export CSV" });
+    }
+  });
+
+  // ============================================
   // نظام التشغيل - Operations Module Routes
   // ============================================
 

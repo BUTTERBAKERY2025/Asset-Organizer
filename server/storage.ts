@@ -485,6 +485,18 @@ import {
   biometricCredentials,
   type BiometricCredential,
   type InsertBiometricCredential,
+  accountingJournalEntries,
+  type AccountingJournalEntry,
+  type InsertAccountingJournalEntry,
+  journalEntryLines,
+  type JournalEntryLine,
+  type InsertJournalEntryLine,
+  accountingReconciliations,
+  type AccountingReconciliation,
+  type InsertAccountingReconciliation,
+  chartOfAccounts,
+  type ChartOfAccount,
+  type InsertChartOfAccount,
 } from "@shared/schema";
 
 type TransferHistory = typeof transferHistory.$inferSelect;
@@ -13061,6 +13073,282 @@ export class DatabaseStorage implements IStorage {
     } catch (error: any) {
       if (error?.code === '42P01') return;
     }
+  }
+
+  // ============================================
+  // Accounting Integration - التكامل المحاسبي
+  // ============================================
+
+  async getAllJournalEntries(filters?: { branchId?: string; entryType?: string; status?: string; dateFrom?: string; dateTo?: string; reconciliationStatus?: string }): Promise<AccountingJournalEntry[]> {
+    let query = db.select().from(accountingJournalEntries);
+    const conditions: any[] = [];
+    if (filters?.branchId) conditions.push(eq(accountingJournalEntries.branchId, filters.branchId));
+    if (filters?.entryType) conditions.push(eq(accountingJournalEntries.entryType, filters.entryType));
+    if (filters?.status) conditions.push(eq(accountingJournalEntries.status, filters.status));
+    if (filters?.reconciliationStatus) conditions.push(eq(accountingJournalEntries.reconciliationStatus, filters.reconciliationStatus));
+    if (filters?.dateFrom) conditions.push(gte(accountingJournalEntries.entryDate, filters.dateFrom));
+    if (filters?.dateTo) conditions.push(lte(accountingJournalEntries.entryDate, filters.dateTo));
+    if (conditions.length > 0) {
+      return db.select().from(accountingJournalEntries).where(and(...conditions)).orderBy(desc(accountingJournalEntries.entryDate));
+    }
+    return db.select().from(accountingJournalEntries).orderBy(desc(accountingJournalEntries.entryDate));
+  }
+
+  async getJournalEntry(id: number): Promise<AccountingJournalEntry | undefined> {
+    const [entry] = await db.select().from(accountingJournalEntries).where(eq(accountingJournalEntries.id, id));
+    return entry || undefined;
+  }
+
+  async getJournalEntryLines(journalEntryId: number): Promise<JournalEntryLine[]> {
+    return db.select().from(journalEntryLines).where(eq(journalEntryLines.journalEntryId, journalEntryId)).orderBy(journalEntryLines.lineNumber);
+  }
+
+  async createJournalEntry(entry: InsertAccountingJournalEntry, lines: InsertJournalEntryLine[]): Promise<AccountingJournalEntry> {
+    const [created] = await db.insert(accountingJournalEntries).values(entry).returning();
+    if (lines.length > 0) {
+      const linesWithId = lines.map(l => ({ ...l, journalEntryId: created.id }));
+      await db.insert(journalEntryLines).values(linesWithId);
+    }
+    return created;
+  }
+
+  async updateJournalEntry(id: number, data: Partial<AccountingJournalEntry>): Promise<AccountingJournalEntry | undefined> {
+    const [updated] = await db.update(accountingJournalEntries).set(data).where(eq(accountingJournalEntries.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async generateNextEntryNumber(): Promise<string> {
+    const result = await pool.query(`SELECT COUNT(*) as count FROM accounting_journal_entries`);
+    const count = parseInt(result.rows[0].count) + 1;
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    return `JE-${year}${month}-${String(count).padStart(5, '0')}`;
+  }
+
+  async generateSalesJournalEntries(dateFrom: string, dateTo: string, branchId?: string): Promise<AccountingJournalEntry[]> {
+    let conditions: any[] = [
+      gte(cashierSalesJournals.journalDate, dateFrom),
+      lte(cashierSalesJournals.journalDate, dateTo),
+    ];
+    if (branchId) conditions.push(eq(cashierSalesJournals.branchId, branchId));
+
+    const journals = await db.select().from(cashierSalesJournals).where(and(...conditions));
+    const entries: AccountingJournalEntry[] = [];
+
+    for (const journal of journals) {
+      const entryNumber = await this.generateNextEntryNumber();
+      const totalSales = parseFloat(String(journal.totalSales || 0));
+      const vatAmount = totalSales * 0.15;
+      const totalWithVat = totalSales + vatAmount;
+      const cashAmount = parseFloat(String(journal.cashTotal || 0));
+      const cardAmount = parseFloat(String(journal.networkTotal || 0));
+
+      const lines: InsertJournalEntryLine[] = [];
+      let lineNum = 1;
+
+      if (cashAmount > 0) {
+        lines.push({ journalEntryId: 0, lineNumber: lineNum++, accountCode: '1101', accountName: 'الصندوق', description: `مبيعات نقدية - ${journal.journalDate}`, debitAmount: String(cashAmount), creditAmount: '0', costCenter: journal.branchId || undefined });
+      }
+      if (cardAmount > 0) {
+        lines.push({ journalEntryId: 0, lineNumber: lineNum++, accountCode: '1103', accountName: 'نقاط البيع (مدى/فيزا)', description: `مبيعات إلكترونية - ${journal.journalDate}`, debitAmount: String(cardAmount), creditAmount: '0', costCenter: journal.branchId || undefined });
+      }
+      lines.push({ journalEntryId: 0, lineNumber: lineNum++, accountCode: '4100', accountName: 'إيرادات المبيعات', description: `إيرادات مبيعات - ${journal.journalDate}`, debitAmount: '0', creditAmount: String(totalSales), costCenter: journal.branchId || undefined });
+      if (vatAmount > 0) {
+        lines.push({ journalEntryId: 0, lineNumber: lineNum++, accountCode: '2100', accountName: 'ضريبة القيمة المضافة المستحقة', description: `ض.ق.م على المبيعات - ${journal.journalDate}`, debitAmount: '0', creditAmount: String(vatAmount.toFixed(2)), costCenter: journal.branchId || undefined });
+      }
+
+      const entry = await this.createJournalEntry({
+        entryNumber,
+        entryDate: journal.journalDate,
+        entryType: 'sales',
+        description: `قيد مبيعات يومية - ${journal.branchId || 'عام'} - ${journal.journalDate}`,
+        branchId: journal.branchId || null,
+        referenceType: 'cashier_journal',
+        referenceId: String(journal.id),
+        totalDebit: String(totalWithVat.toFixed(2)),
+        totalCredit: String(totalWithVat.toFixed(2)),
+        vatAmount: String(vatAmount.toFixed(2)),
+        status: 'draft',
+        reconciliationStatus: 'pending',
+      }, lines);
+
+      entries.push(entry);
+    }
+    return entries;
+  }
+
+  async generateWasteJournalEntries(dateFrom: string, dateTo: string, branchId?: string): Promise<AccountingJournalEntry[]> {
+    let conditions: any[] = [
+      gte(wasteReports.reportDate, dateFrom),
+      lte(wasteReports.reportDate, dateTo),
+      eq(wasteReports.status, 'approved'),
+    ];
+    if (branchId) conditions.push(eq(wasteReports.branchId, branchId));
+
+    const reports = await db.select().from(wasteReports).where(and(...conditions));
+    const entries: AccountingJournalEntry[] = [];
+
+    for (const report of reports) {
+      const items = await db.select().from(wasteItems).where(eq(wasteItems.wasteReportId, report.id));
+      const totalWasteValue = items.reduce((sum, item) => sum + parseFloat(String(item.totalValue || 0)), 0);
+      if (totalWasteValue <= 0) continue;
+
+      const entryNumber = await this.generateNextEntryNumber();
+      const lines: InsertJournalEntryLine[] = [
+        { journalEntryId: 0, lineNumber: 1, accountCode: '5400', accountName: 'الهالك والتالف', description: `هالك - ${report.reportDate}`, debitAmount: String(totalWasteValue.toFixed(2)), creditAmount: '0', costCenter: report.branchId || undefined },
+        { journalEntryId: 0, lineNumber: 2, accountCode: '1203', accountName: 'مخزون العرض (Display Bar)', description: `تخفيض مخزون العرض - ${report.reportDate}`, debitAmount: '0', creditAmount: String(totalWasteValue.toFixed(2)), costCenter: report.branchId || undefined },
+      ];
+
+      const entry = await this.createJournalEntry({
+        entryNumber,
+        entryDate: report.reportDate,
+        entryType: 'waste',
+        description: `قيد هالك - ${report.branchId || 'عام'} - ${report.reportDate}`,
+        branchId: report.branchId || null,
+        referenceType: 'waste_report',
+        referenceId: String(report.id),
+        totalDebit: String(totalWasteValue.toFixed(2)),
+        totalCredit: String(totalWasteValue.toFixed(2)),
+        status: 'draft',
+        reconciliationStatus: 'pending',
+      }, lines);
+
+      entries.push(entry);
+    }
+    return entries;
+  }
+
+  // Reconciliation methods
+  async getAllReconciliations(filters?: { branchId?: string; status?: string }): Promise<AccountingReconciliation[]> {
+    const conditions: any[] = [];
+    if (filters?.branchId) conditions.push(eq(accountingReconciliations.branchId, filters.branchId));
+    if (filters?.status) conditions.push(eq(accountingReconciliations.status, filters.status));
+    if (conditions.length > 0) {
+      return db.select().from(accountingReconciliations).where(and(...conditions)).orderBy(desc(accountingReconciliations.createdAt));
+    }
+    return db.select().from(accountingReconciliations).orderBy(desc(accountingReconciliations.createdAt));
+  }
+
+  async getReconciliation(id: number): Promise<AccountingReconciliation | undefined> {
+    const [rec] = await db.select().from(accountingReconciliations).where(eq(accountingReconciliations.id, id));
+    return rec || undefined;
+  }
+
+  async createReconciliation(data: InsertAccountingReconciliation): Promise<AccountingReconciliation> {
+    const [created] = await db.insert(accountingReconciliations).values(data).returning();
+    return created;
+  }
+
+  async updateReconciliation(id: number, data: Partial<AccountingReconciliation>): Promise<AccountingReconciliation | undefined> {
+    const [updated] = await db.update(accountingReconciliations).set(data).where(eq(accountingReconciliations.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async generateReconciliation(periodFrom: string, periodTo: string, branchId?: string, userId?: string): Promise<AccountingReconciliation> {
+    let salesConditions: any[] = [
+      gte(cashierSalesJournals.journalDate, periodFrom),
+      lte(cashierSalesJournals.journalDate, periodTo),
+    ];
+    if (branchId) salesConditions.push(eq(cashierSalesJournals.branchId, branchId));
+
+    const journals = await db.select().from(cashierSalesJournals).where(and(...salesConditions));
+    const totalSystemSales = journals.reduce((sum, j) => sum + parseFloat(String(j.totalSales || 0)), 0);
+    const totalActualDeposits = journals.reduce((sum, j) => sum + parseFloat(String(j.cashTotal || 0)) + parseFloat(String(j.networkTotal || 0)), 0);
+    const totalVariance = totalActualDeposits - totalSystemSales;
+    const vatCollected = totalSystemSales * 0.15;
+
+    let wasteConditions: any[] = [
+      gte(wasteReports.reportDate, periodFrom),
+      lte(wasteReports.reportDate, periodTo),
+      eq(wasteReports.status, 'approved'),
+    ];
+    if (branchId) wasteConditions.push(eq(wasteReports.branchId, branchId));
+    const wasteReps = await db.select().from(wasteReports).where(and(...wasteConditions));
+    let totalWasteValue = 0;
+    for (const wr of wasteReps) {
+      const items = await db.select().from(wasteItems).where(eq(wasteItems.wasteReportId, wr.id));
+      totalWasteValue += items.reduce((sum, item) => sum + parseFloat(String(item.totalValue || 0)), 0);
+    }
+
+    let entryConditions: any[] = [
+      gte(accountingJournalEntries.entryDate, periodFrom),
+      lte(accountingJournalEntries.entryDate, periodTo),
+    ];
+    if (branchId) entryConditions.push(eq(accountingJournalEntries.branchId, branchId));
+    const entries = await db.select().from(accountingJournalEntries).where(and(...entryConditions));
+    const matchedCount = entries.filter(e => e.reconciliationStatus === 'matched').length;
+    const discrepancyCount = entries.filter(e => e.reconciliationStatus === 'discrepancy').length;
+
+    const { date: today } = getSaudiArabiaTime();
+
+    return this.createReconciliation({
+      reconciliationDate: today,
+      periodFrom,
+      periodTo,
+      branchId: branchId || null,
+      totalSystemSales: String(totalSystemSales.toFixed(2)),
+      totalActualDeposits: String(totalActualDeposits.toFixed(2)),
+      totalVariance: String(totalVariance.toFixed(2)),
+      totalWasteValue: String(totalWasteValue.toFixed(2)),
+      vatCollected: String(vatCollected.toFixed(2)),
+      netVat: String(vatCollected.toFixed(2)),
+      entriesCount: entries.length,
+      matchedCount,
+      discrepancyCount,
+      status: 'draft',
+      preparedBy: userId || null,
+    });
+  }
+
+  // Chart of Accounts
+  async getAllChartOfAccounts(): Promise<ChartOfAccount[]> {
+    return db.select().from(chartOfAccounts).orderBy(chartOfAccounts.accountCode);
+  }
+
+  async createChartOfAccount(data: InsertChartOfAccount): Promise<ChartOfAccount> {
+    const [created] = await db.insert(chartOfAccounts).values(data).returning();
+    return created;
+  }
+
+  async updateChartOfAccount(id: number, data: Partial<ChartOfAccount>): Promise<ChartOfAccount | undefined> {
+    const [updated] = await db.update(chartOfAccounts).set(data).where(eq(chartOfAccounts.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async getJournalEntrySummary(dateFrom: string, dateTo: string, branchId?: string): Promise<any> {
+    let conditions: any[] = [
+      gte(accountingJournalEntries.entryDate, dateFrom),
+      lte(accountingJournalEntries.entryDate, dateTo),
+    ];
+    if (branchId) conditions.push(eq(accountingJournalEntries.branchId, branchId));
+    const entries = await db.select().from(accountingJournalEntries).where(and(...conditions));
+
+    const byType: Record<string, { count: number; totalDebit: number; totalCredit: number }> = {};
+    for (const e of entries) {
+      if (!byType[e.entryType]) byType[e.entryType] = { count: 0, totalDebit: 0, totalCredit: 0 };
+      byType[e.entryType].count++;
+      byType[e.entryType].totalDebit += parseFloat(String(e.totalDebit || 0));
+      byType[e.entryType].totalCredit += parseFloat(String(e.totalCredit || 0));
+    }
+
+    return {
+      totalEntries: entries.length,
+      totalDebit: entries.reduce((s, e) => s + parseFloat(String(e.totalDebit || 0)), 0),
+      totalCredit: entries.reduce((s, e) => s + parseFloat(String(e.totalCredit || 0)), 0),
+      byType,
+      byStatus: {
+        draft: entries.filter(e => e.status === 'draft').length,
+        posted: entries.filter(e => e.status === 'posted').length,
+        reconciled: entries.filter(e => e.status === 'reconciled').length,
+      },
+      byReconciliation: {
+        pending: entries.filter(e => e.reconciliationStatus === 'pending').length,
+        matched: entries.filter(e => e.reconciliationStatus === 'matched').length,
+        discrepancy: entries.filter(e => e.reconciliationStatus === 'discrepancy').length,
+        resolved: entries.filter(e => e.reconciliationStatus === 'resolved').length,
+      },
+    };
   }
 }
 

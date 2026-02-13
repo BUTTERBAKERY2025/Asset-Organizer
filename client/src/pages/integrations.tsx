@@ -1144,9 +1144,19 @@ function StorageSection() {
 
 function AccountingSection({ exports }: { exports: AccountingExport[] }) {
   const queryClient = useQueryClient();
+  const [acctTab, setAcctTab] = useState("journal");
   const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [genDateFrom, setGenDateFrom] = useState("");
+  const [genDateTo, setGenDateTo] = useState("");
+  const [genBranch, setGenBranch] = useState("");
+  const [recPeriodFrom, setRecPeriodFrom] = useState("");
+  const [recPeriodTo, setRecPeriodTo] = useState("");
+  const [recBranch, setRecBranch] = useState("");
+  const [filterEntryType, setFilterEntryType] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [expandedEntry, setExpandedEntry] = useState<number | null>(null);
 
   const { data: qoyodSettings } = useIntegrationSettings('qoyod');
   const { data: zohoSettings } = useIntegrationSettings('zoho');
@@ -1157,7 +1167,6 @@ function AccountingSection({ exports }: { exports: AccountingExport[] }) {
 
   const [qoyodApiKey, setQoyodApiKey] = useState("");
   const [qoyodApiUrl, setQoyodApiUrl] = useState("https://api.qoyod.com/api/2.0");
-
   const [zohoClientId, setZohoClientId] = useState("");
   const [zohoClientSecret, setZohoClientSecret] = useState("");
   const [zohoOrgId, setZohoOrgId] = useState("");
@@ -1181,202 +1190,651 @@ function AccountingSection({ exports }: { exports: AccountingExport[] }) {
 
   const { data: branches = [] } = useQuery({ queryKey: ["/api/branches"] });
 
+  const journalQueryParams = new URLSearchParams();
+  if (dateFrom) journalQueryParams.set('dateFrom', dateFrom);
+  if (dateTo) journalQueryParams.set('dateTo', dateTo);
+  if (selectedBranch && selectedBranch !== 'all') journalQueryParams.set('branchId', selectedBranch);
+  if (filterEntryType && filterEntryType !== 'all') journalQueryParams.set('entryType', filterEntryType);
+  if (filterStatus && filterStatus !== 'all') journalQueryParams.set('status', filterStatus);
+
+  const { data: journalEntries = [], isLoading: loadingEntries } = useQuery<any[]>({
+    queryKey: ["/api/accounting/journal-entries", journalQueryParams.toString()],
+    queryFn: async () => {
+      const res = await fetch(`/api/accounting/journal-entries?${journalQueryParams.toString()}`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: acctTab === 'journal',
+  });
+
+  const { data: reconciliations = [], isLoading: loadingRec } = useQuery<any[]>({
+    queryKey: ["/api/accounting/reconciliations"],
+    queryFn: async () => {
+      const res = await fetch("/api/accounting/reconciliations", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: acctTab === 'reconciliation',
+  });
+
+  const { data: chartAccounts = [] } = useQuery<any[]>({
+    queryKey: ["/api/accounting/chart-of-accounts"],
+    queryFn: async () => {
+      const res = await fetch("/api/accounting/chart-of-accounts", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: acctTab === 'accounts',
+  });
+
+  const { data: entryDetails } = useQuery<any>({
+    queryKey: ["/api/accounting/journal-entries", expandedEntry],
+    queryFn: async () => {
+      const res = await fetch(`/api/accounting/journal-entries/${expandedEntry}`, { credentials: "include" });
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: expandedEntry !== null,
+  });
+
+  const generateSalesMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/accounting/journal-entries/generate-sales", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ dateFrom: genDateFrom, dateTo: genDateTo, branchId: (genBranch && genBranch !== 'all') ? genBranch : null }) });
+      if (!res.ok) throw new Error("فشل");
+      return res.json();
+    },
+    onSuccess: (data) => { queryClient.invalidateQueries({ queryKey: ["/api/accounting/journal-entries"] }); toast.success(`تم إنشاء ${data.count} قيد مبيعات`); },
+    onError: () => toast.error("فشل في إنشاء قيود المبيعات"),
+  });
+
+  const generateWasteMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/accounting/journal-entries/generate-waste", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ dateFrom: genDateFrom, dateTo: genDateTo, branchId: (genBranch && genBranch !== 'all') ? genBranch : null }) });
+      if (!res.ok) throw new Error("فشل");
+      return res.json();
+    },
+    onSuccess: (data) => { queryClient.invalidateQueries({ queryKey: ["/api/accounting/journal-entries"] }); toast.success(`تم إنشاء ${data.count} قيد هالك`); },
+    onError: () => toast.error("فشل في إنشاء قيود الهالك"),
+  });
+
+  const updateEntryStatusMutation = useMutation({
+    mutationFn: async ({ id, status, reconciliationStatus }: { id: number; status?: string; reconciliationStatus?: string }) => {
+      const res = await fetch(`/api/accounting/journal-entries/${id}/status`, { method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ status, reconciliationStatus }) });
+      if (!res.ok) throw new Error("فشل");
+      return res.json();
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/accounting/journal-entries"] }); toast.success("تم تحديث القيد"); },
+    onError: () => toast.error("فشل في تحديث القيد"),
+  });
+
+  const generateReconciliationMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/accounting/reconciliations/generate", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ periodFrom: recPeriodFrom, periodTo: recPeriodTo, branchId: (recBranch && recBranch !== 'all') ? recBranch : null }) });
+      if (!res.ok) throw new Error("فشل");
+      return res.json();
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/accounting/reconciliations"] }); toast.success("تم إنشاء تقرير التسوية"); },
+    onError: () => toast.error("فشل في إنشاء تقرير التسوية"),
+  });
+
+  const updateRecStatusMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: number; status: string }) => {
+      const res = await fetch(`/api/accounting/reconciliations/${id}/status`, { method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ status }) });
+      if (!res.ok) throw new Error("فشل");
+      return res.json();
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/accounting/reconciliations"] }); toast.success("تم تحديث حالة التسوية"); },
+    onError: () => toast.error("فشل في التحديث"),
+  });
+
   const inventoryValuationMutation = useMutation({
     mutationFn: async (branchId?: string) => {
       const res = await fetch("/api/accounting-exports/inventory-valuation", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ branchId: branchId || null }) });
-      if (!res.ok) throw new Error("فشل في إنشاء تقرير التقييم");
-      return res.json();
-    },
-    onSuccess: (data) => { queryClient.invalidateQueries({ queryKey: ["/api/accounting-exports"] }); toast.success(`تم إنشاء تقرير تقييم المخزون`); },
-    onError: () => toast.error("فشل في إنشاء التقرير"),
-  });
-
-  const assetMovementsMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch("/api/accounting-exports/asset-movements", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ dateFrom: dateFrom || null, dateTo: dateTo || null }) });
       if (!res.ok) throw new Error("فشل");
       return res.json();
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/accounting-exports"] }); toast.success("تم إنشاء تقرير حركة الأصول"); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/accounting-exports"] }); toast.success("تم إنشاء تقرير تقييم المخزون"); },
     onError: () => toast.error("فشل في إنشاء التقرير"),
   });
 
-  const projectCostsMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch("/api/accounting-exports/project-costs", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({}) });
-      if (!res.ok) throw new Error("فشل");
-      return res.json();
-    },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/accounting-exports"] }); toast.success("تم إنشاء تقرير تكاليف المشاريع"); },
-    onError: () => toast.error("فشل في إنشاء التقرير"),
-  });
+  const entryTypeLabels: Record<string, string> = { sales: "مبيعات", purchases: "مشتريات", waste: "هالك", production: "إنتاج", transfer: "تحويل", salary: "رواتب", expense: "مصروفات", manual: "يدوي" };
+  const statusLabels: Record<string, string> = { draft: "مسودة", posted: "مُرحّل", reconciled: "تمت التسوية", void: "ملغي" };
+  const recStatusLabels: Record<string, string> = { pending: "معلّق", matched: "مُطابق", discrepancy: "فرق", resolved: "تم الحل" };
+  const recMainStatusLabels: Record<string, string> = { draft: "مسودة", in_review: "قيد المراجعة", approved: "معتمد", exported: "مُصدّر" };
+  const accountTypeLabels: Record<string, string> = { asset: "أصول", liability: "التزامات", equity: "حقوق ملكية", revenue: "إيرادات", expense: "مصروفات" };
 
-  const exportTypeLabels: Record<string, string> = { inventory_valuation: "تقييم المخزون", asset_movements: "حركة الأصول", project_costs: "تكاليف المشاريع" };
+  const exportCSV = (format: string) => {
+    const params = new URLSearchParams();
+    if (dateFrom) params.set('dateFrom', dateFrom);
+    if (dateTo) params.set('dateTo', dateTo);
+    if (selectedBranch && selectedBranch !== 'all') params.set('branchId', selectedBranch);
+    params.set('format', format);
+    window.open(`/api/accounting/export-csv?${params.toString()}`, '_blank');
+  };
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Calculator className="h-5 w-5 text-green-600" />قيود المحاسبي</CardTitle>
-            <CardDescription>نظام المحاسبة السحابي السعودي</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <StatusBadge configured={qoyodSettings?.configured || false} isActive={qoyodSettings?.isActive} />
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <Label>مفتاح API</Label>
-                <SecureInput value={qoyodApiKey} onChange={setQoyodApiKey} placeholder="qoyod_api_xxxxxxxx" testId="input-qoyod-key" />
-              </div>
-              <div className="space-y-2">
-                <Label>رابط API</Label>
-                <Input value={qoyodApiUrl} onChange={(e) => setQoyodApiUrl(e.target.value)} placeholder="https://api.qoyod.com/api/2.0" data-testid="input-qoyod-url" dir="ltr" />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                احصل على المفتاح من <a href="https://www.qoyod.com" target="_blank" rel="noreferrer" className="underline text-primary">لوحة تحكم قيود</a> &gt; إعدادات &gt; API
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <Button className="flex-1" onClick={() => saveQoyod.mutate({ name: "قيود", config: { apiKey: qoyodApiKey, apiUrl: qoyodApiUrl } })} disabled={saveQoyod.isPending || !qoyodApiKey} data-testid="btn-save-qoyod">
-                {saveQoyod.isPending ? <Loader2 className="h-4 w-4 ml-2 animate-spin" /> : <Save className="h-4 w-4 ml-2" />}
-                حفظ
-              </Button>
-              <Button variant="outline" onClick={() => testQoyod.mutate()} disabled={testQoyod.isPending || !qoyodSettings?.configured} data-testid="btn-test-qoyod">
-                {testQoyod.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+    <div className="space-y-4">
+      <Tabs value={acctTab} onValueChange={setAcctTab}>
+        <TabsList className="grid grid-cols-5 w-full">
+          <TabsTrigger value="journal" data-testid="tab-acct-journal">القيود المحاسبية</TabsTrigger>
+          <TabsTrigger value="reconciliation" data-testid="tab-acct-reconciliation">التسوية المالية</TabsTrigger>
+          <TabsTrigger value="accounts" data-testid="tab-acct-accounts">دليل الحسابات</TabsTrigger>
+          <TabsTrigger value="export" data-testid="tab-acct-export">التصدير</TabsTrigger>
+          <TabsTrigger value="settings" data-testid="tab-acct-settings">الإعدادات</TabsTrigger>
+        </TabsList>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Calculator className="h-5 w-5 text-red-600" />Zoho Books</CardTitle>
-            <CardDescription>نظام زوهو المحاسبي</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <StatusBadge configured={zohoSettings?.configured || false} isActive={zohoSettings?.isActive} />
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <Label>معرّف العميل (Client ID)</Label>
-                <Input value={zohoClientId} onChange={(e) => setZohoClientId(e.target.value)} placeholder="1000.xxxxxxxx" data-testid="input-zoho-client-id" dir="ltr" />
-              </div>
-              <div className="space-y-2">
-                <Label>المفتاح السري (Client Secret)</Label>
-                <SecureInput value={zohoClientSecret} onChange={setZohoClientSecret} testId="input-zoho-secret" />
-              </div>
-              <div className="space-y-2">
-                <Label>معرّف المنظمة (Organization ID)</Label>
-                <Input value={zohoOrgId} onChange={(e) => setZohoOrgId(e.target.value)} placeholder="xxxxxxxx" data-testid="input-zoho-org-id" dir="ltr" />
-              </div>
-              <div className="space-y-2">
-                <Label>المنطقة</Label>
-                <Select value={zohoRegion} onValueChange={setZohoRegion}>
-                  <SelectTrigger data-testid="select-zoho-region"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="sa">السعودية (sa)</SelectItem>
-                    <SelectItem value="com">عالمي (com)</SelectItem>
-                    <SelectItem value="eu">أوروبا (eu)</SelectItem>
-                    <SelectItem value="in">الهند (in)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                سجّل التطبيق من <a href="https://api-console.zoho.sa" target="_blank" rel="noreferrer" className="underline text-primary">Zoho API Console</a>
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => saveZoho.mutate({ name: "Zoho Books", config: { clientId: zohoClientId, clientSecret: zohoClientSecret, organizationId: zohoOrgId, region: zohoRegion } })} disabled={saveZoho.isPending || !zohoClientId} data-testid="btn-save-zoho">
-                {saveZoho.isPending ? <Loader2 className="h-4 w-4 ml-2 animate-spin" /> : <Save className="h-4 w-4 ml-2" />}
-                حفظ
-              </Button>
-              <Button variant="outline" onClick={() => testZoho.mutate()} disabled={testZoho.isPending || !zohoSettings?.configured} data-testid="btn-test-zoho">
-                {testZoho.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>تصدير البيانات المحاسبية</CardTitle>
-          <CardDescription>تصدير التقارير بصيغة JSON للأنظمة المحاسبية</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-3">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2"><Calculator className="h-4 w-4 text-blue-600" />تقييم المخزون</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                  <SelectTrigger data-testid="select-branch"><SelectValue placeholder="جميع الفروع" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">جميع الفروع</SelectItem>
-                    {(branches as any[]).map((branch: any) => (
-                      <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button onClick={() => inventoryValuationMutation.mutate(selectedBranch === "all" ? undefined : selectedBranch || undefined)} disabled={inventoryValuationMutation.isPending} className="w-full" size="sm" data-testid="btn-export-valuation">
-                  <Download className="h-4 w-4 ml-2" />تصدير
-                </Button>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2"><RefreshCw className="h-4 w-4 text-green-600" />حركة الأصول</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="grid grid-cols-2 gap-2">
-                  <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} data-testid="input-date-from" />
-                  <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} data-testid="input-date-to" />
+        <TabsContent value="journal" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><FileSpreadsheet className="h-5 w-5 text-blue-600" />إنشاء القيود المحاسبية</CardTitle>
+              <CardDescription>توليد القيود تلقائياً من بيانات المبيعات والهالك</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 md:grid-cols-4 items-end">
+                <div className="space-y-2">
+                  <Label>من تاريخ</Label>
+                  <Input type="date" value={genDateFrom} onChange={(e) => setGenDateFrom(e.target.value)} data-testid="input-gen-date-from" />
                 </div>
-                <Button onClick={() => assetMovementsMutation.mutate()} disabled={assetMovementsMutation.isPending} className="w-full" size="sm" data-testid="btn-export-movements">
-                  <Download className="h-4 w-4 ml-2" />تصدير
+                <div className="space-y-2">
+                  <Label>إلى تاريخ</Label>
+                  <Input type="date" value={genDateTo} onChange={(e) => setGenDateTo(e.target.value)} data-testid="input-gen-date-to" />
+                </div>
+                <div className="space-y-2">
+                  <Label>الفرع</Label>
+                  <Select value={genBranch} onValueChange={setGenBranch}>
+                    <SelectTrigger data-testid="select-gen-branch"><SelectValue placeholder="جميع الفروع" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">جميع الفروع</SelectItem>
+                      {(branches as any[]).map((b: any) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={() => generateSalesMutation.mutate()} disabled={generateSalesMutation.isPending || !genDateFrom || !genDateTo} size="sm" data-testid="btn-gen-sales">
+                    {generateSalesMutation.isPending ? <Loader2 className="h-4 w-4 ml-1 animate-spin" /> : <CreditCard className="h-4 w-4 ml-1" />}
+                    مبيعات
+                  </Button>
+                  <Button variant="outline" onClick={() => generateWasteMutation.mutate()} disabled={generateWasteMutation.isPending || !genDateFrom || !genDateTo} size="sm" data-testid="btn-gen-waste">
+                    {generateWasteMutation.isPending ? <Loader2 className="h-4 w-4 ml-1 animate-spin" /> : <AlertCircle className="h-4 w-4 ml-1" />}
+                    هالك
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <div>
+                  <CardTitle>سجل القيود المحاسبية</CardTitle>
+                  <CardDescription>{journalEntries.length} قيد</CardDescription>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  <Select value={filterEntryType} onValueChange={setFilterEntryType}>
+                    <SelectTrigger className="w-32" data-testid="filter-entry-type"><SelectValue placeholder="النوع" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">الكل</SelectItem>
+                      <SelectItem value="sales">مبيعات</SelectItem>
+                      <SelectItem value="waste">هالك</SelectItem>
+                      <SelectItem value="purchases">مشتريات</SelectItem>
+                      <SelectItem value="manual">يدوي</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={filterStatus} onValueChange={setFilterStatus}>
+                    <SelectTrigger className="w-32" data-testid="filter-entry-status"><SelectValue placeholder="الحالة" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">الكل</SelectItem>
+                      <SelectItem value="draft">مسودة</SelectItem>
+                      <SelectItem value="posted">مُرحّل</SelectItem>
+                      <SelectItem value="reconciled">تمت التسوية</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="w-36" data-testid="filter-date-from" />
+                  <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="w-36" data-testid="filter-date-to" />
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {loadingEntries ? (
+                <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin" /></div>
+              ) : journalEntries.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">لا توجد قيود محاسبية بعد. استخدم أدوات الإنشاء أعلاه لتوليد القيود.</p>
+              ) : (
+                <div className="space-y-2">
+                  {journalEntries.slice(0, 50).map((entry: any) => (
+                    <div key={entry.id} className="border rounded-lg" data-testid={`journal-entry-${entry.id}`}>
+                      <div className="flex items-center justify-between p-3 cursor-pointer hover:bg-muted/50" onClick={() => setExpandedEntry(expandedEntry === entry.id ? null : entry.id)}>
+                        <div className="flex items-center gap-3">
+                          <Badge variant="outline" className="font-mono text-xs">{entry.entryNumber}</Badge>
+                          <Badge className={entry.entryType === 'sales' ? 'bg-green-100 text-green-800' : entry.entryType === 'waste' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'}>
+                            {entryTypeLabels[entry.entryType] || entry.entryType}
+                          </Badge>
+                          <span className="text-sm">{entry.description}</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <Badge variant={entry.status === 'posted' ? 'default' : entry.status === 'reconciled' ? 'default' : 'secondary'}>
+                            {statusLabels[entry.status] || entry.status}
+                          </Badge>
+                          <Badge variant="outline" className={entry.reconciliationStatus === 'matched' ? 'border-green-500 text-green-700' : entry.reconciliationStatus === 'discrepancy' ? 'border-red-500 text-red-700' : ''}>
+                            {recStatusLabels[entry.reconciliationStatus] || entry.reconciliationStatus}
+                          </Badge>
+                          <span className="text-sm font-mono">{parseFloat(entry.totalDebit || 0).toLocaleString('ar-SA')} ر.س</span>
+                          <span className="text-xs text-muted-foreground">{entry.entryDate}</span>
+                        </div>
+                      </div>
+                      {expandedEntry === entry.id && entryDetails && (
+                        <div className="border-t p-3 bg-muted/30">
+                          <div className="mb-3 flex gap-2">
+                            {entry.status === 'draft' && (
+                              <Button size="sm" variant="outline" onClick={() => updateEntryStatusMutation.mutate({ id: entry.id, status: 'posted' })} data-testid={`btn-post-${entry.id}`}>
+                                <CheckCircle className="h-3 w-3 ml-1" />ترحيل
+                              </Button>
+                            )}
+                            {entry.reconciliationStatus === 'pending' && (
+                              <>
+                                <Button size="sm" variant="outline" className="text-green-600" onClick={() => updateEntryStatusMutation.mutate({ id: entry.id, reconciliationStatus: 'matched' })} data-testid={`btn-match-${entry.id}`}>
+                                  <CheckCircle className="h-3 w-3 ml-1" />مُطابق
+                                </Button>
+                                <Button size="sm" variant="outline" className="text-red-600" onClick={() => updateEntryStatusMutation.mutate({ id: entry.id, reconciliationStatus: 'discrepancy' })} data-testid={`btn-discrepancy-${entry.id}`}>
+                                  <XCircle className="h-3 w-3 ml-1" />فرق
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="border-b">
+                                <th className="text-right p-2">#</th>
+                                <th className="text-right p-2">رمز الحساب</th>
+                                <th className="text-right p-2">اسم الحساب</th>
+                                <th className="text-right p-2">البيان</th>
+                                <th className="text-left p-2">مدين</th>
+                                <th className="text-left p-2">دائن</th>
+                                <th className="text-right p-2">مركز التكلفة</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(entryDetails.lines || []).map((line: any) => (
+                                <tr key={line.id} className="border-b last:border-0">
+                                  <td className="p-2">{line.lineNumber}</td>
+                                  <td className="p-2 font-mono">{line.accountCode}</td>
+                                  <td className="p-2">{line.accountName}</td>
+                                  <td className="p-2 text-muted-foreground">{line.description}</td>
+                                  <td className="p-2 text-left font-mono">{parseFloat(line.debitAmount || 0) > 0 ? parseFloat(line.debitAmount).toLocaleString('ar-SA') : '-'}</td>
+                                  <td className="p-2 text-left font-mono">{parseFloat(line.creditAmount || 0) > 0 ? parseFloat(line.creditAmount).toLocaleString('ar-SA') : '-'}</td>
+                                  <td className="p-2">{line.costCenter || '-'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot>
+                              <tr className="font-bold border-t-2">
+                                <td colSpan={4} className="p-2">الإجمالي</td>
+                                <td className="p-2 text-left font-mono">{parseFloat(entryDetails.totalDebit || 0).toLocaleString('ar-SA')}</td>
+                                <td className="p-2 text-left font-mono">{parseFloat(entryDetails.totalCredit || 0).toLocaleString('ar-SA')}</td>
+                                <td></td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="reconciliation" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><RefreshCw className="h-5 w-5 text-amber-600" />إنشاء تسوية مالية جديدة</CardTitle>
+              <CardDescription>مقارنة بيانات النظام مع الإيداعات الفعلية وتحديد الفروقات</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 md:grid-cols-4 items-end">
+                <div className="space-y-2">
+                  <Label>من تاريخ</Label>
+                  <Input type="date" value={recPeriodFrom} onChange={(e) => setRecPeriodFrom(e.target.value)} data-testid="input-rec-from" />
+                </div>
+                <div className="space-y-2">
+                  <Label>إلى تاريخ</Label>
+                  <Input type="date" value={recPeriodTo} onChange={(e) => setRecPeriodTo(e.target.value)} data-testid="input-rec-to" />
+                </div>
+                <div className="space-y-2">
+                  <Label>الفرع</Label>
+                  <Select value={recBranch} onValueChange={setRecBranch}>
+                    <SelectTrigger data-testid="select-rec-branch"><SelectValue placeholder="جميع الفروع" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">جميع الفروع</SelectItem>
+                      {(branches as any[]).map((b: any) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button onClick={() => generateReconciliationMutation.mutate()} disabled={generateReconciliationMutation.isPending || !recPeriodFrom || !recPeriodTo} data-testid="btn-gen-reconciliation">
+                  {generateReconciliationMutation.isPending ? <Loader2 className="h-4 w-4 ml-2 animate-spin" /> : <RefreshCw className="h-4 w-4 ml-2" />}
+                  إنشاء تسوية
                 </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>سجل التسويات المالية</CardTitle>
+              <CardDescription>{reconciliations.length} تسوية</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loadingRec ? (
+                <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin" /></div>
+              ) : reconciliations.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">لا توجد تسويات بعد</p>
+              ) : (
+                <div className="space-y-4">
+                  {reconciliations.map((rec: any) => (
+                    <Card key={rec.id} className="border-2" data-testid={`reconciliation-${rec.id}`}>
+                      <CardHeader className="pb-2">
+                        <div className="flex justify-between items-center">
+                          <CardTitle className="text-base">تسوية {rec.periodFrom} إلى {rec.periodTo}</CardTitle>
+                          <div className="flex gap-2 items-center">
+                            <Badge variant={rec.status === 'approved' ? 'default' : rec.status === 'exported' ? 'default' : 'secondary'}>
+                              {recMainStatusLabels[rec.status] || rec.status}
+                            </Badge>
+                            {rec.status === 'draft' && (
+                              <Button size="sm" variant="outline" onClick={() => updateRecStatusMutation.mutate({ id: rec.id, status: 'in_review' })} data-testid={`btn-review-${rec.id}`}>
+                                مراجعة
+                              </Button>
+                            )}
+                            {rec.status === 'in_review' && (
+                              <Button size="sm" onClick={() => updateRecStatusMutation.mutate({ id: rec.id, status: 'approved' })} data-testid={`btn-approve-rec-${rec.id}`}>
+                                <CheckCircle className="h-3 w-3 ml-1" />اعتماد
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <div className="text-center p-3 bg-green-50 rounded-lg">
+                            <p className="text-xs text-muted-foreground">إجمالي المبيعات (النظام)</p>
+                            <p className="text-lg font-bold text-green-700">{parseFloat(rec.totalSystemSales || 0).toLocaleString('ar-SA')} <span className="text-xs">ر.س</span></p>
+                          </div>
+                          <div className="text-center p-3 bg-blue-50 rounded-lg">
+                            <p className="text-xs text-muted-foreground">الإيداعات الفعلية</p>
+                            <p className="text-lg font-bold text-blue-700">{parseFloat(rec.totalActualDeposits || 0).toLocaleString('ar-SA')} <span className="text-xs">ر.س</span></p>
+                          </div>
+                          <div className={`text-center p-3 rounded-lg ${parseFloat(rec.totalVariance || 0) === 0 ? 'bg-green-50' : parseFloat(rec.totalVariance || 0) > 0 ? 'bg-amber-50' : 'bg-red-50'}`}>
+                            <p className="text-xs text-muted-foreground">الفرق</p>
+                            <p className={`text-lg font-bold ${parseFloat(rec.totalVariance || 0) === 0 ? 'text-green-700' : parseFloat(rec.totalVariance || 0) > 0 ? 'text-amber-700' : 'text-red-700'}`}>{parseFloat(rec.totalVariance || 0).toLocaleString('ar-SA')} <span className="text-xs">ر.س</span></p>
+                          </div>
+                          <div className="text-center p-3 bg-red-50 rounded-lg">
+                            <p className="text-xs text-muted-foreground">قيمة الهالك</p>
+                            <p className="text-lg font-bold text-red-700">{parseFloat(rec.totalWasteValue || 0).toLocaleString('ar-SA')} <span className="text-xs">ر.س</span></p>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-3 md:grid-cols-5 gap-3 mt-4">
+                          <div className="text-center p-2 border rounded">
+                            <p className="text-xs text-muted-foreground">ض.ق.م مُحصّلة</p>
+                            <p className="font-semibold">{parseFloat(rec.vatCollected || 0).toLocaleString('ar-SA')}</p>
+                          </div>
+                          <div className="text-center p-2 border rounded">
+                            <p className="text-xs text-muted-foreground">عدد القيود</p>
+                            <p className="font-semibold">{rec.entriesCount || 0}</p>
+                          </div>
+                          <div className="text-center p-2 border rounded">
+                            <p className="text-xs text-muted-foreground">مُطابقة</p>
+                            <p className="font-semibold text-green-600">{rec.matchedCount || 0}</p>
+                          </div>
+                          <div className="text-center p-2 border rounded">
+                            <p className="text-xs text-muted-foreground">فروقات</p>
+                            <p className="font-semibold text-red-600">{rec.discrepancyCount || 0}</p>
+                          </div>
+                          <div className="text-center p-2 border rounded">
+                            <p className="text-xs text-muted-foreground">تاريخ الإنشاء</p>
+                            <p className="font-semibold text-sm">{rec.reconciliationDate}</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="accounts" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><Calculator className="h-5 w-5 text-purple-600" />دليل الحسابات</CardTitle>
+              <CardDescription>شجرة الحسابات المحاسبية المعتمدة وفق المعايير السعودية</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {chartAccounts.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">لا توجد حسابات</p>
+              ) : (
+                <div className="space-y-1">
+                  {chartAccounts.map((acc: any) => (
+                    <div key={acc.id} className="flex items-center justify-between p-2 rounded hover:bg-muted/50 border-b" style={{ paddingRight: `${(acc.level - 1) * 24 + 8}px` }} data-testid={`account-${acc.accountCode}`}>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-sm text-muted-foreground w-16">{acc.accountCode}</span>
+                        <span className={acc.level === 1 ? 'font-bold' : acc.level === 2 ? 'font-semibold' : ''}>{acc.accountName}</span>
+                        {acc.accountNameEn && <span className="text-xs text-muted-foreground">({acc.accountNameEn})</span>}
+                      </div>
+                      <Badge variant="outline" className={
+                        acc.accountType === 'asset' ? 'border-blue-300 text-blue-700' :
+                        acc.accountType === 'liability' ? 'border-orange-300 text-orange-700' :
+                        acc.accountType === 'equity' ? 'border-purple-300 text-purple-700' :
+                        acc.accountType === 'revenue' ? 'border-green-300 text-green-700' :
+                        'border-red-300 text-red-700'
+                      }>
+                        {accountTypeLabels[acc.accountType] || acc.accountType}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="export" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><Download className="h-5 w-5 text-green-600" />تصدير القيود المحاسبية</CardTitle>
+              <CardDescription>تصدير القيود بصيغ متوافقة مع أنظمة المحاسبة المختلفة</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 md:grid-cols-3 items-end mb-6">
+                <div className="space-y-2">
+                  <Label>من تاريخ</Label>
+                  <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} data-testid="input-export-date-from" />
+                </div>
+                <div className="space-y-2">
+                  <Label>إلى تاريخ</Label>
+                  <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} data-testid="input-export-date-to" />
+                </div>
+                <div className="space-y-2">
+                  <Label>الفرع</Label>
+                  <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+                    <SelectTrigger data-testid="select-export-branch"><SelectValue placeholder="جميع الفروع" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">جميع الفروع</SelectItem>
+                      {(branches as any[]).map((b: any) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid gap-4 md:grid-cols-3">
+                <Card className="border-2 border-green-200 hover:border-green-400 transition-colors">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2"><Calculator className="h-5 w-5 text-green-600" />قيود (Qoyod)</CardTitle>
+                    <CardDescription>تصدير بصيغة CSV متوافقة مع نظام قيود المحاسبي</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Button onClick={() => exportCSV('qoyod')} className="w-full bg-green-600 hover:bg-green-700" size="sm" data-testid="btn-export-qoyod">
+                      <Download className="h-4 w-4 ml-2" />تصدير لقيود
+                    </Button>
+                  </CardContent>
+                </Card>
+                <Card className="border-2 border-red-200 hover:border-red-400 transition-colors">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2"><Calculator className="h-5 w-5 text-red-600" />Zoho Books</CardTitle>
+                    <CardDescription>تصدير بصيغة CSV متوافقة مع نظام زوهو المحاسبي</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Button onClick={() => exportCSV('zoho')} variant="outline" className="w-full border-red-300 text-red-700 hover:bg-red-50" size="sm" data-testid="btn-export-zoho-csv">
+                      <Download className="h-4 w-4 ml-2" />تصدير لزوهو
+                    </Button>
+                  </CardContent>
+                </Card>
+                <Card className="border-2 border-blue-200 hover:border-blue-400 transition-colors">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2"><FileSpreadsheet className="h-5 w-5 text-blue-600" />CSV عام</CardTitle>
+                    <CardDescription>تصدير بصيغة CSV عامة لأي نظام محاسبي</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Button onClick={() => exportCSV('general')} variant="outline" className="w-full" size="sm" data-testid="btn-export-general-csv">
+                      <Download className="h-4 w-4 ml-2" />تصدير CSV
+                    </Button>
+                  </CardContent>
+                </Card>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>تصدير تقارير إضافية</CardTitle>
+              <CardDescription>تصدير تقارير المخزون والأصول والمشاريع</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 md:grid-cols-3">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2"><Calculator className="h-4 w-4 text-blue-600" />تقييم المخزون</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Button onClick={() => inventoryValuationMutation.mutate(selectedBranch === "all" ? undefined : selectedBranch || undefined)} disabled={inventoryValuationMutation.isPending} className="w-full" size="sm" data-testid="btn-export-valuation">
+                      <Download className="h-4 w-4 ml-2" />تصدير JSON
+                    </Button>
+                  </CardContent>
+                </Card>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>سجل التصديرات</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {exports.length === 0 ? (
+                <p className="text-center text-muted-foreground py-4">لا توجد تصديرات بعد</p>
+              ) : (
+                <div className="space-y-2">
+                  {exports.slice(0, 10).map((exp) => (
+                    <div key={exp.id} className="flex items-center justify-between p-3 rounded-lg border" data-testid={`export-row-${exp.id}`}>
+                      <div className="flex items-center gap-3">
+                        <Badge variant={exp.status === 'synced' ? 'default' : 'secondary'}>
+                          {exp.status === 'synced' ? 'تم المزامنة' : 'مكتمل'}
+                        </Badge>
+                        <span className="font-medium">{exp.exportType === 'inventory_valuation' ? 'تقييم المخزون' : exp.exportType === 'asset_movements' ? 'حركة الأصول' : exp.exportType === 'project_costs' ? 'تكاليف المشاريع' : exp.exportType}</span>
+                      </div>
+                      <span className="text-sm text-muted-foreground">{new Date(exp.createdAt).toLocaleDateString('en-GB')}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="settings" className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Calculator className="h-5 w-5 text-green-600" />قيود المحاسبي</CardTitle>
+                <CardDescription>نظام المحاسبة السحابي السعودي</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <StatusBadge configured={qoyodSettings?.configured || false} isActive={qoyodSettings?.isActive} />
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <Label>مفتاح API</Label>
+                    <SecureInput value={qoyodApiKey} onChange={setQoyodApiKey} placeholder="qoyod_api_xxxxxxxx" testId="input-qoyod-key" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>رابط API</Label>
+                    <Input value={qoyodApiUrl} onChange={(e) => setQoyodApiUrl(e.target.value)} placeholder="https://api.qoyod.com/api/2.0" data-testid="input-qoyod-url" dir="ltr" />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    احصل على المفتاح من <a href="https://www.qoyod.com" target="_blank" rel="noreferrer" className="underline text-primary">لوحة تحكم قيود</a> &gt; إعدادات &gt; API
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button className="flex-1" onClick={() => saveQoyod.mutate({ name: "قيود", config: { apiKey: qoyodApiKey, apiUrl: qoyodApiUrl } })} disabled={saveQoyod.isPending || !qoyodApiKey} data-testid="btn-save-qoyod">
+                    {saveQoyod.isPending ? <Loader2 className="h-4 w-4 ml-2 animate-spin" /> : <Save className="h-4 w-4 ml-2" />}
+                    حفظ
+                  </Button>
+                  <Button variant="outline" onClick={() => testQoyod.mutate()} disabled={testQoyod.isPending || !qoyodSettings?.configured} data-testid="btn-test-qoyod">
+                    {testQoyod.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+                  </Button>
+                </div>
               </CardContent>
             </Card>
+
             <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2"><FileSpreadsheet className="h-4 w-4 text-purple-600" />تكاليف المشاريع</CardTitle>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Calculator className="h-5 w-5 text-red-600" />Zoho Books</CardTitle>
+                <CardDescription>نظام زوهو المحاسبي</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-xs text-muted-foreground">جميع المشاريع مع الميزانيات والمصروفات</p>
-                <Button onClick={() => projectCostsMutation.mutate()} disabled={projectCostsMutation.isPending} className="w-full" size="sm" data-testid="btn-export-projects">
-                  <Download className="h-4 w-4 ml-2" />تصدير
-                </Button>
+              <CardContent className="space-y-4">
+                <StatusBadge configured={zohoSettings?.configured || false} isActive={zohoSettings?.isActive} />
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <Label>معرّف العميل (Client ID)</Label>
+                    <Input value={zohoClientId} onChange={(e) => setZohoClientId(e.target.value)} placeholder="1000.xxxxxxxx" data-testid="input-zoho-client-id" dir="ltr" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>المفتاح السري (Client Secret)</Label>
+                    <SecureInput value={zohoClientSecret} onChange={setZohoClientSecret} testId="input-zoho-secret" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>معرّف المنظمة (Organization ID)</Label>
+                    <Input value={zohoOrgId} onChange={(e) => setZohoOrgId(e.target.value)} placeholder="xxxxxxxx" data-testid="input-zoho-org-id" dir="ltr" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>المنطقة</Label>
+                    <Select value={zohoRegion} onValueChange={setZohoRegion}>
+                      <SelectTrigger data-testid="select-zoho-region"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="sa">السعودية (sa)</SelectItem>
+                        <SelectItem value="com">عالمي (com)</SelectItem>
+                        <SelectItem value="eu">أوروبا (eu)</SelectItem>
+                        <SelectItem value="in">الهند (in)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    سجّل التطبيق من <a href="https://api-console.zoho.sa" target="_blank" rel="noreferrer" className="underline text-primary">Zoho API Console</a>
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" className="flex-1" onClick={() => saveZoho.mutate({ name: "Zoho Books", config: { clientId: zohoClientId, clientSecret: zohoClientSecret, organizationId: zohoOrgId, region: zohoRegion } })} disabled={saveZoho.isPending || !zohoClientId} data-testid="btn-save-zoho">
+                    {saveZoho.isPending ? <Loader2 className="h-4 w-4 ml-2 animate-spin" /> : <Save className="h-4 w-4 ml-2" />}
+                    حفظ
+                  </Button>
+                  <Button variant="outline" onClick={() => testZoho.mutate()} disabled={testZoho.isPending || !zohoSettings?.configured} data-testid="btn-test-zoho">
+                    {testZoho.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>سجل التصديرات</CardTitle>
-          <CardDescription>التقارير المصدرة للنظام المحاسبي</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {exports.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">لا توجد تصديرات بعد</p>
-          ) : (
-            <div className="space-y-2">
-              {exports.slice(0, 10).map((exp) => (
-                <div key={exp.id} className="flex items-center justify-between p-3 rounded-lg border" data-testid={`export-row-${exp.id}`}>
-                  <div className="flex items-center gap-3">
-                    <Badge variant={exp.status === 'synced' ? 'default' : 'secondary'}>
-                      {exp.status === 'synced' ? 'تم المزامنة' : 'مكتمل'}
-                    </Badge>
-                    <span className="font-medium">{exportTypeLabels[exp.exportType] || exp.exportType}</span>
-                  </div>
-                  <span className="text-sm text-muted-foreground">{new Date(exp.createdAt).toLocaleDateString('en-GB')}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

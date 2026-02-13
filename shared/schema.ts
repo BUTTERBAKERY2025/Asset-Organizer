@@ -1413,6 +1413,127 @@ export const insertDataImportJobSchema = createInsertSchema(
 export type DataImportJob = typeof dataImportJobs.$inferSelect;
 export type InsertDataImportJob = z.infer<typeof insertDataImportJobSchema>;
 
+// Accounting Journal Entries - القيود المحاسبية
+export const accountingJournalEntries = pgTable("accounting_journal_entries", {
+  id: serial("id").primaryKey(),
+  entryNumber: text("entry_number").notNull(),
+  entryDate: text("entry_date").notNull(),
+  entryType: text("entry_type").notNull(), // 'sales', 'purchases', 'waste', 'production', 'transfer', 'salary', 'expense', 'manual'
+  description: text("description").notNull(),
+  branchId: varchar("branch_id").references(() => branches.id),
+  referenceType: text("reference_type"), // 'cashier_journal', 'waste_report', 'production_order', 'material_request', 'invoice'
+  referenceId: text("reference_id"),
+  totalDebit: numeric("total_debit", { precision: 12, scale: 2 }).default("0"),
+  totalCredit: numeric("total_credit", { precision: 12, scale: 2 }).default("0"),
+  vatAmount: numeric("vat_amount", { precision: 12, scale: 2 }).default("0"),
+  currency: text("currency").default("SAR"),
+  status: text("status").default("draft").notNull(), // 'draft', 'posted', 'reconciled', 'void'
+  reconciliationStatus: text("reconciliation_status").default("pending"), // 'pending', 'matched', 'discrepancy', 'resolved'
+  reconciliationNotes: text("reconciliation_notes"),
+  postedBy: varchar("posted_by").references(() => users.id),
+  postedAt: timestamp("posted_at"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_journal_entry_date").on(table.entryDate),
+  index("idx_journal_entry_type").on(table.entryType),
+  index("idx_journal_entry_branch").on(table.branchId),
+  index("idx_journal_entry_status").on(table.status),
+  index("idx_journal_reconciliation").on(table.reconciliationStatus),
+]);
+
+export const insertAccountingJournalEntrySchema = createInsertSchema(accountingJournalEntries).omit({
+  id: true,
+  createdAt: true,
+  postedAt: true,
+});
+
+export type AccountingJournalEntry = typeof accountingJournalEntries.$inferSelect;
+export type InsertAccountingJournalEntry = z.infer<typeof insertAccountingJournalEntrySchema>;
+
+// Journal Entry Lines - بنود القيد المحاسبي
+export const journalEntryLines = pgTable("journal_entry_lines", {
+  id: serial("id").primaryKey(),
+  journalEntryId: integer("journal_entry_id").references(() => accountingJournalEntries.id).notNull(),
+  lineNumber: integer("line_number").notNull(),
+  accountCode: text("account_code").notNull(),
+  accountName: text("account_name").notNull(),
+  description: text("description"),
+  debitAmount: numeric("debit_amount", { precision: 12, scale: 2 }).default("0"),
+  creditAmount: numeric("credit_amount", { precision: 12, scale: 2 }).default("0"),
+  costCenter: text("cost_center"),
+  vatCode: text("vat_code"),
+  vatRate: numeric("vat_rate", { precision: 5, scale: 2 }),
+});
+
+export const insertJournalEntryLineSchema = createInsertSchema(journalEntryLines).omit({
+  id: true,
+});
+
+export type JournalEntryLine = typeof journalEntryLines.$inferSelect;
+export type InsertJournalEntryLine = z.infer<typeof insertJournalEntryLineSchema>;
+
+// Accounting Reconciliation Records - سجلات التسوية
+export const accountingReconciliations = pgTable("accounting_reconciliations", {
+  id: serial("id").primaryKey(),
+  reconciliationDate: text("reconciliation_date").notNull(),
+  periodFrom: text("period_from").notNull(),
+  periodTo: text("period_to").notNull(),
+  branchId: varchar("branch_id").references(() => branches.id),
+  totalSystemSales: numeric("total_system_sales", { precision: 12, scale: 2 }).default("0"),
+  totalActualDeposits: numeric("total_actual_deposits", { precision: 12, scale: 2 }).default("0"),
+  totalVariance: numeric("total_variance", { precision: 12, scale: 2 }).default("0"),
+  totalWasteValue: numeric("total_waste_value", { precision: 12, scale: 2 }).default("0"),
+  totalPurchases: numeric("total_purchases", { precision: 12, scale: 2 }).default("0"),
+  vatCollected: numeric("vat_collected", { precision: 12, scale: 2 }).default("0"),
+  vatPaid: numeric("vat_paid", { precision: 12, scale: 2 }).default("0"),
+  netVat: numeric("net_vat", { precision: 12, scale: 2 }).default("0"),
+  entriesCount: integer("entries_count").default(0),
+  matchedCount: integer("matched_count").default(0),
+  discrepancyCount: integer("discrepancy_count").default(0),
+  status: text("status").default("draft").notNull(), // 'draft', 'in_review', 'approved', 'exported'
+  notes: text("notes"),
+  preparedBy: varchar("prepared_by").references(() => users.id),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_reconciliation_date").on(table.reconciliationDate),
+  index("idx_reconciliation_branch").on(table.branchId),
+  index("idx_reconciliation_status").on(table.status),
+]);
+
+export const insertAccountingReconciliationSchema = createInsertSchema(accountingReconciliations).omit({
+  id: true,
+  createdAt: true,
+  approvedAt: true,
+});
+
+export type AccountingReconciliation = typeof accountingReconciliations.$inferSelect;
+export type InsertAccountingReconciliation = z.infer<typeof insertAccountingReconciliationSchema>;
+
+// Chart of Accounts - دليل الحسابات
+export const chartOfAccounts = pgTable("chart_of_accounts", {
+  id: serial("id").primaryKey(),
+  accountCode: text("account_code").notNull().unique(),
+  accountName: text("account_name").notNull(),
+  accountNameEn: text("account_name_en"),
+  accountType: text("account_type").notNull(), // 'asset', 'liability', 'equity', 'revenue', 'expense'
+  parentCode: text("parent_code"),
+  level: integer("level").default(1),
+  isActive: text("is_active").default("true"),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertChartOfAccountSchema = createInsertSchema(chartOfAccounts).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ChartOfAccount = typeof chartOfAccounts.$inferSelect;
+export type InsertChartOfAccount = z.infer<typeof insertChartOfAccountSchema>;
+
 // Accounting Exports - تصدير للمحاسبة
 export const accountingExports = pgTable("accounting_exports", {
   id: serial("id").primaryKey(),
