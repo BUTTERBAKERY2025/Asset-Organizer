@@ -11837,15 +11837,162 @@ export async function registerRoutes(
       
       console.log(`[COMPARISON] Found ${barReceipts.length} display bar receipts, ${productionOrders.length} production orders`);
       
-      // Group sales by date + product + branch
+      // Build product name matching system
+      // Sales data has bilingual names like "Almond croissant - كرواسون اللوز"
+      // System products use Arabic-only names like "كرواسون اللوز"
+      
+      // Normalize Arabic text (remove diacritics, normalize alef/taa)
+      function normalizeArabic(text: string): string {
+        return text
+          .replace(/[\u064B-\u065F\u0670]/g, '') // remove tashkeel
+          .replace(/[أإآ]/g, 'ا') // normalize alef
+          .replace(/ة/g, 'ه') // normalize taa marbuta
+          .replace(/ى/g, 'ي') // normalize alef maqsura
+          .replace(/\s+/g, ' ')
+          .trim();
+      }
+      
+      // Extract Arabic text from a bilingual string
+      function extractArabic(text: string): string {
+        const arabicChars = text.match(/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\s]+/g);
+        if (arabicChars) {
+          return arabicChars.join(' ').replace(/\s+/g, ' ').trim();
+        }
+        return '';
+      }
+      
+      // Build lookup maps for matching
+      const allProductsData = await db.select({ name: productsTable.name, category: productsTable.category }).from(productsTable);
+      const systemProductNames = allProductsData.map(p => p.name).filter(Boolean) as string[];
+      const productCategoryMap = new Map<string, string>();
+      for (const p of allProductsData) {
+        if (p.name && p.category) productCategoryMap.set(p.name, p.category);
+      }
+      const exactNameMap = new Map<string, string>(); // normalized → original product name
+      const normalizedProductNames = new Map<string, string>(); // normalized arabic → original
+      for (const name of systemProductNames) {
+        exactNameMap.set(name.toLowerCase().trim(), name);
+        const normalized = normalizeArabic(name);
+        normalizedProductNames.set(normalized, name);
+      }
+      
+      // Cache for resolved names to avoid repeated lookups
+      const nameCache = new Map<string, string>();
+      
+      function resolveProductName(salesName: string): string {
+        if (!salesName) return salesName;
+        const cached = nameCache.get(salesName);
+        if (cached !== undefined) return cached;
+        
+        // 1. Exact match
+        if (exactNameMap.has(salesName.toLowerCase().trim())) {
+          const resolved = exactNameMap.get(salesName.toLowerCase().trim())!;
+          nameCache.set(salesName, resolved);
+          return resolved;
+        }
+        
+        // 2. Split by separator (- or –) and check each part
+        const separators = [' - ', ' – ', '- ', ' -', '-'];
+        for (const sep of separators) {
+          if (salesName.includes(sep)) {
+            const parts = salesName.split(sep).map(p => p.trim()).filter(Boolean);
+            for (const part of parts) {
+              if (exactNameMap.has(part.toLowerCase())) {
+                const resolved = exactNameMap.get(part.toLowerCase())!;
+                nameCache.set(salesName, resolved);
+                return resolved;
+              }
+              // Check normalized arabic
+              const normalizedPart = normalizeArabic(part);
+              if (normalizedProductNames.has(normalizedPart)) {
+                const resolved = normalizedProductNames.get(normalizedPart)!;
+                nameCache.set(salesName, resolved);
+                return resolved;
+              }
+            }
+          }
+        }
+        
+        // 3. Extract Arabic portion from the bilingual name and match
+        const arabicPortion = extractArabic(salesName);
+        if (arabicPortion && arabicPortion.length > 2) {
+          const normalizedArabic = normalizeArabic(arabicPortion);
+          if (normalizedProductNames.has(normalizedArabic)) {
+            const resolved = normalizedProductNames.get(normalizedArabic)!;
+            nameCache.set(salesName, resolved);
+            return resolved;
+          }
+          
+          // 4. Fuzzy: check if any system product name is contained in the Arabic portion or vice versa
+          let bestMatch = '';
+          let bestMatchLen = 0;
+          for (const [normName, origName] of normalizedProductNames) {
+            if (normName.length < 3) continue;
+            if (normalizedArabic.includes(normName) || normName.includes(normalizedArabic)) {
+              if (normName.length > bestMatchLen) {
+                bestMatchLen = normName.length;
+                bestMatch = origName;
+              }
+            }
+          }
+          if (bestMatch) {
+            nameCache.set(salesName, bestMatch);
+            return bestMatch;
+          }
+        }
+        
+        // 5. English-to-Arabic keyword matching for pure English names
+        const englishKeywordMap: Record<string, string> = {
+          'matilda croissant nutella': 'ماتيلدا كرواسون نوتيلا',
+          'choclate matilda': 'ماتيلدا شوكولاته',
+          'chocolate matilda': 'ماتيلدا شوكولاته',
+          'avocado croissant': 'أفوكادو سكرمبل كرواسون',
+          'french toast': 'فرنش توست',
+          'brioche birsaola': 'بريوش بيرزاولا',
+          'brioche haloumey': 'بريوش حلومى',
+          'brioche halloumi': 'بريوش حلومى',
+          'brioche smoked turkey': 'بريوش تركى مدخن',
+          'brioche tunna': 'بريوش تونة',
+          'brioche tuna': 'بريوش تونة',
+          'bruschetta egg': 'بروسكيتا البيض',
+          'menemen': 'منمن',
+          'turkish egg': 'بيض تركى',
+          'cheese croissant': 'كرواسون جبنة',
+          'eggs benedict croissant': 'بيض بنديكت كرواسون مع سالمون',
+        };
+        const lowerSales = salesName.toLowerCase().trim();
+        if (englishKeywordMap[lowerSales]) {
+          const translated = englishKeywordMap[lowerSales];
+          if (exactNameMap.has(translated.toLowerCase())) {
+            const resolved = exactNameMap.get(translated.toLowerCase())!;
+            nameCache.set(salesName, resolved);
+            return resolved;
+          }
+          nameCache.set(salesName, translated);
+          return translated;
+        }
+        
+        // No match found, use original name
+        nameCache.set(salesName, salesName);
+        return salesName;
+      }
+      
+      // Group sales by date + product + branch (using resolved product names)
       const salesByKey = new Map<string, { quantity: number; value: number; category: string | null }>();
+      let resolvedCount = 0;
+      let unresolvedCount = 0;
       for (const sale of salesData) {
-        const key = `${sale.branchId}|${sale.salesDate}|${sale.productName}`;
-        const existing = salesByKey.get(key) || { quantity: 0, value: 0, category: sale.productCategory };
+        const resolvedName = resolveProductName(sale.productName || '');
+        if (resolvedName !== sale.productName) resolvedCount++;
+        else unresolvedCount++;
+        const key = `${sale.branchId}|${sale.salesDate}|${resolvedName}`;
+        const resolvedCategory = productCategoryMap.get(resolvedName) || sale.productCategory;
+        const existing = salesByKey.get(key) || { quantity: 0, value: 0, category: resolvedCategory };
         existing.quantity += sale.quantitySold || 0;
         existing.value += sale.salesValue || 0;
         salesByKey.set(key, existing);
       }
+      console.log(`[COMPARISON] Name resolution: ${resolvedCount} matched, ${unresolvedCount} used original name`);
       
       // Group production/received by date + product + branch
       // Priority: Display bar receipts (actual received) > Production orders (planned)
