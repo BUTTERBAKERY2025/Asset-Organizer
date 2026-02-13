@@ -51,6 +51,8 @@ import {
   advancedProductionOrders,
   productionOrderItems,
   comparisonStatusHistory,
+  displayBarReceipts,
+  products as productsTable,
   productPrices,
   wasteRiskRules,
   wasteRiskAlerts,
@@ -11809,6 +11811,32 @@ export async function registerRoutes(
           .where(inArray(productionOrderItems.orderId, orderIds));
       }
       
+      // Get display bar receipts for the period (actual received production at display bar)
+      const receiptConditions: any[] = [
+        gte(displayBarReceipts.receiptDate, startDate as string),
+        lte(displayBarReceipts.receiptDate, endDate as string),
+      ];
+      if (effectiveBranchId) {
+        receiptConditions.push(eq(displayBarReceipts.branchId, effectiveBranchId));
+      }
+      
+      const barReceipts = await db
+        .select({
+          id: displayBarReceipts.id,
+          branchId: displayBarReceipts.branchId,
+          productId: displayBarReceipts.productId,
+          receiptDate: displayBarReceipts.receiptDate,
+          quantity: displayBarReceipts.quantity,
+          productName: productsTable.name,
+          productCategory: productsTable.category,
+          basePrice: productsTable.basePrice,
+        })
+        .from(displayBarReceipts)
+        .leftJoin(productsTable, eq(displayBarReceipts.productId, productsTable.id))
+        .where(and(...receiptConditions));
+      
+      console.log(`[COMPARISON] Found ${barReceipts.length} display bar receipts, ${productionOrders.length} production orders`);
+      
       // Group sales by date + product + branch
       const salesByKey = new Map<string, { quantity: number; value: number; category: string | null }>();
       for (const sale of salesData) {
@@ -11819,14 +11847,36 @@ export async function registerRoutes(
         salesByKey.set(key, existing);
       }
       
-      // Group production by date + product + branch
-      const productionByKey = new Map<string, { quantity: number; value: number; category: string | null }>();
+      // Group production/received by date + product + branch
+      // Priority: Display bar receipts (actual received) > Production orders (planned)
+      const productionByKey = new Map<string, { quantity: number; value: number; category: string | null; source: string }>();
+      
+      // Source 1: Display bar receipts (actual received at display bar - PRIMARY source)
+      for (const receipt of barReceipts) {
+        if (!receipt.productName) continue;
+        const key = `${receipt.branchId}|${receipt.receiptDate}|${receipt.productName}`;
+        const existing = productionByKey.get(key);
+        const unitPrice = receipt.basePrice || 0;
+        if (!existing) {
+          productionByKey.set(key, { 
+            quantity: receipt.quantity || 0, 
+            value: (receipt.quantity || 0) * unitPrice, 
+            category: receipt.productCategory || null,
+            source: "receipt"
+          });
+        } else {
+          existing.quantity += receipt.quantity || 0;
+          existing.value += (receipt.quantity || 0) * unitPrice;
+        }
+      }
+      
+      // Source 2: Production orders (only for products NOT already covered by receipts)
       for (const order of productionOrders) {
         const orderItems = productionItems.filter(i => i.orderId === order.id);
         for (const item of orderItems) {
           const key = `${order.targetBranchId}|${order.startDate}|${item.productName}`;
-          const existing = productionByKey.get(key) || { quantity: 0, value: 0, category: item.productCategory };
-          // Use producedQuantity if available, otherwise use targetQuantity
+          if (productionByKey.has(key)) continue;
+          const existing = productionByKey.get(key) || { quantity: 0, value: 0, category: item.productCategory, source: "order" };
           const qty = item.producedQuantity || item.targetQuantity || 0;
           existing.quantity += qty;
           existing.value += qty * (item.unitPrice || 0);
