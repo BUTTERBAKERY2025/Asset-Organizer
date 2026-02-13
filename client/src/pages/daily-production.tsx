@@ -679,6 +679,19 @@ export default function DailyProductionPage() {
     return map;
   }, [batches]);
 
+  const productEnNameMap = useMemo(() => {
+    const map: Record<number, string> = {};
+    (products || []).forEach(p => {
+      if (p.nameEn) map[p.id] = p.nameEn;
+    });
+    return map;
+  }, [products]);
+
+  const getEnName = (batch: DailyProductionBatch) => {
+    if (batch.productId && productEnNameMap[batch.productId]) return productEnNameMap[batch.productId];
+    return null;
+  };
+
   const handleProductCardClick = (product: Product) => {
     setQuantityDialogProduct(product);
     setQuickQuantity("");
@@ -1226,8 +1239,10 @@ export default function DailyProductionPage() {
                          product.category === "تجمعات" ? <Users className="h-5 w-5 sm:h-6 sm:w-6 text-purple-600" /> :
                          <Factory className="h-5 w-5 sm:h-6 sm:w-6 text-amber-600" />}
                       </div>
-                      <span className="text-xs sm:text-sm font-medium leading-tight line-clamp-2 min-h-[2rem]">{product.name}</span>
-                      <span className="text-[10px] text-muted-foreground mt-1">{product.category}</span>
+                      <span className="text-xs sm:text-sm font-medium leading-tight line-clamp-2">{product.name}</span>
+                      {product.nameEn && (
+                        <span className="text-[10px] text-muted-foreground leading-tight line-clamp-1">{product.nameEn}</span>
+                      )}
                       {todayQty > 0 && (
                         <div className="absolute -top-1.5 -left-1.5 bg-green-500 text-white text-[10px] font-bold rounded-full w-6 h-6 flex items-center justify-center shadow-sm">
                           {todayQty}
@@ -1288,6 +1303,9 @@ export default function DailyProductionPage() {
                         >
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate">{batch.productName}</p>
+                            {getEnName(batch) && (
+                              <p className="text-[11px] text-muted-foreground truncate ltr">{getEnName(batch)}</p>
+                            )}
                             <p className="text-xs text-muted-foreground">
                               {batch.quantity} {batch.unit || "قطعة"} - {format(new Date(batch.producedAt), "yyyy-MM-dd")}
                             </p>
@@ -1360,6 +1378,9 @@ export default function DailyProductionPage() {
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium truncate">{batch.productName}</p>
+                              {getEnName(batch) && (
+                                <p className="text-[11px] text-muted-foreground truncate ltr">{getEnName(batch)}</p>
+                              )}
                               <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
                                 <span className="flex items-center gap-0.5">
                                   <Clock className="h-2.5 w-2.5" />
@@ -1490,6 +1511,9 @@ export default function DailyProductionPage() {
                                     </div>
                                     <div className="flex-1 min-w-0">
                                       <p className="font-medium text-sm truncate">{batch.productName}</p>
+                                      {getEnName(batch) && (
+                                        <p className="text-[11px] text-muted-foreground truncate ltr">{getEnName(batch)}</p>
+                                      )}
                                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                         <span>{formatTime(batch.producedAt)}</span>
                                         <span>•</span>
@@ -1770,7 +1794,14 @@ export default function DailyProductionPage() {
                                     {formatTime(batch.producedAt)}
                                   </div>
                                 </TableCell>
-                                <TableCell className="font-medium">{batch.productName}</TableCell>
+                                <TableCell>
+                                  <div>
+                                    <span className="font-medium">{batch.productName}</span>
+                                    {getEnName(batch) && (
+                                      <span className="block text-xs text-muted-foreground ltr">{getEnName(batch)}</span>
+                                    )}
+                                  </div>
+                                </TableCell>
                                 <TableCell>
                                   <Badge variant="outline" className="text-xs">
                                     {batch.productCategory || "-"}
@@ -1960,7 +1991,10 @@ export default function DailyProductionPage() {
               )}
             </div>
             <DialogTitle className="text-lg font-bold text-white">{quantityDialogProduct?.name}</DialogTitle>
-            <DialogDescription className="text-amber-100 text-sm mt-1">
+            {quantityDialogProduct?.nameEn && (
+              <p className="text-amber-100/90 text-sm font-medium">{quantityDialogProduct.nameEn}</p>
+            )}
+            <DialogDescription className="text-amber-100 text-xs mt-1">
               {quantityDialogProduct?.category} {quantityDialogProduct?.unit ? `• ${quantityDialogProduct.unit}` : ""}
             </DialogDescription>
           </div>
