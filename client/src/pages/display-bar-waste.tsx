@@ -1238,7 +1238,7 @@ export default function DisplayBarWastePage() {
                               <div>
                                 <Label className="text-xs">المنتج (ابحث بالاسم أو الكود)</Label>
                                 <ProductSelector
-                                  products={products.filter(p => p.isActive !== "false")}
+                                  products={products.filter(p => p.isActive !== "false" && p.category !== "باريستا" && p.category !== "بيتزا")}
                                   value={receiptForm.productId}
                                   onSelect={(id) => setReceiptForm(f => ({ ...f, productId: id }))}
                                   placeholder="ابحث عن المنتج..."
