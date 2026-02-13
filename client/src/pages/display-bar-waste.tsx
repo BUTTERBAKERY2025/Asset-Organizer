@@ -598,6 +598,26 @@ export default function DisplayBarWastePage() {
     onError: () => toast({ title: "حدث خطأ", variant: "destructive" }),
   });
 
+  const syncReceiptsMutation = useMutation({
+    mutationFn: async () => {
+      const params = new URLSearchParams();
+      if (selectedBranch && selectedBranch !== "all") params.set("branchId", selectedBranch);
+      params.set("date", selectedDate);
+      return apiRequest("POST", `/api/display-bar/sync-receipts?${params.toString()}`);
+    },
+    onSuccess: async (response: any) => {
+      const data = await response.json();
+      queryClient.invalidateQueries({ queryKey: ["/api/display-bar/receipts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/display-bar/summary"] });
+      if (data.synced > 0) {
+        toast({ title: `تمت مزامنة ${data.synced} إيصال من الإنتاج`, description: `${data.skipped} موجود مسبقاً` });
+      } else {
+        toast({ title: "لا يوجد إيصالات مفقودة", description: "جميع الإيصالات مزامنة بالفعل" });
+      }
+    },
+    onError: () => toast({ title: "حدث خطأ في المزامنة", variant: "destructive" }),
+  });
+
   const createWasteReportMutation = useMutation({
     mutationFn: async (data: any) => {
       const response = await apiRequest("POST", "/api/waste-reports", data);
@@ -1254,6 +1274,17 @@ export default function DisplayBarWastePage() {
                     title="تقرير استلام الإنتاج"
                     subtitle={`التاريخ: ${selectedDate}`}
                   />
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    className="gap-1 h-11 sm:h-9" 
+                    onClick={() => syncReceiptsMutation.mutate()}
+                    disabled={syncReceiptsMutation.isPending}
+                    data-testid="btn-sync-receipts"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${syncReceiptsMutation.isPending ? 'animate-spin' : ''}`} />
+                    مزامنة الإنتاج
+                  </Button>
                   <Dialog open={showReceiptDialog} onOpenChange={setShowReceiptDialog}>
                     <DialogTrigger asChild>
                       <Button size="sm" className="gap-1 h-11 sm:h-9" data-testid="btn-add-receipt">

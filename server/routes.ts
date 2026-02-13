@@ -10098,6 +10098,27 @@ export async function registerRoutes(
     }
   });
 
+  // Sync missing display bar receipts from production batches
+  app.post("/api/display-bar/sync-receipts", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
+    try {
+      const queryBranchId = req.query.branchId as string | undefined;
+      const date = req.query.date as string | undefined;
+      
+      const branchFilter = getEffectiveBranchFilter(req, queryBranchId);
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بالوصول" });
+      }
+      
+      const effectiveBranchId = branchFilter.singleBranchId;
+      const allowedBranchIds = branchFilter.branchIds;
+      const result = await storage.syncMissingDisplayBarReceipts(effectiveBranchId ?? undefined, date, allowedBranchIds ?? undefined);
+      res.json(result);
+    } catch (error) {
+      console.error("Error syncing display bar receipts:", error);
+      res.status(500).json({ error: "Failed to sync display bar receipts" });
+    }
+  });
+
   // Get Display Bar Daily Summary
   app.get("/api/display-bar/summary", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {

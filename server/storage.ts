@@ -501,7 +501,7 @@ import {
 
 type TransferHistory = typeof transferHistory.$inferSelect;
 import { db, pool } from "./db";
-import { eq, and, gte, lte, desc, or, inArray, sql, isNull, ilike } from "drizzle-orm";
+import { eq, and, gte, lte, desc, or, inArray, sql, isNull, isNotNull, ilike } from "drizzle-orm";
 import bcrypt from "bcrypt";
 
 export type PermissionSource = 'direct' | 'role' | 'override_grant' | 'override_deny';
@@ -851,6 +851,7 @@ export interface IStorage {
   // Display Bar Receipts
   getDisplayBarReceipts(branchId?: string, date?: string): Promise<DisplayBarReceipt[]>;
   createDisplayBarReceipt(data: InsertDisplayBarReceipt): Promise<DisplayBarReceipt>;
+  syncMissingDisplayBarReceipts(branchId?: string, date?: string, allowedBranchIds?: string[]): Promise<{ synced: number; skipped: number; errors: string[] }>;
   
   // Display Bar Daily Summary
   getDisplayBarDailySummary(branchId?: string, date?: string): Promise<DisplayBarDailySummary[]>;
@@ -5267,6 +5268,73 @@ export class DatabaseStorage implements IStorage {
   async createDisplayBarReceipt(data: InsertDisplayBarReceipt): Promise<DisplayBarReceipt> {
     const [receipt] = await db.insert(displayBarReceipts).values(data).returning();
     return receipt;
+  }
+
+  async syncMissingDisplayBarReceipts(branchId?: string, date?: string, allowedBranchIds?: string[]): Promise<{ synced: number; skipped: number; errors: string[] }> {
+    const saudiTime = getSaudiArabiaTime();
+    
+    const conditions = [
+      eq(dailyProductionBatches.destination, 'display_bar'),
+      eq(dailyProductionBatches.status, 'finished'),
+      isNotNull(dailyProductionBatches.productId),
+    ];
+    
+    if (date) {
+      conditions.push(eq(dailyProductionBatches.productionDate, date));
+    }
+    
+    if (branchId) {
+      conditions.push(eq(dailyProductionBatches.branchId, branchId));
+    } else if (allowedBranchIds && allowedBranchIds.length > 0) {
+      conditions.push(inArray(dailyProductionBatches.branchId, allowedBranchIds));
+    }
+    
+    const batches = await db.select().from(dailyProductionBatches).where(and(...conditions));
+    
+    const existingRefs = batches.length > 0 
+      ? await db.select({ productionBatch: displayBarReceipts.productionBatch })
+          .from(displayBarReceipts)
+          .where(inArray(displayBarReceipts.productionBatch, batches.map(b => `PROD-${b.id}`)))
+      : [];
+    const existingRefSet = new Set(existingRefs.map(r => r.productionBatch));
+    
+    let synced = 0;
+    let skipped = 0;
+    const errors: string[] = [];
+    
+    for (const batch of batches) {
+      const batchRef = `PROD-${batch.id}`;
+      
+      if (existingRefSet.has(batchRef)) {
+        skipped++;
+        continue;
+      }
+      
+      try {
+        const receiptDate = batch.productionDate || saudiTime.date;
+        await db.insert(displayBarReceipts).values({
+          branchId: batch.branchId,
+          productId: batch.productId!,
+          receiptDate,
+          receiptTime: saudiTime.timeShort,
+          quantity: batch.quantity,
+          productionBatch: batchRef,
+          notes: `مزامنة تلقائية - استلام من الإنتاج اليومي - ${batch.productName}`,
+        });
+        synced++;
+        console.log(`[Sync] Created missing receipt for ${batchRef}`);
+      } catch (err: any) {
+        if (err.code === '23505') {
+          skipped++;
+        } else {
+          errors.push(`Batch ${batch.id}: ${err.message}`);
+          console.error(`[Sync] Error for batch ${batch.id}:`, err);
+        }
+      }
+    }
+    
+    console.log(`[Sync] Complete: synced=${synced}, skipped=${skipped}, errors=${errors.length}`);
+    return { synced, skipped, errors };
   }
 
   // Display Bar Daily Summary
