@@ -12041,7 +12041,6 @@ export async function registerRoutes(
       
       // Prepare comparison records
       const comparisonsToInsert: any[] = [];
-      const keysToDelete: { branchId: string; date: string; productName: string }[] = [];
       
       for (const key of allKeys as string[]) {
         const [keyBranchId, date, productName] = key.split("|");
@@ -12050,10 +12049,7 @@ export async function registerRoutes(
         const category = production.category || sales.category;
         
         // Made-to-order categories (drinks/pizza) - they don't have waste
-        // These are produced when customer orders, so production = sales by nature
-        // We still need to delete any existing records but don't insert new ones
         if (isMadeToOrderCategory(category)) {
-          keysToDelete.push({ branchId: keyBranchId, date, productName });
           continue;
         }
         
@@ -12076,7 +12072,6 @@ export async function registerRoutes(
           status = "stored";
         }
         
-        keysToDelete.push({ branchId: keyBranchId, date, productName });
         comparisonsToInsert.push({
           branchId: keyBranchId,
           comparisonDate: date,
@@ -12096,16 +12091,16 @@ export async function registerRoutes(
         comparisonsCreated++;
       }
       
-      // Delete existing and insert new comparisons in a transaction for atomicity
+      // Delete ALL existing comparisons for the date range and branch, then insert new ones
       await db.transaction(async (tx) => {
-        for (const keyData of keysToDelete) {
-          await tx.delete(dailyComparisons)
-            .where(and(
-              eq(dailyComparisons.branchId, keyData.branchId),
-              eq(dailyComparisons.comparisonDate, keyData.date),
-              eq(dailyComparisons.productName, keyData.productName)
-            ));
+        const deleteConditions: any[] = [
+          gte(dailyComparisons.comparisonDate, startDate as string),
+          lte(dailyComparisons.comparisonDate, endDate as string),
+        ];
+        if (effectiveBranchId) {
+          deleteConditions.push(eq(dailyComparisons.branchId, effectiveBranchId));
         }
+        await tx.delete(dailyComparisons).where(and(...deleteConditions));
         
         if (comparisonsToInsert.length > 0) {
           await tx.insert(dailyComparisons).values(comparisonsToInsert);
