@@ -12918,12 +12918,13 @@ export async function registerRoutes(
             );
             
             let unitPrice = 0;
-            if (analytics.totalQuantitySold > 0 && analytics.totalRevenue > 0) {
-              unitPrice = analytics.totalRevenue / analytics.totalQuantitySold;
-            } else if (product?.basePrice && product.basePrice > 0) {
+            if (product?.basePrice && product.basePrice > 0) {
               unitPrice = product.basePrice;
+            } else if (analytics.totalQuantitySold > 0 && analytics.totalRevenue > 0) {
+              const historicalPrice = analytics.totalRevenue / analytics.totalQuantitySold;
+              unitPrice = historicalPrice >= 5 ? historicalPrice : 20;
             } else {
-              unitPrice = 15;
+              unitPrice = 20;
             }
             
             const quantity = Math.max(1, Math.round(allocatedSalesValue / unitPrice));
@@ -12964,7 +12965,7 @@ export async function registerRoutes(
               p.name?.toLowerCase() === analytics.productName?.toLowerCase()
             );
             
-            const unitPrice = product?.basePrice || 15;
+            const unitPrice = (product?.basePrice && product.basePrice > 0) ? product.basePrice : 20;
             const allocatedValue = targetSalesValue * quantityShare;
             const quantity = Math.max(1, Math.round(allocatedValue / unitPrice));
             const totalPrice = quantity * unitPrice;
@@ -13786,33 +13787,69 @@ export async function registerRoutes(
           .trim();
       };
       
+      const englishToArabicMap: Record<string, string> = {
+        'croissant': 'كرواسون', 'almond': 'لوز', 'chocolate': 'شوكولاته', 'avocado': 'أفوكادو',
+        'brioche': 'بريوش', 'haloumi': 'حلومى', 'halloumi': 'حلومى', 'turkey': 'تركى',
+        'tuna': 'تونة', 'tunna': 'تونة', 'salmon': 'سالمون', 'egg': 'بيض', 'eggs': 'بيض',
+        'bruschetta': 'بروسكيتا', 'focaccia': 'فوكاشيا', 'pizza': 'بيتزا',
+        'danish': 'دانش', 'pesto': 'بيستو', 'sandwich': 'ساندوتش', 'salad': 'سلطة',
+        'cake': 'كيك', 'cheesecake': 'تشيز كيك', 'brownie': 'براوني',
+        'coffee': 'قهوة', 'latte': 'لاتيه', 'cappuccino': 'كابتشينو', 'espresso': 'اسبريسو',
+        'mocha': 'موكا', 'caramel': 'كراميل', 'matcha': 'ماتشا',
+        'cinnamon': 'قرفة', 'vanilla': 'فانيلا', 'cream': 'كريمة',
+        'french': 'فرنسي', 'toast': 'توست', 'granola': 'جرانولا',
+        'omelette': 'أومليت', 'omelet': 'أومليت', 'scramble': 'اسكرمبل',
+        'benedict': 'بنديكت', 'royal': 'رويال', 'margherita': 'مارجريتا',
+        'pepperoni': 'بيبروني', 'mushroom': 'مشروم', 'chicken': 'دجاج',
+        'beef': 'لحم', 'smoked': 'مدخن', 'grilled': 'مشوى',
+        'mini': 'ميني', 'box': 'بوكس', 'mix': 'ميكس',
+        'birsaola': 'بيرزاولا', 'brisaola': 'بيرزاولا',
+        'ranch': 'رانش', 'truffle': 'ترافل', 'burrata': 'بوراتا',
+        'maritozzo': 'ماريتوزو', 'matilda': 'ماتيلدا',
+        'labna': 'لبنة', 'labne': 'لبنة', 'thyme': 'زعتر',
+        'cheddar': 'شيدر', 'mozzarella': 'موزاريلا',
+        'ice': 'آيس', 'iced': 'آيس', 'hot': 'حار', 'cold': 'بارد',
+        'caramelito': 'كرامليتو', 'butterbeaker': 'بتربيكر',
+        'flat': 'فلات', 'con': 'كون',
+      };
+
+      const translateToArabicKeywords = (name: string): string[] => {
+        const words = name.toLowerCase().replace(/[-_|]/g, ' ').split(/\s+/).filter(w => w.length > 1);
+        const arabicWords: string[] = [];
+        for (const word of words) {
+          if (englishToArabicMap[word]) {
+            arabicWords.push(englishToArabicMap[word]);
+          }
+          for (const [eng, ar] of Object.entries(englishToArabicMap)) {
+            if (word.includes(eng) && word !== eng) {
+              arabicWords.push(ar);
+            }
+          }
+        }
+        return arabicWords;
+      };
+
       const findMatchingProduct = (productName: string, productId: number | null) => {
-        // First try exact ID match
         if (productId) {
           const exactMatch = products.find(p => p.id === productId);
           if (exactMatch) return exactMatch;
         }
         
-        // Then try exact name match
         const exactNameMatch = products.find(p => p.name === productName);
         if (exactNameMatch) return exactNameMatch;
         
-        // Fuzzy matching - try various strategies
         const normalizedName = normalizeProductName(productName);
         const nameParts = normalizedName.split(' ').filter(p => p.length > 2);
         
-        // Try normalized name match
         let fuzzyMatch = products.find(p => normalizeProductName(p.name) === normalizedName);
         if (fuzzyMatch) return fuzzyMatch;
         
-        // Try if one contains the other
         fuzzyMatch = products.find(p => {
           const pNorm = normalizeProductName(p.name);
           return pNorm.includes(normalizedName) || normalizedName.includes(pNorm);
         });
         if (fuzzyMatch) return fuzzyMatch;
         
-        // Try matching significant parts
         if (nameParts.length >= 2) {
           fuzzyMatch = products.find(p => {
             const pNorm = normalizeProductName(p.name);
@@ -13821,7 +13858,6 @@ export async function registerRoutes(
           if (fuzzyMatch) return fuzzyMatch;
         }
         
-        // Try English-only or Arabic-only part matching
         const englishPart = productName.match(/[a-zA-Z\s]+/g)?.join(' ').trim();
         const arabicPart = productName.match(/[\u0600-\u06FF\s]+/g)?.join(' ').trim();
         
@@ -13839,20 +13875,40 @@ export async function registerRoutes(
           if (fuzzyMatch) return fuzzyMatch;
         }
         
+        const translatedKeywords = translateToArabicKeywords(productName);
+        if (translatedKeywords.length >= 2) {
+          fuzzyMatch = products.find(p => {
+            const pNorm = normalizeProductName(p.name);
+            return translatedKeywords.filter(kw => pNorm.includes(kw)).length >= 2;
+          });
+          if (fuzzyMatch) return fuzzyMatch;
+        }
+        if (translatedKeywords.length === 1) {
+          fuzzyMatch = products.find(p => {
+            const pNorm = normalizeProductName(p.name);
+            return pNorm.includes(translatedKeywords[0]) && (
+              (nameParts.length > 0 && nameParts.some(part => pNorm.includes(part)))
+            );
+          });
+          if (fuzzyMatch) return fuzzyMatch;
+        }
+        
         return null;
       };
       
-      // Default prices by category (fallback)
       const categoryDefaultPrices: Record<string, number> = {
-        'باريستا': 18,
-        'مشروبات': 18,
-        'مخبوزات': 15,
+        'باريستا': 20,
+        'مشروبات': 20,
+        'إفطار': 25,
+        'مخبوزات': 18,
         'حلويات': 25,
-        'معجنات': 12,
+        'معجنات': 15,
         'كيك': 30,
+        'بيتزا': 30,
         'ساندويتشات': 22,
         'سلطات': 20,
-        'عام': 15
+        'تجمعات': 40,
+        'عام': 20
       };
       
       const orderItems = forecastItems.map((item, index) => {
@@ -13861,11 +13917,7 @@ export async function registerRoutes(
         let unitPrice = 0;
         let priceSource = '';
         
-        if (item.historicalRevenue > 0 && item.historicalQuantity > 0) {
-          unitPrice = item.historicalRevenue / item.historicalQuantity;
-          priceSource = 'بيانات المبيعات';
-        }
-        else if (product?.basePrice && product.basePrice > 0) {
+        if (product?.basePrice && product.basePrice > 0) {
           unitPrice = product.basePrice;
           priceSource = 'سعر المنتج';
         }
@@ -13873,20 +13925,31 @@ export async function registerRoutes(
           unitPrice = (product as any).price;
           priceSource = 'سعر المنتج';
         }
-        else {
+        else if (item.historicalRevenue > 0 && item.historicalQuantity > 0) {
+          const historicalPrice = item.historicalRevenue / item.historicalQuantity;
+          if (historicalPrice >= 5) {
+            unitPrice = historicalPrice;
+            priceSource = 'بيانات المبيعات';
+          }
+        }
+        
+        if (unitPrice === 0) {
           const category = item.productCategory || product?.category || 'عام';
           unitPrice = categoryDefaultPrices[category] || categoryDefaultPrices['عام'];
           priceSource = 'سعر تقديري';
         }
         
-        const targetQuantity = item.forecastedQuantity;
+        const salesAmount = item.forecastedSalesAmount && isFinite(item.forecastedSalesAmount) ? item.forecastedSalesAmount : 0;
+        const targetQuantity = (unitPrice > 0 && salesAmount > 0)
+          ? Math.max(1, Math.ceil(salesAmount / unitPrice))
+          : Math.max(1, item.forecastedQuantity || 1);
         const totalValue = unitPrice * targetQuantity;
         
         return {
           productId: product?.id || null,
           productName: item.productName,
           productCategory: item.productCategory || product?.category || null,
-          targetQuantity: Math.max(1, targetQuantity),
+          targetQuantity,
           originalQuantity: item.historicalQuantity,
           producedQuantity: 0,
           wastedQuantity: 0,
@@ -13894,7 +13957,7 @@ export async function registerRoutes(
           totalValue: Math.round(totalValue * 100) / 100,
           status: 'pending' as const,
           priority: index + 1,
-          notes: `نسبة المبيعات: ${item.salesRatio}% | مصدر السعر: ${priceSource}`
+          notes: `نسبة المبيعات: ${item.salesRatio}% | مصدر السعر: ${priceSource}${product ? '' : ' | منتج غير مطابق'}`
         };
       });
       
