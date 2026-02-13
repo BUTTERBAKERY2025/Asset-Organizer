@@ -1384,56 +1384,110 @@ export default function DisplayBarWastePage() {
                         تقرير هالك جديد
                       </Button>
                     </DialogTrigger>
-                    <DialogContent className="max-w-lg">
+                    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                       <DialogHeader>
-                        <DialogTitle>إنشاء تقرير هالك جديد</DialogTitle>
+                        <DialogTitle className="text-lg flex items-center gap-2">
+                          <AlertTriangle className="w-5 h-5 text-red-500" />
+                          {!selectedWasteReportId ? "إنشاء تقرير هالك جديد" : "إضافة أصناف تالفة"}
+                        </DialogTitle>
                       </DialogHeader>
-                      <div className="space-y-4 pt-4">
-                        {!selectedWasteReportId ? (
-                          <div className="space-y-4 py-4">
-                            <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-1" />
-                            <div>
-                              <Label>الفرع</Label>
-                              <Select value={wasteBranch || (selectedBranch !== "all" ? selectedBranch : "")} onValueChange={setWasteBranch}>
-                                <SelectTrigger data-testid="select-waste-dialog-branch"><SelectValue placeholder="اختر الفرع" /></SelectTrigger>
-                                <SelectContent>
-                                  {branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-                                </SelectContent>
-                              </Select>
+
+                      {!selectedWasteReportId ? (
+                        <div className="space-y-5">
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-3 bg-gradient-to-l from-red-50 to-amber-50 rounded-lg border">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                                <Building2 className="w-4 h-4 text-blue-600" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs text-muted-foreground">الفرع</p>
+                                <Select value={wasteBranch || (selectedBranch !== "all" ? selectedBranch : "")} onValueChange={setWasteBranch}>
+                                  <SelectTrigger className="h-7 text-xs border-0 bg-white/50 p-1" data-testid="select-waste-dialog-branch">
+                                    <SelectValue placeholder="اختر الفرع" />
+                                  </SelectTrigger>
+                                  <SelectContent className="max-h-60 overflow-y-auto">
+                                    {branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                                  </SelectContent>
+                                </Select>
+                              </div>
                             </div>
-                            <div>
-                              <Label>الوردية</Label>
-                              <Select value={wasteShift} onValueChange={setWasteShift}>
-                                <SelectTrigger data-testid="select-waste-dialog-shift"><SelectValue placeholder="اختر الوردية" /></SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="morning">صباحية</SelectItem>
-                                  <SelectItem value="evening">مسائية</SelectItem>
-                                </SelectContent>
-                              </Select>
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
+                                <Clock className="w-4 h-4 text-purple-600" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs text-muted-foreground">الوردية</p>
+                                <Select value={wasteShift} onValueChange={setWasteShift}>
+                                  <SelectTrigger className="h-7 text-xs border-0 bg-white/50 p-1" data-testid="select-waste-dialog-shift">
+                                    <SelectValue placeholder="اختر" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="morning">صباحية</SelectItem>
+                                    <SelectItem value="evening">مسائية</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
                             </div>
-                            <p className="text-muted-foreground text-sm text-center">التاريخ: {selectedDate}</p>
-                            <Button onClick={handleCreateWasteReport} disabled={createWasteReportMutation.isPending || !(wasteBranch || (selectedBranch !== "all" ? selectedBranch : ""))} className="w-full">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
+                                <Calendar className="w-4 h-4 text-amber-600" />
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">التاريخ</p>
+                                <p className="text-sm font-medium">{selectedDate}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
+                                <User className="w-4 h-4 text-green-600" />
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">المسؤول</p>
+                                <p className="text-sm font-medium">{user?.username || "غير معروف"}</p>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="text-center py-4">
+                            <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-3">
+                              <AlertTriangle className="w-8 h-8 text-red-400" />
+                            </div>
+                            <p className="text-muted-foreground text-sm mb-5">سيتم إنشاء تقرير هالك جديد بالبيانات أعلاه</p>
+                            <Button
+                              onClick={handleCreateWasteReport}
+                              disabled={createWasteReportMutation.isPending || !(wasteBranch || (selectedBranch !== "all" ? selectedBranch : ""))}
+                              variant="destructive"
+                              className="w-full max-w-xs mx-auto h-11"
+                            >
                               {createWasteReportMutation.isPending ? "جاري الإنشاء..." : "إنشاء التقرير"}
                             </Button>
                           </div>
-                        ) : (
-                          <>
-                            <div className="bg-green-50 text-green-700 p-3 rounded-lg text-sm">
-                              تم إنشاء التقرير. يمكنك الآن إضافة الأصناف التالفة.
-                            </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          <div className="bg-green-50 text-green-700 p-3 rounded-lg text-sm flex items-center gap-2 border border-green-200">
+                            <CheckCircle2 className="w-4 h-4 shrink-0" />
+                            تم إنشاء التقرير بنجاح. يمكنك الآن إضافة الأصناف التالفة.
+                          </div>
+
+                          <div className="bg-muted/30 p-4 rounded-lg border space-y-3">
+                            <h4 className="font-semibold text-sm flex items-center gap-2">
+                              <Plus className="w-4 h-4 text-red-500" />
+                              إضافة صنف تالف
+                            </h4>
                             <div>
-                              <Label>المنتج التالف</Label>
+                              <Label className="text-xs">المنتج التالف</Label>
                               <ProductSelector
-                                  products={products.filter(p => p.isActive !== "false")}
-                                  value={wasteForm.productId}
-                                  onSelect={(id) => setWasteForm(f => ({ ...f, productId: id }))}
-                                  placeholder="ابحث عن المنتج..."
-                                  showPrice={true}
-                                />
+                                products={products.filter(p => p.isActive !== "false")}
+                                value={wasteForm.productId}
+                                onSelect={(id) => setWasteForm(f => ({ ...f, productId: id }))}
+                                placeholder="ابحث عن المنتج..."
+                                showPrice={true}
+                              />
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                               <div>
-                                <Label>الكمية</Label>
+                                <Label className="text-xs">الكمية</Label>
                                 <Input
                                   type="number"
                                   value={wasteForm.quantity}
@@ -1443,7 +1497,7 @@ export default function DisplayBarWastePage() {
                                 />
                               </div>
                               <div>
-                                <Label>سبب الإتلاف</Label>
+                                <Label className="text-xs">سبب الإتلاف</Label>
                                 <Select value={wasteForm.wasteReason} onValueChange={(v) => setWasteForm(f => ({ ...f, wasteReason: v }))}>
                                   <SelectTrigger data-testid="select-reason">
                                     <SelectValue />
@@ -1457,17 +1511,18 @@ export default function DisplayBarWastePage() {
                               </div>
                             </div>
                             <div>
-                              <Label>تفاصيل إضافية</Label>
+                              <Label className="text-xs">تفاصيل إضافية</Label>
                               <Textarea
                                 value={wasteForm.reasonDetails}
                                 onChange={(e) => setWasteForm(f => ({ ...f, reasonDetails: e.target.value }))}
                                 placeholder="وصف حالة المنتج..."
+                                rows={2}
                                 data-testid="input-details-waste"
                               />
                             </div>
                             <div>
-                              <Label>صورة المنتج التالف</Label>
-                              <div className="mt-2">
+                              <Label className="text-xs">صورة المنتج التالف</Label>
+                              <div className="mt-1">
                                 <input
                                   ref={fileInputRef}
                                   type="file"
@@ -1478,7 +1533,7 @@ export default function DisplayBarWastePage() {
                                 />
                                 {wasteForm.imageUrl ? (
                                   <div className="relative">
-                                    <img src={wasteForm.imageUrl} alt="صورة المنتج" className="w-full h-40 object-cover rounded-lg" />
+                                    <img src={wasteForm.imageUrl} alt="صورة المنتج" className="w-full h-32 object-cover rounded-lg" />
                                     <Button
                                       size="sm"
                                       variant="destructive"
@@ -1491,31 +1546,32 @@ export default function DisplayBarWastePage() {
                                 ) : (
                                   <Button
                                     variant="outline"
-                                    className="w-full h-24 border-dashed"
+                                    className="w-full h-16 border-dashed text-xs"
                                     onClick={() => fileInputRef.current?.click()}
                                   >
-                                    <Camera className="w-6 h-6 ml-2" />
+                                    <Camera className="w-5 h-5 ml-2" />
                                     التقاط صورة
                                   </Button>
                                 )}
                               </div>
                             </div>
-                            <Button onClick={handleAddWasteItem} className="w-full h-11 sm:h-9" disabled={addWasteItemMutation.isPending}>
+                            <Button onClick={handleAddWasteItem} variant="destructive" className="w-full h-10" disabled={addWasteItemMutation.isPending}>
                               {addWasteItemMutation.isPending ? "جاري الإضافة..." : "إضافة الصنف التالف"}
                             </Button>
-                            <Button
-                              variant="outline"
-                              className="w-full"
-                              onClick={() => {
-                                setShowWasteDialog(false);
-                                setSelectedWasteReportId(null);
-                              }}
-                            >
-                              إنهاء وإغلاق
-                            </Button>
-                          </>
-                        )}
-                      </div>
+                          </div>
+
+                          <Button
+                            variant="outline"
+                            className="w-full"
+                            onClick={() => {
+                              setShowWasteDialog(false);
+                              setSelectedWasteReportId(null);
+                            }}
+                          >
+                            إنهاء وإغلاق
+                          </Button>
+                        </div>
+                      )}
                     </DialogContent>
                   </Dialog>
                 </>
