@@ -908,6 +908,11 @@ export default function DisplayBarWastePage() {
 
   const submitForApprovalMutation = useMutation({
     mutationFn: async (reportId: number) => {
+      const itemsRes = await fetch(`/api/waste-reports/${reportId}/items`, { credentials: "include" });
+      const items = itemsRes.ok ? await itemsRes.json() : [];
+      if (!Array.isArray(items) || items.length === 0) {
+        throw new Error("لا يمكن إرسال تقرير بدون أصناف - يرجى حفظ الأصناف أولاً");
+      }
       const response = await apiRequest("PATCH", `/api/waste-reports/${reportId}`, { status: "submitted" });
       return response.json();
     },

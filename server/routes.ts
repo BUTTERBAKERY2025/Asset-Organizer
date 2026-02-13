@@ -10292,6 +10292,13 @@ export async function registerRoutes(
         }
       }
       
+      if (newStatus === 'submitted' || newStatus === 'approved') {
+        const items = await storage.getWasteItems(id);
+        if (!items || items.length === 0) {
+          return res.status(400).json({ error: "لا يمكن إرسال أو اعتماد تقرير بدون أصناف هالكة" });
+        }
+      }
+      
       const partialData = insertWasteReportSchema.partial().parse(req.body);
       
       if (newStatus === 'approved') {
@@ -10509,9 +10516,11 @@ export async function registerRoutes(
         return res.status(400).json({ error: "الحد الأقصى 500 عنصر لكل تقرير" });
       }
       
-      const validatedItems = items.map((item: any) => {
+      console.log(`[WASTE BATCH] Report ${reportId}: Received ${items.length} items to save`);
+      const validatedItems = items.map((item: any, idx: number) => {
         const reasonDetails = typeof item.reasonDetails === 'string' ? item.reasonDetails.slice(0, 500) : '';
         const imageUrl = typeof item.imageUrl === 'string' ? item.imageUrl.slice(0, 2000) : '';
+        console.log(`[WASTE BATCH] Item ${idx}: productId=${item.productId}, qty=${item.quantity}, reason=${item.wasteReason}`);
         return insertWasteItemSchema.parse({
           ...item,
           reasonDetails,
@@ -10521,6 +10530,7 @@ export async function registerRoutes(
       });
       
       const created = await storage.batchReplaceWasteItems(reportId, validatedItems);
+      console.log(`[WASTE BATCH] Report ${reportId}: Saved ${created.length} items successfully`);
       res.status(200).json({ items: created, count: created.length });
     } catch (error) {
       if (error instanceof z.ZodError) {
