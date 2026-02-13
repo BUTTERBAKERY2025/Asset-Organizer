@@ -121,6 +121,17 @@ interface OperationsReport {
     qualityChecks: { status: string; count: number }[];
     ordersByProduct: { productName: string; quantity: number; orderCount: number }[];
     dailyProduction: { date: string; quantity: number; orders: number }[];
+    actualProduction?: {
+      totalBatches: number;
+      finishedBatches: number;
+      inProgressBatches: number;
+      totalQuantity: number;
+      byDestination: { destination: string; count: number; quantity: number }[];
+      byCategory: { category: string; count: number; quantity: number }[];
+      byProduct: { productName: string; quantity: number; batchCount: number }[];
+      dailyActual: { date: string; quantity: number; batches: number }[];
+      byChef: { chefName: string; batchCount: number; totalQuantity: number }[];
+    };
   };
   shiftsReport: {
     totalShifts: number;
@@ -247,10 +258,10 @@ function QuickStatsRow({ report, cashierJournals }: { report: OperationsReport; 
         <p className="text-xs text-slate-400">العمليات</p>
       </div>
       <div className="text-center">
-        <p className={`text-2xl font-bold ${report.productionReport.qualityPassRate >= 90 ? 'text-green-400' : 'text-amber-400'}`}>
-          {report.productionReport.qualityPassRate.toFixed(0)}%
+        <p className="text-2xl font-bold text-purple-400">
+          {report.productionReport.actualProduction?.totalBatches || report.productionReport.totalOrders}
         </p>
-        <p className="text-xs text-slate-400">نسبة الجودة</p>
+        <p className="text-xs text-slate-400">دفعات الإنتاج</p>
       </div>
       <div className="text-center">
         <p className={`text-2xl font-bold ${shortageCount > 0 ? 'text-red-400' : 'text-green-400'}`}>{shortageCount}</p>
@@ -1028,14 +1039,26 @@ export default function OperationsReportsDashboardPage() {
     const productionData = [
       ["تقرير الإنتاج - " + filters.startDate + " إلى " + filters.endDate],
       [],
+      ["الإنتاج الفعلي اليومي", ""],
       ["البند", "القيمة"],
-      ["إجمالي الأوامر", report.productionReport.totalOrders],
-      ["قيد الانتظار", report.productionReport.pendingOrders],
-      ["قيد التنفيذ", report.productionReport.inProgressOrders],
-      ["مكتملة", report.productionReport.completedOrders],
-      ["ملغاة", report.productionReport.cancelledOrders],
-      ["الكمية المنتجة", report.productionReport.totalQuantityProduced],
-      ["نسبة النجاح في الجودة", `${report.productionReport.qualityPassRate.toFixed(1)}%`],
+      ["إجمالي الدفعات", report.productionReport.actualProduction?.totalBatches || 0],
+      ["دفعات مكتملة", report.productionReport.actualProduction?.finishedBatches || 0],
+      ["قيد التنفيذ", report.productionReport.actualProduction?.inProgressBatches || 0],
+      ["الكمية المنتجة الفعلية", report.productionReport.actualProduction?.totalQuantity || 0],
+      [],
+      ...(report.productionReport.actualProduction?.byProduct?.length ? [
+        ["الإنتاج حسب المنتج", "", ""],
+        ["المنتج", "الكمية", "عدد الدفعات"],
+        ...report.productionReport.actualProduction.byProduct.map(p => [p.productName, p.quantity, p.batchCount]),
+        [],
+      ] : []),
+      ...(report.productionReport.totalOrders > 0 ? [
+        ["أوامر الإنتاج المخططة", ""],
+        ["إجمالي الأوامر", report.productionReport.totalOrders],
+        ["مكتملة", report.productionReport.completedOrders],
+        ["الكمية المنتجة", report.productionReport.totalQuantityProduced],
+        ["نسبة النجاح في الجودة", `${report.productionReport.qualityPassRate.toFixed(1)}%`],
+      ] : []),
     ];
     const productionSheet = XLSX.utils.aoa_to_sheet(productionData);
     XLSX.utils.book_append_sheet(wb, productionSheet, "الإنتاج");
@@ -1161,8 +1184,8 @@ export default function OperationsReportsDashboardPage() {
   <div class="summary-row">
     <div class="summary-card"><div class="value">${formatCurrency(report.salesReport.totalSales)}</div><div class="label">إجمالي المبيعات</div></div>
     <div class="summary-card"><div class="value">${formatNumber(report.salesReport.totalTransactions)}</div><div class="label">العمليات</div></div>
-    <div class="summary-card"><div class="value">${formatNumber(report.productionReport.totalOrders)}</div><div class="label">أوامر الإنتاج</div></div>
-    <div class="summary-card"><div class="value">${formatPercent(report.productionReport.qualityPassRate)}</div><div class="label">الجودة</div></div>
+    <div class="summary-card"><div class="value">${formatNumber(report.productionReport.actualProduction?.totalBatches || report.productionReport.totalOrders)}</div><div class="label">دفعات الإنتاج</div></div>
+    <div class="summary-card"><div class="value">${formatNumber(report.productionReport.actualProduction?.totalQuantity || report.productionReport.totalQuantityProduced)}</div><div class="label">الكمية المنتجة</div></div>
   </div>
 
   <div class="main-grid">
@@ -1182,12 +1205,12 @@ export default function OperationsReportsDashboardPage() {
       </div>
       
       <div class="section">
-        <div class="section-title">الإنتاج</div>
+        <div class="section-title">الإنتاج الفعلي</div>
         <div class="kpi-row">
-          <div class="kpi-item"><div class="value">${formatNumber(report.productionReport.pendingOrders)}</div><div class="label">انتظار</div></div>
-          <div class="kpi-item"><div class="value">${formatNumber(report.productionReport.inProgressOrders)}</div><div class="label">تنفيذ</div></div>
-          <div class="kpi-item"><div class="value">${formatNumber(report.productionReport.completedOrders)}</div><div class="label">مكتملة</div></div>
-          <div class="kpi-item"><div class="value">${formatNumber(report.productionReport.totalQuantityProduced)}</div><div class="label">الكمية</div></div>
+          <div class="kpi-item"><div class="value">${formatNumber(report.productionReport.actualProduction?.totalBatches || 0)}</div><div class="label">الدفعات</div></div>
+          <div class="kpi-item"><div class="value">${formatNumber(report.productionReport.actualProduction?.finishedBatches || 0)}</div><div class="label">مكتملة</div></div>
+          <div class="kpi-item"><div class="value">${formatNumber(report.productionReport.actualProduction?.inProgressBatches || 0)}</div><div class="label">قيد التنفيذ</div></div>
+          <div class="kpi-item"><div class="value">${formatNumber(report.productionReport.actualProduction?.totalQuantity || 0)}</div><div class="label">الكمية</div></div>
         </div>
       </div>
 
@@ -2116,17 +2139,17 @@ export default function OperationsReportsDashboardPage() {
                   bgColor="bg-blue-100"
                 />
                 <KPICard
-                  title="أوامر الإنتاج"
-                  value={formatNumber(report.productionReport.totalOrders)}
+                  title="دفعات الإنتاج"
+                  value={formatNumber(report.productionReport.actualProduction?.totalBatches || report.productionReport.totalOrders)}
                   icon={Package}
                   color="text-purple-600"
                   bgColor="bg-purple-100"
                   onClick={() => setActiveTab("production")}
                 />
                 <KPICard
-                  title="نسبة الجودة"
-                  value={formatPercent(report.productionReport.qualityPassRate)}
-                  icon={CheckCircle}
+                  title="الكمية المنتجة"
+                  value={formatNumber(report.productionReport.actualProduction?.totalQuantity || report.productionReport.totalQuantityProduced)}
+                  icon={Factory}
                   color="text-emerald-600"
                   bgColor="bg-emerald-100"
                 />
@@ -2336,76 +2359,209 @@ export default function OperationsReportsDashboardPage() {
             </TabsContent>
 
             <TabsContent value="production" className="space-y-6">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <KPICard title="إجمالي الأوامر" value={formatNumber(report.productionReport.totalOrders)} icon={Package} color="text-blue-600" bgColor="bg-blue-100" />
-                <KPICard title="قيد الانتظار" value={formatNumber(report.productionReport.pendingOrders)} icon={Clock} color="text-yellow-600" bgColor="bg-yellow-100" />
-                <KPICard title="قيد التنفيذ" value={formatNumber(report.productionReport.inProgressOrders)} icon={Activity} color="text-orange-600" bgColor="bg-orange-100" />
-                <KPICard title="مكتملة" value={formatNumber(report.productionReport.completedOrders)} icon={CheckCircle} color="text-green-600" bgColor="bg-green-100" />
-                <KPICard title="ملغاة" value={formatNumber(report.productionReport.cancelledOrders)} icon={XCircle} color="text-red-600" bgColor="bg-red-100" />
-                <KPICard title="الكمية المنتجة" value={formatNumber(report.productionReport.totalQuantityProduced)} icon={Factory} color="text-indigo-600" bgColor="bg-indigo-100" />
-                <KPICard title="نسبة نجاح الجودة" value={formatPercent(report.productionReport.qualityPassRate)}
-                  icon={report.productionReport.qualityPassRate >= 90 ? CheckCircle : AlertTriangle}
-                  color={report.productionReport.qualityPassRate >= 90 ? "text-green-600" : "text-yellow-600"}
-                  bgColor={report.productionReport.qualityPassRate >= 90 ? "bg-green-100" : "bg-yellow-100"} />
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card>
-                  <CardHeader><CardTitle className="text-lg">الإنتاج اليومي</CardTitle></CardHeader>
-                  <CardContent>
-                    <div className="h-[300px]">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={report.productionReport.dailyProduction}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="date" fontSize={12} />
-                          <YAxis fontSize={12} />
-                          <Tooltip />
-                          <Legend />
-                          <Bar dataKey="quantity" name="الكمية" fill="#10B981" />
-                          <Bar dataKey="orders" name="الأوامر" fill="#3B82F6" />
-                        </BarChart>
-                      </ResponsiveContainer>
+              {(() => {
+                const actual = report.productionReport.actualProduction;
+                const hasActualData = actual && actual.totalBatches > 0;
+                const hasPlannedData = report.productionReport.totalOrders > 0;
+                const DEST_LABELS: Record<string, string> = {
+                  display_bar: 'بار العرض',
+                  branch: 'الفرع',
+                  warehouse: 'المستودع',
+                  catering: 'التموين',
+                  other: 'أخرى',
+                };
+                const CAT_COLORS = ['#10B981', '#3B82F6', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316'];
+                return (
+                  <>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <KPICard title="إجمالي الدفعات" value={formatNumber(actual?.totalBatches || 0)} icon={Package} color="text-blue-600" bgColor="bg-blue-100" />
+                      <KPICard title="مكتملة" value={formatNumber(actual?.finishedBatches || 0)} icon={CheckCircle} color="text-green-600" bgColor="bg-green-100" />
+                      <KPICard title="قيد التنفيذ" value={formatNumber(actual?.inProgressBatches || 0)} icon={Activity} color="text-orange-600" bgColor="bg-orange-100" />
+                      <KPICard title="الكمية المنتجة" value={formatNumber(actual?.totalQuantity || 0)} icon={Factory} color="text-indigo-600" bgColor="bg-indigo-100" />
                     </div>
-                  </CardContent>
-                </Card>
 
-                <Card>
-                  <CardHeader><CardTitle className="text-lg">نتائج فحوصات الجودة</CardTitle></CardHeader>
-                  <CardContent>
-                    <div className="h-[300px]">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie data={report.productionReport.qualityChecks} dataKey="count" nameKey="status" cx="50%" cy="50%" outerRadius={100}
-                            label={({ status, percent }) => `${STATUS_LABELS[status] || status}: ${(percent * 100).toFixed(0)}%`}>
-                            {report.productionReport.qualityChecks.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={entry.status === 'passed' ? '#10B981' : entry.status === 'failed' ? '#EF4444' : '#F59E0B'} />
-                            ))}
-                          </Pie>
-                          <Tooltip />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
+                    {hasActualData && actual ? (
+                      <>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                          <Card>
+                            <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Factory className="w-5 h-5 text-purple-600" />الإنتاج اليومي الفعلي</CardTitle></CardHeader>
+                            <CardContent>
+                              <div className="h-[300px]">
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <BarChart data={actual.dailyActual}>
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <XAxis dataKey="date" fontSize={12} />
+                                    <YAxis fontSize={12} />
+                                    <Tooltip formatter={(value: number, name: string) => [formatNumber(value), name]} />
+                                    <Legend />
+                                    <Bar dataKey="quantity" name="الكمية" fill="#10B981" radius={[4, 4, 0, 0]} />
+                                    <Bar dataKey="batches" name="الدفعات" fill="#8B5CF6" radius={[4, 4, 0, 0]} />
+                                  </BarChart>
+                                </ResponsiveContainer>
+                              </div>
+                            </CardContent>
+                          </Card>
 
-              <Card>
-                <CardHeader><CardTitle className="text-lg">الإنتاج حسب المنتج</CardTitle></CardHeader>
-                <CardContent>
-                  <div className="h-[300px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={report.productionReport.ordersByProduct.slice(0, 10)} layout="vertical">
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis type="number" fontSize={12} />
-                        <YAxis type="category" dataKey="productName" fontSize={12} width={150} />
-                        <Tooltip />
-                        <Legend />
-                        <Bar dataKey="quantity" name="الكمية" fill="#10B981" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </CardContent>
-              </Card>
+                          <Card>
+                            <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Package className="w-5 h-5 text-emerald-600" />التوزيع حسب الوجهة</CardTitle></CardHeader>
+                            <CardContent>
+                              <div className="h-[300px]">
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <PieChart>
+                                    <Pie data={actual.byDestination.map(d => ({ ...d, name: DEST_LABELS[d.destination] || d.destination }))} dataKey="quantity" nameKey="name" cx="50%" cy="50%" outerRadius={100}
+                                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}>
+                                      {actual.byDestination.map((_, index) => (
+                                        <Cell key={`dest-${index}`} fill={CAT_COLORS[index % CAT_COLORS.length]} />
+                                      ))}
+                                    </Pie>
+                                    <Tooltip formatter={(value: number) => formatNumber(value)} />
+                                  </PieChart>
+                                </ResponsiveContainer>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                          <Card>
+                            <CardHeader><CardTitle className="text-lg">الإنتاج حسب المنتج (فعلي)</CardTitle></CardHeader>
+                            <CardContent>
+                              <div className="h-[300px]">
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <BarChart data={actual.byProduct.slice(0, 10)} layout="vertical">
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <XAxis type="number" fontSize={12} />
+                                    <YAxis type="category" dataKey="productName" fontSize={11} width={120} />
+                                    <Tooltip formatter={(value: number) => formatNumber(value)} />
+                                    <Legend />
+                                    <Bar dataKey="quantity" name="الكمية" fill="#10B981" radius={[0, 4, 4, 0]} />
+                                    <Bar dataKey="batchCount" name="الدفعات" fill="#8B5CF6" radius={[0, 4, 4, 0]} />
+                                  </BarChart>
+                                </ResponsiveContainer>
+                              </div>
+                            </CardContent>
+                          </Card>
+
+                          <Card>
+                            <CardHeader><CardTitle className="text-lg">الإنتاج حسب التصنيف</CardTitle></CardHeader>
+                            <CardContent>
+                              <div className="h-[300px]">
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <PieChart>
+                                    <Pie data={actual.byCategory} dataKey="quantity" nameKey="category" cx="50%" cy="50%" outerRadius={100}
+                                      label={({ category, percent }) => `${category}: ${(percent * 100).toFixed(0)}%`}>
+                                      {actual.byCategory.map((_, index) => (
+                                        <Cell key={`cat-${index}`} fill={CAT_COLORS[index % CAT_COLORS.length]} />
+                                      ))}
+                                    </Pie>
+                                    <Tooltip formatter={(value: number) => formatNumber(value)} />
+                                  </PieChart>
+                                </ResponsiveContainer>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </div>
+
+                        {actual.byChef.length > 0 && (
+                          <Card>
+                            <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Users className="w-5 h-5 text-blue-600" />إنتاج الطهاة</CardTitle></CardHeader>
+                            <CardContent>
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-sm" data-testid="table-chef-production">
+                                  <thead>
+                                    <tr className="border-b bg-muted/50">
+                                      <th className="text-right p-3 font-medium">#</th>
+                                      <th className="text-right p-3 font-medium">الطاهي</th>
+                                      <th className="text-center p-3 font-medium">عدد الدفعات</th>
+                                      <th className="text-center p-3 font-medium">إجمالي الكمية</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {actual.byChef.map((chef, i) => (
+                                      <tr key={i} className="border-b hover:bg-muted/30" data-testid={`row-chef-${i}`}>
+                                        <td className="p-3 text-muted-foreground">{i + 1}</td>
+                                        <td className="p-3 font-medium">{chef.chefName}</td>
+                                        <td className="p-3 text-center">{formatNumber(chef.batchCount)}</td>
+                                        <td className="p-3 text-center font-semibold text-green-600">{formatNumber(chef.totalQuantity)}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )}
+                      </>
+                    ) : !hasPlannedData ? (
+                      <Card>
+                        <CardContent className="py-12 text-center">
+                          <Factory className="w-12 h-12 mx-auto text-muted-foreground/30 mb-4" />
+                          <p className="text-muted-foreground text-lg">لا يوجد بيانات إنتاج للفترة المحددة</p>
+                          <p className="text-muted-foreground text-sm mt-2">قم بتسجيل الإنتاج اليومي من صفحة الإنتاج الفعلي</p>
+                        </CardContent>
+                      </Card>
+                    ) : null}
+
+                    {hasPlannedData && (
+                      <>
+                        <div className="flex items-center gap-2 mt-6">
+                          <h3 className="text-lg font-semibold text-muted-foreground">أوامر الإنتاج المخططة</h3>
+                          <Badge variant="outline" className="text-xs">مخطط</Badge>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <KPICard title="إجمالي الأوامر" value={formatNumber(report.productionReport.totalOrders)} icon={Package} color="text-blue-600" bgColor="bg-blue-100" />
+                          <KPICard title="قيد الانتظار" value={formatNumber(report.productionReport.pendingOrders)} icon={Clock} color="text-yellow-600" bgColor="bg-yellow-100" />
+                          <KPICard title="مكتملة" value={formatNumber(report.productionReport.completedOrders)} icon={CheckCircle} color="text-green-600" bgColor="bg-green-100" />
+                          <KPICard title="نسبة نجاح الجودة" value={formatPercent(report.productionReport.qualityPassRate)}
+                            icon={report.productionReport.qualityPassRate >= 90 ? CheckCircle : AlertTriangle}
+                            color={report.productionReport.qualityPassRate >= 90 ? "text-green-600" : "text-yellow-600"}
+                            bgColor={report.productionReport.qualityPassRate >= 90 ? "bg-green-100" : "bg-yellow-100"} />
+                        </div>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                          <Card>
+                            <CardHeader><CardTitle className="text-lg">الإنتاج اليومي (مخطط)</CardTitle></CardHeader>
+                            <CardContent>
+                              <div className="h-[300px]">
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <BarChart data={report.productionReport.dailyProduction}>
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <XAxis dataKey="date" fontSize={12} />
+                                    <YAxis fontSize={12} />
+                                    <Tooltip />
+                                    <Legend />
+                                    <Bar dataKey="quantity" name="الكمية" fill="#10B981" />
+                                    <Bar dataKey="orders" name="الأوامر" fill="#3B82F6" />
+                                  </BarChart>
+                                </ResponsiveContainer>
+                              </div>
+                            </CardContent>
+                          </Card>
+                          {report.productionReport.qualityChecks.length > 0 && (
+                            <Card>
+                              <CardHeader><CardTitle className="text-lg">نتائج فحوصات الجودة</CardTitle></CardHeader>
+                              <CardContent>
+                                <div className="h-[300px]">
+                                  <ResponsiveContainer width="100%" height="100%">
+                                    <PieChart>
+                                      <Pie data={report.productionReport.qualityChecks} dataKey="count" nameKey="status" cx="50%" cy="50%" outerRadius={100}
+                                        label={({ status, percent }) => `${STATUS_LABELS[status] || status}: ${(percent * 100).toFixed(0)}%`}>
+                                        {report.productionReport.qualityChecks.map((entry, index) => (
+                                          <Cell key={`cell-${index}`} fill={entry.status === 'passed' ? '#10B981' : entry.status === 'failed' ? '#EF4444' : '#F59E0B'} />
+                                        ))}
+                                      </Pie>
+                                      <Tooltip />
+                                    </PieChart>
+                                  </ResponsiveContainer>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </>
+                );
+              })()}
             </TabsContent>
 
             <TabsContent value="shifts" className="space-y-6">

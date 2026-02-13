@@ -3646,6 +3646,17 @@ export class DatabaseStorage implements IStorage {
       qualityChecks: { status: string; count: number }[];
       ordersByProduct: { productName: string; quantity: number; orderCount: number }[];
       dailyProduction: { date: string; quantity: number; orders: number }[];
+      actualProduction: {
+        totalBatches: number;
+        finishedBatches: number;
+        inProgressBatches: number;
+        totalQuantity: number;
+        byDestination: { destination: string; count: number; quantity: number }[];
+        byCategory: { category: string; count: number; quantity: number }[];
+        byProduct: { productName: string; quantity: number; batchCount: number }[];
+        dailyActual: { date: string; quantity: number; batches: number }[];
+        byChef: { chefName: string; batchCount: number; totalQuantity: number }[];
+      };
     };
     shiftsReport: {
       totalShifts: number;
@@ -3807,6 +3818,78 @@ export class DatabaseStorage implements IStorage {
       .map(([date, data]) => ({ date, quantity: data.quantity, orders: data.orders }))
       .sort((a, b) => a.date.localeCompare(b.date));
 
+    // Actual Production (daily_production_batches) - real production data
+    const batchConditions: any[] = [];
+    if (branchId) batchConditions.push(eq(dailyProductionBatches.branchId, branchId));
+    if (startDate) batchConditions.push(gte(dailyProductionBatches.productionDate, startDate));
+    if (endDate) batchConditions.push(lte(dailyProductionBatches.productionDate, endDate));
+
+    const allBatches = await db.select()
+      .from(dailyProductionBatches)
+      .where(batchConditions.length > 0 ? and(...batchConditions) : undefined);
+
+    const finishedBatches = allBatches.filter(b => b.status === 'finished');
+    const inProgressBatches = allBatches.filter(b => b.status === 'in_progress');
+    const totalActualQuantity = finishedBatches.reduce((sum, b) => sum + (b.quantity || 0), 0);
+
+    const destMap: Record<string, { count: number; quantity: number }> = {};
+    allBatches.forEach(b => {
+      const dest = b.destination || 'other';
+      if (!destMap[dest]) destMap[dest] = { count: 0, quantity: 0 };
+      destMap[dest].count++;
+      destMap[dest].quantity += b.quantity || 0;
+    });
+    const byDestination = Object.entries(destMap).map(([destination, d]) => ({ destination, ...d }));
+
+    const catMap: Record<string, { count: number; quantity: number }> = {};
+    allBatches.forEach(b => {
+      const cat = b.productCategory || 'أخرى';
+      if (!catMap[cat]) catMap[cat] = { count: 0, quantity: 0 };
+      catMap[cat].count++;
+      catMap[cat].quantity += b.quantity || 0;
+    });
+    const byCategory = Object.entries(catMap).map(([category, d]) => ({ category, ...d })).sort((a, b) => b.quantity - a.quantity);
+
+    const prodMap: Record<string, { quantity: number; batchCount: number }> = {};
+    allBatches.forEach(b => {
+      const name = b.productName || 'غير معروف';
+      if (!prodMap[name]) prodMap[name] = { quantity: 0, batchCount: 0 };
+      prodMap[name].quantity += b.quantity || 0;
+      prodMap[name].batchCount++;
+    });
+    const byProduct = Object.entries(prodMap).map(([productName, d]) => ({ productName, ...d })).sort((a, b) => b.quantity - a.quantity);
+
+    const dailyActualMap: Record<string, { quantity: number; batches: number }> = {};
+    allBatches.forEach(b => {
+      const d = b.productionDate || '';
+      if (!d) return;
+      if (!dailyActualMap[d]) dailyActualMap[d] = { quantity: 0, batches: 0 };
+      dailyActualMap[d].quantity += b.quantity || 0;
+      dailyActualMap[d].batches++;
+    });
+    const dailyActual = Object.entries(dailyActualMap).map(([date, d]) => ({ date, ...d })).sort((a, b) => a.date.localeCompare(b.date));
+
+    const chefMap: Record<string, { batchCount: number; totalQuantity: number }> = {};
+    allBatches.forEach(b => {
+      const name = b.chefName || b.recorderName || 'غير معروف';
+      if (!chefMap[name]) chefMap[name] = { batchCount: 0, totalQuantity: 0 };
+      chefMap[name].batchCount++;
+      chefMap[name].totalQuantity += b.quantity || 0;
+    });
+    const byChef = Object.entries(chefMap).map(([chefName, d]) => ({ chefName, ...d })).sort((a, b) => b.totalQuantity - a.totalQuantity);
+
+    const actualProduction = {
+      totalBatches: allBatches.length,
+      finishedBatches: finishedBatches.length,
+      inProgressBatches: inProgressBatches.length,
+      totalQuantity: totalActualQuantity,
+      byDestination,
+      byCategory,
+      byProduct,
+      dailyActual,
+      byChef,
+    };
+
     // Shifts Report - using employee_schedules table (main schedule data)
     const scheduleConditions: any[] = [];
     if (branchId) scheduleConditions.push(eq(employeeSchedules.branchId, branchId));
@@ -3909,6 +3992,7 @@ export class DatabaseStorage implements IStorage {
         qualityChecks: qualityChecksResult,
         ordersByProduct,
         dailyProduction,
+        actualProduction,
       },
       shiftsReport: {
         totalShifts,
