@@ -21,7 +21,7 @@ import {
   Package, AlertTriangle, Plus, Camera, Trash2, Check, X, 
   FileText, TrendingDown, Clock, Building2, Calendar, CheckCircle2, User,
   Eye, Printer, FileDown, Hash, Image, Save, Search, RefreshCw, ArrowRight,
-  ChevronDown, ChevronUp, Calculator, ExternalLink, BarChart3, Upload
+  ChevronDown, ChevronUp, Calculator, ExternalLink, BarChart3, Upload, Factory
 } from "lucide-react";
 import { Link } from "wouter";
 import { TablePagination } from "@/components/ui/pagination";
@@ -665,7 +665,8 @@ export default function DisplayBarWastePage() {
   const receiptOrders = useMemo(() => {
     const orderMap: Record<string, any> = {};
     filteredReceipts.forEach((r: any) => {
-      const key = `${r.branchId}_${r.receiptDate}_${r.createdBy || 'unknown'}`;
+      const isAutoFromProduction = r.productionBatch?.startsWith('PROD-') || r.notes?.includes('استلام تلقائي من الإنتاج');
+      const key = `${r.branchId}_${r.receiptDate}_${isAutoFromProduction ? 'auto_production' : (r.createdBy || 'unknown')}`;
       if (!orderMap[key]) {
         orderMap[key] = {
           id: key,
@@ -674,11 +675,12 @@ export default function DisplayBarWastePage() {
           branchName: getBranchName(r.branchId),
           receiptDate: r.receiptDate,
           createdBy: r.createdBy,
-          createdByName: r.createdByName || user?.username || "غير معروف",
+          createdByName: isAutoFromProduction ? "ربط تلقائي من الإنتاج" : (r.createdByName || user?.username || "غير معروف"),
           items: [],
           totalQuantity: 0,
           firstTime: r.receiptTime,
           lastTime: r.receiptTime,
+          isAutoFromProduction,
         };
       }
       const itemIndex = orderMap[key].items.length + 1;
@@ -686,6 +688,8 @@ export default function DisplayBarWastePage() {
         ...r,
         index: itemIndex,
         productName: getProductName(r.productId),
+        isAutoFromProduction,
+        productionBatchRef: r.productionBatch,
       });
       orderMap[key].totalQuantity += r.quantity || 0;
       if (r.receiptTime < orderMap[key].firstTime) orderMap[key].firstTime = r.receiptTime;
@@ -1620,10 +1624,17 @@ export default function DisplayBarWastePage() {
                               </Badge>
                             </td>
                             <td className="p-2 sm:p-3 hidden md:table-cell">
-                              <div className="flex items-center gap-1">
-                                <User className="w-3 h-3 text-muted-foreground" />
-                                {order.createdByName}
-                              </div>
+                              {order.isAutoFromProduction ? (
+                                <Badge variant="secondary" className="gap-1 text-[10px] sm:text-xs bg-green-50 text-green-700 border-green-200">
+                                  <Factory className="w-2.5 h-2.5" />
+                                  ربط تلقائي من الإنتاج
+                                </Badge>
+                              ) : (
+                                <div className="flex items-center gap-1">
+                                  <User className="w-3 h-3 text-muted-foreground" />
+                                  {order.createdByName}
+                                </div>
+                              )}
                             </td>
                             <td className="p-2 sm:p-3 hidden sm:table-cell">{order.receiptDate}</td>
                             <td className="p-2 sm:p-3 hidden md:table-cell">

@@ -5732,11 +5732,79 @@ export class DatabaseStorage implements IStorage {
 
   // Mark batch as finished
   async finishBatch(id: number): Promise<DailyProductionBatch | undefined> {
-    const [updated] = await db.update(dailyProductionBatches)
-      .set({ status: 'finished', finishedAt: new Date() })
-      .where(eq(dailyProductionBatches.id, id))
-      .returning();
-    return updated || undefined;
+    return await db.transaction(async (tx) => {
+      const [existing] = await tx.select().from(dailyProductionBatches).where(eq(dailyProductionBatches.id, id));
+      if (!existing || existing.status === 'finished') {
+        if (existing) return existing;
+        return undefined;
+      }
+
+      const [updated] = await tx.update(dailyProductionBatches)
+        .set({ status: 'finished', finishedAt: new Date() })
+        .where(eq(dailyProductionBatches.id, id))
+        .returning();
+      if (!updated) return undefined;
+
+      const productionDate = updated.productionDate || new Date().toISOString().split('T')[0];
+      const productNameNormalized = (updated.productName || '').trim().toLowerCase();
+      
+      try {
+        const upsertResult = await tx.execute(sql`
+          INSERT INTO finished_goods_inventory (branch_id, product_id, product_name, product_name_normalized, product_category, quantity, unit, production_date, last_batch_id, created_at, updated_at)
+          VALUES (${updated.branchId}, ${updated.productId}, ${updated.productName}, ${productNameNormalized}, ${updated.productCategory}, ${updated.quantity}, ${updated.unit || 'قطعة'}, ${productionDate}, ${updated.id}, NOW(), NOW())
+          ON CONFLICT (branch_id, product_name_normalized, production_date)
+          DO UPDATE SET 
+            quantity = finished_goods_inventory.quantity + EXCLUDED.quantity,
+            last_batch_id = EXCLUDED.last_batch_id,
+            product_id = COALESCE(EXCLUDED.product_id, finished_goods_inventory.product_id),
+            updated_at = NOW()
+          RETURNING id, quantity
+        `) as { rows: any[] };
+        
+        const row = upsertResult.rows[0];
+        if (row) {
+          const balanceAfter = row.quantity;
+          const balanceBefore = balanceAfter - updated.quantity;
+          await tx.insert(productionInventoryLogs).values({
+            branchId: updated.branchId,
+            productId: updated.productId,
+            productName: updated.productName,
+            movementType: 'production_in',
+            quantity: updated.quantity,
+            balanceBefore,
+            balanceAfter,
+            referenceType: 'batch',
+            referenceId: updated.id,
+            notes: `ترحيل من إكمال دفعة الإنتاج #${updated.id}`,
+          });
+        }
+      } catch (invErr) {
+        console.error("Error transferring finished batch to inventory:", invErr);
+      }
+
+      if (updated.destination === 'display_bar' && updated.productId) {
+        const batchRef = `PROD-${updated.id}`;
+        const existingReceipt = await tx.select({ id: displayBarReceipts.id })
+          .from(displayBarReceipts)
+          .where(eq(displayBarReceipts.productionBatch, batchRef))
+          .limit(1);
+        if (existingReceipt.length === 0) {
+          const saudiTime = getSaudiArabiaTime();
+          const receiptDate = updated.productionDate || saudiTime.date;
+          await tx.insert(displayBarReceipts).values({
+            branchId: updated.branchId,
+            productId: updated.productId,
+            receiptDate,
+            receiptTime: saudiTime.timeShort,
+            quantity: updated.quantity,
+            productionBatch: batchRef,
+            notes: `استلام تلقائي من إكمال دفعة الإنتاج - ${updated.productName}`,
+          });
+        }
+      }
+
+      return updated;
+    });
   }
 
   // Carry over batch to next day
@@ -5816,6 +5884,28 @@ export class DatabaseStorage implements IStorage {
         });
         
         transferred = true;
+
+        if (newBatch.destination === 'display_bar' && newBatch.productId) {
+          const batchRef = `PROD-${newBatch.id}`;
+          const existingReceipt = await tx.select({ id: displayBarReceipts.id })
+            .from(displayBarReceipts)
+            .where(eq(displayBarReceipts.productionBatch, batchRef))
+            .limit(1);
+          if (existingReceipt.length === 0) {
+            const saudiTime = getSaudiArabiaTime();
+            const receiptDate = newBatch.productionDate || saudiTime.date;
+            await tx.insert(displayBarReceipts).values({
+              branchId: newBatch.branchId,
+              productId: newBatch.productId,
+              receiptDate,
+              receiptTime: saudiTime.timeShort,
+              quantity: newBatch.quantity,
+              receivedBy: userId || null,
+              productionBatch: batchRef,
+              notes: `استلام تلقائي من الإنتاج الفعلي اليومي - ${newBatch.productName}`,
+            });
+          }
+        }
       }
       
       return { batch: newBatch, transferred };
@@ -5883,6 +5973,28 @@ export class DatabaseStorage implements IStorage {
         });
         
         transferred = true;
+
+        if (updated.destination === 'display_bar' && updated.productId) {
+          const batchRef = `PROD-${updated.id}`;
+          const existingReceipt = await tx.select({ id: displayBarReceipts.id })
+            .from(displayBarReceipts)
+            .where(eq(displayBarReceipts.productionBatch, batchRef))
+            .limit(1);
+          if (existingReceipt.length === 0) {
+            const saudiTime = getSaudiArabiaTime();
+            const receiptDate = updated.productionDate || saudiTime.date;
+            await tx.insert(displayBarReceipts).values({
+              branchId: updated.branchId,
+              productId: updated.productId,
+              receiptDate,
+              receiptTime: saudiTime.timeShort,
+              quantity: updated.quantity,
+              receivedBy: userId || null,
+              productionBatch: batchRef,
+              notes: `استلام تلقائي من الإنتاج الفعلي اليومي - ${updated.productName}`,
+            });
+          }
+        }
       }
       
       return { batch: updated, transferred };

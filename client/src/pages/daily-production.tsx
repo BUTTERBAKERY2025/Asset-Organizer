@@ -286,11 +286,13 @@ export default function DailyProductionPage() {
       const res = await apiRequest("POST", "/api/daily-production/batches", data);
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (result: any) => {
       refetchBatches();
       refetchUnfinished();
       queryClient.invalidateQueries({ queryKey: ["/api/daily-production/stats", branchId, selectedDate] });
       queryClient.invalidateQueries({ queryKey: ["/api/finished-goods-inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/display-bar/receipts"] });
+      const wasDisplayBar = destination === 'display_bar' && status === 'finished';
       if (!quickMode) {
         setProductName("");
         setProductCategory("");
@@ -302,7 +304,12 @@ export default function DailyProductionPage() {
       } else {
         setQuantity("");
       }
-      toast({ title: "تم تسجيل الدفعة بنجاح", description: `سجلها: ${user?.firstName || user?.username}` });
+      toast({ 
+        title: "تم تسجيل الدفعة بنجاح", 
+        description: wasDisplayBar 
+          ? `تم الربط التلقائي مع بار العرض - سجلها: ${user?.firstName || user?.username}` 
+          : `سجلها: ${user?.firstName || user?.username}` 
+      });
     },
     onError: (error: any) => {
       toast({ title: "خطأ", description: error.message, variant: "destructive" });
@@ -354,12 +361,13 @@ export default function DailyProductionPage() {
       });
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (result: any) => {
       refetchBatches();
       refetchUnfinished();
       queryClient.invalidateQueries({ queryKey: ["/api/daily-production/stats", branchId, selectedDate] });
       queryClient.invalidateQueries({ queryKey: ["/api/finished-goods-inventory"] });
-      toast({ title: "تم اكتمال الدفعة", description: "تم تحديث حالة الدفعة وترحيلها للمخزون النهائي" });
+      queryClient.invalidateQueries({ queryKey: ["/api/display-bar/receipts"] });
+      toast({ title: "تم اكتمال الدفعة", description: result?.destination === 'display_bar' ? "تم ترحيلها للمخزون وبار العرض تلقائياً" : "تم تحديث حالة الدفعة وترحيلها للمخزون النهائي" });
     },
     onError: (error: any) => {
       toast({ title: "خطأ", description: error.message, variant: "destructive" });
@@ -1363,10 +1371,15 @@ export default function DailyProductionPage() {
                                   </TableCell>
                                   <TableCell className="text-center font-bold text-xs sm:text-sm">{batch.quantity}</TableCell>
                                   <TableCell>
-                                    <Badge className={`${destInfo.color} text-[10px] sm:text-xs`}>
-                                      <DestIcon className="h-2 w-2 sm:h-3 sm:w-3 ml-1" />
-                                      <span className="hidden sm:inline">{destInfo.label}</span>
-                                    </Badge>
+                                    <div className="flex items-center gap-1">
+                                      <Badge className={`${destInfo.color} text-[10px] sm:text-xs`}>
+                                        <DestIcon className="h-2 w-2 sm:h-3 sm:w-3 ml-1" />
+                                        <span className="hidden sm:inline">{destInfo.label}</span>
+                                      </Badge>
+                                      {batch.destination === 'display_bar' && batch.status === 'finished' && (
+                                        <span className="inline-flex" data-testid="icon-display-bar-linked"><CheckCircle className="h-3 w-3 text-green-600 shrink-0" /></span>
+                                      )}
+                                    </div>
                                   </TableCell>
                                   <TableCell className="hidden sm:table-cell">
                                     {isSweetsCategory(batch.productCategory) && batch.status ? (
