@@ -666,7 +666,7 @@ export default function DisplayBarWastePage() {
     const orderMap: Record<string, any> = {};
     filteredReceipts.forEach((r: any) => {
       const isAutoFromProduction = r.productionBatch?.startsWith('PROD-') || r.notes?.includes('استلام تلقائي من الإنتاج');
-      const key = `${r.branchId}_${r.receiptDate}_${isAutoFromProduction ? 'auto_production' : (r.createdBy || 'unknown')}`;
+      const key = `${r.branchId}_${r.receiptDate}_${isAutoFromProduction ? 'auto_production' : (r.receivedBy || 'unknown')}`;
       if (!orderMap[key]) {
         orderMap[key] = {
           id: key,
@@ -674,8 +674,8 @@ export default function DisplayBarWastePage() {
           branchId: r.branchId,
           branchName: getBranchName(r.branchId),
           receiptDate: r.receiptDate,
-          createdBy: r.createdBy,
-          createdByName: isAutoFromProduction ? "ربط تلقائي من الإنتاج" : (r.createdByName || user?.username || "غير معروف"),
+          createdBy: r.receivedBy,
+          createdByName: isAutoFromProduction ? "ربط تلقائي من الإنتاج" : (r.receivedByName || user?.username || "غير معروف"),
           items: [],
           totalQuantity: 0,
           firstTime: r.receiptTime,

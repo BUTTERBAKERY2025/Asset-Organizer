@@ -523,6 +523,7 @@ export interface IStorage {
   updateUser(id: string, user: Partial<InsertUser>): Promise<User | undefined>;
   deleteUser(id: string): Promise<boolean>;
   getAllUsers(): Promise<User[]>;
+  getUsersByIds(ids: string[]): Promise<User[]>;
   updateUserRole(id: string, role: string): Promise<User | undefined>;
   verifyPassword(username: string, password: string): Promise<User | null>;
   
@@ -1287,6 +1288,11 @@ export class DatabaseStorage implements IStorage {
 
   async getAllUsers(): Promise<User[]> {
     return await db.select().from(users);
+  }
+
+  async getUsersByIds(ids: string[]): Promise<User[]> {
+    if (ids.length === 0) return [];
+    return await db.select().from(users).where(inArray(users.id, ids));
   }
 
   async updateUserRole(id: string, role: string): Promise<User | undefined> {
@@ -5784,6 +5790,7 @@ export class DatabaseStorage implements IStorage {
 
       if (updated.destination === 'display_bar' && updated.productId) {
         const batchRef = `PROD-${updated.id}`;
+        console.log(`[Auto-Receipt Finish] Creating receipt for batch ${batchRef}, product: ${updated.productName}`);
         const existingReceipt = await tx.select({ id: displayBarReceipts.id })
           .from(displayBarReceipts)
           .where(eq(displayBarReceipts.productionBatch, batchRef))
@@ -5800,7 +5807,12 @@ export class DatabaseStorage implements IStorage {
             productionBatch: batchRef,
             notes: `استلام تلقائي من إكمال دفعة الإنتاج - ${updated.productName}`,
           });
+          console.log(`[Auto-Receipt Finish] Successfully created receipt for ${batchRef}`);
+        } else {
+          console.log(`[Auto-Receipt Finish] Receipt already exists for ${batchRef}, skipping`);
         }
+      } else {
+        console.log(`[Auto-Receipt Finish] Skipping: destination=${updated.destination}, productId=${updated.productId}`);
       }
 
       return updated;
@@ -5887,6 +5899,7 @@ export class DatabaseStorage implements IStorage {
 
         if (newBatch.destination === 'display_bar' && newBatch.productId) {
           const batchRef = `PROD-${newBatch.id}`;
+          console.log(`[Auto-Receipt] Creating receipt for batch ${batchRef}, product: ${newBatch.productName}, branch: ${newBatch.branchId}`);
           const existingReceipt = await tx.select({ id: displayBarReceipts.id })
             .from(displayBarReceipts)
             .where(eq(displayBarReceipts.productionBatch, batchRef))
@@ -5904,8 +5917,15 @@ export class DatabaseStorage implements IStorage {
               productionBatch: batchRef,
               notes: `استلام تلقائي من الإنتاج الفعلي اليومي - ${newBatch.productName}`,
             });
+            console.log(`[Auto-Receipt] Successfully created receipt for ${batchRef}`);
+          } else {
+            console.log(`[Auto-Receipt] Receipt already exists for ${batchRef}, skipping`);
           }
+        } else {
+          console.log(`[Auto-Receipt] Skipping: destination=${newBatch.destination}, productId=${newBatch.productId}`);
         }
+      } else {
+        console.log(`[Auto-Receipt] Skipping batch ${newBatch?.id}: status=${batch.status}`);
       }
       
       return { batch: newBatch, transferred };
@@ -5976,6 +5996,7 @@ export class DatabaseStorage implements IStorage {
 
         if (updated.destination === 'display_bar' && updated.productId) {
           const batchRef = `PROD-${updated.id}`;
+          console.log(`[Auto-Receipt Update] Creating receipt for batch ${batchRef}, product: ${updated.productName}`);
           const existingReceipt = await tx.select({ id: displayBarReceipts.id })
             .from(displayBarReceipts)
             .where(eq(displayBarReceipts.productionBatch, batchRef))
@@ -5993,6 +6014,9 @@ export class DatabaseStorage implements IStorage {
               productionBatch: batchRef,
               notes: `استلام تلقائي من الإنتاج الفعلي اليومي - ${updated.productName}`,
             });
+            console.log(`[Auto-Receipt Update] Successfully created receipt for ${batchRef}`);
+          } else {
+            console.log(`[Auto-Receipt Update] Receipt already exists for ${batchRef}, skipping`);
           }
         }
       }

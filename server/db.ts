@@ -50,6 +50,12 @@ export async function runStartupMigrations() {
       `ALTER TABLE backups ADD COLUMN IF NOT EXISTS error_message text`,
       `ALTER TABLE backups ADD COLUMN IF NOT EXISTS restored_at timestamp`,
       `ALTER TABLE backups ADD COLUMN IF NOT EXISTS restored_by varchar`,
+      `INSERT INTO display_bar_receipts (branch_id, product_id, receipt_date, receipt_time, quantity, production_batch, notes)
+       SELECT dpb.branch_id, dpb.product_id, dpb.production_date, '08:00', dpb.quantity, 'PROD-' || dpb.id,
+         'استلام تلقائي من الإنتاج الفعلي اليومي - ' || dpb.product_name
+       FROM daily_production_batches dpb
+       WHERE dpb.destination = 'display_bar' AND dpb.status = 'finished' AND dpb.product_id IS NOT NULL
+         AND NOT EXISTS (SELECT 1 FROM display_bar_receipts dbr WHERE dbr.production_batch = 'PROD-' || dpb.id)`,
     ];
     for (const mig of migrations) {
       await pool.query(mig);

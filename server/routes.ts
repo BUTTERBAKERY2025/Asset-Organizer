@@ -10054,7 +10054,20 @@ export async function registerRoutes(
       
       const effectiveBranchId = branchFilter.singleBranchId;
       const receipts = await storage.getDisplayBarReceipts(effectiveBranchId ?? undefined, date);
-      res.json(receipts);
+      const receiverIds = Array.from(new Set(receipts.map(r => r.receivedBy).filter(Boolean))) as string[];
+      let userMap = new Map<string, any>();
+      if (receiverIds.length > 0) {
+        const users = await storage.getUsersByIds(receiverIds);
+        userMap = new Map(users.map(u => [u.id, u]));
+      }
+      const enrichedReceipts = receipts.map(r => {
+        const receivedUser = r.receivedBy ? userMap.get(r.receivedBy) : null;
+        return {
+          ...r,
+          receivedByName: receivedUser ? `${receivedUser.firstName || ''} ${receivedUser.lastName || ''}`.trim() || receivedUser.username : null,
+        };
+      });
+      res.json(enrichedReceipts);
     } catch (error) {
       console.error("Error fetching display bar receipts:", error);
       res.status(500).json({ error: "Failed to fetch display bar receipts" });
