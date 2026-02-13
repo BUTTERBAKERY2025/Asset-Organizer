@@ -21,7 +21,7 @@ import {
   Package, AlertTriangle, Plus, Camera, Trash2, Check, X, 
   FileText, TrendingDown, Clock, Building2, Calendar, CheckCircle2, User,
   Eye, Printer, FileDown, Hash, Image, Save, Search, RefreshCw, ArrowRight,
-  ChevronDown, ChevronUp, Calculator, ExternalLink
+  ChevronDown, ChevronUp, Calculator, ExternalLink, BarChart3, Upload
 } from "lucide-react";
 import { Link } from "wouter";
 import { TablePagination } from "@/components/ui/pagination";
@@ -74,6 +74,12 @@ export default function DisplayBarWastePage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [comparisonStartDate, setComparisonStartDate] = useState(new Date().toISOString().split("T")[0]);
+  const [comparisonEndDate, setComparisonEndDate] = useState(new Date().toISOString().split("T")[0]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isRunningComparison, setIsRunningComparison] = useState(false);
+  const [uploadResult, setUploadResult] = useState<any>(null);
+  const comparisonFileRef = useRef<HTMLInputElement>(null);
 
   const [receiptForm, setReceiptForm] = useState({
     productId: "",
@@ -268,6 +274,34 @@ export default function DisplayBarWastePage() {
     enabled: activeTab === "history",
   });
 
+  const { data: comparisons, refetch: refetchComparisons } = useQuery({
+    queryKey: ["/api/production-comparisons", selectedBranch, comparisonStartDate, comparisonEndDate],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (selectedBranch && selectedBranch !== "all") params.set("branchId", selectedBranch);
+      params.set("startDate", comparisonStartDate);
+      params.set("endDate", comparisonEndDate);
+      const res = await fetch(`/api/production-comparisons?${params}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch comparisons");
+      return res.json();
+    },
+    enabled: activeTab === "comparison" && !!comparisonStartDate && !!comparisonEndDate,
+  });
+
+  const { data: comparisonSummary } = useQuery({
+    queryKey: ["/api/production-comparisons/summary", selectedBranch, comparisonStartDate, comparisonEndDate],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (selectedBranch && selectedBranch !== "all") params.set("branchId", selectedBranch);
+      params.set("startDate", comparisonStartDate);
+      params.set("endDate", comparisonEndDate);
+      const res = await fetch(`/api/production-comparisons/summary?${params}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch summary");
+      return res.json();
+    },
+    enabled: activeTab === "comparison" && !!comparisonStartDate && !!comparisonEndDate,
+  });
+
   const paginatedHistory = wasteHistory.slice((historyPage - 1) * itemsPerPage, historyPage * itemsPerPage);
 
   const historyExportColumns = [
@@ -399,6 +433,86 @@ export default function DisplayBarWastePage() {
     );
     
     toast({ title: "تم تصدير التقرير بنجاح" });
+  };
+
+  const handleSalesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedBranch || selectedBranch === "all") return;
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("branchId", selectedBranch);
+      formData.append("defaultDate", comparisonStartDate);
+      const res = await fetch("/api/production-comparisons/upload-sales", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "فشل الرفع");
+      const result = await res.json();
+      setUploadResult(result);
+      toast({ title: "تم رفع بيانات المبيعات بنجاح", description: `${result.recordsImported} سجل | ${result.uniqueProducts} منتج` });
+    } catch (err: any) {
+      toast({ title: "خطأ", description: err.message, variant: "destructive" });
+    } finally {
+      setIsUploading(false);
+      if (comparisonFileRef.current) comparisonFileRef.current.value = "";
+    }
+  };
+
+  const handleRunComparison = async () => {
+    if (!selectedBranch || selectedBranch === "all") {
+      toast({ title: "يرجى اختيار فرع محدد", variant: "destructive" }); return;
+    }
+    setIsRunningComparison(true);
+    try {
+      const res = await fetch("/api/production-comparisons/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ branchId: selectedBranch, startDate: comparisonStartDate, endDate: comparisonEndDate }),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "فشل المقارنة");
+      const result = await res.json();
+      toast({ title: "تمت المقارنة بنجاح", description: `${result.comparisonsCreated} مقارنة` });
+      refetchComparisons();
+    } catch (err: any) {
+      toast({ title: "خطأ", description: err.message, variant: "destructive" });
+    } finally {
+      setIsRunningComparison(false);
+    }
+  };
+
+  const handleExportComparison = () => {
+    if (!comparisons || !Array.isArray(comparisons) || comparisons.length === 0) {
+      toast({ title: "لا توجد بيانات للتصدير", variant: "destructive" });
+      return;
+    }
+    const exportData = comparisons.map((item: any, index: number) => ({
+      rowNum: index + 1,
+      productName: item.productName || "-",
+      productCategory: item.productCategory || "-",
+      producedQuantity: item.producedQuantity || 0,
+      soldQuantity: item.soldQuantity || 0,
+      difference: item.difference || 0,
+      productionValue: item.productionValue || 0,
+      salesValue: item.salesValue || 0,
+      status: item.status === "normal" ? "طبيعي" : item.status === "waste" ? "هدر" : item.status === "shortage" ? "عجز" : "مخزون",
+    }));
+    const columns = [
+      { header: "#", key: "rowNum", width: 5 },
+      { header: "المنتج", key: "productName", width: 25 },
+      { header: "الفئة", key: "productCategory", width: 15 },
+      { header: "الكمية المنتجة", key: "producedQuantity", width: 12 },
+      { header: "الكمية المباعة", key: "soldQuantity", width: 12 },
+      { header: "الفرق", key: "difference", width: 10 },
+      { header: "قيمة الإنتاج", key: "productionValue", width: 15 },
+      { header: "قيمة المبيعات", key: "salesValue", width: 15 },
+      { header: "الحالة", key: "status", width: 10 },
+    ];
+    exportToExcel(exportData, columns, `مقارنة_المبيعات_${comparisonStartDate}`, "مقارنة المبيعات");
+    toast({ title: "تم تصدير المقارنة بنجاح" });
   };
 
   const createReceiptMutation = useMutation({
@@ -1036,6 +1150,10 @@ export default function DisplayBarWastePage() {
               <TabsTrigger value="history" className="gap-1" data-testid="tab-waste-history">
                 <FileText className="w-4 h-4" />
                 سجل الهالك
+              </TabsTrigger>
+              <TabsTrigger value="comparison" className="gap-1" data-testid="tab-comparison">
+                <BarChart3 className="w-4 h-4" />
+                مقارنة المبيعات
               </TabsTrigger>
             </TabsList>
             <div className="flex gap-2">
@@ -2330,6 +2448,189 @@ export default function DisplayBarWastePage() {
                       itemsPerPage={itemsPerPage}
                       onPageChange={setHistoryPage}
                     />
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="comparison" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-right">
+                  <BarChart3 className="w-5 h-5" />
+                  مقارنة الإنتاج بالمبيعات
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div>
+                    <Label className="text-right block mb-1">من تاريخ</Label>
+                    <Input
+                      type="date"
+                      value={comparisonStartDate}
+                      onChange={(e) => setComparisonStartDate(e.target.value)}
+                      data-testid="input-comparison-start-date"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-right block mb-1">إلى تاريخ</Label>
+                    <Input
+                      type="date"
+                      value={comparisonEndDate}
+                      onChange={(e) => setComparisonEndDate(e.target.value)}
+                      data-testid="input-comparison-end-date"
+                    />
+                  </div>
+                  <div className="flex items-end gap-2">
+                    <Button
+                      onClick={() => comparisonFileRef.current?.click()}
+                      disabled={isUploading || !selectedBranch || selectedBranch === "all"}
+                      variant="outline"
+                      data-testid="button-upload-sales"
+                    >
+                      <Upload className="w-4 h-4 ml-2" />
+                      {isUploading ? "جاري الرفع..." : "رفع بيانات المبيعات"}
+                    </Button>
+                    <input
+                      ref={comparisonFileRef}
+                      type="file"
+                      accept=".xlsx,.xls"
+                      onChange={handleSalesUpload}
+                      className="hidden"
+                      data-testid="input-sales-file"
+                    />
+                  </div>
+                  <div className="flex items-end gap-2">
+                    <Button
+                      onClick={handleRunComparison}
+                      disabled={isRunningComparison || !selectedBranch || selectedBranch === "all"}
+                      data-testid="button-run-comparison"
+                    >
+                      <Calculator className="w-4 h-4 ml-2" />
+                      {isRunningComparison ? "جاري المقارنة..." : "تشغيل المقارنة"}
+                    </Button>
+                  </div>
+                </div>
+
+                {(!selectedBranch || selectedBranch === "all") && (
+                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-right">
+                    <p className="text-amber-700 flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4" />
+                      يرجى اختيار فرع محدد لإجراء المقارنة
+                    </p>
+                  </div>
+                )}
+
+                {uploadResult && (
+                  <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-right" data-testid="upload-result">
+                    <p className="text-green-700 font-medium">تم رفع بيانات المبيعات بنجاح</p>
+                    <p className="text-green-600 text-sm mt-1">
+                      {uploadResult.recordsImported} سجل مستورد | {uploadResult.uniqueProducts} منتج فريد
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {comparisonSummary && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <Card data-testid="card-total-produced">
+                  <CardContent className="p-4 text-right">
+                    <p className="text-sm text-muted-foreground">إجمالي الإنتاج</p>
+                    <p className="text-2xl font-bold text-blue-600">{(comparisonSummary.totalProduced || 0).toLocaleString()}</p>
+                  </CardContent>
+                </Card>
+                <Card data-testid="card-total-sold">
+                  <CardContent className="p-4 text-right">
+                    <p className="text-sm text-muted-foreground">إجمالي المبيعات</p>
+                    <p className="text-2xl font-bold text-green-600">{(comparisonSummary.totalSold || 0).toLocaleString()}</p>
+                  </CardContent>
+                </Card>
+                <Card data-testid="card-total-waste">
+                  <CardContent className="p-4 text-right">
+                    <p className="text-sm text-muted-foreground">إجمالي الهدر</p>
+                    <p className="text-2xl font-bold text-red-600">{(comparisonSummary.totalWaste || 0).toLocaleString()}</p>
+                  </CardContent>
+                </Card>
+                <Card data-testid="card-total-shortage">
+                  <CardContent className="p-4 text-right">
+                    <p className="text-sm text-muted-foreground">إجمالي العجز</p>
+                    <p className="text-2xl font-bold text-orange-600">{(comparisonSummary.totalShortage || 0).toLocaleString()}</p>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between text-right">
+                  <span className="flex items-center gap-2">
+                    <FileText className="w-5 h-5" />
+                    نتائج المقارنة
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleExportComparison}
+                    disabled={!comparisons || !Array.isArray(comparisons) || comparisons.length === 0}
+                    data-testid="button-export-comparison"
+                  >
+                    <FileDown className="w-4 h-4 ml-2" />
+                    تصدير Excel
+                  </Button>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {!comparisons || !Array.isArray(comparisons) || comparisons.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <BarChart3 className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                    <p>لا توجد نتائج مقارنة</p>
+                    <p className="text-sm mt-1">قم برفع بيانات المبيعات ثم تشغيل المقارنة</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-right border-collapse" data-testid="table-comparison-results">
+                      <thead>
+                        <tr className="bg-muted/50">
+                          <th className="p-3 border font-medium">المنتج</th>
+                          <th className="p-3 border font-medium">الفئة</th>
+                          <th className="p-3 border font-medium">الكمية المنتجة</th>
+                          <th className="p-3 border font-medium">الكمية المباعة</th>
+                          <th className="p-3 border font-medium">الفرق</th>
+                          <th className="p-3 border font-medium">قيمة الإنتاج</th>
+                          <th className="p-3 border font-medium">قيمة المبيعات</th>
+                          <th className="p-3 border font-medium">الحالة</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {comparisons.map((item: any, index: number) => {
+                          const diff = item.difference || 0;
+                          const diffColor = diff === 0 ? "text-green-600" : diff > 0 ? "text-red-600" : "text-orange-600";
+                          const statusMap: Record<string, { label: string; className: string }> = {
+                            normal: { label: "طبيعي", className: "bg-green-100 text-green-700" },
+                            waste: { label: "هدر", className: "bg-red-100 text-red-700" },
+                            shortage: { label: "عجز", className: "bg-orange-100 text-orange-700" },
+                            stored: { label: "مخزون", className: "bg-blue-100 text-blue-700" },
+                          };
+                          const status = statusMap[item.status] || statusMap.normal;
+                          return (
+                            <tr key={item.id || index} className="hover:bg-muted/30" data-testid={`row-comparison-${index}`}>
+                              <td className="p-3 border font-medium">{item.productName || "-"}</td>
+                              <td className="p-3 border">{item.productCategory || "-"}</td>
+                              <td className="p-3 border">{(item.producedQuantity || 0).toLocaleString()}</td>
+                              <td className="p-3 border">{(item.soldQuantity || 0).toLocaleString()}</td>
+                              <td className={`p-3 border font-bold ${diffColor}`}>{diff > 0 ? `+${diff}` : diff}</td>
+                              <td className="p-3 border">{(item.productionValue || 0).toLocaleString()} ر.س</td>
+                              <td className="p-3 border">{(item.salesValue || 0).toLocaleString()} ر.س</td>
+                              <td className="p-3 border">
+                                <Badge className={status.className} data-testid={`badge-status-${index}`}>{status.label}</Badge>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </CardContent>
