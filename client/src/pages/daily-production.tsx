@@ -1241,7 +1241,7 @@ export default function DailyProductionPage() {
                       </div>
                       <span className="text-xs sm:text-sm font-medium leading-tight line-clamp-2">{product.name}</span>
                       {product.nameEn && (
-                        <span className="text-[10px] text-muted-foreground leading-tight line-clamp-1">{product.nameEn}</span>
+                        <span className="text-xs text-muted-foreground leading-tight line-clamp-1">{product.nameEn}</span>
                       )}
                       {todayQty > 0 && (
                         <div className="absolute -top-1.5 -left-1.5 bg-green-500 text-white text-[10px] font-bold rounded-full w-6 h-6 flex items-center justify-center shadow-sm">
@@ -1304,7 +1304,7 @@ export default function DailyProductionPage() {
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate">{batch.productName}</p>
                             {getEnName(batch) && (
-                              <p className="text-[11px] text-muted-foreground truncate ltr">{getEnName(batch)}</p>
+                              <p className="text-xs text-muted-foreground truncate ltr">{getEnName(batch)}</p>
                             )}
                             <p className="text-xs text-muted-foreground">
                               {batch.quantity} {batch.unit || "قطعة"} - {format(new Date(batch.producedAt), "yyyy-MM-dd")}
@@ -1379,7 +1379,7 @@ export default function DailyProductionPage() {
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium truncate">{batch.productName}</p>
                               {getEnName(batch) && (
-                                <p className="text-[11px] text-muted-foreground truncate ltr">{getEnName(batch)}</p>
+                                <p className="text-xs text-muted-foreground truncate ltr">{getEnName(batch)}</p>
                               )}
                               <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
                                 <span className="flex items-center gap-0.5">
@@ -1512,7 +1512,7 @@ export default function DailyProductionPage() {
                                     <div className="flex-1 min-w-0">
                                       <p className="font-medium text-sm truncate">{batch.productName}</p>
                                       {getEnName(batch) && (
-                                        <p className="text-[11px] text-muted-foreground truncate ltr">{getEnName(batch)}</p>
+                                        <p className="text-xs text-muted-foreground truncate ltr">{getEnName(batch)}</p>
                                       )}
                                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                         <span>{formatTime(batch.producedAt)}</span>
