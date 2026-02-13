@@ -849,7 +849,7 @@ export default function DailyProductionPage() {
         <div className="flex flex-wrap gap-2 sm:gap-4 items-end">
           <div className="space-y-1 sm:space-y-2 w-full sm:w-auto sm:min-w-[200px]">
             <Label className="text-xs sm:text-sm">الفرع *</Label>
-            <Select value={branchId} onValueChange={setBranchId}>
+            <Select value={branchId} onValueChange={(val) => { setBranchId(val); setSelectedChefId(""); setSelectedChefName(""); }}>
               <SelectTrigger data-testid="select-branch" className="h-10 sm:h-9">
                 <SelectValue placeholder="اختر الفرع" />
               </SelectTrigger>
