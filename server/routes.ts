@@ -13967,14 +13967,29 @@ export async function registerRoutes(
   // Get chefs for production assignment (accessible to production users)
   app.get("/api/daily-production/chefs", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
-      const users = await storage.getAllUsers();
-      // Return minimal user info for chef selection
-      const chefs = users.filter(u => u.isActive === "active").map(u => ({
-        id: u.id,
-        username: u.username,
-        firstName: u.firstName,
-        lastName: u.lastName,
-      }));
+      const { branchId } = req.query;
+      const branchFilter = getEffectiveBranchFilter(req, branchId as string | undefined);
+      const effectiveBranchId = branchFilter.singleBranchId;
+
+      const allEmployees = await storage.getAllBranchEmployees();
+      const productionJobTitles = ["خباز", "حلواني", "شيف سندوتشات", "شيف بيتزا", "مدير قسم انتاج", "مدير قسم إنتاج", "baker", "pastry chef", "sandwich chef", "pizza chef", "production manager"];
+      const chefs = allEmployees
+        .filter(emp => {
+          if (emp.status !== "active") return false;
+          const jobLower = (emp.jobTitle || "").toLowerCase().trim();
+          const matchesJob = productionJobTitles.some(title => jobLower === title.toLowerCase() || jobLower.includes(title.toLowerCase()));
+          if (!matchesJob) return false;
+          if (effectiveBranchId) return emp.branchId === effectiveBranchId;
+          return true;
+        })
+        .map(emp => ({
+          id: String(emp.id),
+          username: emp.employeeNumber || String(emp.id),
+          firstName: emp.employeeName,
+          lastName: null as string | null,
+          jobTitle: emp.jobTitle,
+          branchId: emp.branchId,
+        }));
       res.json(chefs);
     } catch (error) {
       console.error("Error fetching chefs:", error);

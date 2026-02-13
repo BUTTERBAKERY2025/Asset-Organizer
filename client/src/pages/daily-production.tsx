@@ -80,6 +80,8 @@ interface ChefUser {
   username: string;
   firstName: string | null;
   lastName: string | null;
+  jobTitle?: string;
+  branchId?: string;
 }
 
 const PRODUCTION_STATUSES = [
@@ -222,14 +224,16 @@ export default function DailyProductionPage() {
     enabled: !!branchId && !!selectedDate,
   });
 
-  // Fetch chefs (users who can be assigned to production)
   const { data: chefs } = useQuery<ChefUser[]>({
-    queryKey: ["/api/daily-production/chefs"],
+    queryKey: ["/api/daily-production/chefs", branchId],
     queryFn: async () => {
-      const res = await fetch("/api/daily-production/chefs", { credentials: "include" });
+      const params = new URLSearchParams();
+      if (branchId) params.set("branchId", branchId);
+      const res = await fetch(`/api/daily-production/chefs?${params}`, { credentials: "include" });
       if (!res.ok) return [];
       return res.json();
     },
+    enabled: !!branchId,
   });
 
   // Fetch unfinished batches for carry-over
@@ -252,12 +256,11 @@ export default function DailyProductionPage() {
     return category === "حلويات";
   };
 
-  // Handle chef selection
   const handleChefSelect = (chefId: string) => {
     setSelectedChefId(chefId);
     const chef = chefs?.find(c => c.id === chefId);
     if (chef) {
-      setSelectedChefName(chef.firstName ? `${chef.firstName} ${chef.lastName || ""}`.trim() : chef.username);
+      setSelectedChefName(chef.firstName || chef.username);
     }
   };
 
@@ -1193,9 +1196,15 @@ export default function DailyProductionPage() {
                         <SelectContent className="max-h-60 overflow-y-auto">
                           {chefs?.map((chef) => (
                             <SelectItem key={chef.id} value={chef.id}>
-                              {chef.firstName ? `${chef.firstName} ${chef.lastName || ""}`.trim() : chef.username}
+                              {chef.firstName || chef.username}
+                              {chef.jobTitle ? ` - ${chef.jobTitle}` : ""}
                             </SelectItem>
                           ))}
+                          {chefs?.length === 0 && (
+                            <div className="px-3 py-2 text-sm text-muted-foreground text-center">
+                              لا يوجد موظفين بوظائف الإنتاج في هذا الفرع
+                            </div>
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
