@@ -285,10 +285,10 @@ export default function DisplayBarWastePage() {
       if (!res.ok) throw new Error("Failed to fetch comparisons");
       return res.json();
     },
-    enabled: activeTab === "comparison" && !!comparisonStartDate && !!comparisonEndDate,
+    enabled: activeTab === "comparison" && !!comparisonStartDate && !!comparisonEndDate && selectedBranch !== "all",
   });
 
-  const { data: comparisonSummary } = useQuery({
+  const { data: comparisonSummary, refetch: refetchComparisonSummary } = useQuery({
     queryKey: ["/api/production-comparisons/summary", selectedBranch, comparisonStartDate, comparisonEndDate],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -299,7 +299,7 @@ export default function DisplayBarWastePage() {
       if (!res.ok) throw new Error("Failed to fetch summary");
       return res.json();
     },
-    enabled: activeTab === "comparison" && !!comparisonStartDate && !!comparisonEndDate,
+    enabled: activeTab === "comparison" && !!comparisonStartDate && !!comparisonEndDate && selectedBranch !== "all",
   });
 
   const paginatedHistory = wasteHistory.slice((historyPage - 1) * itemsPerPage, historyPage * itemsPerPage);
@@ -477,6 +477,7 @@ export default function DisplayBarWastePage() {
       const result = await res.json();
       toast({ title: "تمت المقارنة بنجاح", description: `${result.comparisonsCreated} مقارنة` });
       refetchComparisons();
+      refetchComparisonSummary();
     } catch (err: any) {
       toast({ title: "خطأ", description: err.message, variant: "destructive" });
     } finally {
@@ -511,7 +512,7 @@ export default function DisplayBarWastePage() {
       { header: "قيمة المبيعات", key: "salesValue", width: 15 },
       { header: "الحالة", key: "status", width: 10 },
     ];
-    exportToExcel(exportData, columns, `مقارنة_المبيعات_${comparisonStartDate}`, "مقارنة المبيعات");
+    exportToExcel(exportData, columns, `مقارنة_المبيعات_${comparisonStartDate}_${comparisonEndDate}`, "مقارنة المبيعات");
     toast({ title: "تم تصدير المقارنة بنجاح" });
   };
 
