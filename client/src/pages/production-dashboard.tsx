@@ -7,7 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+import { Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
@@ -185,8 +185,18 @@ export default function ProductionDashboardPage() {
   }, [userBranchId, selectedBranch, setSelectedBranch]);
 
   const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useQuery<OrderStats>({
-    queryKey: ["/api/advanced-production-orders/stats"],
-    staleTime: 1000 * 30, // 30 seconds - production stats are dynamic
+    queryKey: ["/api/advanced-production-orders/stats", selectedBranch],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (selectedBranch && selectedBranch !== "all") {
+        params.set("branchId", selectedBranch);
+      }
+      const res = await fetch(`/api/advanced-production-orders/stats?${params}`, { credentials: "include" });
+      if (!res.ok) return { total: 0, draft: 0, pending: 0, approved: 0, inProgress: 0, completed: 0, cancelled: 0, daily: 0, weekly: 0, longTerm: 0, totalEstimatedCost: 0 };
+      return res.json();
+    },
+    enabled: !!selectedBranch,
+    staleTime: 1000 * 30,
     placeholderData: (prev) => prev,
   });
 
@@ -213,7 +223,8 @@ export default function ProductionDashboardPage() {
       return data;
     },
     enabled: !!selectedBranch && !!selectedDate,
-    staleTime: 1000 * 30, // 30 seconds
+    staleTime: 1000 * 30,
+    refetchInterval: autoRefresh ? 60000 : false,
     placeholderData: (prev) => prev,
   });
 
@@ -221,7 +232,7 @@ export default function ProductionDashboardPage() {
   const prevDayStats = hubData?.yesterday;
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-GB", { style: "currency", currency: "SAR", maximumFractionDigits: 0 }).format(amount || 0);
+    return new Intl.NumberFormat("ar-SA", { style: "decimal", maximumFractionDigits: 0 }).format(amount || 0) + " ر.س";
   };
 
   const completionRate = stats ? 
@@ -297,7 +308,10 @@ export default function ProductionDashboardPage() {
                 <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-foreground" data-testid="page-title">
                   لوحة الإنتاج
                 </h1>
-                <p className="text-xs sm:text-sm text-muted-foreground">{format(new Date(selectedDate), "EEEE، dd MMMM yyyy", { locale: ar })}</p>
+                <p className="text-xs sm:text-sm text-muted-foreground">
+                  {format(new Date(selectedDate), "EEEE، dd MMMM yyyy", { locale: ar })}
+                  {lastUpdated && <span className="mr-2 text-green-600">• {formatLastUpdated()}</span>}
+                </p>
               </div>
             </div>
               
@@ -320,6 +334,25 @@ export default function ProductionDashboardPage() {
                 onChange={(e) => setSelectedDate(e.target.value)}
                 className="w-[120px] sm:w-[140px] h-11 sm:h-10"
               />
+              
+              <TooltipProvider>
+                <UITooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      variant={autoRefresh ? "default" : "outline"} 
+                      size="icon" 
+                      onClick={() => setAutoRefresh(!autoRefresh)} 
+                      data-testid="btn-auto-refresh" 
+                      className={`h-11 w-11 sm:h-10 sm:w-10 ${autoRefresh ? 'bg-green-600 hover:bg-green-700' : ''}`}
+                    >
+                      <Activity className={`h-4 w-4 ${autoRefresh ? 'animate-pulse text-white' : ''}`} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    <p>{autoRefresh ? 'التحديث التلقائي مفعّل (كل دقيقة)' : 'تفعيل التحديث التلقائي'}</p>
+                  </TooltipContent>
+                </UITooltip>
+              </TooltipProvider>
               
               <Button variant="outline" size="icon" onClick={handleRefresh} data-testid="btn-refresh" className="h-11 w-11 sm:h-10 sm:w-10">
                 <RefreshCw className={`h-4 w-4 ${dailyLoading ? 'animate-spin' : ''}`} />
@@ -415,76 +448,84 @@ export default function ProductionDashboardPage() {
           </div>
 
           {/* Target Progress Card */}
-          {hubData?.target && hubData.target.totalTarget > 0 && (
-            <Card data-testid="card-target-vs-actual">
-              <CardContent className="p-3 sm:p-4">
-                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
-                  <div className="flex items-center gap-2 sm:gap-3">
-                    <div className="h-8 w-8 sm:h-10 sm:w-10 bg-amber-100 rounded-xl flex items-center justify-center">
-                      <Target className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600" />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-sm sm:text-base text-slate-800">الهدف مقابل الإنتاج الفعلي</h3>
-                      <p className="text-[10px] sm:text-xs text-slate-500">متابعة تحقيق الأهداف اليومية</p>
-                    </div>
+          <Card data-testid="card-target-vs-actual">
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-4 sm:mb-6">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="h-8 w-8 sm:h-10 sm:w-10 bg-amber-100 rounded-xl flex items-center justify-center">
+                    <Target className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600" />
                   </div>
+                  <div>
+                    <h3 className="font-bold text-sm sm:text-base text-slate-800">الهدف مقابل الإنتاج الفعلي</h3>
+                    <p className="text-[10px] sm:text-xs text-slate-500">متابعة تحقيق الأهداف اليومية</p>
+                  </div>
+                </div>
                   <div className="sm:mr-auto">
-                    {hubData.target.completionRate >= 100 && (
+                    {hubData?.target && hubData.target.totalTarget > 0 && hubData.target.completionRate >= 100 && (
                       <Badge className="bg-green-500 text-white text-[10px] sm:text-xs">تم تحقيق الهدف</Badge>
                     )}
-                    {hubData.target.completionRate >= 80 && hubData.target.completionRate < 100 && (
+                    {hubData?.target && hubData.target.totalTarget > 0 && hubData.target.completionRate >= 80 && hubData.target.completionRate < 100 && (
                       <Badge className="bg-amber-500 text-white text-[10px] sm:text-xs">قريب من الهدف</Badge>
                     )}
-                    {hubData.target.completionRate < 80 && hubData.target.completionRate > 0 && (
+                    {hubData?.target && hubData.target.totalTarget > 0 && hubData.target.completionRate < 80 && hubData.target.completionRate > 0 && (
                       <Badge className="bg-red-500 text-white text-[10px] sm:text-xs">يحتاج متابعة</Badge>
                     )}
                   </div>
                 </div>
                 
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 mb-4 sm:mb-6">
-                  <div className="bg-white rounded-xl p-2 sm:p-4 text-center shadow-sm border border-slate-100">
-                    <p className="text-[10px] sm:text-xs text-slate-500 mb-1">الهدف</p>
-                    <p className="text-lg sm:text-2xl font-bold text-slate-800">{hubData.target.totalTarget}</p>
-                  </div>
-                  <div className="bg-white rounded-xl p-2 sm:p-4 text-center shadow-sm border border-green-100">
-                    <p className="text-[10px] sm:text-xs text-slate-500 mb-1">المُنتَج</p>
-                    <p className="text-lg sm:text-2xl font-bold text-green-600">{hubData.target.totalProduced}</p>
-                  </div>
-                  <div className="bg-white rounded-xl p-2 sm:p-4 text-center shadow-sm border border-slate-100">
-                    <p className="text-[10px] sm:text-xs text-slate-500 mb-1">الفرق</p>
-                    <p className={`text-lg sm:text-2xl font-bold ${hubData.target.gap > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                      {hubData.target.gap > 0 ? `-${hubData.target.gap}` : hubData.target.gap === 0 ? '0' : `+${Math.abs(hubData.target.gap)}`}
-                    </p>
-                  </div>
-                  <div className="bg-white rounded-xl p-2 sm:p-4 text-center shadow-sm border border-amber-100">
-                    <p className="text-[10px] sm:text-xs text-slate-500 mb-1">نسبة الإنجاز</p>
-                    <p className={`text-lg sm:text-2xl font-bold ${
-                      hubData.target.completionRate >= 100 ? 'text-green-600' : 
-                      hubData.target.completionRate >= 80 ? 'text-amber-600' : 'text-red-600'
-                    }`}>
-                      {hubData.target.completionRate}%
-                    </p>
-                  </div>
-                </div>
+                {hubData?.target && hubData.target.totalTarget > 0 ? (
+                  <>
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 mb-4 sm:mb-6">
+                      <div className="bg-white rounded-xl p-2 sm:p-4 text-center shadow-sm border border-slate-100">
+                        <p className="text-[10px] sm:text-xs text-slate-500 mb-1">الهدف</p>
+                        <p className="text-lg sm:text-2xl font-bold text-slate-800">{hubData.target.totalTarget}</p>
+                      </div>
+                      <div className="bg-white rounded-xl p-2 sm:p-4 text-center shadow-sm border border-green-100">
+                        <p className="text-[10px] sm:text-xs text-slate-500 mb-1">المُنتَج</p>
+                        <p className="text-lg sm:text-2xl font-bold text-green-600">{hubData.target.totalProduced}</p>
+                      </div>
+                      <div className="bg-white rounded-xl p-2 sm:p-4 text-center shadow-sm border border-slate-100">
+                        <p className="text-[10px] sm:text-xs text-slate-500 mb-1">الفرق</p>
+                        <p className={`text-lg sm:text-2xl font-bold ${hubData.target.gap > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          {hubData.target.gap > 0 ? `-${hubData.target.gap}` : hubData.target.gap === 0 ? '0' : `+${Math.abs(hubData.target.gap)}`}
+                        </p>
+                      </div>
+                      <div className="bg-white rounded-xl p-2 sm:p-4 text-center shadow-sm border border-amber-100">
+                        <p className="text-[10px] sm:text-xs text-slate-500 mb-1">نسبة الإنجاز</p>
+                        <p className={`text-lg sm:text-2xl font-bold ${
+                          hubData.target.completionRate >= 100 ? 'text-green-600' : 
+                          hubData.target.completionRate >= 80 ? 'text-amber-600' : 'text-red-600'
+                        }`}>
+                          {hubData.target.completionRate}%
+                        </p>
+                      </div>
+                    </div>
 
-                <div className="relative">
-                  <Progress 
-                    value={Math.min(hubData.target.completionRate, 100)} 
-                    className={`h-4 rounded-full ${
-                      hubData.target.completionRate >= 100 ? '[&>div]:bg-gradient-to-r [&>div]:from-green-500 [&>div]:to-emerald-500' : 
-                      hubData.target.completionRate >= 80 ? '[&>div]:bg-gradient-to-r [&>div]:from-amber-500 [&>div]:to-orange-500' : 
-                      '[&>div]:bg-gradient-to-r [&>div]:from-red-500 [&>div]:to-rose-500'
-                    }`}
-                  />
-                  <div className="flex justify-between text-xs text-slate-400 mt-2">
-                    <span>0%</span>
-                    <span>{hubData.target.totalTarget} قطعة</span>
-                    <span>100%</span>
+                    <div className="relative">
+                      <Progress 
+                        value={Math.min(hubData.target.completionRate, 100)} 
+                        className={`h-4 rounded-full ${
+                          hubData.target.completionRate >= 100 ? '[&>div]:bg-gradient-to-r [&>div]:from-green-500 [&>div]:to-emerald-500' : 
+                          hubData.target.completionRate >= 80 ? '[&>div]:bg-gradient-to-r [&>div]:from-amber-500 [&>div]:to-orange-500' : 
+                          '[&>div]:bg-gradient-to-r [&>div]:from-red-500 [&>div]:to-rose-500'
+                        }`}
+                      />
+                      <div className="flex justify-between text-xs text-slate-400 mt-2">
+                        <span>0%</span>
+                        <span>{hubData.target.totalTarget} قطعة</span>
+                        <span>100%</span>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center py-6 text-slate-400">
+                    <Target className="h-10 w-10 mx-auto mb-2 opacity-40" />
+                    <p className="text-sm">لا توجد أهداف إنتاج مُعدّة لهذا التاريخ</p>
+                    <p className="text-xs mt-1">يمكنك إنشاء أمر إنتاج جديد لتحديد الأهداف</p>
                   </div>
-                </div>
+                )}
               </CardContent>
             </Card>
-          )}
 
           {/* Main Content Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -504,7 +545,7 @@ export default function ProductionDashboardPage() {
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Waste KPI */}
-                    <Link href="/waste-reports" className="block group" data-testid="card-waste-kpi">
+                    <Link href="/display-bar-waste" className="block group" data-testid="card-waste-kpi">
                       <div className="rounded-xl border-2 border-red-100 bg-gradient-to-br from-red-50 to-white p-4 hover:border-red-300 hover:shadow-md transition-all cursor-pointer">
                         <div className="flex items-center justify-between mb-3">
                           <div className="h-10 w-10 bg-red-100 rounded-xl flex items-center justify-center">
@@ -651,6 +692,11 @@ export default function ProductionDashboardPage() {
                       {[1, 2, 3, 4].map((i) => (
                         <Skeleton key={i} className="h-10 w-full" />
                       ))}
+                    </div>
+                  ) : stats?.total === 0 ? (
+                    <div className="text-center py-6 text-slate-400">
+                      <ClipboardList className="h-10 w-10 mx-auto mb-2 opacity-40" />
+                      <p className="text-sm">لا توجد أوامر إنتاج حالياً</p>
                     </div>
                   ) : (
                     <>

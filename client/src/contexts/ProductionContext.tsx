@@ -110,11 +110,13 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
         }
         return null;
       }
-      return res.json();
+      const data = await res.json();
+      setLastUpdated(new Date());
+      return data;
     },
     enabled: !!selectedDate && !!selectedBranch,
-    refetchInterval: autoRefresh ? 300000 : false,
-    staleTime: 5 * 60 * 1000,
+    refetchInterval: autoRefresh ? 60000 : false,
+    staleTime: 30 * 1000,
     refetchOnWindowFocus: false,
     retry: false,
   });
