@@ -165,7 +165,7 @@ export async function registerRoutes(
 
   setInterval(() => {
     const now = Date.now();
-    for (const [key, val] of responseCache.entries()) {
+    for (const [key, val] of Array.from(responseCache.entries())) {
       if (now - val.timestamp > 120000) responseCache.delete(key);
     }
   }, 120000);
@@ -367,7 +367,7 @@ export async function registerRoutes(
             });
           }
           // Clear permissions cache
-          storage.clearPermissionsCache?.(req.params.id);
+          (storage as any).clearPermissionsCache?.(req.params.id);
           invalidateAuthCache(req.params.id);
         }
       }
@@ -6268,7 +6268,7 @@ export async function registerRoutes(
         : allBranches;
       
       const operationsReport = await storage.getOperationsReport({
-        branchId: effectiveBranchId,
+        branchId: effectiveBranchId ?? undefined,
         startDate: startDate as string | undefined,
         endDate: endDate as string | undefined,
       });
@@ -7796,7 +7796,7 @@ export async function registerRoutes(
         }
       }
 
-      const branchFilter = getEffectiveBranchFilter(req, branchId);
+      const branchFilter = getEffectiveBranchFilter(req, branchId as string | undefined);
       if (!branchFilter.hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول" });
 
       let filtered = targets;
@@ -9922,7 +9922,7 @@ export async function registerRoutes(
       }
       
       const results: any[] = [];
-      for (const productId of productIds) {
+      for (const productId of Array.from(productIds)) {
         const receivedQuantity = receipts
           .filter(r => r.productId === productId)
           .reduce((sum, r) => sum + r.quantity, 0);
@@ -14003,7 +14003,7 @@ export async function registerRoutes(
       const effectiveBranchId = branchFilter.singleBranchId;
       console.log("Fetching batches with filters:", { branchId: effectiveBranchId, date, destination, status, chefId, category });
       const batches = await storage.getAllDailyProductionBatches({
-        branchId: effectiveBranchId,
+        branchId: effectiveBranchId ?? undefined,
         date: date as string,
         destination: destination as string,
         status: status as string,
@@ -14036,7 +14036,7 @@ export async function registerRoutes(
       }
       
       const effectiveBranchId = branchFilter.singleBranchId;
-      const batches = await storage.getUnfinishedBatches(effectiveBranchId);
+      const batches = await storage.getUnfinishedBatches(effectiveBranchId ?? undefined);
       res.json(batches);
     } catch (error) {
       console.error("Error fetching unfinished batches:", error);
@@ -15779,7 +15779,7 @@ export async function registerRoutes(
       
       const user = getCurrentUser(req);
       // SECURITY: Apply branch filter
-      const branchFilter = getEffectiveBranchFilter(req, branchId);
+      const branchFilter = getEffectiveBranchFilter(req, branchId as string | undefined);
       if (!branchFilter.hasAccess) {
         return res.status(403).json({ error: "غير مصرح بالوصول" });
       }
@@ -18932,7 +18932,7 @@ export async function registerRoutes(
         return res.json(schedules);
       }
       if (date) {
-        let schedules = await storage.getEmployeeSchedulesByDate(date as string, effectiveBranchId);
+        let schedules = await storage.getEmployeeSchedulesByDate(date as string, effectiveBranchId ?? undefined);
         // SECURITY: Filter by allowed branches for multi-branch users without specific branch
         if (!effectiveBranchId && allowedBranchIds !== null) {
           const allowedSet = new Set(allowedBranchIds);
@@ -19334,7 +19334,7 @@ export async function registerRoutes(
   // ============ Biometric / WebAuthn Endpoints ============
   
   // In-memory challenge store with TTL (5 minutes)
-  const biometricChallenges = new Map<string, { challenge: string; employeeId: string; type: string; timestamp: number }>();
+  const biometricChallenges = new Map<string, { challenge: string; employeeId: string; branchId?: string; type: string; timestamp: number }>();
   setInterval(() => {
     const now = Date.now();
     const keys = Array.from(biometricChallenges.keys());
@@ -19465,7 +19465,7 @@ export async function registerRoutes(
         deviceModel: deviceModel || null,
         registrationMethod: validMethods.includes(registrationMethod) ? registrationMethod : "fingerprint",
         registeredBy: currentUser?.id || null,
-        registeredByName: registeredByName || currentUser?.fullName || currentUser?.username || null,
+        registeredByName: registeredByName || [currentUser?.firstName, currentUser?.lastName].filter(Boolean).join(' ') || currentUser?.username || null,
         isActive: true,
       });
 
@@ -20066,7 +20066,7 @@ export async function registerRoutes(
       const conditions: SQL[] = [];
       if (!isUserAdmin(req)) {
         const allowedBranches = await getAllowedBranchIds(req);
-        if (allowedBranches.length > 0) {
+        if (allowedBranches && allowedBranches.length > 0) {
           conditions.push(inArray(biometricCredentials.branchId, allowedBranches));
         } else if (currentUser?.branchId) {
           conditions.push(eq(biometricCredentials.branchId, currentUser.branchId));
@@ -23546,7 +23546,7 @@ export async function registerRoutes(
       const inventoryItem = await storage.addProductionToFinishedGoods(
         batchId,
         user?.id,
-        [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username
+        [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username || undefined
       );
       
       res.status(201).json(inventoryItem);
@@ -23609,7 +23609,7 @@ export async function registerRoutes(
         destinationBranchId,
         notes,
         user?.id,
-        [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username
+        [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username || undefined
       );
       
       if (destinationType === 'display_bar' || destinationType === 'بار_العرض') {
@@ -24106,8 +24106,8 @@ export async function registerRoutes(
       const transfer = await storage.modifyTransferQuantities(
         parseInt(req.params.id),
         modifications,
-        user?.id,
-        [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username
+        user?.id || '',
+        [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username || ''
       );
       
       // Create notification about quantity modification
@@ -24159,12 +24159,12 @@ export async function registerRoutes(
         parseInt(req.params.id),
         receivedItems,
         {
-          receivedBy: user?.id,
-          receivedByName: [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username,
+          receivedBy: user?.id ?? undefined,
+          receivedByName: [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username || undefined,
           receiverSignature,
           deliveryNotes
         },
-        user?.id
+        user?.id ?? undefined
       );
       
       if (!transfer) {
@@ -24353,7 +24353,7 @@ export async function registerRoutes(
   app.get("/api/warehouse/notifications/unread-count", isAuthenticated, requirePermission("warehouse", "view"), async (req, res) => {
     try {
       const user = req.currentUser;
-      const branchId = req.query.branchId as string || user?.branchId;
+      const branchId = (req.query.branchId as string || user?.branchId) ?? undefined;
       const count = await storage.getUnreadNotificationCount(branchId, user?.id);
       res.json({ count });
     } catch (error) {
@@ -24389,7 +24389,7 @@ export async function registerRoutes(
   app.put("/api/warehouse/notifications/mark-all-read", isAuthenticated, requirePermission("warehouse", "edit"), async (req, res) => {
     try {
       const user = req.currentUser;
-      const branchId = req.query.branchId as string || user?.branchId;
+      const branchId = (req.query.branchId as string || user?.branchId) ?? undefined;
       await storage.markAllNotificationsAsRead(branchId, user?.id);
       res.json({ success: true });
     } catch (error) {
@@ -26309,7 +26309,7 @@ export async function registerRoutes(
         return res.status(403).json({ error: "غير مصرح بالوصول" });
       }
       
-      const visitors = await storage.getVisitors(branchFilter.singleBranchId);
+      const visitors = await storage.getVisitors(branchFilter.singleBranchId ?? undefined);
       res.json(visitors);
     } catch (error) {
       console.error("Error getting visitors:", error);
@@ -26326,7 +26326,7 @@ export async function registerRoutes(
         return res.status(403).json({ error: "غير مصرح بالوصول" });
       }
       
-      const visitors = await storage.searchVisitors(query, branchFilter.singleBranchId);
+      const visitors = await storage.searchVisitors(query, branchFilter.singleBranchId ?? undefined);
       res.json(visitors);
     } catch (error) {
       console.error("Error searching visitors:", error);
@@ -26342,7 +26342,7 @@ export async function registerRoutes(
         return res.status(403).json({ error: "غير مصرح بالوصول" });
       }
       
-      const visitors = await storage.getBlacklistedVisitors(branchFilter.singleBranchId);
+      const visitors = await storage.getBlacklistedVisitors(branchFilter.singleBranchId ?? undefined);
       res.json(visitors);
     } catch (error) {
       console.error("Error getting blacklist:", error);
@@ -26478,7 +26478,7 @@ export async function registerRoutes(
         return res.status(403).json({ error: "غير مصرح بالوصول" });
       }
       
-      const logs = await storage.getVisitorLogs(branchFilter.singleBranchId, startDate, endDate);
+      const logs = await storage.getVisitorLogs(branchFilter.singleBranchId ?? undefined, startDate, endDate);
       res.json(logs);
     } catch (error) {
       console.error("Error getting visitor logs:", error);
@@ -26495,7 +26495,7 @@ export async function registerRoutes(
         return res.status(403).json({ error: "غير مصرح بالوصول" });
       }
       
-      const logs = await storage.getActiveVisitorLogs(branchFilter.singleBranchId);
+      const logs = await storage.getActiveVisitorLogs(branchFilter.singleBranchId ?? undefined);
       res.json(logs);
     } catch (error) {
       console.error("Error getting active visitors:", error);
@@ -26512,7 +26512,7 @@ export async function registerRoutes(
         return res.status(403).json({ error: "غير مصرح بالوصول" });
       }
       
-      const stats = await storage.getVisitorStats(branchFilter.singleBranchId);
+      const stats = await storage.getVisitorStats(branchFilter.singleBranchId ?? undefined);
       res.json(stats);
     } catch (error) {
       console.error("Error getting visitor stats:", error);
@@ -27122,7 +27122,7 @@ export async function registerRoutes(
         return res.status(403).json({ error: "غير مصرح بالوصول" });
       }
       
-      const visitors = await storage.getVisitors(branchFilter.singleBranchId);
+      const visitors = await storage.getVisitors(branchFilter.singleBranchId ?? undefined);
       res.json(visitors);
     } catch (error) {
       console.error("Error exporting visitors:", error);

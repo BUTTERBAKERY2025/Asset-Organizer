@@ -5639,29 +5639,39 @@ export class DatabaseStorage implements IStorage {
     longTerm: number;
     totalEstimatedCost: number;
   }> {
-    let allOrders = await db.select().from(advancedProductionOrders);
-    
-    // Filter by branch if provided
-    if (branchId) {
-      allOrders = allOrders.filter(o => o.sourceBranchId === branchId || o.targetBranchId === branchId);
-    }
-    
-    // Calculate total estimated cost from all active orders
+    const conditions = branchId ? [
+      or(
+        eq(advancedProductionOrders.sourceBranchId, branchId),
+        eq(advancedProductionOrders.targetBranchId, branchId)
+      )
+    ] : [];
+
+    const allOrders = conditions.length > 0
+      ? await db.select().from(advancedProductionOrders).where(and(...conditions))
+      : await db.select().from(advancedProductionOrders);
+
     const totalEstimatedCost = allOrders
       .filter(o => o.status !== 'cancelled' && o.status !== 'completed')
       .reduce((sum, o) => sum + (o.estimatedCost || 0), 0);
     
+    const statusCounts: Record<string, number> = {};
+    const typeCounts: Record<string, number> = {};
+    for (const o of allOrders) {
+      statusCounts[o.status] = (statusCounts[o.status] || 0) + 1;
+      typeCounts[o.orderType] = (typeCounts[o.orderType] || 0) + 1;
+    }
+
     return {
       total: allOrders.length,
-      draft: allOrders.filter(o => o.status === 'draft').length,
-      pending: allOrders.filter(o => o.status === 'pending').length,
-      approved: allOrders.filter(o => o.status === 'approved').length,
-      inProgress: allOrders.filter(o => o.status === 'in_progress').length,
-      completed: allOrders.filter(o => o.status === 'completed').length,
-      cancelled: allOrders.filter(o => o.status === 'cancelled').length,
-      daily: allOrders.filter(o => o.orderType === 'daily').length,
-      weekly: allOrders.filter(o => o.orderType === 'weekly').length,
-      longTerm: allOrders.filter(o => o.orderType === 'long_term').length,
+      draft: statusCounts['draft'] || 0,
+      pending: statusCounts['pending'] || 0,
+      approved: statusCounts['approved'] || 0,
+      inProgress: statusCounts['in_progress'] || 0,
+      completed: statusCounts['completed'] || 0,
+      cancelled: statusCounts['cancelled'] || 0,
+      daily: typeCounts['daily'] || 0,
+      weekly: typeCounts['weekly'] || 0,
+      longTerm: typeCounts['long_term'] || 0,
       totalEstimatedCost,
     };
   }
@@ -7548,7 +7558,7 @@ export class DatabaseStorage implements IStorage {
     const existing = await db.select().from(employeeSchedules)
       .where(and(
         eq(employeeSchedules.employeeId, schedule.employeeId),
-        eq(employeeSchedules.branchId, schedule.branchId),
+        schedule.branchId ? eq(employeeSchedules.branchId, schedule.branchId) : isNull(employeeSchedules.branchId),
         eq(employeeSchedules.scheduleDate, schedule.scheduleDate)
       ))
       .limit(1);
@@ -7586,7 +7596,7 @@ export class DatabaseStorage implements IStorage {
         existing = await db.select().from(employeeSchedules)
           .where(and(
             eq(employeeSchedules.branchEmployeeId, schedule.branchEmployeeId),
-            eq(employeeSchedules.branchId, schedule.branchId),
+            schedule.branchId ? eq(employeeSchedules.branchId, schedule.branchId) : isNull(employeeSchedules.branchId),
             eq(employeeSchedules.scheduleDate, schedule.scheduleDate)
           ))
           .limit(1);
@@ -7596,7 +7606,7 @@ export class DatabaseStorage implements IStorage {
         existing = await db.select().from(employeeSchedules)
           .where(and(
             eq(employeeSchedules.employeeId, schedule.employeeId),
-            eq(employeeSchedules.branchId, schedule.branchId),
+            schedule.branchId ? eq(employeeSchedules.branchId, schedule.branchId) : isNull(employeeSchedules.branchId),
             eq(employeeSchedules.scheduleDate, schedule.scheduleDate)
           ))
           .limit(1);
@@ -7943,7 +7953,7 @@ export class DatabaseStorage implements IStorage {
           try {
             const employee = await this.getUser(schedule.employeeId);
             if (employee) {
-              resolvedName = `${employee.firstName || ''} ${employee.lastName || ''}`.trim() || employee.username;
+              resolvedName = `${employee.firstName || ''} ${employee.lastName || ''}`.trim() || employee.username || 'غير معروف';
             }
           } catch (e) {
             // Continue
