@@ -12909,34 +12909,26 @@ export async function registerRoutes(
             .sort((a, b) => (b.totalRevenue || 0) - (a.totalRevenue || 0));
           
           recommendedProducts = sortedAnalytics.slice(0, 40).map(analytics => {
-            // Calculate this product's share of total revenue
             const revenueShare = (analytics.totalRevenue || 0) / totalRevenue;
-            
-            // Allocate target sales based on this revenue share
             const allocatedSalesValue = targetSalesValue * revenueShare;
             
-            // Find matching product for pricing
             const product = activeProducts.find(p => 
               p.id === analytics.productId || 
               p.name?.toLowerCase() === analytics.productName?.toLowerCase()
             );
             
-            // Calculate unit price from historical data or product catalog
             let unitPrice = 0;
             if (analytics.totalQuantitySold > 0 && analytics.totalRevenue > 0) {
-              // Use actual average price from sales data
               unitPrice = analytics.totalRevenue / analytics.totalQuantitySold;
-            } else if (product) {
-              unitPrice = product.basePrice || 15;
+            } else if (product?.basePrice && product.basePrice > 0) {
+              unitPrice = product.basePrice;
             } else {
-              unitPrice = 15; // Default fallback
+              unitPrice = 15;
             }
             
-            // Calculate quantity needed to reach allocated value
             const quantity = Math.max(1, Math.round(allocatedSalesValue / unitPrice));
             const totalPrice = quantity * unitPrice;
-            const costRatio = 0.4; // Assume 40% production cost
-            const estimatedCost = totalPrice * costRatio;
+            const estimatedCost = totalPrice * 0.4;
             
             return {
               productId: analytics.productId || product?.id || null,
@@ -12947,7 +12939,7 @@ export async function registerRoutes(
               totalPrice: Math.round(totalPrice * 100) / 100,
               estimatedCost: Math.round(estimatedCost * 100) / 100,
               salesVelocity: analytics.totalQuantitySold || 0,
-              revenueShare: Math.round(revenueShare * 10000) / 100, // As percentage
+              revenueShare: Math.round(revenueShare * 10000) / 100,
               historicalRevenue: analytics.totalRevenue || 0,
               priority: revenueShare > 0.05 ? 'high' : revenueShare > 0.02 ? 'medium' : 'normal'
             };
@@ -13866,37 +13858,29 @@ export async function registerRoutes(
       const orderItems = forecastItems.map((item, index) => {
         const product = findMatchingProduct(item.productName, item.productId);
         
-        // Calculate unit price with multiple fallbacks
         let unitPrice = 0;
+        let priceSource = '';
         
-        // 1. First priority: Product basePrice from database
-        if (product?.basePrice && product.basePrice > 0) {
-          unitPrice = product.basePrice;
+        if (item.historicalRevenue > 0 && item.historicalQuantity > 0) {
+          unitPrice = item.historicalRevenue / item.historicalQuantity;
+          priceSource = 'بيانات المبيعات';
         }
-        // 2. Second priority: Product price from database
+        else if (product?.basePrice && product.basePrice > 0) {
+          unitPrice = product.basePrice;
+          priceSource = 'سعر المنتج';
+        }
         else if ((product as any)?.price && (product as any).price > 0) {
           unitPrice = (product as any).price;
+          priceSource = 'سعر المنتج';
         }
-        // 3. Third priority: Calculate from historical sales data
-        else if (item.historicalRevenue > 0 && item.historicalQuantity > 0) {
-          unitPrice = item.historicalRevenue / item.historicalQuantity;
-        }
-        // 4. Fourth priority: Calculate from forecast amounts
-        else if (item.forecastedSalesAmount > 0 && item.forecastedQuantity > 0) {
-          unitPrice = item.forecastedSalesAmount / item.forecastedQuantity;
-        }
-        // 5. Fifth priority: Use category default price
         else {
           const category = item.productCategory || product?.category || 'عام';
           unitPrice = categoryDefaultPrices[category] || categoryDefaultPrices['عام'];
+          priceSource = 'سعر تقديري';
         }
         
-        // IMPORTANT: Recalculate quantity based on actual unit price to ensure
-        // totalValue matches the forecasted sales amount (target sales * ratio)
-        // This ensures the total order value equals the target sales value
-        const targetQuantity = unitPrice > 0 
-          ? Math.ceil(item.forecastedSalesAmount / unitPrice)
-          : item.forecastedQuantity;
+        const targetQuantity = item.forecastedQuantity;
+        const totalValue = unitPrice * targetQuantity;
         
         return {
           productId: product?.id || null,
@@ -13907,10 +13891,10 @@ export async function registerRoutes(
           producedQuantity: 0,
           wastedQuantity: 0,
           unitPrice: Math.round(unitPrice * 100) / 100,
-          totalValue: Math.round(unitPrice * targetQuantity * 100) / 100,
+          totalValue: Math.round(totalValue * 100) / 100,
           status: 'pending' as const,
           priority: index + 1,
-          notes: `نسبة المبيعات: ${item.salesRatio}%${!product ? ' (سعر تقديري)' : ''}`
+          notes: `نسبة المبيعات: ${item.salesRatio}% | مصدر السعر: ${priceSource}`
         };
       });
       
