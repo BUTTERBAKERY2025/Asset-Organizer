@@ -147,6 +147,9 @@ export default function DisplayBarWastePage() {
   const [analyticsDateTo, setAnalyticsDateTo] = useState(new Date().toISOString().split('T')[0]);
   const [analyticsBranch, setAnalyticsBranch] = useState<string>("all");
   const [analyticsCategory, setAnalyticsCategory] = useState<string>("all");
+  const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
+  const [showProductDetailDialog, setShowProductDetailDialog] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   
   const SHIFT_OPTIONS = [
     { value: "morning", label: "الوردية الصباحية", time: "06:00 - 14:00" },
@@ -325,6 +328,27 @@ export default function DisplayBarWastePage() {
     },
     enabled: activeTab === "reports",
   });
+
+  const { data: productWasteDetails, isLoading: isLoadingProductDetails } = useQuery({
+    queryKey: ["/api/waste-reports/product-details", selectedProductId, analyticsBranch, analyticsDateFrom, analyticsDateTo],
+    queryFn: async () => {
+      if (!selectedProductId) return null;
+      const params = new URLSearchParams();
+      if (analyticsBranch !== "all") params.append("branchId", analyticsBranch);
+      params.append("dateFrom", analyticsDateFrom);
+      params.append("dateTo", analyticsDateTo);
+      const res = await fetch(`/api/waste-reports/product-details/${selectedProductId}?${params}`, { credentials: "include" });
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !!selectedProductId && showProductDetailDialog,
+  });
+
+  const openProductDetail = (productId: number) => {
+    setSelectedProductId(productId);
+    setSelectedImageIndex(0);
+    setShowProductDetailDialog(true);
+  };
 
   const CATEGORY_LABELS: Record<string, string> = {
     pastries: "معجنات", sweets: "حلويات", bread: "خبز", cakes: "كيك",
@@ -2932,7 +2956,15 @@ export default function DisplayBarWastePage() {
                             {detailedAnalytics.topDamaged.map((item: any, index: number) => (
                               <tr key={index} className="hover:bg-muted/30" data-testid={`row-top-product-${index}`}>
                                 <td className="p-3 border">{index + 1}</td>
-                                <td className="p-3 border font-medium">{item.productName || "-"}</td>
+                                <td className="p-3 border font-medium">
+                                  <button
+                                    className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer font-medium"
+                                    onClick={() => openProductDetail(item.productId)}
+                                    data-testid={`btn-product-detail-${item.productId}`}
+                                  >
+                                    {item.productName || "-"}
+                                  </button>
+                                </td>
                                 <td className="p-3 border">
                                   <Badge variant="outline">{CATEGORY_LABELS[item.category] || item.category || "-"}</Badge>
                                 </td>
@@ -2980,7 +3012,15 @@ export default function DisplayBarWastePage() {
                           <tbody>
                             {detailedAnalytics.recurring.map((item: any, index: number) => (
                               <tr key={index} className="hover:bg-muted/30" data-testid={`row-recurring-${index}`}>
-                                <td className="p-3 border font-medium">{item.productName || "-"}</td>
+                                <td className="p-3 border font-medium">
+                                  <button
+                                    className="text-blue-600 hover:text-blue-800 hover:underline cursor-pointer font-medium"
+                                    onClick={() => openProductDetail(item.productId)}
+                                    data-testid={`btn-recurring-detail-${item.productId}`}
+                                  >
+                                    {item.productName || "-"}
+                                  </button>
+                                </td>
                                 <td className="p-3 border">
                                   <Badge variant="outline">{CATEGORY_LABELS[item.category] || item.category || "-"}</Badge>
                                 </td>
@@ -3260,6 +3300,269 @@ export default function DisplayBarWastePage() {
               </div>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={showProductDetailDialog} onOpenChange={setShowProductDetailDialog}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center gap-2">
+              تفاصيل هالك الصنف
+              {productWasteDetails?.product && (
+                <Badge variant="outline" className="text-sm">
+                  {productWasteDetails.product.categoryLabel}
+                </Badge>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+
+          {isLoadingProductDetails ? (
+            <div className="flex items-center justify-center py-12">
+              <RefreshCw className="w-6 h-6 animate-spin text-muted-foreground" />
+              <span className="mr-2 text-muted-foreground">جاري تحميل البيانات...</span>
+            </div>
+          ) : !productWasteDetails ? (
+            <div className="text-center py-12 text-muted-foreground">
+              لا توجد بيانات
+            </div>
+          ) : (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">معلومات الصنف</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">اسم الصنف:</span>
+                      <span className="font-medium">{productWasteDetails.product.name}</span>
+                    </div>
+                    {productWasteDetails.product.nameEn && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">الاسم بالإنجليزية:</span>
+                        <span className="font-medium">{productWasteDetails.product.nameEn}</span>
+                      </div>
+                    )}
+                    {productWasteDetails.product.sku && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">رمز المنتج:</span>
+                        <span className="font-medium">{productWasteDetails.product.sku}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">الفئة:</span>
+                      <Badge variant="outline">{productWasteDetails.product.categoryLabel}</Badge>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">الوحدة:</span>
+                      <span>{productWasteDetails.product.unit}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">السعر:</span>
+                      <span className="font-medium">{(productWasteDetails.product.basePrice || 0).toLocaleString()} ر.س</span>
+                    </div>
+                    {productWasteDetails.product.description && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">الوصف:</span>
+                        <span className="text-xs max-w-[200px] text-left">{productWasteDetails.product.description}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">الحالة:</span>
+                      <Badge className={productWasteDetails.product.isActive === "true" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}>
+                        {productWasteDetails.product.isActive === "true" ? "نشط" : "غير نشط"}
+                      </Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">ملخص الهالك</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">إجمالي الكمية المهدرة:</span>
+                      <span className="font-bold text-red-600">{(productWasteDetails.summary.totalQuantity || 0).toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">إجمالي قيمة الهالك:</span>
+                      <span className="font-bold text-red-600">{(productWasteDetails.summary.totalValue || 0).toLocaleString()} ر.س</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">عدد مرات الهدر:</span>
+                      <span className="font-medium">{productWasteDetails.summary.entryCount || 0}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">متوسط الكمية لكل مرة:</span>
+                      <span>{productWasteDetails.summary.avgQuantityPerEntry || 0}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">السبب الرئيسي:</span>
+                      <Badge className="bg-amber-100 text-amber-700">{productWasteDetails.summary.topReasonLabel || "-"}</Badge>
+                    </div>
+                    {productWasteDetails.summary.firstDate && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">أول تاريخ هدر:</span>
+                        <span>{productWasteDetails.summary.firstDate}</span>
+                      </div>
+                    )}
+                    {productWasteDetails.summary.lastDate && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">آخر تاريخ هدر:</span>
+                        <span>{productWasteDetails.summary.lastDate}</span>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
+              {productWasteDetails.images && productWasteDetails.images.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      صور الهالك
+                      <Badge variant="outline">{productWasteDetails.images.length} صورة</Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div className="flex justify-center bg-muted/30 rounded-lg p-4 min-h-[200px]">
+                        <img
+                          src={productWasteDetails.images[selectedImageIndex]}
+                          alt={`صورة هالك ${selectedImageIndex + 1}`}
+                          className="max-h-[300px] object-contain rounded-lg shadow-md"
+                          data-testid="img-product-waste-main"
+                        />
+                      </div>
+                      {productWasteDetails.images.length > 1 && (
+                        <div className="flex gap-2 overflow-x-auto pb-2">
+                          {productWasteDetails.images.map((imgUrl: string, idx: number) => (
+                            <button
+                              key={idx}
+                              onClick={() => setSelectedImageIndex(idx)}
+                              className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${
+                                idx === selectedImageIndex ? "border-blue-500 ring-2 ring-blue-200" : "border-gray-200 hover:border-gray-400"
+                              }`}
+                              data-testid={`btn-image-thumb-${idx}`}
+                            >
+                              <img src={imgUrl} alt={`صورة ${idx + 1}`} className="w-full h-full object-cover" />
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {productWasteDetails.reasonBreakdown && productWasteDetails.reasonBreakdown.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base">توزيع حسب السبب</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {productWasteDetails.reasonBreakdown.map((r: any) => (
+                        <div key={r.reason} className="flex items-center justify-between p-2 bg-muted/30 rounded">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-2.5 h-2.5 rounded-full ${REASON_COLORS[r.reason] || "bg-gray-400"}`} />
+                            <span className="text-sm font-medium">{r.reasonLabel}</span>
+                          </div>
+                          <div className="flex items-center gap-3 text-sm">
+                            <span>{r.quantity} قطعة</span>
+                            <Badge variant="outline">{r.percentage}%</Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+
+                  {productWasteDetails.branchBreakdown && productWasteDetails.branchBreakdown.length > 1 && (
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-base">توزيع حسب الفرع</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2">
+                        {productWasteDetails.branchBreakdown.map((b: any) => (
+                          <div key={b.branchId} className="flex items-center justify-between p-2 bg-muted/30 rounded">
+                            <span className="text-sm font-medium">{b.branchName}</span>
+                            <div className="flex items-center gap-3 text-sm">
+                              <span>{b.quantity} قطعة</span>
+                              <span className="text-red-600 font-medium">{(b.value || 0).toLocaleString()} ر.س</span>
+                            </div>
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              )}
+
+              {productWasteDetails.entries && productWasteDetails.entries.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      سجل الهالك التفصيلي
+                      <Badge variant="outline">{productWasteDetails.entries.length} سجل</Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-right border-collapse text-sm" data-testid="table-product-waste-entries">
+                        <thead>
+                          <tr className="bg-muted/50">
+                            <th className="p-2.5 border font-medium">التاريخ</th>
+                            <th className="p-2.5 border font-medium">الفرع</th>
+                            <th className="p-2.5 border font-medium">الكمية</th>
+                            <th className="p-2.5 border font-medium">سعر الوحدة</th>
+                            <th className="p-2.5 border font-medium">القيمة</th>
+                            <th className="p-2.5 border font-medium">السبب</th>
+                            <th className="p-2.5 border font-medium">التفاصيل</th>
+                            <th className="p-2.5 border font-medium">الحالة</th>
+                            <th className="p-2.5 border font-medium">صورة</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {productWasteDetails.entries.map((entry: any, idx: number) => (
+                            <tr key={idx} className="hover:bg-muted/30" data-testid={`row-product-entry-${idx}`}>
+                              <td className="p-2.5 border whitespace-nowrap">{entry.reportDate}</td>
+                              <td className="p-2.5 border">{entry.branchName}</td>
+                              <td className="p-2.5 border">{entry.quantity}</td>
+                              <td className="p-2.5 border">{(entry.unitPrice || 0).toLocaleString()} ر.س</td>
+                              <td className="p-2.5 border text-red-600 font-medium">{(entry.totalValue || 0).toLocaleString()} ر.س</td>
+                              <td className="p-2.5 border">
+                                <Badge variant="outline" className="text-xs">{entry.wasteReasonLabel}</Badge>
+                              </td>
+                              <td className="p-2.5 border text-xs max-w-[150px] truncate">{entry.reasonDetails || "-"}</td>
+                              <td className="p-2.5 border">
+                                <Badge className={
+                                  entry.reportStatus === "approved" ? "bg-green-100 text-green-700" :
+                                  entry.reportStatus === "submitted" ? "bg-blue-100 text-blue-700" :
+                                  "bg-gray-100 text-gray-700"
+                                }>
+                                  {entry.reportStatus === "approved" ? "معتمد" :
+                                   entry.reportStatus === "submitted" ? "مرسل" : "مسودة"}
+                                </Badge>
+                              </td>
+                              <td className="p-2.5 border text-center">
+                                {entry.imageUrl ? (
+                                  <a href={entry.imageUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-xs">
+                                    عرض
+                                  </a>
+                                ) : (
+                                  <span className="text-muted-foreground text-xs">-</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </Layout>

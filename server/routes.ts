@@ -10495,6 +10495,151 @@ export async function registerRoutes(
     }
   });
 
+  // Get Product-Level Waste Details (must be before /:id route)
+  app.get("/api/waste-reports/product-details/:productId", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const productId = Number(req.params.productId);
+      if (isNaN(productId)) return res.status(400).json({ error: "معرف المنتج غير صالح" });
+
+      const queryBranchId = req.query.branchId as string | undefined;
+      const dateFrom = req.query.dateFrom as string || new Date(Date.now() - 90 * 86400000).toISOString().split('T')[0];
+      const dateTo = req.query.dateTo as string || new Date().toISOString().split('T')[0];
+
+      const branchFilter = getEffectiveBranchFilter(req, queryBranchId);
+      if (!branchFilter.hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول" });
+
+      const product = await storage.getProduct(productId);
+      if (!product) return res.status(404).json({ error: "المنتج غير موجود" });
+
+      const categoryLabels: Record<string, string> = {
+        pastries: "معجنات", sweets: "حلويات", bread: "خبز", cakes: "كيك",
+        cookies: "كوكيز", drinks: "مشروبات", sandwiches: "ساندويتشات", other: "أخرى"
+      };
+      const reasonLabels: Record<string, string> = {
+        expired: "منتهي الصلاحية", damaged: "تالف", quality_issue: "مشكلة جودة",
+        overproduction: "إنتاج زائد", customer_return: "إرجاع عميل", other: "أخرى"
+      };
+
+      const effectiveBranchId = branchFilter.singleBranchId;
+      const reports = await storage.getWasteReports(effectiveBranchId ?? undefined, dateFrom, dateTo);
+
+      const allBranches = await storage.getAllBranches();
+      const branchMap = new Map(allBranches.map((b: any) => [b.id, b]));
+
+      const wasteEntries: Array<{
+        wasteItemId: number;
+        reportId: number;
+        reportDate: string;
+        shift: string;
+        branchId: string;
+        branchName: string;
+        quantity: number;
+        unitPrice: number;
+        totalValue: number;
+        wasteReason: string;
+        wasteReasonLabel: string;
+        reasonDetails: string | null;
+        imageUrl: string | null;
+        reportStatus: string;
+      }> = [];
+
+      let totalQuantity = 0;
+      let totalValue = 0;
+      const reasonCounts: Record<string, number> = {};
+      const branchCounts: Record<string, { branchName: string; quantity: number; value: number }> = {};
+      const images: string[] = [];
+
+      for (const report of reports) {
+        const items = await storage.getWasteItems(report.id);
+        for (const item of items) {
+          if (item.productId !== productId) continue;
+
+          const branch = branchMap.get(report.branchId);
+          const qty = item.quantity || 0;
+          const val = item.totalValue || 0;
+          const reason = item.wasteReason || "other";
+
+          totalQuantity += qty;
+          totalValue += val;
+          reasonCounts[reason] = (reasonCounts[reason] || 0) + qty;
+
+          if (!branchCounts[report.branchId]) {
+            branchCounts[report.branchId] = { branchName: branch?.name || report.branchId, quantity: 0, value: 0 };
+          }
+          branchCounts[report.branchId].quantity += qty;
+          branchCounts[report.branchId].value += val;
+
+          if (item.imageUrl) images.push(item.imageUrl);
+
+          wasteEntries.push({
+            wasteItemId: item.id,
+            reportId: report.id,
+            reportDate: report.reportDate,
+            shift: report.shiftId ? String(report.shiftId) : "-",
+            branchId: report.branchId,
+            branchName: branch?.name || report.branchId,
+            quantity: qty,
+            unitPrice: item.unitPrice || 0,
+            totalValue: val,
+            wasteReason: reason,
+            wasteReasonLabel: reasonLabels[reason] || reason,
+            reasonDetails: item.reasonDetails || null,
+            imageUrl: item.imageUrl || null,
+            reportStatus: report.status || "draft",
+          });
+        }
+      }
+
+      wasteEntries.sort((a, b) => b.reportDate.localeCompare(a.reportDate));
+
+      const topReason = Object.entries(reasonCounts).sort(([,a],[,b]) => b - a)[0];
+      const reasonBreakdown = Object.entries(reasonCounts).map(([reason, count]) => ({
+        reason,
+        reasonLabel: reasonLabels[reason] || reason,
+        quantity: count,
+        percentage: totalQuantity > 0 ? Math.round((count / totalQuantity) * 10000) / 100 : 0,
+      })).sort((a, b) => b.quantity - a.quantity);
+
+      const branchBreakdown = Object.entries(branchCounts).map(([branchId, data]) => ({
+        branchId,
+        ...data,
+      })).sort((a, b) => b.value - a.value);
+
+      res.json({
+        product: {
+          id: product.id,
+          name: product.name,
+          nameEn: product.nameEn || null,
+          sku: product.sku || null,
+          category: product.category,
+          categoryLabel: categoryLabels[product.category] || product.category,
+          unit: product.unit || "قطعة",
+          basePrice: product.basePrice || 0,
+          priceExclVat: product.priceExclVat || 0,
+          description: product.description || null,
+          isActive: product.isActive,
+        },
+        summary: {
+          totalQuantity,
+          totalValue: Math.round(totalValue * 100) / 100,
+          entryCount: wasteEntries.length,
+          avgQuantityPerEntry: wasteEntries.length > 0 ? Math.round((totalQuantity / wasteEntries.length) * 100) / 100 : 0,
+          topReason: topReason ? topReason[0] : null,
+          topReasonLabel: topReason ? (reasonLabels[topReason[0]] || topReason[0]) : null,
+          firstDate: wasteEntries.length > 0 ? wasteEntries[wasteEntries.length - 1].reportDate : null,
+          lastDate: wasteEntries.length > 0 ? wasteEntries[0].reportDate : null,
+        },
+        images,
+        reasonBreakdown,
+        branchBreakdown,
+        entries: wasteEntries,
+      });
+    } catch (error) {
+      console.error("Error fetching product waste details:", error);
+      res.status(500).json({ error: "فشل في جلب تفاصيل هالك المنتج" });
+    }
+  });
+
   // Get Waste Stats - today's summary by branch (must be before /:id route)
   app.get("/api/waste-reports/stats", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
