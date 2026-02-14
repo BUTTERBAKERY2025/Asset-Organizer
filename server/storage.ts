@@ -932,7 +932,7 @@ export interface IStorage {
   }>;
 
   // Daily Production Batches
-  getAllDailyProductionBatches(filters?: { branchId?: string; date?: string; destination?: string; status?: string; chefId?: string; category?: string }): Promise<DailyProductionBatch[]>;
+  getAllDailyProductionBatches(filters?: { branchId?: string; date?: string; destination?: string; status?: string; chefId?: string; category?: string; productionOrderId?: number }): Promise<DailyProductionBatch[]>;
   getDailyProductionBatch(id: number): Promise<DailyProductionBatch | undefined>;
   createDailyProductionBatch(batch: InsertDailyProductionBatch): Promise<DailyProductionBatch>;
   createDailyProductionBatchWithTransfer(batch: InsertDailyProductionBatch, userId?: string, userName?: string): Promise<{ batch: DailyProductionBatch; transferred: boolean }>;
@@ -5847,7 +5847,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Daily Production Batches
-  async getAllDailyProductionBatches(filters?: { branchId?: string; date?: string; destination?: string; status?: string; chefId?: string; category?: string }): Promise<DailyProductionBatch[]> {
+  async getAllDailyProductionBatches(filters?: { branchId?: string; date?: string; destination?: string; status?: string; chefId?: string; category?: string; productionOrderId?: number }): Promise<DailyProductionBatch[]> {
     let query = db.select().from(dailyProductionBatches);
     
     const conditions = [];
@@ -5869,6 +5869,9 @@ export class DatabaseStorage implements IStorage {
     }
     if (filters?.category) {
       conditions.push(eq(dailyProductionBatches.productCategory, filters.category));
+    }
+    if (filters?.productionOrderId) {
+      conditions.push(eq(dailyProductionBatches.productionOrderId, filters.productionOrderId));
     }
     
     if (conditions.length > 0) {

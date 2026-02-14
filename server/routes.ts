@@ -11300,7 +11300,173 @@ export async function registerRoutes(
       }
       
       const schedules = await storage.getProductionOrderSchedules(id);
-      res.json({ ...result, schedules });
+      
+      const order = result.order;
+      const orderStartDate = order.startDate;
+      const orderEndDate = order.endDate || order.startDate;
+      let dailyProductionComparison: any[] = [];
+      let comparisonScope = '';
+      
+      if (order.sourceBranchId) {
+        const normalizeArabic = (name: string): string => {
+          return name
+            .trim()
+            .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
+            .replace(/[أإآٱ]/g, 'ا')
+            .replace(/ة/g, 'ه')
+            .replace(/ى/g, 'ي')
+            .replace(/ؤ/g, 'و')
+            .replace(/ئ/g, 'ي')
+            .replace(/[-_\s]+/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .toLowerCase();
+        };
+        
+        let allBatches: any[] = [];
+        
+        const batchesByOrderId = await storage.getAllDailyProductionBatches({
+          branchId: order.sourceBranchId,
+          productionOrderId: id,
+        } as any);
+        
+        if (batchesByOrderId && batchesByOrderId.length > 0) {
+          allBatches = batchesByOrderId;
+          comparisonScope = 'مرتبط بأمر الإنتاج';
+        } else if (orderStartDate) {
+          if (orderStartDate === orderEndDate || !orderEndDate) {
+            const dateBatches = await storage.getAllDailyProductionBatches({
+              branchId: order.sourceBranchId,
+              date: orderStartDate,
+            });
+            allBatches = dateBatches;
+            comparisonScope = `تاريخ ${orderStartDate}`;
+          } else {
+            const start = new Date(orderStartDate);
+            const end = new Date(orderEndDate);
+            const dateList: string[] = [];
+            for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+              dateList.push(d.toISOString().split('T')[0]);
+            }
+            for (const dateStr of dateList) {
+              const dayBatches = await storage.getAllDailyProductionBatches({
+                branchId: order.sourceBranchId,
+                date: dateStr,
+              });
+              allBatches.push(...dayBatches);
+            }
+            comparisonScope = `من ${orderStartDate} إلى ${orderEndDate}`;
+          }
+        }
+        
+        const orderItems = result.items || [];
+        
+        const batchesByProductId = new Map<number, { totalProduced: number; batches: any[] }>();
+        const batchesByName = new Map<string, { totalProduced: number; batches: any[] }>();
+        
+        for (const batch of allBatches) {
+          if (batch.productId) {
+            if (!batchesByProductId.has(batch.productId)) {
+              batchesByProductId.set(batch.productId, { totalProduced: 0, batches: [] });
+            }
+            const entry = batchesByProductId.get(batch.productId)!;
+            entry.totalProduced += batch.quantity || 0;
+            entry.batches.push(batch);
+          }
+          
+          const nameKey = normalizeArabic(batch.productName);
+          if (!batchesByName.has(nameKey)) {
+            batchesByName.set(nameKey, { totalProduced: 0, batches: [] });
+          }
+          const nameEntry = batchesByName.get(nameKey)!;
+          nameEntry.totalProduced += batch.quantity || 0;
+          nameEntry.batches.push(batch);
+        }
+        
+        const matchedBatchKeys = new Set<string>();
+        
+        dailyProductionComparison = orderItems.map((item: any) => {
+          const itemProductId = item.productId || item.product_id;
+          const itemName = normalizeArabic(item.productName || item.product_name || '');
+          
+          let matched: { totalProduced: number; batches: any[] } | undefined;
+          
+          if (itemProductId && batchesByProductId.has(itemProductId)) {
+            matched = batchesByProductId.get(itemProductId);
+            if (matched) {
+              for (const b of matched.batches) {
+                matchedBatchKeys.add(normalizeArabic(b.productName));
+              }
+            }
+          }
+          
+          if (!matched) {
+            matched = batchesByName.get(itemName);
+            if (matched) matchedBatchKeys.add(itemName);
+          }
+          
+          if (!matched) {
+            for (const [bKey, bVal] of batchesByName.entries()) {
+              if (bKey.includes(itemName) || itemName.includes(bKey)) {
+                matched = bVal;
+                matchedBatchKeys.add(bKey);
+                break;
+              }
+            }
+          }
+          
+          if (!matched) {
+            const itemParts = itemName.split(' ').filter((p: string) => p.length > 2);
+            if (itemParts.length >= 2) {
+              for (const [bKey, bVal] of batchesByName.entries()) {
+                const matchCount = itemParts.filter((p: string) => bKey.includes(p)).length;
+                if (matchCount >= Math.ceil(itemParts.length * 0.6)) {
+                  matched = bVal;
+                  matchedBatchKeys.add(bKey);
+                  break;
+                }
+              }
+            }
+          }
+          
+          const actualProduced = matched?.totalProduced || 0;
+          const targetQty = Number(item.targetQuantity || item.target_quantity || item.quantity) || 0;
+          const variance = actualProduced - targetQty;
+          const achievementPct = targetQty > 0 ? Math.round((actualProduced / targetQty) * 100) : 0;
+          
+          return {
+            orderItemId: item.id,
+            productName: item.productName || item.product_name,
+            category: item.category || item.productCategory || item.product_category || '',
+            targetQuantity: targetQty,
+            actualProduced,
+            variance,
+            achievementPct,
+            unit: item.unit || 'قطعة',
+            batchCount: matched?.batches?.length || 0,
+          };
+        });
+        
+        const unmatchedBatches = [...batchesByName.entries()].filter(([bKey]) => !matchedBatchKeys.has(bKey));
+        
+        for (const [, val] of unmatchedBatches) {
+          const batch = val.batches[0];
+          dailyProductionComparison.push({
+            orderItemId: null,
+            productName: batch.productName,
+            category: batch.productCategory || '',
+            targetQuantity: 0,
+            actualProduced: val.totalProduced,
+            variance: val.totalProduced,
+            achievementPct: 0,
+            unit: batch.unit || 'قطعة',
+            batchCount: val.batches.length,
+            isExtraProduction: true,
+          });
+        }
+      }
+      
+      res.json({ ...result, schedules, dailyProductionComparison, comparisonScope });
     } catch (error) {
       console.error("Error fetching production order:", error);
       res.status(500).json({ error: "Failed to fetch production order" });

@@ -1,5 +1,5 @@
 import { Layout } from "@/components/layout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -7,10 +7,11 @@ import { useToast } from "@/hooks/use-toast";
 import { useParams, Link } from "wouter";
 import { 
   ArrowRight, Edit, Printer, Package, Calendar, Factory, 
-  ClipboardList, Building2, User, Clock, TrendingUp, CheckCircle,
+  ClipboardList, Building2, Clock, TrendingUp, CheckCircle,
   AlertCircle, Loader2, FileText, Download, FileSpreadsheet,
-  Play, Pause, XCircle, Send, ThumbsUp, RotateCcw, ChevronLeft,
-  ArrowLeftRight, Sparkles
+  Play, XCircle, Send, ThumbsUp, RotateCcw, ChevronLeft,
+  Sparkles, ArrowUpDown, Target, BarChart3, TrendingDown,
+  AlertTriangle, CircleCheck, MinusCircle
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -93,14 +94,17 @@ interface OrderItem {
   notes: string;
 }
 
-interface OrderSchedule {
-  id: number;
-  scheduleDate: string;
-  shift: string;
-  productId: number;
+interface ComparisonItem {
+  orderItemId: number | null;
   productName: string;
-  quantity: number;
-  status: string;
+  category: string;
+  targetQuantity: number;
+  actualProduced: number;
+  variance: number;
+  achievementPct: number;
+  unit: string;
+  batchCount: number;
+  isExtraProduction?: boolean;
 }
 
 interface OrderResponse {
@@ -125,7 +129,9 @@ interface OrderResponse {
   sourceSalesValue?: number;
   order?: any;
   items?: OrderItem[];
-  schedules?: OrderSchedule[];
+  schedules?: any[];
+  dailyProductionComparison?: ComparisonItem[];
+  comparisonScope?: string;
 }
 
 export default function AdvancedProductionOrderDetailsPage() {
@@ -170,7 +176,8 @@ export default function AdvancedProductionOrderDetailsPage() {
     const response = rawData as any;
     const order = response.order || response;
     const rawItems = response.items || [];
-    const rawSchedules = response.schedules || [];
+    const comparison = response.dailyProductionComparison || [];
+    const comparisonScope = response.comparisonScope || '';
     
     const items = rawItems.map((item: any) => ({
       id: item.id,
@@ -185,17 +192,7 @@ export default function AdvancedProductionOrderDetailsPage() {
       notes: item.notes || ""
     }));
     
-    const schedules = rawSchedules.map((schedule: any) => ({
-      id: schedule.id,
-      scheduleDate: schedule.scheduleDate || schedule.schedule_date,
-      shift: schedule.shift,
-      productId: schedule.productId || schedule.product_id,
-      productName: schedule.productName || schedule.product_name || "",
-      quantity: Number(schedule.quantity) || 0,
-      status: schedule.status || "pending"
-    }));
-    
-    return { order, items, schedules };
+    return { order, items, comparison, comparisonScope };
   })() : null;
 
   const getBranchName = (branchId: string) => {
@@ -217,32 +214,27 @@ export default function AdvancedProductionOrderDetailsPage() {
 
   const exportToExcel = () => {
     if (!orderData) return;
-    const { order, items } = orderData;
+    const { order, items, comparison } = orderData;
     
     const orderInfo = [
       ["رقم الأمر", order.orderNumber],
       ["العنوان", order.title || "-"],
       ["الحالة", STATUS_CONFIG[order.status]?.label || order.status],
       ["النوع", ORDER_TYPE_CONFIG[order.orderType]?.label || order.orderType],
-      ["الأولوية", PRIORITY_CONFIG[order.priority]?.label || order.priority],
-      ["الفرع المصدر", getBranchName(order.sourceBranchId)],
-      ["الفرع المستهدف", getBranchName(order.targetBranchId)],
+      ["الفرع", getBranchName(order.sourceBranchId)],
       ["تاريخ البدء", formatDate(order.startDate)],
       ["تاريخ الانتهاء", formatDate(order.endDate)],
-      ["نسبة الإنجاز", `${order.completionPercentage || 0}%`],
-      ["التكلفة المقدرة", formatCurrency(order.estimatedCost || 0)],
-      ["التكلفة الفعلية", formatCurrency(order.actualCost || 0)],
     ];
 
-    const itemsData = items.map((item: OrderItem, index: number) => [
+    const comparisonData = comparison.map((item: ComparisonItem, index: number) => [
       index + 1,
       item.productName,
       item.category || 'عام',
       item.targetQuantity,
-      item.producedQuantity || 0,
+      item.actualProduced,
+      item.variance,
+      `${item.achievementPct}%`,
       item.unit,
-      item.unitPrice,
-      (item.targetQuantity || 0) * (item.unitPrice || 0)
     ]);
 
     const wb = XLSX.utils.book_new();
@@ -250,65 +242,13 @@ export default function AdvancedProductionOrderDetailsPage() {
     const wsInfo = XLSX.utils.aoa_to_sheet(orderInfo);
     XLSX.utils.book_append_sheet(wb, wsInfo, "معلومات الأمر");
 
-    const wsItems = XLSX.utils.aoa_to_sheet([
-      ["#", "المنتج", "الفئة", "الكمية المطلوبة", "الكمية المنتجة", "الوحدة", "سعر الوحدة", "الإجمالي"],
-      ...itemsData
+    const wsComparison = XLSX.utils.aoa_to_sheet([
+      ["#", "المنتج", "الفئة", "الكمية المطلوبة", "الكمية المنتجة فعلياً", "الفرق", "نسبة الإنجاز", "الوحدة"],
+      ...comparisonData
     ]);
-    XLSX.utils.book_append_sheet(wb, wsItems, "المنتجات");
+    XLSX.utils.book_append_sheet(wb, wsComparison, "مقارنة الإنتاج");
 
-    XLSX.writeFile(wb, `امر_انتاج_${order.orderNumber}.xlsx`);
-  };
-
-  const exportToPdf = async () => {
-    if (!orderData) return;
-    const { order, items } = orderData;
-
-    try {
-      const response = await fetch("/api/pdf/production-order", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          orderNumber: order.orderNumber,
-          title: order.title || '',
-          status: STATUS_CONFIG[order.status]?.label || order.status,
-          priority: PRIORITY_CONFIG[order.priority]?.label || order.priority,
-          orderType: ORDER_TYPE_CONFIG[order.orderType]?.label || order.orderType,
-          branchName: getBranchName(order.sourceBranchId),
-          targetDate: formatDate(order.endDate),
-          notes: order.notes || '',
-          estimatedCost: order.estimatedCost || 0,
-          actualCost: order.actualCost || 0,
-          targetSalesValue: order.targetSalesValue || 0,
-          sourceSalesValue: order.sourceSalesValue || 0,
-          items: items.map((item: OrderItem) => {
-            const originalQty = item.originalQuantity || 0;
-            const targetQty = item.targetQuantity || 0;
-            const increaseQty = originalQty > 0 ? targetQty - originalQty : 0;
-            return {
-              productName: item.productName,
-              category: item.category || 'عام',
-              targetQuantity: targetQty,
-              producedQuantity: item.producedQuantity || 0,
-              unitPrice: item.unitPrice || 0,
-              total: targetQty * (item.unitPrice || 0),
-              originalQuantity: originalQty,
-              increaseQuantity: increaseQty > 0 ? increaseQty : 0,
-            };
-          }),
-        }),
-      });
-      if (!response.ok) throw new Error("Failed to generate PDF");
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `امر_انتاج_${order.orderNumber}.pdf`;
-      a.click();
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error("Error exporting production order PDF:", error);
-    }
+    XLSX.writeFile(wb, `مقارنة_انتاج_${order.orderNumber}.xlsx`);
   };
 
   const handleStatusAction = (nextStatus: string, label: string) => {
@@ -326,13 +266,10 @@ export default function AdvancedProductionOrderDetailsPage() {
       <Layout>
         <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-4 sm:space-y-6" dir="rtl">
           <Skeleton className="h-12 w-64" />
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-6">
-              <Skeleton className="h-64 w-full" />
-              <Skeleton className="h-96 w-full" />
-            </div>
-            <Skeleton className="h-80 w-full" />
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24" />)}
           </div>
+          <Skeleton className="h-96 w-full" />
         </div>
       </Layout>
     );
@@ -340,7 +277,7 @@ export default function AdvancedProductionOrderDetailsPage() {
 
   const order = orderData?.order;
   const items = orderData?.items || [];
-  const schedules = orderData?.schedules || [];
+  const comparison = orderData?.comparison || [];
 
   if (!order) {
     return (
@@ -367,15 +304,20 @@ export default function AdvancedProductionOrderDetailsPage() {
   const currentStepIndex = WORKFLOW_STEPS.findIndex(s => s.status === order.status);
   const actions = STATUS_ACTIONS[order.status] || [];
 
-  const totalTargetQuantity = items.reduce((sum: number, item: OrderItem) => sum + (item.targetQuantity || 0), 0);
-  const totalProducedQuantity = items.reduce((sum: number, item: OrderItem) => sum + (item.producedQuantity || 0), 0);
-  const totalItemsCost = items.reduce((sum: number, item: OrderItem) => sum + ((item.targetQuantity || 0) * (item.unitPrice || 0)), 0);
-  const completionPct = totalTargetQuantity > 0 ? Math.round((totalProducedQuantity / totalTargetQuantity) * 100) : (order.completionPercentage || 0);
+  const orderItemsComparison = comparison.filter((c: ComparisonItem) => !c.isExtraProduction);
+  const extraProduction = comparison.filter((c: ComparisonItem) => c.isExtraProduction);
+  
+  const totalTarget = orderItemsComparison.reduce((s: number, c: ComparisonItem) => s + c.targetQuantity, 0);
+  const totalProduced = orderItemsComparison.reduce((s: number, c: ComparisonItem) => s + c.actualProduced, 0);
+  const totalVariance = totalProduced - totalTarget;
+  const overallAchievement = totalTarget > 0 ? Math.round((totalProduced / totalTarget) * 100) : 0;
+  const fulfilledCount = orderItemsComparison.filter((c: ComparisonItem) => c.achievementPct >= 100).length;
+  const partialCount = orderItemsComparison.filter((c: ComparisonItem) => c.achievementPct > 0 && c.achievementPct < 100).length;
+  const notStartedCount = orderItemsComparison.filter((c: ComparisonItem) => c.achievementPct === 0).length;
 
   return (
     <Layout>
       <div className="p-3 sm:p-6 max-w-6xl mx-auto space-y-4 sm:space-y-6" dir="rtl">
-        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3 sm:gap-4">
             <Link href="/advanced-production-orders">
@@ -393,9 +335,12 @@ export default function AdvancedProductionOrderDetailsPage() {
                   {statusConfig.label}
                 </Badge>
               </div>
-              <p className="text-gray-500 mt-1 flex items-center gap-2 text-xs sm:text-sm">
-                <FileText className="h-4 w-4" />
-                رقم الأمر: {order.orderNumber}
+              <p className="text-gray-500 mt-1 flex items-center gap-2 text-xs sm:text-sm flex-wrap">
+                <span className="flex items-center gap-1"><FileText className="h-3.5 w-3.5" /> {order.orderNumber}</span>
+                <span className="text-gray-300">|</span>
+                <span className="flex items-center gap-1"><Building2 className="h-3.5 w-3.5" /> {getBranchName(order.sourceBranchId)}</span>
+                <span className="text-gray-300">|</span>
+                <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> {formatDate(order.startDate)}</span>
               </p>
             </div>
           </div>
@@ -403,10 +348,6 @@ export default function AdvancedProductionOrderDetailsPage() {
             <Button variant="outline" size="sm" className="h-11 sm:h-9" onClick={() => handlePrint()} data-testid="btn-print">
               <Printer className="h-4 w-4 ml-2" />
               طباعة
-            </Button>
-            <Button variant="outline" size="sm" className="h-11 sm:h-9" onClick={exportToPdf} data-testid="btn-pdf">
-              <Download className="h-4 w-4 ml-2" />
-              PDF
             </Button>
             <Button variant="outline" size="sm" className="h-11 sm:h-9" onClick={exportToExcel} data-testid="btn-excel">
               <FileSpreadsheet className="h-4 w-4 ml-2" />
@@ -423,7 +364,6 @@ export default function AdvancedProductionOrderDetailsPage() {
           </div>
         </div>
 
-        {/* Workflow Steps */}
         {order.status !== 'cancelled' && (
           <Card className="border-0 shadow-sm overflow-hidden">
             <CardContent className="p-3 sm:p-4">
@@ -447,9 +387,7 @@ export default function AdvancedProductionOrderDetailsPage() {
                         }`}>{step.label}</p>
                       </div>
                       {index < WORKFLOW_STEPS.length - 1 && (
-                        <div className={`h-0.5 flex-1 mx-1 ${
-                          isCompleted ? 'bg-green-400' : 'bg-gray-200'
-                        }`} />
+                        <div className={`h-0.5 flex-1 mx-1 ${isCompleted ? 'bg-green-400' : 'bg-gray-200'}`} />
                       )}
                     </div>
                   );
@@ -459,7 +397,6 @@ export default function AdvancedProductionOrderDetailsPage() {
           </Card>
         )}
 
-        {/* Action Buttons */}
         {actions.length > 0 && (
           <Card className="border-2 border-amber-200 shadow-md bg-gradient-to-r from-amber-50 to-orange-50">
             <CardContent className="p-4">
@@ -507,7 +444,6 @@ export default function AdvancedProductionOrderDetailsPage() {
           </Card>
         )}
 
-        {/* Cancelled - Reactivate */}
         {order.status === 'cancelled' && (
           <Card className="border-2 border-gray-300 bg-gray-50">
             <CardContent className="p-4 flex items-center justify-between">
@@ -531,7 +467,6 @@ export default function AdvancedProductionOrderDetailsPage() {
           </Card>
         )}
 
-        {/* Link to Daily Production - show when approved or in_progress */}
         {(order.status === 'approved' || order.status === 'in_progress') && (
           <Card className="border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-indigo-50">
             <CardContent className="p-4">
@@ -542,7 +477,7 @@ export default function AdvancedProductionOrderDetailsPage() {
                   </div>
                   <div>
                     <p className="font-bold text-purple-900">الإنتاج اليومي</p>
-                    <p className="text-xs text-purple-700">انتقل لصفحة الإنتاج اليومي لتسجيل الدفعات المنتجة حسب هذا الأمر</p>
+                    <p className="text-xs text-purple-700">انتقل لصفحة الإنتاج اليومي لتسجيل الدفعات المنتجة</p>
                   </div>
                 </div>
                 <Link href={`/daily-production?branchId=${order.sourceBranchId}`}>
@@ -557,281 +492,339 @@ export default function AdvancedProductionOrderDetailsPage() {
           </Card>
         )}
 
-        <div ref={printRef} className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 print:block">
-          <div className="lg:col-span-2 space-y-4 sm:space-y-6">
-            {/* Order Details */}
+        <div ref={printRef} className="space-y-4 sm:space-y-6 print:block">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+            <Card className={`border-0 shadow-sm ${overallAchievement >= 100 ? 'bg-gradient-to-br from-green-50 to-emerald-100 border-green-200' : overallAchievement >= 50 ? 'bg-gradient-to-br from-amber-50 to-yellow-100 border-amber-200' : 'bg-gradient-to-br from-red-50 to-orange-100 border-red-200'}`}>
+              <CardContent className="p-3 sm:p-4 text-center">
+                <BarChart3 className={`w-6 h-6 mx-auto mb-1 ${overallAchievement >= 100 ? 'text-green-600' : overallAchievement >= 50 ? 'text-amber-600' : 'text-red-600'}`} />
+                <p className={`text-2xl sm:text-3xl font-bold ${overallAchievement >= 100 ? 'text-green-700' : overallAchievement >= 50 ? 'text-amber-700' : 'text-red-700'}`} data-testid="stat-achievement">
+                  {overallAchievement}%
+                </p>
+                <p className="text-xs text-gray-600">نسبة الإنجاز الكلية</p>
+              </CardContent>
+            </Card>
+            <Card className="border-0 shadow-sm bg-gradient-to-br from-green-50 to-emerald-50">
+              <CardContent className="p-3 sm:p-4 text-center">
+                <CircleCheck className="w-6 h-6 mx-auto mb-1 text-green-600" />
+                <p className="text-2xl sm:text-3xl font-bold text-green-700" data-testid="stat-fulfilled">{fulfilledCount}</p>
+                <p className="text-xs text-gray-600">مكتمل ({items.length} صنف)</p>
+              </CardContent>
+            </Card>
+            <Card className="border-0 shadow-sm bg-gradient-to-br from-amber-50 to-yellow-50">
+              <CardContent className="p-3 sm:p-4 text-center">
+                <AlertTriangle className="w-6 h-6 mx-auto mb-1 text-amber-600" />
+                <p className="text-2xl sm:text-3xl font-bold text-amber-700" data-testid="stat-partial">{partialCount}</p>
+                <p className="text-xs text-gray-600">إنتاج جزئي</p>
+              </CardContent>
+            </Card>
+            <Card className="border-0 shadow-sm bg-gradient-to-br from-red-50 to-rose-50">
+              <CardContent className="p-3 sm:p-4 text-center">
+                <MinusCircle className="w-6 h-6 mx-auto mb-1 text-red-600" />
+                <p className="text-2xl sm:text-3xl font-bold text-red-700" data-testid="stat-not-started">{notStartedCount}</p>
+                <p className="text-xs text-gray-600">لم يبدأ بعد</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card className="border-0 shadow-sm overflow-hidden">
+            <CardHeader className="pb-2 bg-gradient-to-r from-blue-50 to-indigo-50">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <ArrowUpDown className="h-5 w-5 text-blue-600" />
+                  <CardTitle className="text-lg">مقارنة أمر الإنتاج مع الإنتاج الفعلي</CardTitle>
+                  {orderData?.comparisonScope && (
+                    <Badge variant="outline" className="text-xs bg-blue-50 border-blue-200 text-blue-600">
+                      <Clock className="h-3 w-3 ml-1" />
+                      {orderData.comparisonScope}
+                    </Badge>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 text-sm">
+                  <span className="flex items-center gap-1 text-gray-600">
+                    <Target className="h-4 w-4" />
+                    المطلوب: <strong>{totalTarget.toLocaleString()}</strong>
+                  </span>
+                  <span className="flex items-center gap-1 text-gray-600">
+                    <Factory className="h-4 w-4" />
+                    المنتج: <strong className="text-blue-600">{totalProduced.toLocaleString()}</strong>
+                  </span>
+                  <span className={`flex items-center gap-1 font-bold ${totalVariance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {totalVariance >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+                    {totalVariance >= 0 ? '+' : ''}{totalVariance.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {orderItemsComparison.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <Table className="min-w-[700px]">
+                    <TableHeader>
+                      <TableRow className="bg-gray-50/80">
+                        <TableHead className="text-right font-semibold w-[40px]">#</TableHead>
+                        <TableHead className="text-right font-semibold">المنتج</TableHead>
+                        <TableHead className="text-right font-semibold hidden md:table-cell">الفئة</TableHead>
+                        <TableHead className="text-center font-semibold">
+                          <span className="flex items-center justify-center gap-1"><Target className="h-3.5 w-3.5" /> المطلوب</span>
+                        </TableHead>
+                        <TableHead className="text-center font-semibold">
+                          <span className="flex items-center justify-center gap-1"><Factory className="h-3.5 w-3.5" /> المنتج فعلياً</span>
+                        </TableHead>
+                        <TableHead className="text-center font-semibold">الفرق</TableHead>
+                        <TableHead className="text-center font-semibold w-[160px]">نسبة الإنجاز</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {orderItemsComparison.map((item: ComparisonItem, index: number) => {
+                        const isOver = item.variance > 0;
+                        const isUnder = item.variance < 0;
+                        const isExact = item.variance === 0 && item.actualProduced > 0;
+                        const pct = Math.min(item.achievementPct, 100);
+                        return (
+                          <TableRow key={item.orderItemId || index} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'} hover:bg-blue-50/50 transition-colors`} data-testid={`comparison-row-${index}`}>
+                            <TableCell className="font-medium text-gray-400 text-sm">{index + 1}</TableCell>
+                            <TableCell>
+                              <p className="font-medium text-sm">{item.productName}</p>
+                              {item.batchCount > 0 && (
+                                <p className="text-[10px] text-gray-400">{item.batchCount} دفعة إنتاج</p>
+                              )}
+                            </TableCell>
+                            <TableCell className="hidden md:table-cell">
+                              <Badge variant="outline" className="text-[10px] bg-slate-50 border-slate-200">{item.category || 'عام'}</Badge>
+                            </TableCell>
+                            <TableCell className="text-center font-medium text-sm">{item.targetQuantity.toLocaleString()} <span className="text-[10px] text-gray-400">{item.unit}</span></TableCell>
+                            <TableCell className="text-center">
+                              <span className={`font-bold text-sm ${item.actualProduced > 0 ? 'text-blue-700' : 'text-gray-400'}`}>
+                                {item.actualProduced.toLocaleString()}
+                              </span>
+                              <span className="text-[10px] text-gray-400 mr-1">{item.unit}</span>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Badge className={`text-xs ${
+                                isOver ? 'bg-green-100 text-green-700 border-green-200' :
+                                isExact ? 'bg-blue-100 text-blue-700 border-blue-200' :
+                                isUnder ? 'bg-red-100 text-red-700 border-red-200' :
+                                'bg-gray-100 text-gray-500 border-gray-200'
+                              }`}>
+                                {item.variance > 0 ? '+' : ''}{item.variance.toLocaleString()}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2 min-w-[120px]">
+                                <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full transition-all ${
+                                      item.achievementPct >= 100 ? 'bg-green-500' :
+                                      item.achievementPct >= 75 ? 'bg-blue-500' :
+                                      item.achievementPct >= 50 ? 'bg-amber-500' :
+                                      item.achievementPct > 0 ? 'bg-orange-500' :
+                                      'bg-gray-300'
+                                    }`}
+                                    style={{ width: `${pct}%` }}
+                                  />
+                                </div>
+                                <span className={`text-xs font-bold min-w-[36px] text-left ${
+                                  item.achievementPct >= 100 ? 'text-green-600' :
+                                  item.achievementPct >= 50 ? 'text-amber-600' :
+                                  'text-red-600'
+                                }`}>
+                                  {item.achievementPct}%
+                                </span>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                      <TableRow className="bg-gradient-to-l from-blue-50 to-indigo-50 font-bold border-t-2">
+                        <TableCell colSpan={3} className="text-right font-bold text-sm">الإجمالي</TableCell>
+                        <TableCell className="text-center font-bold text-sm">{totalTarget.toLocaleString()}</TableCell>
+                        <TableCell className="text-center font-bold text-sm text-blue-700">{totalProduced.toLocaleString()}</TableCell>
+                        <TableCell className="text-center">
+                          <Badge className={`text-xs font-bold ${totalVariance >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                            {totalVariance >= 0 ? '+' : ''}{totalVariance.toLocaleString()}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Progress value={Math.min(overallAchievement, 100)} className="h-3 flex-1" />
+                            <span className={`text-xs font-bold ${overallAchievement >= 100 ? 'text-green-600' : 'text-amber-600'}`}>{overallAchievement}%</span>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-gray-500">
+                  <ArrowUpDown className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                  <p className="font-medium mb-1">لا توجد بيانات مقارنة</p>
+                  <p className="text-sm">لم يتم تسجيل إنتاج يومي لهذا الأمر بعد</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {extraProduction.length > 0 && (
+            <Card className="border-0 shadow-sm border-t-4 border-t-amber-400">
+              <CardHeader className="pb-2">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-amber-600" />
+                  <CardTitle className="text-base">إنتاج إضافي (خارج أمر الإنتاج)</CardTitle>
+                  <Badge variant="secondary">{extraProduction.length} صنف</Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <Table className="min-w-[400px]">
+                    <TableHeader>
+                      <TableRow className="bg-amber-50/50">
+                        <TableHead className="text-right font-semibold">#</TableHead>
+                        <TableHead className="text-right font-semibold">المنتج</TableHead>
+                        <TableHead className="text-right font-semibold">الفئة</TableHead>
+                        <TableHead className="text-center font-semibold">الكمية المنتجة</TableHead>
+                        <TableHead className="text-center font-semibold">عدد الدفعات</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {extraProduction.map((item: ComparisonItem, index: number) => (
+                        <TableRow key={index} className="hover:bg-amber-50/50">
+                          <TableCell className="text-sm">{index + 1}</TableCell>
+                          <TableCell className="font-medium text-sm">{item.productName}</TableCell>
+                          <TableCell><Badge variant="outline" className="text-[10px]">{item.category || 'عام'}</Badge></TableCell>
+                          <TableCell className="text-center font-bold text-amber-700">{item.actualProduced.toLocaleString()} {item.unit}</TableCell>
+                          <TableCell className="text-center text-sm">{item.batchCount}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
             <Card className="border-0 shadow-sm">
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-2">
                   <ClipboardList className="h-5 w-5 text-amber-600" />
-                  <CardTitle className="text-lg">تفاصيل الأمر</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent className="p-3 sm:p-4 md:p-6">
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-4">
-                  <div className="space-y-1">
-                    <p className="text-sm text-gray-500">نوع الأمر</p>
-                    <Badge className={typeConfig.color}>{typeConfig.label}</Badge>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-sm text-gray-500">الأولوية</p>
-                    <Badge className={priorityConfig.color}>{priorityConfig.label}</Badge>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-sm text-gray-500">تاريخ البدء</p>
-                    <p className="font-medium flex items-center gap-1">
-                      <Calendar className="h-4 w-4 text-gray-400" />
-                      {formatDate(order.startDate)}
-                    </p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-sm text-gray-500">تاريخ الانتهاء</p>
-                    <p className="font-medium flex items-center gap-1">
-                      <Calendar className="h-4 w-4 text-gray-400" />
-                      {formatDate(order.endDate)}
-                    </p>
-                  </div>
-                </div>
-
-                <Separator className="my-4" />
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                  <div className="space-y-1">
-                    <p className="text-xs sm:text-sm text-gray-500 flex items-center gap-1">
-                      <Building2 className="h-4 w-4" />
-                      الفرع المصدر
-                    </p>
-                    <p className="font-medium">{getBranchName(order.sourceBranchId)}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-sm text-gray-500 flex items-center gap-1">
-                      <Building2 className="h-4 w-4" />
-                      الفرع المستهدف
-                    </p>
-                    <p className="font-medium">{getBranchName(order.targetBranchId)}</p>
-                  </div>
-                </div>
-
-                {order.description && (
-                  <>
-                    <Separator className="my-4" />
-                    <div>
-                      <p className="text-sm text-gray-500 mb-2">الوصف</p>
-                      <p className="text-gray-700">{order.description}</p>
-                    </div>
-                  </>
-                )}
-
-                {order.notes && (
-                  <>
-                    <Separator className="my-4" />
-                    <div>
-                      <p className="text-sm text-gray-500 mb-2">ملاحظات</p>
-                      <p className="text-gray-700 whitespace-pre-line text-sm">{order.notes}</p>
-                    </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Products Table */}
-            <Card className="border-0 shadow-sm">
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Package className="h-5 w-5 text-blue-600" />
-                    <CardTitle className="text-lg">منتجات الأمر</CardTitle>
-                  </div>
-                  <Badge variant="secondary">{items.length} منتج</Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {items.length > 0 ? (
-                  <div className="rounded-lg border overflow-x-auto">
-                    <Table className="min-w-[600px]">
-                      <TableHeader>
-                        <TableRow className="bg-gray-50">
-                          <TableHead className="text-right">#</TableHead>
-                          <TableHead className="text-right">المنتج</TableHead>
-                          <TableHead className="text-right hidden md:table-cell">الفئة</TableHead>
-                          <TableHead className="text-right">الكمية المطلوبة</TableHead>
-                          <TableHead className="text-right">الكمية المنتجة</TableHead>
-                          <TableHead className="text-right">التقدم</TableHead>
-                          <TableHead className="text-right hidden sm:table-cell">الإجمالي</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {items.map((item: OrderItem, index: number) => {
-                          const itemPct = item.targetQuantity > 0 ? Math.round((item.producedQuantity / item.targetQuantity) * 100) : 0;
-                          return (
-                            <TableRow key={item.id || index}>
-                              <TableCell className="font-medium text-xs sm:text-sm">{index + 1}</TableCell>
-                              <TableCell>
-                                <div>
-                                  <p className="font-medium text-xs sm:text-sm">{item.productName}</p>
-                                  {item.notes && <p className="text-[10px] sm:text-xs text-gray-500">{item.notes}</p>}
-                                </div>
-                              </TableCell>
-                              <TableCell className="hidden md:table-cell">
-                                <Badge variant="outline" className="text-[10px] sm:text-xs bg-slate-50 border-slate-300 text-slate-600">
-                                  {item.category || 'عام'}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-xs sm:text-sm">{item.targetQuantity} {item.unit}</TableCell>
-                              <TableCell>
-                                <span className={`text-xs sm:text-sm font-medium ${item.producedQuantity >= item.targetQuantity ? "text-green-600" : "text-amber-600"}`}>
-                                  {item.producedQuantity || 0} {item.unit}
-                                </span>
-                              </TableCell>
-                              <TableCell>
-                                <div className="flex items-center gap-2 min-w-[80px]">
-                                  <Progress value={Math.min(itemPct, 100)} className="h-2 flex-1" />
-                                  <span className={`text-[10px] font-bold ${itemPct >= 100 ? 'text-green-600' : 'text-amber-600'}`}>{itemPct}%</span>
-                                </div>
-                              </TableCell>
-                              <TableCell className="hidden sm:table-cell text-xs sm:text-sm font-medium">{formatCurrency((item.targetQuantity || 0) * (item.unitPrice || 0))}</TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    <Package className="h-12 w-12 mx-auto mb-2 text-gray-300" />
-                    <p>لا توجد منتجات في هذا الأمر</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Schedules */}
-            {schedules.length > 0 && (
-              <Card className="border-0 shadow-sm">
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-5 w-5 text-purple-600" />
-                      <CardTitle className="text-lg">جدول الإنتاج</CardTitle>
-                    </div>
-                    <Badge variant="secondary">{schedules.length} موعد</Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="p-3 sm:p-4 md:p-6">
-                  <div className="rounded-lg border overflow-x-auto">
-                    <Table className="min-w-[600px]">
-                      <TableHeader>
-                        <TableRow className="bg-gray-50">
-                          <TableHead className="text-right">التاريخ</TableHead>
-                          <TableHead className="text-right">الفترة</TableHead>
-                          <TableHead className="text-right">المنتج</TableHead>
-                          <TableHead className="text-right hidden sm:table-cell">الكمية</TableHead>
-                          <TableHead className="text-right">الحالة</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {schedules.map((schedule: OrderSchedule, index: number) => (
-                          <TableRow key={schedule.id || index}>
-                            <TableCell className="text-xs sm:text-sm">{formatDate(schedule.scheduleDate)}</TableCell>
-                            <TableCell>
-                              <Badge variant="outline" className="text-[10px] sm:text-xs">
-                                {schedule.shift === "morning" ? "صباحي" : schedule.shift === "evening" ? "مسائي" : "ليلي"}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-xs sm:text-sm">{schedule.productName}</TableCell>
-                            <TableCell className="hidden sm:table-cell text-xs sm:text-sm">{schedule.quantity}</TableCell>
-                            <TableCell>
-                              <Badge className={
-                                schedule.status === "completed" ? "bg-green-100 text-green-700" :
-                                schedule.status === "in_progress" ? "bg-purple-100 text-purple-700" :
-                                "bg-gray-100 text-gray-700"
-                              }>
-                                {schedule.status === "completed" ? "مكتمل" : schedule.status === "in_progress" ? "جاري" : "معلق"}
-                              </Badge>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-
-          {/* Sidebar */}
-          <div className="space-y-4 sm:space-y-6">
-            {/* Progress Summary */}
-            <Card className="border-0 shadow-sm bg-gradient-to-br from-amber-50 to-orange-50">
-              <CardHeader className="pb-2">
-                <div className="flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5 text-amber-600" />
-                  <CardTitle className="text-lg">ملخص التقدم</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <div className="flex justify-between text-sm mb-2">
-                    <span className="text-gray-600">نسبة الإنجاز</span>
-                    <span className="font-bold text-amber-700">{completionPct}%</span>
-                  </div>
-                  <Progress value={completionPct} className="h-3" />
-                </div>
-
-                <Separator />
-
-                <div className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600 text-sm">إجمالي المنتجات</span>
-                    <span className="font-medium">{items.length}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600 text-sm">الكمية المطلوبة</span>
-                    <span className="font-medium">{totalTargetQuantity.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600 text-sm">الكمية المنتجة</span>
-                    <span className="font-medium text-green-600">{totalProducedQuantity.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600 text-sm">المتبقي</span>
-                    <span className="font-medium text-amber-600">{Math.max(0, totalTargetQuantity - totalProducedQuantity).toLocaleString()}</span>
-                  </div>
-                </div>
-
-                <Separator />
-
-                <div className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600 text-sm">التكلفة المقدرة</span>
-                    <span className="font-medium text-sm">{formatCurrency(order.estimatedCost || totalItemsCost)}</span>
-                  </div>
-                  {order.targetSalesValue > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-600 text-sm">المبيعات المستهدفة</span>
-                      <span className="font-medium text-sm text-blue-600">{formatCurrency(order.targetSalesValue)}</span>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Timeline */}
-            <Card className="border-0 shadow-sm">
-              <CardHeader className="pb-2">
-                <div className="flex items-center gap-2">
-                  <Clock className="h-5 w-5 text-gray-600" />
-                  <CardTitle className="text-lg">سجل التواريخ</CardTitle>
+                  <CardTitle className="text-base">تفاصيل الأمر</CardTitle>
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">تاريخ الإنشاء</span>
-                  <span>{formatDate(order.createdAt)}</span>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <p className="text-xs text-gray-500">نوع الأمر</p>
+                    <Badge className={typeConfig.color}>{typeConfig.label}</Badge>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-gray-500">الأولوية</p>
+                    <Badge className={priorityConfig.color}>{priorityConfig.label}</Badge>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-gray-500">الفرع</p>
+                    <p className="font-medium text-sm flex items-center gap-1">
+                      <Building2 className="h-3.5 w-3.5 text-gray-400" />
+                      {getBranchName(order.sourceBranchId)}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-gray-500">الفترة</p>
+                    <p className="font-medium text-sm flex items-center gap-1">
+                      <Calendar className="h-3.5 w-3.5 text-gray-400" />
+                      {formatDate(order.startDate)} - {formatDate(order.endDate)}
+                    </p>
+                  </div>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">آخر تحديث</span>
-                  <span>{formatDate(order.updatedAt)}</span>
+                {order.targetSalesValue > 0 && (
+                  <>
+                    <Separator />
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <p className="text-xs text-gray-500">المبيعات المستهدفة</p>
+                        <p className="font-bold text-sm text-blue-600">{formatCurrency(order.targetSalesValue)}</p>
+                      </div>
+                      {order.sourceSalesValue > 0 && (
+                        <div className="space-y-1">
+                          <p className="text-xs text-gray-500">المبيعات المصدر</p>
+                          <p className="font-bold text-sm">{formatCurrency(order.sourceSalesValue)}</p>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+                {order.notes && (
+                  <>
+                    <Separator />
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1">ملاحظات</p>
+                      <p className="text-sm text-gray-700 whitespace-pre-line">{order.notes}</p>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="pb-2">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-green-600" />
+                  <CardTitle className="text-base">ملخص الأداء</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div>
+                  <div className="flex justify-between text-sm mb-2">
+                    <span className="text-gray-600">نسبة الإنجاز الإجمالية</span>
+                    <span className={`font-bold ${overallAchievement >= 100 ? 'text-green-600' : 'text-amber-600'}`}>{overallAchievement}%</span>
+                  </div>
+                  <Progress value={Math.min(overallAchievement, 100)} className="h-3" />
+                </div>
+                <Separator />
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">إجمالي الأصناف في الأمر</span>
+                    <span className="font-medium">{items.length}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600 flex items-center gap-1"><CircleCheck className="h-3.5 w-3.5 text-green-500" /> مكتمل</span>
+                    <span className="font-medium text-green-600">{fulfilledCount}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600 flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5 text-amber-500" /> جزئي</span>
+                    <span className="font-medium text-amber-600">{partialCount}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600 flex items-center gap-1"><MinusCircle className="h-3.5 w-3.5 text-red-500" /> لم يبدأ</span>
+                    <span className="font-medium text-red-600">{notStartedCount}</span>
+                  </div>
+                </div>
+                <Separator />
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">الكمية المطلوبة</span>
+                    <span className="font-medium">{totalTarget.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">الكمية المنتجة</span>
+                    <span className="font-bold text-blue-600">{totalProduced.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">الفرق</span>
+                    <span className={`font-bold ${totalVariance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {totalVariance >= 0 ? '+' : ''}{totalVariance.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+                <Separator />
+                <div className="space-y-2 text-xs text-gray-400">
+                  <div className="flex justify-between">
+                    <span>تاريخ الإنشاء</span>
+                    <span>{formatDate(order.createdAt)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>آخر تحديث</span>
+                    <span>{formatDate(order.updatedAt)}</span>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -839,7 +832,6 @@ export default function AdvancedProductionOrderDetailsPage() {
         </div>
       </div>
 
-      {/* Status Change Confirmation Dialog */}
       <AlertDialog open={statusDialogOpen} onOpenChange={setStatusDialogOpen}>
         <AlertDialogContent dir="rtl">
           <AlertDialogHeader>
