@@ -24817,9 +24817,9 @@ export async function registerRoutes(
       }
       
       // Validate destination type at route level
-      const validDestinationTypes = ['branch', 'display_bar', 'بار_العرض'];
+      const validDestinationTypes = ['branch', 'display_bar', 'بار_العرض', 'kitchen_trolley', 'freezer', 'refrigerator'];
       if (!validDestinationTypes.includes(destinationType)) {
-        return res.status(400).json({ error: "نوع الوجهة غير صالح. الأنواع المسموحة: branch, display_bar, بار_العرض" });
+        return res.status(400).json({ error: "نوع الوجهة غير صالح" });
       }
       
       // Validate branch ID for branch transfers
@@ -24838,26 +24838,30 @@ export async function registerRoutes(
       );
       
       if (destinationType === 'display_bar' || destinationType === 'بار_العرض') {
-        try {
-          const now = new Date();
-          const receiptDate = now.toISOString().split('T')[0];
-          const receiptTime = now.toTimeString().slice(0, 5);
-          
-          await storage.createDisplayBarReceipt({
-            branchId: transfer.sourceBranchId,
-            productId: transfer.productId!,
-            receiptDate,
-            receiptTime,
-            quantity: transfer.quantity,
-            receivedBy: user?.id,
-            productionBatch: `FG-${transfer.id}`,
-            notes: `استلام تلقائي من تحويل المنتجات النهائية #${transfer.id}${notes ? ' - ' + notes : ''}`,
-          });
-        } catch (receiptError) {
-          console.error("Error creating auto display bar receipt:", receiptError);
+        if (transfer.productId) {
+          try {
+            const now = new Date();
+            const receiptDate = now.toISOString().split('T')[0];
+            const receiptTime = now.toTimeString().slice(0, 5);
+            
+            await storage.createDisplayBarReceipt({
+              branchId: transfer.sourceBranchId,
+              productId: transfer.productId,
+              receiptDate,
+              receiptTime,
+              quantity: transfer.quantity,
+              receivedBy: user?.id,
+              productionBatch: `FG-${transfer.id}`,
+              notes: `استلام تلقائي من تحويل المنتجات النهائية #${transfer.id}${notes ? ' - ' + notes : ''}`,
+            });
+          } catch (receiptError) {
+            console.error("Error creating auto display bar receipt:", receiptError);
+          }
+        } else {
+          console.warn(`Skipping display bar receipt: productId is null for transfer #${transfer.id}`);
         }
       }
-      
+
       res.status(201).json(transfer);
     } catch (error: any) {
       console.error("Error transferring finished goods:", error);

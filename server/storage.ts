@@ -9727,9 +9727,9 @@ export class DatabaseStorage implements IStorage {
 
   async transferFinishedGoods(inventoryId: number, quantity: number, destinationType: string, destinationBranchId?: string, notes?: string, userId?: string, userName?: string): Promise<FinishedGoodsTransfer> {
     // Valid destination types
-    const validDestinationTypes = ['branch', 'display_bar', 'بار_العرض'];
+    const validDestinationTypes = ['branch', 'display_bar', 'بار_العرض', 'kitchen_trolley', 'freezer', 'refrigerator'];
     if (!validDestinationTypes.includes(destinationType)) {
-      throw new Error(`نوع الوجهة غير صالح. الأنواع المسموحة: فرع, بار العرض`);
+      throw new Error(`نوع الوجهة غير صالح`);
     }
     
     // Validate branch ID for branch transfers
@@ -9786,7 +9786,15 @@ export class DatabaseStorage implements IStorage {
       }).returning();
       
       // Map destination type to Arabic for log
-      const destTypeArabic = destinationType === 'branch' ? 'فرع' : 'بار العرض';
+      const destTypeMap: Record<string, string> = {
+        'branch': 'فرع',
+        'display_bar': 'بار العرض',
+        'بار_العرض': 'بار العرض',
+        'kitchen_trolley': 'عربة المطبخ',
+        'freezer': 'الفريزر',
+        'refrigerator': 'الثلاجة',
+      };
+      const destTypeArabic = destTypeMap[destinationType] || destinationType;
       
       // Log the movement within same transaction
       await tx.insert(productionInventoryLogs).values({
