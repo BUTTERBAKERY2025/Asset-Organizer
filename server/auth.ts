@@ -412,6 +412,101 @@ export async function setupAuth(app: Express) {
     }
   });
 
+  app.get("/api/auth/init", async (req, res) => {
+    try {
+      if (!req.session.userId) {
+        return res.json({ user: null, branches: [], permissions: [] });
+      }
+      
+      const userId = req.session.userId;
+      const cached = getCachedAuth(userId);
+      
+      let user: any, userBranches: any[], activeBranch: any, permissions: any[];
+      
+      if (cached) {
+        const { password: _, ...safeUser } = cached.user;
+        user = safeUser;
+        userBranches = cached.branchAccess;
+        activeBranch = req.session.activeBranchId 
+          ? cached.branchAccess.find((b: any) => b.branchId === req.session.activeBranchId)
+            ? await storage.getBranch(req.session.activeBranchId) : null
+          : null;
+        permissions = cached.permissions || [];
+      } else {
+        const dbUser = await storage.getUser(userId);
+        if (!dbUser) {
+          req.session.destroy(() => {});
+          return res.json({ user: null, branches: [], permissions: [] });
+        }
+        if (dbUser.isActive === "inactive") {
+          req.session.destroy(() => {});
+          return res.status(403).json({ error: "حسابك معطّل" });
+        }
+        const { password: _, ...safeUser } = dbUser;
+        user = safeUser;
+        
+        const [ub, ab] = await Promise.all([
+          storage.getUserBranchAccess(dbUser.id),
+          req.session.activeBranchId ? storage.getBranch(req.session.activeBranchId) : Promise.resolve(null)
+        ]);
+        userBranches = ub;
+        activeBranch = ab;
+        permissions = [];
+      }
+      
+      const allBranches = await storage.getAllBranches();
+      let filteredBranches: any[] = [];
+      if (user.role === "admin") {
+        filteredBranches = allBranches;
+      } else if (userBranches.length > 0) {
+        const allowedIds = userBranches.map((b: any) => b.branchId);
+        filteredBranches = allBranches.filter((b: any) => allowedIds.includes(b.id));
+      } else if (user.branchId) {
+        filteredBranches = allBranches.filter((b: any) => b.id === user.branchId);
+      } else {
+        filteredBranches = [];
+      }
+      
+      if (permissions.length === 0) {
+        if (user.role === "admin") {
+          const { SYSTEM_MODULES, MODULE_ACTIONS } = await import("@shared/schema");
+          permissions = SYSTEM_MODULES.map((m: string) => ({ module: m, actions: [...MODULE_ACTIONS] }));
+        } else if (user.role === "attendance_clerk") {
+          permissions = [{ module: "attendance_check", actions: ["view", "create", "edit"] }];
+        } else {
+          const { getCachedPermissionsForUser } = await import("./auth");
+          permissions = getCachedPermissionsForUser(userId) || [];
+          if (permissions.length === 0) {
+            const userPerms = await storage.getUserPermissions(userId);
+            const permMap = new Map<string, string[]>();
+            for (const p of userPerms) {
+              if (!permMap.has(p.module)) permMap.set(p.module, []);
+              const acts = permMap.get(p.module)!;
+              for (const a of p.actions) {
+                if (!acts.includes(a)) acts.push(a);
+              }
+            }
+            permissions = Array.from(permMap.entries()).map(([module, actions]) => ({ module, actions }));
+          }
+        }
+      }
+      
+      res.json({
+        user: {
+          ...user,
+          activeBranchId: req.session.activeBranchId || null,
+          activeBranch,
+          allowedBranches: userBranches,
+        },
+        branches: filteredBranches,
+        permissions,
+      });
+    } catch (error) {
+      console.error("Auth init error:", error);
+      res.status(500).json({ error: "Failed to initialize" });
+    }
+  });
+
   // Switch active branch
   app.patch("/api/auth/active-branch", async (req, res) => {
     try {

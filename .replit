@@ -46,6 +46,6 @@ integrations = ["javascript_database:1.0.0", "javascript_log_in_with_replit:1.0.
 [userenv]
 
 [userenv.shared]
-USE_SUPABASE = "true"
+USE_SUPABASE = "false"
 PUBLIC_SITE_URL = ""
 VITE_PUBLIC_SITE_URL = "https://www.thebutterbakery.com"
