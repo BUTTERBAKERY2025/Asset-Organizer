@@ -61,8 +61,13 @@ if (process.env.NODE_ENV === "production") {
 // Note: These are non-sensitive equipment photos, not confidential business data
 app.use('/attached_assets', express.static(path.join(process.cwd(), 'attached_assets')));
 
-// Serve uploads directory for social media files
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+// Serve uploads directory - require session authentication for non-public files
+app.use('/uploads', (req, res, next) => {
+  if ((req as any).session?.userId) {
+    return next();
+  }
+  return res.status(401).json({ error: "غير مصرح بالوصول" });
+}, express.static(path.join(process.cwd(), 'uploads')));
 
 // Serve public assets (logo, etc.) for PDF generation
 app.use('/assets', express.static(path.join(process.cwd(), 'public/assets')));
@@ -196,9 +201,16 @@ process.on("SIGINT", () => gracefulShutdown("SIGINT"));
     const message = err.message || "Internal Server Error";
 
     log(`Error: ${message} (${status})`, "error");
+    if (err.stack) {
+      log(`Stack: ${err.stack}`, "error");
+    }
     
     if (!res.headersSent) {
-      res.status(status).json({ message });
+      const isProduction = process.env.NODE_ENV === "production";
+      const clientMessage = isProduction && status >= 500
+        ? "حدث خطأ داخلي في الخادم"
+        : message;
+      res.status(status).json({ message: clientMessage });
     }
   });
 
