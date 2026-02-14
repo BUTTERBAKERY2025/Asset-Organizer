@@ -14695,6 +14695,30 @@ export async function registerRoutes(
       // Get all products for matching
       const products = await storage.getAllProducts();
       
+      // Filter: Only categories that require pre-production go into the production order
+      // مخبوزات (bakery), حلويات (sweets), سندوتشات/ساندويتشات (sandwiches) need pre-production
+      // Other categories (باريستا, بيتزا, إفطار, مشروبات, etc.) are made-to-order
+      const madeToOrderCategories = ['باريستا', 'بيتزا', 'إفطار', 'مشروبات', 'سلطات', 'تجمعات'];
+      const productionCategoryKeywords = ['مخبوز', 'حلوي', 'حلويات', 'سندوتش', 'ساندويتش', 'سندويتش', 'معجن', 'كيك', 'خبز', 'كرواسون', 'دانش', 'بريوش', 'كوكيز'];
+      
+      const normalizeCategory = (cat: string): string => {
+        return cat.trim().replace(/[\u064B-\u065F\u0670]/g, '').replace(/[-_\s]+/g, ' ').trim();
+      };
+      
+      const isProductionCategory = (category: string | null | undefined): boolean => {
+        if (!category) return false;
+        const normalized = normalizeCategory(category);
+        if (madeToOrderCategories.some(mc => normalized === normalizeCategory(mc) || normalized.includes(normalizeCategory(mc)))) {
+          return false;
+        }
+        if (productionCategoryKeywords.some(kw => normalized.includes(normalizeCategory(kw)))) {
+          return true;
+        }
+        return false;
+      };
+      
+      // NOTE: Category filtering moved below after findMatchingProduct is defined
+      
       // Calculate source sales value from historical data
       const sourceSalesValue = totalHistoricalRevenue;
       
@@ -14713,8 +14737,8 @@ export async function registerRoutes(
         status: 'draft' as const,
         targetSalesValue: targetSalesNum,
         sourceSalesValue: sourceSalesValue,
-        notes: `${notes || ''}\n\nتوقعات مبنية على بيانات المبيعات السابقة\nملف المصدر: ${upload.fileName}\nالمبيعات المستهدفة: ${targetSalesNum.toLocaleString('en-GB')} ريال\nإجمالي مبيعات الملف المصدر: ${sourceSalesValue.toLocaleString('en-GB')} ريال`,
-        totalItems: forecastItems.length,
+        notes: `${notes || ''}\n\nتوقعات مبنية على بيانات المبيعات السابقة\nملف المصدر: ${upload.fileName}\nالمبيعات المستهدفة: ${targetSalesNum.toLocaleString('en-GB')} ريال\nإجمالي مبيعات الملف المصدر: ${sourceSalesValue.toLocaleString('en-GB')} ريال\n\nأصناف الإنتاج المسبق: ${productionForecastItems.length} صنف (مخبوزات، حلويات، سندوتشات)${salesOnlyItems.length > 0 ? `\nأصناف مبيعات فقط (تحضير بعد الطلب): ${salesOnlyItems.length} صنف - ${salesOnlyItems.map(i => i.productName).join('، ')}` : ''}`,
+        totalItems: productionForecastItems.length,
         completedItems: 0
       };
       
@@ -14853,7 +14877,30 @@ export async function registerRoutes(
         'عام': 20
       };
       
-      const orderItems = forecastItems.map((item, index) => {
+      // Resolve categories and filter: only pre-production categories go into the order
+      const resolvedForecastItems = forecastItems.map(item => {
+        let resolvedCategory = item.productCategory;
+        if (!resolvedCategory) {
+          const matchedProduct = findMatchingProduct(item.productName, item.productId);
+          if (matchedProduct?.category) {
+            resolvedCategory = matchedProduct.category;
+          }
+        }
+        return { ...item, resolvedCategory };
+      });
+      
+      const productionForecastItems = resolvedForecastItems.filter(item => isProductionCategory(item.resolvedCategory));
+      const salesOnlyItems = resolvedForecastItems.filter(item => !isProductionCategory(item.resolvedCategory));
+      
+      console.log(`Forecast category filter: ${productionForecastItems.length} production items, ${salesOnlyItems.length} sales-only items (${salesOnlyItems.map(i => `${i.productName}[${i.resolvedCategory}]`).join(', ')})`);
+      
+      if (productionForecastItems.length === 0) {
+        return res.status(400).json({ 
+          error: "لا توجد منتجات تحتاج إنتاج مسبق (مخبوزات، حلويات، سندوتشات) في بيانات المبيعات. الأصناف الأخرى مثل الباريستا والبيتزا تُحضّر بعد الطلب ولا تحتاج أمر إنتاج." 
+        });
+      }
+      
+      const orderItems = productionForecastItems.map((item, index) => {
         const product = findMatchingProduct(item.productName, item.productId);
         
         let unitPrice = 0;
@@ -14933,15 +14980,23 @@ export async function registerRoutes(
       
       res.status(201).json({
         success: true,
-        message: 'تم إنشاء توقعات الإنتاج وأمر الإنتاج بنجاح',
+        message: `تم إنشاء أمر الإنتاج بنجاح - ${productionForecastItems.length} صنف إنتاج مسبق${salesOnlyItems.length > 0 ? ` (${salesOnlyItems.length} صنف تحضير بعد الطلب لم يُضاف للأمر)` : ''}`,
         forecast: {
           uploadId,
           branchId,
           targetSales: targetSalesNum,
           planDate,
           totalProducts: forecastItems.length,
-          totalForecastedQuantity: forecastItems.reduce((sum, i) => sum + i.forecastedQuantity, 0),
-          items: forecastItems
+          productionItems: productionForecastItems.length,
+          salesOnlyItems: salesOnlyItems.length,
+          totalForecastedQuantity: productionForecastItems.reduce((sum, i) => sum + i.forecastedQuantity, 0),
+          items: forecastItems,
+          excludedItems: salesOnlyItems.map(i => ({
+            productName: i.productName,
+            category: i.resolvedCategory || i.productCategory,
+            forecastedSalesAmount: i.forecastedSalesAmount,
+            reason: 'تحضير بعد الطلب - لا يحتاج إنتاج مسبق'
+          }))
         },
         productionOrder: result
       });

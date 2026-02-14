@@ -63,6 +63,8 @@ interface ForecastResult {
     targetSales: number;
     planDate: string;
     totalProducts: number;
+    productionItems?: number;
+    salesOnlyItems?: number;
     totalForecastedQuantity: number;
     items: {
       productName: string;
@@ -70,6 +72,12 @@ interface ForecastResult {
       salesRatio: number;
       forecastedQuantity: number;
       forecastedSalesAmount: number;
+    }[];
+    excludedItems?: {
+      productName: string;
+      category: string | null;
+      forecastedSalesAmount: number;
+      reason: string;
     }[];
   };
   productionOrder: any;
@@ -741,10 +749,10 @@ export default function SalesDataUploadsPage() {
                                             <CheckCircle className="w-5 h-5" />
                                             <span className="font-medium">{forecastResult.message || 'تم إنشاء التوقعات'}</span>
                                           </div>
-                                          <div className="grid grid-cols-3 gap-4 mt-4">
+                                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4">
                                             <div className="text-center">
-                                              <div className="text-2xl font-bold text-green-700">{forecastResult.forecast.totalProducts || 0}</div>
-                                              <div className="text-sm text-green-600">منتج</div>
+                                              <div className="text-2xl font-bold text-green-700">{forecastResult.forecast.productionItems || forecastResult.forecast.totalProducts || 0}</div>
+                                              <div className="text-sm text-green-600">أصناف الإنتاج</div>
                                             </div>
                                             <div className="text-center">
                                               <div className="text-2xl font-bold text-green-700">{(forecastResult.forecast.totalForecastedQuantity || 0).toLocaleString('en-US')}</div>
@@ -754,8 +762,30 @@ export default function SalesDataUploadsPage() {
                                               <div className="text-2xl font-bold text-green-700">{formatCurrency(forecastResult.forecast.targetSales || 0)}</div>
                                               <div className="text-sm text-green-600">المبيعات المستهدفة</div>
                                             </div>
+                                            {(forecastResult.forecast.salesOnlyItems ?? 0) > 0 && (
+                                              <div className="text-center">
+                                                <div className="text-2xl font-bold text-amber-600">{forecastResult.forecast.salesOnlyItems}</div>
+                                                <div className="text-sm text-amber-600">تحضير بعد الطلب</div>
+                                              </div>
+                                            )}
                                           </div>
                                         </div>
+
+                                        {(forecastResult.forecast.excludedItems?.length ?? 0) > 0 && (
+                                          <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
+                                            <div className="flex items-center gap-2 text-amber-800 mb-2">
+                                              <AlertCircle className="w-4 h-4" />
+                                              <span className="text-sm font-medium">أصناف لم تُضاف لأمر الإنتاج (تُحضّر بعد الطلب)</span>
+                                            </div>
+                                            <div className="flex flex-wrap gap-1">
+                                              {forecastResult.forecast.excludedItems!.map((item: any, idx: number) => (
+                                                <Badge key={idx} variant="outline" className="bg-amber-100 text-amber-800 border-amber-300 text-xs">
+                                                  {item.productName} ({item.category || 'غير مصنف'})
+                                                </Badge>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
 
                                         <Card>
                                           <CardHeader>
