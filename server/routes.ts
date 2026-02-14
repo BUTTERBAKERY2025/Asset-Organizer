@@ -11641,19 +11641,14 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Invalid order ID" });
       }
       
-      // SECURITY: Verify branch access for non-admins (must have access to ALL branches involved)
+      // SECURITY: Only admins can delete production orders
+      if (!isUserAdmin(req)) {
+        return res.status(403).json({ error: "حذف أوامر الإنتاج متاح للمشرف العام (الأدمن) فقط" });
+      }
+      
       const existingOrder = await storage.getAdvancedProductionOrder(id);
       if (!existingOrder) {
         return res.status(404).json({ error: "Order not found" });
-      }
-      if (!isUserAdmin(req)) {
-        // User must have access to both source and target branches for cross-branch operations
-        const hasSourceAccess = existingOrder.sourceBranchId ? await canAccessBranch(req, existingOrder.sourceBranchId) : true;
-        const hasTargetAccess = existingOrder.targetBranchId ? await canAccessBranch(req, existingOrder.targetBranchId) : true;
-        // Require access to BOTH branches for cross-branch orders
-        if (!hasSourceAccess || !hasTargetAccess) {
-          return res.status(403).json({ error: "غير مصرح بحذف أمر إنتاج هذا الفرع - يجب أن يكون لديك صلاحية للفرعين المصدر والهدف" });
-        }
       }
       
       const success = await storage.deleteAdvancedProductionOrder(id);

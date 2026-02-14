@@ -16,6 +16,7 @@ import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import { TablePagination, usePagination } from "@/components/ui/pagination";
 import { useBranches } from "@/hooks/useBranches";
+import { useAuth } from "@/hooks/useAuth";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -85,6 +86,7 @@ const ORDER_TYPE_CONFIG: Record<string, { label: string; color: string }> = {
 
 export default function AdvancedProductionOrdersPage() {
   const { branches, userBranchId, canSelectBranch } = useBranches();
+  const { isAdmin } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [branchFilter, setBranchFilter] = useState<string>("");
@@ -460,30 +462,32 @@ export default function AdvancedProductionOrdersPage() {
                                 <Edit className="h-4 w-4" />
                               </Button>
                             </Link>
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8 hover:bg-red-100 hover:text-red-700" data-testid={`button-delete-${order.id}`}>
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent dir="rtl">
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>هل أنت متأكد من الحذف؟</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    سيتم حذف الأمر "{order.title || order.orderNumber}" نهائياً. هذا الإجراء لا يمكن التراجع عنه.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter className="gap-2">
-                                  <AlertDialogCancel>إلغاء</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => deleteMutation.mutate(order.id)}
-                                    className="bg-destructive hover:bg-destructive/90"
-                                  >
-                                    حذف
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
+                            {isAdmin && (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8 hover:bg-red-100 hover:text-red-700" data-testid={`button-delete-${order.id}`}>
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent dir="rtl">
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>هل أنت متأكد من الحذف؟</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      سيتم حذف الأمر "{order.title || order.orderNumber}" نهائياً. هذا الإجراء لا يمكن التراجع عنه.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter className="gap-2">
+                                    <AlertDialogCancel>إلغاء</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => deleteMutation.mutate(order.id)}
+                                      className="bg-destructive hover:bg-destructive/90"
+                                    >
+                                      حذف
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
