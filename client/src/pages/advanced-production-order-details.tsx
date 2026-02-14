@@ -817,23 +817,21 @@ export default function AdvancedProductionOrderDetailsPage() {
                 </div>
                 <Separator />
                 {(() => {
-                  const madeToOrderCats = ['باريستا', 'بيتزا', 'إفطار', 'مشروبات', 'سلطات', 'تجمعات'];
-                  const preProductionItems = items.filter((item: any) => {
-                    const cat = (item.category || '').trim();
-                    return cat && !madeToOrderCats.some(mc => cat.includes(mc));
-                  });
-                  const madeToOrderItems = items.filter((item: any) => {
-                    const cat = (item.category || '').trim();
-                    return cat && madeToOrderCats.some(mc => cat.includes(mc));
-                  });
-                  const uncategorized = items.filter((item: any) => !(item.category || '').trim());
-                  const total = items.length;
-                  const prePct = total > 0 ? Math.round((preProductionItems.length / total) * 100) : 0;
-                  const madePct = total > 0 ? Math.round((madeToOrderItems.length / total) * 100) : 0;
-                  const uncatPct = total > 0 ? Math.round((uncategorized.length / total) * 100) : 0;
+                  const preProductionCount = items.length;
+                  const preCategories = Array.from(new Set(items.map((i: any) => i.category).filter(Boolean))) as string[];
 
-                  const preCategories = Array.from(new Set(preProductionItems.map((i: any) => i.category).filter(Boolean))) as string[];
-                  const madeCategories = Array.from(new Set(madeToOrderItems.map((i: any) => i.category).filter(Boolean))) as string[];
+                  let madeToOrderCount = 0;
+                  let madeToOrderNames: string[] = [];
+                  if (order.notes) {
+                    const mtoMatch = order.notes.match(/أصناف مبيعات فقط[^:]*:\s*(\d+)\s*صنف/);
+                    if (mtoMatch) madeToOrderCount = parseInt(mtoMatch[1]) || 0;
+                    const namesMatch = order.notes.match(/أصناف مبيعات فقط[^-]*-\s*(.+?)$/m);
+                    if (namesMatch) madeToOrderNames = namesMatch[1].split('،').map((n: string) => n.trim()).filter(Boolean);
+                  }
+
+                  const totalAll = preProductionCount + madeToOrderCount;
+                  const prePct = totalAll > 0 ? Math.round((preProductionCount / totalAll) * 100) : 100;
+                  const madePct = totalAll > 0 ? Math.round((madeToOrderCount / totalAll) * 100) : 0;
 
                   return (
                     <div className="space-y-3" data-testid="category-breakdown">
@@ -848,40 +846,26 @@ export default function AdvancedProductionOrderDetailsPage() {
                                 <span className="text-[10px] text-gray-400">({preCategories.join('، ')})</span>
                               )}
                             </span>
-                            <span className="font-bold text-blue-600">{preProductionItems.length} صنف ({prePct}%)</span>
+                            <span className="font-bold text-blue-600">{preProductionCount} صنف ({prePct}%)</span>
                           </div>
                           <div className="w-full bg-gray-200 rounded-full h-2">
                             <div className="bg-blue-500 h-2 rounded-full transition-all" style={{ width: `${prePct}%` }} />
                           </div>
                         </div>
-                        {madeToOrderItems.length > 0 && (
+                        {madeToOrderCount > 0 && (
                           <div>
                             <div className="flex justify-between text-sm mb-1">
                               <span className="text-gray-600 flex items-center gap-1">
                                 <Clock className="h-3.5 w-3.5 text-orange-500" />
                                 تحضير بعد الطلب
-                                {madeCategories.length > 0 && (
-                                  <span className="text-[10px] text-gray-400">({madeCategories.join('، ')})</span>
+                                {madeToOrderNames.length > 0 && madeToOrderNames.length <= 5 && (
+                                  <span className="text-[10px] text-gray-400">({madeToOrderNames.slice(0, 5).join('، ')})</span>
                                 )}
                               </span>
-                              <span className="font-bold text-orange-600">{madeToOrderItems.length} صنف ({madePct}%)</span>
+                              <span className="font-bold text-orange-600">{madeToOrderCount} صنف ({madePct}%)</span>
                             </div>
                             <div className="w-full bg-gray-200 rounded-full h-2">
                               <div className="bg-orange-500 h-2 rounded-full transition-all" style={{ width: `${madePct}%` }} />
-                            </div>
-                          </div>
-                        )}
-                        {uncategorized.length > 0 && (
-                          <div>
-                            <div className="flex justify-between text-sm mb-1">
-                              <span className="text-gray-600 flex items-center gap-1">
-                                <MinusCircle className="h-3.5 w-3.5 text-gray-400" />
-                                غير مصنف
-                              </span>
-                              <span className="font-bold text-gray-500">{uncategorized.length} صنف ({uncatPct}%)</span>
-                            </div>
-                            <div className="w-full bg-gray-200 rounded-full h-2">
-                              <div className="bg-gray-400 h-2 rounded-full transition-all" style={{ width: `${uncatPct}%` }} />
                             </div>
                           </div>
                         )}
