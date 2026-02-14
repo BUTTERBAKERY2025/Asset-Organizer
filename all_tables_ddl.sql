@@ -4,7 +4,7 @@
 -- ============================================
 
 -- Table: accounting_exports
-CREATE TABLE public.accounting_exports (
+CREATE TABLE IF NOT EXISTS public.accounting_exports (
     id integer NOT NULL,
     export_type text NOT NULL,
     date_from text,
@@ -18,7 +18,7 @@ CREATE TABLE public.accounting_exports (
 );
 
 -- Table: accounting_journal_entries
-CREATE TABLE public.accounting_journal_entries (
+CREATE TABLE IF NOT EXISTS public.accounting_journal_entries (
     id integer NOT NULL,
     entry_number text NOT NULL,
     entry_date text NOT NULL,
@@ -41,7 +41,7 @@ CREATE TABLE public.accounting_journal_entries (
 );
 
 -- Table: accounting_reconciliations
-CREATE TABLE public.accounting_reconciliations (
+CREATE TABLE IF NOT EXISTS public.accounting_reconciliations (
     id integer NOT NULL,
     reconciliation_date text NOT NULL,
     period_from text NOT NULL,
@@ -67,7 +67,7 @@ CREATE TABLE public.accounting_reconciliations (
 );
 
 -- Table: advanced_production_orders
-CREATE TABLE public.advanced_production_orders (
+CREATE TABLE IF NOT EXISTS public.advanced_production_orders (
     id integer NOT NULL,
     order_number text NOT NULL,
     order_type text DEFAULT 'daily'::text NOT NULL,
@@ -98,7 +98,7 @@ CREATE TABLE public.advanced_production_orders (
 );
 
 -- Table: asset_transfer_events
-CREATE TABLE public.asset_transfer_events (
+CREATE TABLE IF NOT EXISTS public.asset_transfer_events (
     id integer NOT NULL,
     transfer_id integer NOT NULL,
     event_type text NOT NULL,
@@ -108,7 +108,7 @@ CREATE TABLE public.asset_transfer_events (
 );
 
 -- Table: asset_transfers
-CREATE TABLE public.asset_transfers (
+CREATE TABLE IF NOT EXISTS public.asset_transfers (
     id integer NOT NULL,
     transfer_number text NOT NULL,
     item_id character varying NOT NULL,
@@ -131,7 +131,7 @@ CREATE TABLE public.asset_transfers (
 );
 
 -- Table: attendance_records
-CREATE TABLE public.attendance_records (
+CREATE TABLE IF NOT EXISTS public.attendance_records (
     id integer NOT NULL,
     employee_id character varying NOT NULL,
     employee_name text NOT NULL,
@@ -163,7 +163,7 @@ CREATE TABLE public.attendance_records (
 );
 
 -- Table: attendance_summary
-CREATE TABLE public.attendance_summary (
+CREATE TABLE IF NOT EXISTS public.attendance_summary (
     id integer NOT NULL,
     employee_id character varying NOT NULL,
     employee_name text NOT NULL,
@@ -186,7 +186,7 @@ CREATE TABLE public.attendance_summary (
 );
 
 -- Table: audit_logs
-CREATE TABLE public.audit_logs (
+CREATE TABLE IF NOT EXISTS public.audit_logs (
     id integer NOT NULL,
     item_id character varying NOT NULL,
     action text NOT NULL,
@@ -198,7 +198,7 @@ CREATE TABLE public.audit_logs (
 );
 
 -- Table: average_ticket_targets
-CREATE TABLE public.average_ticket_targets (
+CREATE TABLE IF NOT EXISTS public.average_ticket_targets (
     id integer NOT NULL,
     branch_id character varying,
     cashier_id character varying,
@@ -217,7 +217,7 @@ CREATE TABLE public.average_ticket_targets (
 );
 
 -- Table: backups
-CREATE TABLE public.backups (
+CREATE TABLE IF NOT EXISTS public.backups (
     id integer NOT NULL,
     name text NOT NULL,
     type text NOT NULL,
@@ -237,7 +237,7 @@ CREATE TABLE public.backups (
 );
 
 -- Table: beneficiary_organizations
-CREATE TABLE public.beneficiary_organizations (
+CREATE TABLE IF NOT EXISTS public.beneficiary_organizations (
     id integer NOT NULL,
     name text NOT NULL,
     name_en text,
@@ -265,7 +265,7 @@ CREATE TABLE public.beneficiary_organizations (
 );
 
 -- Table: biometric_credentials
-CREATE TABLE public.biometric_credentials (
+CREATE TABLE IF NOT EXISTS public.biometric_credentials (
     id integer NOT NULL,
     employee_id character varying NOT NULL,
     employee_name text NOT NULL,
@@ -290,7 +290,7 @@ CREATE TABLE public.biometric_credentials (
 );
 
 -- Table: board_committees
-CREATE TABLE public.board_committees (
+CREATE TABLE IF NOT EXISTS public.board_committees (
     id integer NOT NULL,
     name text NOT NULL,
     name_en text,
@@ -311,7 +311,7 @@ CREATE TABLE public.board_committees (
 );
 
 -- Table: board_member_training
-CREATE TABLE public.board_member_training (
+CREATE TABLE IF NOT EXISTS public.board_member_training (
     id integer NOT NULL,
     board_member_id integer NOT NULL,
     training_type text NOT NULL,
@@ -330,7 +330,7 @@ CREATE TABLE public.board_member_training (
 );
 
 -- Table: board_members
-CREATE TABLE public.board_members (
+CREATE TABLE IF NOT EXISTS public.board_members (
     id integer NOT NULL,
     user_id character varying,
     full_name text NOT NULL,
@@ -362,7 +362,7 @@ CREATE TABLE public.board_members (
 );
 
 -- Table: board_resolutions
-CREATE TABLE public.board_resolutions (
+CREATE TABLE IF NOT EXISTS public.board_resolutions (
     id integer NOT NULL,
     resolution_number text NOT NULL,
     meeting_id integer,
@@ -397,7 +397,7 @@ CREATE TABLE public.board_resolutions (
 );
 
 -- Table: branch_achievement_bonus
-CREATE TABLE public.branch_achievement_bonus (
+CREATE TABLE IF NOT EXISTS public.branch_achievement_bonus (
     id integer NOT NULL,
     branch_id character varying NOT NULL,
     year_month text NOT NULL,
@@ -419,7 +419,7 @@ CREATE TABLE public.branch_achievement_bonus (
 );
 
 -- Table: branch_custom_checklist_items
-CREATE TABLE public.branch_custom_checklist_items (
+CREATE TABLE IF NOT EXISTS public.branch_custom_checklist_items (
     id integer NOT NULL,
     branch_id character varying NOT NULL,
     template_id integer NOT NULL,
@@ -436,7 +436,7 @@ CREATE TABLE public.branch_custom_checklist_items (
 );
 
 -- Table: branch_daily_closure_journals
-CREATE TABLE public.branch_daily_closure_journals (
+CREATE TABLE IF NOT EXISTS public.branch_daily_closure_journals (
     id integer NOT NULL,
     closure_id integer NOT NULL,
     journal_id integer NOT NULL,
@@ -444,7 +444,7 @@ CREATE TABLE public.branch_daily_closure_journals (
 );
 
 -- Table: branch_daily_closure_payments
-CREATE TABLE public.branch_daily_closure_payments (
+CREATE TABLE IF NOT EXISTS public.branch_daily_closure_payments (
     id integer NOT NULL,
     closure_id integer NOT NULL,
     payment_method text NOT NULL,
@@ -459,7 +459,7 @@ CREATE TABLE public.branch_daily_closure_payments (
 );
 
 -- Table: branch_daily_closures
-CREATE TABLE public.branch_daily_closures (
+CREATE TABLE IF NOT EXISTS public.branch_daily_closures (
     id integer NOT NULL,
     branch_id character varying NOT NULL,
     closure_date text NOT NULL,
@@ -490,7 +490,7 @@ CREATE TABLE public.branch_daily_closures (
 );
 
 -- Table: branch_daily_sales
-CREATE TABLE public.branch_daily_sales (
+CREATE TABLE IF NOT EXISTS public.branch_daily_sales (
     id integer NOT NULL,
     branch_id character varying NOT NULL,
     sales_date text NOT NULL,
@@ -511,7 +511,7 @@ CREATE TABLE public.branch_daily_sales (
 );
 
 -- Table: branch_employees
-CREATE TABLE public.branch_employees (
+CREATE TABLE IF NOT EXISTS public.branch_employees (
     id integer NOT NULL,
     branch_id character varying NOT NULL,
     employee_name text NOT NULL,
@@ -549,7 +549,7 @@ CREATE TABLE public.branch_employees (
 );
 
 -- Table: branch_monthly_targets
-CREATE TABLE public.branch_monthly_targets (
+CREATE TABLE IF NOT EXISTS public.branch_monthly_targets (
     id integer NOT NULL,
     branch_id character varying NOT NULL,
     year_month text NOT NULL,
@@ -565,7 +565,7 @@ CREATE TABLE public.branch_monthly_targets (
 );
 
 -- Table: branch_shift_profiles
-CREATE TABLE public.branch_shift_profiles (
+CREATE TABLE IF NOT EXISTS public.branch_shift_profiles (
     id integer NOT NULL,
     branch_id character varying NOT NULL,
     shift_code text NOT NULL,
@@ -582,7 +582,7 @@ CREATE TABLE public.branch_shift_profiles (
 );
 
 -- Table: branch_shifts
-CREATE TABLE public.branch_shifts (
+CREATE TABLE IF NOT EXISTS public.branch_shifts (
     id integer NOT NULL,
     branch_id character varying NOT NULL,
     shift_type text NOT NULL,
@@ -617,7 +617,7 @@ CREATE TABLE public.branch_shifts (
 );
 
 -- Table: branch_stock
-CREATE TABLE public.branch_stock (
+CREATE TABLE IF NOT EXISTS public.branch_stock (
     id integer NOT NULL,
     branch_id character varying NOT NULL,
     item_id integer NOT NULL,
@@ -628,7 +628,7 @@ CREATE TABLE public.branch_stock (
 );
 
 -- Table: branches
-CREATE TABLE public.branches (
+CREATE TABLE IF NOT EXISTS public.branches (
     id character varying NOT NULL,
     name text NOT NULL,
     created_at timestamp without time zone DEFAULT now() NOT NULL,
@@ -639,7 +639,7 @@ CREATE TABLE public.branches (
 );
 
 -- Table: campaign_budget_allocations
-CREATE TABLE public.campaign_budget_allocations (
+CREATE TABLE IF NOT EXISTS public.campaign_budget_allocations (
     id integer NOT NULL,
     campaign_id integer NOT NULL,
     branch_id character varying NOT NULL,
@@ -651,7 +651,7 @@ CREATE TABLE public.campaign_budget_allocations (
 );
 
 -- Table: campaign_expenses
-CREATE TABLE public.campaign_expenses (
+CREATE TABLE IF NOT EXISTS public.campaign_expenses (
     id integer NOT NULL,
     campaign_id integer,
     influencer_id integer,
@@ -678,7 +678,7 @@ CREATE TABLE public.campaign_expenses (
 );
 
 -- Table: campaign_goals
-CREATE TABLE public.campaign_goals (
+CREATE TABLE IF NOT EXISTS public.campaign_goals (
     id integer NOT NULL,
     campaign_id integer NOT NULL,
     goal_type text NOT NULL,
@@ -693,7 +693,7 @@ CREATE TABLE public.campaign_goals (
 );
 
 -- Table: capital_transactions
-CREATE TABLE public.capital_transactions (
+CREATE TABLE IF NOT EXISTS public.capital_transactions (
     id integer NOT NULL,
     transaction_number text NOT NULL,
     transaction_type text NOT NULL,
@@ -721,7 +721,7 @@ CREATE TABLE public.capital_transactions (
 );
 
 -- Table: cashier_daily_challenges
-CREATE TABLE public.cashier_daily_challenges (
+CREATE TABLE IF NOT EXISTS public.cashier_daily_challenges (
     id integer NOT NULL,
     name text NOT NULL,
     challenge_type text NOT NULL,
@@ -741,7 +741,7 @@ CREATE TABLE public.cashier_daily_challenges (
 );
 
 -- Table: cashier_incentive_statements
-CREATE TABLE public.cashier_incentive_statements (
+CREATE TABLE IF NOT EXISTS public.cashier_incentive_statements (
     id integer NOT NULL,
     statement_number text NOT NULL,
     cashier_id character varying NOT NULL,
@@ -771,7 +771,7 @@ CREATE TABLE public.cashier_incentive_statements (
 );
 
 -- Table: cashier_payment_breakdowns
-CREATE TABLE public.cashier_payment_breakdowns (
+CREATE TABLE IF NOT EXISTS public.cashier_payment_breakdowns (
     id integer NOT NULL,
     journal_id integer NOT NULL,
     payment_method text NOT NULL,
@@ -787,7 +787,7 @@ CREATE TABLE public.cashier_payment_breakdowns (
 );
 
 -- Table: cashier_points_ledger
-CREATE TABLE public.cashier_points_ledger (
+CREATE TABLE IF NOT EXISTS public.cashier_points_ledger (
     id integer NOT NULL,
     cashier_id character varying NOT NULL,
     branch_id character varying NOT NULL,
@@ -807,7 +807,7 @@ CREATE TABLE public.cashier_points_ledger (
 );
 
 -- Table: cashier_product_sales
-CREATE TABLE public.cashier_product_sales (
+CREATE TABLE IF NOT EXISTS public.cashier_product_sales (
     id integer NOT NULL,
     cashier_id character varying NOT NULL,
     branch_id character varying NOT NULL,
@@ -824,7 +824,7 @@ CREATE TABLE public.cashier_product_sales (
 );
 
 -- Table: cashier_sales_journals
-CREATE TABLE public.cashier_sales_journals (
+CREATE TABLE IF NOT EXISTS public.cashier_sales_journals (
     id integer NOT NULL,
     branch_id character varying NOT NULL,
     shift_id integer,
@@ -869,7 +869,7 @@ CREATE TABLE public.cashier_sales_journals (
 );
 
 -- Table: cashier_shift_performance
-CREATE TABLE public.cashier_shift_performance (
+CREATE TABLE IF NOT EXISTS public.cashier_shift_performance (
     id integer NOT NULL,
     journal_id integer,
     cashier_id character varying NOT NULL,
@@ -893,7 +893,7 @@ CREATE TABLE public.cashier_shift_performance (
 );
 
 -- Table: cashier_shift_targets
-CREATE TABLE public.cashier_shift_targets (
+CREATE TABLE IF NOT EXISTS public.cashier_shift_targets (
     id integer NOT NULL,
     cashier_id character varying(255) NOT NULL,
     branch_id character varying(255) NOT NULL,
@@ -913,7 +913,7 @@ CREATE TABLE public.cashier_shift_targets (
 );
 
 -- Table: cashier_signatures
-CREATE TABLE public.cashier_signatures (
+CREATE TABLE IF NOT EXISTS public.cashier_signatures (
     id integer NOT NULL,
     journal_id integer NOT NULL,
     signature_type text NOT NULL,
@@ -926,7 +926,7 @@ CREATE TABLE public.cashier_signatures (
 );
 
 -- Table: chart_of_accounts
-CREATE TABLE public.chart_of_accounts (
+CREATE TABLE IF NOT EXISTS public.chart_of_accounts (
     id integer NOT NULL,
     account_code text NOT NULL,
     account_name text NOT NULL,
@@ -940,7 +940,7 @@ CREATE TABLE public.chart_of_accounts (
 );
 
 -- Table: checklist_items
-CREATE TABLE public.checklist_items (
+CREATE TABLE IF NOT EXISTS public.checklist_items (
     id integer NOT NULL,
     template_id integer NOT NULL,
     title text NOT NULL,
@@ -955,7 +955,7 @@ CREATE TABLE public.checklist_items (
 );
 
 -- Table: checklist_templates
-CREATE TABLE public.checklist_templates (
+CREATE TABLE IF NOT EXISTS public.checklist_templates (
     id integer NOT NULL,
     name text NOT NULL,
     name_en text,
@@ -972,7 +972,7 @@ CREATE TABLE public.checklist_templates (
 );
 
 -- Table: commission_calculations
-CREATE TABLE public.commission_calculations (
+CREATE TABLE IF NOT EXISTS public.commission_calculations (
     id integer NOT NULL,
     cashier_id character varying,
     branch_id character varying,
@@ -997,7 +997,7 @@ CREATE TABLE public.commission_calculations (
 );
 
 -- Table: commission_rates
-CREATE TABLE public.commission_rates (
+CREATE TABLE IF NOT EXISTS public.commission_rates (
     id integer NOT NULL,
     name text NOT NULL,
     description text,
@@ -1017,7 +1017,7 @@ CREATE TABLE public.commission_rates (
 );
 
 -- Table: committee_memberships
-CREATE TABLE public.committee_memberships (
+CREATE TABLE IF NOT EXISTS public.committee_memberships (
     id integer NOT NULL,
     committee_id integer NOT NULL,
     board_member_id integer NOT NULL,
@@ -1030,7 +1030,7 @@ CREATE TABLE public.committee_memberships (
 );
 
 -- Table: community_discounts
-CREATE TABLE public.community_discounts (
+CREATE TABLE IF NOT EXISTS public.community_discounts (
     id integer NOT NULL,
     code text NOT NULL,
     name text NOT NULL,
@@ -1056,7 +1056,7 @@ CREATE TABLE public.community_discounts (
 );
 
 -- Table: comparison_status_history
-CREATE TABLE public.comparison_status_history (
+CREATE TABLE IF NOT EXISTS public.comparison_status_history (
     id integer NOT NULL,
     comparison_id integer NOT NULL,
     previous_status text,
@@ -1067,7 +1067,7 @@ CREATE TABLE public.comparison_status_history (
 );
 
 -- Table: comparison_summaries
-CREATE TABLE public.comparison_summaries (
+CREATE TABLE IF NOT EXISTS public.comparison_summaries (
     id integer NOT NULL,
     branch_id character varying NOT NULL,
     period_type text NOT NULL,
@@ -1091,7 +1091,7 @@ CREATE TABLE public.comparison_summaries (
 );
 
 -- Table: comparison_uploads
-CREATE TABLE public.comparison_uploads (
+CREATE TABLE IF NOT EXISTS public.comparison_uploads (
     id integer NOT NULL,
     branch_id character varying NOT NULL,
     file_name text NOT NULL,
@@ -1109,7 +1109,7 @@ CREATE TABLE public.comparison_uploads (
 );
 
 -- Table: compliance_history
-CREATE TABLE public.compliance_history (
+CREATE TABLE IF NOT EXISTS public.compliance_history (
     id integer NOT NULL,
     requirement_id integer NOT NULL,
     action text NOT NULL,
@@ -1128,7 +1128,7 @@ CREATE TABLE public.compliance_history (
 );
 
 -- Table: compliance_requirements
-CREATE TABLE public.compliance_requirements (
+CREATE TABLE IF NOT EXISTS public.compliance_requirements (
     id integer NOT NULL,
     requirement_code text NOT NULL,
     title text NOT NULL,
@@ -1158,7 +1158,7 @@ CREATE TABLE public.compliance_requirements (
 );
 
 -- Table: construction_categories
-CREATE TABLE public.construction_categories (
+CREATE TABLE IF NOT EXISTS public.construction_categories (
     id integer NOT NULL,
     name text NOT NULL,
     slug text NOT NULL,
@@ -1167,7 +1167,7 @@ CREATE TABLE public.construction_categories (
 );
 
 -- Table: construction_contracts
-CREATE TABLE public.construction_contracts (
+CREATE TABLE IF NOT EXISTS public.construction_contracts (
     id integer NOT NULL,
     project_id integer NOT NULL,
     contractor_id integer NOT NULL,
@@ -1190,7 +1190,7 @@ CREATE TABLE public.construction_contracts (
 );
 
 -- Table: construction_projects
-CREATE TABLE public.construction_projects (
+CREATE TABLE IF NOT EXISTS public.construction_projects (
     id integer NOT NULL,
     branch_id character varying NOT NULL,
     title text NOT NULL,
@@ -1208,7 +1208,7 @@ CREATE TABLE public.construction_projects (
 );
 
 -- Table: contract_items
-CREATE TABLE public.contract_items (
+CREATE TABLE IF NOT EXISTS public.contract_items (
     id integer NOT NULL,
     contract_id integer NOT NULL,
     category_id integer,
@@ -1225,7 +1225,7 @@ CREATE TABLE public.contract_items (
 );
 
 -- Table: contract_payments
-CREATE TABLE public.contract_payments (
+CREATE TABLE IF NOT EXISTS public.contract_payments (
     id integer NOT NULL,
     contract_id integer NOT NULL,
     payment_request_id integer,
@@ -1239,7 +1239,7 @@ CREATE TABLE public.contract_payments (
 );
 
 -- Table: contractors
-CREATE TABLE public.contractors (
+CREATE TABLE IF NOT EXISTS public.contractors (
     id integer NOT NULL,
     name text NOT NULL,
     phone text,
@@ -1252,7 +1252,7 @@ CREATE TABLE public.contractors (
 );
 
 -- Table: daily_comparisons
-CREATE TABLE public.daily_comparisons (
+CREATE TABLE IF NOT EXISTS public.daily_comparisons (
     id integer NOT NULL,
     branch_id character varying NOT NULL,
     comparison_date date NOT NULL,
@@ -1277,7 +1277,7 @@ CREATE TABLE public.daily_comparisons (
 );
 
 -- Table: daily_operations_summary
-CREATE TABLE public.daily_operations_summary (
+CREATE TABLE IF NOT EXISTS public.daily_operations_summary (
     id integer NOT NULL,
     branch_id character varying NOT NULL,
     date text NOT NULL,
@@ -1295,7 +1295,7 @@ CREATE TABLE public.daily_operations_summary (
 );
 
 -- Table: daily_production_batches
-CREATE TABLE public.daily_production_batches (
+CREATE TABLE IF NOT EXISTS public.daily_production_batches (
     id integer NOT NULL,
     branch_id character varying NOT NULL,
     product_id integer,
@@ -1322,7 +1322,7 @@ CREATE TABLE public.daily_production_batches (
 );
 
 -- Table: daily_sales_data
-CREATE TABLE public.daily_sales_data (
+CREATE TABLE IF NOT EXISTS public.daily_sales_data (
     id integer NOT NULL,
     branch_id character varying NOT NULL,
     sales_date date NOT NULL,
@@ -1336,7 +1336,7 @@ CREATE TABLE public.daily_sales_data (
 );
 
 -- Table: daily_waste_log
-CREATE TABLE public.daily_waste_log (
+CREATE TABLE IF NOT EXISTS public.daily_waste_log (
     id integer NOT NULL,
     shift_id integer NOT NULL,
     product_name text NOT NULL,
@@ -1352,7 +1352,7 @@ CREATE TABLE public.daily_waste_log (
 );
 
 -- Table: data_import_jobs
-CREATE TABLE public.data_import_jobs (
+CREATE TABLE IF NOT EXISTS public.data_import_jobs (
     id integer NOT NULL,
     source_system text NOT NULL,
     target_module text NOT NULL,
@@ -1369,7 +1369,7 @@ CREATE TABLE public.data_import_jobs (
 );
 
 -- Table: departments
-CREATE TABLE public.departments (
+CREATE TABLE IF NOT EXISTS public.departments (
     id integer NOT NULL,
     name text NOT NULL,
     code character varying(50) NOT NULL,
@@ -1380,7 +1380,7 @@ CREATE TABLE public.departments (
 );
 
 -- Table: disclosures
-CREATE TABLE public.disclosures (
+CREATE TABLE IF NOT EXISTS public.disclosures (
     id integer NOT NULL,
     disclosure_number text NOT NULL,
     disclosure_type text NOT NULL,
@@ -1415,7 +1415,7 @@ CREATE TABLE public.disclosures (
 );
 
 -- Table: discount_usage_logs
-CREATE TABLE public.discount_usage_logs (
+CREATE TABLE IF NOT EXISTS public.discount_usage_logs (
     id integer NOT NULL,
     discount_id integer NOT NULL,
     branch_id character varying,
@@ -1430,7 +1430,7 @@ CREATE TABLE public.discount_usage_logs (
 );
 
 -- Table: display_bar_daily_summary
-CREATE TABLE public.display_bar_daily_summary (
+CREATE TABLE IF NOT EXISTS public.display_bar_daily_summary (
     id integer NOT NULL,
     branch_id character varying NOT NULL,
     product_id integer NOT NULL,
@@ -1446,7 +1446,7 @@ CREATE TABLE public.display_bar_daily_summary (
 );
 
 -- Table: display_bar_receipts
-CREATE TABLE public.display_bar_receipts (
+CREATE TABLE IF NOT EXISTS public.display_bar_receipts (
     id integer NOT NULL,
     branch_id character varying NOT NULL,
     product_id integer NOT NULL,
@@ -1461,7 +1461,7 @@ CREATE TABLE public.display_bar_receipts (
 );
 
 -- Table: dividend_distributions
-CREATE TABLE public.dividend_distributions (
+CREATE TABLE IF NOT EXISTS public.dividend_distributions (
     id integer NOT NULL,
     distribution_number text NOT NULL,
     fiscal_year text NOT NULL,
@@ -1484,7 +1484,7 @@ CREATE TABLE public.dividend_distributions (
 );
 
 -- Table: document_access_logs
-CREATE TABLE public.document_access_logs (
+CREATE TABLE IF NOT EXISTS public.document_access_logs (
     id integer NOT NULL,
     document_id integer NOT NULL,
     user_id character varying,
@@ -1498,7 +1498,7 @@ CREATE TABLE public.document_access_logs (
 );
 
 -- Table: document_categories
-CREATE TABLE public.document_categories (
+CREATE TABLE IF NOT EXISTS public.document_categories (
     id integer NOT NULL,
     name text NOT NULL,
     name_en text,
@@ -1511,7 +1511,7 @@ CREATE TABLE public.document_categories (
 );
 
 -- Table: document_folders
-CREATE TABLE public.document_folders (
+CREATE TABLE IF NOT EXISTS public.document_folders (
     id integer NOT NULL,
     name text NOT NULL,
     name_en text,
@@ -1527,7 +1527,7 @@ CREATE TABLE public.document_folders (
 );
 
 -- Table: document_shares
-CREATE TABLE public.document_shares (
+CREATE TABLE IF NOT EXISTS public.document_shares (
     id integer NOT NULL,
     document_id integer NOT NULL,
     folder_id integer,
@@ -1548,7 +1548,7 @@ CREATE TABLE public.document_shares (
 );
 
 -- Table: document_versions
-CREATE TABLE public.document_versions (
+CREATE TABLE IF NOT EXISTS public.document_versions (
     id integer NOT NULL,
     document_id integer NOT NULL,
     version_number integer NOT NULL,
@@ -1565,7 +1565,7 @@ CREATE TABLE public.document_versions (
 );
 
 -- Table: documents
-CREATE TABLE public.documents (
+CREATE TABLE IF NOT EXISTS public.documents (
     id integer NOT NULL,
     branch_id character varying,
     folder_id integer,
@@ -1610,7 +1610,7 @@ CREATE TABLE public.documents (
 );
 
 -- Table: employee_schedules
-CREATE TABLE public.employee_schedules (
+CREATE TABLE IF NOT EXISTS public.employee_schedules (
     id integer NOT NULL,
     period_id integer,
     employee_id character varying NOT NULL,
@@ -1631,7 +1631,7 @@ CREATE TABLE public.employee_schedules (
 );
 
 -- Table: employee_settings
-CREATE TABLE public.employee_settings (
+CREATE TABLE IF NOT EXISTS public.employee_settings (
     id integer NOT NULL,
     category text NOT NULL,
     value text NOT NULL,
@@ -1647,7 +1647,7 @@ CREATE TABLE public.employee_settings (
 );
 
 -- Table: employee_transfer_requests
-CREATE TABLE public.employee_transfer_requests (
+CREATE TABLE IF NOT EXISTS public.employee_transfer_requests (
     id integer NOT NULL,
     employee_id integer NOT NULL,
     source_branch_id character varying NOT NULL,
@@ -1666,7 +1666,7 @@ CREATE TABLE public.employee_transfer_requests (
 );
 
 -- Table: exec_correspondence
-CREATE TABLE public.exec_correspondence (
+CREATE TABLE IF NOT EXISTS public.exec_correspondence (
     id integer NOT NULL,
     branch_id character varying(255),
     ref_number text NOT NULL,
@@ -1704,7 +1704,7 @@ CREATE TABLE public.exec_correspondence (
 );
 
 -- Table: exec_meeting_attendees
-CREATE TABLE public.exec_meeting_attendees (
+CREATE TABLE IF NOT EXISTS public.exec_meeting_attendees (
     id integer NOT NULL,
     meeting_id integer NOT NULL,
     user_id character varying(255),
@@ -1721,7 +1721,7 @@ CREATE TABLE public.exec_meeting_attendees (
 );
 
 -- Table: exec_meetings
-CREATE TABLE public.exec_meetings (
+CREATE TABLE IF NOT EXISTS public.exec_meetings (
     id integer NOT NULL,
     branch_id character varying(255),
     title text NOT NULL,
@@ -1748,7 +1748,7 @@ CREATE TABLE public.exec_meetings (
 );
 
 -- Table: exec_notifications
-CREATE TABLE public.exec_notifications (
+CREATE TABLE IF NOT EXISTS public.exec_notifications (
     id integer NOT NULL,
     user_id character varying(255),
     branch_id character varying(255),
@@ -1767,7 +1767,7 @@ CREATE TABLE public.exec_notifications (
 );
 
 -- Table: exec_task_comments
-CREATE TABLE public.exec_task_comments (
+CREATE TABLE IF NOT EXISTS public.exec_task_comments (
     id integer NOT NULL,
     task_id integer NOT NULL,
     user_id character varying(255),
@@ -1777,7 +1777,7 @@ CREATE TABLE public.exec_task_comments (
 );
 
 -- Table: exec_tasks
-CREATE TABLE public.exec_tasks (
+CREATE TABLE IF NOT EXISTS public.exec_tasks (
     id integer NOT NULL,
     branch_id character varying(255),
     title text NOT NULL,
@@ -1805,7 +1805,7 @@ CREATE TABLE public.exec_tasks (
 );
 
 -- Table: external_integrations
-CREATE TABLE public.external_integrations (
+CREATE TABLE IF NOT EXISTS public.external_integrations (
     id integer NOT NULL,
     name text NOT NULL,
     type text NOT NULL,
@@ -1817,7 +1817,7 @@ CREATE TABLE public.external_integrations (
 );
 
 -- Table: financial_cogs
-CREATE TABLE public.financial_cogs (
+CREATE TABLE IF NOT EXISTS public.financial_cogs (
     id integer NOT NULL,
     period_id integer NOT NULL,
     item_type text NOT NULL,
@@ -1829,7 +1829,7 @@ CREATE TABLE public.financial_cogs (
 );
 
 -- Table: financial_fixed_costs
-CREATE TABLE public.financial_fixed_costs (
+CREATE TABLE IF NOT EXISTS public.financial_fixed_costs (
     id integer NOT NULL,
     period_id integer NOT NULL,
     cost_type text NOT NULL,
@@ -1839,7 +1839,7 @@ CREATE TABLE public.financial_fixed_costs (
 );
 
 -- Table: financial_metrics
-CREATE TABLE public.financial_metrics (
+CREATE TABLE IF NOT EXISTS public.financial_metrics (
     id integer NOT NULL,
     period_id integer NOT NULL,
     total_revenue real DEFAULT 0,
@@ -1872,7 +1872,7 @@ CREATE TABLE public.financial_metrics (
 );
 
 -- Table: financial_operating_expenses
-CREATE TABLE public.financial_operating_expenses (
+CREATE TABLE IF NOT EXISTS public.financial_operating_expenses (
     id integer NOT NULL,
     period_id integer NOT NULL,
     expense_type text NOT NULL,
@@ -1882,7 +1882,7 @@ CREATE TABLE public.financial_operating_expenses (
 );
 
 -- Table: financial_periods
-CREATE TABLE public.financial_periods (
+CREATE TABLE IF NOT EXISTS public.financial_periods (
     id integer NOT NULL,
     branch_id character varying NOT NULL,
     period_type text DEFAULT 'monthly'::text NOT NULL,
@@ -1899,7 +1899,7 @@ CREATE TABLE public.financial_periods (
 );
 
 -- Table: financial_sales
-CREATE TABLE public.financial_sales (
+CREATE TABLE IF NOT EXISTS public.financial_sales (
     id integer NOT NULL,
     period_id integer NOT NULL,
     channel text NOT NULL,
@@ -1914,7 +1914,7 @@ CREATE TABLE public.financial_sales (
 );
 
 -- Table: finished_goods_inventory
-CREATE TABLE public.finished_goods_inventory (
+CREATE TABLE IF NOT EXISTS public.finished_goods_inventory (
     id integer NOT NULL,
     branch_id character varying NOT NULL,
     product_id integer,
@@ -1930,7 +1930,7 @@ CREATE TABLE public.finished_goods_inventory (
 );
 
 -- Table: finished_goods_transfers
-CREATE TABLE public.finished_goods_transfers (
+CREATE TABLE IF NOT EXISTS public.finished_goods_transfers (
     id integer NOT NULL,
     inventory_id integer NOT NULL,
     source_branch_id character varying NOT NULL,
@@ -1950,7 +1950,7 @@ CREATE TABLE public.finished_goods_transfers (
 );
 
 -- Table: governance_meetings
-CREATE TABLE public.governance_meetings (
+CREATE TABLE IF NOT EXISTS public.governance_meetings (
     id integer NOT NULL,
     meeting_number text NOT NULL,
     meeting_type text NOT NULL,
@@ -1984,7 +1984,7 @@ CREATE TABLE public.governance_meetings (
 );
 
 -- Table: incentive_awards
-CREATE TABLE public.incentive_awards (
+CREATE TABLE IF NOT EXISTS public.incentive_awards (
     id integer NOT NULL,
     award_type text NOT NULL,
     branch_id character varying,
@@ -2010,7 +2010,7 @@ CREATE TABLE public.incentive_awards (
 );
 
 -- Table: incentive_tiers
-CREATE TABLE public.incentive_tiers (
+CREATE TABLE IF NOT EXISTS public.incentive_tiers (
     id integer NOT NULL,
     name text NOT NULL,
     description text,
@@ -2028,7 +2028,7 @@ CREATE TABLE public.incentive_tiers (
 );
 
 -- Table: influencer_campaign_links
-CREATE TABLE public.influencer_campaign_links (
+CREATE TABLE IF NOT EXISTS public.influencer_campaign_links (
     id integer NOT NULL,
     influencer_id integer NOT NULL,
     campaign_id integer NOT NULL,
@@ -2048,7 +2048,7 @@ CREATE TABLE public.influencer_campaign_links (
 );
 
 -- Table: influencer_contacts
-CREATE TABLE public.influencer_contacts (
+CREATE TABLE IF NOT EXISTS public.influencer_contacts (
     id integer NOT NULL,
     influencer_id integer NOT NULL,
     contact_type text NOT NULL,
@@ -2063,7 +2063,7 @@ CREATE TABLE public.influencer_contacts (
 );
 
 -- Table: influencer_contracts
-CREATE TABLE public.influencer_contracts (
+CREATE TABLE IF NOT EXISTS public.influencer_contracts (
     id integer NOT NULL,
     contract_number text NOT NULL,
     influencer_id integer,
@@ -2110,7 +2110,7 @@ CREATE TABLE public.influencer_contracts (
 );
 
 -- Table: influencer_payments
-CREATE TABLE public.influencer_payments (
+CREATE TABLE IF NOT EXISTS public.influencer_payments (
     id integer NOT NULL,
     influencer_id integer NOT NULL,
     campaign_id integer,
@@ -2132,7 +2132,7 @@ CREATE TABLE public.influencer_payments (
 );
 
 -- Table: interest_declarations
-CREATE TABLE public.interest_declarations (
+CREATE TABLE IF NOT EXISTS public.interest_declarations (
     id integer NOT NULL,
     declaration_number text NOT NULL,
     board_member_id integer NOT NULL,
@@ -2156,7 +2156,7 @@ CREATE TABLE public.interest_declarations (
 );
 
 -- Table: inventory_items
-CREATE TABLE public.inventory_items (
+CREATE TABLE IF NOT EXISTS public.inventory_items (
     id character varying NOT NULL,
     branch_id character varying NOT NULL,
     name text NOT NULL,
@@ -2176,7 +2176,7 @@ CREATE TABLE public.inventory_items (
 );
 
 -- Table: job_role_permissions
-CREATE TABLE public.job_role_permissions (
+CREATE TABLE IF NOT EXISTS public.job_role_permissions (
     id integer NOT NULL,
     job_title text NOT NULL,
     module text NOT NULL,
@@ -2187,7 +2187,7 @@ CREATE TABLE public.job_role_permissions (
 );
 
 -- Table: journal_attachments
-CREATE TABLE public.journal_attachments (
+CREATE TABLE IF NOT EXISTS public.journal_attachments (
     id integer NOT NULL,
     journal_id integer NOT NULL,
     attachment_type text NOT NULL,
@@ -2201,7 +2201,7 @@ CREATE TABLE public.journal_attachments (
 );
 
 -- Table: journal_entry_lines
-CREATE TABLE public.journal_entry_lines (
+CREATE TABLE IF NOT EXISTS public.journal_entry_lines (
     id integer NOT NULL,
     journal_entry_id integer NOT NULL,
     line_number integer NOT NULL,
@@ -2216,7 +2216,7 @@ CREATE TABLE public.journal_entry_lines (
 );
 
 -- Table: marketing_alerts
-CREATE TABLE public.marketing_alerts (
+CREATE TABLE IF NOT EXISTS public.marketing_alerts (
     id integer NOT NULL,
     alert_type text NOT NULL,
     severity text NOT NULL,
@@ -2235,7 +2235,7 @@ CREATE TABLE public.marketing_alerts (
 );
 
 -- Table: marketing_assets
-CREATE TABLE public.marketing_assets (
+CREATE TABLE IF NOT EXISTS public.marketing_assets (
     id integer NOT NULL,
     name text NOT NULL,
     asset_type text NOT NULL,
@@ -2258,7 +2258,7 @@ CREATE TABLE public.marketing_assets (
 );
 
 -- Table: marketing_calendar_events
-CREATE TABLE public.marketing_calendar_events (
+CREATE TABLE IF NOT EXISTS public.marketing_calendar_events (
     id integer NOT NULL,
     title text NOT NULL,
     description text,
@@ -2280,7 +2280,7 @@ CREATE TABLE public.marketing_calendar_events (
 );
 
 -- Table: marketing_campaigns
-CREATE TABLE public.marketing_campaigns (
+CREATE TABLE IF NOT EXISTS public.marketing_campaigns (
     id integer NOT NULL,
     name text NOT NULL,
     name_ar text,
@@ -2304,7 +2304,7 @@ CREATE TABLE public.marketing_campaigns (
 );
 
 -- Table: marketing_influencers
-CREATE TABLE public.marketing_influencers (
+CREATE TABLE IF NOT EXISTS public.marketing_influencers (
     id integer NOT NULL,
     name text NOT NULL,
     name_ar text,
@@ -2343,7 +2343,7 @@ CREATE TABLE public.marketing_influencers (
 );
 
 -- Table: marketing_performance_reports
-CREATE TABLE public.marketing_performance_reports (
+CREATE TABLE IF NOT EXISTS public.marketing_performance_reports (
     id integer NOT NULL,
     report_type text NOT NULL,
     period_start text NOT NULL,
@@ -2370,7 +2370,7 @@ CREATE TABLE public.marketing_performance_reports (
 );
 
 -- Table: marketing_task_activities
-CREATE TABLE public.marketing_task_activities (
+CREATE TABLE IF NOT EXISTS public.marketing_task_activities (
     id integer NOT NULL,
     task_id integer NOT NULL,
     activity_type text NOT NULL,
@@ -2382,7 +2382,7 @@ CREATE TABLE public.marketing_task_activities (
 );
 
 -- Table: marketing_tasks
-CREATE TABLE public.marketing_tasks (
+CREATE TABLE IF NOT EXISTS public.marketing_tasks (
     id integer NOT NULL,
     title text NOT NULL,
     description text,
@@ -2402,7 +2402,7 @@ CREATE TABLE public.marketing_tasks (
 );
 
 -- Table: marketing_team_members
-CREATE TABLE public.marketing_team_members (
+CREATE TABLE IF NOT EXISTS public.marketing_team_members (
     id integer NOT NULL,
     user_id character varying,
     role text NOT NULL,
@@ -2421,7 +2421,7 @@ CREATE TABLE public.marketing_team_members (
 );
 
 -- Table: material_transfer_items
-CREATE TABLE public.material_transfer_items (
+CREATE TABLE IF NOT EXISTS public.material_transfer_items (
     id integer NOT NULL,
     transfer_id integer NOT NULL,
     item_id integer NOT NULL,
@@ -2443,7 +2443,7 @@ CREATE TABLE public.material_transfer_items (
 );
 
 -- Table: material_transfers
-CREATE TABLE public.material_transfers (
+CREATE TABLE IF NOT EXISTS public.material_transfers (
     id integer NOT NULL,
     transfer_number text NOT NULL,
     request_id integer,
@@ -2478,7 +2478,7 @@ CREATE TABLE public.material_transfers (
 );
 
 -- Table: meeting_attendance
-CREATE TABLE public.meeting_attendance (
+CREATE TABLE IF NOT EXISTS public.meeting_attendance (
     id integer NOT NULL,
     meeting_id integer NOT NULL,
     attendee_type text NOT NULL,
@@ -2501,7 +2501,7 @@ CREATE TABLE public.meeting_attendance (
 );
 
 -- Table: meeting_minutes
-CREATE TABLE public.meeting_minutes (
+CREATE TABLE IF NOT EXISTS public.meeting_minutes (
     id integer NOT NULL,
     meeting_id integer NOT NULL,
     minutes_number text NOT NULL,
@@ -2529,7 +2529,7 @@ CREATE TABLE public.meeting_minutes (
 );
 
 -- Table: meeting_rsvps
-CREATE TABLE public.meeting_rsvps (
+CREATE TABLE IF NOT EXISTS public.meeting_rsvps (
     id integer NOT NULL,
     meeting_id integer NOT NULL,
     shareholder_id integer NOT NULL,
@@ -2544,7 +2544,7 @@ CREATE TABLE public.meeting_rsvps (
 );
 
 -- Table: notification_queue
-CREATE TABLE public.notification_queue (
+CREATE TABLE IF NOT EXISTS public.notification_queue (
     id integer NOT NULL,
     recipient_phone text NOT NULL,
     recipient_name text,
@@ -2559,7 +2559,7 @@ CREATE TABLE public.notification_queue (
 );
 
 -- Table: notification_templates
-CREATE TABLE public.notification_templates (
+CREATE TABLE IF NOT EXISTS public.notification_templates (
     id integer NOT NULL,
     name text NOT NULL,
     event_type text NOT NULL,
@@ -2570,7 +2570,7 @@ CREATE TABLE public.notification_templates (
 );
 
 -- Table: notifications
-CREATE TABLE public.notifications (
+CREATE TABLE IF NOT EXISTS public.notifications (
     id integer NOT NULL,
     branch_id character varying,
     user_id character varying,
@@ -2593,7 +2593,7 @@ CREATE TABLE public.notifications (
 );
 
 -- Table: org_job_roles
-CREATE TABLE public.org_job_roles (
+CREATE TABLE IF NOT EXISTS public.org_job_roles (
     id integer NOT NULL,
     slug text NOT NULL,
     parent_id integer,
@@ -2615,7 +2615,7 @@ CREATE TABLE public.org_job_roles (
 );
 
 -- Table: payment_requests
-CREATE TABLE public.payment_requests (
+CREATE TABLE IF NOT EXISTS public.payment_requests (
     id integer NOT NULL,
     project_id integer NOT NULL,
     contract_id integer,
@@ -2644,7 +2644,7 @@ CREATE TABLE public.payment_requests (
 );
 
 -- Table: performance_alerts
-CREATE TABLE public.performance_alerts (
+CREATE TABLE IF NOT EXISTS public.performance_alerts (
     id integer NOT NULL,
     cashier_id character varying(255),
     branch_id character varying(255) NOT NULL,
@@ -2660,7 +2660,7 @@ CREATE TABLE public.performance_alerts (
 );
 
 -- Table: permission_audit_logs
-CREATE TABLE public.permission_audit_logs (
+CREATE TABLE IF NOT EXISTS public.permission_audit_logs (
     id integer NOT NULL,
     target_user_id character varying NOT NULL,
     changed_by_user_id character varying NOT NULL,
@@ -2673,7 +2673,7 @@ CREATE TABLE public.permission_audit_logs (
 );
 
 -- Table: permission_check_logs
-CREATE TABLE public.permission_check_logs (
+CREATE TABLE IF NOT EXISTS public.permission_check_logs (
     id integer NOT NULL,
     user_id character varying NOT NULL,
     module character varying(100) NOT NULL,
@@ -2690,7 +2690,7 @@ CREATE TABLE public.permission_check_logs (
 );
 
 -- Table: permissions
-CREATE TABLE public.permissions (
+CREATE TABLE IF NOT EXISTS public.permissions (
     id integer NOT NULL,
     module character varying(100) NOT NULL,
     action character varying(50) NOT NULL,
@@ -2701,7 +2701,7 @@ CREATE TABLE public.permissions (
 );
 
 -- Table: pnl_branch_settings
-CREATE TABLE public.pnl_branch_settings (
+CREATE TABLE IF NOT EXISTS public.pnl_branch_settings (
     id integer NOT NULL,
     branch_id character varying NOT NULL,
     monthly_rent real DEFAULT 0,
@@ -2711,7 +2711,7 @@ CREATE TABLE public.pnl_branch_settings (
 );
 
 -- Table: pnl_monthly_inputs
-CREATE TABLE public.pnl_monthly_inputs (
+CREATE TABLE IF NOT EXISTS public.pnl_monthly_inputs (
     id integer NOT NULL,
     branch_id character varying NOT NULL,
     year integer NOT NULL,
@@ -2733,7 +2733,7 @@ CREATE TABLE public.pnl_monthly_inputs (
 );
 
 -- Table: point_settings
-CREATE TABLE public.point_settings (
+CREATE TABLE IF NOT EXISTS public.point_settings (
     id integer NOT NULL,
     point_value real DEFAULT 0.5 NOT NULL,
     max_daily_points integer,
@@ -2747,7 +2747,7 @@ CREATE TABLE public.point_settings (
 );
 
 -- Table: product_commissions
-CREATE TABLE public.product_commissions (
+CREATE TABLE IF NOT EXISTS public.product_commissions (
     id integer NOT NULL,
     product_name text NOT NULL,
     product_category text,
@@ -2767,7 +2767,7 @@ CREATE TABLE public.product_commissions (
 );
 
 -- Table: product_prices
-CREATE TABLE public.product_prices (
+CREATE TABLE IF NOT EXISTS public.product_prices (
     id integer NOT NULL,
     product_name text NOT NULL,
     branch_id character varying,
@@ -2781,7 +2781,7 @@ CREATE TABLE public.product_prices (
 );
 
 -- Table: product_sales_analytics
-CREATE TABLE public.product_sales_analytics (
+CREATE TABLE IF NOT EXISTS public.product_sales_analytics (
     id integer NOT NULL,
     upload_id integer NOT NULL,
     product_id integer,
@@ -2798,7 +2798,7 @@ CREATE TABLE public.product_sales_analytics (
 );
 
 -- Table: product_storage_settings
-CREATE TABLE public.product_storage_settings (
+CREATE TABLE IF NOT EXISTS public.product_storage_settings (
     id integer NOT NULL,
     product_name text NOT NULL,
     product_category text,
@@ -2816,7 +2816,7 @@ CREATE TABLE public.product_storage_settings (
 );
 
 -- Table: production_ai_plans
-CREATE TABLE public.production_ai_plans (
+CREATE TABLE IF NOT EXISTS public.production_ai_plans (
     id integer NOT NULL,
     branch_id character varying NOT NULL,
     plan_name text NOT NULL,
@@ -2839,7 +2839,7 @@ CREATE TABLE public.production_ai_plans (
 );
 
 -- Table: production_inventory_logs
-CREATE TABLE public.production_inventory_logs (
+CREATE TABLE IF NOT EXISTS public.production_inventory_logs (
     id integer NOT NULL,
     branch_id character varying NOT NULL,
     product_id integer,
@@ -2857,7 +2857,7 @@ CREATE TABLE public.production_inventory_logs (
 );
 
 -- Table: production_order_items
-CREATE TABLE public.production_order_items (
+CREATE TABLE IF NOT EXISTS public.production_order_items (
     id integer NOT NULL,
     order_id integer NOT NULL,
     product_id integer,
@@ -2883,7 +2883,7 @@ CREATE TABLE public.production_order_items (
 );
 
 -- Table: production_order_schedules
-CREATE TABLE public.production_order_schedules (
+CREATE TABLE IF NOT EXISTS public.production_order_schedules (
     id integer NOT NULL,
     order_id integer NOT NULL,
     scheduled_date text NOT NULL,
@@ -2899,7 +2899,7 @@ CREATE TABLE public.production_order_schedules (
 );
 
 -- Table: production_orders
-CREATE TABLE public.production_orders (
+CREATE TABLE IF NOT EXISTS public.production_orders (
     id integer NOT NULL,
     order_number text,
     branch_id character varying NOT NULL,
@@ -2922,7 +2922,7 @@ CREATE TABLE public.production_orders (
 );
 
 -- Table: products
-CREATE TABLE public.products (
+CREATE TABLE IF NOT EXISTS public.products (
     id integer NOT NULL,
     name text NOT NULL,
     category text NOT NULL,
@@ -2942,7 +2942,7 @@ CREATE TABLE public.products (
 );
 
 -- Table: project_budget_allocations
-CREATE TABLE public.project_budget_allocations (
+CREATE TABLE IF NOT EXISTS public.project_budget_allocations (
     id integer NOT NULL,
     project_id integer NOT NULL,
     category_id integer,
@@ -2953,7 +2953,7 @@ CREATE TABLE public.project_budget_allocations (
 );
 
 -- Table: project_work_items
-CREATE TABLE public.project_work_items (
+CREATE TABLE IF NOT EXISTS public.project_work_items (
     id integer NOT NULL,
     project_id integer NOT NULL,
     category_id integer,
@@ -2972,7 +2972,7 @@ CREATE TABLE public.project_work_items (
 );
 
 -- Table: proxy_votes
-CREATE TABLE public.proxy_votes (
+CREATE TABLE IF NOT EXISTS public.proxy_votes (
     id integer NOT NULL,
     proxy_number text NOT NULL,
     meeting_id integer NOT NULL,
@@ -2998,7 +2998,7 @@ CREATE TABLE public.proxy_votes (
 );
 
 -- Table: purchasing_request_items
-CREATE TABLE public.purchasing_request_items (
+CREATE TABLE IF NOT EXISTS public.purchasing_request_items (
     id integer NOT NULL,
     purchasing_request_id integer NOT NULL,
     item_id integer,
@@ -3015,7 +3015,7 @@ CREATE TABLE public.purchasing_request_items (
 );
 
 -- Table: purchasing_requests
-CREATE TABLE public.purchasing_requests (
+CREATE TABLE IF NOT EXISTS public.purchasing_requests (
     id integer NOT NULL,
     request_number text NOT NULL,
     source_material_request_id integer,
@@ -3039,7 +3039,7 @@ CREATE TABLE public.purchasing_requests (
 );
 
 -- Table: quality_checks
-CREATE TABLE public.quality_checks (
+CREATE TABLE IF NOT EXISTS public.quality_checks (
     id integer NOT NULL,
     branch_id character varying NOT NULL,
     shift_id integer,
@@ -3060,7 +3060,7 @@ CREATE TABLE public.quality_checks (
 );
 
 -- Table: quorum_calculations
-CREATE TABLE public.quorum_calculations (
+CREATE TABLE IF NOT EXISTS public.quorum_calculations (
     id integer NOT NULL,
     meeting_id integer NOT NULL,
     calculation_type text NOT NULL,
@@ -3082,7 +3082,7 @@ CREATE TABLE public.quorum_calculations (
 );
 
 -- Table: resolution_signatures
-CREATE TABLE public.resolution_signatures (
+CREATE TABLE IF NOT EXISTS public.resolution_signatures (
     id integer NOT NULL,
     resolution_id integer NOT NULL,
     board_member_id integer,
@@ -3106,7 +3106,7 @@ CREATE TABLE public.resolution_signatures (
 );
 
 -- Table: resolution_votes
-CREATE TABLE public.resolution_votes (
+CREATE TABLE IF NOT EXISTS public.resolution_votes (
     id integer NOT NULL,
     resolution_id integer NOT NULL,
     voter_type text NOT NULL,
@@ -3128,7 +3128,7 @@ CREATE TABLE public.resolution_votes (
 );
 
 -- Table: role_permissions
-CREATE TABLE public.role_permissions (
+CREATE TABLE IF NOT EXISTS public.role_permissions (
     id integer NOT NULL,
     role_id integer NOT NULL,
     permission_id integer NOT NULL,
@@ -3137,7 +3137,7 @@ CREATE TABLE public.role_permissions (
 );
 
 -- Table: role_templates
-CREATE TABLE public.role_templates (
+CREATE TABLE IF NOT EXISTS public.role_templates (
     id integer NOT NULL,
     name text NOT NULL,
     slug character varying(50) NOT NULL,
@@ -3151,7 +3151,7 @@ CREATE TABLE public.role_templates (
 );
 
 -- Table: roles
-CREATE TABLE public.roles (
+CREATE TABLE IF NOT EXISTS public.roles (
     id integer NOT NULL,
     name text NOT NULL,
     slug character varying(50) NOT NULL,
@@ -3164,7 +3164,7 @@ CREATE TABLE public.roles (
 );
 
 -- Table: sales_data_uploads
-CREATE TABLE public.sales_data_uploads (
+CREATE TABLE IF NOT EXISTS public.sales_data_uploads (
     id integer NOT NULL,
     branch_id character varying NOT NULL,
     file_name text NOT NULL,
@@ -3184,7 +3184,7 @@ CREATE TABLE public.sales_data_uploads (
 );
 
 -- Table: saved_filters
-CREATE TABLE public.saved_filters (
+CREATE TABLE IF NOT EXISTS public.saved_filters (
     id integer NOT NULL,
     name text NOT NULL,
     filter_config text NOT NULL,
@@ -3192,7 +3192,7 @@ CREATE TABLE public.saved_filters (
 );
 
 -- Table: schedule_change_audit
-CREATE TABLE public.schedule_change_audit (
+CREATE TABLE IF NOT EXISTS public.schedule_change_audit (
     id integer NOT NULL,
     branch_id character varying NOT NULL,
     week_start_date text NOT NULL,
@@ -3209,7 +3209,7 @@ CREATE TABLE public.schedule_change_audit (
 );
 
 -- Table: schedule_periods
-CREATE TABLE public.schedule_periods (
+CREATE TABLE IF NOT EXISTS public.schedule_periods (
     id integer NOT NULL,
     branch_id character varying NOT NULL,
     period_type text NOT NULL,
@@ -3227,7 +3227,7 @@ CREATE TABLE public.schedule_periods (
 );
 
 -- Table: schedule_templates
-CREATE TABLE public.schedule_templates (
+CREATE TABLE IF NOT EXISTS public.schedule_templates (
     id integer NOT NULL,
     name text NOT NULL,
     description text,
@@ -3241,7 +3241,7 @@ CREATE TABLE public.schedule_templates (
 );
 
 -- Table: seasons_holidays
-CREATE TABLE public.seasons_holidays (
+CREATE TABLE IF NOT EXISTS public.seasons_holidays (
     id integer NOT NULL,
     name text NOT NULL,
     type text NOT NULL,
@@ -3262,7 +3262,7 @@ CREATE TABLE public.seasons_holidays (
 );
 
 -- Table: security_violation_alerts
-CREATE TABLE public.security_violation_alerts (
+CREATE TABLE IF NOT EXISTS public.security_violation_alerts (
     id integer NOT NULL,
     user_id character varying,
     violation_type character varying(50) NOT NULL,
@@ -3281,14 +3281,14 @@ CREATE TABLE public.security_violation_alerts (
 );
 
 -- Table: sessions
-CREATE TABLE public.sessions (
+CREATE TABLE IF NOT EXISTS public.sessions (
     sid character varying NOT NULL,
     sess jsonb NOT NULL,
     expire timestamp without time zone NOT NULL
 );
 
 -- Table: share_transfers
-CREATE TABLE public.share_transfers (
+CREATE TABLE IF NOT EXISTS public.share_transfers (
     id integer NOT NULL,
     transfer_number text NOT NULL,
     from_shareholder_id integer NOT NULL,
@@ -3311,7 +3311,7 @@ CREATE TABLE public.share_transfers (
 );
 
 -- Table: shareholder_dividends
-CREATE TABLE public.shareholder_dividends (
+CREATE TABLE IF NOT EXISTS public.shareholder_dividends (
     id integer NOT NULL,
     distribution_id integer NOT NULL,
     shareholder_id integer NOT NULL,
@@ -3329,7 +3329,7 @@ CREATE TABLE public.shareholder_dividends (
 );
 
 -- Table: shareholder_documents
-CREATE TABLE public.shareholder_documents (
+CREATE TABLE IF NOT EXISTS public.shareholder_documents (
     id integer NOT NULL,
     shareholder_id integer NOT NULL,
     document_type text NOT NULL,
@@ -3346,7 +3346,7 @@ CREATE TABLE public.shareholder_documents (
 );
 
 -- Table: shareholders
-CREATE TABLE public.shareholders (
+CREATE TABLE IF NOT EXISTS public.shareholders (
     id integer NOT NULL,
     shareholder_type text NOT NULL,
     full_name text NOT NULL,
@@ -3377,7 +3377,7 @@ CREATE TABLE public.shareholders (
 );
 
 -- Table: shift_audit_log
-CREATE TABLE public.shift_audit_log (
+CREATE TABLE IF NOT EXISTS public.shift_audit_log (
     id integer NOT NULL,
     shift_id integer NOT NULL,
     action text NOT NULL,
@@ -3394,7 +3394,7 @@ CREATE TABLE public.shift_audit_log (
 );
 
 -- Table: shift_checklist_responses
-CREATE TABLE public.shift_checklist_responses (
+CREATE TABLE IF NOT EXISTS public.shift_checklist_responses (
     id integer NOT NULL,
     shift_id integer NOT NULL,
     item_id integer NOT NULL,
@@ -3410,7 +3410,7 @@ CREATE TABLE public.shift_checklist_responses (
 );
 
 -- Table: shift_employees
-CREATE TABLE public.shift_employees (
+CREATE TABLE IF NOT EXISTS public.shift_employees (
     id integer NOT NULL,
     shift_id integer NOT NULL,
     employee_name text NOT NULL,
@@ -3423,7 +3423,7 @@ CREATE TABLE public.shift_employees (
 );
 
 -- Table: shift_performance_tracking
-CREATE TABLE public.shift_performance_tracking (
+CREATE TABLE IF NOT EXISTS public.shift_performance_tracking (
     id integer NOT NULL,
     branch_id character varying(255) NOT NULL,
     shift_type character varying(50) NOT NULL,
@@ -3439,7 +3439,7 @@ CREATE TABLE public.shift_performance_tracking (
 );
 
 -- Table: shift_photos
-CREATE TABLE public.shift_photos (
+CREATE TABLE IF NOT EXISTS public.shift_photos (
     id integer NOT NULL,
     shift_id integer NOT NULL,
     checklist_response_id integer,
@@ -3454,7 +3454,7 @@ CREATE TABLE public.shift_photos (
 );
 
 -- Table: shift_reminders
-CREATE TABLE public.shift_reminders (
+CREATE TABLE IF NOT EXISTS public.shift_reminders (
     id integer NOT NULL,
     branch_id character varying NOT NULL,
     reminder_type text NOT NULL,
@@ -3468,7 +3468,7 @@ CREATE TABLE public.shift_reminders (
 );
 
 -- Table: shift_signatures
-CREATE TABLE public.shift_signatures (
+CREATE TABLE IF NOT EXISTS public.shift_signatures (
     id integer NOT NULL,
     shift_id integer NOT NULL,
     signature_type text NOT NULL,
@@ -3481,7 +3481,7 @@ CREATE TABLE public.shift_signatures (
 );
 
 -- Table: shifts
-CREATE TABLE public.shifts (
+CREATE TABLE IF NOT EXISTS public.shifts (
     id integer NOT NULL,
     branch_id character varying NOT NULL,
     name text NOT NULL,
@@ -3498,7 +3498,7 @@ CREATE TABLE public.shifts (
 );
 
 -- Table: social_accounts
-CREATE TABLE public.social_accounts (
+CREATE TABLE IF NOT EXISTS public.social_accounts (
     id integer NOT NULL,
     platform text NOT NULL,
     account_id text,
@@ -3522,7 +3522,7 @@ CREATE TABLE public.social_accounts (
 );
 
 -- Table: social_content_templates
-CREATE TABLE public.social_content_templates (
+CREATE TABLE IF NOT EXISTS public.social_content_templates (
     id integer NOT NULL,
     name text NOT NULL,
     category text NOT NULL,
@@ -3540,7 +3540,7 @@ CREATE TABLE public.social_content_templates (
 );
 
 -- Table: social_initiatives
-CREATE TABLE public.social_initiatives (
+CREATE TABLE IF NOT EXISTS public.social_initiatives (
     id integer NOT NULL,
     title text NOT NULL,
     title_en text,
@@ -3568,7 +3568,7 @@ CREATE TABLE public.social_initiatives (
 );
 
 -- Table: social_post_metrics
-CREATE TABLE public.social_post_metrics (
+CREATE TABLE IF NOT EXISTS public.social_post_metrics (
     id integer NOT NULL,
     post_id integer NOT NULL,
     platform text NOT NULL,
@@ -3587,7 +3587,7 @@ CREATE TABLE public.social_post_metrics (
 );
 
 -- Table: social_posts
-CREATE TABLE public.social_posts (
+CREATE TABLE IF NOT EXISTS public.social_posts (
     id integer NOT NULL,
     title text,
     content text NOT NULL,
@@ -3617,7 +3617,7 @@ CREATE TABLE public.social_posts (
 );
 
 -- Table: social_schedule_slots
-CREATE TABLE public.social_schedule_slots (
+CREATE TABLE IF NOT EXISTS public.social_schedule_slots (
     id integer NOT NULL,
     platform text NOT NULL,
     day_of_week integer NOT NULL,
@@ -3629,7 +3629,7 @@ CREATE TABLE public.social_schedule_slots (
 );
 
 -- Table: system_audit_logs
-CREATE TABLE public.system_audit_logs (
+CREATE TABLE IF NOT EXISTS public.system_audit_logs (
     id integer NOT NULL,
     module text NOT NULL,
     entity_id text NOT NULL,
@@ -3644,7 +3644,7 @@ CREATE TABLE public.system_audit_logs (
 );
 
 -- Table: target_daily_allocations
-CREATE TABLE public.target_daily_allocations (
+CREATE TABLE IF NOT EXISTS public.target_daily_allocations (
     id integer NOT NULL,
     monthly_target_id integer NOT NULL,
     target_date text NOT NULL,
@@ -3659,7 +3659,7 @@ CREATE TABLE public.target_daily_allocations (
 );
 
 -- Table: target_shift_allocations
-CREATE TABLE public.target_shift_allocations (
+CREATE TABLE IF NOT EXISTS public.target_shift_allocations (
     id integer NOT NULL,
     daily_allocation_id integer NOT NULL,
     shift_type text NOT NULL,
@@ -3670,7 +3670,7 @@ CREATE TABLE public.target_shift_allocations (
 );
 
 -- Table: target_weight_profiles
-CREATE TABLE public.target_weight_profiles (
+CREATE TABLE IF NOT EXISTS public.target_weight_profiles (
     id integer NOT NULL,
     name text NOT NULL,
     description text,
@@ -3691,7 +3691,7 @@ CREATE TABLE public.target_weight_profiles (
 );
 
 -- Table: time_entries
-CREATE TABLE public.time_entries (
+CREATE TABLE IF NOT EXISTS public.time_entries (
     id integer NOT NULL,
     attendance_id integer,
     employee_id character varying NOT NULL,
@@ -3711,7 +3711,7 @@ CREATE TABLE public.time_entries (
 );
 
 -- Table: timesheet_report_entries
-CREATE TABLE public.timesheet_report_entries (
+CREATE TABLE IF NOT EXISTS public.timesheet_report_entries (
     id integer NOT NULL,
     report_id integer NOT NULL,
     date text NOT NULL,
@@ -3732,7 +3732,7 @@ CREATE TABLE public.timesheet_report_entries (
 );
 
 -- Table: timesheet_reports
-CREATE TABLE public.timesheet_reports (
+CREATE TABLE IF NOT EXISTS public.timesheet_reports (
     id integer NOT NULL,
     employee_id character varying NOT NULL,
     branch_id character varying NOT NULL,
@@ -3762,7 +3762,7 @@ CREATE TABLE public.timesheet_reports (
 );
 
 -- Table: transfer_approval_steps
-CREATE TABLE public.transfer_approval_steps (
+CREATE TABLE IF NOT EXISTS public.transfer_approval_steps (
     id integer NOT NULL,
     transfer_id integer NOT NULL,
     step_order integer NOT NULL,
@@ -3775,7 +3775,7 @@ CREATE TABLE public.transfer_approval_steps (
 );
 
 -- Table: transfer_history
-CREATE TABLE public.transfer_history (
+CREATE TABLE IF NOT EXISTS public.transfer_history (
     id integer NOT NULL,
     transfer_id integer NOT NULL,
     event_type text NOT NULL,
@@ -3785,7 +3785,7 @@ CREATE TABLE public.transfer_history (
 );
 
 -- Table: travel_expenses
-CREATE TABLE public.travel_expenses (
+CREATE TABLE IF NOT EXISTS public.travel_expenses (
     id integer NOT NULL,
     travel_request_id integer NOT NULL,
     expense_type text NOT NULL,
@@ -3806,7 +3806,7 @@ CREATE TABLE public.travel_expenses (
 );
 
 -- Table: travel_requests
-CREATE TABLE public.travel_requests (
+CREATE TABLE IF NOT EXISTS public.travel_requests (
     id integer NOT NULL,
     branch_id character varying,
     request_number text,
@@ -3862,7 +3862,7 @@ CREATE TABLE public.travel_requests (
 );
 
 -- Table: user_assignments
-CREATE TABLE public.user_assignments (
+CREATE TABLE IF NOT EXISTS public.user_assignments (
     id integer NOT NULL,
     user_id character varying NOT NULL,
     role_id integer NOT NULL,
@@ -3878,7 +3878,7 @@ CREATE TABLE public.user_assignments (
 );
 
 -- Table: user_branch_access
-CREATE TABLE public.user_branch_access (
+CREATE TABLE IF NOT EXISTS public.user_branch_access (
     id integer NOT NULL,
     user_id character varying NOT NULL,
     branch_id character varying NOT NULL,
@@ -3888,7 +3888,7 @@ CREATE TABLE public.user_branch_access (
 );
 
 -- Table: user_permission_overrides
-CREATE TABLE public.user_permission_overrides (
+CREATE TABLE IF NOT EXISTS public.user_permission_overrides (
     id integer NOT NULL,
     user_id character varying NOT NULL,
     permission_id integer NOT NULL,
@@ -3903,7 +3903,7 @@ CREATE TABLE public.user_permission_overrides (
 );
 
 -- Table: user_permissions
-CREATE TABLE public.user_permissions (
+CREATE TABLE IF NOT EXISTS public.user_permissions (
     id integer NOT NULL,
     user_id character varying NOT NULL,
     module text NOT NULL,
@@ -3913,7 +3913,7 @@ CREATE TABLE public.user_permissions (
 );
 
 -- Table: user_security_settings
-CREATE TABLE public.user_security_settings (
+CREATE TABLE IF NOT EXISTS public.user_security_settings (
     id integer NOT NULL,
     user_id character varying NOT NULL,
     two_factor_enabled boolean DEFAULT false NOT NULL,
@@ -3937,7 +3937,7 @@ CREATE TABLE public.user_security_settings (
 );
 
 -- Table: user_sessions
-CREATE TABLE public.user_sessions (
+CREATE TABLE IF NOT EXISTS public.user_sessions (
     id integer NOT NULL,
     session_id character varying(255) NOT NULL,
     user_id character varying NOT NULL,
@@ -3951,7 +3951,7 @@ CREATE TABLE public.user_sessions (
 );
 
 -- Table: users
-CREATE TABLE public.users (
+CREATE TABLE IF NOT EXISTS public.users (
     id character varying DEFAULT gen_random_uuid() NOT NULL,
     email character varying,
     first_name character varying,
@@ -3969,7 +3969,7 @@ CREATE TABLE public.users (
 );
 
 -- Table: visitor_logs
-CREATE TABLE public.visitor_logs (
+CREATE TABLE IF NOT EXISTS public.visitor_logs (
     id integer NOT NULL,
     branch_id character varying,
     visitor_id integer,
@@ -4006,7 +4006,7 @@ CREATE TABLE public.visitor_logs (
 );
 
 -- Table: visitors
-CREATE TABLE public.visitors (
+CREATE TABLE IF NOT EXISTS public.visitors (
     id integer NOT NULL,
     branch_id character varying,
     full_name text NOT NULL,
@@ -4028,7 +4028,7 @@ CREATE TABLE public.visitors (
 );
 
 -- Table: voting_audit_log
-CREATE TABLE public.voting_audit_log (
+CREATE TABLE IF NOT EXISTS public.voting_audit_log (
     id integer NOT NULL,
     resolution_id integer,
     meeting_id integer,
@@ -4051,7 +4051,7 @@ CREATE TABLE public.voting_audit_log (
 );
 
 -- Table: voting_tokens
-CREATE TABLE public.voting_tokens (
+CREATE TABLE IF NOT EXISTS public.voting_tokens (
     id integer NOT NULL,
     resolution_id integer NOT NULL,
     shareholder_id integer NOT NULL,
@@ -4072,7 +4072,7 @@ CREATE TABLE public.voting_tokens (
 );
 
 -- Table: warehouse_items
-CREATE TABLE public.warehouse_items (
+CREATE TABLE IF NOT EXISTS public.warehouse_items (
     id integer NOT NULL,
     name text NOT NULL,
     name_en text,
@@ -4093,7 +4093,7 @@ CREATE TABLE public.warehouse_items (
 );
 
 -- Table: warehouse_movement_logs
-CREATE TABLE public.warehouse_movement_logs (
+CREATE TABLE IF NOT EXISTS public.warehouse_movement_logs (
     id integer NOT NULL,
     item_id integer NOT NULL,
     branch_id character varying,
@@ -4110,7 +4110,7 @@ CREATE TABLE public.warehouse_movement_logs (
 );
 
 -- Table: warehouse_notifications
-CREATE TABLE public.warehouse_notifications (
+CREATE TABLE IF NOT EXISTS public.warehouse_notifications (
     id integer NOT NULL,
     type text NOT NULL,
     title text NOT NULL,
@@ -4130,7 +4130,7 @@ CREATE TABLE public.warehouse_notifications (
 );
 
 -- Table: waste_items
-CREATE TABLE public.waste_items (
+CREATE TABLE IF NOT EXISTS public.waste_items (
     id integer NOT NULL,
     waste_report_id integer NOT NULL,
     product_id integer NOT NULL,
@@ -4144,7 +4144,7 @@ CREATE TABLE public.waste_items (
 );
 
 -- Table: waste_reports
-CREATE TABLE public.waste_reports (
+CREATE TABLE IF NOT EXISTS public.waste_reports (
     id integer NOT NULL,
     branch_id character varying NOT NULL,
     report_date text NOT NULL,
@@ -4163,7 +4163,7 @@ CREATE TABLE public.waste_reports (
 );
 
 -- Table: waste_risk_alerts
-CREATE TABLE public.waste_risk_alerts (
+CREATE TABLE IF NOT EXISTS public.waste_risk_alerts (
     id integer NOT NULL,
     rule_id integer NOT NULL,
     branch_id character varying NOT NULL,
@@ -4183,7 +4183,7 @@ CREATE TABLE public.waste_risk_alerts (
 );
 
 -- Table: waste_risk_rules
-CREATE TABLE public.waste_risk_rules (
+CREATE TABLE IF NOT EXISTS public.waste_risk_rules (
     id integer NOT NULL,
     name text NOT NULL,
     branch_id character varying,
@@ -4199,7 +4199,7 @@ CREATE TABLE public.waste_risk_rules (
 );
 
 -- Table: weekly_schedule_locks
-CREATE TABLE public.weekly_schedule_locks (
+CREATE TABLE IF NOT EXISTS public.weekly_schedule_locks (
     id integer NOT NULL,
     branch_id character varying NOT NULL,
     week_start_date text NOT NULL,
@@ -4215,776 +4215,776 @@ CREATE TABLE public.weekly_schedule_locks (
 -- الفهارس - Indexes
 -- ============================================
 
-CREATE UNIQUE INDEX branch_stock_unique ON public.branch_stock USING btree (branch_id, item_id);
+CREATE UNIQUE INDEX IF NOT EXISTS branch_stock_unique ON public.branch_stock USING btree (branch_id, item_id);
 
-CREATE UNIQUE INDEX finished_goods_unique_idx ON public.finished_goods_inventory USING btree (branch_id, product_name_normalized, production_date);
+CREATE UNIQUE INDEX IF NOT EXISTS finished_goods_unique_idx ON public.finished_goods_inventory USING btree (branch_id, product_name_normalized, production_date);
 
-CREATE INDEX idx_approval_approver ON public.transfer_approval_steps USING btree (approver_id);
+CREATE INDEX IF NOT EXISTS idx_approval_approver ON public.transfer_approval_steps USING btree (approver_id);
 
-CREATE INDEX idx_approval_status ON public.transfer_approval_steps USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_approval_status ON public.transfer_approval_steps USING btree (status);
 
-CREATE INDEX idx_approval_transfer ON public.transfer_approval_steps USING btree (transfer_id);
+CREATE INDEX IF NOT EXISTS idx_approval_transfer ON public.transfer_approval_steps USING btree (transfer_id);
 
-CREATE INDEX idx_attendance_branch ON public.attendance_records USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_attendance_branch ON public.attendance_records USING btree (branch_id);
 
-CREATE INDEX idx_attendance_branch_employee ON public.attendance_records USING btree (branch_employee_id);
+CREATE INDEX IF NOT EXISTS idx_attendance_branch_employee ON public.attendance_records USING btree (branch_employee_id);
 
-CREATE INDEX idx_attendance_date ON public.attendance_records USING btree (attendance_date);
+CREATE INDEX IF NOT EXISTS idx_attendance_date ON public.attendance_records USING btree (attendance_date);
 
-CREATE INDEX idx_attendance_employee ON public.attendance_records USING btree (employee_id);
+CREATE INDEX IF NOT EXISTS idx_attendance_employee ON public.attendance_records USING btree (employee_id);
 
-CREATE INDEX idx_attendance_status ON public.attendance_records USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_attendance_status ON public.attendance_records USING btree (status);
 
-CREATE INDEX idx_attendance_summary_branch ON public.attendance_summary USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_attendance_summary_branch ON public.attendance_summary USING btree (branch_id);
 
-CREATE INDEX idx_attendance_summary_employee ON public.attendance_summary USING btree (employee_id);
+CREATE INDEX IF NOT EXISTS idx_attendance_summary_employee ON public.attendance_summary USING btree (employee_id);
 
-CREATE INDEX idx_attendance_summary_month ON public.attendance_summary USING btree (period_month);
+CREATE INDEX IF NOT EXISTS idx_attendance_summary_month ON public.attendance_summary USING btree (period_month);
 
-CREATE INDEX idx_beneficiary_org_partnership ON public.beneficiary_organizations USING btree (partnership_type);
+CREATE INDEX IF NOT EXISTS idx_beneficiary_org_partnership ON public.beneficiary_organizations USING btree (partnership_type);
 
-CREATE INDEX idx_beneficiary_org_status ON public.beneficiary_organizations USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_beneficiary_org_status ON public.beneficiary_organizations USING btree (status);
 
-CREATE INDEX idx_beneficiary_org_type ON public.beneficiary_organizations USING btree (organization_type);
+CREATE INDEX IF NOT EXISTS idx_beneficiary_org_type ON public.beneficiary_organizations USING btree (organization_type);
 
-CREATE INDEX idx_biometric_branch ON public.biometric_credentials USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_biometric_branch ON public.biometric_credentials USING btree (branch_id);
 
-CREATE INDEX idx_biometric_credential ON public.biometric_credentials USING btree (credential_id);
+CREATE INDEX IF NOT EXISTS idx_biometric_credential ON public.biometric_credentials USING btree (credential_id);
 
-CREATE INDEX idx_biometric_employee ON public.biometric_credentials USING btree (employee_id);
+CREATE INDEX IF NOT EXISTS idx_biometric_employee ON public.biometric_credentials USING btree (employee_id);
 
-CREATE INDEX idx_board_committees_status ON public.board_committees USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_board_committees_status ON public.board_committees USING btree (status);
 
-CREATE INDEX idx_board_committees_type ON public.board_committees USING btree (committee_type);
+CREATE INDEX IF NOT EXISTS idx_board_committees_type ON public.board_committees USING btree (committee_type);
 
-CREATE INDEX idx_board_member_training_member ON public.board_member_training USING btree (board_member_id);
+CREATE INDEX IF NOT EXISTS idx_board_member_training_member ON public.board_member_training USING btree (board_member_id);
 
-CREATE INDEX idx_board_member_training_status ON public.board_member_training USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_board_member_training_status ON public.board_member_training USING btree (status);
 
-CREATE INDEX idx_board_member_training_type ON public.board_member_training USING btree (training_type);
+CREATE INDEX IF NOT EXISTS idx_board_member_training_type ON public.board_member_training USING btree (training_type);
 
-CREATE INDEX idx_board_members_position ON public.board_members USING btree ("position");
+CREATE INDEX IF NOT EXISTS idx_board_members_position ON public.board_members USING btree ("position");
 
-CREATE INDEX idx_board_members_status ON public.board_members USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_board_members_status ON public.board_members USING btree (status);
 
-CREATE INDEX idx_board_members_type ON public.board_members USING btree (member_type);
+CREATE INDEX IF NOT EXISTS idx_board_members_type ON public.board_members USING btree (member_type);
 
-CREATE INDEX idx_board_resolutions_category ON public.board_resolutions USING btree (category);
+CREATE INDEX IF NOT EXISTS idx_board_resolutions_category ON public.board_resolutions USING btree (category);
 
-CREATE INDEX idx_board_resolutions_implementation ON public.board_resolutions USING btree (implementation_status);
+CREATE INDEX IF NOT EXISTS idx_board_resolutions_implementation ON public.board_resolutions USING btree (implementation_status);
 
-CREATE INDEX idx_board_resolutions_meeting ON public.board_resolutions USING btree (meeting_id);
+CREATE INDEX IF NOT EXISTS idx_board_resolutions_meeting ON public.board_resolutions USING btree (meeting_id);
 
-CREATE INDEX idx_board_resolutions_status ON public.board_resolutions USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_board_resolutions_status ON public.board_resolutions USING btree (status);
 
-CREATE INDEX idx_board_resolutions_type ON public.board_resolutions USING btree (resolution_type);
+CREATE INDEX IF NOT EXISTS idx_board_resolutions_type ON public.board_resolutions USING btree (resolution_type);
 
-CREATE INDEX idx_branch_custom_items_branch ON public.branch_custom_checklist_items USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_branch_custom_items_branch ON public.branch_custom_checklist_items USING btree (branch_id);
 
-CREATE INDEX idx_branch_custom_items_template ON public.branch_custom_checklist_items USING btree (template_id);
+CREATE INDEX IF NOT EXISTS idx_branch_custom_items_template ON public.branch_custom_checklist_items USING btree (template_id);
 
-CREATE INDEX idx_branch_daily_sales_branch_date ON public.branch_daily_sales USING btree (branch_id, sales_date);
+CREATE INDEX IF NOT EXISTS idx_branch_daily_sales_branch_date ON public.branch_daily_sales USING btree (branch_id, sales_date);
 
-CREATE INDEX idx_branch_employees_branch ON public.branch_employees USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_branch_employees_branch ON public.branch_employees USING btree (branch_id);
 
-CREATE INDEX idx_branch_employees_job ON public.branch_employees USING btree (job_title);
+CREATE INDEX IF NOT EXISTS idx_branch_employees_job ON public.branch_employees USING btree (job_title);
 
-CREATE INDEX idx_branch_employees_linked_user ON public.branch_employees USING btree (linked_user_id);
+CREATE INDEX IF NOT EXISTS idx_branch_employees_linked_user ON public.branch_employees USING btree (linked_user_id);
 
-CREATE INDEX idx_branch_employees_nationality ON public.branch_employees USING btree (nationality);
+CREATE INDEX IF NOT EXISTS idx_branch_employees_nationality ON public.branch_employees USING btree (nationality);
 
-CREATE INDEX idx_branch_employees_status ON public.branch_employees USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_branch_employees_status ON public.branch_employees USING btree (status);
 
-CREATE INDEX idx_branch_shift_profiles_branch ON public.branch_shift_profiles USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_branch_shift_profiles_branch ON public.branch_shift_profiles USING btree (branch_id);
 
-CREATE INDEX idx_branch_shift_profiles_code ON public.branch_shift_profiles USING btree (branch_id, shift_code);
+CREATE INDEX IF NOT EXISTS idx_branch_shift_profiles_code ON public.branch_shift_profiles USING btree (branch_id, shift_code);
 
-CREATE INDEX idx_branch_shifts_branch ON public.branch_shifts USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_branch_shifts_branch ON public.branch_shifts USING btree (branch_id);
 
-CREATE INDEX idx_branch_shifts_date ON public.branch_shifts USING btree (shift_date);
+CREATE INDEX IF NOT EXISTS idx_branch_shifts_date ON public.branch_shifts USING btree (shift_date);
 
-CREATE INDEX idx_branch_shifts_status ON public.branch_shifts USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_branch_shifts_status ON public.branch_shifts USING btree (status);
 
-CREATE INDEX idx_branch_stock_branch ON public.branch_stock USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_branch_stock_branch ON public.branch_stock USING btree (branch_id);
 
-CREATE INDEX idx_branch_stock_branch_item ON public.branch_stock USING btree (branch_id, item_id);
+CREATE INDEX IF NOT EXISTS idx_branch_stock_branch_item ON public.branch_stock USING btree (branch_id, item_id);
 
-CREATE INDEX idx_branch_stock_item ON public.branch_stock USING btree (item_id);
+CREATE INDEX IF NOT EXISTS idx_branch_stock_item ON public.branch_stock USING btree (item_id);
 
-CREATE INDEX idx_capital_transactions_date ON public.capital_transactions USING btree (effective_date);
+CREATE INDEX IF NOT EXISTS idx_capital_transactions_date ON public.capital_transactions USING btree (effective_date);
 
-CREATE INDEX idx_capital_transactions_status ON public.capital_transactions USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_capital_transactions_status ON public.capital_transactions USING btree (status);
 
-CREATE INDEX idx_capital_transactions_type ON public.capital_transactions USING btree (transaction_type);
+CREATE INDEX IF NOT EXISTS idx_capital_transactions_type ON public.capital_transactions USING btree (transaction_type);
 
-CREATE INDEX idx_cashier_journals_branch_date ON public.cashier_sales_journals USING btree (branch_id, journal_date);
+CREATE INDEX IF NOT EXISTS idx_cashier_journals_branch_date ON public.cashier_sales_journals USING btree (branch_id, journal_date);
 
-CREATE INDEX idx_cashier_journals_created ON public.cashier_sales_journals USING btree (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_cashier_journals_created ON public.cashier_sales_journals USING btree (created_at DESC);
 
-CREATE INDEX idx_cashier_journals_status ON public.cashier_sales_journals USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_cashier_journals_status ON public.cashier_sales_journals USING btree (status);
 
-CREATE INDEX idx_cashier_shift_perf_branch ON public.cashier_shift_performance USING btree (branch_id, performance_date);
+CREATE INDEX IF NOT EXISTS idx_cashier_shift_perf_branch ON public.cashier_shift_performance USING btree (branch_id, performance_date);
 
-CREATE INDEX idx_cashier_shift_perf_cashier ON public.cashier_shift_performance USING btree (cashier_id, performance_date);
+CREATE INDEX IF NOT EXISTS idx_cashier_shift_perf_cashier ON public.cashier_shift_performance USING btree (cashier_id, performance_date);
 
-CREATE INDEX idx_checklist_items_template ON public.checklist_items USING btree (template_id);
+CREATE INDEX IF NOT EXISTS idx_checklist_items_template ON public.checklist_items USING btree (template_id);
 
-CREATE INDEX idx_checklist_templates_category ON public.checklist_templates USING btree (category);
+CREATE INDEX IF NOT EXISTS idx_checklist_templates_category ON public.checklist_templates USING btree (category);
 
-CREATE INDEX idx_checklist_templates_type ON public.checklist_templates USING btree (type);
+CREATE INDEX IF NOT EXISTS idx_checklist_templates_type ON public.checklist_templates USING btree (type);
 
-CREATE INDEX idx_closure_journal_closure ON public.branch_daily_closure_journals USING btree (closure_id);
+CREATE INDEX IF NOT EXISTS idx_closure_journal_closure ON public.branch_daily_closure_journals USING btree (closure_id);
 
-CREATE INDEX idx_closure_journal_journal ON public.branch_daily_closure_journals USING btree (journal_id);
+CREATE INDEX IF NOT EXISTS idx_closure_journal_journal ON public.branch_daily_closure_journals USING btree (journal_id);
 
-CREATE UNIQUE INDEX idx_closure_journal_unique ON public.branch_daily_closure_journals USING btree (journal_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_closure_journal_unique ON public.branch_daily_closure_journals USING btree (journal_id);
 
-CREATE INDEX idx_committee_memberships_committee ON public.committee_memberships USING btree (committee_id);
+CREATE INDEX IF NOT EXISTS idx_committee_memberships_committee ON public.committee_memberships USING btree (committee_id);
 
-CREATE INDEX idx_committee_memberships_member ON public.committee_memberships USING btree (board_member_id);
+CREATE INDEX IF NOT EXISTS idx_committee_memberships_member ON public.committee_memberships USING btree (board_member_id);
 
-CREATE INDEX idx_committee_memberships_status ON public.committee_memberships USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_committee_memberships_status ON public.committee_memberships USING btree (status);
 
-CREATE INDEX idx_community_discount_code ON public.community_discounts USING btree (code);
+CREATE INDEX IF NOT EXISTS idx_community_discount_code ON public.community_discounts USING btree (code);
 
-CREATE INDEX idx_community_discount_org ON public.community_discounts USING btree (beneficiary_organization_id);
+CREATE INDEX IF NOT EXISTS idx_community_discount_org ON public.community_discounts USING btree (beneficiary_organization_id);
 
-CREATE INDEX idx_community_discount_status ON public.community_discounts USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_community_discount_status ON public.community_discounts USING btree (status);
 
-CREATE INDEX idx_community_discount_validity ON public.community_discounts USING btree (valid_from, valid_to);
+CREATE INDEX IF NOT EXISTS idx_community_discount_validity ON public.community_discounts USING btree (valid_from, valid_to);
 
-CREATE INDEX idx_comparison_summaries_branch ON public.comparison_summaries USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_comparison_summaries_branch ON public.comparison_summaries USING btree (branch_id);
 
-CREATE INDEX idx_comparison_summaries_dates ON public.comparison_summaries USING btree (period_start, period_end);
+CREATE INDEX IF NOT EXISTS idx_comparison_summaries_dates ON public.comparison_summaries USING btree (period_start, period_end);
 
-CREATE INDEX idx_comparison_summaries_period ON public.comparison_summaries USING btree (period_type);
+CREATE INDEX IF NOT EXISTS idx_comparison_summaries_period ON public.comparison_summaries USING btree (period_type);
 
-CREATE INDEX idx_comparison_uploads_branch ON public.comparison_uploads USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_comparison_uploads_branch ON public.comparison_uploads USING btree (branch_id);
 
-CREATE INDEX idx_comparison_uploads_status ON public.comparison_uploads USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_comparison_uploads_status ON public.comparison_uploads USING btree (status);
 
-CREATE INDEX idx_comparison_uploads_type ON public.comparison_uploads USING btree (data_type);
+CREATE INDEX IF NOT EXISTS idx_comparison_uploads_type ON public.comparison_uploads USING btree (data_type);
 
-CREATE INDEX idx_compliance_history_action ON public.compliance_history USING btree (action);
+CREATE INDEX IF NOT EXISTS idx_compliance_history_action ON public.compliance_history USING btree (action);
 
-CREATE INDEX idx_compliance_history_date ON public.compliance_history USING btree (action_date);
+CREATE INDEX IF NOT EXISTS idx_compliance_history_date ON public.compliance_history USING btree (action_date);
 
-CREATE INDEX idx_compliance_history_requirement ON public.compliance_history USING btree (requirement_id);
+CREATE INDEX IF NOT EXISTS idx_compliance_history_requirement ON public.compliance_history USING btree (requirement_id);
 
-CREATE INDEX idx_compliance_requirements_category ON public.compliance_requirements USING btree (category);
+CREATE INDEX IF NOT EXISTS idx_compliance_requirements_category ON public.compliance_requirements USING btree (category);
 
-CREATE INDEX idx_compliance_requirements_due_date ON public.compliance_requirements USING btree (next_due_date);
+CREATE INDEX IF NOT EXISTS idx_compliance_requirements_due_date ON public.compliance_requirements USING btree (next_due_date);
 
-CREATE INDEX idx_compliance_requirements_frequency ON public.compliance_requirements USING btree (frequency);
+CREATE INDEX IF NOT EXISTS idx_compliance_requirements_frequency ON public.compliance_requirements USING btree (frequency);
 
-CREATE INDEX idx_compliance_requirements_status ON public.compliance_requirements USING btree (current_status);
+CREATE INDEX IF NOT EXISTS idx_compliance_requirements_status ON public.compliance_requirements USING btree (current_status);
 
-CREATE INDEX idx_content_templates_category ON public.social_content_templates USING btree (category);
+CREATE INDEX IF NOT EXISTS idx_content_templates_category ON public.social_content_templates USING btree (category);
 
-CREATE INDEX idx_daily_closure_branch_date ON public.branch_daily_closures USING btree (branch_id, closure_date);
+CREATE INDEX IF NOT EXISTS idx_daily_closure_branch_date ON public.branch_daily_closures USING btree (branch_id, closure_date);
 
-CREATE INDEX idx_daily_closure_status ON public.branch_daily_closures USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_daily_closure_status ON public.branch_daily_closures USING btree (status);
 
-CREATE INDEX idx_daily_comparisons_branch ON public.daily_comparisons USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_daily_comparisons_branch ON public.daily_comparisons USING btree (branch_id);
 
-CREATE INDEX idx_daily_comparisons_category ON public.daily_comparisons USING btree (product_category);
+CREATE INDEX IF NOT EXISTS idx_daily_comparisons_category ON public.daily_comparisons USING btree (product_category);
 
-CREATE INDEX idx_daily_comparisons_date ON public.daily_comparisons USING btree (comparison_date);
+CREATE INDEX IF NOT EXISTS idx_daily_comparisons_date ON public.daily_comparisons USING btree (comparison_date);
 
-CREATE INDEX idx_daily_comparisons_product ON public.daily_comparisons USING btree (product_name);
+CREATE INDEX IF NOT EXISTS idx_daily_comparisons_product ON public.daily_comparisons USING btree (product_name);
 
-CREATE INDEX idx_daily_comparisons_status ON public.daily_comparisons USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_daily_comparisons_status ON public.daily_comparisons USING btree (status);
 
-CREATE INDEX idx_daily_production_branch_date ON public.daily_production_batches USING btree (branch_id, production_date);
+CREATE INDEX IF NOT EXISTS idx_daily_production_branch_date ON public.daily_production_batches USING btree (branch_id, production_date);
 
-CREATE INDEX idx_daily_production_created ON public.daily_production_batches USING btree (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_daily_production_created ON public.daily_production_batches USING btree (created_at DESC);
 
-CREATE INDEX idx_daily_production_status ON public.daily_production_batches USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_daily_production_status ON public.daily_production_batches USING btree (status);
 
-CREATE INDEX idx_daily_sales_branch ON public.daily_sales_data USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_daily_sales_branch ON public.daily_sales_data USING btree (branch_id);
 
-CREATE INDEX idx_daily_sales_date ON public.daily_sales_data USING btree (sales_date);
+CREATE INDEX IF NOT EXISTS idx_daily_sales_date ON public.daily_sales_data USING btree (sales_date);
 
-CREATE INDEX idx_daily_sales_product ON public.daily_sales_data USING btree (product_name);
+CREATE INDEX IF NOT EXISTS idx_daily_sales_product ON public.daily_sales_data USING btree (product_name);
 
-CREATE INDEX idx_daily_sales_upload ON public.daily_sales_data USING btree (upload_id);
+CREATE INDEX IF NOT EXISTS idx_daily_sales_upload ON public.daily_sales_data USING btree (upload_id);
 
-CREATE INDEX idx_daily_waste_shift ON public.daily_waste_log USING btree (shift_id);
+CREATE INDEX IF NOT EXISTS idx_daily_waste_shift ON public.daily_waste_log USING btree (shift_id);
 
-CREATE INDEX idx_disclosures_category ON public.disclosures USING btree (category);
+CREATE INDEX IF NOT EXISTS idx_disclosures_category ON public.disclosures USING btree (category);
 
-CREATE INDEX idx_disclosures_due_date ON public.disclosures USING btree (due_date);
+CREATE INDEX IF NOT EXISTS idx_disclosures_due_date ON public.disclosures USING btree (due_date);
 
-CREATE INDEX idx_disclosures_fiscal_year ON public.disclosures USING btree (fiscal_year);
+CREATE INDEX IF NOT EXISTS idx_disclosures_fiscal_year ON public.disclosures USING btree (fiscal_year);
 
-CREATE INDEX idx_disclosures_status ON public.disclosures USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_disclosures_status ON public.disclosures USING btree (status);
 
-CREATE INDEX idx_disclosures_type ON public.disclosures USING btree (disclosure_type);
+CREATE INDEX IF NOT EXISTS idx_disclosures_type ON public.disclosures USING btree (disclosure_type);
 
-CREATE INDEX idx_discount_usage_branch ON public.discount_usage_logs USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_discount_usage_branch ON public.discount_usage_logs USING btree (branch_id);
 
-CREATE INDEX idx_discount_usage_date ON public.discount_usage_logs USING btree (used_at);
+CREATE INDEX IF NOT EXISTS idx_discount_usage_date ON public.discount_usage_logs USING btree (used_at);
 
-CREATE INDEX idx_discount_usage_discount ON public.discount_usage_logs USING btree (discount_id);
+CREATE INDEX IF NOT EXISTS idx_discount_usage_discount ON public.discount_usage_logs USING btree (discount_id);
 
-CREATE INDEX idx_dividend_distributions_payment_date ON public.dividend_distributions USING btree (payment_date);
+CREATE INDEX IF NOT EXISTS idx_dividend_distributions_payment_date ON public.dividend_distributions USING btree (payment_date);
 
-CREATE INDEX idx_dividend_distributions_status ON public.dividend_distributions USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_dividend_distributions_status ON public.dividend_distributions USING btree (status);
 
-CREATE INDEX idx_dividend_distributions_year ON public.dividend_distributions USING btree (fiscal_year);
+CREATE INDEX IF NOT EXISTS idx_dividend_distributions_year ON public.dividend_distributions USING btree (fiscal_year);
 
-CREATE INDEX idx_doc_access_document ON public.document_access_logs USING btree (document_id);
+CREATE INDEX IF NOT EXISTS idx_doc_access_document ON public.document_access_logs USING btree (document_id);
 
-CREATE INDEX idx_doc_shares_document ON public.document_shares USING btree (document_id);
+CREATE INDEX IF NOT EXISTS idx_doc_shares_document ON public.document_shares USING btree (document_id);
 
-CREATE INDEX idx_doc_shares_link ON public.document_shares USING btree (share_link);
+CREATE INDEX IF NOT EXISTS idx_doc_shares_link ON public.document_shares USING btree (share_link);
 
-CREATE INDEX idx_doc_versions_document ON public.document_versions USING btree (document_id);
+CREATE INDEX IF NOT EXISTS idx_doc_versions_document ON public.document_versions USING btree (document_id);
 
-CREATE INDEX idx_documents_branch ON public.documents USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_documents_branch ON public.documents USING btree (branch_id);
 
-CREATE INDEX idx_documents_category ON public.documents USING btree (category_id);
+CREATE INDEX IF NOT EXISTS idx_documents_category ON public.documents USING btree (category_id);
 
-CREATE INDEX idx_documents_folder ON public.documents USING btree (folder_id);
+CREATE INDEX IF NOT EXISTS idx_documents_folder ON public.documents USING btree (folder_id);
 
-CREATE INDEX idx_documents_status ON public.documents USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_documents_status ON public.documents USING btree (status);
 
-CREATE INDEX idx_employee_schedules_branch ON public.employee_schedules USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_employee_schedules_branch ON public.employee_schedules USING btree (branch_id);
 
-CREATE INDEX idx_employee_schedules_branch_employee ON public.employee_schedules USING btree (branch_employee_id);
+CREATE INDEX IF NOT EXISTS idx_employee_schedules_branch_employee ON public.employee_schedules USING btree (branch_employee_id);
 
-CREATE INDEX idx_employee_schedules_date ON public.employee_schedules USING btree (schedule_date);
+CREATE INDEX IF NOT EXISTS idx_employee_schedules_date ON public.employee_schedules USING btree (schedule_date);
 
-CREATE INDEX idx_employee_schedules_employee ON public.employee_schedules USING btree (employee_id);
+CREATE INDEX IF NOT EXISTS idx_employee_schedules_employee ON public.employee_schedules USING btree (employee_id);
 
-CREATE INDEX idx_employee_schedules_period ON public.employee_schedules USING btree (period_id);
+CREATE INDEX IF NOT EXISTS idx_employee_schedules_period ON public.employee_schedules USING btree (period_id);
 
-CREATE INDEX idx_employee_settings_active ON public.employee_settings USING btree (is_active);
+CREATE INDEX IF NOT EXISTS idx_employee_settings_active ON public.employee_settings USING btree (is_active);
 
-CREATE INDEX idx_employee_settings_category ON public.employee_settings USING btree (category);
+CREATE INDEX IF NOT EXISTS idx_employee_settings_category ON public.employee_settings USING btree (category);
 
-CREATE INDEX idx_exec_attendees_meeting ON public.exec_meeting_attendees USING btree (meeting_id);
+CREATE INDEX IF NOT EXISTS idx_exec_attendees_meeting ON public.exec_meeting_attendees USING btree (meeting_id);
 
-CREATE INDEX idx_exec_attendees_user ON public.exec_meeting_attendees USING btree (user_id);
+CREATE INDEX IF NOT EXISTS idx_exec_attendees_user ON public.exec_meeting_attendees USING btree (user_id);
 
-CREATE INDEX idx_exec_corr_assigned ON public.exec_correspondence USING btree (assigned_to);
+CREATE INDEX IF NOT EXISTS idx_exec_corr_assigned ON public.exec_correspondence USING btree (assigned_to);
 
-CREATE INDEX idx_exec_corr_branch ON public.exec_correspondence USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_exec_corr_branch ON public.exec_correspondence USING btree (branch_id);
 
-CREATE INDEX idx_exec_corr_category ON public.exec_correspondence USING btree (category);
+CREATE INDEX IF NOT EXISTS idx_exec_corr_category ON public.exec_correspondence USING btree (category);
 
-CREATE INDEX idx_exec_corr_owner ON public.exec_correspondence USING btree (owner_id);
+CREATE INDEX IF NOT EXISTS idx_exec_corr_owner ON public.exec_correspondence USING btree (owner_id);
 
-CREATE INDEX idx_exec_corr_received ON public.exec_correspondence USING btree (received_at);
+CREATE INDEX IF NOT EXISTS idx_exec_corr_received ON public.exec_correspondence USING btree (received_at);
 
-CREATE INDEX idx_exec_corr_status ON public.exec_correspondence USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_exec_corr_status ON public.exec_correspondence USING btree (status);
 
-CREATE INDEX idx_exec_corr_type ON public.exec_correspondence USING btree (type);
+CREATE INDEX IF NOT EXISTS idx_exec_corr_type ON public.exec_correspondence USING btree (type);
 
-CREATE INDEX idx_exec_meetings_branch ON public.exec_meetings USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_exec_meetings_branch ON public.exec_meetings USING btree (branch_id);
 
-CREATE INDEX idx_exec_meetings_organizer ON public.exec_meetings USING btree (organizer_id);
+CREATE INDEX IF NOT EXISTS idx_exec_meetings_organizer ON public.exec_meetings USING btree (organizer_id);
 
-CREATE INDEX idx_exec_meetings_start ON public.exec_meetings USING btree (start_at);
+CREATE INDEX IF NOT EXISTS idx_exec_meetings_start ON public.exec_meetings USING btree (start_at);
 
-CREATE INDEX idx_exec_meetings_status ON public.exec_meetings USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_exec_meetings_status ON public.exec_meetings USING btree (status);
 
-CREATE INDEX idx_exec_notif_branch ON public.exec_notifications USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_exec_notif_branch ON public.exec_notifications USING btree (branch_id);
 
-CREATE INDEX idx_exec_notif_entity ON public.exec_notifications USING btree (entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_exec_notif_entity ON public.exec_notifications USING btree (entity_type, entity_id);
 
-CREATE INDEX idx_exec_notif_read ON public.exec_notifications USING btree (is_read);
+CREATE INDEX IF NOT EXISTS idx_exec_notif_read ON public.exec_notifications USING btree (is_read);
 
-CREATE INDEX idx_exec_notif_user ON public.exec_notifications USING btree (user_id);
+CREATE INDEX IF NOT EXISTS idx_exec_notif_user ON public.exec_notifications USING btree (user_id);
 
-CREATE INDEX idx_exec_task_comments_task ON public.exec_task_comments USING btree (task_id);
+CREATE INDEX IF NOT EXISTS idx_exec_task_comments_task ON public.exec_task_comments USING btree (task_id);
 
-CREATE INDEX idx_exec_tasks_assigned ON public.exec_tasks USING btree (assigned_to);
+CREATE INDEX IF NOT EXISTS idx_exec_tasks_assigned ON public.exec_tasks USING btree (assigned_to);
 
-CREATE INDEX idx_exec_tasks_branch ON public.exec_tasks USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_exec_tasks_branch ON public.exec_tasks USING btree (branch_id);
 
-CREATE INDEX idx_exec_tasks_created_by ON public.exec_tasks USING btree (created_by);
+CREATE INDEX IF NOT EXISTS idx_exec_tasks_created_by ON public.exec_tasks USING btree (created_by);
 
-CREATE INDEX idx_exec_tasks_due_date ON public.exec_tasks USING btree (due_date);
+CREATE INDEX IF NOT EXISTS idx_exec_tasks_due_date ON public.exec_tasks USING btree (due_date);
 
-CREATE INDEX idx_exec_tasks_priority ON public.exec_tasks USING btree (priority);
+CREATE INDEX IF NOT EXISTS idx_exec_tasks_priority ON public.exec_tasks USING btree (priority);
 
-CREATE INDEX idx_exec_tasks_status ON public.exec_tasks USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_exec_tasks_status ON public.exec_tasks USING btree (status);
 
-CREATE INDEX idx_fg_transfers_date ON public.finished_goods_transfers USING btree (transfer_date);
+CREATE INDEX IF NOT EXISTS idx_fg_transfers_date ON public.finished_goods_transfers USING btree (transfer_date);
 
-CREATE INDEX idx_fg_transfers_dest ON public.finished_goods_transfers USING btree (destination_branch_id);
+CREATE INDEX IF NOT EXISTS idx_fg_transfers_dest ON public.finished_goods_transfers USING btree (destination_branch_id);
 
-CREATE INDEX idx_fg_transfers_source ON public.finished_goods_transfers USING btree (source_branch_id);
+CREATE INDEX IF NOT EXISTS idx_fg_transfers_source ON public.finished_goods_transfers USING btree (source_branch_id);
 
-CREATE INDEX idx_fg_transfers_status ON public.finished_goods_transfers USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_fg_transfers_status ON public.finished_goods_transfers USING btree (status);
 
-CREATE INDEX idx_fg_transfers_type ON public.finished_goods_transfers USING btree (destination_type);
+CREATE INDEX IF NOT EXISTS idx_fg_transfers_type ON public.finished_goods_transfers USING btree (destination_type);
 
-CREATE INDEX idx_financial_cogs_period ON public.financial_cogs USING btree (period_id);
+CREATE INDEX IF NOT EXISTS idx_financial_cogs_period ON public.financial_cogs USING btree (period_id);
 
-CREATE INDEX idx_financial_cogs_type ON public.financial_cogs USING btree (item_type);
+CREATE INDEX IF NOT EXISTS idx_financial_cogs_type ON public.financial_cogs USING btree (item_type);
 
-CREATE INDEX idx_financial_fixed_period ON public.financial_fixed_costs USING btree (period_id);
+CREATE INDEX IF NOT EXISTS idx_financial_fixed_period ON public.financial_fixed_costs USING btree (period_id);
 
-CREATE INDEX idx_financial_fixed_type ON public.financial_fixed_costs USING btree (cost_type);
+CREATE INDEX IF NOT EXISTS idx_financial_fixed_type ON public.financial_fixed_costs USING btree (cost_type);
 
-CREATE INDEX idx_financial_metrics_period ON public.financial_metrics USING btree (period_id);
+CREATE INDEX IF NOT EXISTS idx_financial_metrics_period ON public.financial_metrics USING btree (period_id);
 
-CREATE INDEX idx_financial_metrics_rating ON public.financial_metrics USING btree (rating);
+CREATE INDEX IF NOT EXISTS idx_financial_metrics_rating ON public.financial_metrics USING btree (rating);
 
-CREATE INDEX idx_financial_opex_period ON public.financial_operating_expenses USING btree (period_id);
+CREATE INDEX IF NOT EXISTS idx_financial_opex_period ON public.financial_operating_expenses USING btree (period_id);
 
-CREATE INDEX idx_financial_opex_type ON public.financial_operating_expenses USING btree (expense_type);
+CREATE INDEX IF NOT EXISTS idx_financial_opex_type ON public.financial_operating_expenses USING btree (expense_type);
 
-CREATE INDEX idx_financial_periods_branch ON public.financial_periods USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_financial_periods_branch ON public.financial_periods USING btree (branch_id);
 
-CREATE INDEX idx_financial_periods_date ON public.financial_periods USING btree (year, month);
+CREATE INDEX IF NOT EXISTS idx_financial_periods_date ON public.financial_periods USING btree (year, month);
 
-CREATE INDEX idx_financial_sales_channel ON public.financial_sales USING btree (channel);
+CREATE INDEX IF NOT EXISTS idx_financial_sales_channel ON public.financial_sales USING btree (channel);
 
-CREATE INDEX idx_financial_sales_period ON public.financial_sales USING btree (period_id);
+CREATE INDEX IF NOT EXISTS idx_financial_sales_period ON public.financial_sales USING btree (period_id);
 
-CREATE INDEX idx_finished_goods_branch ON public.finished_goods_inventory USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_finished_goods_branch ON public.finished_goods_inventory USING btree (branch_id);
 
-CREATE INDEX idx_finished_goods_category ON public.finished_goods_inventory USING btree (product_category);
+CREATE INDEX IF NOT EXISTS idx_finished_goods_category ON public.finished_goods_inventory USING btree (product_category);
 
-CREATE INDEX idx_finished_goods_date ON public.finished_goods_inventory USING btree (production_date);
+CREATE INDEX IF NOT EXISTS idx_finished_goods_date ON public.finished_goods_inventory USING btree (production_date);
 
-CREATE INDEX idx_finished_goods_product ON public.finished_goods_inventory USING btree (product_id);
+CREATE INDEX IF NOT EXISTS idx_finished_goods_product ON public.finished_goods_inventory USING btree (product_id);
 
-CREATE INDEX idx_governance_meetings_date ON public.governance_meetings USING btree (meeting_date);
+CREATE INDEX IF NOT EXISTS idx_governance_meetings_date ON public.governance_meetings USING btree (meeting_date);
 
-CREATE INDEX idx_governance_meetings_fiscal_year ON public.governance_meetings USING btree (fiscal_year);
+CREATE INDEX IF NOT EXISTS idx_governance_meetings_fiscal_year ON public.governance_meetings USING btree (fiscal_year);
 
-CREATE INDEX idx_governance_meetings_status ON public.governance_meetings USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_governance_meetings_status ON public.governance_meetings USING btree (status);
 
-CREATE INDEX idx_governance_meetings_type ON public.governance_meetings USING btree (meeting_type);
+CREATE INDEX IF NOT EXISTS idx_governance_meetings_type ON public.governance_meetings USING btree (meeting_type);
 
-CREATE INDEX idx_history_event ON public.transfer_history USING btree (event_type);
+CREATE INDEX IF NOT EXISTS idx_history_event ON public.transfer_history USING btree (event_type);
 
-CREATE INDEX idx_history_transfer ON public.transfer_history USING btree (transfer_id);
+CREATE INDEX IF NOT EXISTS idx_history_transfer ON public.transfer_history USING btree (transfer_id);
 
-CREATE INDEX idx_incentive_stmt_branch ON public.cashier_incentive_statements USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_incentive_stmt_branch ON public.cashier_incentive_statements USING btree (branch_id);
 
-CREATE INDEX idx_incentive_stmt_cashier ON public.cashier_incentive_statements USING btree (cashier_id);
+CREATE INDEX IF NOT EXISTS idx_incentive_stmt_cashier ON public.cashier_incentive_statements USING btree (cashier_id);
 
-CREATE INDEX idx_incentive_stmt_status ON public.cashier_incentive_statements USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_incentive_stmt_status ON public.cashier_incentive_statements USING btree (status);
 
-CREATE INDEX idx_influencer_contracts_branch ON public.influencer_contracts USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_influencer_contracts_branch ON public.influencer_contracts USING btree (branch_id);
 
-CREATE INDEX idx_influencer_contracts_influencer ON public.influencer_contracts USING btree (influencer_id);
+CREATE INDEX IF NOT EXISTS idx_influencer_contracts_influencer ON public.influencer_contracts USING btree (influencer_id);
 
-CREATE INDEX idx_influencer_contracts_payment ON public.influencer_contracts USING btree (payment_status);
+CREATE INDEX IF NOT EXISTS idx_influencer_contracts_payment ON public.influencer_contracts USING btree (payment_status);
 
-CREATE INDEX idx_influencer_contracts_status ON public.influencer_contracts USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_influencer_contracts_status ON public.influencer_contracts USING btree (status);
 
-CREATE INDEX idx_interest_declarations_member ON public.interest_declarations USING btree (board_member_id);
+CREATE INDEX IF NOT EXISTS idx_interest_declarations_member ON public.interest_declarations USING btree (board_member_id);
 
-CREATE INDEX idx_interest_declarations_status ON public.interest_declarations USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_interest_declarations_status ON public.interest_declarations USING btree (status);
 
-CREATE INDEX idx_interest_declarations_type ON public.interest_declarations USING btree (declaration_type);
+CREATE INDEX IF NOT EXISTS idx_interest_declarations_type ON public.interest_declarations USING btree (declaration_type);
 
-CREATE INDEX idx_interest_declarations_year ON public.interest_declarations USING btree (fiscal_year);
+CREATE INDEX IF NOT EXISTS idx_interest_declarations_year ON public.interest_declarations USING btree (fiscal_year);
 
-CREATE INDEX idx_inventory_items_branch_category ON public.inventory_items USING btree (branch_id, category);
+CREATE INDEX IF NOT EXISTS idx_inventory_items_branch_category ON public.inventory_items USING btree (branch_id, category);
 
-CREATE INDEX idx_inventory_items_branch_status ON public.inventory_items USING btree (branch_id, status);
+CREATE INDEX IF NOT EXISTS idx_inventory_items_branch_status ON public.inventory_items USING btree (branch_id, status);
 
-CREATE INDEX idx_inventory_items_created ON public.inventory_items USING btree (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_inventory_items_created ON public.inventory_items USING btree (created_at DESC);
 
-CREATE INDEX idx_inventory_logs_branch ON public.production_inventory_logs USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_logs_branch ON public.production_inventory_logs USING btree (branch_id);
 
-CREATE INDEX idx_inventory_logs_product ON public.production_inventory_logs USING btree (product_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_logs_product ON public.production_inventory_logs USING btree (product_id);
 
-CREATE INDEX idx_inventory_logs_type ON public.production_inventory_logs USING btree (movement_type);
+CREATE INDEX IF NOT EXISTS idx_inventory_logs_type ON public.production_inventory_logs USING btree (movement_type);
 
-CREATE INDEX idx_journal_entry_branch ON public.accounting_journal_entries USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_journal_entry_branch ON public.accounting_journal_entries USING btree (branch_id);
 
-CREATE INDEX idx_journal_entry_date ON public.accounting_journal_entries USING btree (entry_date);
+CREATE INDEX IF NOT EXISTS idx_journal_entry_date ON public.accounting_journal_entries USING btree (entry_date);
 
-CREATE INDEX idx_journal_entry_status ON public.accounting_journal_entries USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_journal_entry_status ON public.accounting_journal_entries USING btree (status);
 
-CREATE INDEX idx_journal_entry_type ON public.accounting_journal_entries USING btree (entry_type);
+CREATE INDEX IF NOT EXISTS idx_journal_entry_type ON public.accounting_journal_entries USING btree (entry_type);
 
-CREATE INDEX idx_journal_reconciliation ON public.accounting_journal_entries USING btree (reconciliation_status);
+CREATE INDEX IF NOT EXISTS idx_journal_reconciliation ON public.accounting_journal_entries USING btree (reconciliation_status);
 
-CREATE INDEX idx_material_transfer_items_item ON public.material_transfer_items USING btree (item_id);
+CREATE INDEX IF NOT EXISTS idx_material_transfer_items_item ON public.material_transfer_items USING btree (item_id);
 
-CREATE INDEX idx_material_transfer_items_transfer ON public.material_transfer_items USING btree (transfer_id);
+CREATE INDEX IF NOT EXISTS idx_material_transfer_items_transfer ON public.material_transfer_items USING btree (transfer_id);
 
-CREATE INDEX idx_material_transfers_date ON public.material_transfers USING btree (transfer_date);
+CREATE INDEX IF NOT EXISTS idx_material_transfers_date ON public.material_transfers USING btree (transfer_date);
 
-CREATE INDEX idx_material_transfers_dest ON public.material_transfers USING btree (destination_branch_id);
+CREATE INDEX IF NOT EXISTS idx_material_transfers_dest ON public.material_transfers USING btree (destination_branch_id);
 
-CREATE INDEX idx_material_transfers_request ON public.material_transfers USING btree (request_id);
+CREATE INDEX IF NOT EXISTS idx_material_transfers_request ON public.material_transfers USING btree (request_id);
 
-CREATE INDEX idx_material_transfers_source ON public.material_transfers USING btree (source_branch_id);
+CREATE INDEX IF NOT EXISTS idx_material_transfers_source ON public.material_transfers USING btree (source_branch_id);
 
-CREATE INDEX idx_material_transfers_status ON public.material_transfers USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_material_transfers_status ON public.material_transfers USING btree (status);
 
-CREATE INDEX idx_meeting_attendance_board_member ON public.meeting_attendance USING btree (board_member_id);
+CREATE INDEX IF NOT EXISTS idx_meeting_attendance_board_member ON public.meeting_attendance USING btree (board_member_id);
 
-CREATE INDEX idx_meeting_attendance_meeting ON public.meeting_attendance USING btree (meeting_id);
+CREATE INDEX IF NOT EXISTS idx_meeting_attendance_meeting ON public.meeting_attendance USING btree (meeting_id);
 
-CREATE INDEX idx_meeting_attendance_shareholder ON public.meeting_attendance USING btree (shareholder_id);
+CREATE INDEX IF NOT EXISTS idx_meeting_attendance_shareholder ON public.meeting_attendance USING btree (shareholder_id);
 
-CREATE INDEX idx_meeting_attendance_status ON public.meeting_attendance USING btree (attendance_status);
+CREATE INDEX IF NOT EXISTS idx_meeting_attendance_status ON public.meeting_attendance USING btree (attendance_status);
 
-CREATE INDEX idx_meeting_minutes_meeting ON public.meeting_minutes USING btree (meeting_id);
+CREATE INDEX IF NOT EXISTS idx_meeting_minutes_meeting ON public.meeting_minutes USING btree (meeting_id);
 
-CREATE INDEX idx_meeting_minutes_number ON public.meeting_minutes USING btree (minutes_number);
+CREATE INDEX IF NOT EXISTS idx_meeting_minutes_number ON public.meeting_minutes USING btree (minutes_number);
 
-CREATE INDEX idx_meeting_minutes_status ON public.meeting_minutes USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_meeting_minutes_status ON public.meeting_minutes USING btree (status);
 
-CREATE INDEX idx_meeting_rsvps_meeting ON public.meeting_rsvps USING btree (meeting_id);
+CREATE INDEX IF NOT EXISTS idx_meeting_rsvps_meeting ON public.meeting_rsvps USING btree (meeting_id);
 
-CREATE INDEX idx_meeting_rsvps_shareholder ON public.meeting_rsvps USING btree (shareholder_id);
+CREATE INDEX IF NOT EXISTS idx_meeting_rsvps_shareholder ON public.meeting_rsvps USING btree (shareholder_id);
 
-CREATE INDEX idx_meeting_rsvps_token ON public.meeting_rsvps USING btree (token);
+CREATE INDEX IF NOT EXISTS idx_meeting_rsvps_token ON public.meeting_rsvps USING btree (token);
 
-CREATE INDEX idx_notifications_branch ON public.notifications USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_branch ON public.notifications USING btree (branch_id);
 
-CREATE INDEX idx_notifications_category ON public.notifications USING btree (category);
+CREATE INDEX IF NOT EXISTS idx_notifications_category ON public.notifications USING btree (category);
 
-CREATE INDEX idx_notifications_read ON public.notifications USING btree (is_read);
+CREATE INDEX IF NOT EXISTS idx_notifications_read ON public.notifications USING btree (is_read);
 
-CREATE INDEX idx_notifications_scheduled ON public.notifications USING btree (scheduled_for);
+CREATE INDEX IF NOT EXISTS idx_notifications_scheduled ON public.notifications USING btree (scheduled_for);
 
-CREATE INDEX idx_notifications_type ON public.notifications USING btree (type);
+CREATE INDEX IF NOT EXISTS idx_notifications_type ON public.notifications USING btree (type);
 
-CREATE INDEX idx_notifications_user ON public.notifications USING btree (user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON public.notifications USING btree (user_id);
 
-CREATE INDEX idx_org_job_roles_active ON public.org_job_roles USING btree (is_active);
+CREATE INDEX IF NOT EXISTS idx_org_job_roles_active ON public.org_job_roles USING btree (is_active);
 
-CREATE INDEX idx_org_job_roles_level ON public.org_job_roles USING btree (level);
+CREATE INDEX IF NOT EXISTS idx_org_job_roles_level ON public.org_job_roles USING btree (level);
 
-CREATE INDEX idx_org_job_roles_parent ON public.org_job_roles USING btree (parent_id);
+CREATE INDEX IF NOT EXISTS idx_org_job_roles_parent ON public.org_job_roles USING btree (parent_id);
 
-CREATE INDEX idx_permissions_module_action ON public.permissions USING btree (module, action);
+CREATE INDEX IF NOT EXISTS idx_permissions_module_action ON public.permissions USING btree (module, action);
 
-CREATE INDEX idx_pnl_branch_settings_branch ON public.pnl_branch_settings USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_pnl_branch_settings_branch ON public.pnl_branch_settings USING btree (branch_id);
 
-CREATE INDEX idx_pnl_branch_settings_branch_id ON public.pnl_branch_settings USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_pnl_branch_settings_branch_id ON public.pnl_branch_settings USING btree (branch_id);
 
-CREATE INDEX idx_pnl_monthly_inputs_branch ON public.pnl_monthly_inputs USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_pnl_monthly_inputs_branch ON public.pnl_monthly_inputs USING btree (branch_id);
 
-CREATE INDEX idx_pnl_monthly_inputs_branch_period ON public.pnl_monthly_inputs USING btree (branch_id, year, month);
+CREATE INDEX IF NOT EXISTS idx_pnl_monthly_inputs_branch_period ON public.pnl_monthly_inputs USING btree (branch_id, year, month);
 
-CREATE INDEX idx_pnl_monthly_inputs_branch_year_month ON public.pnl_monthly_inputs USING btree (branch_id, year, month);
+CREATE INDEX IF NOT EXISTS idx_pnl_monthly_inputs_branch_year_month ON public.pnl_monthly_inputs USING btree (branch_id, year, month);
 
-CREATE INDEX idx_pnl_monthly_inputs_period ON public.pnl_monthly_inputs USING btree (year, month);
+CREATE INDEX IF NOT EXISTS idx_pnl_monthly_inputs_period ON public.pnl_monthly_inputs USING btree (year, month);
 
-CREATE INDEX idx_points_branch_date ON public.cashier_points_ledger USING btree (branch_id, transaction_date);
+CREATE INDEX IF NOT EXISTS idx_points_branch_date ON public.cashier_points_ledger USING btree (branch_id, transaction_date);
 
-CREATE INDEX idx_points_cashier_date ON public.cashier_points_ledger USING btree (cashier_id, transaction_date);
+CREATE INDEX IF NOT EXISTS idx_points_cashier_date ON public.cashier_points_ledger USING btree (cashier_id, transaction_date);
 
-CREATE INDEX idx_points_status ON public.cashier_points_ledger USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_points_status ON public.cashier_points_ledger USING btree (status);
 
-CREATE INDEX idx_prod_inv_logs_branch ON public.production_inventory_logs USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_prod_inv_logs_branch ON public.production_inventory_logs USING btree (branch_id);
 
-CREATE INDEX idx_prod_inv_logs_product ON public.production_inventory_logs USING btree (product_id);
+CREATE INDEX IF NOT EXISTS idx_prod_inv_logs_product ON public.production_inventory_logs USING btree (product_id);
 
-CREATE INDEX idx_prod_inv_logs_type ON public.production_inventory_logs USING btree (movement_type);
+CREATE INDEX IF NOT EXISTS idx_prod_inv_logs_type ON public.production_inventory_logs USING btree (movement_type);
 
-CREATE INDEX idx_product_prices_branch ON public.product_prices USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_product_prices_branch ON public.product_prices USING btree (branch_id);
 
-CREATE INDEX idx_product_prices_date ON public.product_prices USING btree (effective_date);
+CREATE INDEX IF NOT EXISTS idx_product_prices_date ON public.product_prices USING btree (effective_date);
 
-CREATE INDEX idx_product_prices_name ON public.product_prices USING btree (product_name);
+CREATE INDEX IF NOT EXISTS idx_product_prices_name ON public.product_prices USING btree (product_name);
 
-CREATE INDEX idx_product_sales_cashier ON public.cashier_product_sales USING btree (cashier_id, sales_date);
+CREATE INDEX IF NOT EXISTS idx_product_sales_cashier ON public.cashier_product_sales USING btree (cashier_id, sales_date);
 
-CREATE INDEX idx_product_storage_category ON public.product_storage_settings USING btree (product_category);
+CREATE INDEX IF NOT EXISTS idx_product_storage_category ON public.product_storage_settings USING btree (product_category);
 
-CREATE INDEX idx_product_storage_name ON public.product_storage_settings USING btree (product_name);
+CREATE INDEX IF NOT EXISTS idx_product_storage_name ON public.product_storage_settings USING btree (product_name);
 
-CREATE INDEX idx_product_storage_verified ON public.product_storage_settings USING btree (is_verified);
+CREATE INDEX IF NOT EXISTS idx_product_storage_verified ON public.product_storage_settings USING btree (is_verified);
 
-CREATE INDEX idx_products_active ON public.products USING btree (is_active);
+CREATE INDEX IF NOT EXISTS idx_products_active ON public.products USING btree (is_active);
 
-CREATE INDEX idx_products_category ON public.products USING btree (category);
+CREATE INDEX IF NOT EXISTS idx_products_category ON public.products USING btree (category);
 
-CREATE INDEX idx_proxy_votes_holder ON public.proxy_votes USING btree (proxy_holder_shareholder_id);
+CREATE INDEX IF NOT EXISTS idx_proxy_votes_holder ON public.proxy_votes USING btree (proxy_holder_shareholder_id);
 
-CREATE INDEX idx_proxy_votes_meeting ON public.proxy_votes USING btree (meeting_id);
+CREATE INDEX IF NOT EXISTS idx_proxy_votes_meeting ON public.proxy_votes USING btree (meeting_id);
 
-CREATE INDEX idx_proxy_votes_principal ON public.proxy_votes USING btree (principal_shareholder_id);
+CREATE INDEX IF NOT EXISTS idx_proxy_votes_principal ON public.proxy_votes USING btree (principal_shareholder_id);
 
-CREATE INDEX idx_proxy_votes_status ON public.proxy_votes USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_proxy_votes_status ON public.proxy_votes USING btree (status);
 
-CREATE INDEX idx_purchasing_requests_branch ON public.purchasing_requests USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_purchasing_requests_branch ON public.purchasing_requests USING btree (branch_id);
 
-CREATE INDEX idx_purchasing_requests_status ON public.purchasing_requests USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_purchasing_requests_status ON public.purchasing_requests USING btree (status);
 
-CREATE INDEX idx_quorum_calculations_meeting ON public.quorum_calculations USING btree (meeting_id);
+CREATE INDEX IF NOT EXISTS idx_quorum_calculations_meeting ON public.quorum_calculations USING btree (meeting_id);
 
-CREATE INDEX idx_quorum_calculations_resolution ON public.quorum_calculations USING btree (resolution_id);
+CREATE INDEX IF NOT EXISTS idx_quorum_calculations_resolution ON public.quorum_calculations USING btree (resolution_id);
 
-CREATE INDEX idx_quorum_calculations_type ON public.quorum_calculations USING btree (calculation_type);
+CREATE INDEX IF NOT EXISTS idx_quorum_calculations_type ON public.quorum_calculations USING btree (calculation_type);
 
-CREATE INDEX idx_reconciliation_branch ON public.accounting_reconciliations USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_reconciliation_branch ON public.accounting_reconciliations USING btree (branch_id);
 
-CREATE INDEX idx_reconciliation_date ON public.accounting_reconciliations USING btree (reconciliation_date);
+CREATE INDEX IF NOT EXISTS idx_reconciliation_date ON public.accounting_reconciliations USING btree (reconciliation_date);
 
-CREATE INDEX idx_reconciliation_status ON public.accounting_reconciliations USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_reconciliation_status ON public.accounting_reconciliations USING btree (status);
 
-CREATE INDEX idx_resolution_signatures_member ON public.resolution_signatures USING btree (board_member_id);
+CREATE INDEX IF NOT EXISTS idx_resolution_signatures_member ON public.resolution_signatures USING btree (board_member_id);
 
-CREATE INDEX idx_resolution_signatures_resolution ON public.resolution_signatures USING btree (resolution_id);
+CREATE INDEX IF NOT EXISTS idx_resolution_signatures_resolution ON public.resolution_signatures USING btree (resolution_id);
 
-CREATE INDEX idx_resolution_signatures_shareholder ON public.resolution_signatures USING btree (shareholder_id);
+CREATE INDEX IF NOT EXISTS idx_resolution_signatures_shareholder ON public.resolution_signatures USING btree (shareholder_id);
 
-CREATE INDEX idx_resolution_signatures_status ON public.resolution_signatures USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_resolution_signatures_status ON public.resolution_signatures USING btree (status);
 
-CREATE INDEX idx_resolution_signatures_token ON public.resolution_signatures USING btree (signature_token);
+CREATE INDEX IF NOT EXISTS idx_resolution_signatures_token ON public.resolution_signatures USING btree (signature_token);
 
-CREATE INDEX idx_resolution_votes_board_member ON public.resolution_votes USING btree (board_member_id);
+CREATE INDEX IF NOT EXISTS idx_resolution_votes_board_member ON public.resolution_votes USING btree (board_member_id);
 
-CREATE INDEX idx_resolution_votes_resolution ON public.resolution_votes USING btree (resolution_id);
+CREATE INDEX IF NOT EXISTS idx_resolution_votes_resolution ON public.resolution_votes USING btree (resolution_id);
 
-CREATE INDEX idx_resolution_votes_shareholder ON public.resolution_votes USING btree (shareholder_id);
+CREATE INDEX IF NOT EXISTS idx_resolution_votes_shareholder ON public.resolution_votes USING btree (shareholder_id);
 
-CREATE INDEX idx_resolution_votes_vote ON public.resolution_votes USING btree (vote);
+CREATE INDEX IF NOT EXISTS idx_resolution_votes_vote ON public.resolution_votes USING btree (vote);
 
-CREATE INDEX idx_role_permissions_role_id ON public.role_permissions USING btree (role_id);
+CREATE INDEX IF NOT EXISTS idx_role_permissions_role_id ON public.role_permissions USING btree (role_id);
 
-CREATE INDEX idx_schedule_audit_branch ON public.schedule_change_audit USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_schedule_audit_branch ON public.schedule_change_audit USING btree (branch_id);
 
-CREATE INDEX idx_schedule_audit_date ON public.schedule_change_audit USING btree (created_at);
+CREATE INDEX IF NOT EXISTS idx_schedule_audit_date ON public.schedule_change_audit USING btree (created_at);
 
-CREATE INDEX idx_schedule_audit_employee ON public.schedule_change_audit USING btree (employee_id);
+CREATE INDEX IF NOT EXISTS idx_schedule_audit_employee ON public.schedule_change_audit USING btree (employee_id);
 
-CREATE INDEX idx_schedule_audit_week ON public.schedule_change_audit USING btree (week_start_date);
+CREATE INDEX IF NOT EXISTS idx_schedule_audit_week ON public.schedule_change_audit USING btree (week_start_date);
 
-CREATE INDEX idx_schedule_periods_branch ON public.schedule_periods USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_schedule_periods_branch ON public.schedule_periods USING btree (branch_id);
 
-CREATE INDEX idx_schedule_periods_dates ON public.schedule_periods USING btree (start_date, end_date);
+CREATE INDEX IF NOT EXISTS idx_schedule_periods_dates ON public.schedule_periods USING btree (start_date, end_date);
 
-CREATE INDEX idx_schedule_slots_day ON public.social_schedule_slots USING btree (day_of_week);
+CREATE INDEX IF NOT EXISTS idx_schedule_slots_day ON public.social_schedule_slots USING btree (day_of_week);
 
-CREATE INDEX idx_schedule_slots_platform ON public.social_schedule_slots USING btree (platform);
+CREATE INDEX IF NOT EXISTS idx_schedule_slots_platform ON public.social_schedule_slots USING btree (platform);
 
-CREATE INDEX idx_share_transfers_date ON public.share_transfers USING btree (transfer_date);
+CREATE INDEX IF NOT EXISTS idx_share_transfers_date ON public.share_transfers USING btree (transfer_date);
 
-CREATE INDEX idx_share_transfers_from ON public.share_transfers USING btree (from_shareholder_id);
+CREATE INDEX IF NOT EXISTS idx_share_transfers_from ON public.share_transfers USING btree (from_shareholder_id);
 
-CREATE INDEX idx_share_transfers_status ON public.share_transfers USING btree (approval_status);
+CREATE INDEX IF NOT EXISTS idx_share_transfers_status ON public.share_transfers USING btree (approval_status);
 
-CREATE INDEX idx_share_transfers_to ON public.share_transfers USING btree (to_shareholder_id);
+CREATE INDEX IF NOT EXISTS idx_share_transfers_to ON public.share_transfers USING btree (to_shareholder_id);
 
-CREATE INDEX idx_shareholder_dividends_distribution ON public.shareholder_dividends USING btree (distribution_id);
+CREATE INDEX IF NOT EXISTS idx_shareholder_dividends_distribution ON public.shareholder_dividends USING btree (distribution_id);
 
-CREATE INDEX idx_shareholder_dividends_shareholder ON public.shareholder_dividends USING btree (shareholder_id);
+CREATE INDEX IF NOT EXISTS idx_shareholder_dividends_shareholder ON public.shareholder_dividends USING btree (shareholder_id);
 
-CREATE INDEX idx_shareholder_dividends_status ON public.shareholder_dividends USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_shareholder_dividends_status ON public.shareholder_dividends USING btree (status);
 
-CREATE INDEX idx_shareholder_docs_shareholder ON public.shareholder_documents USING btree (shareholder_id);
+CREATE INDEX IF NOT EXISTS idx_shareholder_docs_shareholder ON public.shareholder_documents USING btree (shareholder_id);
 
-CREATE INDEX idx_shareholder_docs_type ON public.shareholder_documents USING btree (document_type);
+CREATE INDEX IF NOT EXISTS idx_shareholder_docs_type ON public.shareholder_documents USING btree (document_type);
 
-CREATE INDEX idx_shareholders_percentage ON public.shareholders USING btree (share_percentage);
+CREATE INDEX IF NOT EXISTS idx_shareholders_percentage ON public.shareholders USING btree (share_percentage);
 
-CREATE INDEX idx_shareholders_status ON public.shareholders USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_shareholders_status ON public.shareholders USING btree (status);
 
-CREATE INDEX idx_shareholders_type ON public.shareholders USING btree (shareholder_type);
+CREATE INDEX IF NOT EXISTS idx_shareholders_type ON public.shareholders USING btree (shareholder_type);
 
-CREATE INDEX idx_shift_audit_action ON public.shift_audit_log USING btree (action);
+CREATE INDEX IF NOT EXISTS idx_shift_audit_action ON public.shift_audit_log USING btree (action);
 
-CREATE INDEX idx_shift_audit_date ON public.shift_audit_log USING btree (created_at);
+CREATE INDEX IF NOT EXISTS idx_shift_audit_date ON public.shift_audit_log USING btree (created_at);
 
-CREATE INDEX idx_shift_audit_shift ON public.shift_audit_log USING btree (shift_id);
+CREATE INDEX IF NOT EXISTS idx_shift_audit_shift ON public.shift_audit_log USING btree (shift_id);
 
-CREATE INDEX idx_shift_checklist_item ON public.shift_checklist_responses USING btree (item_id);
+CREATE INDEX IF NOT EXISTS idx_shift_checklist_item ON public.shift_checklist_responses USING btree (item_id);
 
-CREATE INDEX idx_shift_checklist_shift ON public.shift_checklist_responses USING btree (shift_id);
+CREATE INDEX IF NOT EXISTS idx_shift_checklist_shift ON public.shift_checklist_responses USING btree (shift_id);
 
-CREATE INDEX idx_shift_photos_shift ON public.shift_photos USING btree (shift_id);
+CREATE INDEX IF NOT EXISTS idx_shift_photos_shift ON public.shift_photos USING btree (shift_id);
 
-CREATE INDEX idx_shift_reminders_branch ON public.shift_reminders USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_shift_reminders_branch ON public.shift_reminders USING btree (branch_id);
 
-CREATE INDEX idx_shift_reminders_date ON public.shift_reminders USING btree (shift_date);
+CREATE INDEX IF NOT EXISTS idx_shift_reminders_date ON public.shift_reminders USING btree (shift_date);
 
-CREATE INDEX idx_shift_reminders_sent ON public.shift_reminders USING btree (is_sent);
+CREATE INDEX IF NOT EXISTS idx_shift_reminders_sent ON public.shift_reminders USING btree (is_sent);
 
-CREATE INDEX idx_shift_signatures_shift ON public.shift_signatures USING btree (shift_id);
+CREATE INDEX IF NOT EXISTS idx_shift_signatures_shift ON public.shift_signatures USING btree (shift_id);
 
-CREATE INDEX idx_social_accounts_branch ON public.social_accounts USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_social_accounts_branch ON public.social_accounts USING btree (branch_id);
 
-CREATE INDEX idx_social_accounts_platform ON public.social_accounts USING btree (platform);
+CREATE INDEX IF NOT EXISTS idx_social_accounts_platform ON public.social_accounts USING btree (platform);
 
-CREATE INDEX idx_social_init_beneficiary ON public.social_initiatives USING btree (beneficiary_organization_id);
+CREATE INDEX IF NOT EXISTS idx_social_init_beneficiary ON public.social_initiatives USING btree (beneficiary_organization_id);
 
-CREATE INDEX idx_social_init_dates ON public.social_initiatives USING btree (start_date, end_date);
+CREATE INDEX IF NOT EXISTS idx_social_init_dates ON public.social_initiatives USING btree (start_date, end_date);
 
-CREATE INDEX idx_social_init_status ON public.social_initiatives USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_social_init_status ON public.social_initiatives USING btree (status);
 
-CREATE INDEX idx_social_init_type ON public.social_initiatives USING btree (initiative_type);
+CREATE INDEX IF NOT EXISTS idx_social_init_type ON public.social_initiatives USING btree (initiative_type);
 
-CREATE INDEX idx_social_metrics_platform ON public.social_post_metrics USING btree (platform);
+CREATE INDEX IF NOT EXISTS idx_social_metrics_platform ON public.social_post_metrics USING btree (platform);
 
-CREATE INDEX idx_social_metrics_post ON public.social_post_metrics USING btree (post_id);
+CREATE INDEX IF NOT EXISTS idx_social_metrics_post ON public.social_post_metrics USING btree (post_id);
 
-CREATE INDEX idx_social_posts_campaign ON public.social_posts USING btree (campaign_id);
+CREATE INDEX IF NOT EXISTS idx_social_posts_campaign ON public.social_posts USING btree (campaign_id);
 
-CREATE INDEX idx_social_posts_scheduled ON public.social_posts USING btree (scheduled_at);
+CREATE INDEX IF NOT EXISTS idx_social_posts_scheduled ON public.social_posts USING btree (scheduled_at);
 
-CREATE INDEX idx_social_posts_status ON public.social_posts USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_social_posts_status ON public.social_posts USING btree (status);
 
-CREATE INDEX idx_status_history_comparison ON public.comparison_status_history USING btree (comparison_id);
+CREATE INDEX IF NOT EXISTS idx_status_history_comparison ON public.comparison_status_history USING btree (comparison_id);
 
-CREATE INDEX idx_status_history_date ON public.comparison_status_history USING btree (created_at);
+CREATE INDEX IF NOT EXISTS idx_status_history_date ON public.comparison_status_history USING btree (created_at);
 
-CREATE INDEX idx_time_entries_attendance ON public.time_entries USING btree (attendance_id);
+CREATE INDEX IF NOT EXISTS idx_time_entries_attendance ON public.time_entries USING btree (attendance_id);
 
-CREATE INDEX idx_time_entries_branch ON public.time_entries USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_time_entries_branch ON public.time_entries USING btree (branch_id);
 
-CREATE INDEX idx_time_entries_employee ON public.time_entries USING btree (employee_id);
+CREATE INDEX IF NOT EXISTS idx_time_entries_employee ON public.time_entries USING btree (employee_id);
 
-CREATE INDEX idx_timesheet_entries_date ON public.timesheet_report_entries USING btree (date);
+CREATE INDEX IF NOT EXISTS idx_timesheet_entries_date ON public.timesheet_report_entries USING btree (date);
 
-CREATE INDEX idx_timesheet_entries_report ON public.timesheet_report_entries USING btree (report_id);
+CREATE INDEX IF NOT EXISTS idx_timesheet_entries_report ON public.timesheet_report_entries USING btree (report_id);
 
-CREATE INDEX idx_timesheet_reports_branch ON public.timesheet_reports USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_timesheet_reports_branch ON public.timesheet_reports USING btree (branch_id);
 
-CREATE INDEX idx_timesheet_reports_branch_employee ON public.timesheet_reports USING btree (branch_employee_id);
+CREATE INDEX IF NOT EXISTS idx_timesheet_reports_branch_employee ON public.timesheet_reports USING btree (branch_employee_id);
 
-CREATE INDEX idx_timesheet_reports_dates ON public.timesheet_reports USING btree (start_date, end_date);
+CREATE INDEX IF NOT EXISTS idx_timesheet_reports_dates ON public.timesheet_reports USING btree (start_date, end_date);
 
-CREATE INDEX idx_timesheet_reports_employee ON public.timesheet_reports USING btree (employee_id);
+CREATE INDEX IF NOT EXISTS idx_timesheet_reports_employee ON public.timesheet_reports USING btree (employee_id);
 
-CREATE INDEX idx_timesheet_reports_status ON public.timesheet_reports USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_timesheet_reports_status ON public.timesheet_reports USING btree (status);
 
-CREATE INDEX idx_transfer_dest ON public.employee_transfer_requests USING btree (destination_branch_id);
+CREATE INDEX IF NOT EXISTS idx_transfer_dest ON public.employee_transfer_requests USING btree (destination_branch_id);
 
-CREATE INDEX idx_transfer_employee ON public.employee_transfer_requests USING btree (employee_id);
+CREATE INDEX IF NOT EXISTS idx_transfer_employee ON public.employee_transfer_requests USING btree (employee_id);
 
-CREATE INDEX idx_transfer_requested_by ON public.employee_transfer_requests USING btree (requested_by);
+CREATE INDEX IF NOT EXISTS idx_transfer_requested_by ON public.employee_transfer_requests USING btree (requested_by);
 
-CREATE INDEX idx_transfer_source ON public.employee_transfer_requests USING btree (source_branch_id);
+CREATE INDEX IF NOT EXISTS idx_transfer_source ON public.employee_transfer_requests USING btree (source_branch_id);
 
-CREATE INDEX idx_transfer_status ON public.employee_transfer_requests USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_transfer_status ON public.employee_transfer_requests USING btree (status);
 
-CREATE INDEX idx_transfers_date ON public.finished_goods_transfers USING btree (transfer_date);
+CREATE INDEX IF NOT EXISTS idx_transfers_date ON public.finished_goods_transfers USING btree (transfer_date);
 
-CREATE INDEX idx_transfers_dest_type ON public.finished_goods_transfers USING btree (destination_type);
+CREATE INDEX IF NOT EXISTS idx_transfers_dest_type ON public.finished_goods_transfers USING btree (destination_type);
 
-CREATE INDEX idx_transfers_source ON public.finished_goods_transfers USING btree (source_branch_id);
+CREATE INDEX IF NOT EXISTS idx_transfers_source ON public.finished_goods_transfers USING btree (source_branch_id);
 
-CREATE INDEX idx_travel_expenses_request ON public.travel_expenses USING btree (travel_request_id);
+CREATE INDEX IF NOT EXISTS idx_travel_expenses_request ON public.travel_expenses USING btree (travel_request_id);
 
-CREATE INDEX idx_travel_expenses_status ON public.travel_expenses USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_travel_expenses_status ON public.travel_expenses USING btree (status);
 
-CREATE INDEX idx_travel_expenses_type ON public.travel_expenses USING btree (expense_type);
+CREATE INDEX IF NOT EXISTS idx_travel_expenses_type ON public.travel_expenses USING btree (expense_type);
 
-CREATE INDEX idx_travel_requests_branch ON public.travel_requests USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_travel_requests_branch ON public.travel_requests USING btree (branch_id);
 
-CREATE INDEX idx_travel_requests_dates ON public.travel_requests USING btree (departure_date, return_date);
+CREATE INDEX IF NOT EXISTS idx_travel_requests_dates ON public.travel_requests USING btree (departure_date, return_date);
 
-CREATE INDEX idx_travel_requests_number ON public.travel_requests USING btree (request_number);
+CREATE INDEX IF NOT EXISTS idx_travel_requests_number ON public.travel_requests USING btree (request_number);
 
-CREATE INDEX idx_travel_requests_requester ON public.travel_requests USING btree (requester_id);
+CREATE INDEX IF NOT EXISTS idx_travel_requests_requester ON public.travel_requests USING btree (requester_id);
 
-CREATE INDEX idx_travel_requests_status ON public.travel_requests USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_travel_requests_status ON public.travel_requests USING btree (status);
 
-CREATE INDEX idx_user_assignments_branch_id ON public.user_assignments USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_user_assignments_branch_id ON public.user_assignments USING btree (branch_id);
 
-CREATE INDEX idx_user_assignments_role_id ON public.user_assignments USING btree (role_id);
+CREATE INDEX IF NOT EXISTS idx_user_assignments_role_id ON public.user_assignments USING btree (role_id);
 
-CREATE INDEX idx_user_assignments_user_id ON public.user_assignments USING btree (user_id);
+CREATE INDEX IF NOT EXISTS idx_user_assignments_user_id ON public.user_assignments USING btree (user_id);
 
-CREATE INDEX idx_user_branch_access_user_id ON public.user_branch_access USING btree (user_id);
+CREATE INDEX IF NOT EXISTS idx_user_branch_access_user_id ON public.user_branch_access USING btree (user_id);
 
-CREATE INDEX idx_visitor_logs_branch ON public.visitor_logs USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_visitor_logs_branch ON public.visitor_logs USING btree (branch_id);
 
-CREATE INDEX idx_visitor_logs_date ON public.visitor_logs USING btree (visit_date);
+CREATE INDEX IF NOT EXISTS idx_visitor_logs_date ON public.visitor_logs USING btree (visit_date);
 
-CREATE INDEX idx_visitor_logs_host ON public.visitor_logs USING btree (host_id);
+CREATE INDEX IF NOT EXISTS idx_visitor_logs_host ON public.visitor_logs USING btree (host_id);
 
-CREATE INDEX idx_visitor_logs_number ON public.visitor_logs USING btree (visit_number);
+CREATE INDEX IF NOT EXISTS idx_visitor_logs_number ON public.visitor_logs USING btree (visit_number);
 
-CREATE INDEX idx_visitor_logs_status ON public.visitor_logs USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_visitor_logs_status ON public.visitor_logs USING btree (status);
 
-CREATE INDEX idx_visitor_logs_visitor ON public.visitor_logs USING btree (visitor_id);
+CREATE INDEX IF NOT EXISTS idx_visitor_logs_visitor ON public.visitor_logs USING btree (visitor_id);
 
-CREATE INDEX idx_visitors_branch ON public.visitors USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_visitors_branch ON public.visitors USING btree (branch_id);
 
-CREATE INDEX idx_visitors_company ON public.visitors USING btree (company);
+CREATE INDEX IF NOT EXISTS idx_visitors_company ON public.visitors USING btree (company);
 
-CREATE INDEX idx_visitors_national_id ON public.visitors USING btree (national_id);
+CREATE INDEX IF NOT EXISTS idx_visitors_national_id ON public.visitors USING btree (national_id);
 
-CREATE INDEX idx_visitors_phone ON public.visitors USING btree (phone);
+CREATE INDEX IF NOT EXISTS idx_visitors_phone ON public.visitors USING btree (phone);
 
-CREATE INDEX idx_voting_audit_action ON public.voting_audit_log USING btree (action);
+CREATE INDEX IF NOT EXISTS idx_voting_audit_action ON public.voting_audit_log USING btree (action);
 
-CREATE INDEX idx_voting_audit_actor ON public.voting_audit_log USING btree (actor_id);
+CREATE INDEX IF NOT EXISTS idx_voting_audit_actor ON public.voting_audit_log USING btree (actor_id);
 
-CREATE INDEX idx_voting_audit_meeting ON public.voting_audit_log USING btree (meeting_id);
+CREATE INDEX IF NOT EXISTS idx_voting_audit_meeting ON public.voting_audit_log USING btree (meeting_id);
 
-CREATE INDEX idx_voting_audit_resolution ON public.voting_audit_log USING btree (resolution_id);
+CREATE INDEX IF NOT EXISTS idx_voting_audit_resolution ON public.voting_audit_log USING btree (resolution_id);
 
-CREATE INDEX idx_voting_audit_timestamp ON public.voting_audit_log USING btree ("timestamp");
+CREATE INDEX IF NOT EXISTS idx_voting_audit_timestamp ON public.voting_audit_log USING btree ("timestamp");
 
-CREATE INDEX idx_voting_tokens_resolution ON public.voting_tokens USING btree (resolution_id);
+CREATE INDEX IF NOT EXISTS idx_voting_tokens_resolution ON public.voting_tokens USING btree (resolution_id);
 
-CREATE INDEX idx_voting_tokens_shareholder ON public.voting_tokens USING btree (shareholder_id);
+CREATE INDEX IF NOT EXISTS idx_voting_tokens_shareholder ON public.voting_tokens USING btree (shareholder_id);
 
-CREATE INDEX idx_voting_tokens_status ON public.voting_tokens USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_voting_tokens_status ON public.voting_tokens USING btree (status);
 
-CREATE INDEX idx_voting_tokens_token ON public.voting_tokens USING btree (vote_token);
+CREATE INDEX IF NOT EXISTS idx_voting_tokens_token ON public.voting_tokens USING btree (vote_token);
 
-CREATE INDEX idx_warehouse_items_active ON public.warehouse_items USING btree (is_active);
+CREATE INDEX IF NOT EXISTS idx_warehouse_items_active ON public.warehouse_items USING btree (is_active);
 
-CREATE INDEX idx_warehouse_items_category ON public.warehouse_items USING btree (category);
+CREATE INDEX IF NOT EXISTS idx_warehouse_items_category ON public.warehouse_items USING btree (category);
 
-CREATE INDEX idx_warehouse_items_sku ON public.warehouse_items USING btree (sku);
+CREATE INDEX IF NOT EXISTS idx_warehouse_items_sku ON public.warehouse_items USING btree (sku);
 
-CREATE INDEX idx_warehouse_logs_branch ON public.warehouse_movement_logs USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_warehouse_logs_branch ON public.warehouse_movement_logs USING btree (branch_id);
 
-CREATE INDEX idx_warehouse_logs_date ON public.warehouse_movement_logs USING btree (created_at);
+CREATE INDEX IF NOT EXISTS idx_warehouse_logs_date ON public.warehouse_movement_logs USING btree (created_at);
 
-CREATE INDEX idx_warehouse_logs_item ON public.warehouse_movement_logs USING btree (item_id);
+CREATE INDEX IF NOT EXISTS idx_warehouse_logs_item ON public.warehouse_movement_logs USING btree (item_id);
 
-CREATE INDEX idx_warehouse_logs_type ON public.warehouse_movement_logs USING btree (movement_type);
+CREATE INDEX IF NOT EXISTS idx_warehouse_logs_type ON public.warehouse_movement_logs USING btree (movement_type);
 
-CREATE INDEX idx_warehouse_notif_branch ON public.warehouse_notifications USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_warehouse_notif_branch ON public.warehouse_notifications USING btree (branch_id);
 
-CREATE INDEX idx_warehouse_notif_date ON public.warehouse_notifications USING btree (created_at);
+CREATE INDEX IF NOT EXISTS idx_warehouse_notif_date ON public.warehouse_notifications USING btree (created_at);
 
-CREATE INDEX idx_warehouse_notif_entity ON public.warehouse_notifications USING btree (entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_warehouse_notif_entity ON public.warehouse_notifications USING btree (entity_type, entity_id);
 
-CREATE INDEX idx_warehouse_notif_read ON public.warehouse_notifications USING btree (is_read);
+CREATE INDEX IF NOT EXISTS idx_warehouse_notif_read ON public.warehouse_notifications USING btree (is_read);
 
-CREATE INDEX idx_warehouse_notif_user ON public.warehouse_notifications USING btree (user_id);
+CREATE INDEX IF NOT EXISTS idx_warehouse_notif_user ON public.warehouse_notifications USING btree (user_id);
 
-CREATE INDEX idx_waste_alerts_branch ON public.waste_risk_alerts USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_waste_alerts_branch ON public.waste_risk_alerts USING btree (branch_id);
 
-CREATE INDEX idx_waste_alerts_date ON public.waste_risk_alerts USING btree (alert_date);
+CREATE INDEX IF NOT EXISTS idx_waste_alerts_date ON public.waste_risk_alerts USING btree (alert_date);
 
-CREATE INDEX idx_waste_alerts_rule ON public.waste_risk_alerts USING btree (rule_id);
+CREATE INDEX IF NOT EXISTS idx_waste_alerts_rule ON public.waste_risk_alerts USING btree (rule_id);
 
-CREATE INDEX idx_waste_alerts_severity ON public.waste_risk_alerts USING btree (severity);
+CREATE INDEX IF NOT EXISTS idx_waste_alerts_severity ON public.waste_risk_alerts USING btree (severity);
 
-CREATE INDEX idx_waste_alerts_status ON public.waste_risk_alerts USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_waste_alerts_status ON public.waste_risk_alerts USING btree (status);
 
-CREATE INDEX idx_waste_rules_active ON public.waste_risk_rules USING btree (is_active);
+CREATE INDEX IF NOT EXISTS idx_waste_rules_active ON public.waste_risk_rules USING btree (is_active);
 
-CREATE INDEX idx_waste_rules_branch ON public.waste_risk_rules USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_waste_rules_branch ON public.waste_risk_rules USING btree (branch_id);
 
-CREATE INDEX idx_waste_rules_category ON public.waste_risk_rules USING btree (category);
+CREATE INDEX IF NOT EXISTS idx_waste_rules_category ON public.waste_risk_rules USING btree (category);
 
-CREATE INDEX idx_weekly_locks_branch ON public.weekly_schedule_locks USING btree (branch_id);
+CREATE INDEX IF NOT EXISTS idx_weekly_locks_branch ON public.weekly_schedule_locks USING btree (branch_id);
 
-CREATE UNIQUE INDEX idx_weekly_locks_unique ON public.weekly_schedule_locks USING btree (branch_id, week_start_date);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_weekly_locks_unique ON public.weekly_schedule_locks USING btree (branch_id, week_start_date);
 
-CREATE INDEX idx_weekly_locks_week ON public.weekly_schedule_locks USING btree (week_start_date);
+CREATE INDEX IF NOT EXISTS idx_weekly_locks_week ON public.weekly_schedule_locks USING btree (week_start_date);
 
 
 -- ============================================
 -- التسلسلات - Sequences
 -- ============================================
 
-CREATE SEQUENCE public.accounting_exports_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.accounting_exports_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -4992,7 +4992,7 @@ CREATE SEQUENCE public.accounting_exports_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.accounting_journal_entries_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.accounting_journal_entries_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5000,7 +5000,7 @@ CREATE SEQUENCE public.accounting_journal_entries_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.accounting_reconciliations_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.accounting_reconciliations_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5008,7 +5008,7 @@ CREATE SEQUENCE public.accounting_reconciliations_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.advanced_production_orders_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.advanced_production_orders_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5016,7 +5016,7 @@ CREATE SEQUENCE public.advanced_production_orders_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.asset_transfer_events_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.asset_transfer_events_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5024,7 +5024,7 @@ CREATE SEQUENCE public.asset_transfer_events_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.asset_transfers_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.asset_transfers_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5032,7 +5032,7 @@ CREATE SEQUENCE public.asset_transfers_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.attendance_records_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.attendance_records_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5040,7 +5040,7 @@ CREATE SEQUENCE public.attendance_records_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.attendance_summary_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.attendance_summary_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5048,7 +5048,7 @@ CREATE SEQUENCE public.attendance_summary_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.audit_logs_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.audit_logs_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5056,7 +5056,7 @@ CREATE SEQUENCE public.audit_logs_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.average_ticket_targets_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.average_ticket_targets_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5064,7 +5064,7 @@ CREATE SEQUENCE public.average_ticket_targets_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.backups_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.backups_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5072,7 +5072,7 @@ CREATE SEQUENCE public.backups_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.beneficiary_organizations_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.beneficiary_organizations_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5080,7 +5080,7 @@ CREATE SEQUENCE public.beneficiary_organizations_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.biometric_credentials_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.biometric_credentials_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5088,7 +5088,7 @@ CREATE SEQUENCE public.biometric_credentials_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.board_committees_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.board_committees_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5096,7 +5096,7 @@ CREATE SEQUENCE public.board_committees_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.board_member_training_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.board_member_training_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5104,7 +5104,7 @@ CREATE SEQUENCE public.board_member_training_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.board_members_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.board_members_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5112,7 +5112,7 @@ CREATE SEQUENCE public.board_members_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.board_resolutions_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.board_resolutions_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5120,7 +5120,7 @@ CREATE SEQUENCE public.board_resolutions_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.branch_achievement_bonus_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.branch_achievement_bonus_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5128,7 +5128,7 @@ CREATE SEQUENCE public.branch_achievement_bonus_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.branch_custom_checklist_items_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.branch_custom_checklist_items_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5136,7 +5136,7 @@ CREATE SEQUENCE public.branch_custom_checklist_items_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.branch_daily_closure_journals_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.branch_daily_closure_journals_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5144,7 +5144,7 @@ CREATE SEQUENCE public.branch_daily_closure_journals_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.branch_daily_closure_payments_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.branch_daily_closure_payments_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5152,7 +5152,7 @@ CREATE SEQUENCE public.branch_daily_closure_payments_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.branch_daily_closures_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.branch_daily_closures_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5160,7 +5160,7 @@ CREATE SEQUENCE public.branch_daily_closures_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.branch_daily_sales_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.branch_daily_sales_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5168,7 +5168,7 @@ CREATE SEQUENCE public.branch_daily_sales_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.branch_employees_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.branch_employees_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5176,7 +5176,7 @@ CREATE SEQUENCE public.branch_employees_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.branch_monthly_targets_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.branch_monthly_targets_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5184,7 +5184,7 @@ CREATE SEQUENCE public.branch_monthly_targets_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.branch_shift_profiles_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.branch_shift_profiles_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5192,7 +5192,7 @@ CREATE SEQUENCE public.branch_shift_profiles_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.branch_shifts_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.branch_shifts_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5200,7 +5200,7 @@ CREATE SEQUENCE public.branch_shifts_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.branch_stock_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.branch_stock_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5208,7 +5208,7 @@ CREATE SEQUENCE public.branch_stock_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.campaign_budget_allocations_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.campaign_budget_allocations_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5216,7 +5216,7 @@ CREATE SEQUENCE public.campaign_budget_allocations_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.campaign_expenses_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.campaign_expenses_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5224,7 +5224,7 @@ CREATE SEQUENCE public.campaign_expenses_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.campaign_goals_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.campaign_goals_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5232,7 +5232,7 @@ CREATE SEQUENCE public.campaign_goals_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.capital_transactions_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.capital_transactions_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5240,7 +5240,7 @@ CREATE SEQUENCE public.capital_transactions_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.cashier_daily_challenges_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.cashier_daily_challenges_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5248,7 +5248,7 @@ CREATE SEQUENCE public.cashier_daily_challenges_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.cashier_incentive_statements_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.cashier_incentive_statements_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5256,7 +5256,7 @@ CREATE SEQUENCE public.cashier_incentive_statements_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.cashier_payment_breakdowns_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.cashier_payment_breakdowns_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5264,7 +5264,7 @@ CREATE SEQUENCE public.cashier_payment_breakdowns_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.cashier_points_ledger_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.cashier_points_ledger_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5272,7 +5272,7 @@ CREATE SEQUENCE public.cashier_points_ledger_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.cashier_product_sales_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.cashier_product_sales_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5280,7 +5280,7 @@ CREATE SEQUENCE public.cashier_product_sales_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.cashier_sales_journals_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.cashier_sales_journals_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5288,7 +5288,7 @@ CREATE SEQUENCE public.cashier_sales_journals_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.cashier_shift_performance_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.cashier_shift_performance_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5296,7 +5296,7 @@ CREATE SEQUENCE public.cashier_shift_performance_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.cashier_shift_targets_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.cashier_shift_targets_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5304,7 +5304,7 @@ CREATE SEQUENCE public.cashier_shift_targets_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.cashier_signatures_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.cashier_signatures_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5312,7 +5312,7 @@ CREATE SEQUENCE public.cashier_signatures_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.chart_of_accounts_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.chart_of_accounts_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5320,7 +5320,7 @@ CREATE SEQUENCE public.chart_of_accounts_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.checklist_items_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.checklist_items_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5328,7 +5328,7 @@ CREATE SEQUENCE public.checklist_items_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.checklist_templates_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.checklist_templates_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5336,7 +5336,7 @@ CREATE SEQUENCE public.checklist_templates_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.commission_calculations_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.commission_calculations_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5344,7 +5344,7 @@ CREATE SEQUENCE public.commission_calculations_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.commission_rates_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.commission_rates_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5352,7 +5352,7 @@ CREATE SEQUENCE public.commission_rates_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.committee_memberships_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.committee_memberships_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5360,7 +5360,7 @@ CREATE SEQUENCE public.committee_memberships_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.community_discounts_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.community_discounts_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5368,7 +5368,7 @@ CREATE SEQUENCE public.community_discounts_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.comparison_status_history_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.comparison_status_history_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5376,7 +5376,7 @@ CREATE SEQUENCE public.comparison_status_history_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.comparison_summaries_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.comparison_summaries_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5384,7 +5384,7 @@ CREATE SEQUENCE public.comparison_summaries_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.comparison_uploads_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.comparison_uploads_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5392,7 +5392,7 @@ CREATE SEQUENCE public.comparison_uploads_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.compliance_history_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.compliance_history_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5400,7 +5400,7 @@ CREATE SEQUENCE public.compliance_history_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.compliance_requirements_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.compliance_requirements_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5408,7 +5408,7 @@ CREATE SEQUENCE public.compliance_requirements_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.construction_categories_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.construction_categories_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5416,7 +5416,7 @@ CREATE SEQUENCE public.construction_categories_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.construction_contracts_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.construction_contracts_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5424,7 +5424,7 @@ CREATE SEQUENCE public.construction_contracts_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.construction_projects_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.construction_projects_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5432,7 +5432,7 @@ CREATE SEQUENCE public.construction_projects_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.contract_items_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.contract_items_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5440,7 +5440,7 @@ CREATE SEQUENCE public.contract_items_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.contract_payments_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.contract_payments_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5448,7 +5448,7 @@ CREATE SEQUENCE public.contract_payments_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.contractors_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.contractors_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5456,7 +5456,7 @@ CREATE SEQUENCE public.contractors_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.daily_comparisons_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.daily_comparisons_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5464,7 +5464,7 @@ CREATE SEQUENCE public.daily_comparisons_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.daily_operations_summary_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.daily_operations_summary_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5472,7 +5472,7 @@ CREATE SEQUENCE public.daily_operations_summary_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.daily_production_batches_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.daily_production_batches_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5480,7 +5480,7 @@ CREATE SEQUENCE public.daily_production_batches_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.daily_sales_data_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.daily_sales_data_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5488,7 +5488,7 @@ CREATE SEQUENCE public.daily_sales_data_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.daily_waste_log_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.daily_waste_log_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5496,7 +5496,7 @@ CREATE SEQUENCE public.daily_waste_log_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.data_import_jobs_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.data_import_jobs_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5504,7 +5504,7 @@ CREATE SEQUENCE public.data_import_jobs_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.departments_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.departments_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5512,7 +5512,7 @@ CREATE SEQUENCE public.departments_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.disclosures_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.disclosures_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5520,7 +5520,7 @@ CREATE SEQUENCE public.disclosures_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.discount_usage_logs_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.discount_usage_logs_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5528,7 +5528,7 @@ CREATE SEQUENCE public.discount_usage_logs_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.display_bar_daily_summary_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.display_bar_daily_summary_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5536,7 +5536,7 @@ CREATE SEQUENCE public.display_bar_daily_summary_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.display_bar_receipts_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.display_bar_receipts_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5544,7 +5544,7 @@ CREATE SEQUENCE public.display_bar_receipts_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.dividend_distributions_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.dividend_distributions_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5552,7 +5552,7 @@ CREATE SEQUENCE public.dividend_distributions_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.document_access_logs_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.document_access_logs_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5560,7 +5560,7 @@ CREATE SEQUENCE public.document_access_logs_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.document_categories_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.document_categories_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5568,7 +5568,7 @@ CREATE SEQUENCE public.document_categories_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.document_folders_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.document_folders_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5576,7 +5576,7 @@ CREATE SEQUENCE public.document_folders_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.document_shares_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.document_shares_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5584,7 +5584,7 @@ CREATE SEQUENCE public.document_shares_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.document_versions_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.document_versions_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5592,7 +5592,7 @@ CREATE SEQUENCE public.document_versions_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.documents_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.documents_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5600,7 +5600,7 @@ CREATE SEQUENCE public.documents_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.employee_schedules_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.employee_schedules_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5608,7 +5608,7 @@ CREATE SEQUENCE public.employee_schedules_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.employee_settings_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.employee_settings_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5616,7 +5616,7 @@ CREATE SEQUENCE public.employee_settings_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.employee_transfer_requests_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.employee_transfer_requests_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5624,7 +5624,7 @@ CREATE SEQUENCE public.employee_transfer_requests_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.exec_correspondence_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.exec_correspondence_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5632,7 +5632,7 @@ CREATE SEQUENCE public.exec_correspondence_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.exec_meeting_attendees_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.exec_meeting_attendees_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5640,7 +5640,7 @@ CREATE SEQUENCE public.exec_meeting_attendees_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.exec_meetings_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.exec_meetings_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5648,7 +5648,7 @@ CREATE SEQUENCE public.exec_meetings_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.exec_notifications_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.exec_notifications_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5656,7 +5656,7 @@ CREATE SEQUENCE public.exec_notifications_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.exec_task_comments_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.exec_task_comments_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5664,7 +5664,7 @@ CREATE SEQUENCE public.exec_task_comments_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.exec_tasks_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.exec_tasks_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5672,7 +5672,7 @@ CREATE SEQUENCE public.exec_tasks_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.external_integrations_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.external_integrations_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5680,7 +5680,7 @@ CREATE SEQUENCE public.external_integrations_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.financial_cogs_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.financial_cogs_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5688,7 +5688,7 @@ CREATE SEQUENCE public.financial_cogs_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.financial_fixed_costs_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.financial_fixed_costs_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5696,7 +5696,7 @@ CREATE SEQUENCE public.financial_fixed_costs_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.financial_metrics_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.financial_metrics_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5704,7 +5704,7 @@ CREATE SEQUENCE public.financial_metrics_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.financial_operating_expenses_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.financial_operating_expenses_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5712,7 +5712,7 @@ CREATE SEQUENCE public.financial_operating_expenses_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.financial_periods_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.financial_periods_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5720,7 +5720,7 @@ CREATE SEQUENCE public.financial_periods_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.financial_sales_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.financial_sales_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5728,7 +5728,7 @@ CREATE SEQUENCE public.financial_sales_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.finished_goods_inventory_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.finished_goods_inventory_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5736,7 +5736,7 @@ CREATE SEQUENCE public.finished_goods_inventory_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.finished_goods_transfers_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.finished_goods_transfers_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5744,7 +5744,7 @@ CREATE SEQUENCE public.finished_goods_transfers_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.governance_meetings_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.governance_meetings_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5752,7 +5752,7 @@ CREATE SEQUENCE public.governance_meetings_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.incentive_awards_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.incentive_awards_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5760,7 +5760,7 @@ CREATE SEQUENCE public.incentive_awards_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.incentive_tiers_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.incentive_tiers_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5768,7 +5768,7 @@ CREATE SEQUENCE public.incentive_tiers_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.influencer_campaign_links_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.influencer_campaign_links_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5776,7 +5776,7 @@ CREATE SEQUENCE public.influencer_campaign_links_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.influencer_contacts_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.influencer_contacts_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5784,7 +5784,7 @@ CREATE SEQUENCE public.influencer_contacts_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.influencer_contracts_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.influencer_contracts_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5792,7 +5792,7 @@ CREATE SEQUENCE public.influencer_contracts_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.influencer_payments_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.influencer_payments_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5800,7 +5800,7 @@ CREATE SEQUENCE public.influencer_payments_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.interest_declarations_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.interest_declarations_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5808,7 +5808,7 @@ CREATE SEQUENCE public.interest_declarations_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.job_role_permissions_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.job_role_permissions_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5816,7 +5816,7 @@ CREATE SEQUENCE public.job_role_permissions_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.journal_attachments_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.journal_attachments_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5824,7 +5824,7 @@ CREATE SEQUENCE public.journal_attachments_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.journal_entry_lines_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.journal_entry_lines_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5832,7 +5832,7 @@ CREATE SEQUENCE public.journal_entry_lines_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.marketing_alerts_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.marketing_alerts_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5840,7 +5840,7 @@ CREATE SEQUENCE public.marketing_alerts_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.marketing_assets_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.marketing_assets_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5848,7 +5848,7 @@ CREATE SEQUENCE public.marketing_assets_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.marketing_calendar_events_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.marketing_calendar_events_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5856,7 +5856,7 @@ CREATE SEQUENCE public.marketing_calendar_events_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.marketing_campaigns_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.marketing_campaigns_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5864,7 +5864,7 @@ CREATE SEQUENCE public.marketing_campaigns_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.marketing_influencers_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.marketing_influencers_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5872,7 +5872,7 @@ CREATE SEQUENCE public.marketing_influencers_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.marketing_performance_reports_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.marketing_performance_reports_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5880,7 +5880,7 @@ CREATE SEQUENCE public.marketing_performance_reports_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.marketing_task_activities_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.marketing_task_activities_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5888,7 +5888,7 @@ CREATE SEQUENCE public.marketing_task_activities_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.marketing_tasks_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.marketing_tasks_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5896,7 +5896,7 @@ CREATE SEQUENCE public.marketing_tasks_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.marketing_team_members_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.marketing_team_members_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5904,7 +5904,7 @@ CREATE SEQUENCE public.marketing_team_members_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.material_transfer_items_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.material_transfer_items_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5912,7 +5912,7 @@ CREATE SEQUENCE public.material_transfer_items_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.material_transfers_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.material_transfers_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5920,7 +5920,7 @@ CREATE SEQUENCE public.material_transfers_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.meeting_attendance_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.meeting_attendance_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5928,7 +5928,7 @@ CREATE SEQUENCE public.meeting_attendance_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.meeting_minutes_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.meeting_minutes_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5936,7 +5936,7 @@ CREATE SEQUENCE public.meeting_minutes_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.meeting_rsvps_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.meeting_rsvps_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5944,7 +5944,7 @@ CREATE SEQUENCE public.meeting_rsvps_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.notification_queue_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.notification_queue_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5952,7 +5952,7 @@ CREATE SEQUENCE public.notification_queue_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.notification_templates_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.notification_templates_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5960,7 +5960,7 @@ CREATE SEQUENCE public.notification_templates_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.notifications_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.notifications_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5968,7 +5968,7 @@ CREATE SEQUENCE public.notifications_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.org_job_roles_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.org_job_roles_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5976,7 +5976,7 @@ CREATE SEQUENCE public.org_job_roles_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.payment_requests_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.payment_requests_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5984,7 +5984,7 @@ CREATE SEQUENCE public.payment_requests_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.performance_alerts_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.performance_alerts_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -5992,7 +5992,7 @@ CREATE SEQUENCE public.performance_alerts_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.permission_audit_logs_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.permission_audit_logs_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6000,7 +6000,7 @@ CREATE SEQUENCE public.permission_audit_logs_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.permission_check_logs_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.permission_check_logs_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6008,7 +6008,7 @@ CREATE SEQUENCE public.permission_check_logs_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.permissions_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.permissions_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6016,7 +6016,7 @@ CREATE SEQUENCE public.permissions_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.pnl_branch_settings_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.pnl_branch_settings_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6024,7 +6024,7 @@ CREATE SEQUENCE public.pnl_branch_settings_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.pnl_monthly_inputs_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.pnl_monthly_inputs_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6032,7 +6032,7 @@ CREATE SEQUENCE public.pnl_monthly_inputs_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.point_settings_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.point_settings_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6040,7 +6040,7 @@ CREATE SEQUENCE public.point_settings_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.product_commissions_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.product_commissions_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6048,7 +6048,7 @@ CREATE SEQUENCE public.product_commissions_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.product_prices_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.product_prices_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6056,7 +6056,7 @@ CREATE SEQUENCE public.product_prices_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.product_sales_analytics_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.product_sales_analytics_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6064,7 +6064,7 @@ CREATE SEQUENCE public.product_sales_analytics_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.product_storage_settings_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.product_storage_settings_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6072,7 +6072,7 @@ CREATE SEQUENCE public.product_storage_settings_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.production_ai_plans_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.production_ai_plans_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6080,7 +6080,7 @@ CREATE SEQUENCE public.production_ai_plans_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.production_inventory_logs_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.production_inventory_logs_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6088,7 +6088,7 @@ CREATE SEQUENCE public.production_inventory_logs_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.production_order_items_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.production_order_items_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6096,7 +6096,7 @@ CREATE SEQUENCE public.production_order_items_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.production_order_schedules_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.production_order_schedules_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6104,7 +6104,7 @@ CREATE SEQUENCE public.production_order_schedules_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.production_orders_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.production_orders_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6112,7 +6112,7 @@ CREATE SEQUENCE public.production_orders_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.products_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.products_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6120,7 +6120,7 @@ CREATE SEQUENCE public.products_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.project_budget_allocations_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.project_budget_allocations_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6128,7 +6128,7 @@ CREATE SEQUENCE public.project_budget_allocations_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.project_work_items_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.project_work_items_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6136,7 +6136,7 @@ CREATE SEQUENCE public.project_work_items_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.proxy_votes_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.proxy_votes_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6144,7 +6144,7 @@ CREATE SEQUENCE public.proxy_votes_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.purchasing_request_items_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.purchasing_request_items_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6152,7 +6152,7 @@ CREATE SEQUENCE public.purchasing_request_items_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.purchasing_requests_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.purchasing_requests_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6160,7 +6160,7 @@ CREATE SEQUENCE public.purchasing_requests_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.quality_checks_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.quality_checks_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6168,7 +6168,7 @@ CREATE SEQUENCE public.quality_checks_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.quorum_calculations_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.quorum_calculations_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6176,7 +6176,7 @@ CREATE SEQUENCE public.quorum_calculations_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.resolution_signatures_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.resolution_signatures_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6184,7 +6184,7 @@ CREATE SEQUENCE public.resolution_signatures_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.resolution_votes_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.resolution_votes_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6192,7 +6192,7 @@ CREATE SEQUENCE public.resolution_votes_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.role_permissions_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.role_permissions_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6200,7 +6200,7 @@ CREATE SEQUENCE public.role_permissions_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.role_templates_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.role_templates_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6208,7 +6208,7 @@ CREATE SEQUENCE public.role_templates_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.roles_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.roles_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6216,7 +6216,7 @@ CREATE SEQUENCE public.roles_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.sales_data_uploads_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.sales_data_uploads_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6224,7 +6224,7 @@ CREATE SEQUENCE public.sales_data_uploads_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.saved_filters_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.saved_filters_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6232,7 +6232,7 @@ CREATE SEQUENCE public.saved_filters_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.schedule_change_audit_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.schedule_change_audit_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6240,7 +6240,7 @@ CREATE SEQUENCE public.schedule_change_audit_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.schedule_periods_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.schedule_periods_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6248,7 +6248,7 @@ CREATE SEQUENCE public.schedule_periods_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.schedule_templates_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.schedule_templates_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6256,7 +6256,7 @@ CREATE SEQUENCE public.schedule_templates_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.seasons_holidays_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.seasons_holidays_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6264,7 +6264,7 @@ CREATE SEQUENCE public.seasons_holidays_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.security_violation_alerts_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.security_violation_alerts_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6272,7 +6272,7 @@ CREATE SEQUENCE public.security_violation_alerts_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.share_transfers_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.share_transfers_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6280,7 +6280,7 @@ CREATE SEQUENCE public.share_transfers_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.shareholder_dividends_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.shareholder_dividends_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6288,7 +6288,7 @@ CREATE SEQUENCE public.shareholder_dividends_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.shareholder_documents_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.shareholder_documents_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6296,7 +6296,7 @@ CREATE SEQUENCE public.shareholder_documents_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.shareholders_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.shareholders_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6304,7 +6304,7 @@ CREATE SEQUENCE public.shareholders_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.shift_audit_log_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.shift_audit_log_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6312,7 +6312,7 @@ CREATE SEQUENCE public.shift_audit_log_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.shift_checklist_responses_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.shift_checklist_responses_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6320,7 +6320,7 @@ CREATE SEQUENCE public.shift_checklist_responses_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.shift_employees_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.shift_employees_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6328,7 +6328,7 @@ CREATE SEQUENCE public.shift_employees_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.shift_performance_tracking_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.shift_performance_tracking_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6336,7 +6336,7 @@ CREATE SEQUENCE public.shift_performance_tracking_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.shift_photos_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.shift_photos_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6344,7 +6344,7 @@ CREATE SEQUENCE public.shift_photos_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.shift_reminders_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.shift_reminders_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6352,7 +6352,7 @@ CREATE SEQUENCE public.shift_reminders_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.shift_signatures_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.shift_signatures_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6360,7 +6360,7 @@ CREATE SEQUENCE public.shift_signatures_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.shifts_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.shifts_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6368,7 +6368,7 @@ CREATE SEQUENCE public.shifts_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.social_accounts_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.social_accounts_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6376,7 +6376,7 @@ CREATE SEQUENCE public.social_accounts_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.social_content_templates_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.social_content_templates_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6384,7 +6384,7 @@ CREATE SEQUENCE public.social_content_templates_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.social_initiatives_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.social_initiatives_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6392,7 +6392,7 @@ CREATE SEQUENCE public.social_initiatives_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.social_post_metrics_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.social_post_metrics_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6400,7 +6400,7 @@ CREATE SEQUENCE public.social_post_metrics_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.social_posts_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.social_posts_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6408,7 +6408,7 @@ CREATE SEQUENCE public.social_posts_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.social_schedule_slots_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.social_schedule_slots_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6416,7 +6416,7 @@ CREATE SEQUENCE public.social_schedule_slots_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.system_audit_logs_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.system_audit_logs_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6424,7 +6424,7 @@ CREATE SEQUENCE public.system_audit_logs_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.target_daily_allocations_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.target_daily_allocations_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6432,7 +6432,7 @@ CREATE SEQUENCE public.target_daily_allocations_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.target_shift_allocations_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.target_shift_allocations_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6440,7 +6440,7 @@ CREATE SEQUENCE public.target_shift_allocations_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.target_weight_profiles_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.target_weight_profiles_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6448,7 +6448,7 @@ CREATE SEQUENCE public.target_weight_profiles_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.time_entries_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.time_entries_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6456,7 +6456,7 @@ CREATE SEQUENCE public.time_entries_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.timesheet_report_entries_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.timesheet_report_entries_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6464,7 +6464,7 @@ CREATE SEQUENCE public.timesheet_report_entries_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.timesheet_reports_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.timesheet_reports_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6472,7 +6472,7 @@ CREATE SEQUENCE public.timesheet_reports_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.transfer_approval_steps_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.transfer_approval_steps_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6480,7 +6480,7 @@ CREATE SEQUENCE public.transfer_approval_steps_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.transfer_history_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.transfer_history_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6488,7 +6488,7 @@ CREATE SEQUENCE public.transfer_history_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.travel_expenses_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.travel_expenses_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6496,7 +6496,7 @@ CREATE SEQUENCE public.travel_expenses_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.travel_requests_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.travel_requests_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6504,7 +6504,7 @@ CREATE SEQUENCE public.travel_requests_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.user_assignments_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.user_assignments_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6512,7 +6512,7 @@ CREATE SEQUENCE public.user_assignments_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.user_branch_access_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.user_branch_access_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6520,7 +6520,7 @@ CREATE SEQUENCE public.user_branch_access_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.user_permission_overrides_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.user_permission_overrides_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6528,7 +6528,7 @@ CREATE SEQUENCE public.user_permission_overrides_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.user_permissions_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.user_permissions_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6536,7 +6536,7 @@ CREATE SEQUENCE public.user_permissions_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.user_security_settings_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.user_security_settings_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6544,7 +6544,7 @@ CREATE SEQUENCE public.user_security_settings_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.user_sessions_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.user_sessions_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6552,7 +6552,7 @@ CREATE SEQUENCE public.user_sessions_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.visitor_logs_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.visitor_logs_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6560,7 +6560,7 @@ CREATE SEQUENCE public.visitor_logs_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.visitors_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.visitors_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6568,7 +6568,7 @@ CREATE SEQUENCE public.visitors_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.voting_audit_log_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.voting_audit_log_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6576,7 +6576,7 @@ CREATE SEQUENCE public.voting_audit_log_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.voting_tokens_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.voting_tokens_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6584,7 +6584,7 @@ CREATE SEQUENCE public.voting_tokens_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.warehouse_items_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.warehouse_items_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6592,7 +6592,7 @@ CREATE SEQUENCE public.warehouse_items_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.warehouse_movement_logs_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.warehouse_movement_logs_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6600,7 +6600,7 @@ CREATE SEQUENCE public.warehouse_movement_logs_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.warehouse_notifications_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.warehouse_notifications_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6608,7 +6608,7 @@ CREATE SEQUENCE public.warehouse_notifications_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.waste_items_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.waste_items_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6616,7 +6616,7 @@ CREATE SEQUENCE public.waste_items_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.waste_reports_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.waste_reports_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6624,7 +6624,7 @@ CREATE SEQUENCE public.waste_reports_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.waste_risk_alerts_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.waste_risk_alerts_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6632,7 +6632,7 @@ CREATE SEQUENCE public.waste_risk_alerts_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.waste_risk_rules_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.waste_risk_rules_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -6640,7 +6640,7 @@ CREATE SEQUENCE public.waste_risk_rules_id_seq
     NO MAXVALUE
     CACHE 1;
 
-CREATE SEQUENCE public.weekly_schedule_locks_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.weekly_schedule_locks_id_seq
     AS integer
     START WITH 1
     INCREMENT BY 1
