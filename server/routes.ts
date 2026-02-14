@@ -14229,27 +14229,47 @@ export async function registerRoutes(
           const firstRowValues = Object.values(firstRow).map(v => String(v).toLowerCase().trim());
           const columnKeys = Object.keys(firstRow);
           
-          // Check if first row looks like header labels
+          // Check if first row looks like header labels (using partial/contains matching for Arabic)
           const headerKeywords = [
             'product', 'المنتج', 'منتج', 'item', 'الصنف', 'title', 'العنوان',
             'quantity', 'الكمية', 'كمية', 'qty', 'value', 'القيمة',
-            'sales', 'المبيعات', 'revenue', 'total', 'الإيرادات', 'amount'
+            'sales', 'المبيعات', 'revenue', 'total', 'الإيرادات', 'amount',
+            'اسم', 'معدل', 'إجمالي', 'التصنيف', 'المباعة'
           ];
           
-          const hasHeaderRow = firstRowValues.some(v => headerKeywords.includes(v));
+          const hasHeaderRow = firstRowValues.some(v => 
+            headerKeywords.includes(v) || 
+            headerKeywords.some(kw => v.includes(kw) || kw.includes(v))
+          );
           
           if (hasHeaderRow) {
             console.log('Detected header row in first data row, creating column mapping...');
             dataStartIndex = 1; // Skip first row as it's headers
             
             // Create mapping from Excel column keys to semantic names
+            // Uses partial matching for compound Arabic names like "الكمية المباعة", "إجمالي الإيرادات", "اسم المنتج"
+            const productKeywords = ['product', 'المنتج', 'منتج', 'item', 'title', 'العنوان', 'menu item', 'الصنف', 'name', 'الاسم', 'اسم المنتج', 'اسم الصنف'];
+            const quantityKeywords = ['quantity', 'الكمية', 'كمية', 'qty', 'count', 'عدد', 'units', 'المباعة', 'الكمية المباعة'];
+            const revenueKeywords = ['sales', 'المبيعات', 'revenue', 'total', 'amount', 'value', 'القيمة', 'الإيرادات', 'إجمالي الإيرادات', 'price', 'السعر', 'إجمالي', 'صافي'];
+            const dailyAvgKeywords = ['معدل', 'معدل البيع', 'average', 'daily', 'يومي', 'معدل البيع اليومي'];
+            const categoryKeywords = ['التصنيف', 'الفئة', 'category', 'تصنيف', 'نوع'];
+            
             for (const [key, value] of Object.entries(firstRow)) {
               const valLower = String(value).toLowerCase().trim();
-              if (['product', 'المنتج', 'منتج', 'item', 'title', 'العنوان', 'menu item', 'الصنف', 'name', 'الاسم'].includes(valLower)) {
+              
+              const matchesAny = (keywords: string[]) => 
+                keywords.includes(valLower) || 
+                keywords.some(kw => valLower.includes(kw) || (kw.length > 2 && kw.includes(valLower)));
+              
+              if (!columnMapping['product'] && matchesAny(productKeywords)) {
                 columnMapping['product'] = key;
-              } else if (['quantity', 'الكمية', 'كمية', 'qty', 'count', 'عدد', 'units'].includes(valLower)) {
+              } else if (!columnMapping['category'] && matchesAny(categoryKeywords)) {
+                columnMapping['category'] = key;
+              } else if (!columnMapping['quantity'] && matchesAny(quantityKeywords)) {
                 columnMapping['quantity'] = key;
-              } else if (['sales', 'المبيعات', 'revenue', 'total', 'amount', 'value', 'القيمة', 'الإيرادات', 'price', 'السعر'].includes(valLower)) {
+              } else if (!columnMapping['dailyAvg'] && matchesAny(dailyAvgKeywords)) {
+                columnMapping['dailyAvg'] = key;
+              } else if (!columnMapping['revenue'] && matchesAny(revenueKeywords)) {
                 columnMapping['revenue'] = key;
               }
             }
@@ -14261,8 +14281,16 @@ export async function registerRoutes(
           if (columnKeys.length === 2 && !hasHeaderRow) {
             console.log('Detected two-column format, using first as product, second as value');
             columnMapping['product'] = columnKeys[0];
-            columnMapping['quantity'] = columnKeys[1];
-            columnMapping['revenue'] = columnKeys[1];
+            // Determine if the value column is quantity or revenue by checking if values are integers
+            const sampleVals = parsedData.slice(0, 10).map((r: any) => parseFloat(r[columnKeys[1]] || 0));
+            const allIntegers = sampleVals.every(v => Number.isInteger(v));
+            if (allIntegers) {
+              columnMapping['quantity'] = columnKeys[1];
+              // Don't set revenue - it's a quantity-only report
+            } else {
+              columnMapping['revenue'] = columnKeys[1];
+              // Don't set quantity - it's a revenue-only report
+            }
           }
           
           // Auto-detect columns if no header and no mapping yet
@@ -14288,29 +14316,48 @@ export async function registerRoutes(
         // Process data rows (skipping header if detected)
         const dataRows = Array.isArray(parsedData) ? parsedData.slice(dataStartIndex) : [];
         
+        // Metadata/invalid product names to filter out during parsing (exact match only to avoid over-filtering)
+        const metadataExactNames = new Set(['النطاق الزمني', 'الفترة', 'التاريخ', 'الإجمالي', 'المجموع', 'الفروع', 'total', 'sum', 'date range', 'period', 'product', 'branches', 'grand total', 'المجموع الكلي', 'subtotal', 'category', 'التصنيف'].map(s => s.toLowerCase().trim()));
+        const isMetadataRow = (name: string) => {
+          if (!name || name.trim().length < 2) return true;
+          const lower = name.toLowerCase().trim();
+          return metadataExactNames.has(lower);
+        };
+        
+        const productCategory: Record<string, string> = {};
+        const productDailyAvg: Record<string, number> = {};
+        
         dataRows.forEach((row: any) => {
           let productName: any;
           let quantity: number;
           let revenue: number;
+          let category: string | null = null;
+          let dailyAvg: number = 0;
           
           if (Object.keys(columnMapping).length > 0) {
-            // Use column mapping if we detected a header row
             productName = columnMapping['product'] ? row[columnMapping['product']] : null;
-            quantity = parseInt(row[columnMapping['quantity']] || 0, 10);
-            revenue = parseFloat(row[columnMapping['revenue']] || 0);
+            quantity = columnMapping['quantity'] ? parseFloat(row[columnMapping['quantity']] || 0) : 0;
+            revenue = columnMapping['revenue'] ? parseFloat(row[columnMapping['revenue']] || 0) : 0;
+            if (columnMapping['category']) {
+              category = row[columnMapping['category']] || null;
+            }
+            if (columnMapping['dailyAvg']) {
+              dailyAvg = parseFloat(row[columnMapping['dailyAvg']] || 0);
+            }
           } else {
-            // Fall back to standard column name detection
             productName = findValue(row, productColumns);
-            quantity = parseInt(findValue(row, quantityColumns) || 0, 10);
+            quantity = parseFloat(findValue(row, quantityColumns) || 0);
             revenue = parseFloat(findValue(row, revenueColumns) || 0);
           }
           
-          if (productName && typeof productName === 'string' && productName.trim()) {
+          if (productName && typeof productName === 'string' && productName.trim() && !isMetadataRow(productName)) {
             const cleanName = productName.trim();
             uniqueProducts.add(cleanName);
-            productVelocity[cleanName] = (productVelocity[cleanName] || 0) + (isNaN(quantity) ? 1 : quantity);
+            productVelocity[cleanName] = (productVelocity[cleanName] || 0) + (isNaN(quantity) ? 0 : quantity);
             productRevenue[cleanName] = (productRevenue[cleanName] || 0) + (isNaN(revenue) ? 0 : revenue);
             totalSales += isNaN(revenue) ? 0 : revenue;
+            if (category) productCategory[cleanName] = category;
+            if (dailyAvg > 0) productDailyAvg[cleanName] = (productDailyAvg[cleanName] || 0) + dailyAvg;
           }
         });
         
@@ -14333,14 +14380,17 @@ export async function registerRoutes(
         const analyticsRecords = Object.entries(productVelocity).map(([name, velocity]) => {
           const product = products.find(p => p.name === name);
           const revenue = productRevenue[name] || 0;
+          const excelCategory = productCategory[name] || null;
+          const excelDailyAvg = productDailyAvg[name] || 0;
+          const calculatedDailyAvg = velocity > 0 ? Math.round((velocity / daysInPeriod) * 100) / 100 : excelDailyAvg;
           return {
             uploadId: upload.id,
             productId: product?.id || null,
             productName: name,
-            productCategory: product?.category || null,
+            productCategory: excelCategory || product?.category || null,
             totalQuantitySold: velocity,
             totalRevenue: revenue,
-            averageDailySales: Math.round((velocity / daysInPeriod) * 100) / 100,
+            averageDailySales: calculatedDailyAvg > 0 ? calculatedDailyAvg : (revenue > 0 ? Math.round((revenue / daysInPeriod) * 100) / 100 : 0),
             salesVelocity: velocity
           };
         });
@@ -14476,47 +14526,68 @@ export async function registerRoutes(
         return res.status(400).json({ error: "قيمة المبيعات المستهدفة غير صالحة" });
       }
       
+      // Determine if we have usable quantity data (not all zeros)
+      const hasQuantityData = totalHistoricalQuantity > 0;
+      const hasRevenueData = totalHistoricalRevenue > 0;
+      
+      // Calculate scaling factor: targetSales / historicalRevenue
+      // This tells us how much to scale quantities up or down
+      const scalingFactor = hasRevenueData ? targetSalesNum / totalHistoricalRevenue : 1;
+      
+      console.log(`Forecast: target=${targetSalesNum}, historicalRevenue=${totalHistoricalRevenue}, historicalQty=${totalHistoricalQuantity}, scalingFactor=${scalingFactor}, hasQty=${hasQuantityData}, hasRevenue=${hasRevenueData}`);
+      
+      // Calculate global average unit price for fallback (only from products that have both qty and revenue)
+      const productsWithBoth = analytics.filter(a => (a.totalQuantitySold || 0) > 0 && (a.totalRevenue || 0) > 0);
+      const globalAvgUnitPrice = productsWithBoth.length > 0
+        ? productsWithBoth.reduce((s, a) => s + a.totalRevenue, 0) / productsWithBoth.reduce((s, a) => s + a.totalQuantitySold, 0)
+        : 0;
+      
       const forecastItems = analytics.map(product => {
-        // Calculate ratio based on revenue if available, otherwise quantity
-        // Safe division with guards against zero
-        let ratio = 0;
-        if (totalHistoricalRevenue > 0) {
-          ratio = (product.totalRevenue || 0) / totalHistoricalRevenue;
-        } else if (totalHistoricalQuantity > 0) {
-          ratio = (product.totalQuantitySold || 0) / totalHistoricalQuantity;
+        const productRevenue = product.totalRevenue || 0;
+        const productQty = product.totalQuantitySold || 0;
+        
+        // Calculate revenue ratio (what % of total revenue is this product)
+        let revenueRatio = 0;
+        if (hasRevenueData && productRevenue > 0) {
+          revenueRatio = productRevenue / totalHistoricalRevenue;
+        } else if (hasQuantityData && productQty > 0) {
+          revenueRatio = productQty / totalHistoricalQuantity;
         }
         
-        // Guard against NaN
-        if (isNaN(ratio)) ratio = 0;
+        if (isNaN(revenueRatio)) revenueRatio = 0;
         
-        // Calculate forecasted sales amount for this product
-        const forecastedSalesAmount = targetSalesNum * ratio;
+        // Calculate forecasted sales amount = target * ratio
+        const forecastedSalesAmount = targetSalesNum * revenueRatio;
         
-        // Get average price per unit from historical data
-        const totalQty = product.totalQuantitySold || 0;
-        const avgPricePerUnit = totalQty > 0 && product.totalRevenue 
-          ? product.totalRevenue / totalQty 
-          : 0;
-        
-        // Calculate forecasted quantity with fallback
+        // Calculate forecasted quantity using the best available method:
         let forecastedQuantity = 0;
-        if (avgPricePerUnit > 0 && forecastedSalesAmount > 0) {
-          forecastedQuantity = Math.ceil(forecastedSalesAmount / avgPricePerUnit);
+        
+        if (productQty > 0 && productRevenue > 0) {
+          // BEST: Product has both qty and revenue - use its own unit price
+          const unitPrice = productRevenue / productQty;
+          forecastedQuantity = Math.ceil(forecastedSalesAmount / unitPrice);
+        } else if (productQty > 0 && hasRevenueData) {
+          // Product has qty but no revenue - scale qty by target factor
+          forecastedQuantity = Math.ceil(productQty * scalingFactor);
+        } else if (productRevenue > 0 && globalAvgUnitPrice > 0) {
+          // Product has revenue but no qty - estimate qty using global avg price
+          forecastedQuantity = Math.ceil(forecastedSalesAmount / globalAvgUnitPrice);
         } else if (product.averageDailySales && product.averageDailySales > 0) {
-          forecastedQuantity = Math.ceil(product.averageDailySales);
-        } else if (ratio > 0) {
-          // Fallback: use ratio-based quantity distribution
-          forecastedQuantity = Math.max(1, Math.ceil(ratio * 100));
+          // Use daily average from Excel, scaled appropriately
+          forecastedQuantity = Math.ceil(product.averageDailySales * (hasRevenueData ? scalingFactor : 1));
+        } else if (revenueRatio > 0) {
+          // Fallback: minimum 1 unit for products with any ratio
+          forecastedQuantity = 1;
         }
         
         return {
           productId: product.productId,
           productName: product.productName,
           productCategory: product.productCategory,
-          historicalQuantity: product.totalQuantitySold || 0,
-          historicalRevenue: product.totalRevenue || 0,
-          salesRatio: Math.round(ratio * 10000) / 100, // percentage with 2 decimals
-          forecastedQuantity: Math.max(1, forecastedQuantity),
+          historicalQuantity: productQty,
+          historicalRevenue: productRevenue,
+          salesRatio: Math.round(revenueRatio * 10000) / 100,
+          forecastedQuantity: Math.max(forecastedQuantity > 0 ? 1 : 0, forecastedQuantity),
           forecastedSalesAmount: Math.round(forecastedSalesAmount * 100) / 100
         };
       }).filter(item => item.forecastedQuantity > 0 && item.salesRatio > 0);
