@@ -11530,6 +11530,89 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/advanced-production-orders/:id/mto-items", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid order ID" });
+
+      const result = await storage.getAdvancedProductionOrderWithItems(id);
+      if (!result) return res.status(404).json({ error: "Order not found" });
+
+      const order = result.order;
+
+      if (!isUserAdmin(req)) {
+        const hasSourceAccess = order.sourceBranchId ? await canAccessBranch(req, order.sourceBranchId) : false;
+        const hasTargetAccess = order.targetBranchId ? await canAccessBranch(req, order.targetBranchId) : false;
+        if (!hasSourceAccess && !hasTargetAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول" });
+        }
+      }
+
+      if (order.mtoItems && Array.isArray(order.mtoItems) && (order.mtoItems as any[]).length > 0) {
+        return res.json({ items: order.mtoItems, source: 'stored' });
+      }
+
+      const branchId = order.sourceBranchId;
+      const salesData = await db.select().from(dailySalesData).where(eq(dailySalesData.branchId, branchId));
+
+      if (!salesData || salesData.length === 0) {
+        return res.json({ items: [], source: 'no_data' });
+      }
+
+      const productionItemNames = result.items.map((i: any) => (i.productName || '').trim().toLowerCase());
+      
+      const productAggregates = new Map<string, { totalQty: number; totalValue: number; count: number; category: string | null }>();
+      salesData.forEach(sd => {
+        const name = (sd.productName || '').trim();
+        const key = name.toLowerCase();
+        const existing = productAggregates.get(key) || { totalQty: 0, totalValue: 0, count: 0, category: null };
+        existing.totalQty += (sd.quantitySold || 0);
+        existing.totalValue += (sd.salesValue || 0);
+        existing.count += 1;
+        if (!existing.category && sd.productCategory) existing.category = sd.productCategory;
+        productAggregates.set(key, existing);
+      });
+
+      const mtoItems: any[] = [];
+      productAggregates.forEach((agg, key) => {
+        const isInProduction = productionItemNames.some((pn: string) => {
+          if (pn === key) return true;
+          const pnNorm = pn.replace(/[-_\s]+/g, ' ').trim();
+          const keyNorm = key.replace(/[-_\s]+/g, ' ').trim();
+          return pnNorm === keyNorm || pnNorm.includes(keyNorm) || keyNorm.includes(pnNorm);
+        });
+        if (!isInProduction) {
+          const displayName = salesData.find(sd => (sd.productName || '').trim().toLowerCase() === key)?.productName || key;
+          const uniqueDays = new Set(salesData.filter(sd => (sd.productName || '').trim().toLowerCase() === key).map(sd => String(sd.salesDate))).size;
+          const avgDailyQty = agg.count > 0 ? Math.ceil(agg.totalQty / Math.max(1, uniqueDays)) : 0;
+          const avgDailyValue = agg.count > 0 ? Math.round(agg.totalValue / Math.max(1, uniqueDays)) : 0;
+
+          const scalingFactor = order.targetSalesValue && agg.totalValue > 0 
+            ? (order.targetSalesValue / (productAggregates.size > 0 ? Array.from(productAggregates.values()).reduce((s, v) => s + v.totalValue, 0) : 1))
+            : 1;
+
+          mtoItems.push({
+            productName: displayName,
+            productCategory: agg.category || 'غير محدد',
+            forecastedQuantity: Math.ceil(avgDailyQty * scalingFactor),
+            forecastedSalesAmount: Math.round(avgDailyValue * scalingFactor),
+          });
+        }
+      });
+
+      if (mtoItems.length > 0) {
+        await db.update(advancedProductionOrders)
+          .set({ mtoItems: mtoItems })
+          .where(eq(advancedProductionOrders.id, id));
+      }
+
+      res.json({ items: mtoItems, source: 'calculated' });
+    } catch (error) {
+      console.error("Error getting MTO items:", error);
+      res.status(500).json({ error: "فشل في جلب أصناف التحضير بعد الطلب" });
+    }
+  });
+
   // Update production order
   app.patch("/api/advanced-production-orders/:id", isAuthenticated, requirePermission("production", "edit"), async (req, res) => {
     try {
@@ -15066,7 +15149,14 @@ export async function registerRoutes(
           return `${notes || ''}\n\nتوقعات مبنية على بيانات المبيعات السابقة\nملف المصدر: ${upload.fileName}\nالمبيعات المستهدفة: ${targetSalesNum.toLocaleString('en-GB')} ريال\nإجمالي مبيعات الملف المصدر: ${sourceSalesValue.toLocaleString('en-GB')} ريال\n\nأصناف الإنتاج المسبق: ${productionForecastItems.length} صنف (${preProductionPct}%) - القيمة: ${Math.round(preProductionValue).toLocaleString('en-GB')} ريال (مخبوزات، حلويات، سندوتشات)${salesOnlyItems.length > 0 ? `\nأصناف مبيعات فقط (تحضير بعد الطلب): ${salesOnlyItems.length} صنف (${madeToOrderPct}%) - القيمة: ${Math.round(madeToOrderValue).toLocaleString('en-GB')} ريال - ${salesOnlyItems.map(i => i.productName).join('، ')}\n\n[تفاصيل أصناف التحضير بعد الطلب]\n${mtoDetailLines}\n[/تفاصيل أصناف التحضير بعد الطلب]` : ''}`;
         })(),
         totalItems: productionForecastItems.length,
-        completedItems: 0
+        completedItems: 0,
+        mtoItems: salesOnlyItems.length > 0 ? salesOnlyItems.map(i => ({
+          productName: i.productName,
+          productCategory: i.resolvedCategory || i.productCategory || null,
+          forecastedQuantity: i.forecastedQuantity || 0,
+          forecastedSalesAmount: Math.round(i.forecastedSalesAmount || 0),
+          salesRatio: i.salesRatio || 0,
+        })) : null
       };
       
       const orderItems = productionForecastItems.map((item, index) => {

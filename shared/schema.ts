@@ -3084,6 +3084,7 @@ export const advancedProductionOrders = pgTable("advanced_production_orders", {
   isAiGenerated: boolean("is_ai_generated").default(false),
   aiPlanId: integer("ai_plan_id"),
   notes: text("notes"),
+  mtoItems: jsonb("mto_items"),
   createdBy: varchar("created_by").references(() => users.id),
   approvedBy: varchar("approved_by").references(() => users.id),
   approvedAt: timestamp("approved_at"),
