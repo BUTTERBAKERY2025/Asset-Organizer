@@ -15056,7 +15056,12 @@ export async function registerRoutes(
         status: 'draft' as const,
         targetSalesValue: targetSalesNum,
         sourceSalesValue: sourceSalesValue,
-        notes: `${notes || ''}\n\nتوقعات مبنية على بيانات المبيعات السابقة\nملف المصدر: ${upload.fileName}\nالمبيعات المستهدفة: ${targetSalesNum.toLocaleString('en-GB')} ريال\nإجمالي مبيعات الملف المصدر: ${sourceSalesValue.toLocaleString('en-GB')} ريال\n\nأصناف الإنتاج المسبق: ${productionForecastItems.length} صنف (مخبوزات، حلويات، سندوتشات)${salesOnlyItems.length > 0 ? `\nأصناف مبيعات فقط (تحضير بعد الطلب): ${salesOnlyItems.length} صنف - ${salesOnlyItems.map(i => i.productName).join('، ')}` : ''}`,
+        notes: (() => {
+          const totalAllItems = productionForecastItems.length + salesOnlyItems.length;
+          const preProductionPct = totalAllItems > 0 ? Math.round((productionForecastItems.length / totalAllItems) * 100) : 0;
+          const madeToOrderPct = totalAllItems > 0 ? Math.round((salesOnlyItems.length / totalAllItems) * 100) : 0;
+          return `${notes || ''}\n\nتوقعات مبنية على بيانات المبيعات السابقة\nملف المصدر: ${upload.fileName}\nالمبيعات المستهدفة: ${targetSalesNum.toLocaleString('en-GB')} ريال\nإجمالي مبيعات الملف المصدر: ${sourceSalesValue.toLocaleString('en-GB')} ريال\n\nأصناف الإنتاج المسبق: ${productionForecastItems.length} صنف (${preProductionPct}%) (مخبوزات، حلويات، سندوتشات)${salesOnlyItems.length > 0 ? `\nأصناف مبيعات فقط (تحضير بعد الطلب): ${salesOnlyItems.length} صنف (${madeToOrderPct}%) - ${salesOnlyItems.map(i => i.productName).join('، ')}` : ''}`;
+        })(),
         totalItems: productionForecastItems.length,
         completedItems: 0
       };
