@@ -1,12 +1,16 @@
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { useParams, Link } from "wouter";
 import { 
   ArrowRight, Edit, Printer, Package, Calendar, Factory, 
   ClipboardList, Building2, User, Clock, TrendingUp, CheckCircle,
-  AlertCircle, Loader2, FileText, Download, FileSpreadsheet
+  AlertCircle, Loader2, FileText, Download, FileSpreadsheet,
+  Play, Pause, XCircle, Send, ThumbsUp, RotateCcw, ChevronLeft,
+  ArrowLeftRight, Sparkles
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -16,17 +20,28 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useBranches } from "@/hooks/useBranches";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useReactToPrint } from "react-to-print";
 import * as XLSX from "xlsx";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Textarea } from "@/components/ui/textarea";
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string }> = {
-  draft: { label: "مسودة", color: "text-gray-700", bgColor: "bg-gray-100" },
-  pending: { label: "قيد الانتظار", color: "text-yellow-700", bgColor: "bg-yellow-100" },
-  approved: { label: "معتمد", color: "text-blue-700", bgColor: "bg-blue-100" },
-  in_progress: { label: "قيد التنفيذ", color: "text-purple-700", bgColor: "bg-purple-100" },
-  completed: { label: "مكتمل", color: "text-green-700", bgColor: "bg-green-100" },
-  cancelled: { label: "ملغي", color: "text-red-700", bgColor: "bg-red-100" },
+const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string; icon: any }> = {
+  draft: { label: "مسودة", color: "text-gray-700", bgColor: "bg-gray-100", icon: FileText },
+  pending: { label: "قيد المراجعة", color: "text-yellow-700", bgColor: "bg-yellow-100", icon: Clock },
+  approved: { label: "معتمد", color: "text-blue-700", bgColor: "bg-blue-100", icon: ThumbsUp },
+  in_progress: { label: "قيد التنفيذ", color: "text-purple-700", bgColor: "bg-purple-100", icon: Play },
+  completed: { label: "مكتمل", color: "text-green-700", bgColor: "bg-green-100", icon: CheckCircle },
+  cancelled: { label: "ملغي", color: "text-red-700", bgColor: "bg-red-100", icon: XCircle },
 };
 
 const ORDER_TYPE_CONFIG: Record<string, { label: string; color: string }> = {
@@ -39,6 +54,30 @@ const PRIORITY_CONFIG: Record<string, { label: string; color: string }> = {
   normal: { label: "عادية", color: "bg-gray-100 text-gray-700" },
   high: { label: "عالية", color: "bg-orange-100 text-orange-700" },
   urgent: { label: "عاجلة", color: "bg-red-100 text-red-700" },
+};
+
+const WORKFLOW_STEPS = [
+  { status: 'draft', label: 'مسودة', description: 'إنشاء وتعديل الأمر' },
+  { status: 'pending', label: 'مراجعة', description: 'بانتظار الاعتماد' },
+  { status: 'approved', label: 'معتمد', description: 'جاهز للتنفيذ' },
+  { status: 'in_progress', label: 'تنفيذ', description: 'الإنتاج جارٍ' },
+  { status: 'completed', label: 'مكتمل', description: 'تم الإنجاز' },
+];
+
+const STATUS_ACTIONS: Record<string, { nextStatus: string; label: string; icon: any; color: string; description: string }[]> = {
+  draft: [
+    { nextStatus: 'pending', label: 'إرسال للمراجعة', icon: Send, color: 'bg-yellow-500 hover:bg-yellow-600 text-white', description: 'إرسال الأمر للمراجعة والاعتماد' },
+  ],
+  pending: [
+    { nextStatus: 'approved', label: 'اعتماد الأمر', icon: ThumbsUp, color: 'bg-blue-500 hover:bg-blue-600 text-white', description: 'اعتماد الأمر والموافقة على التنفيذ' },
+    { nextStatus: 'draft', label: 'إرجاع للتعديل', icon: RotateCcw, color: 'bg-gray-500 hover:bg-gray-600 text-white', description: 'إرجاع الأمر للتعديل' },
+  ],
+  approved: [
+    { nextStatus: 'in_progress', label: 'بدء التنفيذ', icon: Play, color: 'bg-purple-500 hover:bg-purple-600 text-white', description: 'بدء تنفيذ الإنتاج' },
+  ],
+  in_progress: [
+    { nextStatus: 'completed', label: 'إتمام الأمر', icon: CheckCircle, color: 'bg-green-500 hover:bg-green-600 text-white', description: 'تم إكمال جميع المنتجات' },
+  ],
 };
 
 interface OrderItem {
@@ -82,6 +121,8 @@ interface OrderResponse {
   notes: string;
   createdAt: string;
   updatedAt: string;
+  targetSalesValue?: number;
+  sourceSalesValue?: number;
   order?: any;
   items?: OrderItem[];
   schedules?: OrderSchedule[];
@@ -90,6 +131,11 @@ interface OrderResponse {
 export default function AdvancedProductionOrderDetailsPage() {
   const { id } = useParams();
   const printRef = useRef<HTMLDivElement>(null);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<{ nextStatus: string; label: string } | null>(null);
+  const [statusNotes, setStatusNotes] = useState("");
 
   const { data: rawData, isLoading } = useQuery<OrderResponse>({
     queryKey: [`/api/advanced-production-orders/${id}`],
@@ -97,6 +143,23 @@ export default function AdvancedProductionOrderDetailsPage() {
   });
 
   const { branches } = useBranches();
+
+  const statusMutation = useMutation({
+    mutationFn: async ({ status, notes }: { status: string; notes?: string }) => {
+      const res = await apiRequest("POST", `/api/advanced-production-orders/${id}/status`, { status, notes });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === 'string' && q.queryKey[0].includes('advanced-production') });
+      toast({ title: "تم تغيير الحالة بنجاح" });
+      setStatusDialogOpen(false);
+      setStatusNotes("");
+      setPendingAction(null);
+    },
+    onError: (err: any) => {
+      toast({ title: "خطأ", description: err?.message || "فشل في تغيير الحالة", variant: "destructive" });
+    },
+  });
 
   const handlePrint = useReactToPrint({
     contentRef: printRef,
@@ -248,6 +311,16 @@ export default function AdvancedProductionOrderDetailsPage() {
     }
   };
 
+  const handleStatusAction = (nextStatus: string, label: string) => {
+    setPendingAction({ nextStatus, label });
+    setStatusDialogOpen(true);
+  };
+
+  const confirmStatusChange = () => {
+    if (!pendingAction) return;
+    statusMutation.mutate({ status: pendingAction.nextStatus, notes: statusNotes });
+  };
+
   if (isLoading) {
     return (
       <Layout>
@@ -290,18 +363,23 @@ export default function AdvancedProductionOrderDetailsPage() {
   const statusConfig = STATUS_CONFIG[order.status] || STATUS_CONFIG.draft;
   const typeConfig = ORDER_TYPE_CONFIG[order.orderType] || ORDER_TYPE_CONFIG.daily;
   const priorityConfig = PRIORITY_CONFIG[order.priority] || PRIORITY_CONFIG.normal;
+  const StatusIcon = statusConfig.icon;
+  const currentStepIndex = WORKFLOW_STEPS.findIndex(s => s.status === order.status);
+  const actions = STATUS_ACTIONS[order.status] || [];
 
   const totalTargetQuantity = items.reduce((sum: number, item: OrderItem) => sum + (item.targetQuantity || 0), 0);
   const totalProducedQuantity = items.reduce((sum: number, item: OrderItem) => sum + (item.producedQuantity || 0), 0);
   const totalItemsCost = items.reduce((sum: number, item: OrderItem) => sum + ((item.targetQuantity || 0) * (item.unitPrice || 0)), 0);
+  const completionPct = totalTargetQuantity > 0 ? Math.round((totalProducedQuantity / totalTargetQuantity) * 100) : (order.completionPercentage || 0);
 
   return (
     <Layout>
-      <div className="p-6 max-w-6xl mx-auto space-y-6" dir="rtl">
+      <div className="p-3 sm:p-6 max-w-6xl mx-auto space-y-4 sm:space-y-6" dir="rtl">
+        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3 sm:gap-4">
             <Link href="/advanced-production-orders">
-              <Button variant="ghost" size="icon" className="hover:bg-amber-50 h-11 w-11 min-h-[44px] min-w-[44px] sm:h-10 sm:w-10 sm:min-h-0 sm:min-w-0">
+              <Button variant="ghost" size="icon" className="hover:bg-amber-50 h-11 w-11 min-h-[44px] min-w-[44px] sm:h-10 sm:w-10 sm:min-h-0 sm:min-w-0" data-testid="btn-back">
                 <ArrowRight className="h-5 w-5" />
               </Button>
             </Link>
@@ -310,7 +388,8 @@ export default function AdvancedProductionOrderDetailsPage() {
                 <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900" data-testid="order-title">
                   {order.title || order.orderNumber}
                 </h1>
-                <Badge className={`${statusConfig.bgColor} ${statusConfig.color} border-0`}>
+                <Badge className={`${statusConfig.bgColor} ${statusConfig.color} border-0 gap-1`}>
+                  <StatusIcon className="h-3 w-3" />
                   {statusConfig.label}
                 </Badge>
               </div>
@@ -333,17 +412,154 @@ export default function AdvancedProductionOrderDetailsPage() {
               <FileSpreadsheet className="h-4 w-4 ml-2" />
               Excel
             </Button>
-            <Link href={`/advanced-production-orders/${id}/edit`}>
-              <Button className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 h-11 sm:h-9" data-testid="btn-edit">
-                <Edit className="h-4 w-4 ml-2" />
-                تعديل
-              </Button>
-            </Link>
+            {(order.status === 'draft' || order.status === 'pending') && (
+              <Link href={`/advanced-production-orders/${id}/edit`}>
+                <Button className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 h-11 sm:h-9" data-testid="btn-edit">
+                  <Edit className="h-4 w-4 ml-2" />
+                  تعديل
+                </Button>
+              </Link>
+            )}
           </div>
         </div>
 
-        <div ref={printRef} className="grid grid-cols-1 lg:grid-cols-3 gap-6 print:block">
-          <div className="lg:col-span-2 space-y-6">
+        {/* Workflow Steps */}
+        {order.status !== 'cancelled' && (
+          <Card className="border-0 shadow-sm overflow-hidden">
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center justify-between gap-1 sm:gap-2">
+                {WORKFLOW_STEPS.map((step, index) => {
+                  const isCompleted = currentStepIndex > index;
+                  const isCurrent = currentStepIndex === index;
+                  const StepIcon = STATUS_CONFIG[step.status]?.icon || Clock;
+                  return (
+                    <div key={step.status} className="flex items-center flex-1">
+                      <div className={`flex flex-col items-center flex-1 ${isCurrent ? 'scale-105' : ''}`}>
+                        <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-all ${
+                          isCompleted ? 'bg-green-500 text-white' :
+                          isCurrent ? 'bg-amber-500 text-white ring-4 ring-amber-200' :
+                          'bg-gray-200 text-gray-400'
+                        }`}>
+                          {isCompleted ? <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5" /> : <StepIcon className="h-4 w-4 sm:h-5 sm:w-5" />}
+                        </div>
+                        <p className={`text-[10px] sm:text-xs mt-1 font-medium text-center ${
+                          isCurrent ? 'text-amber-700' : isCompleted ? 'text-green-700' : 'text-gray-400'
+                        }`}>{step.label}</p>
+                      </div>
+                      {index < WORKFLOW_STEPS.length - 1 && (
+                        <div className={`h-0.5 flex-1 mx-1 ${
+                          isCompleted ? 'bg-green-400' : 'bg-gray-200'
+                        }`} />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Action Buttons */}
+        {actions.length > 0 && (
+          <Card className="border-2 border-amber-200 shadow-md bg-gradient-to-r from-amber-50 to-orange-50">
+            <CardContent className="p-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-amber-500 text-white flex items-center justify-center">
+                    <Sparkles className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-amber-900">الخطوة التالية</p>
+                    <p className="text-xs text-amber-700">{actions[0]?.description}</p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                  {actions.map(action => {
+                    const ActionIcon = action.icon;
+                    return (
+                      <Button
+                        key={action.nextStatus}
+                        onClick={() => handleStatusAction(action.nextStatus, action.label)}
+                        disabled={statusMutation.isPending}
+                        className={`${action.color} gap-2 h-11 sm:h-10 flex-1 sm:flex-none`}
+                        data-testid={`btn-status-${action.nextStatus}`}
+                      >
+                        {statusMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ActionIcon className="h-4 w-4" />}
+                        {action.label}
+                      </Button>
+                    );
+                  })}
+                  {order.status !== 'cancelled' && order.status !== 'completed' && (
+                    <Button
+                      variant="outline"
+                      onClick={() => handleStatusAction('cancelled', 'إلغاء الأمر')}
+                      disabled={statusMutation.isPending}
+                      className="border-red-300 text-red-600 hover:bg-red-50 h-11 sm:h-10"
+                      data-testid="btn-status-cancel"
+                    >
+                      <XCircle className="h-4 w-4 ml-1" />
+                      إلغاء
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Cancelled - Reactivate */}
+        {order.status === 'cancelled' && (
+          <Card className="border-2 border-gray-300 bg-gray-50">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <XCircle className="h-8 w-8 text-red-400" />
+                <div>
+                  <p className="font-bold text-gray-700">هذا الأمر ملغي</p>
+                  <p className="text-xs text-gray-500">يمكنك إعادة تفعيله كمسودة</p>
+                </div>
+              </div>
+              <Button
+                onClick={() => handleStatusAction('draft', 'إعادة تفعيل')}
+                disabled={statusMutation.isPending}
+                className="bg-gray-600 hover:bg-gray-700 text-white"
+                data-testid="btn-reactivate"
+              >
+                <RotateCcw className="h-4 w-4 ml-2" />
+                إعادة تفعيل
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Link to Daily Production - show when approved or in_progress */}
+        {(order.status === 'approved' || order.status === 'in_progress') && (
+          <Card className="border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-indigo-50">
+            <CardContent className="p-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-purple-500 text-white flex items-center justify-center">
+                    <Factory className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-purple-900">الإنتاج اليومي</p>
+                    <p className="text-xs text-purple-700">انتقل لصفحة الإنتاج اليومي لتسجيل الدفعات المنتجة حسب هذا الأمر</p>
+                  </div>
+                </div>
+                <Link href={`/daily-production?branchId=${order.sourceBranchId}`}>
+                  <Button className="bg-purple-600 hover:bg-purple-700 text-white gap-2 h-11 sm:h-10" data-testid="btn-go-production">
+                    <Factory className="h-4 w-4" />
+                    فتح الإنتاج اليومي
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        <div ref={printRef} className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 print:block">
+          <div className="lg:col-span-2 space-y-4 sm:space-y-6">
+            {/* Order Details */}
             <Card className="border-0 shadow-sm">
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-2">
@@ -411,13 +627,14 @@ export default function AdvancedProductionOrderDetailsPage() {
                     <Separator className="my-4" />
                     <div>
                       <p className="text-sm text-gray-500 mb-2">ملاحظات</p>
-                      <p className="text-gray-700">{order.notes}</p>
+                      <p className="text-gray-700 whitespace-pre-line text-sm">{order.notes}</p>
                     </div>
                   </>
                 )}
               </CardContent>
             </Card>
 
+            {/* Products Table */}
             <Card className="border-0 shadow-sm">
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
@@ -438,36 +655,44 @@ export default function AdvancedProductionOrderDetailsPage() {
                           <TableHead className="text-right">المنتج</TableHead>
                           <TableHead className="text-right hidden md:table-cell">الفئة</TableHead>
                           <TableHead className="text-right">الكمية المطلوبة</TableHead>
-                          <TableHead className="text-right hidden md:table-cell">الكمية المنتجة</TableHead>
-                          <TableHead className="text-right hidden sm:table-cell">سعر الوحدة</TableHead>
-                          <TableHead className="text-right">الإجمالي</TableHead>
+                          <TableHead className="text-right">الكمية المنتجة</TableHead>
+                          <TableHead className="text-right">التقدم</TableHead>
+                          <TableHead className="text-right hidden sm:table-cell">الإجمالي</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {items.map((item: OrderItem, index: number) => (
-                          <TableRow key={item.id || index}>
-                            <TableCell className="font-medium text-xs sm:text-sm">{index + 1}</TableCell>
-                            <TableCell>
-                              <div>
-                                <p className="font-medium text-xs sm:text-sm">{item.productName}</p>
-                                {item.notes && <p className="text-[10px] sm:text-xs text-gray-500">{item.notes}</p>}
-                              </div>
-                            </TableCell>
-                            <TableCell className="hidden md:table-cell">
-                              <Badge variant="outline" className="text-[10px] sm:text-xs bg-slate-50 border-slate-300 text-slate-600">
-                                {item.category || 'عام'}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-xs sm:text-sm">{item.targetQuantity} {item.unit}</TableCell>
-                            <TableCell className="hidden md:table-cell">
-                              <span className={item.producedQuantity >= item.targetQuantity ? "text-green-600" : "text-amber-600"}>
-                                {item.producedQuantity || 0} {item.unit}
-                              </span>
-                            </TableCell>
-                            <TableCell className="hidden sm:table-cell text-xs sm:text-sm">{formatCurrency(item.unitPrice)}</TableCell>
-                            <TableCell className="font-medium text-xs sm:text-sm">{formatCurrency((item.targetQuantity || 0) * (item.unitPrice || 0))}</TableCell>
-                          </TableRow>
-                        ))}
+                        {items.map((item: OrderItem, index: number) => {
+                          const itemPct = item.targetQuantity > 0 ? Math.round((item.producedQuantity / item.targetQuantity) * 100) : 0;
+                          return (
+                            <TableRow key={item.id || index}>
+                              <TableCell className="font-medium text-xs sm:text-sm">{index + 1}</TableCell>
+                              <TableCell>
+                                <div>
+                                  <p className="font-medium text-xs sm:text-sm">{item.productName}</p>
+                                  {item.notes && <p className="text-[10px] sm:text-xs text-gray-500">{item.notes}</p>}
+                                </div>
+                              </TableCell>
+                              <TableCell className="hidden md:table-cell">
+                                <Badge variant="outline" className="text-[10px] sm:text-xs bg-slate-50 border-slate-300 text-slate-600">
+                                  {item.category || 'عام'}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-xs sm:text-sm">{item.targetQuantity} {item.unit}</TableCell>
+                              <TableCell>
+                                <span className={`text-xs sm:text-sm font-medium ${item.producedQuantity >= item.targetQuantity ? "text-green-600" : "text-amber-600"}`}>
+                                  {item.producedQuantity || 0} {item.unit}
+                                </span>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2 min-w-[80px]">
+                                  <Progress value={Math.min(itemPct, 100)} className="h-2 flex-1" />
+                                  <span className={`text-[10px] font-bold ${itemPct >= 100 ? 'text-green-600' : 'text-amber-600'}`}>{itemPct}%</span>
+                                </div>
+                              </TableCell>
+                              <TableCell className="hidden sm:table-cell text-xs sm:text-sm font-medium">{formatCurrency((item.targetQuantity || 0) * (item.unitPrice || 0))}</TableCell>
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </div>
@@ -480,6 +705,7 @@ export default function AdvancedProductionOrderDetailsPage() {
               </CardContent>
             </Card>
 
+            {/* Schedules */}
             {schedules.length > 0 && (
               <Card className="border-0 shadow-sm">
                 <CardHeader className="pb-2">
@@ -533,7 +759,9 @@ export default function AdvancedProductionOrderDetailsPage() {
             )}
           </div>
 
-          <div className="space-y-6">
+          {/* Sidebar */}
+          <div className="space-y-4 sm:space-y-6">
+            {/* Progress Summary */}
             <Card className="border-0 shadow-sm bg-gradient-to-br from-amber-50 to-orange-50">
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-2">
@@ -545,25 +773,29 @@ export default function AdvancedProductionOrderDetailsPage() {
                 <div>
                   <div className="flex justify-between text-sm mb-2">
                     <span className="text-gray-600">نسبة الإنجاز</span>
-                    <span className="font-bold text-amber-700">{order.completionPercentage || 0}%</span>
+                    <span className="font-bold text-amber-700">{completionPct}%</span>
                   </div>
-                  <Progress value={order.completionPercentage || 0} className="h-3" />
+                  <Progress value={completionPct} className="h-3" />
                 </div>
 
                 <Separator />
 
                 <div className="space-y-3">
                   <div className="flex justify-between">
-                    <span className="text-gray-600">إجمالي المنتجات</span>
+                    <span className="text-gray-600 text-sm">إجمالي المنتجات</span>
                     <span className="font-medium">{items.length}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-600">الكمية المطلوبة</span>
-                    <span className="font-medium">{totalTargetQuantity}</span>
+                    <span className="text-gray-600 text-sm">الكمية المطلوبة</span>
+                    <span className="font-medium">{totalTargetQuantity.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-600">الكمية المنتجة</span>
-                    <span className="font-medium text-green-600">{totalProducedQuantity}</span>
+                    <span className="text-gray-600 text-sm">الكمية المنتجة</span>
+                    <span className="font-medium text-green-600">{totalProducedQuantity.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 text-sm">المتبقي</span>
+                    <span className="font-medium text-amber-600">{Math.max(0, totalTargetQuantity - totalProducedQuantity).toLocaleString()}</span>
                   </div>
                 </div>
 
@@ -571,17 +803,20 @@ export default function AdvancedProductionOrderDetailsPage() {
 
                 <div className="space-y-3">
                   <div className="flex justify-between">
-                    <span className="text-gray-600">التكلفة المقدرة</span>
-                    <span className="font-medium">{formatCurrency(order.estimatedCost || totalItemsCost)}</span>
+                    <span className="text-gray-600 text-sm">التكلفة المقدرة</span>
+                    <span className="font-medium text-sm">{formatCurrency(order.estimatedCost || totalItemsCost)}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">التكلفة الفعلية</span>
-                    <span className="font-medium">{formatCurrency(order.actualCost || 0)}</span>
-                  </div>
+                  {order.targetSalesValue > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600 text-sm">المبيعات المستهدفة</span>
+                      <span className="font-medium text-sm text-blue-600">{formatCurrency(order.targetSalesValue)}</span>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
 
+            {/* Timeline */}
             <Card className="border-0 shadow-sm">
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-2">
@@ -603,6 +838,34 @@ export default function AdvancedProductionOrderDetailsPage() {
           </div>
         </div>
       </div>
+
+      {/* Status Change Confirmation Dialog */}
+      <AlertDialog open={statusDialogOpen} onOpenChange={setStatusDialogOpen}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>تأكيد تغيير الحالة</AlertDialogTitle>
+            <AlertDialogDescription>
+              هل تريد {pendingAction?.label}؟
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-2">
+            <Textarea
+              placeholder="ملاحظات (اختياري)..."
+              value={statusNotes}
+              onChange={(e) => setStatusNotes(e.target.value)}
+              className="text-right"
+              data-testid="input-status-notes"
+            />
+          </div>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel onClick={() => { setStatusNotes(""); setPendingAction(null); }}>إلغاء</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmStatusChange} disabled={statusMutation.isPending}>
+              {statusMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : null}
+              تأكيد
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Layout>
   );
 }

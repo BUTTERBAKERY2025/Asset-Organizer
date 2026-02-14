@@ -11406,6 +11406,67 @@ export async function registerRoutes(
     }
   });
 
+  // Change production order status with validation
+  app.post("/api/advanced-production-orders/:id/status", isAuthenticated, requirePermission("production", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid order ID" });
+      
+      const { status, notes } = req.body;
+      if (!status || typeof status !== 'string') return res.status(400).json({ error: "الحالة مطلوبة" });
+      if (notes && typeof notes !== 'string') return res.status(400).json({ error: "الملاحظات يجب أن تكون نص" });
+      if (notes && notes.length > 1000) return res.status(400).json({ error: "الملاحظات طويلة جداً" });
+      
+      const validStatuses = ['draft', 'pending', 'approved', 'in_progress', 'completed', 'cancelled'];
+      if (!validStatuses.includes(status)) return res.status(400).json({ error: "حالة غير صالحة" });
+      
+      const order = await storage.getAdvancedProductionOrder(id);
+      if (!order) return res.status(404).json({ error: "أمر الإنتاج غير موجود" });
+      
+      if (!isUserAdmin(req)) {
+        const hasSourceAccess = order.sourceBranchId ? await canAccessBranch(req, order.sourceBranchId) : false;
+        const hasTargetAccess = order.targetBranchId ? await canAccessBranch(req, order.targetBranchId) : false;
+        if (!hasSourceAccess && !hasTargetAccess) return res.status(403).json({ error: "غير مصرح بتعديل هذا الأمر" });
+      }
+      
+      const validTransitions: Record<string, string[]> = {
+        draft: ['pending', 'cancelled'],
+        pending: ['approved', 'draft', 'cancelled'],
+        approved: ['in_progress', 'pending', 'cancelled'],
+        in_progress: ['completed', 'approved', 'cancelled'],
+        completed: ['in_progress'],
+        cancelled: ['draft'],
+      };
+      
+      const allowed = validTransitions[order.status] || [];
+      if (!allowed.includes(status)) {
+        return res.status(400).json({ 
+          error: `لا يمكن تغيير الحالة من "${order.status}" إلى "${status}"`,
+          allowedTransitions: allowed
+        });
+      }
+      
+      const updateData: any = { status };
+      if (status === 'approved') {
+        updateData.approvedBy = (req as any).user?.id;
+        updateData.approvedAt = new Date();
+      }
+      if (status === 'completed') {
+        updateData.completionPercentage = 100;
+      }
+      if (notes) {
+        updateData.notes = (order.notes ? order.notes + '\n' : '') + `[${new Date().toLocaleDateString('ar-SA')}] ${notes}`;
+      }
+      
+      await storage.updateAdvancedProductionOrder(id, updateData);
+      const result = await storage.getAdvancedProductionOrderWithItems(id);
+      res.json(result);
+    } catch (error) {
+      console.error("Error changing order status:", error);
+      res.status(500).json({ error: "فشل في تغيير حالة الأمر" });
+    }
+  });
+
   // Delete production order
   app.delete("/api/advanced-production-orders/:id", isAuthenticated, requirePermission("production", "delete"), async (req, res) => {
     try {
