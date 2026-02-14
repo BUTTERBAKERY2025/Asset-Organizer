@@ -14293,21 +14293,53 @@ export async function registerRoutes(
             }
           }
           
-          // Auto-detect columns if no header and no mapping yet
+          // Check if column KEYS themselves are meaningful names (xlsx parsed with headers)
+          // e.g., keys = ['Product', 'Sales', 'Quantity'] means xlsx already used first row as headers
           if (Object.keys(columnMapping).length === 0 && columnKeys.length >= 2) {
-            console.log('Auto-detecting column mapping from structure...');
-            // First non-numeric column is likely product, first numeric is quantity/revenue
+            console.log('Checking if column keys are semantic names...');
+            const keyProductWords = ['product', 'المنتج', 'منتج', 'item', 'الصنف', 'name', 'الاسم', 'اسم', 'menu item', 'title'];
+            const keyQuantityWords = ['quantity', 'qty', 'الكمية', 'كمية', 'count', 'عدد', 'units', 'المباعة'];
+            const keyRevenueWords = ['sales', 'revenue', 'total', 'amount', 'المبيعات', 'الإيرادات', 'إجمالي', 'price', 'value', 'القيمة'];
+            const keyCategoryWords = ['category', 'التصنيف', 'الفئة', 'تصنيف', 'type'];
+            
+            for (const key of columnKeys) {
+              const keyLower = key.toLowerCase().trim();
+              const matchKey = (words: string[]) => words.some(w => keyLower === w || keyLower.includes(w) || w.includes(keyLower));
+              
+              if (!columnMapping['product'] && matchKey(keyProductWords)) {
+                columnMapping['product'] = key;
+              } else if (!columnMapping['category'] && matchKey(keyCategoryWords)) {
+                columnMapping['category'] = key;
+              } else if (!columnMapping['quantity'] && matchKey(keyQuantityWords)) {
+                columnMapping['quantity'] = key;
+              } else if (!columnMapping['revenue'] && matchKey(keyRevenueWords)) {
+                columnMapping['revenue'] = key;
+              }
+            }
+            
+            if (Object.keys(columnMapping).length > 0) {
+              console.log('Column keys are semantic names, mapping:', columnMapping);
+            }
+          }
+          
+          // Auto-detect columns from data types if no mapping yet
+          if (Object.keys(columnMapping).length === 0 && columnKeys.length >= 2) {
+            console.log('Auto-detecting column mapping from data structure...');
+            const numericColumns: string[] = [];
+            const textColumns: string[] = [];
             for (const key of columnKeys) {
               const sampleValues = parsedData.slice(0, 5).map(r => r[key]);
               const isNumeric = sampleValues.every(v => !isNaN(parseFloat(v)) || v === null || v === undefined);
               const isText = sampleValues.some(v => typeof v === 'string' && isNaN(parseFloat(v)) && v.length > 0);
-              
-              if (isText && !columnMapping['product']) {
-                columnMapping['product'] = key;
-              } else if (isNumeric && !columnMapping['quantity']) {
-                columnMapping['quantity'] = key;
-                columnMapping['revenue'] = key;
-              }
+              if (isText) textColumns.push(key);
+              else if (isNumeric) numericColumns.push(key);
+            }
+            if (textColumns.length > 0) columnMapping['product'] = textColumns[0];
+            if (numericColumns.length >= 2) {
+              columnMapping['quantity'] = numericColumns[numericColumns.length - 1];
+              columnMapping['revenue'] = numericColumns[0];
+            } else if (numericColumns.length === 1) {
+              columnMapping['quantity'] = numericColumns[0];
             }
             console.log('Auto-detected column mapping:', columnMapping);
           }
@@ -14388,10 +14420,10 @@ export async function registerRoutes(
             productId: product?.id || null,
             productName: name,
             productCategory: excelCategory || product?.category || null,
-            totalQuantitySold: velocity,
+            totalQuantitySold: Math.round(velocity),
             totalRevenue: revenue,
             averageDailySales: calculatedDailyAvg > 0 ? calculatedDailyAvg : (revenue > 0 ? Math.round((revenue / daysInPeriod) * 100) / 100 : 0),
-            salesVelocity: velocity
+            salesVelocity: Math.round(velocity)
           };
         });
         
