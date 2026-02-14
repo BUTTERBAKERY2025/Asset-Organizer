@@ -34,6 +34,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string; icon: any }> = {
@@ -142,6 +148,7 @@ export default function AdvancedProductionOrderDetailsPage() {
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<{ nextStatus: string; label: string } | null>(null);
   const [statusNotes, setStatusNotes] = useState("");
+  const [mtoDialogOpen, setMtoDialogOpen] = useState(false);
 
   const { data: rawData, isLoading } = useQuery<OrderResponse>({
     queryKey: [`/api/advanced-production-orders/${id}`],
@@ -886,16 +893,20 @@ export default function AdvancedProductionOrderDetailsPage() {
                           </div>
                         </div>
                         {madeToOrderCount > 0 && (
-                          <div className="bg-orange-50 rounded-lg p-2.5">
+                          <div 
+                            className="bg-orange-50 rounded-lg p-2.5 cursor-pointer hover:bg-orange-100 transition-colors border border-transparent hover:border-orange-200"
+                            onClick={() => setMtoDialogOpen(true)}
+                            data-testid="mto-indicator-clickable"
+                          >
                             <div className="flex justify-between text-sm mb-1">
                               <span className="text-gray-700 flex items-center gap-1 font-medium">
                                 <Clock className="h-3.5 w-3.5 text-orange-500" />
                                 تحضير بعد الطلب
-                                {madeToOrderNames.length > 0 && madeToOrderNames.length <= 5 && (
-                                  <span className="text-[10px] text-gray-400">({madeToOrderNames.slice(0, 5).join('، ')})</span>
-                                )}
                               </span>
-                              <span className="font-bold text-orange-600">{madeToOrderCount} صنف ({madePct}%)</span>
+                              <span className="font-bold text-orange-600 flex items-center gap-1">
+                                {madeToOrderCount} صنف ({madePct}%)
+                                <ArrowRight className="h-3 w-3 rotate-180" />
+                              </span>
                             </div>
                             <div className="w-full bg-orange-100 rounded-full h-2 mb-1.5">
                               <div className="bg-orange-500 h-2 rounded-full transition-all" style={{ width: `${madePct}%` }} />
@@ -905,6 +916,7 @@ export default function AdvancedProductionOrderDetailsPage() {
                                 {madeToOrderValue.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} <span className="text-orange-500">ريال</span>
                               </div>
                             )}
+                            <div className="text-[10px] text-orange-400 mt-1 text-center">اضغط لعرض تفاصيل الأصناف</div>
                           </div>
                         )}
                         {totalValue > 0 && (
@@ -960,6 +972,136 @@ export default function AdvancedProductionOrderDetailsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={mtoDialogOpen} onOpenChange={setMtoDialogOpen}>
+        <DialogContent dir="rtl" className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-orange-700">
+              <Clock className="h-5 w-5" />
+              أصناف التحضير بعد الطلب
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-500">
+              هذه الأصناف لا تحتاج إنتاج مسبق وتُحضر حسب الطلب. الكميات المتوقعة مبنية على بيانات المبيعات السابقة.
+            </p>
+            {(() => {
+              const mtoItems: { name: string; quantity: number; value: number; category: string }[] = [];
+              if (order?.notes) {
+                const detailsBlock = order.notes.match(/\[تفاصيل أصناف التحضير بعد الطلب\]\n([\s\S]*?)\n\[\/تفاصيل أصناف التحضير بعد الطلب\]/);
+                if (detailsBlock) {
+                  const lines = detailsBlock[1].split('\n').filter((l: string) => l.trim().startsWith('•'));
+                  lines.forEach((line: string) => {
+                    const nameMatch = line.match(/•\s*(.+?)\s*\|/);
+                    const qtyMatch = line.match(/الكمية:\s*(\d+)/);
+                    const valMatch = line.match(/القيمة:\s*([\d,]+)/);
+                    const catMatch = line.match(/الفئة:\s*(.+?)$/);
+                    if (nameMatch) {
+                      mtoItems.push({
+                        name: nameMatch[1].trim(),
+                        quantity: parseInt(qtyMatch?.[1] || '0'),
+                        value: parseFloat((valMatch?.[1] || '0').replace(/,/g, '')),
+                        category: catMatch?.[1]?.trim() || 'غير محدد'
+                      });
+                    }
+                  });
+                }
+                if (mtoItems.length === 0) {
+                  const namesSection = order.notes.match(/أصناف مبيعات فقط.*ريال\s*-\s*(.+?)$/m);
+                  const fallbackNames = namesSection?.[1] || order.notes.match(/أصناف مبيعات فقط[^-]*-\s*(.+?)$/m)?.[1];
+                  if (fallbackNames) {
+                    const names = fallbackNames.split('،').map((n: string) => n.trim()).filter(Boolean);
+                    const mtoMatch = order.notes.match(/أصناف مبيعات فقط[^:]*:\s*(\d+)\s*صنف/);
+                    const totalMtoCount = parseInt(mtoMatch?.[1] || '0') || names.length;
+                    const valueMatch = order.notes.match(/أصناف مبيعات فقط[^-]*-\s*القيمة:\s*([\d,.]+)\s*ريال/);
+                    const totalMtoValue = parseFloat((valueMatch?.[1] || '0').replace(/,/g, ''));
+                    const perItemValue = totalMtoCount > 0 ? totalMtoValue / totalMtoCount : 0;
+                    names.forEach((name: string) => {
+                      mtoItems.push({ name, quantity: 0, value: Math.round(perItemValue), category: 'غير محدد' });
+                    });
+                  }
+                }
+              }
+              const totalQty = mtoItems.reduce((s, i) => s + i.quantity, 0);
+              const totalVal = mtoItems.reduce((s, i) => s + i.value, 0);
+              const categories = Array.from(new Set(mtoItems.map(i => i.category)));
+
+              return (
+                <>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="bg-orange-50 rounded-lg p-3 text-center">
+                      <div className="text-2xl font-bold text-orange-700">{mtoItems.length}</div>
+                      <div className="text-xs text-orange-500">عدد الأصناف</div>
+                    </div>
+                    <div className="bg-orange-50 rounded-lg p-3 text-center">
+                      <div className="text-2xl font-bold text-orange-700">{totalQty.toLocaleString()}</div>
+                      <div className="text-xs text-orange-500">إجمالي الكميات المتوقعة</div>
+                    </div>
+                    <div className="bg-orange-50 rounded-lg p-3 text-center">
+                      <div className="text-2xl font-bold text-orange-700">{totalVal.toLocaleString()}</div>
+                      <div className="text-xs text-orange-500">القيمة المتوقعة (ريال)</div>
+                    </div>
+                  </div>
+                  {categories.length > 1 && (
+                    <div className="flex flex-wrap gap-2">
+                      {categories.map(cat => {
+                        const catItems = mtoItems.filter(i => i.category === cat);
+                        return (
+                          <Badge key={cat} variant="outline" className="text-xs bg-orange-50 text-orange-700 border-orange-200">
+                            {cat} ({catItems.length})
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {mtoItems.length > 0 ? (
+                    <div className="border rounded-lg overflow-hidden">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-orange-50">
+                            <TableHead className="text-right font-bold text-orange-800">#</TableHead>
+                            <TableHead className="text-right font-bold text-orange-800">اسم الصنف</TableHead>
+                            <TableHead className="text-right font-bold text-orange-800">الفئة</TableHead>
+                            <TableHead className="text-center font-bold text-orange-800">الكمية المتوقعة</TableHead>
+                            <TableHead className="text-left font-bold text-orange-800">القيمة (ريال)</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {mtoItems.map((item, idx) => (
+                            <TableRow key={idx} className="hover:bg-orange-50/50">
+                              <TableCell className="text-right text-gray-500 text-xs">{idx + 1}</TableCell>
+                              <TableCell className="text-right font-medium">{item.name}</TableCell>
+                              <TableCell className="text-right text-xs text-gray-500">{item.category}</TableCell>
+                              <TableCell className="text-center font-semibold text-orange-700">
+                                {item.quantity > 0 ? item.quantity.toLocaleString() : '-'}
+                              </TableCell>
+                              <TableCell className="text-left font-semibold text-orange-600" dir="ltr">
+                                {item.value > 0 ? item.value.toLocaleString() : '-'}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          <TableRow className="bg-orange-100/50 font-bold">
+                            <TableCell></TableCell>
+                            <TableCell className="text-right text-orange-800">الإجمالي</TableCell>
+                            <TableCell></TableCell>
+                            <TableCell className="text-center text-orange-800">{totalQty > 0 ? totalQty.toLocaleString() : '-'}</TableCell>
+                            <TableCell className="text-left text-orange-800" dir="ltr">{totalVal > 0 ? totalVal.toLocaleString() : '-'}</TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                    </div>
+                  ) : (
+                    <div className="text-center text-gray-400 py-6">
+                      <Clock className="h-10 w-10 mx-auto mb-2 text-gray-300" />
+                      <p>لا توجد تفاصيل متاحة لأصناف التحضير بعد الطلب</p>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }
