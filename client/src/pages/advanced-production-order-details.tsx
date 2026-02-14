@@ -819,27 +819,37 @@ export default function AdvancedProductionOrderDetailsPage() {
                 {(() => {
                   const preProductionCount = items.length;
                   const preCategories = Array.from(new Set(items.map((i: any) => i.category).filter(Boolean))) as string[];
+                  const preProductionValue = items.reduce((sum: number, item: any) => sum + (Number(item.totalValue) || (Number(item.unitPrice) || 0) * (Number(item.targetQuantity) || 0)), 0);
 
                   let madeToOrderCount = 0;
+                  let madeToOrderValue = 0;
                   let madeToOrderNames: string[] = [];
                   if (order.notes) {
                     const mtoMatch = order.notes.match(/أصناف مبيعات فقط[^:]*:\s*(\d+)\s*صنف/);
                     if (mtoMatch) madeToOrderCount = parseInt(mtoMatch[1]) || 0;
-                    const namesMatch = order.notes.match(/أصناف مبيعات فقط[^-]*-\s*(.+?)$/m);
-                    if (namesMatch) madeToOrderNames = namesMatch[1].split('،').map((n: string) => n.trim()).filter(Boolean);
+                    const valueMatch = order.notes.match(/أصناف مبيعات فقط[^-]*-\s*القيمة:\s*([\d,]+)\s*ريال/);
+                    if (valueMatch) madeToOrderValue = parseInt(valueMatch[1].replace(/,/g, '')) || 0;
+                    const namesMatch = order.notes.match(/أصناف مبيعات فقط.*ريال\s*-\s*(.+?)$/m);
+                    if (!namesMatch) {
+                      const fallbackNames = order.notes.match(/أصناف مبيعات فقط[^-]*-\s*(.+?)$/m);
+                      if (fallbackNames) madeToOrderNames = fallbackNames[1].split('،').map((n: string) => n.trim()).filter(Boolean);
+                    } else {
+                      madeToOrderNames = namesMatch[1].split('،').map((n: string) => n.trim()).filter(Boolean);
+                    }
                   }
 
                   const totalAll = preProductionCount + madeToOrderCount;
                   const prePct = totalAll > 0 ? Math.round((preProductionCount / totalAll) * 100) : 100;
                   const madePct = totalAll > 0 ? Math.round((madeToOrderCount / totalAll) * 100) : 0;
+                  const totalValue = preProductionValue + madeToOrderValue;
 
                   return (
                     <div className="space-y-3" data-testid="category-breakdown">
                       <p className="text-xs font-semibold text-gray-600">توزيع الأصناف حسب الفئة</p>
                       <div className="space-y-2">
-                        <div>
+                        <div className="bg-blue-50 rounded-lg p-2.5">
                           <div className="flex justify-between text-sm mb-1">
-                            <span className="text-gray-600 flex items-center gap-1">
+                            <span className="text-gray-700 flex items-center gap-1 font-medium">
                               <Factory className="h-3.5 w-3.5 text-blue-500" />
                               إنتاج مسبق
                               {preCategories.length > 0 && (
@@ -848,14 +858,17 @@ export default function AdvancedProductionOrderDetailsPage() {
                             </span>
                             <span className="font-bold text-blue-600">{preProductionCount} صنف ({prePct}%)</span>
                           </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div className="w-full bg-blue-100 rounded-full h-2 mb-1.5">
                             <div className="bg-blue-500 h-2 rounded-full transition-all" style={{ width: `${prePct}%` }} />
+                          </div>
+                          <div className="text-xs text-blue-700 font-semibold text-left" dir="ltr">
+                            {preProductionValue.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} <span className="text-blue-500">ريال</span>
                           </div>
                         </div>
                         {madeToOrderCount > 0 && (
-                          <div>
+                          <div className="bg-orange-50 rounded-lg p-2.5">
                             <div className="flex justify-between text-sm mb-1">
-                              <span className="text-gray-600 flex items-center gap-1">
+                              <span className="text-gray-700 flex items-center gap-1 font-medium">
                                 <Clock className="h-3.5 w-3.5 text-orange-500" />
                                 تحضير بعد الطلب
                                 {madeToOrderNames.length > 0 && madeToOrderNames.length <= 5 && (
@@ -864,9 +877,20 @@ export default function AdvancedProductionOrderDetailsPage() {
                               </span>
                               <span className="font-bold text-orange-600">{madeToOrderCount} صنف ({madePct}%)</span>
                             </div>
-                            <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div className="w-full bg-orange-100 rounded-full h-2 mb-1.5">
                               <div className="bg-orange-500 h-2 rounded-full transition-all" style={{ width: `${madePct}%` }} />
                             </div>
+                            {madeToOrderValue > 0 && (
+                              <div className="text-xs text-orange-700 font-semibold text-left" dir="ltr">
+                                {madeToOrderValue.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} <span className="text-orange-500">ريال</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {totalValue > 0 && (
+                          <div className="flex justify-between items-center text-xs text-gray-500 pt-1 border-t border-dashed">
+                            <span>القيمة الإجمالية</span>
+                            <span className="font-bold text-gray-700">{totalValue.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} ريال</span>
                           </div>
                         )}
                       </div>
