@@ -1210,7 +1210,7 @@ export interface IStorage {
   // ==========================================
   
   // Finished Goods Inventory
-  getFinishedGoodsInventory(filters?: { branchId?: string; productId?: number; productionDate?: string; category?: string }): Promise<FinishedGoodsInventory[]>;
+  getFinishedGoodsInventory(filters?: { branchId?: string; productId?: number; productionDate?: string; startDate?: string; endDate?: string; category?: string }): Promise<FinishedGoodsInventory[]>;
   getFinishedGoodsInventoryItem(id: number): Promise<FinishedGoodsInventory | undefined>;
   addToFinishedGoodsInventory(item: InsertFinishedGoodsInventory): Promise<FinishedGoodsInventory>;
   updateFinishedGoodsInventory(id: number, item: Partial<InsertFinishedGoodsInventory>): Promise<FinishedGoodsInventory | undefined>;
@@ -1218,7 +1218,7 @@ export interface IStorage {
   addProductionToFinishedGoods(batchId: number, userId?: string, userName?: string): Promise<FinishedGoodsInventory>;
   
   // Finished Goods Transfers
-  getFinishedGoodsTransfers(filters?: { sourceBranchId?: string; destinationType?: string; destinationBranchId?: string; transferDate?: string; status?: string }): Promise<FinishedGoodsTransfer[]>;
+  getFinishedGoodsTransfers(filters?: { sourceBranchId?: string; destinationType?: string; destinationBranchId?: string; transferDate?: string; startDate?: string; endDate?: string; status?: string }): Promise<FinishedGoodsTransfer[]>;
   getFinishedGoodsTransfer(id: number): Promise<FinishedGoodsTransfer | undefined>;
   createFinishedGoodsTransfer(transfer: InsertFinishedGoodsTransfer): Promise<FinishedGoodsTransfer>;
   transferFinishedGoods(inventoryId: number, quantity: number, destinationType: string, destinationBranchId?: string, notes?: string, userId?: string, userName?: string): Promise<FinishedGoodsTransfer>;
@@ -9556,11 +9556,13 @@ export class DatabaseStorage implements IStorage {
   // Finished Goods Inventory - مخزون الإنتاج النهائي
   // ==========================================
 
-  async getFinishedGoodsInventory(filters?: { branchId?: string; productId?: number; productionDate?: string; category?: string }): Promise<FinishedGoodsInventory[]> {
+  async getFinishedGoodsInventory(filters?: { branchId?: string; productId?: number; productionDate?: string; startDate?: string; endDate?: string; category?: string }): Promise<FinishedGoodsInventory[]> {
     const conditions = [];
     if (filters?.branchId) conditions.push(eq(finishedGoodsInventory.branchId, filters.branchId));
     if (filters?.productId) conditions.push(eq(finishedGoodsInventory.productId, filters.productId));
     if (filters?.productionDate) conditions.push(eq(finishedGoodsInventory.productionDate, filters.productionDate));
+    if (filters?.startDate) conditions.push(sql`${finishedGoodsInventory.productionDate} >= ${filters.startDate}`);
+    if (filters?.endDate) conditions.push(sql`${finishedGoodsInventory.productionDate} <= ${filters.endDate}`);
     if (filters?.category) conditions.push(eq(finishedGoodsInventory.productCategory, filters.category));
     
     if (conditions.length > 0) {
@@ -9701,12 +9703,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Finished Goods Transfers
-  async getFinishedGoodsTransfers(filters?: { sourceBranchId?: string; destinationType?: string; destinationBranchId?: string; transferDate?: string; status?: string }): Promise<FinishedGoodsTransfer[]> {
+  async getFinishedGoodsTransfers(filters?: { sourceBranchId?: string; destinationType?: string; destinationBranchId?: string; transferDate?: string; startDate?: string; endDate?: string; status?: string }): Promise<FinishedGoodsTransfer[]> {
     const conditions = [];
     if (filters?.sourceBranchId) conditions.push(eq(finishedGoodsTransfers.sourceBranchId, filters.sourceBranchId));
     if (filters?.destinationType) conditions.push(eq(finishedGoodsTransfers.destinationType, filters.destinationType));
     if (filters?.destinationBranchId) conditions.push(eq(finishedGoodsTransfers.destinationBranchId, filters.destinationBranchId));
     if (filters?.transferDate) conditions.push(eq(finishedGoodsTransfers.transferDate, filters.transferDate));
+    if (filters?.startDate) conditions.push(sql`${finishedGoodsTransfers.transferDate} >= ${filters.startDate}`);
+    if (filters?.endDate) conditions.push(sql`${finishedGoodsTransfers.transferDate} <= ${filters.endDate}`);
     if (filters?.status) conditions.push(eq(finishedGoodsTransfers.status, filters.status));
     
     if (conditions.length > 0) {

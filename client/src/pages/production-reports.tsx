@@ -412,12 +412,22 @@ function TransfersReportTab({ branchId, startDate, endDate }: { branchId: string
     transfers?.reduce((sum, t) => sum + (t.quantity || 0), 0) || 0
   , [transfers]);
 
+  const getDestinationLabel = (type: string, branchName?: string | null) => {
+    const destMap: Record<string, string> = {
+      'display_bar': 'بار العرض',
+      'بار_العرض': 'بار العرض',
+      'kitchen_trolley': 'عربة المطبخ',
+      'freezer': 'الفريزر',
+      'refrigerator': 'الثلاجة',
+      'branch': branchName || 'فرع آخر',
+    };
+    return destMap[type] || type;
+  };
+
   const byDestination = useMemo(() => {
     const destinations: Record<string, number> = {};
     transfers?.forEach(t => {
-      const dest = t.destinationType === "display_bar" || t.destinationType === "بار_العرض" 
-        ? "بار العرض" 
-        : t.destinationBranchName || "فرع آخر";
+      const dest = getDestinationLabel(t.destinationType, t.destinationBranchName);
       destinations[dest] = (destinations[dest] || 0) + t.quantity;
     });
     return Object.entries(destinations).map(([name, value]) => ({ name, value }));
@@ -522,16 +532,21 @@ function TransfersReportTab({ branchId, startDate, endDate }: { branchId: string
                     <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
                       t.destinationType === "display_bar" || t.destinationType === "بار_العرض"
                         ? "bg-orange-100 text-orange-700"
-                        : "bg-blue-100 text-blue-700"
+                        : t.destinationType === "branch"
+                        ? "bg-blue-100 text-blue-700"
+                        : "bg-purple-100 text-purple-700"
                     }`}>
-                      {t.destinationType === "display_bar" || t.destinationType === "بار_العرض" ? "ب" : "ف"}
+                      {t.destinationType === "display_bar" || t.destinationType === "بار_العرض" ? "ب" 
+                        : t.destinationType === "branch" ? "ف" 
+                        : t.destinationType === "kitchen_trolley" ? "ع"
+                        : t.destinationType === "freezer" ? "ث"
+                        : t.destinationType === "refrigerator" ? "ث"
+                        : "أ"}
                     </div>
                     <div>
                       <span className="text-sm font-medium">{t.productName}</span>
                       <span className="text-xs text-gray-400 mr-2">
-                        → {t.destinationType === "display_bar" || t.destinationType === "بار_العرض" 
-                          ? "بار العرض" 
-                          : t.destinationBranchName || "فرع"}
+                        → {getDestinationLabel(t.destinationType, t.destinationBranchName)}
                       </span>
                     </div>
                   </div>
@@ -579,10 +594,10 @@ function TransfersReportTab({ branchId, startDate, endDate }: { branchId: string
                     <td className="p-2 text-gray-500">{t.sourceBranchName || "-"}</td>
                     <td className="p-2">
                       <Badge className={t.destinationType === "display_bar" || t.destinationType === "بار_العرض" 
-                        ? "bg-orange-500" : "bg-blue-500"}>
-                        {t.destinationType === "display_bar" || t.destinationType === "بار_العرض" 
-                          ? "بار العرض" 
-                          : t.destinationBranchName || "فرع"}
+                        ? "bg-orange-500" 
+                        : t.destinationType === "branch" ? "bg-blue-500" 
+                        : "bg-purple-500"}>
+                        {getDestinationLabel(t.destinationType, t.destinationBranchName)}
                       </Badge>
                     </td>
                     <td className="p-2 text-gray-500">{t.createdByName || "-"}</td>
@@ -664,8 +679,8 @@ export default function ProductionReportsPage() {
   // Extract unique values for filters
   const filterOptions = useMemo(() => {
     const entries = reportData?.rawProductionEntries || [];
-    const categories = [...new Set(entries.map(e => e.productCategory).filter(Boolean))] as string[];
-    const chefs = [...new Set(entries.map(e => e.chefName).filter(Boolean))] as string[];
+    const categories = Array.from(new Set(entries.map(e => e.productCategory).filter(Boolean))) as string[];
+    const chefs = Array.from(new Set(entries.map(e => e.chefName).filter(Boolean))) as string[];
     return { categories, chefs };
   }, [reportData?.rawProductionEntries]);
   

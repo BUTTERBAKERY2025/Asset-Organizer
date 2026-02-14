@@ -24712,11 +24712,13 @@ export async function registerRoutes(
 
   app.get("/api/finished-goods-inventory", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
-      const filters: { branchId?: string; productId?: number; productionDate?: string; category?: string } = {};
+      const filters: { branchId?: string; productId?: number; productionDate?: string; startDate?: string; endDate?: string; category?: string } = {};
       if (req.query.branchId) filters.branchId = req.query.branchId as string;
       if (req.query.productId) filters.productId = parseInt(req.query.productId as string);
       if (req.query.productionDate) filters.productionDate = req.query.productionDate as string;
       if (req.query.category) filters.category = req.query.category as string;
+      if (req.query.startDate) filters.startDate = req.query.startDate as string;
+      if (req.query.endDate) filters.endDate = req.query.endDate as string;
       
       // SECURITY: Apply branch filter
       const branchFilter = getEffectiveBranchFilter(req, req.query.branchId as string | undefined);
@@ -24876,12 +24878,14 @@ export async function registerRoutes(
 
   app.get("/api/finished-goods-transfers", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
-      const filters: { sourceBranchId?: string; destinationType?: string; destinationBranchId?: string; transferDate?: string; status?: string; branchId?: string } = {};
+      const filters: { sourceBranchId?: string; destinationType?: string; destinationBranchId?: string; transferDate?: string; startDate?: string; endDate?: string; status?: string; branchId?: string } = {};
       if (req.query.sourceBranchId) filters.sourceBranchId = req.query.sourceBranchId as string;
       if (req.query.destinationType) filters.destinationType = req.query.destinationType as string;
       if (req.query.destinationBranchId) filters.destinationBranchId = req.query.destinationBranchId as string;
       if (req.query.transferDate) filters.transferDate = req.query.transferDate as string;
       if (req.query.status) filters.status = req.query.status as string;
+      if (req.query.startDate) filters.startDate = req.query.startDate as string;
+      if (req.query.endDate) filters.endDate = req.query.endDate as string;
       
       // SECURITY: Apply branch filter (source OR destination)
       const branchFilter = getEffectiveBranchFilter(req, req.query.sourceBranchId as string | undefined);
@@ -24962,6 +24966,8 @@ export async function registerRoutes(
     try {
       const filters: { category?: string; isActive?: boolean } = {};
       if (req.query.category) filters.category = req.query.category as string;
+      if (req.query.startDate) filters.startDate = req.query.startDate as string;
+      if (req.query.endDate) filters.endDate = req.query.endDate as string;
       if (req.query.isActive !== undefined) filters.isActive = req.query.isActive === 'true';
       
       const items = await storage.getWarehouseItems(filters);
@@ -25078,6 +25084,8 @@ export async function registerRoutes(
       if (req.query.sourceBranchId) filters.sourceBranchId = req.query.sourceBranchId as string;
       if (req.query.destinationBranchId) filters.destinationBranchId = req.query.destinationBranchId as string;
       if (req.query.status) filters.status = req.query.status as string;
+      if (req.query.startDate) filters.startDate = req.query.startDate as string;
+      if (req.query.endDate) filters.endDate = req.query.endDate as string;
       if (req.query.startDate) filters.startDate = req.query.startDate as string;
       if (req.query.endDate) filters.endDate = req.query.endDate as string;
       
@@ -25643,6 +25651,8 @@ export async function registerRoutes(
       const filters: { branchId?: string; status?: string } = {};
       if (req.query.branchId) filters.branchId = req.query.branchId as string;
       if (req.query.status) filters.status = req.query.status as string;
+      if (req.query.startDate) filters.startDate = req.query.startDate as string;
+      if (req.query.endDate) filters.endDate = req.query.endDate as string;
       
       const requests = await storage.getPurchasingRequests(filters);
       res.json(requests);
