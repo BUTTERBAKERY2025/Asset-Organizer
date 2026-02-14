@@ -7070,2091 +7070,4179 @@ ALTER TABLE ONLY public.waste_risk_rules ALTER COLUMN id SET DEFAULT nextval('pu
 
 ALTER TABLE ONLY public.weekly_schedule_locks ALTER COLUMN id SET DEFAULT nextval('public.weekly_schedule_locks_id_seq'::regclass);
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.accounting_exports
     ADD CONSTRAINT accounting_exports_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.accounting_journal_entries
     ADD CONSTRAINT accounting_journal_entries_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.accounting_reconciliations
     ADD CONSTRAINT accounting_reconciliations_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.advanced_production_orders
     ADD CONSTRAINT advanced_production_orders_order_number_key UNIQUE (order_number);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.advanced_production_orders
     ADD CONSTRAINT advanced_production_orders_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.asset_transfer_events
     ADD CONSTRAINT asset_transfer_events_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.asset_transfers
     ADD CONSTRAINT asset_transfers_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.asset_transfers
     ADD CONSTRAINT asset_transfers_transfer_number_key UNIQUE (transfer_number);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.attendance_records
     ADD CONSTRAINT attendance_records_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.attendance_summary
     ADD CONSTRAINT attendance_summary_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.audit_logs
     ADD CONSTRAINT audit_logs_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.average_ticket_targets
     ADD CONSTRAINT average_ticket_targets_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.backups
     ADD CONSTRAINT backups_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.beneficiary_organizations
     ADD CONSTRAINT beneficiary_organizations_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.biometric_credentials
     ADD CONSTRAINT biometric_credentials_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.board_committees
     ADD CONSTRAINT board_committees_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.board_member_training
     ADD CONSTRAINT board_member_training_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.board_members
     ADD CONSTRAINT board_members_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.board_resolutions
     ADD CONSTRAINT board_resolutions_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.board_resolutions
     ADD CONSTRAINT board_resolutions_resolution_number_key UNIQUE (resolution_number);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.branch_achievement_bonus
     ADD CONSTRAINT branch_achievement_bonus_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.branch_custom_checklist_items
     ADD CONSTRAINT branch_custom_checklist_items_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.branch_daily_closure_journals
     ADD CONSTRAINT branch_daily_closure_journals_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.branch_daily_closure_payments
     ADD CONSTRAINT branch_daily_closure_payments_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.branch_daily_closures
     ADD CONSTRAINT branch_daily_closures_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.branch_daily_sales
     ADD CONSTRAINT branch_daily_sales_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.branch_employees
     ADD CONSTRAINT branch_employees_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.branch_monthly_targets
     ADD CONSTRAINT branch_monthly_targets_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.branch_shift_profiles
     ADD CONSTRAINT branch_shift_profiles_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.branch_shifts
     ADD CONSTRAINT branch_shifts_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.branch_stock
     ADD CONSTRAINT branch_stock_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.branches
     ADD CONSTRAINT branches_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.campaign_budget_allocations
     ADD CONSTRAINT campaign_budget_allocations_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.campaign_expenses
     ADD CONSTRAINT campaign_expenses_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.campaign_goals
     ADD CONSTRAINT campaign_goals_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.capital_transactions
     ADD CONSTRAINT capital_transactions_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.capital_transactions
     ADD CONSTRAINT capital_transactions_transaction_number_key UNIQUE (transaction_number);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.cashier_daily_challenges
     ADD CONSTRAINT cashier_daily_challenges_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.cashier_incentive_statements
     ADD CONSTRAINT cashier_incentive_statements_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.cashier_payment_breakdowns
     ADD CONSTRAINT cashier_payment_breakdowns_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.cashier_points_ledger
     ADD CONSTRAINT cashier_points_ledger_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.cashier_product_sales
     ADD CONSTRAINT cashier_product_sales_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.cashier_sales_journals
     ADD CONSTRAINT cashier_sales_journals_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.cashier_shift_performance
     ADD CONSTRAINT cashier_shift_performance_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.cashier_shift_targets
     ADD CONSTRAINT cashier_shift_targets_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.cashier_signatures
     ADD CONSTRAINT cashier_signatures_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.chart_of_accounts
     ADD CONSTRAINT chart_of_accounts_account_code_key UNIQUE (account_code);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.chart_of_accounts
     ADD CONSTRAINT chart_of_accounts_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.checklist_items
     ADD CONSTRAINT checklist_items_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.checklist_templates
     ADD CONSTRAINT checklist_templates_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.commission_calculations
     ADD CONSTRAINT commission_calculations_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.commission_rates
     ADD CONSTRAINT commission_rates_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.committee_memberships
     ADD CONSTRAINT committee_memberships_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.community_discounts
     ADD CONSTRAINT community_discounts_code_key UNIQUE (code);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.community_discounts
     ADD CONSTRAINT community_discounts_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.comparison_status_history
     ADD CONSTRAINT comparison_status_history_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.comparison_summaries
     ADD CONSTRAINT comparison_summaries_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.comparison_uploads
     ADD CONSTRAINT comparison_uploads_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.compliance_history
     ADD CONSTRAINT compliance_history_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.compliance_requirements
     ADD CONSTRAINT compliance_requirements_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.compliance_requirements
     ADD CONSTRAINT compliance_requirements_requirement_code_key UNIQUE (requirement_code);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.construction_categories
     ADD CONSTRAINT construction_categories_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.construction_categories
     ADD CONSTRAINT construction_categories_slug_key UNIQUE (slug);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.construction_contracts
     ADD CONSTRAINT construction_contracts_contract_number_key UNIQUE (contract_number);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.construction_contracts
     ADD CONSTRAINT construction_contracts_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.construction_projects
     ADD CONSTRAINT construction_projects_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.contract_items
     ADD CONSTRAINT contract_items_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.contract_payments
     ADD CONSTRAINT contract_payments_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.contractors
     ADD CONSTRAINT contractors_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.daily_comparisons
     ADD CONSTRAINT daily_comparisons_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.daily_operations_summary
     ADD CONSTRAINT daily_operations_summary_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.daily_production_batches
     ADD CONSTRAINT daily_production_batches_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.daily_sales_data
     ADD CONSTRAINT daily_sales_data_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.daily_waste_log
     ADD CONSTRAINT daily_waste_log_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.data_import_jobs
     ADD CONSTRAINT data_import_jobs_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.departments
     ADD CONSTRAINT departments_code_key UNIQUE (code);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.departments
     ADD CONSTRAINT departments_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.disclosures
     ADD CONSTRAINT disclosures_disclosure_number_key UNIQUE (disclosure_number);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.disclosures
     ADD CONSTRAINT disclosures_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.discount_usage_logs
     ADD CONSTRAINT discount_usage_logs_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.display_bar_daily_summary
     ADD CONSTRAINT display_bar_daily_summary_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.display_bar_receipts
     ADD CONSTRAINT display_bar_receipts_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.dividend_distributions
     ADD CONSTRAINT dividend_distributions_distribution_number_key UNIQUE (distribution_number);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.dividend_distributions
     ADD CONSTRAINT dividend_distributions_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.document_access_logs
     ADD CONSTRAINT document_access_logs_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.document_categories
     ADD CONSTRAINT document_categories_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.document_folders
     ADD CONSTRAINT document_folders_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.document_shares
     ADD CONSTRAINT document_shares_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.document_versions
     ADD CONSTRAINT document_versions_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.documents
     ADD CONSTRAINT documents_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.employee_schedules
     ADD CONSTRAINT employee_schedules_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.employee_settings
     ADD CONSTRAINT employee_settings_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.employee_transfer_requests
     ADD CONSTRAINT employee_transfer_requests_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.exec_correspondence
     ADD CONSTRAINT exec_correspondence_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.exec_correspondence
     ADD CONSTRAINT exec_correspondence_ref_number_key UNIQUE (ref_number);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.exec_meeting_attendees
     ADD CONSTRAINT exec_meeting_attendees_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.exec_meetings
     ADD CONSTRAINT exec_meetings_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.exec_notifications
     ADD CONSTRAINT exec_notifications_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.exec_task_comments
     ADD CONSTRAINT exec_task_comments_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.exec_tasks
     ADD CONSTRAINT exec_tasks_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.external_integrations
     ADD CONSTRAINT external_integrations_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.financial_cogs
     ADD CONSTRAINT financial_cogs_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.financial_fixed_costs
     ADD CONSTRAINT financial_fixed_costs_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.financial_metrics
     ADD CONSTRAINT financial_metrics_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.financial_operating_expenses
     ADD CONSTRAINT financial_operating_expenses_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.financial_periods
     ADD CONSTRAINT financial_periods_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.financial_sales
     ADD CONSTRAINT financial_sales_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.finished_goods_inventory
     ADD CONSTRAINT finished_goods_inventory_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.finished_goods_transfers
     ADD CONSTRAINT finished_goods_transfers_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.governance_meetings
     ADD CONSTRAINT governance_meetings_meeting_number_key UNIQUE (meeting_number);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.governance_meetings
     ADD CONSTRAINT governance_meetings_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.incentive_awards
     ADD CONSTRAINT incentive_awards_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.incentive_tiers
     ADD CONSTRAINT incentive_tiers_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.influencer_campaign_links
     ADD CONSTRAINT influencer_campaign_links_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.influencer_contacts
     ADD CONSTRAINT influencer_contacts_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.influencer_contracts
     ADD CONSTRAINT influencer_contracts_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.influencer_payments
     ADD CONSTRAINT influencer_payments_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.interest_declarations
     ADD CONSTRAINT interest_declarations_declaration_number_key UNIQUE (declaration_number);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.interest_declarations
     ADD CONSTRAINT interest_declarations_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.inventory_items
     ADD CONSTRAINT inventory_items_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.job_role_permissions
     ADD CONSTRAINT job_role_permissions_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.journal_attachments
     ADD CONSTRAINT journal_attachments_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.journal_entry_lines
     ADD CONSTRAINT journal_entry_lines_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.marketing_alerts
     ADD CONSTRAINT marketing_alerts_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.marketing_assets
     ADD CONSTRAINT marketing_assets_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.marketing_calendar_events
     ADD CONSTRAINT marketing_calendar_events_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.marketing_campaigns
     ADD CONSTRAINT marketing_campaigns_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.marketing_influencers
     ADD CONSTRAINT marketing_influencers_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.marketing_performance_reports
     ADD CONSTRAINT marketing_performance_reports_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.marketing_task_activities
     ADD CONSTRAINT marketing_task_activities_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.marketing_tasks
     ADD CONSTRAINT marketing_tasks_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.marketing_team_members
     ADD CONSTRAINT marketing_team_members_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.material_transfer_items
     ADD CONSTRAINT material_transfer_items_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.material_transfers
     ADD CONSTRAINT material_transfers_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.material_transfers
     ADD CONSTRAINT material_transfers_transfer_number_key UNIQUE (transfer_number);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.meeting_attendance
     ADD CONSTRAINT meeting_attendance_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.meeting_minutes
     ADD CONSTRAINT meeting_minutes_minutes_number_key UNIQUE (minutes_number);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.meeting_minutes
     ADD CONSTRAINT meeting_minutes_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.meeting_rsvps
     ADD CONSTRAINT meeting_rsvps_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.meeting_rsvps
     ADD CONSTRAINT meeting_rsvps_token_key UNIQUE (token);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.notification_queue
     ADD CONSTRAINT notification_queue_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.notification_templates
     ADD CONSTRAINT notification_templates_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.notifications
     ADD CONSTRAINT notifications_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.org_job_roles
     ADD CONSTRAINT org_job_roles_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.org_job_roles
     ADD CONSTRAINT org_job_roles_slug_key UNIQUE (slug);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.payment_requests
     ADD CONSTRAINT payment_requests_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.performance_alerts
     ADD CONSTRAINT performance_alerts_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.permission_audit_logs
     ADD CONSTRAINT permission_audit_logs_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.permission_check_logs
     ADD CONSTRAINT permission_check_logs_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.permissions
     ADD CONSTRAINT permissions_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.pnl_branch_settings
     ADD CONSTRAINT pnl_branch_settings_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.pnl_monthly_inputs
     ADD CONSTRAINT pnl_monthly_inputs_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.point_settings
     ADD CONSTRAINT point_settings_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.product_commissions
     ADD CONSTRAINT product_commissions_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.product_prices
     ADD CONSTRAINT product_prices_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.product_sales_analytics
     ADD CONSTRAINT product_sales_analytics_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.product_storage_settings
     ADD CONSTRAINT product_storage_settings_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.product_storage_settings
     ADD CONSTRAINT product_storage_settings_product_name_key UNIQUE (product_name);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.production_ai_plans
     ADD CONSTRAINT production_ai_plans_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.production_inventory_logs
     ADD CONSTRAINT production_inventory_logs_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.production_order_items
     ADD CONSTRAINT production_order_items_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.production_order_schedules
     ADD CONSTRAINT production_order_schedules_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.production_orders
     ADD CONSTRAINT production_orders_order_number_key UNIQUE (order_number);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.production_orders
     ADD CONSTRAINT production_orders_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.products
     ADD CONSTRAINT products_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.project_budget_allocations
     ADD CONSTRAINT project_budget_allocations_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.project_work_items
     ADD CONSTRAINT project_work_items_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.proxy_votes
     ADD CONSTRAINT proxy_votes_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.proxy_votes
     ADD CONSTRAINT proxy_votes_proxy_number_key UNIQUE (proxy_number);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.purchasing_request_items
     ADD CONSTRAINT purchasing_request_items_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.purchasing_requests
     ADD CONSTRAINT purchasing_requests_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.purchasing_requests
     ADD CONSTRAINT purchasing_requests_request_number_key UNIQUE (request_number);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.quality_checks
     ADD CONSTRAINT quality_checks_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.quorum_calculations
     ADD CONSTRAINT quorum_calculations_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.resolution_signatures
     ADD CONSTRAINT resolution_signatures_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.resolution_signatures
     ADD CONSTRAINT resolution_signatures_resolution_id_board_member_id_key UNIQUE (resolution_id, board_member_id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.resolution_signatures
     ADD CONSTRAINT resolution_signatures_signature_token_key UNIQUE (signature_token);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.resolution_votes
     ADD CONSTRAINT resolution_votes_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.role_permissions
     ADD CONSTRAINT role_permissions_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.role_templates
     ADD CONSTRAINT role_templates_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.role_templates
     ADD CONSTRAINT role_templates_slug_key UNIQUE (slug);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.roles
     ADD CONSTRAINT roles_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.roles
     ADD CONSTRAINT roles_slug_key UNIQUE (slug);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.sales_data_uploads
     ADD CONSTRAINT sales_data_uploads_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.saved_filters
     ADD CONSTRAINT saved_filters_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.schedule_change_audit
     ADD CONSTRAINT schedule_change_audit_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.schedule_periods
     ADD CONSTRAINT schedule_periods_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.schedule_templates
     ADD CONSTRAINT schedule_templates_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.seasons_holidays
     ADD CONSTRAINT seasons_holidays_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.security_violation_alerts
     ADD CONSTRAINT security_violation_alerts_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.sessions
     ADD CONSTRAINT sessions_pkey PRIMARY KEY (sid);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.share_transfers
     ADD CONSTRAINT share_transfers_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.share_transfers
     ADD CONSTRAINT share_transfers_transfer_number_key UNIQUE (transfer_number);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.shareholder_dividends
     ADD CONSTRAINT shareholder_dividends_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.shareholder_documents
     ADD CONSTRAINT shareholder_documents_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.shareholders
     ADD CONSTRAINT shareholders_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.shift_audit_log
     ADD CONSTRAINT shift_audit_log_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.shift_checklist_responses
     ADD CONSTRAINT shift_checklist_responses_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.shift_employees
     ADD CONSTRAINT shift_employees_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.shift_performance_tracking
     ADD CONSTRAINT shift_performance_tracking_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.shift_photos
     ADD CONSTRAINT shift_photos_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.shift_reminders
     ADD CONSTRAINT shift_reminders_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.shift_signatures
     ADD CONSTRAINT shift_signatures_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.shifts
     ADD CONSTRAINT shifts_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.social_accounts
     ADD CONSTRAINT social_accounts_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.social_content_templates
     ADD CONSTRAINT social_content_templates_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.social_initiatives
     ADD CONSTRAINT social_initiatives_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.social_post_metrics
     ADD CONSTRAINT social_post_metrics_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.social_posts
     ADD CONSTRAINT social_posts_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.social_schedule_slots
     ADD CONSTRAINT social_schedule_slots_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.system_audit_logs
     ADD CONSTRAINT system_audit_logs_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.target_daily_allocations
     ADD CONSTRAINT target_daily_allocations_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.target_shift_allocations
     ADD CONSTRAINT target_shift_allocations_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.target_weight_profiles
     ADD CONSTRAINT target_weight_profiles_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.time_entries
     ADD CONSTRAINT time_entries_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.timesheet_report_entries
     ADD CONSTRAINT timesheet_report_entries_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.timesheet_reports
     ADD CONSTRAINT timesheet_reports_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.transfer_approval_steps
     ADD CONSTRAINT transfer_approval_steps_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.transfer_history
     ADD CONSTRAINT transfer_history_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.travel_expenses
     ADD CONSTRAINT travel_expenses_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.travel_requests
     ADD CONSTRAINT travel_requests_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.user_assignments
     ADD CONSTRAINT user_assignments_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.user_branch_access
     ADD CONSTRAINT user_branch_access_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.user_permission_overrides
     ADD CONSTRAINT user_permission_overrides_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.user_permissions
     ADD CONSTRAINT user_permissions_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.user_security_settings
     ADD CONSTRAINT user_security_settings_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.user_security_settings
     ADD CONSTRAINT user_security_settings_user_id_key UNIQUE (user_id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.user_sessions
     ADD CONSTRAINT user_sessions_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.user_sessions
     ADD CONSTRAINT user_sessions_session_id_key UNIQUE (session_id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_email_unique UNIQUE (email);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_phone_key UNIQUE (phone);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_username_key UNIQUE (username);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.visitor_logs
     ADD CONSTRAINT visitor_logs_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.visitors
     ADD CONSTRAINT visitors_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.voting_audit_log
     ADD CONSTRAINT voting_audit_log_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.voting_tokens
     ADD CONSTRAINT voting_tokens_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.voting_tokens
     ADD CONSTRAINT voting_tokens_resolution_id_shareholder_id_key UNIQUE (resolution_id, shareholder_id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.voting_tokens
     ADD CONSTRAINT voting_tokens_vote_token_key UNIQUE (vote_token);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.warehouse_items
     ADD CONSTRAINT warehouse_items_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.warehouse_movement_logs
     ADD CONSTRAINT warehouse_movement_logs_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.warehouse_notifications
     ADD CONSTRAINT warehouse_notifications_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.waste_items
     ADD CONSTRAINT waste_items_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.waste_reports
     ADD CONSTRAINT waste_reports_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.waste_risk_alerts
     ADD CONSTRAINT waste_risk_alerts_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.waste_risk_rules
     ADD CONSTRAINT waste_risk_rules_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.weekly_schedule_locks
     ADD CONSTRAINT weekly_schedule_locks_pkey PRIMARY KEY (id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.accounting_exports
     ADD CONSTRAINT accounting_exports_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.accounting_exports
     ADD CONSTRAINT accounting_exports_exported_by_fkey FOREIGN KEY (exported_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.accounting_journal_entries
     ADD CONSTRAINT accounting_journal_entries_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.accounting_journal_entries
     ADD CONSTRAINT accounting_journal_entries_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.accounting_journal_entries
     ADD CONSTRAINT accounting_journal_entries_posted_by_fkey FOREIGN KEY (posted_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.accounting_reconciliations
     ADD CONSTRAINT accounting_reconciliations_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.accounting_reconciliations
     ADD CONSTRAINT accounting_reconciliations_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.accounting_reconciliations
     ADD CONSTRAINT accounting_reconciliations_prepared_by_fkey FOREIGN KEY (prepared_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.advanced_production_orders
     ADD CONSTRAINT advanced_production_orders_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.advanced_production_orders
     ADD CONSTRAINT advanced_production_orders_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.advanced_production_orders
     ADD CONSTRAINT advanced_production_orders_source_branch_id_fkey FOREIGN KEY (source_branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.advanced_production_orders
     ADD CONSTRAINT advanced_production_orders_target_branch_id_fkey FOREIGN KEY (target_branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.asset_transfer_events
     ADD CONSTRAINT asset_transfer_events_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.asset_transfer_events
     ADD CONSTRAINT asset_transfer_events_transfer_id_fkey FOREIGN KEY (transfer_id) REFERENCES public.asset_transfers(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.asset_transfers
     ADD CONSTRAINT asset_transfers_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.asset_transfers
     ADD CONSTRAINT asset_transfers_from_branch_id_fkey FOREIGN KEY (from_branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.asset_transfers
     ADD CONSTRAINT asset_transfers_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.inventory_items(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.asset_transfers
     ADD CONSTRAINT asset_transfers_received_by_fkey FOREIGN KEY (received_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.asset_transfers
     ADD CONSTRAINT asset_transfers_requested_by_fkey FOREIGN KEY (requested_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.asset_transfers
     ADD CONSTRAINT asset_transfers_to_branch_id_fkey FOREIGN KEY (to_branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.attendance_records
     ADD CONSTRAINT attendance_records_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.attendance_summary
     ADD CONSTRAINT attendance_summary_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.attendance_summary
     ADD CONSTRAINT attendance_summary_employee_id_fkey FOREIGN KEY (employee_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.audit_logs
     ADD CONSTRAINT audit_logs_item_id_inventory_items_id_fk FOREIGN KEY (item_id) REFERENCES public.inventory_items(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.average_ticket_targets
     ADD CONSTRAINT average_ticket_targets_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.average_ticket_targets
     ADD CONSTRAINT average_ticket_targets_cashier_id_fkey FOREIGN KEY (cashier_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.average_ticket_targets
     ADD CONSTRAINT average_ticket_targets_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.backups
     ADD CONSTRAINT backups_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.beneficiary_organizations
     ADD CONSTRAINT beneficiary_organizations_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.biometric_credentials
     ADD CONSTRAINT biometric_credentials_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.biometric_credentials
     ADD CONSTRAINT biometric_credentials_registered_by_fkey FOREIGN KEY (registered_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.board_committees
     ADD CONSTRAINT board_committees_chairman_id_fkey FOREIGN KEY (chairman_id) REFERENCES public.board_members(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.board_committees
     ADD CONSTRAINT board_committees_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.board_committees
     ADD CONSTRAINT board_committees_secretary_id_fkey FOREIGN KEY (secretary_id) REFERENCES public.board_members(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.board_member_training
     ADD CONSTRAINT board_member_training_board_member_id_fkey FOREIGN KEY (board_member_id) REFERENCES public.board_members(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.board_members
     ADD CONSTRAINT board_members_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.board_members
     ADD CONSTRAINT board_members_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.board_resolutions
     ADD CONSTRAINT board_resolutions_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.board_resolutions
     ADD CONSTRAINT board_resolutions_meeting_id_fkey FOREIGN KEY (meeting_id) REFERENCES public.governance_meetings(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.board_resolutions
     ADD CONSTRAINT board_resolutions_proposed_by_fkey FOREIGN KEY (proposed_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.board_resolutions
     ADD CONSTRAINT board_resolutions_responsible_person_fkey FOREIGN KEY (responsible_person) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.branch_achievement_bonus
     ADD CONSTRAINT branch_achievement_bonus_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.branch_achievement_bonus
     ADD CONSTRAINT branch_achievement_bonus_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.branch_custom_checklist_items
     ADD CONSTRAINT branch_custom_checklist_items_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.branch_custom_checklist_items
     ADD CONSTRAINT branch_custom_checklist_items_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.branch_custom_checklist_items
     ADD CONSTRAINT branch_custom_checklist_items_template_id_fkey FOREIGN KEY (template_id) REFERENCES public.checklist_templates(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.branch_daily_closure_journals
     ADD CONSTRAINT branch_daily_closure_journals_closure_id_fkey FOREIGN KEY (closure_id) REFERENCES public.branch_daily_closures(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.branch_daily_closure_journals
     ADD CONSTRAINT branch_daily_closure_journals_journal_id_fkey FOREIGN KEY (journal_id) REFERENCES public.cashier_sales_journals(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.branch_daily_closure_payments
     ADD CONSTRAINT branch_daily_closure_payments_closure_id_fkey FOREIGN KEY (closure_id) REFERENCES public.branch_daily_closures(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.branch_daily_closures
     ADD CONSTRAINT branch_daily_closures_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.branch_daily_closures
     ADD CONSTRAINT branch_daily_closures_closed_by_fkey FOREIGN KEY (closed_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.branch_daily_closures
     ADD CONSTRAINT branch_daily_closures_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.branch_daily_sales
     ADD CONSTRAINT branch_daily_sales_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.branch_employees
     ADD CONSTRAINT branch_employees_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.branch_monthly_targets
     ADD CONSTRAINT branch_monthly_targets_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.branch_monthly_targets
     ADD CONSTRAINT branch_monthly_targets_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.branch_monthly_targets
     ADD CONSTRAINT branch_monthly_targets_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.branch_monthly_targets
     ADD CONSTRAINT branch_monthly_targets_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.target_weight_profiles(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.branch_shift_profiles
     ADD CONSTRAINT branch_shift_profiles_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.branch_shifts
     ADD CONSTRAINT branch_shifts_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.branch_shifts
     ADD CONSTRAINT branch_shifts_supervisor_id_fkey FOREIGN KEY (supervisor_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.branch_stock
     ADD CONSTRAINT branch_stock_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.branch_stock
     ADD CONSTRAINT branch_stock_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.warehouse_items(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.branch_stock
     ADD CONSTRAINT branch_stock_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.campaign_budget_allocations
     ADD CONSTRAINT campaign_budget_allocations_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.campaign_budget_allocations
     ADD CONSTRAINT campaign_budget_allocations_campaign_id_fkey FOREIGN KEY (campaign_id) REFERENCES public.marketing_campaigns(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.campaign_expenses
     ADD CONSTRAINT campaign_expenses_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.users(id) ON DELETE SET NULL;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.campaign_expenses
     ADD CONSTRAINT campaign_expenses_campaign_id_fkey FOREIGN KEY (campaign_id) REFERENCES public.marketing_campaigns(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.campaign_expenses
     ADD CONSTRAINT campaign_expenses_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.campaign_expenses
     ADD CONSTRAINT campaign_expenses_influencer_id_fkey FOREIGN KEY (influencer_id) REFERENCES public.marketing_influencers(id) ON DELETE SET NULL;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.campaign_goals
     ADD CONSTRAINT campaign_goals_campaign_id_fkey FOREIGN KEY (campaign_id) REFERENCES public.marketing_campaigns(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.capital_transactions
     ADD CONSTRAINT capital_transactions_assembly_meeting_id_fkey FOREIGN KEY (assembly_meeting_id) REFERENCES public.governance_meetings(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.capital_transactions
     ADD CONSTRAINT capital_transactions_board_resolution_id_fkey FOREIGN KEY (board_resolution_id) REFERENCES public.board_resolutions(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.capital_transactions
     ADD CONSTRAINT capital_transactions_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.cashier_daily_challenges
     ADD CONSTRAINT cashier_daily_challenges_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.cashier_daily_challenges
     ADD CONSTRAINT cashier_daily_challenges_cashier_id_fkey FOREIGN KEY (cashier_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.cashier_daily_challenges
     ADD CONSTRAINT cashier_daily_challenges_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.cashier_incentive_statements
     ADD CONSTRAINT cashier_incentive_statements_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.cashier_incentive_statements
     ADD CONSTRAINT cashier_incentive_statements_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.cashier_incentive_statements
     ADD CONSTRAINT cashier_incentive_statements_cashier_id_fkey FOREIGN KEY (cashier_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.cashier_incentive_statements
     ADD CONSTRAINT cashier_incentive_statements_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.cashier_incentive_statements
     ADD CONSTRAINT cashier_incentive_statements_paid_by_fkey FOREIGN KEY (paid_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.cashier_incentive_statements
     ADD CONSTRAINT cashier_incentive_statements_rejected_by_fkey FOREIGN KEY (rejected_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.cashier_payment_breakdowns
     ADD CONSTRAINT cashier_payment_breakdowns_journal_id_fkey FOREIGN KEY (journal_id) REFERENCES public.cashier_sales_journals(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.cashier_points_ledger
     ADD CONSTRAINT cashier_points_ledger_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.cashier_points_ledger
     ADD CONSTRAINT cashier_points_ledger_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.cashier_points_ledger
     ADD CONSTRAINT cashier_points_ledger_cashier_id_fkey FOREIGN KEY (cashier_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.cashier_product_sales
     ADD CONSTRAINT cashier_product_sales_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.cashier_product_sales
     ADD CONSTRAINT cashier_product_sales_cashier_id_fkey FOREIGN KEY (cashier_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.cashier_product_sales
     ADD CONSTRAINT cashier_product_sales_commission_id_fkey FOREIGN KEY (commission_id) REFERENCES public.product_commissions(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.cashier_product_sales
     ADD CONSTRAINT cashier_product_sales_recorded_by_fkey FOREIGN KEY (recorded_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.cashier_sales_journals
     ADD CONSTRAINT cashier_sales_journals_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.cashier_sales_journals
     ADD CONSTRAINT cashier_sales_journals_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.cashier_sales_journals
     ADD CONSTRAINT cashier_sales_journals_cashier_id_fkey FOREIGN KEY (cashier_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.cashier_sales_journals
     ADD CONSTRAINT cashier_sales_journals_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.cashier_sales_journals
     ADD CONSTRAINT cashier_sales_journals_shift_id_fkey FOREIGN KEY (shift_id) REFERENCES public.shifts(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.cashier_shift_performance
     ADD CONSTRAINT cashier_shift_performance_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.cashier_shift_performance
     ADD CONSTRAINT cashier_shift_performance_cashier_id_fkey FOREIGN KEY (cashier_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.cashier_shift_performance
     ADD CONSTRAINT cashier_shift_performance_journal_id_fkey FOREIGN KEY (journal_id) REFERENCES public.cashier_sales_journals(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.cashier_shift_performance
     ADD CONSTRAINT cashier_shift_performance_shift_id_fkey FOREIGN KEY (shift_id) REFERENCES public.shifts(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.cashier_signatures
     ADD CONSTRAINT cashier_signatures_journal_id_fkey FOREIGN KEY (journal_id) REFERENCES public.cashier_sales_journals(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.cashier_signatures
     ADD CONSTRAINT cashier_signatures_signer_id_fkey FOREIGN KEY (signer_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.checklist_items
     ADD CONSTRAINT checklist_items_template_id_fkey FOREIGN KEY (template_id) REFERENCES public.checklist_templates(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.commission_calculations
     ADD CONSTRAINT commission_calculations_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.commission_calculations
     ADD CONSTRAINT commission_calculations_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.commission_calculations
     ADD CONSTRAINT commission_calculations_cashier_id_fkey FOREIGN KEY (cashier_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.commission_calculations
     ADD CONSTRAINT commission_calculations_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.commission_calculations
     ADD CONSTRAINT commission_calculations_rate_id_fkey FOREIGN KEY (rate_id) REFERENCES public.commission_rates(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.commission_rates
     ADD CONSTRAINT commission_rates_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.committee_memberships
     ADD CONSTRAINT committee_memberships_board_member_id_fkey FOREIGN KEY (board_member_id) REFERENCES public.board_members(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.committee_memberships
     ADD CONSTRAINT committee_memberships_committee_id_fkey FOREIGN KEY (committee_id) REFERENCES public.board_committees(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.community_discounts
     ADD CONSTRAINT community_discounts_beneficiary_organization_id_fkey FOREIGN KEY (beneficiary_organization_id) REFERENCES public.beneficiary_organizations(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.community_discounts
     ADD CONSTRAINT community_discounts_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.community_discounts
     ADD CONSTRAINT community_discounts_initiative_id_fkey FOREIGN KEY (initiative_id) REFERENCES public.social_initiatives(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.comparison_status_history
     ADD CONSTRAINT comparison_status_history_changed_by_fkey FOREIGN KEY (changed_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.comparison_status_history
     ADD CONSTRAINT comparison_status_history_comparison_id_fkey FOREIGN KEY (comparison_id) REFERENCES public.daily_comparisons(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.comparison_summaries
     ADD CONSTRAINT comparison_summaries_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.comparison_uploads
     ADD CONSTRAINT comparison_uploads_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.compliance_history
     ADD CONSTRAINT compliance_history_performed_by_fkey FOREIGN KEY (performed_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.compliance_history
     ADD CONSTRAINT compliance_history_requirement_id_fkey FOREIGN KEY (requirement_id) REFERENCES public.compliance_requirements(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.compliance_requirements
     ADD CONSTRAINT compliance_requirements_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.compliance_requirements
     ADD CONSTRAINT compliance_requirements_responsible_person_fkey FOREIGN KEY (responsible_person) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.construction_contracts
     ADD CONSTRAINT construction_contracts_contractor_id_fkey FOREIGN KEY (contractor_id) REFERENCES public.contractors(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.construction_contracts
     ADD CONSTRAINT construction_contracts_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.construction_contracts
     ADD CONSTRAINT construction_contracts_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.construction_projects(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.construction_projects
     ADD CONSTRAINT construction_projects_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.contract_items
     ADD CONSTRAINT contract_items_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.construction_categories(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.contract_items
     ADD CONSTRAINT contract_items_contract_id_fkey FOREIGN KEY (contract_id) REFERENCES public.construction_contracts(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.contract_payments
     ADD CONSTRAINT contract_payments_contract_id_fkey FOREIGN KEY (contract_id) REFERENCES public.construction_contracts(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.contract_payments
     ADD CONSTRAINT contract_payments_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.contract_payments
     ADD CONSTRAINT contract_payments_payment_request_id_fkey FOREIGN KEY (payment_request_id) REFERENCES public.payment_requests(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.daily_comparisons
     ADD CONSTRAINT daily_comparisons_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.daily_operations_summary
     ADD CONSTRAINT daily_operations_summary_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.daily_production_batches
     ADD CONSTRAINT daily_production_batches_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.daily_production_batches
     ADD CONSTRAINT daily_production_batches_chef_id_fkey FOREIGN KEY (chef_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.daily_production_batches
     ADD CONSTRAINT daily_production_batches_finished_by_id_fkey FOREIGN KEY (finished_by_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.daily_production_batches
     ADD CONSTRAINT daily_production_batches_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.daily_production_batches
     ADD CONSTRAINT daily_production_batches_production_order_id_fkey FOREIGN KEY (production_order_id) REFERENCES public.advanced_production_orders(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.daily_production_batches
     ADD CONSTRAINT daily_production_batches_recorded_by_fkey FOREIGN KEY (recorded_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.daily_production_batches
     ADD CONSTRAINT daily_production_batches_shift_id_fkey FOREIGN KEY (shift_id) REFERENCES public.shifts(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.daily_sales_data
     ADD CONSTRAINT daily_sales_data_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.daily_waste_log
     ADD CONSTRAINT daily_waste_log_recorded_by_fkey FOREIGN KEY (recorded_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.daily_waste_log
     ADD CONSTRAINT daily_waste_log_shift_id_fkey FOREIGN KEY (shift_id) REFERENCES public.branch_shifts(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.data_import_jobs
     ADD CONSTRAINT data_import_jobs_imported_by_fkey FOREIGN KEY (imported_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.disclosures
     ADD CONSTRAINT disclosures_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.disclosures
     ADD CONSTRAINT disclosures_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.disclosures
     ADD CONSTRAINT disclosures_reviewed_by_fkey FOREIGN KEY (reviewed_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.discount_usage_logs
     ADD CONSTRAINT discount_usage_logs_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.discount_usage_logs
     ADD CONSTRAINT discount_usage_logs_discount_id_fkey FOREIGN KEY (discount_id) REFERENCES public.community_discounts(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.discount_usage_logs
     ADD CONSTRAINT discount_usage_logs_used_by_fkey FOREIGN KEY (used_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.display_bar_daily_summary
     ADD CONSTRAINT display_bar_daily_summary_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.display_bar_daily_summary
     ADD CONSTRAINT display_bar_daily_summary_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.display_bar_receipts
     ADD CONSTRAINT display_bar_receipts_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.display_bar_receipts
     ADD CONSTRAINT display_bar_receipts_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.display_bar_receipts
     ADD CONSTRAINT display_bar_receipts_received_by_fkey FOREIGN KEY (received_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.display_bar_receipts
     ADD CONSTRAINT display_bar_receipts_shift_id_fkey FOREIGN KEY (shift_id) REFERENCES public.shifts(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.dividend_distributions
     ADD CONSTRAINT dividend_distributions_assembly_meeting_id_fkey FOREIGN KEY (assembly_meeting_id) REFERENCES public.governance_meetings(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.dividend_distributions
     ADD CONSTRAINT dividend_distributions_board_resolution_id_fkey FOREIGN KEY (board_resolution_id) REFERENCES public.board_resolutions(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.dividend_distributions
     ADD CONSTRAINT dividend_distributions_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.document_access_logs
     ADD CONSTRAINT document_access_logs_document_id_fkey FOREIGN KEY (document_id) REFERENCES public.documents(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.document_access_logs
     ADD CONSTRAINT document_access_logs_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.document_folders
     ADD CONSTRAINT document_folders_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.document_folders
     ADD CONSTRAINT document_folders_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES public.document_folders(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.document_shares
     ADD CONSTRAINT document_shares_document_id_fkey FOREIGN KEY (document_id) REFERENCES public.documents(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.document_shares
     ADD CONSTRAINT document_shares_folder_id_fkey FOREIGN KEY (folder_id) REFERENCES public.document_folders(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.document_shares
     ADD CONSTRAINT document_shares_shared_by_fkey FOREIGN KEY (shared_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.document_shares
     ADD CONSTRAINT document_shares_shared_with_branch_id_fkey FOREIGN KEY (shared_with_branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.document_shares
     ADD CONSTRAINT document_shares_shared_with_user_id_fkey FOREIGN KEY (shared_with_user_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.document_versions
     ADD CONSTRAINT document_versions_changed_by_fkey FOREIGN KEY (changed_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.document_versions
     ADD CONSTRAINT document_versions_document_id_fkey FOREIGN KEY (document_id) REFERENCES public.documents(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.documents
     ADD CONSTRAINT documents_archived_by_fkey FOREIGN KEY (archived_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.documents
     ADD CONSTRAINT documents_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.documents
     ADD CONSTRAINT documents_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.document_categories(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.documents
     ADD CONSTRAINT documents_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.documents
     ADD CONSTRAINT documents_folder_id_fkey FOREIGN KEY (folder_id) REFERENCES public.document_folders(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.documents
     ADD CONSTRAINT documents_last_accessed_by_fkey FOREIGN KEY (last_accessed_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.documents
     ADD CONSTRAINT documents_locked_by_fkey FOREIGN KEY (locked_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.documents
     ADD CONSTRAINT documents_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.employee_schedules
     ADD CONSTRAINT employee_schedules_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.employee_schedules
     ADD CONSTRAINT employee_schedules_period_id_fkey FOREIGN KEY (period_id) REFERENCES public.schedule_periods(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.employee_transfer_requests
     ADD CONSTRAINT employee_transfer_requests_destination_branch_id_fkey FOREIGN KEY (destination_branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.employee_transfer_requests
     ADD CONSTRAINT employee_transfer_requests_employee_id_fkey FOREIGN KEY (employee_id) REFERENCES public.branch_employees(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.employee_transfer_requests
     ADD CONSTRAINT employee_transfer_requests_requested_by_fkey FOREIGN KEY (requested_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.employee_transfer_requests
     ADD CONSTRAINT employee_transfer_requests_source_branch_id_fkey FOREIGN KEY (source_branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.exec_correspondence
     ADD CONSTRAINT exec_correspondence_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.exec_correspondence
     ADD CONSTRAINT exec_correspondence_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.exec_correspondence
     ADD CONSTRAINT exec_correspondence_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.exec_correspondence
     ADD CONSTRAINT exec_correspondence_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.exec_meeting_attendees
     ADD CONSTRAINT exec_meeting_attendees_meeting_id_fkey FOREIGN KEY (meeting_id) REFERENCES public.exec_meetings(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.exec_meeting_attendees
     ADD CONSTRAINT exec_meeting_attendees_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.exec_meetings
     ADD CONSTRAINT exec_meetings_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.exec_meetings
     ADD CONSTRAINT exec_meetings_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.exec_meetings
     ADD CONSTRAINT exec_meetings_organizer_id_fkey FOREIGN KEY (organizer_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.exec_notifications
     ADD CONSTRAINT exec_notifications_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.exec_notifications
     ADD CONSTRAINT exec_notifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.exec_task_comments
     ADD CONSTRAINT exec_task_comments_task_id_fkey FOREIGN KEY (task_id) REFERENCES public.exec_tasks(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.exec_task_comments
     ADD CONSTRAINT exec_task_comments_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.exec_tasks
     ADD CONSTRAINT exec_tasks_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.exec_tasks
     ADD CONSTRAINT exec_tasks_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.exec_tasks
     ADD CONSTRAINT exec_tasks_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.financial_cogs
     ADD CONSTRAINT financial_cogs_period_id_fkey FOREIGN KEY (period_id) REFERENCES public.financial_periods(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.financial_fixed_costs
     ADD CONSTRAINT financial_fixed_costs_period_id_fkey FOREIGN KEY (period_id) REFERENCES public.financial_periods(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.financial_metrics
     ADD CONSTRAINT financial_metrics_period_id_fkey FOREIGN KEY (period_id) REFERENCES public.financial_periods(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.financial_operating_expenses
     ADD CONSTRAINT financial_operating_expenses_period_id_fkey FOREIGN KEY (period_id) REFERENCES public.financial_periods(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.financial_periods
     ADD CONSTRAINT financial_periods_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.financial_periods
     ADD CONSTRAINT financial_periods_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.financial_sales
     ADD CONSTRAINT financial_sales_period_id_fkey FOREIGN KEY (period_id) REFERENCES public.financial_periods(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.finished_goods_inventory
     ADD CONSTRAINT finished_goods_inventory_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.finished_goods_inventory
     ADD CONSTRAINT finished_goods_inventory_last_batch_id_fkey FOREIGN KEY (last_batch_id) REFERENCES public.daily_production_batches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.finished_goods_inventory
     ADD CONSTRAINT finished_goods_inventory_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.finished_goods_transfers
     ADD CONSTRAINT finished_goods_transfers_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.finished_goods_transfers
     ADD CONSTRAINT finished_goods_transfers_destination_branch_id_fkey FOREIGN KEY (destination_branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.finished_goods_transfers
     ADD CONSTRAINT finished_goods_transfers_inventory_id_fkey FOREIGN KEY (inventory_id) REFERENCES public.finished_goods_inventory(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.finished_goods_transfers
     ADD CONSTRAINT finished_goods_transfers_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.finished_goods_transfers
     ADD CONSTRAINT finished_goods_transfers_source_branch_id_fkey FOREIGN KEY (source_branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.governance_meetings
     ADD CONSTRAINT governance_meetings_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.governance_meetings
     ADD CONSTRAINT governance_meetings_minutes_approved_by_fkey FOREIGN KEY (minutes_approved_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.incentive_awards
     ADD CONSTRAINT incentive_awards_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.incentive_awards
     ADD CONSTRAINT incentive_awards_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.incentive_awards
     ADD CONSTRAINT incentive_awards_cashier_id_fkey FOREIGN KEY (cashier_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.incentive_awards
     ADD CONSTRAINT incentive_awards_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.incentive_awards
     ADD CONSTRAINT incentive_awards_tier_id_fkey FOREIGN KEY (tier_id) REFERENCES public.incentive_tiers(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.incentive_tiers
     ADD CONSTRAINT incentive_tiers_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.influencer_campaign_links
     ADD CONSTRAINT influencer_campaign_links_campaign_id_fkey FOREIGN KEY (campaign_id) REFERENCES public.marketing_campaigns(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.influencer_campaign_links
     ADD CONSTRAINT influencer_campaign_links_influencer_id_fkey FOREIGN KEY (influencer_id) REFERENCES public.marketing_influencers(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.influencer_contacts
     ADD CONSTRAINT influencer_contacts_contacted_by_fkey FOREIGN KEY (contacted_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.influencer_contacts
     ADD CONSTRAINT influencer_contacts_influencer_id_fkey FOREIGN KEY (influencer_id) REFERENCES public.marketing_influencers(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.influencer_contracts
     ADD CONSTRAINT influencer_contracts_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.influencer_contracts
     ADD CONSTRAINT influencer_contracts_company_signed_by_fkey FOREIGN KEY (company_signed_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.influencer_contracts
     ADD CONSTRAINT influencer_contracts_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.influencer_contracts
     ADD CONSTRAINT influencer_contracts_finance_approved_by_fkey FOREIGN KEY (finance_approved_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.influencer_contracts
     ADD CONSTRAINT influencer_contracts_influencer_id_fkey FOREIGN KEY (influencer_id) REFERENCES public.marketing_influencers(id) ON DELETE SET NULL;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.influencer_payments
     ADD CONSTRAINT influencer_payments_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.influencer_payments
     ADD CONSTRAINT influencer_payments_campaign_id_fkey FOREIGN KEY (campaign_id) REFERENCES public.marketing_campaigns(id) ON DELETE SET NULL;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.influencer_payments
     ADD CONSTRAINT influencer_payments_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.influencer_payments
     ADD CONSTRAINT influencer_payments_influencer_id_fkey FOREIGN KEY (influencer_id) REFERENCES public.marketing_influencers(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.interest_declarations
     ADD CONSTRAINT interest_declarations_board_member_id_fkey FOREIGN KEY (board_member_id) REFERENCES public.board_members(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.interest_declarations
     ADD CONSTRAINT interest_declarations_reviewed_by_fkey FOREIGN KEY (reviewed_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.inventory_items
     ADD CONSTRAINT inventory_items_branch_id_branches_id_fk FOREIGN KEY (branch_id) REFERENCES public.branches(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.journal_attachments
     ADD CONSTRAINT journal_attachments_journal_id_fkey FOREIGN KEY (journal_id) REFERENCES public.cashier_sales_journals(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.journal_attachments
     ADD CONSTRAINT journal_attachments_uploaded_by_fkey FOREIGN KEY (uploaded_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.journal_entry_lines
     ADD CONSTRAINT journal_entry_lines_journal_entry_id_fkey FOREIGN KEY (journal_entry_id) REFERENCES public.accounting_journal_entries(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.marketing_alerts
     ADD CONSTRAINT marketing_alerts_acknowledged_by_fkey FOREIGN KEY (acknowledged_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.marketing_alerts
     ADD CONSTRAINT marketing_alerts_campaign_id_fkey FOREIGN KEY (campaign_id) REFERENCES public.marketing_campaigns(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.marketing_alerts
     ADD CONSTRAINT marketing_alerts_target_user_id_fkey FOREIGN KEY (target_user_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.marketing_alerts
     ADD CONSTRAINT marketing_alerts_task_id_fkey FOREIGN KEY (task_id) REFERENCES public.marketing_tasks(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.marketing_assets
     ADD CONSTRAINT marketing_assets_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id) ON DELETE SET NULL;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.marketing_assets
     ADD CONSTRAINT marketing_assets_campaign_id_fkey FOREIGN KEY (campaign_id) REFERENCES public.marketing_campaigns(id) ON DELETE SET NULL;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.marketing_assets
     ADD CONSTRAINT marketing_assets_uploaded_by_fkey FOREIGN KEY (uploaded_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.marketing_calendar_events
     ADD CONSTRAINT marketing_calendar_events_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.marketing_calendar_events
     ADD CONSTRAINT marketing_calendar_events_campaign_id_fkey FOREIGN KEY (campaign_id) REFERENCES public.marketing_campaigns(id) ON DELETE SET NULL;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.marketing_calendar_events
     ADD CONSTRAINT marketing_calendar_events_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.marketing_campaigns
     ADD CONSTRAINT marketing_campaigns_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.marketing_campaigns
     ADD CONSTRAINT marketing_campaigns_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.marketing_influencers
     ADD CONSTRAINT marketing_influencers_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.marketing_performance_reports
     ADD CONSTRAINT marketing_performance_reports_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.marketing_performance_reports
     ADD CONSTRAINT marketing_performance_reports_campaign_id_fkey FOREIGN KEY (campaign_id) REFERENCES public.marketing_campaigns(id) ON DELETE SET NULL;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.marketing_performance_reports
     ADD CONSTRAINT marketing_performance_reports_generated_by_fkey FOREIGN KEY (generated_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.marketing_task_activities
     ADD CONSTRAINT marketing_task_activities_task_id_fkey FOREIGN KEY (task_id) REFERENCES public.marketing_tasks(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.marketing_task_activities
     ADD CONSTRAINT marketing_task_activities_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.marketing_tasks
     ADD CONSTRAINT marketing_tasks_assigned_by_fkey FOREIGN KEY (assigned_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.marketing_tasks
     ADD CONSTRAINT marketing_tasks_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.marketing_tasks
     ADD CONSTRAINT marketing_tasks_campaign_id_fkey FOREIGN KEY (campaign_id) REFERENCES public.marketing_campaigns(id) ON DELETE SET NULL;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.marketing_team_members
     ADD CONSTRAINT marketing_team_members_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.material_transfer_items
     ADD CONSTRAINT material_transfer_items_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.warehouse_items(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.material_transfer_items
     ADD CONSTRAINT material_transfer_items_transfer_id_fkey FOREIGN KEY (transfer_id) REFERENCES public.material_transfers(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.material_transfers
     ADD CONSTRAINT material_transfers_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.material_transfers
     ADD CONSTRAINT material_transfers_destination_branch_id_fkey FOREIGN KEY (destination_branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.material_transfers
     ADD CONSTRAINT material_transfers_received_by_fkey FOREIGN KEY (received_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.material_transfers
     ADD CONSTRAINT material_transfers_source_branch_id_fkey FOREIGN KEY (source_branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.meeting_attendance
     ADD CONSTRAINT meeting_attendance_board_member_id_fkey FOREIGN KEY (board_member_id) REFERENCES public.board_members(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.meeting_attendance
     ADD CONSTRAINT meeting_attendance_meeting_id_fkey FOREIGN KEY (meeting_id) REFERENCES public.governance_meetings(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.meeting_attendance
     ADD CONSTRAINT meeting_attendance_shareholder_id_fkey FOREIGN KEY (shareholder_id) REFERENCES public.shareholders(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.meeting_minutes
     ADD CONSTRAINT meeting_minutes_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.meeting_minutes
     ADD CONSTRAINT meeting_minutes_meeting_id_fkey FOREIGN KEY (meeting_id) REFERENCES public.governance_meetings(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.meeting_minutes
     ADD CONSTRAINT meeting_minutes_prepared_by_fkey FOREIGN KEY (prepared_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.meeting_minutes
     ADD CONSTRAINT meeting_minutes_reviewed_by_fkey FOREIGN KEY (reviewed_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.meeting_rsvps
     ADD CONSTRAINT meeting_rsvps_meeting_id_fkey FOREIGN KEY (meeting_id) REFERENCES public.governance_meetings(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.meeting_rsvps
     ADD CONSTRAINT meeting_rsvps_shareholder_id_fkey FOREIGN KEY (shareholder_id) REFERENCES public.shareholders(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.notifications
     ADD CONSTRAINT notifications_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.notifications
     ADD CONSTRAINT notifications_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.notifications
     ADD CONSTRAINT notifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.payment_requests
     ADD CONSTRAINT payment_requests_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.payment_requests
     ADD CONSTRAINT payment_requests_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.construction_categories(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.payment_requests
     ADD CONSTRAINT payment_requests_contract_id_fkey FOREIGN KEY (contract_id) REFERENCES public.construction_contracts(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.payment_requests
     ADD CONSTRAINT payment_requests_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.construction_projects(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.payment_requests
     ADD CONSTRAINT payment_requests_requested_by_fkey FOREIGN KEY (requested_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.permission_audit_logs
     ADD CONSTRAINT permission_audit_logs_changed_by_user_id_fkey FOREIGN KEY (changed_by_user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.permission_audit_logs
     ADD CONSTRAINT permission_audit_logs_target_user_id_fkey FOREIGN KEY (target_user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.pnl_branch_settings
     ADD CONSTRAINT pnl_branch_settings_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.pnl_monthly_inputs
     ADD CONSTRAINT pnl_monthly_inputs_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.point_settings
     ADD CONSTRAINT point_settings_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.product_commissions
     ADD CONSTRAINT product_commissions_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.product_commissions
     ADD CONSTRAINT product_commissions_cashier_id_fkey FOREIGN KEY (cashier_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.product_commissions
     ADD CONSTRAINT product_commissions_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.product_prices
     ADD CONSTRAINT product_prices_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.product_sales_analytics
     ADD CONSTRAINT product_sales_analytics_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.product_sales_analytics
     ADD CONSTRAINT product_sales_analytics_upload_id_fkey FOREIGN KEY (upload_id) REFERENCES public.sales_data_uploads(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.production_ai_plans
     ADD CONSTRAINT production_ai_plans_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.production_ai_plans
     ADD CONSTRAINT production_ai_plans_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.production_ai_plans
     ADD CONSTRAINT production_ai_plans_reviewed_by_fkey FOREIGN KEY (reviewed_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.production_inventory_logs
     ADD CONSTRAINT production_inventory_logs_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.production_inventory_logs
     ADD CONSTRAINT production_inventory_logs_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.production_inventory_logs
     ADD CONSTRAINT production_inventory_logs_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.production_order_items
     ADD CONSTRAINT production_order_items_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.advanced_production_orders(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.production_order_items
     ADD CONSTRAINT production_order_items_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.production_order_schedules
     ADD CONSTRAINT production_order_schedules_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.advanced_production_orders(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.production_orders
     ADD CONSTRAINT production_orders_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.production_orders
     ADD CONSTRAINT production_orders_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.production_orders
     ADD CONSTRAINT production_orders_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.production_orders
     ADD CONSTRAINT production_orders_shift_id_fkey FOREIGN KEY (shift_id) REFERENCES public.shifts(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.project_budget_allocations
     ADD CONSTRAINT project_budget_allocations_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.construction_categories(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.project_budget_allocations
     ADD CONSTRAINT project_budget_allocations_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.construction_projects(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.project_work_items
     ADD CONSTRAINT project_work_items_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.construction_categories(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.project_work_items
     ADD CONSTRAINT project_work_items_contractor_id_fkey FOREIGN KEY (contractor_id) REFERENCES public.contractors(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.project_work_items
     ADD CONSTRAINT project_work_items_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.construction_projects(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.proxy_votes
     ADD CONSTRAINT proxy_votes_meeting_id_fkey FOREIGN KEY (meeting_id) REFERENCES public.governance_meetings(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.proxy_votes
     ADD CONSTRAINT proxy_votes_principal_shareholder_id_fkey FOREIGN KEY (principal_shareholder_id) REFERENCES public.shareholders(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.proxy_votes
     ADD CONSTRAINT proxy_votes_proxy_holder_shareholder_id_fkey FOREIGN KEY (proxy_holder_shareholder_id) REFERENCES public.shareholders(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.proxy_votes
     ADD CONSTRAINT proxy_votes_verified_by_fkey FOREIGN KEY (verified_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.purchasing_request_items
     ADD CONSTRAINT purchasing_request_items_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.warehouse_items(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.purchasing_request_items
     ADD CONSTRAINT purchasing_request_items_purchasing_request_id_fkey FOREIGN KEY (purchasing_request_id) REFERENCES public.purchasing_requests(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.purchasing_requests
     ADD CONSTRAINT purchasing_requests_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.purchasing_requests
     ADD CONSTRAINT purchasing_requests_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.purchasing_requests
     ADD CONSTRAINT purchasing_requests_requested_by_fkey FOREIGN KEY (requested_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.quality_checks
     ADD CONSTRAINT quality_checks_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.quality_checks
     ADD CONSTRAINT quality_checks_production_order_id_fkey FOREIGN KEY (production_order_id) REFERENCES public.production_orders(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.quality_checks
     ADD CONSTRAINT quality_checks_shift_id_fkey FOREIGN KEY (shift_id) REFERENCES public.shifts(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.quorum_calculations
     ADD CONSTRAINT quorum_calculations_calculated_by_fkey FOREIGN KEY (calculated_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.quorum_calculations
     ADD CONSTRAINT quorum_calculations_meeting_id_fkey FOREIGN KEY (meeting_id) REFERENCES public.governance_meetings(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.quorum_calculations
     ADD CONSTRAINT quorum_calculations_resolution_id_fkey FOREIGN KEY (resolution_id) REFERENCES public.board_resolutions(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.resolution_signatures
     ADD CONSTRAINT resolution_signatures_board_member_id_fkey FOREIGN KEY (board_member_id) REFERENCES public.board_members(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.resolution_signatures
     ADD CONSTRAINT resolution_signatures_resolution_id_fkey FOREIGN KEY (resolution_id) REFERENCES public.board_resolutions(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.resolution_signatures
     ADD CONSTRAINT resolution_signatures_shareholder_id_fkey FOREIGN KEY (shareholder_id) REFERENCES public.shareholders(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.resolution_votes
     ADD CONSTRAINT resolution_votes_board_member_id_fkey FOREIGN KEY (board_member_id) REFERENCES public.board_members(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.resolution_votes
     ADD CONSTRAINT resolution_votes_resolution_id_fkey FOREIGN KEY (resolution_id) REFERENCES public.board_resolutions(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.resolution_votes
     ADD CONSTRAINT resolution_votes_shareholder_id_fkey FOREIGN KEY (shareholder_id) REFERENCES public.shareholders(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.role_permissions
     ADD CONSTRAINT role_permissions_permission_id_fkey FOREIGN KEY (permission_id) REFERENCES public.permissions(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.role_permissions
     ADD CONSTRAINT role_permissions_role_id_fkey FOREIGN KEY (role_id) REFERENCES public.roles(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.roles
     ADD CONSTRAINT roles_inherits_from_role_id_fkey FOREIGN KEY (inherits_from_role_id) REFERENCES public.roles(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.sales_data_uploads
     ADD CONSTRAINT sales_data_uploads_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.sales_data_uploads
     ADD CONSTRAINT sales_data_uploads_uploaded_by_fkey FOREIGN KEY (uploaded_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.schedule_change_audit
     ADD CONSTRAINT schedule_change_audit_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.schedule_change_audit
     ADD CONSTRAINT schedule_change_audit_changed_by_fkey FOREIGN KEY (changed_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.schedule_periods
     ADD CONSTRAINT schedule_periods_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.schedule_periods
     ADD CONSTRAINT schedule_periods_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.schedule_periods
     ADD CONSTRAINT schedule_periods_published_by_fkey FOREIGN KEY (published_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.schedule_periods
     ADD CONSTRAINT schedule_periods_template_id_fkey FOREIGN KEY (template_id) REFERENCES public.schedule_templates(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.schedule_templates
     ADD CONSTRAINT schedule_templates_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.schedule_templates
     ADD CONSTRAINT schedule_templates_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.seasons_holidays
     ADD CONSTRAINT seasons_holidays_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.share_transfers
     ADD CONSTRAINT share_transfers_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.share_transfers
     ADD CONSTRAINT share_transfers_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.share_transfers
     ADD CONSTRAINT share_transfers_from_shareholder_id_fkey FOREIGN KEY (from_shareholder_id) REFERENCES public.shareholders(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.share_transfers
     ADD CONSTRAINT share_transfers_to_shareholder_id_fkey FOREIGN KEY (to_shareholder_id) REFERENCES public.shareholders(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.shareholder_dividends
     ADD CONSTRAINT shareholder_dividends_distribution_id_fkey FOREIGN KEY (distribution_id) REFERENCES public.dividend_distributions(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.shareholder_dividends
     ADD CONSTRAINT shareholder_dividends_shareholder_id_fkey FOREIGN KEY (shareholder_id) REFERENCES public.shareholders(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.shareholder_documents
     ADD CONSTRAINT shareholder_documents_shareholder_id_fkey FOREIGN KEY (shareholder_id) REFERENCES public.shareholders(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.shareholder_documents
     ADD CONSTRAINT shareholder_documents_uploaded_by_fkey FOREIGN KEY (uploaded_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.shareholders
     ADD CONSTRAINT shareholders_board_member_id_fkey FOREIGN KEY (board_member_id) REFERENCES public.board_members(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.shareholders
     ADD CONSTRAINT shareholders_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.shift_audit_log
     ADD CONSTRAINT shift_audit_log_performed_by_fkey FOREIGN KEY (performed_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.shift_audit_log
     ADD CONSTRAINT shift_audit_log_shift_id_fkey FOREIGN KEY (shift_id) REFERENCES public.branch_shifts(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.shift_checklist_responses
     ADD CONSTRAINT shift_checklist_responses_completed_by_fkey FOREIGN KEY (completed_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.shift_checklist_responses
     ADD CONSTRAINT shift_checklist_responses_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.checklist_items(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.shift_checklist_responses
     ADD CONSTRAINT shift_checklist_responses_shift_id_fkey FOREIGN KEY (shift_id) REFERENCES public.branch_shifts(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.shift_employees
     ADD CONSTRAINT shift_employees_shift_id_fkey FOREIGN KEY (shift_id) REFERENCES public.shifts(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.shift_photos
     ADD CONSTRAINT shift_photos_checklist_response_id_fkey FOREIGN KEY (checklist_response_id) REFERENCES public.shift_checklist_responses(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.shift_photos
     ADD CONSTRAINT shift_photos_shift_id_fkey FOREIGN KEY (shift_id) REFERENCES public.branch_shifts(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.shift_photos
     ADD CONSTRAINT shift_photos_uploaded_by_fkey FOREIGN KEY (uploaded_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.shift_reminders
     ADD CONSTRAINT shift_reminders_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.shift_signatures
     ADD CONSTRAINT shift_signatures_shift_id_fkey FOREIGN KEY (shift_id) REFERENCES public.branch_shifts(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.shift_signatures
     ADD CONSTRAINT shift_signatures_signed_by_fkey FOREIGN KEY (signed_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.shifts
     ADD CONSTRAINT shifts_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.shifts
     ADD CONSTRAINT shifts_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.social_initiatives
     ADD CONSTRAINT social_initiatives_beneficiary_organization_id_fkey FOREIGN KEY (beneficiary_organization_id) REFERENCES public.beneficiary_organizations(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.social_initiatives
     ADD CONSTRAINT social_initiatives_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.social_posts
     ADD CONSTRAINT social_posts_influencer_id_fkey FOREIGN KEY (influencer_id) REFERENCES public.marketing_influencers(id) ON DELETE SET NULL;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.system_audit_logs
     ADD CONSTRAINT system_audit_logs_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.target_daily_allocations
     ADD CONSTRAINT target_daily_allocations_monthly_target_id_fkey FOREIGN KEY (monthly_target_id) REFERENCES public.branch_monthly_targets(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.target_shift_allocations
     ADD CONSTRAINT target_shift_allocations_daily_allocation_id_fkey FOREIGN KEY (daily_allocation_id) REFERENCES public.target_daily_allocations(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.target_weight_profiles
     ADD CONSTRAINT target_weight_profiles_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.time_entries
     ADD CONSTRAINT time_entries_attendance_id_fkey FOREIGN KEY (attendance_id) REFERENCES public.attendance_records(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.time_entries
     ADD CONSTRAINT time_entries_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.time_entries
     ADD CONSTRAINT time_entries_employee_id_fkey FOREIGN KEY (employee_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.time_entries
     ADD CONSTRAINT time_entries_verified_by_fkey FOREIGN KEY (verified_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.timesheet_report_entries
     ADD CONSTRAINT timesheet_report_entries_report_id_fkey FOREIGN KEY (report_id) REFERENCES public.timesheet_reports(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.timesheet_reports
     ADD CONSTRAINT timesheet_reports_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.timesheet_reports
     ADD CONSTRAINT timesheet_reports_employee_id_fkey FOREIGN KEY (employee_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.timesheet_reports
     ADD CONSTRAINT timesheet_reports_generated_by_fkey FOREIGN KEY (generated_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.timesheet_reports
     ADD CONSTRAINT timesheet_reports_manager_id_fkey FOREIGN KEY (manager_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.transfer_approval_steps
     ADD CONSTRAINT transfer_approval_steps_approver_id_fkey FOREIGN KEY (approver_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.transfer_approval_steps
     ADD CONSTRAINT transfer_approval_steps_transfer_id_fkey FOREIGN KEY (transfer_id) REFERENCES public.employee_transfer_requests(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.transfer_history
     ADD CONSTRAINT transfer_history_performed_by_fkey FOREIGN KEY (performed_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.transfer_history
     ADD CONSTRAINT transfer_history_transfer_id_fkey FOREIGN KEY (transfer_id) REFERENCES public.employee_transfer_requests(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.travel_expenses
     ADD CONSTRAINT travel_expenses_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.travel_expenses
     ADD CONSTRAINT travel_expenses_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.travel_expenses
     ADD CONSTRAINT travel_expenses_travel_request_id_fkey FOREIGN KEY (travel_request_id) REFERENCES public.travel_requests(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.travel_requests
     ADD CONSTRAINT travel_requests_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.travel_requests
     ADD CONSTRAINT travel_requests_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.travel_requests
     ADD CONSTRAINT travel_requests_finance_approval_by_fkey FOREIGN KEY (finance_approval_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.travel_requests
     ADD CONSTRAINT travel_requests_manager_approval_by_fkey FOREIGN KEY (manager_approval_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.travel_requests
     ADD CONSTRAINT travel_requests_requester_id_fkey FOREIGN KEY (requester_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.user_assignments
     ADD CONSTRAINT user_assignments_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id) ON DELETE SET NULL;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.user_assignments
     ADD CONSTRAINT user_assignments_department_id_fkey FOREIGN KEY (department_id) REFERENCES public.departments(id) ON DELETE SET NULL;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.user_assignments
     ADD CONSTRAINT user_assignments_role_id_fkey FOREIGN KEY (role_id) REFERENCES public.roles(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.user_assignments
     ADD CONSTRAINT user_assignments_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.user_branch_access
     ADD CONSTRAINT user_branch_access_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.user_branch_access
     ADD CONSTRAINT user_branch_access_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.user_permission_overrides
     ADD CONSTRAINT user_permission_overrides_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id) ON DELETE SET NULL;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.user_permission_overrides
     ADD CONSTRAINT user_permission_overrides_department_id_fkey FOREIGN KEY (department_id) REFERENCES public.departments(id) ON DELETE SET NULL;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.user_permission_overrides
     ADD CONSTRAINT user_permission_overrides_granted_by_fkey FOREIGN KEY (granted_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.user_permission_overrides
     ADD CONSTRAINT user_permission_overrides_permission_id_fkey FOREIGN KEY (permission_id) REFERENCES public.permissions(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.user_permission_overrides
     ADD CONSTRAINT user_permission_overrides_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.user_permissions
     ADD CONSTRAINT user_permissions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.visitor_logs
     ADD CONSTRAINT visitor_logs_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.visitor_logs
     ADD CONSTRAINT visitor_logs_checked_out_by_fkey FOREIGN KEY (checked_out_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.visitor_logs
     ADD CONSTRAINT visitor_logs_host_id_fkey FOREIGN KEY (host_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.visitor_logs
     ADD CONSTRAINT visitor_logs_registered_by_fkey FOREIGN KEY (registered_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.visitor_logs
     ADD CONSTRAINT visitor_logs_visitor_id_fkey FOREIGN KEY (visitor_id) REFERENCES public.visitors(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.visitors
     ADD CONSTRAINT visitors_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.visitors
     ADD CONSTRAINT visitors_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.voting_audit_log
     ADD CONSTRAINT voting_audit_log_meeting_id_fkey FOREIGN KEY (meeting_id) REFERENCES public.governance_meetings(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.voting_audit_log
     ADD CONSTRAINT voting_audit_log_proxy_id_fkey FOREIGN KEY (proxy_id) REFERENCES public.proxy_votes(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.voting_audit_log
     ADD CONSTRAINT voting_audit_log_resolution_id_fkey FOREIGN KEY (resolution_id) REFERENCES public.board_resolutions(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.voting_audit_log
     ADD CONSTRAINT voting_audit_log_vote_id_fkey FOREIGN KEY (vote_id) REFERENCES public.resolution_votes(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.voting_tokens
     ADD CONSTRAINT voting_tokens_resolution_id_fkey FOREIGN KEY (resolution_id) REFERENCES public.board_resolutions(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.voting_tokens
     ADD CONSTRAINT voting_tokens_shareholder_id_fkey FOREIGN KEY (shareholder_id) REFERENCES public.shareholders(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.warehouse_movement_logs
     ADD CONSTRAINT warehouse_movement_logs_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.warehouse_movement_logs
     ADD CONSTRAINT warehouse_movement_logs_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.warehouse_movement_logs
     ADD CONSTRAINT warehouse_movement_logs_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.warehouse_items(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.warehouse_notifications
     ADD CONSTRAINT warehouse_notifications_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.warehouse_notifications
     ADD CONSTRAINT warehouse_notifications_read_by_fkey FOREIGN KEY (read_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.warehouse_notifications
     ADD CONSTRAINT warehouse_notifications_target_branch_id_fkey FOREIGN KEY (target_branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.warehouse_notifications
     ADD CONSTRAINT warehouse_notifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.waste_items
     ADD CONSTRAINT waste_items_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.waste_items
     ADD CONSTRAINT waste_items_waste_report_id_fkey FOREIGN KEY (waste_report_id) REFERENCES public.waste_reports(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.waste_reports
     ADD CONSTRAINT waste_reports_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.waste_reports
     ADD CONSTRAINT waste_reports_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id) ON DELETE CASCADE;
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.waste_reports
     ADD CONSTRAINT waste_reports_reported_by_fkey FOREIGN KEY (reported_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.waste_reports
     ADD CONSTRAINT waste_reports_shift_id_fkey FOREIGN KEY (shift_id) REFERENCES public.shifts(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.waste_risk_alerts
     ADD CONSTRAINT waste_risk_alerts_acknowledged_by_fkey FOREIGN KEY (acknowledged_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.waste_risk_alerts
     ADD CONSTRAINT waste_risk_alerts_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.waste_risk_alerts
     ADD CONSTRAINT waste_risk_alerts_resolved_by_fkey FOREIGN KEY (resolved_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.waste_risk_alerts
     ADD CONSTRAINT waste_risk_alerts_rule_id_fkey FOREIGN KEY (rule_id) REFERENCES public.waste_risk_rules(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.waste_risk_rules
     ADD CONSTRAINT waste_risk_rules_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.weekly_schedule_locks
     ADD CONSTRAINT weekly_schedule_locks_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
+DO $$ BEGIN
 ALTER TABLE ONLY public.weekly_schedule_locks
     ADD CONSTRAINT weekly_schedule_locks_locked_by_fkey FOREIGN KEY (locked_by) REFERENCES public.users(id);
+EXCEPTION WHEN duplicate_object OR invalid_table_definition THEN NULL;
+END $$;
 
