@@ -819,16 +819,19 @@ export default function AdvancedProductionOrderDetailsPage() {
                 {(() => {
                   const preProductionCount = items.length;
                   const preCategories = Array.from(new Set(items.map((i: any) => i.category).filter(Boolean))) as string[];
-                  const preProductionValue = items.reduce((sum: number, item: any) => sum + (Number(item.totalValue) || (Number(item.unitPrice) || 0) * (Number(item.targetQuantity) || 0)), 0);
 
+                  let preProductionValue = 0;
                   let madeToOrderCount = 0;
                   let madeToOrderValue = 0;
                   let madeToOrderNames: string[] = [];
                   if (order.notes) {
+                    const preValMatch = order.notes.match(/أصناف الإنتاج المسبق[^-]*-\s*القيمة:\s*([\d,.]+)\s*ريال/);
+                    if (preValMatch) preProductionValue = parseFloat(preValMatch[1].replace(/,/g, '')) || 0;
+
                     const mtoMatch = order.notes.match(/أصناف مبيعات فقط[^:]*:\s*(\d+)\s*صنف/);
                     if (mtoMatch) madeToOrderCount = parseInt(mtoMatch[1]) || 0;
-                    const valueMatch = order.notes.match(/أصناف مبيعات فقط[^-]*-\s*القيمة:\s*([\d,]+)\s*ريال/);
-                    if (valueMatch) madeToOrderValue = parseInt(valueMatch[1].replace(/,/g, '')) || 0;
+                    const valueMatch = order.notes.match(/أصناف مبيعات فقط[^-]*-\s*القيمة:\s*([\d,.]+)\s*ريال/);
+                    if (valueMatch) madeToOrderValue = parseFloat(valueMatch[1].replace(/,/g, '')) || 0;
                     const namesMatch = order.notes.match(/أصناف مبيعات فقط.*ريال\s*-\s*(.+?)$/m);
                     if (!namesMatch) {
                       const fallbackNames = order.notes.match(/أصناف مبيعات فقط[^-]*-\s*(.+?)$/m);
@@ -839,6 +842,23 @@ export default function AdvancedProductionOrderDetailsPage() {
                   }
 
                   const totalAll = preProductionCount + madeToOrderCount;
+
+                  if (preProductionValue === 0) {
+                    if (order.targetSalesValue > 0 && madeToOrderValue > 0) {
+                      preProductionValue = order.targetSalesValue - madeToOrderValue;
+                    } else if (order.targetSalesValue > 0 && totalAll > 0) {
+                      preProductionValue = Math.round(order.targetSalesValue * (preProductionCount / totalAll));
+                    } else {
+                      preProductionValue = items.reduce((sum: number, item: any) => sum + (Number(item.totalValue) || (Number(item.unitPrice) || 0) * (Number(item.targetQuantity) || 0)), 0);
+                    }
+                  }
+                  if (madeToOrderValue === 0 && madeToOrderCount > 0 && order.targetSalesValue > 0) {
+                    if (preProductionValue > 0 && preProductionValue < order.targetSalesValue) {
+                      madeToOrderValue = order.targetSalesValue - preProductionValue;
+                    } else {
+                      madeToOrderValue = Math.round(order.targetSalesValue * (madeToOrderCount / totalAll));
+                    }
+                  }
                   const prePct = totalAll > 0 ? Math.round((preProductionCount / totalAll) * 100) : 100;
                   const madePct = totalAll > 0 ? Math.round((madeToOrderCount / totalAll) * 100) : 0;
                   const totalValue = preProductionValue + madeToOrderValue;
