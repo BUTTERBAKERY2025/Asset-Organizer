@@ -358,13 +358,36 @@ export async function setupAuth(app: Express) {
         return res.json(null);
       }
 
-      const user = await storage.getUser(req.session.userId);
+      const userId = req.session.userId;
+      const cached = getCachedAuth(userId);
+      
+      if (cached) {
+        const { password: _, ...safeUser } = cached.user;
+        
+        if (safeUser.isActive === "inactive") {
+          invalidateAuthCache(userId);
+          req.session.destroy(() => {});
+          return res.status(403).json({ error: "حسابك معطّل. يرجى التواصل مع المسؤول." });
+        }
+
+        const activeBranch = req.session.activeBranchId 
+          ? await storage.getBranch(req.session.activeBranchId) 
+          : null;
+        
+        return res.json({
+          ...safeUser,
+          activeBranchId: req.session.activeBranchId || null,
+          activeBranch,
+          allowedBranches: cached.branchAccess,
+        });
+      }
+
+      const user = await storage.getUser(userId);
       if (!user) {
         req.session.destroy(() => {});
         return res.json(null);
       }
 
-      // Security check: Auto-logout if user has been deactivated
       if (user.isActive === "inactive") {
         req.session.destroy(() => {});
         return res.status(403).json({ error: "حسابك معطّل. يرجى التواصل مع المسؤول." });
@@ -372,7 +395,6 @@ export async function setupAuth(app: Express) {
 
       const { password: _, ...safeUser } = user;
       
-      // Parallel fetch for better performance
       const [userBranches, activeBranch] = await Promise.all([
         storage.getUserBranchAccess(user.id),
         req.session.activeBranchId ? storage.getBranch(req.session.activeBranchId) : Promise.resolve(null)
@@ -419,11 +441,15 @@ export async function setupAuth(app: Express) {
       }
 
       req.session.activeBranchId = branchId;
-      req.session.save((err) => {
+      req.session.save(async (err) => {
         if (err) {
           console.error("Session save error:", err);
           return res.status(500).json({ error: "فشل تغيير الفرع" });
         }
+        try {
+          const { invalidateCacheForUser } = await import("./api-cache");
+          invalidateCacheForUser(req.session.userId!);
+        } catch (e) {}
         res.json({ 
           success: true, 
           activeBranchId: branchId,

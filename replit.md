@@ -52,10 +52,15 @@ The system uses a modern web architecture with a React-based frontend and a Node
 - **Accounting Software Integration**: Comprehensive accounting integration system with 5 sub-modules: (1) Journal Entries - automatic generation of double-entry journal entries from sales (cashier journals) and waste (approved waste reports) with proper account codes (Saudi chart of accounts), VAT calculations (15%), debit/credit balancing, and entry status workflow (draft → posted → reconciled). (2) Financial Reconciliation - automated comparison of system sales data vs actual deposits, variance detection, waste value tracking, VAT collection summaries, and approval workflow (draft → in_review → approved → exported). (3) Chart of Accounts - hierarchical Saudi-standard account tree with 37 pre-seeded accounts across 5 types (assets, liabilities, equity, revenue, expenses) including bakery-specific accounts. (4) Export - CSV export in 3 formats: Qoyod (Saudi cloud accounting), Zoho Books, and General CSV with BOM for Arabic support. (5) Settings - API configuration for Qoyod and Zoho Books with secure key storage and connection testing. Database tables: accounting_journal_entries, journal_entry_lines, accounting_reconciliations, chart_of_accounts. API routes under /api/accounting/*.
 
 ### Performance Optimization
+- **API Response Cache**: Server-side in-memory cache (server/api-cache.ts) for all GET /api/* responses with per-user+branch isolation, route-specific TTLs (30s-120s), auto-invalidation on writes and branch switch. Max 500 entries with LRU eviction.
 - **Tiered Caching Strategy**: Five-tier cache system based on data volatility (STATIC, LONG, MEDIUM, SHORT, DYNAMIC).
-- **Server-side Caching**: Memoized data fetchers for frequently accessed data (Branches, Users, Permissions).
+- **Server-side Caching**: Memoized data fetchers for frequently accessed data (Branches, Users, Permissions). Auth cache in server/auth.ts eliminates DB queries for 30s per user.
+- **Batch API**: POST /api/batch endpoint for combining multiple GET requests into a single HTTP call.
+- **Gzip Compression**: All responses >1KB are compressed via compression middleware.
 - **Prefetch on Hover**: Navigation links prefetch API data on mouse hover to reduce perceived load time, with smart prefetch guards.
-- **Database Indexes**: Composite indexes for common query patterns to improve performance.
+- **Database Indexes**: 14+ composite indexes for common query patterns (branch_id, status, dates, etc.).
+- **N+1 Query Elimination**: Batch queries replace per-item loops for users, waste items, production stats.
+- **Slow Request Logging**: Only requests >500ms are logged to reduce I/O overhead.
 
 ### System Design Choices
 - **Shared Schema**: `shared/` directory for database schema ensures type consistency between frontend and backend.

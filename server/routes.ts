@@ -101,6 +101,8 @@ import { authRateLimiter, biometricRateLimiter, uploadRateLimiter, apiRateLimite
 import { registerGovernanceRoutes } from "./governance-routes";
 import { registerSocialResponsibilityRoutes } from "./social-responsibility-routes";
 import { registerSecurityRoutes } from "./security-routes";
+import { apiCacheMiddleware, invalidateCacheForPath } from "./api-cache";
+import { registerBatchRoute } from "./batch-api";
 
 // Normalize date to YYYY-MM-DD format
 function normalizeDate(dateStr: string | null | undefined): string | null {
@@ -133,6 +135,20 @@ export async function registerRoutes(
 
   // Setup authentication
   await setupAuth(app);
+
+  app.use('/api/', (req, res, next) => {
+    if (req.method === "POST" || req.method === "PUT" || req.method === "PATCH" || req.method === "DELETE") {
+      const pathParts = req.path.split("/").filter(Boolean);
+      const basePath = "/api/" + pathParts[0];
+      res.on("finish", () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          invalidateCacheForPath(basePath);
+        }
+      });
+    }
+    next();
+  });
+  app.use(apiCacheMiddleware);
 
   // Register governance routes
   registerGovernanceRoutes(app);
@@ -176,22 +192,26 @@ export async function registerRoutes(
   // Admin routes for user management
   app.get("/api/users", isAuthenticated, requirePermission("users", "view"), async (req, res) => {
     try {
-      const safeUsers = await getCachedUsers();
+      const [safeUsers, allBranches, allBranchAccess] = await Promise.all([
+        getCachedUsers(),
+        getCachedBranches(),
+        db.select().from(userBranchAccess),
+      ]);
       
-      // Enrich users with branch access information
-      const allBranches = await getCachedBranches();
-      const enrichedUsers = await Promise.all(safeUsers.map(async (user: any) => {
-        const branchAccess = await storage.getUserBranchAccess(user.id);
-        
-        // If user has access to all branches (or most branches), mark as "all_branches"
-        if (branchAccess.length >= allBranches.length && branchAccess.length > 0) {
-          return { ...user, branchId: "all_branches", branchAccessCount: branchAccess.length };
-        } else if (branchAccess.length > 1) {
-          // User has access to multiple (but not all) branches
-          return { ...user, branchAccessCount: branchAccess.length };
+      const accessByUser = new Map<string, number>();
+      for (const ba of allBranchAccess) {
+        accessByUser.set(ba.userId, (accessByUser.get(ba.userId) || 0) + 1);
+      }
+      
+      const enrichedUsers = safeUsers.map((user: any) => {
+        const count = accessByUser.get(user.id) || 0;
+        if (count >= allBranches.length && count > 0) {
+          return { ...user, branchId: "all_branches", branchAccessCount: count };
+        } else if (count > 1) {
+          return { ...user, branchAccessCount: count };
         }
         return user;
-      }));
+      });
       
       res.json(enrichedUsers);
     } catch (error) {
@@ -28972,3 +28992,4 @@ export async function registerRoutes(
 
   return httpServer;
 }
+
