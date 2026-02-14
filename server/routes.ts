@@ -97,7 +97,7 @@ import {
 import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertInfluencerContractSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema, isMadeToOrderCategory, suggestCategoryFromProductName, userBranchAccess } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, isUserAdmin, getAllowedBranchIds, getEffectiveBranchFilter, invalidateAuthCache } from "./auth";
-import { authRateLimiter, biometricRateLimiter, uploadRateLimiter, validateFileUpload, sanitizeFilename, trackLoginAttempt } from "./security";
+import { authRateLimiter, biometricRateLimiter, uploadRateLimiter, apiRateLimiter, validateFileUpload, sanitizeFilename, trackLoginAttempt } from "./security";
 import { registerGovernanceRoutes } from "./governance-routes";
 import { registerSocialResponsibilityRoutes } from "./social-responsibility-routes";
 import { registerSecurityRoutes } from "./security-routes";
@@ -2755,6 +2755,15 @@ export async function registerRoutes(
       try {
         await client.query('BEGIN');
 
+        const tableColumnsCache = new Map<string, Set<string>>();
+        for (const tName of allowedTableNames) {
+          const colResult = await client.query(
+            `SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1`,
+            [tName]
+          );
+          tableColumnsCache.set(tName as string, new Set(colResult.rows.map((r: any) => r.column_name)));
+        }
+
         for (const [tableName, rows] of Object.entries(data)) {
           if (!Array.isArray(rows) || rows.length === 0) continue;
           if (skippedTables.includes(tableName)) continue;
@@ -2767,9 +2776,26 @@ export async function registerRoutes(
             continue;
           }
 
+          const allowedColumns = tableColumnsCache.get(tableName);
+          if (!allowedColumns || allowedColumns.size === 0) {
+            console.warn(`Skipping table with no known columns: ${tableName}`);
+            continue;
+          }
+
           await client.query(`DELETE FROM "${tableName}"`);
           for (const row of rows) {
-            const columns = Object.keys(row).filter(k => row[k] !== null && row[k] !== undefined);
+            const columns = Object.keys(row).filter(k => {
+              if (row[k] === null || row[k] === undefined) return false;
+              if (!allowedColumns.has(k)) {
+                console.warn(`[Security] Skipping unknown column "${k}" in table "${tableName}"`);
+                return false;
+              }
+              if (!/^[a-z_][a-z0-9_]*$/.test(k)) {
+                console.warn(`[Security] Skipping invalid column name "${k}" in table "${tableName}"`);
+                return false;
+              }
+              return true;
+            });
             if (columns.length === 0) continue;
             const colList = columns.map(c => `"${c}"`).join(', ');
             const valList = columns.map((_, i) => `$${i + 1}`).join(', ');
@@ -2785,12 +2811,13 @@ export async function registerRoutes(
 
         for (const tableName of restoredTables) {
           try {
-            const seqResult = await client.query(`
-              SELECT pg_get_serial_sequence('"${tableName}"', 'id') as seq_name
-            `);
+            const seqResult = await client.query(
+              `SELECT pg_get_serial_sequence($1, 'id') as seq_name`,
+              [tableName]
+            );
             const seqName = seqResult.rows[0]?.seq_name;
             if (seqName) {
-              await client.query(`SELECT setval('${seqName}', COALESCE((SELECT MAX(id) FROM "${tableName}"), 1))`);
+              await client.query(`SELECT setval($1, COALESCE((SELECT MAX(id) FROM "${tableName}"), 1))`, [seqName]);
             }
           } catch {
           }
@@ -27428,7 +27455,7 @@ export async function registerRoutes(
   });
 
   // Serve shared files (public access via share link) - From Object Storage
-  app.get("/api/documents/shared-file/:shareLink/:filename", async (req, res) => {
+  app.get("/api/documents/shared-file/:shareLink/:filename", apiRateLimiter, async (req, res) => {
     try {
       const shareLink = req.params.shareLink;
       if (!shareLink || !/^[a-f0-9]{32}$/.test(shareLink)) {
@@ -27501,7 +27528,7 @@ export async function registerRoutes(
   });
 
   // Public share link access (no auth required) - uses POST for password security
-  app.post("/api/documents/share/:shareLink", async (req, res) => {
+  app.post("/api/documents/share/:shareLink", authRateLimiter, async (req, res) => {
     try {
       const shareLink = req.params.shareLink;
       if (!shareLink || !/^[a-f0-9]{32}$/.test(shareLink)) {
