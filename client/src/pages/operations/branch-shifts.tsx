@@ -266,7 +266,7 @@ export default function BranchShiftsPage() {
       return users.filter((u: any) => u.branchId === selectedBranch && u.isActive === "active");
     },
     enabled: !!selectedBranch,
-    staleTime: 0, // إعادة جلب البيانات عند كل تغيير
+    staleTime: 15000,
   });
 
   // إعادة تعيين اسم المشرف عند تغيير الفرع
@@ -287,7 +287,7 @@ export default function BranchShiftsPage() {
       return res.json();
     },
     enabled: !!selectedBranch,
-    staleTime: 0,
+    staleTime: 15000,
   });
 
   // تحديث عدد الموظفين تلقائياً عند تغيير الفرع أو الشفت

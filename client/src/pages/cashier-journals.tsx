@@ -138,7 +138,7 @@ export default function CashierJournalsPage() {
       if (!res.ok) throw new Error("Failed to fetch stats");
       return res.json();
     },
-    staleTime: 0,
+    staleTime: 15000,
     enabled: isBranchFilterReady,
   });
 

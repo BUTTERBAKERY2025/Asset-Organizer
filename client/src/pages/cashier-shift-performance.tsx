@@ -295,7 +295,7 @@ export default function CashierShiftPerformance() {
       if (!res.ok) return [];
       return res.json();
     },
-    staleTime: 0,
+    staleTime: 15000,
     retry: 2,
     refetchOnMount: 'always',
   });

@@ -5,6 +5,7 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import path from "path";
 import helmet from "helmet";
+import compression from "compression";
 import { db, pool, runStartupMigrations } from "./db";
 import { sql } from "drizzle-orm";
 import { securityHeaders, csrfProtection, apiRateLimiter } from "./security";
@@ -13,6 +14,7 @@ const app = express();
 const httpServer = createServer(app);
 
 app.set('trust proxy', 1);
+app.use(compression({ threshold: 1024 }));
 app.use(securityHeaders);
 app.use('/api/', (req, res, next) => {
   if (req.path.startsWith('/public/') && req.method === 'GET') {

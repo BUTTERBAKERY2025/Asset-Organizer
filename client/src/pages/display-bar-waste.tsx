@@ -396,7 +396,7 @@ export default function DisplayBarWastePage() {
       return res.json();
     },
     enabled: !!viewingReport?.id && showReportDetailsDialog,
-    staleTime: 0,
+    staleTime: 15000,
   });
 
   const handleCloseReportDialog = () => {

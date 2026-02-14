@@ -200,7 +200,7 @@ export default function DailyProductionPage() {
     },
     enabled: !!branchId,
     refetchInterval: autoRefresh ? 60000 : false,
-    staleTime: 0, // Always consider stale to enable refetch
+    staleTime: 15000,
   });
 
   const { data: stats } = useQuery<DailyStats>({
@@ -213,7 +213,7 @@ export default function DailyProductionPage() {
     },
     enabled: !!branchId && !!selectedDate,
     refetchInterval: autoRefresh ? 60000 : false,
-    staleTime: 0,
+    staleTime: 15000,
   });
 
   // Previous day stats for comparison
@@ -253,7 +253,7 @@ export default function DailyProductionPage() {
       return res.json();
     },
     enabled: !!branchId,
-    staleTime: 0,
+    staleTime: 15000,
   });
 
   // Helper to check if product category is sweets (حلويات)

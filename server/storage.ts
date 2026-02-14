@@ -2794,95 +2794,121 @@ export class DatabaseStorage implements IStorage {
     branches: Branch[];
     campaigns: MarketingCampaign[];
   }> {
-    const lowerQuery = query.toLowerCase();
-    
-    // Search inventory
-    const allInventory = await db.select().from(inventoryItems);
-    const inventory = allInventory.filter(item =>
-      item.name.toLowerCase().includes(lowerQuery) ||
-      item.id.toLowerCase().includes(lowerQuery) ||
-      item.category.toLowerCase().includes(lowerQuery) ||
-      item.serialNumber?.toLowerCase().includes(lowerQuery) ||
-      item.notes?.toLowerCase().includes(lowerQuery)
-    ).slice(0, 10);
+    const sanitizedQuery = query.replace(/[%_\\]/g, '\\$&');
+    const pattern = `%${sanitizedQuery}%`;
 
-    // Search projects
-    const allProjects = await db.select().from(constructionProjects);
-    const projects = allProjects.filter(project =>
-      project.title.toLowerCase().includes(lowerQuery) ||
-      project.description?.toLowerCase().includes(lowerQuery)
-    ).slice(0, 10);
+    const [
+      inventory,
+      projects,
+      contractorResults,
+      transfers,
+      userResults,
+      employeeResults,
+      productResults,
+      warehouseItemResults,
+      branchResults,
+      campaignResults,
+    ] = await Promise.all([
+      db.select().from(inventoryItems)
+        .where(or(
+          ilike(inventoryItems.name, pattern),
+          ilike(inventoryItems.id, pattern),
+          ilike(inventoryItems.category, pattern),
+          ilike(inventoryItems.serialNumber, pattern),
+          ilike(inventoryItems.notes, pattern)
+        ))
+        .limit(10),
 
-    // Search contractors
-    const allContractors = await db.select().from(contractors);
-    const contractorResults = allContractors.filter(contractor =>
-      contractor.name.toLowerCase().includes(lowerQuery) ||
-      contractor.email?.toLowerCase().includes(lowerQuery) ||
-      contractor.phone?.toLowerCase().includes(lowerQuery) ||
-      contractor.specialization?.toLowerCase().includes(lowerQuery)
-    ).slice(0, 10);
+      db.select().from(constructionProjects)
+        .where(or(
+          ilike(constructionProjects.title, pattern),
+          ilike(constructionProjects.description, pattern)
+        ))
+        .limit(10),
 
-    // Search transfers
-    const allTransfers = await db.select().from(assetTransfers);
-    const transfers = allTransfers.filter(transfer =>
-      transfer.transferNumber.toLowerCase().includes(lowerQuery) ||
-      transfer.notes?.toLowerCase().includes(lowerQuery)
-    ).slice(0, 10);
+      db.select().from(contractors)
+        .where(or(
+          ilike(contractors.name, pattern),
+          ilike(contractors.email, pattern),
+          ilike(contractors.phone, pattern),
+          ilike(contractors.specialization, pattern)
+        ))
+        .limit(10),
 
-    // Search users
-    const allUsers = await db.select().from(users);
-    const userResults = allUsers.filter(user =>
-      user.username?.toLowerCase().includes(lowerQuery) ||
-      user.firstName?.toLowerCase().includes(lowerQuery) ||
-      user.lastName?.toLowerCase().includes(lowerQuery) ||
-      user.email?.toLowerCase().includes(lowerQuery)
-    ).slice(0, 10);
+      db.select().from(assetTransfers)
+        .where(or(
+          ilike(assetTransfers.transferNumber, pattern),
+          ilike(assetTransfers.notes, pattern)
+        ))
+        .limit(10),
 
-    // Search employees
-    const allEmployees = await db.select().from(branchEmployees);
-    const employeeResults = allEmployees.filter(emp =>
-      emp.employeeName?.toLowerCase().includes(lowerQuery) ||
-      emp.employeeNumber?.toLowerCase().includes(lowerQuery) ||
-      emp.phoneNumber?.toLowerCase().includes(lowerQuery) ||
-      emp.jobTitle?.toLowerCase().includes(lowerQuery)
-    ).slice(0, 10);
+      db.select({
+        id: users.id,
+        username: users.username,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        email: users.email,
+        phone: users.phone,
+        role: users.role,
+        profileImageUrl: users.profileImageUrl,
+        isActive: users.isActive,
+        jobTitle: users.jobTitle,
+        branchId: users.branchId,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
+      }).from(users)
+        .where(or(
+          ilike(users.username, pattern),
+          ilike(users.firstName, pattern),
+          ilike(users.lastName, pattern),
+          ilike(users.email, pattern)
+        ))
+        .limit(10),
 
-    // Search products
-    const allProducts = await db.select().from(products);
-    const productResults = allProducts.filter(prod =>
-      prod.name.toLowerCase().includes(lowerQuery) ||
-      prod.sku?.toLowerCase().includes(lowerQuery) ||
-      prod.category?.toLowerCase().includes(lowerQuery)
-    ).slice(0, 10);
+      db.select().from(branchEmployees)
+        .where(or(
+          ilike(branchEmployees.employeeName, pattern),
+          ilike(branchEmployees.employeeNumber, pattern),
+          ilike(branchEmployees.phoneNumber, pattern),
+          ilike(branchEmployees.jobTitle, pattern)
+        ))
+        .limit(10),
 
-    // Search warehouse items
-    const allWarehouseItems = await db.select().from(warehouseItems);
-    const warehouseItemResults = allWarehouseItems.filter(item =>
-      item.name.toLowerCase().includes(lowerQuery) ||
-      item.sku?.toLowerCase().includes(lowerQuery) ||
-      item.category?.toLowerCase().includes(lowerQuery) ||
-      item.notes?.toLowerCase().includes(lowerQuery)
-    ).slice(0, 10);
+      db.select().from(products)
+        .where(or(
+          ilike(products.name, pattern),
+          ilike(products.sku, pattern),
+          ilike(products.category, pattern)
+        ))
+        .limit(10),
 
-    // Search branches
-    const allBranches = await db.select().from(branches);
-    const branchResults = allBranches.filter(branch =>
-      branch.name.toLowerCase().includes(lowerQuery)
-    ).slice(0, 10);
+      db.select().from(warehouseItems)
+        .where(or(
+          ilike(warehouseItems.name, pattern),
+          ilike(warehouseItems.sku, pattern),
+          ilike(warehouseItems.category, pattern),
+          ilike(warehouseItems.notes, pattern)
+        ))
+        .limit(10),
 
-    // Search marketing campaigns
-    const allCampaigns = await db.select().from(marketingCampaigns);
-    const campaignResults = allCampaigns.filter(camp =>
-      camp.name.toLowerCase().includes(lowerQuery) ||
-      camp.description?.toLowerCase().includes(lowerQuery)
-    ).slice(0, 10);
+      db.select().from(branches)
+        .where(ilike(branches.name, pattern))
+        .limit(10),
+
+      db.select().from(marketingCampaigns)
+        .where(or(
+          ilike(marketingCampaigns.name, pattern),
+          ilike(marketingCampaigns.description, pattern)
+        ))
+        .limit(10),
+    ]);
 
     return {
       inventory,
       projects,
       contractors: contractorResults,
       transfers,
-      users: userResults,
+      users: userResults as User[],
       employees: employeeResults,
       products: productResults,
       warehouseItems: warehouseItemResults,
@@ -5809,30 +5835,34 @@ export class DatabaseStorage implements IStorage {
     longTerm: number;
     totalEstimatedCost: number;
   }> {
-    const conditions = branchId ? [
-      or(
-        eq(advancedProductionOrders.sourceBranchId, branchId),
-        eq(advancedProductionOrders.targetBranchId, branchId)
-      )
-    ] : [];
+    const whereCondition = branchId ? or(
+      eq(advancedProductionOrders.sourceBranchId, branchId),
+      eq(advancedProductionOrders.targetBranchId, branchId)
+    ) : undefined;
 
-    const allOrders = conditions.length > 0
-      ? await db.select().from(advancedProductionOrders).where(and(...conditions))
-      : await db.select().from(advancedProductionOrders);
+    const stats = await db.select({
+      status: advancedProductionOrders.status,
+      orderType: advancedProductionOrders.orderType,
+      count: sql<number>`count(*)::int`,
+      estimatedCost: sql<string>`sum(CASE WHEN ${advancedProductionOrders.status} NOT IN ('cancelled', 'completed') THEN COALESCE(${advancedProductionOrders.estimatedCost}, 0) ELSE 0 END)::numeric`,
+    }).from(advancedProductionOrders)
+      .where(whereCondition)
+      .groupBy(advancedProductionOrders.status, advancedProductionOrders.orderType);
 
-    const totalEstimatedCost = allOrders
-      .filter(o => o.status !== 'cancelled' && o.status !== 'completed')
-      .reduce((sum, o) => sum + (o.estimatedCost || 0), 0);
-    
     const statusCounts: Record<string, number> = {};
     const typeCounts: Record<string, number> = {};
-    for (const o of allOrders) {
-      statusCounts[o.status] = (statusCounts[o.status] || 0) + 1;
-      typeCounts[o.orderType] = (typeCounts[o.orderType] || 0) + 1;
+    let total = 0;
+    let totalEstimatedCost = 0;
+
+    for (const row of stats) {
+      statusCounts[row.status] = (statusCounts[row.status] || 0) + row.count;
+      typeCounts[row.orderType] = (typeCounts[row.orderType] || 0) + row.count;
+      total += row.count;
+      totalEstimatedCost += parseFloat(row.estimatedCost || '0');
     }
 
     return {
-      total: allOrders.length,
+      total,
       draft: statusCounts['draft'] || 0,
       pending: statusCounts['pending'] || 0,
       approved: statusCounts['approved'] || 0,
@@ -6192,12 +6222,12 @@ export class DatabaseStorage implements IStorage {
     byCategory: Record<string, number>;
     byHour: Record<string, number>;
   }> {
-    // Use productionDate for reliable timezone-independent filtering
+    const conditions = [eq(dailyProductionBatches.productionDate, date)];
+    if (branchId !== "all") {
+      conditions.push(eq(dailyProductionBatches.branchId, branchId));
+    }
     const batches = await db.select().from(dailyProductionBatches)
-      .where(and(
-        eq(dailyProductionBatches.branchId, branchId),
-        eq(dailyProductionBatches.productionDate, date)
-      ));
+      .where(and(...conditions));
 
     const byDestination: Record<string, number> = {};
     const byCategory: Record<string, number> = {};
@@ -6269,69 +6299,74 @@ export class DatabaseStorage implements IStorage {
       salesVsYesterday: number;
     };
   }> {
-    const startOfDay = new Date(date);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(date);
-    endOfDay.setHours(23, 59, 59, 999);
-    
     const yesterday = new Date(date);
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayStr = yesterday.toISOString().split('T')[0];
 
-    // Production data
-    const prodStats = await this.getDailyProductionStats(branchId, date);
-    const yesterdayProdStats = await this.getDailyProductionStats(branchId, yesterdayStr);
-    
-    // Get production targets - returns { totalTarget, totalProduced }
-    const targetData = await this.getProductionTargetsByDate(branchId, date);
+    const [
+      prodStats,
+      yesterdayProdStats,
+      targetData,
+      orderCountResult,
+      invItems,
+      journals,
+      yesterdayJournals,
+      wasteReportsList,
+    ] = await Promise.all([
+      this.getDailyProductionStats(branchId, date),
+      this.getDailyProductionStats(branchId, yesterdayStr),
+      this.getProductionTargetsByDate(branchId, date),
+      db.select({
+        status: advancedProductionOrders.status,
+        count: sql<number>`count(*)::int`,
+      }).from(advancedProductionOrders)
+        .where(branchId !== 'all' ? or(
+          eq(advancedProductionOrders.sourceBranchId, branchId),
+          eq(advancedProductionOrders.targetBranchId, branchId)
+        ) : undefined)
+        .groupBy(advancedProductionOrders.status),
+      branchId === 'all'
+        ? db.select().from(inventoryItems)
+        : this.getInventoryItemsByBranch(branchId),
+      this.getCashierJournalsByDate(date),
+      this.getCashierJournalsByDate(yesterdayStr),
+      this.getWasteReports(branchId !== 'all' ? branchId : undefined, date, date),
+    ]);
+
     const totalTarget = targetData.totalTarget;
     const totalProduced = targetData.totalProduced;
-    
-    // Active production orders - filter by sourceBranchId or targetBranchId
-    const allOrders = await db.select().from(advancedProductionOrders);
-    const filteredOrders = branchId !== 'all' 
-      ? allOrders.filter(o => o.sourceBranchId === branchId || o.targetBranchId === branchId)
-      : allOrders;
-    const activeOrders = filteredOrders.filter(o => o.status === 'pending' || o.status === 'in_progress').length;
-    const completedOrders = filteredOrders.filter(o => o.status === 'completed').length;
 
-    // Inventory data
-    let invItems: InventoryItem[];
-    if (branchId === 'all') {
-      invItems = await db.select().from(inventoryItems);
-    } else {
-      invItems = await this.getInventoryItemsByBranch(branchId);
+    const orderCounts: Record<string, number> = {};
+    for (const row of orderCountResult) {
+      orderCounts[row.status] = (orderCounts[row.status] || 0) + row.count;
     }
+    const activeOrders = (orderCounts['pending'] || 0) + (orderCounts['in_progress'] || 0);
+    const completedOrders = orderCounts['completed'] || 0;
+
     const totalValue = invItems.reduce((sum, i) => sum + ((i.price || 0) * (i.quantity || 1)), 0);
     const lowStockCount = invItems.filter(i => (i.quantity || 0) < 5).length;
     const maintenanceNeeded = invItems.filter(i => i.status === 'maintenance').length;
     const goodCondition = invItems.filter(i => i.status === 'good').length;
     const damaged = invItems.filter(i => i.status === 'damaged' || i.status === 'missing').length;
 
-    // Cashier data (for today)
-    let journals = await this.getCashierJournalsByDate(date);
-    if (branchId !== 'all') {
-      journals = journals.filter(j => j.branchId === branchId);
-    }
-    const yesterdayJournals = await this.getCashierJournalsByDate(yesterdayStr);
+    const filteredJournals = branchId !== 'all' ? journals.filter(j => j.branchId === branchId) : journals;
     const filteredYesterdayJournals = branchId !== 'all' 
       ? yesterdayJournals.filter(j => j.branchId === branchId) 
       : yesterdayJournals;
     
-    const totalSales = journals.reduce((sum, j) => sum + j.totalSales, 0);
+    const totalSales = filteredJournals.reduce((sum, j) => sum + j.totalSales, 0);
     const yesterdaySales = filteredYesterdayJournals.reduce((sum, j) => sum + j.totalSales, 0);
-    const shortageJournals = journals.filter(j => j.discrepancyStatus === 'shortage');
-    const surplusJournals = journals.filter(j => j.discrepancyStatus === 'surplus');
+    const shortageJournals = filteredJournals.filter(j => j.discrepancyStatus === 'shortage');
+    const surplusJournals = filteredJournals.filter(j => j.discrepancyStatus === 'surplus');
 
-    // Waste data
-    const wasteReports = await this.getWasteReports(branchId !== 'all' ? branchId : undefined, date, date);
     let totalWastedQuantity = 0;
     let totalWastedValue = 0;
     const wasteByReason: Record<string, number> = {};
-    
-    for (const report of wasteReports) {
-      const items = await this.getWasteItems(report.id);
-      for (const item of items) {
+
+    const reportIds = wasteReportsList.map(r => r.id);
+    if (reportIds.length > 0) {
+      const allWasteItemsList = await db.select().from(wasteItems).where(inArray(wasteItems.wasteReportId, reportIds));
+      for (const item of allWasteItemsList) {
         totalWastedQuantity += item.quantity;
         totalWastedValue += item.totalValue || 0;
         wasteByReason[item.wasteReason] = (wasteByReason[item.wasteReason] || 0) + item.quantity;
@@ -6367,17 +6402,17 @@ export class DatabaseStorage implements IStorage {
       },
       cashier: {
         totalSales,
-        totalJournals: journals.length,
+        totalJournals: filteredJournals.length,
         shortages: shortageJournals.length,
         surpluses: surplusJournals.length,
         shortageAmount: shortageJournals.reduce((sum, j) => sum + j.discrepancyAmount, 0),
         surplusAmount: surplusJournals.reduce((sum, j) => sum + j.discrepancyAmount, 0),
-        averageTicket: journals.length > 0 
-          ? journals.reduce((sum, j) => sum + (j.averageTicket || 0), 0) / journals.length 
+        averageTicket: filteredJournals.length > 0 
+          ? filteredJournals.reduce((sum, j) => sum + (j.averageTicket || 0), 0) / filteredJournals.length 
           : 0,
       },
       waste: {
-        totalReports: wasteReports.length,
+        totalReports: wasteReportsList.length,
         totalWastedQuantity,
         totalWastedValue,
         wasteByReason,

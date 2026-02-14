@@ -145,7 +145,7 @@ export default function VotingPage() {
   const { data: auditLogs = [], refetch: refetchAuditLogs } = useQuery<AuditLogEntry[]>({
     queryKey: ["/api/governance/voting-audit-log"],
     enabled: showAuditLog,
-    staleTime: 0,
+    staleTime: 15000,
     refetchOnMount: true,
   });
 

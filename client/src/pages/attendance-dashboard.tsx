@@ -52,7 +52,7 @@ export default function AttendanceDashboardPage() {
   } | null>({
     queryKey: ["/api/attendance-dashboard-stats"],
     queryFn: getQueryFn({ on401: "returnNull" }),
-    staleTime: 0,
+    staleTime: 15000,
     refetchOnMount: true,
     enabled: isAuthenticated,
   });

@@ -171,7 +171,7 @@ export default function IncentivesManagement() {
       if (!res.ok) return [];
       return res.json();
     },
-    staleTime: 0,
+    staleTime: 15000,
     refetchOnMount: 'always',
   });
 
@@ -246,7 +246,7 @@ export default function IncentivesManagement() {
       return res.json();
     },
     enabled: ledgerQueryEnabled,
-    staleTime: 0,
+    staleTime: 15000,
     refetchOnWindowFocus: true,
   });
 
@@ -259,7 +259,7 @@ export default function IncentivesManagement() {
       return res.json();
     },
     enabled: !!walletCashierId,
-    staleTime: 0,
+    staleTime: 15000,
     refetchOnWindowFocus: true,
   });
 

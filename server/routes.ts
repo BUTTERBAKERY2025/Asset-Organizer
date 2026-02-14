@@ -11247,7 +11247,6 @@ export async function registerRoutes(
   app.get("/api/advanced-production-orders", isAuthenticated, requirePermission("production", "view"), async (req, res) => {
     try {
       const { branchId, status, orderType } = req.query;
-      console.log("Fetching advanced production orders with filters:", { branchId, status, orderType });
       
       // SECURITY: Apply branch filter
       const queryBranchId = branchId as string | undefined;
@@ -11276,7 +11275,6 @@ export async function registerRoutes(
         console.log("After orderType filter:", orders.length);
       }
       
-      console.log("Returning orders:", orders.length);
       res.json(orders);
     } catch (error) {
       console.error("Error fetching production orders:", error);
@@ -11296,7 +11294,12 @@ export async function registerRoutes(
         return res.status(403).json({ error: "غير مصرح بالوصول" });
       }
       
+      const statsCacheKey = `prod_order_stats:${branchFilter.singleBranchId || 'all'}`;
+      const cachedStats = getCachedResponse(statsCacheKey, 30000);
+      if (cachedStats) return res.json(cachedStats);
+      
       const stats = await storage.getAdvancedProductionOrderStats(branchFilter.singleBranchId || undefined);
+      setCachedResponse(statsCacheKey, stats);
       res.json(stats);
     } catch (error) {
       console.error("Error fetching production order stats:", error);
@@ -15679,6 +15682,10 @@ export async function registerRoutes(
       
       const branchId = branchFilter.singleBranchId || queryBranchId;
       
+      const hubCacheKey = `production_hub:${branchId}:${date}`;
+      const cachedHub = getCachedResponse(hubCacheKey, 30000);
+      if (cachedHub) return res.json(cachedHub);
+      
       const dateStr = date as string;
       const prevDate = new Date(dateStr);
       prevDate.setDate(prevDate.getDate() - 1);
@@ -15706,36 +15713,23 @@ export async function registerRoutes(
       let activeOrders = 0;
       
       if (branchId === "all") {
-        // Aggregate across all branches
-        const allBranches = await storage.getAllBranches();
-        const allOrders = await storage.getAllAdvancedProductionOrders();
-        activeOrders = allOrders.filter(o => 
-          o.status === 'pending' || o.status === 'approved' || o.status === 'in_progress'
-        ).length;
-        
-        for (const branch of allBranches) {
-          const branchToday = await storage.getDailyProductionStats(branch.id, dateStr);
-          todayStats.totalBatches += branchToday.totalBatches;
-          todayStats.totalQuantity += branchToday.totalQuantity;
-          for (const [k, v] of Object.entries(branchToday.byDestination || {})) {
-            todayStats.byDestination[k] = (todayStats.byDestination[k] || 0) + v;
-          }
-          for (const [k, v] of Object.entries(branchToday.byCategory || {})) {
-            todayStats.byCategory[k] = (todayStats.byCategory[k] || 0) + v;
-          }
-          
-          const branchYesterday = await storage.getDailyProductionStats(branch.id, prevDateStr);
-          yesterdayStats.totalBatches += branchYesterday.totalBatches;
-          yesterdayStats.totalQuantity += branchYesterday.totalQuantity;
-        }
+        const [allTodayStats, allYesterdayStats, orderStats] = await Promise.all([
+          storage.getDailyProductionStats("all", dateStr),
+          storage.getDailyProductionStats("all", prevDateStr),
+          storage.getAdvancedProductionOrderStats()
+        ]);
+        todayStats = allTodayStats;
+        yesterdayStats = allYesterdayStats;
+        activeOrders = (orderStats.pending || 0) + (orderStats.inProgress || 0);
       } else {
-        // Single branch
-        todayStats = await storage.getDailyProductionStats(branchId as string, dateStr);
-        yesterdayStats = await storage.getDailyProductionStats(branchId as string, prevDateStr);
-        const branchOrders = await storage.getAdvancedProductionOrdersByBranch(branchId as string);
-        activeOrders = branchOrders.filter(o => 
-          o.status === 'pending' || o.status === 'approved' || o.status === 'in_progress'
-        ).length;
+        const [branchTodayStats, branchYesterdayStats, branchOrderStats] = await Promise.all([
+          storage.getDailyProductionStats(branchId as string, dateStr),
+          storage.getDailyProductionStats(branchId as string, prevDateStr),
+          storage.getAdvancedProductionOrderStats(branchId as string)
+        ]);
+        todayStats = branchTodayStats;
+        yesterdayStats = branchYesterdayStats;
+        activeOrders = (branchOrderStats.pending || 0) + (branchOrderStats.inProgress || 0);
       }
       
       // Get target vs actual from production orders scheduled for this date
@@ -15749,7 +15743,7 @@ export async function registerRoutes(
       const qtyDelta = todayStats.totalQuantity - (yesterdayStats?.totalQuantity || 0);
       const batchDelta = todayStats.totalBatches - (yesterdayStats?.totalBatches || 0);
       
-      res.json({
+      const hubResponseData = {
         today: todayStats,
         yesterday: yesterdayStats,
         deltas: {
@@ -15767,7 +15761,9 @@ export async function registerRoutes(
         activeOrders,
         date: dateStr,
         branchId: branchId,
-      });
+      };
+      setCachedResponse(hubCacheKey, hubResponseData);
+      res.json(hubResponseData);
     } catch (error) {
       console.error("Error fetching production hub:", error);
       res.status(500).json({ error: "فشل في جلب بيانات مركز الإنتاج" });

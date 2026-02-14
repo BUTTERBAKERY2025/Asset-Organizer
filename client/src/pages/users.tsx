@@ -231,7 +231,7 @@ export default function UsersPage() {
       return data;
     },
     enabled: !!selectedUser && isPermissionsDialogOpen,
-    staleTime: 0,
+    staleTime: 15000,
   });
 
   const { data: permissionsWithSources = [], refetch: refetchPermissionSources } = useQuery<PermissionWithSource[]>({
@@ -249,7 +249,7 @@ export default function UsersPage() {
       return data;
     },
     enabled: !!selectedUser && isPermissionsDialogOpen,
-    staleTime: 0,
+    staleTime: 15000,
   });
 
   const savePermissionsMutation = useMutation({

@@ -30,9 +30,10 @@ export const pool = new Pool({
   connectionString,
   ssl: isSupabase ? { rejectUnauthorized: false } : undefined,
   connectionTimeoutMillis: 10000,
-  idleTimeoutMillis: 30000,
-  max: 20,
-  min: 2,
+  idleTimeoutMillis: 60000,
+  max: 25,
+  min: 5,
+  statement_timeout: 30000,
 });
 
 pool.on('error', (err) => {
@@ -57,9 +58,25 @@ export async function runStartupMigrations() {
        WHERE dpb.destination = 'display_bar' AND dpb.status = 'finished' AND dpb.product_id IS NOT NULL
          AND NOT EXISTS (SELECT 1 FROM display_bar_receipts dbr WHERE dbr.production_batch = 'PROD-' || dpb.id)`,
       `ALTER TABLE advanced_production_orders ADD COLUMN IF NOT EXISTS mto_items jsonb`,
+      `CREATE INDEX IF NOT EXISTS idx_adv_prod_orders_source_branch ON advanced_production_orders(source_branch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_adv_prod_orders_target_branch ON advanced_production_orders(target_branch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_adv_prod_orders_status ON advanced_production_orders(status)`,
+      `CREATE INDEX IF NOT EXISTS idx_adv_prod_orders_created ON advanced_production_orders(created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_daily_prod_batches_branch_date ON daily_production_batches(branch_id, production_date)`,
+      `CREATE INDEX IF NOT EXISTS idx_daily_prod_batches_status ON daily_production_batches(status)`,
+      `CREATE INDEX IF NOT EXISTS idx_cashier_journals_date ON cashier_journals(journal_date)`,
+      `CREATE INDEX IF NOT EXISTS idx_cashier_journals_branch ON cashier_journals(branch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_inventory_items_branch ON inventory_items(branch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_inventory_items_status ON inventory_items(status)`,
+      `CREATE INDEX IF NOT EXISTS idx_waste_reports_branch_date ON waste_reports(branch_id, report_date)`,
+      `CREATE INDEX IF NOT EXISTS idx_waste_items_report ON waste_items(waste_report_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_attendance_records_date ON attendance_records(attendance_date)`,
+      `CREATE INDEX IF NOT EXISTS idx_attendance_records_branch ON attendance_records(branch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_branch_employees_branch ON branch_employees(branch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_display_bar_receipts_branch_date ON display_bar_receipts(branch_id, receipt_date)`,
     ];
     for (const mig of migrations) {
-      await pool.query(mig);
+      try { await pool.query(mig); } catch (e) { /* index may already exist or table not found */ }
     }
     console.log("Startup migrations completed successfully");
   } catch (err) {
