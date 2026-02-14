@@ -14717,30 +14717,10 @@ export async function registerRoutes(
         return false;
       };
       
-      // NOTE: Category filtering moved below after findMatchingProduct is defined
-      
       // Calculate source sales value from historical data
       const sourceSalesValue = totalHistoricalRevenue;
       
-      // Prepare order data
-      const orderNumber = `FCST-${Date.now().toString(36).toUpperCase()}`;
-      const orderData = {
-        orderNumber,
-        sourceBranchId: branchId,
-        targetBranchId: branchId,
-        title: `توقعات إنتاج ${planDate}`,
-        createdBy: (req as any).user?.id || null,
-        orderType: 'daily' as const,
-        startDate: planDate,
-        endDate: planDate,
-        priority: 'normal' as const,
-        status: 'draft' as const,
-        targetSalesValue: targetSalesNum,
-        sourceSalesValue: sourceSalesValue,
-        notes: `${notes || ''}\n\nتوقعات مبنية على بيانات المبيعات السابقة\nملف المصدر: ${upload.fileName}\nالمبيعات المستهدفة: ${targetSalesNum.toLocaleString('en-GB')} ريال\nإجمالي مبيعات الملف المصدر: ${sourceSalesValue.toLocaleString('en-GB')} ريال\n\nأصناف الإنتاج المسبق: ${productionForecastItems.length} صنف (مخبوزات، حلويات، سندوتشات)${salesOnlyItems.length > 0 ? `\nأصناف مبيعات فقط (تحضير بعد الطلب): ${salesOnlyItems.length} صنف - ${salesOnlyItems.map(i => i.productName).join('، ')}` : ''}`,
-        totalItems: productionForecastItems.length,
-        completedItems: 0
-      };
+      // NOTE: orderData is created after findMatchingProduct and category filtering below
       
       // Prepare items (without orderId - will be added in transaction)
       // Products can have null productId if no matching product exists in the database
@@ -14899,6 +14879,26 @@ export async function registerRoutes(
           error: "لا توجد منتجات تحتاج إنتاج مسبق (مخبوزات، حلويات، سندوتشات) في بيانات المبيعات. الأصناف الأخرى مثل الباريستا والبيتزا تُحضّر بعد الطلب ولا تحتاج أمر إنتاج." 
         });
       }
+      
+      // Prepare order data (after filtering so we have correct counts)
+      const orderNumber = `FCST-${Date.now().toString(36).toUpperCase()}`;
+      const orderData = {
+        orderNumber,
+        sourceBranchId: branchId,
+        targetBranchId: branchId,
+        title: `توقعات إنتاج ${planDate}`,
+        createdBy: (req as any).user?.id || null,
+        orderType: 'daily' as const,
+        startDate: planDate,
+        endDate: planDate,
+        priority: 'normal' as const,
+        status: 'draft' as const,
+        targetSalesValue: targetSalesNum,
+        sourceSalesValue: sourceSalesValue,
+        notes: `${notes || ''}\n\nتوقعات مبنية على بيانات المبيعات السابقة\nملف المصدر: ${upload.fileName}\nالمبيعات المستهدفة: ${targetSalesNum.toLocaleString('en-GB')} ريال\nإجمالي مبيعات الملف المصدر: ${sourceSalesValue.toLocaleString('en-GB')} ريال\n\nأصناف الإنتاج المسبق: ${productionForecastItems.length} صنف (مخبوزات، حلويات، سندوتشات)${salesOnlyItems.length > 0 ? `\nأصناف مبيعات فقط (تحضير بعد الطلب): ${salesOnlyItems.length} صنف - ${salesOnlyItems.map(i => i.productName).join('، ')}` : ''}`,
+        totalItems: productionForecastItems.length,
+        completedItems: 0
+      };
       
       const orderItems = productionForecastItems.map((item, index) => {
         const product = findMatchingProduct(item.productName, item.productId);
