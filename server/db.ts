@@ -56,6 +56,7 @@ export async function runStartupMigrations() {
        FROM daily_production_batches dpb
        WHERE dpb.destination = 'display_bar' AND dpb.status = 'finished' AND dpb.product_id IS NOT NULL
          AND NOT EXISTS (SELECT 1 FROM display_bar_receipts dbr WHERE dbr.production_batch = 'PROD-' || dpb.id)`,
+      `ALTER TABLE advanced_production_orders ADD COLUMN IF NOT EXISTS mto_items jsonb`,
     ];
     for (const mig of migrations) {
       await pool.query(mig);
