@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
@@ -22,8 +22,10 @@ import {
   Plus, Edit, Trash2, Eye, EyeOff, Bell, BellOff, Star,
   Monitor, Maximize, LayoutDashboard, PanelRightOpen,
   Volume2, VolumeX, Palette, Target, Calendar, Music,
-  FileText, Send, X, CheckCircle, Ban, Timer
+  FileText, Send, X, CheckCircle, Ban, Timer,
+  Users, BarChart3, PlayCircle, XCircle
 } from "lucide-react";
+import { NotificationContent } from "@/components/NotificationDisplay";
 
 const MESSAGE_TYPES = [
   { value: "announcement", label: "إعلان", icon: Megaphone, color: "bg-blue-100 text-blue-700 border-blue-200", dotColor: "bg-blue-500" },
@@ -190,6 +192,8 @@ export default function NotificationsManagement() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+  const [previewNotification, setPreviewNotification] = useState<SystemNotification | null>(null);
+  const [statsDialogId, setStatsDialogId] = useState<number | null>(null);
 
   const { data: notifications = [], isLoading } = useQuery<SystemNotification[]>({
     queryKey: ["/api/system-notifications"],
@@ -208,6 +212,22 @@ export default function NotificationsManagement() {
       return res.json();
     },
   });
+
+  type ReadStatsEntry = { notificationId: number; readCount: number; dismissedCount: number; readers: { userId: string; username: string; readAt: string; dismissed: boolean }[] };
+  const { data: readStats = [] } = useQuery<ReadStatsEntry[]>({
+    queryKey: ["/api/system-notifications/read-stats"],
+    queryFn: async () => {
+      const res = await fetch("/api/system-notifications/read-stats", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
+  const readStatsMap = useMemo(() => {
+    const map = new Map<number, ReadStatsEntry>();
+    readStats.forEach(s => map.set(s.notificationId, s));
+    return map;
+  }, [readStats]);
 
   const createMutation = useMutation({
     mutationFn: async (data: Partial<SystemNotification>) => {
@@ -483,9 +503,40 @@ export default function NotificationsManagement() {
                           )}
                           {n.soundEnabled && <Volume2 className="w-3 h-3 text-gray-400" />}
                           {n.effectType && <span className="text-sm">{EFFECT_TYPES.find(e => e.value === n.effectType)?.emoji}</span>}
+                          {(() => {
+                            const nStats = readStatsMap.get(n.id);
+                            if (!nStats || nStats.readCount === 0) return null;
+                            return (
+                              <button
+                                data-testid={`button-stats-${n.id}`}
+                                onClick={() => setStatsDialogId(n.id)}
+                                className="flex items-center gap-1.5 text-xs bg-indigo-50 text-indigo-700 px-2 py-1 rounded-full hover:bg-indigo-100 transition-colors cursor-pointer border border-indigo-200"
+                              >
+                                <Users className="w-3 h-3" />
+                                <span>{nStats.readCount} قراءة</span>
+                                {nStats.dismissedCount > 0 && (
+                                  <>
+                                    <span className="text-indigo-300">|</span>
+                                    <XCircle className="w-3 h-3" />
+                                    <span>{nStats.dismissedCount} إخفاء</span>
+                                  </>
+                                )}
+                              </button>
+                            );
+                          })()}
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
+                        <Button
+                          data-testid={`button-preview-${n.id}`}
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setPreviewNotification(n)}
+                          className="text-purple-600 hover:text-purple-700"
+                          title="إرسال تجريبي"
+                        >
+                          <PlayCircle className="w-4 h-4" />
+                        </Button>
                         <Button
                           data-testid={`button-toggle-${n.id}`}
                           variant="ghost"
@@ -1010,6 +1061,101 @@ export default function NotificationsManagement() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={statsDialogId !== null} onOpenChange={() => setStatsDialogId(null)}>
+        <DialogContent className="max-w-lg max-h-[80vh]" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="text-right flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-indigo-600" />
+              إحصائيات القراءة
+            </DialogTitle>
+          </DialogHeader>
+          {(() => {
+            const nStats = statsDialogId ? readStatsMap.get(statsDialogId) : null;
+            const notif = statsDialogId ? notifications.find(n => n.id === statsDialogId) : null;
+            if (!nStats || !notif) return <p className="text-sm text-gray-500 text-center py-8">لا توجد بيانات قراءة</p>;
+            return (
+              <div className="space-y-4">
+                <div className="text-sm font-medium text-gray-700 bg-gray-50 p-3 rounded-lg">{notif.title}</div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-green-600">{nStats.readCount}</div>
+                    <div className="text-xs text-green-700 mt-1 flex items-center justify-center gap-1">
+                      <Eye className="w-3 h-3" />
+                      إجمالي القراءات
+                    </div>
+                  </div>
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
+                    <div className="text-2xl font-bold text-red-500">{nStats.dismissedCount}</div>
+                    <div className="text-xs text-red-600 mt-1 flex items-center justify-center gap-1">
+                      <XCircle className="w-3 h-3" />
+                      تم الإخفاء
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+                    <Users className="w-4 h-4" />
+                    تفاصيل القراء ({nStats.readers.length})
+                  </h4>
+                  <ScrollArea className="max-h-[300px]">
+                    <div className="space-y-2">
+                      {nStats.readers.map((reader, idx) => (
+                        <div
+                          key={idx}
+                          data-testid={`reader-row-${idx}`}
+                          className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#d4a017] to-[#b8860b] text-white flex items-center justify-center text-xs font-bold">
+                              {reader.username.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <div className="text-sm font-medium text-gray-800">{reader.username}</div>
+                              <div className="text-xs text-gray-400">
+                                {new Date(reader.readAt).toLocaleDateString("ar-SA")} - {new Date(reader.readAt).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" })}
+                              </div>
+                            </div>
+                          </div>
+                          <Badge className={reader.dismissed ? "bg-red-100 text-red-600 border-red-200" : "bg-green-100 text-green-600 border-green-200"}>
+                            {reader.dismissed ? "أخفى" : "قرأ"}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
+      {previewNotification && (
+        <>
+          <style>{`
+            @keyframes notifFadeIn { from { opacity: 0; } to { opacity: 1; } }
+            @keyframes notifSlideIn { from { opacity: 0; transform: translateY(-30px); } to { opacity: 1; transform: translateY(0); } }
+            @keyframes notifBounce { 0% { opacity: 0; transform: scale(0.3); } 50% { opacity: 1; transform: scale(1.05); } 70% { transform: scale(0.95); } 100% { opacity: 1; transform: scale(1); } }
+            @keyframes notifZoom { from { opacity: 0; transform: scale(0.5); } to { opacity: 1; transform: scale(1); } }
+            @keyframes notifFlip { from { opacity: 0; transform: perspective(400px) rotateY(90deg); } to { opacity: 1; transform: perspective(400px) rotateY(0deg); } }
+            @keyframes notifSlideDown { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+            @keyframes notifSlideFromLeft { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+            @keyframes notifBackdropIn { from { opacity: 0; } to { opacity: 1; } }
+            @keyframes notifProgress { from { width: 100%; } to { width: 0%; } }
+            @keyframes particleFall { 0% { opacity: 0; transform: translateY(-20px) rotate(0deg); } 10% { opacity: 1; } 90% { opacity: 1; } 100% { opacity: 0; transform: translateY(40px) rotate(360deg); } }
+          `}</style>
+          <div style={{ position: "fixed", top: 12, left: "50%", transform: "translateX(-50%)", zIndex: 999999, backgroundColor: "rgba(0,0,0,0.8)", color: "#fff", padding: "8px 20px", borderRadius: "8px", fontSize: "13px", display: "flex", alignItems: "center", gap: "8px", pointerEvents: "auto" }} data-testid="preview-banner">
+            <PlayCircle className="w-4 h-4" />
+            <span>وضع المعاينة التجريبية - هكذا سيظهر الإشعار للمستخدمين</span>
+          </div>
+          <NotificationContent
+            notification={previewNotification as any}
+            onDismiss={() => setPreviewNotification(null)}
+            isPreview={true}
+          />
+        </>
+      )}
     </div>
   );
 }

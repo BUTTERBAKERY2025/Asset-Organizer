@@ -1254,6 +1254,7 @@ export interface IStorage {
   markNotificationRead(notificationId: number, userId: string): Promise<NotificationRead>;
   dismissNotification(notificationId: number, userId: string): Promise<NotificationRead>;
   getNotificationReadsByUser(userId: string): Promise<NotificationRead[]>;
+  getNotificationReadStats(): Promise<{ notificationId: number; readCount: number; dismissedCount: number; readers: { userId: string; username: string; readAt: Date; dismissed: boolean }[] }[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -13789,6 +13790,35 @@ export class DatabaseStorage implements IStorage {
 
   async getNotificationReadsByUser(userId: string): Promise<NotificationRead[]> {
     return await db.select().from(notificationReads).where(eq(notificationReads.userId, userId));
+  }
+
+  async getNotificationReadStats(): Promise<{ notificationId: number; readCount: number; dismissedCount: number; readers: { userId: string; username: string; readAt: Date; dismissed: boolean }[] }[]> {
+    const allReads = await db.select().from(notificationReads);
+    const allNotifications = await db.select({ id: systemNotifications.id }).from(systemNotifications);
+    const userIds = [...new Set(allReads.map(r => r.userId))];
+    const userMap = new Map<string, string>();
+    if (userIds.length > 0) {
+      const userRows = await db.select({ id: users.id, username: users.username }).from(users).where(inArray(users.id, userIds));
+      userRows.forEach(u => userMap.set(u.id, u.username));
+    }
+    const statsMap = new Map<number, { readCount: number; dismissedCount: number; readers: { userId: string; username: string; readAt: Date; dismissed: boolean }[] }>();
+    allNotifications.forEach(n => statsMap.set(n.id, { readCount: 0, dismissedCount: 0, readers: [] }));
+    allReads.forEach(r => {
+      let entry = statsMap.get(r.notificationId);
+      if (!entry) {
+        entry = { readCount: 0, dismissedCount: 0, readers: [] };
+        statsMap.set(r.notificationId, entry);
+      }
+      entry.readCount++;
+      if (r.dismissed) entry.dismissedCount++;
+      entry.readers.push({
+        userId: r.userId,
+        username: userMap.get(r.userId) || r.userId,
+        readAt: r.readAt!,
+        dismissed: r.dismissed || false,
+      });
+    });
+    return Array.from(statsMap.entries()).map(([notificationId, data]) => ({ notificationId, ...data }));
   }
 }
 

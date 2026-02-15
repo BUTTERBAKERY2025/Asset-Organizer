@@ -29138,6 +29138,16 @@ export async function registerRoutes(
     }
   });
 
+
+  app.get("/api/system-notifications/read-stats", isAuthenticated, requirePermission("settings", "view"), async (req, res) => {
+    try {
+      const stats = await storage.getNotificationReadStats();
+      res.json(stats);
+    } catch (error) {
+      console.error("Error getting notification read stats:", error);
+      res.status(500).json({ error: "فشل في جلب إحصائيات القراءة" });
+    }
+  });
   return httpServer;
 }
 

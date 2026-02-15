@@ -118,12 +118,12 @@ function getAnimationName(animationType: string | null): string {
   }
 }
 
-function NotificationContent({ notification, onDismiss }: { notification: SystemNotification; onDismiss: () => void }) {
+export function NotificationContent({ notification, onDismiss, isPreview }: { notification: SystemNotification; onDismiss: () => void; isPreview?: boolean }) {
   const autoCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasMarkedRead = useRef(false);
 
   useEffect(() => {
-    if (!hasMarkedRead.current) {
+    if (!hasMarkedRead.current && !isPreview) {
       hasMarkedRead.current = true;
       apiRequest("POST", `/api/system-notifications/${notification.id}/read`).catch(() => {});
     }
@@ -141,9 +141,11 @@ function NotificationContent({ notification, onDismiss }: { notification: System
   }, [notification.id]);
 
   const handleDismiss = useCallback(() => {
-    apiRequest("POST", `/api/system-notifications/${notification.id}/dismiss`).catch(() => {});
+    if (!isPreview) {
+      apiRequest("POST", `/api/system-notifications/${notification.id}/dismiss`).catch(() => {});
+    }
     onDismiss();
-  }, [notification.id, onDismiss]);
+  }, [notification.id, onDismiss, isPreview]);
 
   const handleButtonClick = useCallback(() => {
     if (notification.buttonAction) {
