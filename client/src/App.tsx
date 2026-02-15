@@ -245,7 +245,7 @@ function Router() {
       <Route path="/products">{() => <ModulePage component={ProductsPage} module="products" />}</Route>
       <Route path="/quality-control">{() => <ModulePage component={QualityControlPage} module="quality_control" />}</Route>
       <Route path="/display-bar-waste">{() => <ModulePage component={DisplayBarWastePage} module="waste_tracking" />}</Route>
-      <Route path="/operations-employees">{() => <ModulePage component={OperationsEmployeesPage} module="operations" />}</Route>
+      <Route path="/operations-employees">{() => <AdminPage component={OperationsEmployeesPage} module="operations" />}</Route>
       <Route path="/operations-reports">{() => <ModulePage component={OperationsReportsDashboardPage} module="operations" />}</Route>
       
       {/* Sales - المبيعات والكاشير */}

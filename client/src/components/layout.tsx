@@ -45,7 +45,8 @@ interface NavItem {
   module?: SystemModule;
   isHeader?: boolean;
   indent?: boolean;
-  hideIfNoPermission?: boolean; // Hide header items if no permission (don't block group visibility)
+  hideIfNoPermission?: boolean;
+  adminOnly?: boolean;
 }
 
 interface NavGroup {
@@ -182,7 +183,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { href: "/products", label: t("sidebar.products"), icon: Package, module: "products", indent: true },
           { href: "/quality-control", label: t("sidebar.qualityControl"), icon: CheckCircle, module: "quality_control", indent: true },
           { href: "/display-bar-waste", label: t("sidebar.displayBarWaste"), icon: Boxes, module: "waste_tracking", indent: true },
-          { href: "/operations-employees", label: t("sidebar.operationsEmployees"), icon: Users, module: "operations", indent: true },
+          { href: "/operations-employees", label: t("sidebar.operationsEmployees"), icon: Users, module: "operations", indent: true, adminOnly: true },
           { href: "/operations-reports", label: t("sidebar.operationsReports"), icon: FileBarChart, module: "operations", indent: true },
         ],
       },
@@ -335,6 +336,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const filterGroupItems = (items: NavItem[]): NavItem[] => {
     return items.filter(item => {
+      if (item.adminOnly && !isAdmin) return false;
       if (!item.module) return true;
       if (item.hideIfNoPermission && !checkNavPermission(item.module)) return false;
       return checkNavPermission(item.module);
