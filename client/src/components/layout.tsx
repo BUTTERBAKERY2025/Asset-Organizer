@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import logo from "@assets/logo_-5_1765206843638.png";
@@ -345,9 +345,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
     });
   };
 
-  const standaloneItems = filterItemsByPermission(allStandaloneItems);
+  const standaloneItems = useMemo(() => filterItemsByPermission(allStandaloneItems), [isAdmin, canView]);
   
-  const navGroups = allNavGroups
+  const navGroups = useMemo(() => allNavGroups
     .map(({ key, group }) => ({
       key,
       group: {
@@ -355,9 +355,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
         items: filterGroupItems(group.items),
       },
     }))
-    .filter(({ group }) => group.items.length > 0);
+    .filter(({ group }) => group.items.length > 0), [isAdmin, canView, currentLang]);
 
-  const bottomItems = filterItemsByPermission(allBottomItems);
+  const bottomItems = useMemo(() => filterItemsByPermission(allBottomItems), [isAdmin, canView]);
 
   const isGroupActive = (items: NavItem[]) => items.some(item => location === item.href);
 

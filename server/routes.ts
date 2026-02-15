@@ -158,12 +158,12 @@ export async function registerRoutes(
   // Cached data fetchers
   const getCachedBranches = memoize(async () => {
     return await storage.getAllBranches();
-  }, { promise: true, maxAge: 60000 }); // Cache for 1 minute
+  }, { promise: true, maxAge: 300000 }); // Cache for 5 minutes
 
   const getCachedUsers = memoize(async () => {
     const users = await storage.getAllUsers();
     return users.map(({ password, ...user }) => user);
-  }, { promise: true, maxAge: 30000 }); // Cache for 30 seconds
+  }, { promise: true, maxAge: 120000 }); // Cache for 2 minutes
 
   // Per-user permissions - use storage's built-in cache (no extra memoize layer)
   // This ensures cache invalidation works correctly when permissions are updated

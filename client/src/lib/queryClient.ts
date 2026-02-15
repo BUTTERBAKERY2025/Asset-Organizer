@@ -15,6 +15,30 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
+const inflightRequests = new Map<string, Promise<Response>>();
+
+async function deduplicatedFetch(url: string, options?: RequestInit): Promise<Response> {
+  const method = options?.method || "GET";
+  if (method !== "GET") {
+    return fetch(url, options);
+  }
+  const existing = inflightRequests.get(url);
+  if (existing) {
+    const cloned = await existing;
+    return cloned.clone();
+  }
+  const promise = fetch(url, options).then(res => {
+    inflightRequests.delete(url);
+    return res;
+  }).catch(err => {
+    inflightRequests.delete(url);
+    throw err;
+  });
+  inflightRequests.set(url, promise);
+  const result = await promise;
+  return result.clone();
+}
+
 export async function apiRequest(
   method: string,
   url: string,
@@ -37,7 +61,7 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const res = await fetch(queryKey.join("/") as string, {
+    const res = await deduplicatedFetch(queryKey.join("/") as string, {
       credentials: "include",
     });
 
@@ -58,47 +82,62 @@ export const queryClient = new QueryClient({
       refetchOnMount: false,
       refetchOnReconnect: false,
       staleTime: CACHE_TIMES.MEDIUM,
-      gcTime: 1000 * 60 * 60, // 1 hour garbage collection
+      gcTime: 1000 * 60 * 60,
       retry: (failureCount, error) => {
-        // Don't retry on auth errors
         if (error instanceof Error && error.message.startsWith("401")) {
           return false;
         }
-        // Retry up to 2 times for other errors
-        return failureCount < 2;
+        return failureCount < 1;
       },
-      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 3000),
+      structuralSharing: true,
+      networkMode: "offlineFirst",
     },
     mutations: {
       retry: false,
+      networkMode: "offlineFirst",
     },
   },
 });
 
 const ENDPOINT_CACHE_TIERS: Record<string, number> = {
-  // Static data - rarely changes
   "/api/branches": CACHE_TIMES.STATIC,
-  "/api/my-permissions": CACHE_TIMES.MEDIUM, // Permissions need to refresh reasonably quickly
+  "/api/my-permissions": CACHE_TIMES.LONG,
   "/api/users": CACHE_TIMES.LONG,
-  
-  // Product/catalog data - changes slowly
+  "/api/products": CACHE_TIMES.LONG,
+  "/api/product-categories": CACHE_TIMES.STATIC,
+  "/api/departments": CACHE_TIMES.STATIC,
+  "/api/roles": CACHE_TIMES.STATIC,
+  "/api/chart-of-accounts": CACHE_TIMES.STATIC,
+  "/api/checklist-templates": CACHE_TIMES.LONG,
+  "/api/point-settings": CACHE_TIMES.LONG,
+  "/api/product-commissions": CACHE_TIMES.LONG,
+  "/api/waste-risk-rules": CACHE_TIMES.LONG,
+  "/api/biometric-settings": CACHE_TIMES.LONG,
   "/api/operations/products": CACHE_TIMES.LONG,
   "/api/warehouse/items": CACHE_TIMES.LONG,
-  
-  // Moderate change frequency
+  "/api/contractors": CACHE_TIMES.LONG,
+  "/api/governance": CACHE_TIMES.LONG,
   "/api/marketing/campaigns": CACHE_TIMES.MEDIUM,
   "/api/marketing/influencers": CACHE_TIMES.MEDIUM,
   "/api/marketing/influencer-contracts": CACHE_TIMES.MEDIUM,
   "/api/inventory": CACHE_TIMES.MEDIUM,
   "/api/construction-projects": CACHE_TIMES.MEDIUM,
   "/api/assets": CACHE_TIMES.MEDIUM,
+  "/api/branch-employees": CACHE_TIMES.MEDIUM,
+  "/api/shifts": CACHE_TIMES.MEDIUM,
+  "/api/documents": CACHE_TIMES.MEDIUM,
+  "/api/targets": CACHE_TIMES.MEDIUM,
   "/api/material-requests": CACHE_TIMES.SHORT,
   "/api/material-transfers": CACHE_TIMES.SHORT,
-  
-  // Real-time data - needs fresh data
+  "/api/attendance-records": CACHE_TIMES.SHORT,
+  "/api/transfer-requests": CACHE_TIMES.SHORT,
+  "/api/system-notifications": CACHE_TIMES.MEDIUM,
   "/api/dashboard/stats": CACHE_TIMES.DYNAMIC,
   "/api/daily-production": CACHE_TIMES.DYNAMIC,
   "/api/cashier-journals": CACHE_TIMES.DYNAMIC,
+  "/api/command-center": CACHE_TIMES.DYNAMIC,
+  "/api/active-notifications": CACHE_TIMES.SHORT,
 };
 
 // Endpoints that should NOT be prefetched on hover (large datasets)

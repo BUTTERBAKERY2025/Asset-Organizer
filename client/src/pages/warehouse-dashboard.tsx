@@ -81,7 +81,7 @@ export default function WarehouseDashboardPage() {
       const res = await fetch(`/api/warehouse/notifications${params}`);
       return res.json();
     },
-    refetchInterval: 30000,
+    refetchInterval: 60000,
     staleTime: 1000 * 30, // 30 seconds
     placeholderData: (prev) => prev,
   });
@@ -93,7 +93,7 @@ export default function WarehouseDashboardPage() {
       const res = await fetch(`/api/warehouse/notifications/unread-count${params}`);
       return res.json();
     },
-    refetchInterval: 30000,
+    refetchInterval: 60000,
     staleTime: 1000 * 30, // 30 seconds
     placeholderData: (prev) => prev,
   });

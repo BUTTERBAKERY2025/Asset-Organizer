@@ -97,7 +97,7 @@ export default function BackupsPage() {
       if (!res.ok) throw new Error("Failed to fetch backups");
       return res.json();
     },
-    refetchInterval: 5000,
+    refetchInterval: 15000,
   });
 
   const { data: tableStats = [], isLoading: tablesLoading } = useQuery<TableStat[]>({

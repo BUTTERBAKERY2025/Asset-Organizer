@@ -29,18 +29,44 @@ console.log(`SSL enabled: ${isSupabase}`);
 export const pool = new Pool({ 
   connectionString,
   ssl: isSupabase ? { rejectUnauthorized: false } : undefined,
-  connectionTimeoutMillis: 10000,
-  idleTimeoutMillis: 60000,
-  max: 25,
-  min: 5,
-  statement_timeout: 30000,
+  connectionTimeoutMillis: isSupabase ? 15000 : 5000,
+  idleTimeoutMillis: isSupabase ? 120000 : 60000,
+  max: isSupabase ? 15 : 25,
+  min: isSupabase ? 3 : 5,
+  statement_timeout: isSupabase ? 45000 : 30000,
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10000,
 });
 
 pool.on('error', (err) => {
   console.error('Database pool error:', err);
 });
 
+pool.on('connect', (client) => {
+  if (isSupabase) {
+    client.query('SET statement_timeout = 45000').catch(() => {});
+  }
+});
+
 export const db = drizzle(pool, { schema });
+
+export async function warmupPool() {
+  try {
+    const client = await pool.connect();
+    await client.query('SELECT 1');
+    client.release();
+    const warmupCount = Math.min(3, isSupabase ? 2 : 3);
+    const warmups = Array.from({ length: warmupCount }, async () => {
+      const c = await pool.connect();
+      await c.query('SELECT 1');
+      c.release();
+    });
+    await Promise.all(warmups);
+    console.log(`Database pool warmed up with ${warmupCount + 1} connections`);
+  } catch (err) {
+    console.error('Pool warmup failed:', err);
+  }
+}
 
 export async function runStartupMigrations() {
   try {

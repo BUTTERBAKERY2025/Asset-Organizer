@@ -18,8 +18,8 @@ interface CachedUserData {
   timestamp: number;
 }
 
-const AUTH_CACHE_TTL = 30_000; // 30 seconds - balance between performance and freshness
-const PERMISSIONS_CACHE_TTL = 60_000; // 1 minute for permissions (change less frequently)
+const AUTH_CACHE_TTL = 60_000; // 30 seconds - balance between performance and freshness
+const PERMISSIONS_CACHE_TTL = 120_000; // 1 minute for permissions (change less frequently)
 const authCache = new Map<string, CachedUserData>();
 
 // Clean up stale entries periodically

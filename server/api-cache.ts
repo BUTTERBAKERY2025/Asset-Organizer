@@ -8,60 +8,64 @@ interface CacheEntry {
 }
 
 const cache = new Map<string, CacheEntry>();
-const MAX_CACHE_SIZE = 500;
-const DEFAULT_TTL = 30_000;
+const MAX_CACHE_SIZE = 1000;
+const DEFAULT_TTL = 45_000;
 
 const ROUTE_TTL: Record<string, number> = {
-  "/api/branches": 120_000,
-  "/api/products": 60_000,
-  "/api/product-categories": 120_000,
-  "/api/departments": 120_000,
-  "/api/roles": 120_000,
-  "/api/users": 60_000,
-  "/api/permissions": 60_000,
-  "/api/user-permissions": 60_000,
-  "/api/chart-of-accounts": 120_000,
-  "/api/checklist-templates": 60_000,
-  "/api/point-settings": 60_000,
-  "/api/product-commissions": 60_000,
-  "/api/waste-risk-rules": 60_000,
-  "/api/inventory-items": 30_000,
-  "/api/cashier-journals": 30_000,
-  "/api/waste-reports": 30_000,
-  "/api/daily-production-batches": 30_000,
-  "/api/advanced-production-orders": 30_000,
-  "/api/production-hub": 30_000,
-  "/api/display-bar-receipts": 30_000,
-  "/api/branch-employees": 30_000,
-  "/api/attendance-records": 30_000,
-  "/api/shifts": 30_000,
-  "/api/branch-shifts": 30_000,
-  "/api/construction-projects": 30_000,
-  "/api/contractors": 60_000,
-  "/api/maintenance-records": 30_000,
-  "/api/marketing": 30_000,
-  "/api/executive": 30_000,
-  "/api/governance": 30_000,
-  "/api/warehouse": 30_000,
-  "/api/transfer-requests": 30_000,
-  "/api/documents": 30_000,
-  "/api/daily-sales-data": 30_000,
-  "/api/targets": 30_000,
-  "/api/cashier-daily-challenges": 30_000,
-  "/api/branch-achievement-bonus": 30_000,
-  "/api/cashier-points-ledger": 30_000,
-  "/api/smart-incentives": 30_000,
-  "/api/production-comparisons": 30_000,
-  "/api/finished-goods": 30_000,
-  "/api/command-center": 30_000,
-  "/api/daily-production-stats": 30_000,
-  "/api/advanced-production-order-stats": 30_000,
-  "/api/production-ai-plans": 30_000,
-  "/api/accounting": 30_000,
-  "/api/salary": 30_000,
-  "/api/pnl": 30_000,
-  "/api/security": 30_000,
-  "/api/social-responsibility": 30_000,
+  "/api/branches": 300_000,
+  "/api/products": 120_000,
+  "/api/product-categories": 300_000,
+  "/api/departments": 300_000,
+  "/api/roles": 300_000,
+  "/api/users": 120_000,
+  "/api/permissions": 120_000,
+  "/api/user-permissions": 120_000,
+  "/api/my-permissions": 120_000,
+  "/api/chart-of-accounts": 300_000,
+  "/api/checklist-templates": 120_000,
+  "/api/point-settings": 120_000,
+  "/api/product-commissions": 120_000,
+  "/api/waste-risk-rules": 120_000,
+  "/api/inventory-items": 45_000,
+  "/api/cashier-journals": 45_000,
+  "/api/waste-reports": 45_000,
+  "/api/daily-production-batches": 45_000,
+  "/api/advanced-production-orders": 45_000,
+  "/api/production-hub": 45_000,
+  "/api/display-bar-receipts": 45_000,
+  "/api/branch-employees": 60_000,
+  "/api/attendance-records": 45_000,
+  "/api/shifts": 60_000,
+  "/api/branch-shifts": 60_000,
+  "/api/construction-projects": 60_000,
+  "/api/contractors": 120_000,
+  "/api/maintenance-records": 60_000,
+  "/api/marketing": 60_000,
+  "/api/executive": 60_000,
+  "/api/governance": 120_000,
+  "/api/warehouse": 45_000,
+  "/api/transfer-requests": 45_000,
+  "/api/documents": 60_000,
+  "/api/daily-sales-data": 45_000,
+  "/api/targets": 60_000,
+  "/api/cashier-daily-challenges": 60_000,
+  "/api/branch-achievement-bonus": 60_000,
+  "/api/cashier-points-ledger": 60_000,
+  "/api/smart-incentives": 60_000,
+  "/api/production-comparisons": 60_000,
+  "/api/finished-goods": 45_000,
+  "/api/command-center": 45_000,
+  "/api/daily-production-stats": 45_000,
+  "/api/advanced-production-order-stats": 45_000,
+  "/api/production-ai-plans": 60_000,
+  "/api/accounting": 60_000,
+  "/api/salary": 60_000,
+  "/api/pnl": 60_000,
+  "/api/security": 120_000,
+  "/api/social-responsibility": 60_000,
+  "/api/system-notifications": 60_000,
+  "/api/active-notifications": 60_000,
+  "/api/biometric-settings": 120_000,
 };
 
 function getTTL(path: string): number {
@@ -112,20 +116,28 @@ export function apiCacheMiddleware(req: Request, res: Response, next: NextFuncti
     return next();
   }
 
-  if (req.path.includes("/export") || req.path.includes("/download") || req.path.includes("/file/")) {
+  if (req.path.includes("/export") || req.path.includes("/download") || req.path.includes("/file/") || req.path.includes("/pdf")) {
     return next();
   }
 
   const key = buildCacheKey(req);
   if (!key) {
-    return next(); // Skip caching for unauthenticated requests
+    return next();
   }
   
   const entry = cache.get(key);
   const ttl = getTTL(req.path);
 
   if (entry && (Date.now() - entry.timestamp) < ttl) {
+    const etag = `"${entry.timestamp}"`;
+    const ifNoneMatch = req.headers["if-none-match"];
+    if (ifNoneMatch === etag) {
+      res.set("X-Cache", "HIT-304");
+      return res.status(304).end();
+    }
     res.set("X-Cache", "HIT");
+    res.set("ETag", etag);
+    res.set("Cache-Control", `private, max-age=${Math.floor(ttl / 1000)}`);
     res.set("Content-Type", entry.headers["content-type"] || "application/json");
     if (entry.headers["content-encoding"]) {
       res.set("Content-Encoding", entry.headers["content-encoding"]);

@@ -115,7 +115,7 @@ export default function AuditLogsPage() {
   // Fetch online users
   const { data: onlineUsers = [], isLoading: onlineLoading, refetch: refetchOnline } = useQuery<OnlineUser[]>({
     queryKey: ["/api/online-users"],
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 60000,
   });
 
   // Fetch logs based on filters

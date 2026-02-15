@@ -6,7 +6,7 @@ import { createServer } from "http";
 import path from "path";
 import helmet from "helmet";
 import compression from "compression";
-import { db, pool, runStartupMigrations } from "./db";
+import { db, pool, runStartupMigrations, warmupPool } from "./db";
 import { sql } from "drizzle-orm";
 import { securityHeaders, csrfProtection, apiRateLimiter } from "./security";
 
@@ -174,6 +174,7 @@ process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
 (async () => {
+  await warmupPool();
   await runStartupMigrations();
   await registerRoutes(httpServer, app);
   
