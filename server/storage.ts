@@ -3660,6 +3660,7 @@ export class DatabaseStorage implements IStorage {
   // Comprehensive Operations Reports - OPTIMIZED with SQL aggregation
   async getOperationsReport(filters: {
     branchId?: string;
+    branchIds?: string[];
     startDate?: string;
     endDate?: string;
   }): Promise<{
@@ -3717,11 +3718,15 @@ export class DatabaseStorage implements IStorage {
       averageTicket: number;
     }[];
   }> {
-    const { branchId, startDate, endDate } = filters;
+    const { branchId, branchIds, startDate, endDate } = filters;
     
     // Build WHERE conditions for SQL queries
     const journalConditions: any[] = [];
-    if (branchId) journalConditions.push(eq(cashierSalesJournals.branchId, branchId));
+    if (branchId) {
+      journalConditions.push(eq(cashierSalesJournals.branchId, branchId));
+    } else if (branchIds && branchIds.length > 0) {
+      journalConditions.push(inArray(cashierSalesJournals.branchId, branchIds));
+    }
     if (startDate) journalConditions.push(gte(cashierSalesJournals.journalDate, startDate));
     if (endDate) journalConditions.push(lte(cashierSalesJournals.journalDate, endDate));
 
@@ -3789,7 +3794,11 @@ export class DatabaseStorage implements IStorage {
 
     // OPTIMIZED: Production Report with SQL WHERE
     const orderConditions: any[] = [];
-    if (branchId) orderConditions.push(eq(productionOrders.branchId, branchId));
+    if (branchId) {
+      orderConditions.push(eq(productionOrders.branchId, branchId));
+    } else if (branchIds && branchIds.length > 0) {
+      orderConditions.push(inArray(productionOrders.branchId, branchIds));
+    }
     if (startDate) orderConditions.push(gte(productionOrders.scheduledDate, startDate));
     if (endDate) orderConditions.push(lte(productionOrders.scheduledDate, endDate));
 
@@ -3863,7 +3872,11 @@ export class DatabaseStorage implements IStorage {
 
     // Actual Production (daily_production_batches) - real production data
     const batchConditions: any[] = [];
-    if (branchId) batchConditions.push(eq(dailyProductionBatches.branchId, branchId));
+    if (branchId) {
+      batchConditions.push(eq(dailyProductionBatches.branchId, branchId));
+    } else if (branchIds && branchIds.length > 0) {
+      batchConditions.push(inArray(dailyProductionBatches.branchId, branchIds));
+    }
     if (startDate) batchConditions.push(gte(dailyProductionBatches.productionDate, startDate));
     if (endDate) batchConditions.push(lte(dailyProductionBatches.productionDate, endDate));
 
@@ -3935,7 +3948,11 @@ export class DatabaseStorage implements IStorage {
 
     // Shifts Report - using employee_schedules table (main schedule data)
     const scheduleConditions: any[] = [];
-    if (branchId) scheduleConditions.push(eq(employeeSchedules.branchId, branchId));
+    if (branchId) {
+      scheduleConditions.push(eq(employeeSchedules.branchId, branchId));
+    } else if (branchIds && branchIds.length > 0) {
+      scheduleConditions.push(inArray(employeeSchedules.branchId, branchIds));
+    }
     if (startDate) scheduleConditions.push(gte(employeeSchedules.scheduleDate, startDate));
     if (endDate) scheduleConditions.push(lte(employeeSchedules.scheduleDate, endDate));
 
@@ -3975,9 +3992,14 @@ export class DatabaseStorage implements IStorage {
 
     // Branch Comparison - SECURITY: Only include authorized branches
     const allBranches = await this.getAllBranches();
-    const branchesToCompare = branchId 
-      ? allBranches.filter(b => b.id === branchId)
-      : allBranches;
+    let branchesToCompare;
+    if (branchId) {
+      branchesToCompare = allBranches.filter(b => b.id === branchId);
+    } else if (branchIds && branchIds.length > 0) {
+      branchesToCompare = allBranches.filter(b => branchIds.includes(b.id));
+    } else {
+      branchesToCompare = allBranches;
+    }
     
     // Pre-group data by branch for efficient comparison
     const journalsByBranch = new Map<string, typeof allJournals>();

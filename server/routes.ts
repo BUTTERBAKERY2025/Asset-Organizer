@@ -6517,19 +6517,12 @@ export async function registerRoutes(
         return res.status(403).json({ error: "غير مصرح بالوصول" });
       }
       
-      const effectiveBranchId = branchFilter.singleBranchId || (branchFilter.branchIds ? branchFilter.branchIds[0] : undefined);
-      
-      // DEBUG: Log the report parameters
-      console.log("[OPS REPORT DEBUG] Params:", { branchId, startDate, endDate, effectiveBranchId });
-      
       const report = await storage.getOperationsReport({
-        branchId: effectiveBranchId,
+        branchId: branchFilter.singleBranchId || undefined,
+        branchIds: branchFilter.branchIds || undefined,
         startDate: startDate as string | undefined,
         endDate: endDate as string | undefined,
       });
-      
-      // DEBUG: Log shifts report
-      console.log("[OPS REPORT DEBUG] Shifts report:", report.shiftsReport);
       
       res.json(report);
     } catch (error) {
@@ -6676,18 +6669,27 @@ export async function registerRoutes(
         : allBranches;
       
       const operationsReport = await storage.getOperationsReport({
-        branchId: effectiveBranchId ?? undefined,
+        branchId: branchFilter.singleBranchId || undefined,
+        branchIds: branchFilter.branchIds || undefined,
         startDate: startDate as string | undefined,
         endDate: endDate as string | undefined,
       });
       
-      const allItems = effectiveBranchId 
+      const allItemsRaw = effectiveBranchId 
         ? await storage.getInventoryItemsByBranch(effectiveBranchId)
         : await storage.getAllInventoryItems();
+      const allItems = branchFilter.branchIds && !effectiveBranchId
+        ? allItemsRaw.filter(i => branchFilter.branchIds!.includes(i.branchId))
+        : allItemsRaw;
       const tempAllJournals = await storage.getAllCashierJournals();
-      const allJournals = effectiveBranchId 
-        ? tempAllJournals.filter(j => j.branchId === effectiveBranchId)
-        : tempAllJournals;
+      let allJournals;
+      if (effectiveBranchId) {
+        allJournals = tempAllJournals.filter(j => j.branchId === effectiveBranchId);
+      } else if (branchFilter.branchIds) {
+        allJournals = tempAllJournals.filter(j => branchFilter.branchIds!.includes(j.branchId));
+      } else {
+        allJournals = tempAllJournals;
+      }
       
       let filteredJournals = allJournals;
       if (startDate) {
@@ -6705,10 +6707,15 @@ export async function registerRoutes(
       const now = new Date();
       const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
       const allTargetsProgress = await storage.getAllBranchesSalesProgress(currentYearMonth);
-      // SECURITY: Filter targets to user's branch for non-admins
-      const targetsProgress = effectiveBranchId 
-        ? allTargetsProgress.filter(b => b.branchId === effectiveBranchId)
-        : allTargetsProgress;
+      // SECURITY: Filter targets to user's allowed branches
+      let targetsProgress;
+      if (effectiveBranchId) {
+        targetsProgress = allTargetsProgress.filter(b => b.branchId === effectiveBranchId);
+      } else if (branchFilter.branchIds) {
+        targetsProgress = allTargetsProgress.filter(b => branchFilter.branchIds!.includes(b.branchId));
+      } else {
+        targetsProgress = allTargetsProgress;
+      }
       const totalTarget = targetsProgress.reduce((sum, b) => sum + (b.targetAmount || 0), 0);
       const totalAchieved = targetsProgress.reduce((sum, b) => sum + (b.achievedAmount || 0), 0);
       const targetAchievementPercent = totalTarget > 0 ? (totalAchieved / totalTarget) * 100 : 0;
@@ -17514,11 +17521,13 @@ export async function registerRoutes(
       }
       if (branchFilter.singleBranchId) {
         filters.branchId = branchFilter.singleBranchId;
-      } else if (branchId && branchId !== 'all') {
-        filters.branchId = branchId as string;
       }
 
       let journals = await storage.getCashierSalesJournals(filters);
+      
+      if (!branchFilter.singleBranchId && branchFilter.branchIds) {
+        journals = journals.filter(j => branchFilter.branchIds!.includes(j.branchId));
+      }
       
       // Filter by shiftType if specified
       if (shiftType && shiftType !== 'all') {
@@ -17608,11 +17617,13 @@ export async function registerRoutes(
       if (endDate) filters.endDate = endDate as string;
       if (branchFilter.singleBranchId) {
         filters.branchId = branchFilter.singleBranchId;
-      } else if (branchId && branchId !== 'all') {
-        filters.branchId = branchId as string;
       }
 
       let journals = await storage.getCashierSalesJournals(filters);
+      
+      if (!branchFilter.singleBranchId && branchFilter.branchIds) {
+        journals = journals.filter(j => branchFilter.branchIds!.includes(j.branchId));
+      }
       
       // Get user and branch names
       const users = await storage.getAllUsers();
