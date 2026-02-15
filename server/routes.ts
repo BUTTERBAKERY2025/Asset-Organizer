@@ -417,9 +417,12 @@ export async function registerRoutes(
         if (currentUser.role !== "admin") {
           return res.status(403).json({ error: "فقط المسؤولين يمكنهم تغيير الأدوار" });
         }
-        // SECURITY: Prevent admin from changing their own role
+        // SECURITY: Prevent admin from changing their own role (only block if actually different)
         if (req.params.id === currentUser.id) {
-          return res.status(403).json({ error: "لا يمكنك تغيير دورك الخاص" });
+          const targetUser = await storage.getUser(req.params.id);
+          if (targetUser && targetUser.role !== role) {
+            return res.status(403).json({ error: "لا يمكنك تغيير دورك الخاص" });
+          }
         }
         updateData.role = role;
       }
