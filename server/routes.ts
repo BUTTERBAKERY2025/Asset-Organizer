@@ -150,6 +150,54 @@ export async function registerRoutes(
   });
   app.use(apiCacheMiddleware);
 
+  const BATCH_ALLOWED_PREFIXES = [
+    "/api/branches", "/api/products", "/api/users", "/api/roles",
+    "/api/departments", "/api/dashboard", "/api/inventory",
+    "/api/branch-employees", "/api/shifts", "/api/attendance",
+    "/api/cashier-journals", "/api/operations", "/api/daily-production",
+    "/api/my-permissions", "/api/active-notifications",
+    "/api/point-settings", "/api/product-categories",
+  ];
+
+  app.post("/api/batch", isAuthenticated, async (req, res) => {
+    try {
+      const { requests } = req.body;
+      if (!Array.isArray(requests) || requests.length === 0 || requests.length > 10) {
+        return res.status(400).json({ error: "requests must be an array of 1-10 items" });
+      }
+      for (const r of requests) {
+        if (!r.url || typeof r.url !== "string" || !r.url.startsWith("/api/")) {
+          return res.status(400).json({ error: "All URLs must start with /api/" });
+        }
+        const allowed = BATCH_ALLOWED_PREFIXES.some(p => r.url.startsWith(p));
+        if (!allowed) {
+          return res.status(403).json({ error: `URL not allowed in batch: ${r.url}` });
+        }
+      }
+      const port = process.env.PORT || 5000;
+      const results = await Promise.all(
+        requests.map(async (r: { url: string }) => {
+          try {
+            const url = new URL(r.url, `http://localhost:${port}`);
+            const response = await fetch(url.toString(), {
+              headers: {
+                cookie: req.headers.cookie || "",
+                "x-batch-request": "1",
+              },
+            });
+            const data = await response.json();
+            return { url: r.url, status: response.status, data };
+          } catch (e: any) {
+            return { url: r.url, status: 500, data: { error: e.message } };
+          }
+        })
+      );
+      res.json({ results });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // Register governance routes
   registerGovernanceRoutes(app);
   registerSocialResponsibilityRoutes(app);

@@ -105,17 +105,23 @@ export function log(message: string, source = "express") {
 
 app.use((req, res, next) => {
   const start = Date.now();
-  const path = req.path;
+  const reqPath = req.path;
+
+  if (reqPath.startsWith("/api")) {
+    req.setTimeout(30000);
+  }
 
   res.on("finish", () => {
     const duration = Date.now() - start;
-    if (path.startsWith("/api") && duration > 500) {
-      log(`SLOW ${req.method} ${path} ${res.statusCode} in ${duration}ms`);
+    if (reqPath.startsWith("/api") && duration > 500) {
+      log(`SLOW ${req.method} ${reqPath} ${res.statusCode} in ${duration}ms`);
     }
   });
 
   next();
 });
+
+app.set('json spaces', 0);
 
 // Health check endpoint
 app.get("/api/health", async (_req, res) => {

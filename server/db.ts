@@ -100,6 +100,36 @@ export async function runStartupMigrations() {
       `CREATE INDEX IF NOT EXISTS idx_attendance_records_branch ON attendance_records(branch_id)`,
       `CREATE INDEX IF NOT EXISTS idx_branch_employees_branch ON branch_employees(branch_id)`,
       `CREATE INDEX IF NOT EXISTS idx_display_bar_receipts_branch_date ON display_bar_receipts(branch_id, receipt_date)`,
+      // Notifications indexes
+      `CREATE INDEX IF NOT EXISTS idx_notifications_target ON system_notifications(target_type, is_active)`,
+      `CREATE INDEX IF NOT EXISTS idx_notifications_scheduled ON system_notifications(scheduled_at) WHERE scheduled_at IS NOT NULL`,
+      `CREATE INDEX IF NOT EXISTS idx_notification_reads_user ON notification_reads(user_id, notification_id)`,
+      // Shifts and schedules
+      `CREATE INDEX IF NOT EXISTS idx_shifts_branch ON shifts(branch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_shift_assignments_employee ON shift_assignments(employee_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_shift_assignments_date ON shift_assignments(assignment_date)`,
+      // Audit logs
+      `CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON audit_logs(user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(created_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action)`,
+      // Users
+      `CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)`,
+      `CREATE INDEX IF NOT EXISTS idx_users_branch ON users(branch_id)`,
+      // Journal entries
+      `CREATE INDEX IF NOT EXISTS idx_cashier_journals_branch_date ON cashier_journals(branch_id, journal_date)`,
+      `CREATE INDEX IF NOT EXISTS idx_cashier_journals_status ON cashier_journals(status)`,
+      // Material requests
+      `CREATE INDEX IF NOT EXISTS idx_material_requests_branch ON material_requests(branch_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_material_requests_status ON material_requests(status)`,
+      // Documents
+      `CREATE INDEX IF NOT EXISTS idx_documents_category ON documents(category)`,
+      `CREATE INDEX IF NOT EXISTS idx_documents_created ON documents(created_at DESC)`,
+      // Production
+      `CREATE INDEX IF NOT EXISTS idx_daily_prod_batches_product ON daily_production_batches(product_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_daily_prod_batches_destination ON daily_production_batches(destination)`,
+      // Employee attendance composite
+      `CREATE INDEX IF NOT EXISTS idx_attendance_branch_date ON attendance_records(branch_id, attendance_date)`,
+      `CREATE INDEX IF NOT EXISTS idx_attendance_employee_date ON attendance_records(employee_id, attendance_date)`,
     ];
     for (const mig of migrations) {
       try { await pool.query(mig); } catch (e) { /* index may already exist or table not found */ }
