@@ -14,7 +14,7 @@ import {
   Shield, MapPin, Megaphone, UserCheck, Calendar, UsersRound, Building, Briefcase,
   Receipt, PieChart, Lock, Layers, PieChartIcon, Share2, Languages, Warehouse,
   PackageCheck, Send, ShoppingCart, FolderOpen, Landmark, Scale, Vote, FileCheck,
-  Sparkles, Crown, Handshake, DoorOpen
+  Sparkles, Crown, Handshake, DoorOpen, Bell
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
@@ -24,6 +24,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { NotificationsDropdown } from "@/components/notifications-dropdown";
+import { NotificationDisplay } from "@/components/NotificationDisplay";
 import { GlobalSearch } from "@/components/global-search";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -304,6 +305,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { href: "/integrations", label: t("sidebar.integrations"), icon: Link2, module: "integrations", indent: true },
           { href: "/audit-logs", label: t("sidebar.auditLogs"), icon: FileSearch, module: "audit_logs", indent: true },
           { href: "/backups", label: t("sidebar.backups"), icon: HardDrive, module: "backups", indent: true },
+          { href: "/notifications-management", label: "الإشعارات والرسائل", icon: Bell, module: "settings", indent: true, adminOnly: true },
         ],
       },
     },
@@ -647,6 +649,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           {children}
         </div>
       </main>
+      {isAuthenticated && <NotificationDisplay />}
     </div>
   );
 }

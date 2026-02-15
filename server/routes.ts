@@ -29044,6 +29044,100 @@ export async function registerRoutes(
     }
   });
 
+  // ==========================================
+  // System Notifications & Broadcast Messages
+  // ==========================================
+
+  app.get("/api/system-notifications", isAuthenticated, requirePermission("settings", "view"), async (req, res) => {
+    try {
+      const notifications = await storage.getAllSystemNotifications();
+      res.json(notifications);
+    } catch (error) {
+      console.error("Error fetching system notifications:", error);
+      res.status(500).json({ error: "فشل في جلب الإشعارات" });
+    }
+  });
+
+  app.get("/api/system-notifications/:id", isAuthenticated, requirePermission("settings", "view"), async (req, res) => {
+    try {
+      const notification = await storage.getSystemNotification(parseInt(req.params.id));
+      if (!notification) return res.status(404).json({ error: "الإشعار غير موجود" });
+      res.json(notification);
+    } catch (error) {
+      console.error("Error fetching notification:", error);
+      res.status(500).json({ error: "فشل في جلب الإشعار" });
+    }
+  });
+
+  app.post("/api/system-notifications", isAuthenticated, requirePermission("settings", "create"), async (req, res) => {
+    try {
+      const data = req.body;
+      data.createdBy = (req as any).user?.id;
+      const notification = await storage.createSystemNotification(data);
+      res.status(201).json(notification);
+    } catch (error) {
+      console.error("Error creating notification:", error);
+      res.status(500).json({ error: "فشل في إنشاء الإشعار" });
+    }
+  });
+
+  app.patch("/api/system-notifications/:id", isAuthenticated, requirePermission("settings", "edit"), async (req, res) => {
+    try {
+      const notification = await storage.updateSystemNotification(parseInt(req.params.id), req.body);
+      if (!notification) return res.status(404).json({ error: "الإشعار غير موجود" });
+      res.json(notification);
+    } catch (error) {
+      console.error("Error updating notification:", error);
+      res.status(500).json({ error: "فشل في تحديث الإشعار" });
+    }
+  });
+
+  app.delete("/api/system-notifications/:id", isAuthenticated, requirePermission("settings", "delete"), async (req, res) => {
+    try {
+      const deleted = await storage.deleteSystemNotification(parseInt(req.params.id));
+      if (!deleted) return res.status(404).json({ error: "الإشعار غير موجود" });
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting notification:", error);
+      res.status(500).json({ error: "فشل في حذف الإشعار" });
+    }
+  });
+
+  app.get("/api/active-notifications", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req as any).user?.id;
+      const user = (req as any).user;
+      const branchId = user?.activeBranch || user?.branchId || "";
+      const notifications = await storage.getActiveNotificationsForUser(userId, branchId);
+      res.json(notifications);
+    } catch (error) {
+      console.error("Error fetching active notifications:", error);
+      res.status(500).json({ error: "فشل في جلب الإشعارات النشطة" });
+    }
+  });
+
+  app.post("/api/system-notifications/:id/read", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req as any).user?.id;
+      const read = await storage.markNotificationRead(parseInt(req.params.id), userId);
+      res.json(read);
+    } catch (error) {
+      console.error("Error marking notification read:", error);
+      res.status(500).json({ error: "فشل في تسجيل القراءة" });
+    }
+  });
+
+  app.post("/api/system-notifications/:id/dismiss", isAuthenticated, async (req, res) => {
+    try {
+      const userId = (req as any).user?.id;
+      const dismissed = await storage.dismissNotification(parseInt(req.params.id), userId);
+      res.json(dismissed);
+    } catch (error) {
+      console.error("Error dismissing notification:", error);
+      res.status(500).json({ error: "فشل في إخفاء الإشعار" });
+    }
+  });
+
   return httpServer;
 }
 

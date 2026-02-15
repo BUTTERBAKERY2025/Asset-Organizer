@@ -497,6 +497,11 @@ import {
   chartOfAccounts,
   type ChartOfAccount,
   type InsertChartOfAccount,
+  systemNotifications,
+  type SystemNotification,
+  type InsertSystemNotification,
+  notificationReads,
+  type NotificationRead,
 } from "@shared/schema";
 
 type TransferHistory = typeof transferHistory.$inferSelect;
@@ -1238,6 +1243,17 @@ export interface IStorage {
   // P&L Monthly Inputs (Variable monthly costs)
   getPnlMonthlyInputs(branchId: string, year: number, month: number): Promise<PnlMonthlyInputs | undefined>;
   upsertPnlMonthlyInputs(inputs: InsertPnlMonthlyInputs): Promise<PnlMonthlyInputs>;
+
+  // System Notifications
+  getAllSystemNotifications(): Promise<SystemNotification[]>;
+  getSystemNotification(id: number): Promise<SystemNotification | undefined>;
+  createSystemNotification(notification: InsertSystemNotification): Promise<SystemNotification>;
+  updateSystemNotification(id: number, notification: Partial<InsertSystemNotification>): Promise<SystemNotification | undefined>;
+  deleteSystemNotification(id: number): Promise<boolean>;
+  getActiveNotificationsForUser(userId: string, branchId: string): Promise<SystemNotification[]>;
+  markNotificationRead(notificationId: number, userId: string): Promise<NotificationRead>;
+  dismissNotification(notificationId: number, userId: string): Promise<NotificationRead>;
+  getNotificationReadsByUser(userId: string): Promise<NotificationRead[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -13687,6 +13703,92 @@ export class DatabaseStorage implements IStorage {
         resolved: entries.filter(e => e.reconciliationStatus === 'resolved').length,
       },
     };
+  }
+
+  // System Notifications
+  async getAllSystemNotifications(): Promise<SystemNotification[]> {
+    return await db.select().from(systemNotifications).orderBy(desc(systemNotifications.createdAt));
+  }
+
+  async getSystemNotification(id: number): Promise<SystemNotification | undefined> {
+    const [notification] = await db.select().from(systemNotifications).where(eq(systemNotifications.id, id));
+    return notification || undefined;
+  }
+
+  async createSystemNotification(notification: InsertSystemNotification): Promise<SystemNotification> {
+    const [created] = await db.insert(systemNotifications).values(notification).returning();
+    return created;
+  }
+
+  async updateSystemNotification(id: number, notification: Partial<InsertSystemNotification>): Promise<SystemNotification | undefined> {
+    const [updated] = await db.update(systemNotifications)
+      .set({ ...notification, updatedAt: new Date() })
+      .where(eq(systemNotifications.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteSystemNotification(id: number): Promise<boolean> {
+    const result = await db.delete(systemNotifications).where(eq(systemNotifications.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async getActiveNotificationsForUser(userId: string, branchId: string): Promise<SystemNotification[]> {
+    const now = new Date();
+    const allActive = await db.select().from(systemNotifications)
+      .where(and(
+        eq(systemNotifications.isActive, true),
+        or(isNull(systemNotifications.startDate), lte(systemNotifications.startDate, now)),
+        or(isNull(systemNotifications.endDate), gte(systemNotifications.endDate, now)),
+      ))
+      .orderBy(desc(systemNotifications.priority), desc(systemNotifications.createdAt));
+
+    const reads = await db.select().from(notificationReads)
+      .where(eq(notificationReads.userId, userId));
+    const dismissedIds = new Set(reads.filter(r => r.dismissed).map(r => r.notificationId));
+    const readOnceIds = new Set(reads.map(r => r.notificationId));
+
+    return allActive.filter(n => {
+      if (dismissedIds.has(n.id)) return false;
+      if (n.showOnce && readOnceIds.has(n.id)) return false;
+      if (!n.targetAllBranches && n.targetBranchIds && !n.targetBranchIds.includes(branchId)) return false;
+      if (n.displayTimeStart || n.displayTimeEnd) {
+        const nowTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+        if (n.displayTimeStart && nowTime < n.displayTimeStart) return false;
+        if (n.displayTimeEnd && nowTime > n.displayTimeEnd) return false;
+      }
+      return true;
+    });
+  }
+
+  async markNotificationRead(notificationId: number, userId: string): Promise<NotificationRead> {
+    const [existing] = await db.select().from(notificationReads)
+      .where(and(eq(notificationReads.notificationId, notificationId), eq(notificationReads.userId, userId)));
+    if (existing) return existing;
+    const [created] = await db.insert(notificationReads)
+      .values({ notificationId, userId, dismissed: false })
+      .returning();
+    return created;
+  }
+
+  async dismissNotification(notificationId: number, userId: string): Promise<NotificationRead> {
+    const [existing] = await db.select().from(notificationReads)
+      .where(and(eq(notificationReads.notificationId, notificationId), eq(notificationReads.userId, userId)));
+    if (existing) {
+      const [updated] = await db.update(notificationReads)
+        .set({ dismissed: true })
+        .where(eq(notificationReads.id, existing.id))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(notificationReads)
+      .values({ notificationId, userId, dismissed: true })
+      .returning();
+    return created;
+  }
+
+  async getNotificationReadsByUser(userId: string): Promise<NotificationRead[]> {
+    return await db.select().from(notificationReads).where(eq(notificationReads.userId, userId));
   }
 }
 

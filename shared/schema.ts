@@ -8773,3 +8773,70 @@ export const insertBiometricCredentialSchema = createInsertSchema(biometricCrede
 
 export type BiometricCredential = typeof biometricCredentials.$inferSelect;
 export type InsertBiometricCredential = z.infer<typeof insertBiometricCredentialSchema>;
+
+// System Notifications & Broadcast Messages - الإشعارات والرسائل العامة
+export const systemNotifications = pgTable("system_notifications", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  messageType: text("message_type").notNull().default("announcement"),
+  displayStyle: text("display_style").notNull().default("modal"),
+  priority: integer("priority").default(1).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  targetAllBranches: boolean("target_all_branches").default(true).notNull(),
+  targetBranchIds: text("target_branch_ids").array(),
+  startDate: timestamp("start_date"),
+  endDate: timestamp("end_date"),
+  displayTimeStart: text("display_time_start"),
+  displayTimeEnd: text("display_time_end"),
+  soundEnabled: boolean("sound_enabled").default(false).notNull(),
+  soundType: text("sound_type").default("default"),
+  backgroundColor: text("background_color").default("#ffffff"),
+  textColor: text("text_color").default("#1a1a1a"),
+  accentColor: text("accent_color").default("#d4a017"),
+  animationType: text("animation_type").default("fade"),
+  effectType: text("effect_type"),
+  emoji: text("emoji"),
+  imageUrl: text("image_url"),
+  buttonText: text("button_text"),
+  buttonAction: text("button_action"),
+  showOnce: boolean("show_once").default(false).notNull(),
+  autoCloseSeconds: integer("auto_close_seconds"),
+  designConfig: jsonb("design_config"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_sys_notif_active").on(table.isActive),
+  index("idx_sys_notif_dates").on(table.startDate, table.endDate),
+  index("idx_sys_notif_priority").on(table.priority),
+]);
+
+export const insertSystemNotificationSchema = createInsertSchema(systemNotifications).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type SystemNotification = typeof systemNotifications.$inferSelect;
+export type InsertSystemNotification = z.infer<typeof insertSystemNotificationSchema>;
+
+// Notification Reads - تتبع قراءة الإشعارات
+export const notificationReads = pgTable("notification_reads", {
+  id: serial("id").primaryKey(),
+  notificationId: integer("notification_id").notNull().references(() => systemNotifications.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  readAt: timestamp("read_at").defaultNow().notNull(),
+  dismissed: boolean("dismissed").default(false).notNull(),
+}, (table) => [
+  uniqueIndex("idx_notif_read_unique").on(table.notificationId, table.userId),
+  index("idx_notif_read_user").on(table.userId),
+]);
+
+export const insertNotificationReadSchema = createInsertSchema(notificationReads).omit({
+  id: true,
+  readAt: true,
+});
+
+export type NotificationRead = typeof notificationReads.$inferSelect;
+export type InsertNotificationRead = z.infer<typeof insertNotificationReadSchema>;
