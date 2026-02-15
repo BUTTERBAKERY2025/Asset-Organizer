@@ -166,35 +166,45 @@ export async function registerRoutes(
         return res.status(400).json({ error: "requests must be an array of 1-10 items" });
       }
       for (const r of requests) {
-        if (!r.url || typeof r.url !== "string" || !r.url.startsWith("/api/")) {
-          return res.status(400).json({ error: "All URLs must start with /api/" });
+        if (!r.url || typeof r.url !== "string") {
+          return res.status(400).json({ error: "Invalid request URL" });
         }
-        const allowed = BATCH_ALLOWED_PREFIXES.some(p => r.url.startsWith(p));
+        const decoded = decodeURIComponent(r.url);
+        if (!decoded.startsWith("/api/") || decoded.includes("..") || decoded.includes("//") || decoded.includes("\0") || decoded.includes("\\")) {
+          return res.status(400).json({ error: "Invalid URL format" });
+        }
+        const pathOnly = decoded.split("?")[0];
+        const allowed = BATCH_ALLOWED_PREFIXES.some(p => pathOnly.startsWith(p));
         if (!allowed) {
-          return res.status(403).json({ error: `URL not allowed in batch: ${r.url}` });
+          return res.status(403).json({ error: "URL not permitted in batch requests" });
         }
       }
       const port = process.env.PORT || 5000;
       const results = await Promise.all(
         requests.map(async (r: { url: string }) => {
           try {
-            const url = new URL(r.url, `http://localhost:${port}`);
-            const response = await fetch(url.toString(), {
+            const decoded = decodeURIComponent(r.url);
+            const pathOnly = decoded.split("?")[0].replace(/\/+/g, "/");
+            const queryString = decoded.includes("?") ? "?" + decoded.split("?")[1] : "";
+            const fullUrl = `http://127.0.0.1:${port}${pathOnly}${queryString}`;
+            const response = await fetch(fullUrl, {
               headers: {
                 cookie: req.headers.cookie || "",
                 "x-batch-request": "1",
               },
+              redirect: "error",
             });
             const data = await response.json();
             return { url: r.url, status: response.status, data };
           } catch (e: any) {
-            return { url: r.url, status: 500, data: { error: e.message } };
+            return { url: r.url, status: 500, data: { error: "Request failed" } };
           }
         })
       );
       res.json({ results });
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      console.error("Batch API error:", e);
+      res.status(500).json({ error: "فشل في تنفيذ الطلبات المجمعة" });
     }
   });
 
@@ -334,11 +344,14 @@ export async function registerRoutes(
         return res.status(400).json({ error: "اسم المستخدم يجب أن يكون بين 3 و 50 حرفاً" });
       }
       
-      if (password.length < 6) {
-        return res.status(400).json({ error: "كلمة المرور يجب أن تكون 6 أحرف على الأقل" });
+      if (password.length < 8) {
+        return res.status(400).json({ error: "كلمة المرور يجب أن تكون 8 أحرف على الأقل" });
       }
       if (password.length > 128) {
         return res.status(400).json({ error: "كلمة المرور طويلة جداً" });
+      }
+      if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password)) {
+        return res.status(400).json({ error: "كلمة المرور يجب أن تحتوي على حروف كبيرة وصغيرة وأرقام" });
       }
       
       const existingUser = await storage.getUserByUsername(username);
@@ -426,7 +439,18 @@ export async function registerRoutes(
         }
         updateData.role = role;
       }
-      if (password) updateData.password = password;
+      if (password) {
+        if (password.length < 8) {
+          return res.status(400).json({ error: "كلمة المرور يجب أن تكون 8 أحرف على الأقل" });
+        }
+        if (password.length > 128) {
+          return res.status(400).json({ error: "كلمة المرور طويلة جداً" });
+        }
+        if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password)) {
+          return res.status(400).json({ error: "كلمة المرور يجب أن تحتوي على حروف كبيرة وصغيرة وأرقام" });
+        }
+        updateData.password = password;
+      }
       
       // Handle branch assignment
       let grantAllBranches = false;
@@ -4531,11 +4555,14 @@ export async function registerRoutes(
         return res.status(400).json({ error: "اسم المستخدم يجب أن يكون بين 3 و 50 حرفاً" });
       }
       
-      if (password.length < 6) {
-        return res.status(400).json({ error: "كلمة المرور يجب أن تكون 6 أحرف على الأقل" });
+      if (password.length < 8) {
+        return res.status(400).json({ error: "كلمة المرور يجب أن تكون 8 أحرف على الأقل" });
       }
       if (password.length > 128) {
         return res.status(400).json({ error: "كلمة المرور طويلة جداً" });
+      }
+      if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password)) {
+        return res.status(400).json({ error: "كلمة المرور يجب أن تحتوي على حروف كبيرة وصغيرة وأرقام" });
       }
       
       if (!branchId) {
