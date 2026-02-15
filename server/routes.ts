@@ -220,6 +220,60 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/branch-cashiers", isAuthenticated, async (req, res) => {
+    try {
+      const currentUser = getCurrentUser(req);
+      if (!currentUser) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      
+      const branchId = req.query.branchId as string | undefined;
+      const allUsers = await getCachedUsers();
+      
+      if (isUserAdmin(req)) {
+        if (branchId && branchId !== "all") {
+          const branchAccessList = await db.select().from(userBranchAccess).where(eq(userBranchAccess.branchId, branchId));
+          const branchUserIds = new Set(branchAccessList.map(ba => ba.userId));
+          const filtered = allUsers.filter((u: any) => branchUserIds.has(u.id) || u.branchId === branchId);
+          return res.json(filtered.map((u: any) => ({ id: u.id, username: u.username, firstName: u.firstName, lastName: u.lastName })));
+        }
+        return res.json(allUsers.map((u: any) => ({ id: u.id, username: u.username, firstName: u.firstName, lastName: u.lastName })));
+      }
+      
+      const userBranches = await storage.getUserBranchAccess(currentUser.id);
+      const allowedBranchIds = userBranches.length > 0 
+        ? userBranches.map(b => b.branchId) 
+        : (currentUser.branchId ? [currentUser.branchId] : []);
+      
+      if (allowedBranchIds.length === 0) {
+        return res.json([]);
+      }
+      
+      const targetBranches = branchId && branchId !== "all" && allowedBranchIds.includes(branchId)
+        ? [branchId]
+        : allowedBranchIds;
+      
+      const branchAccessList = await db.select().from(userBranchAccess);
+      const branchUserIds = new Set<string>();
+      for (const ba of branchAccessList) {
+        if (targetBranches.includes(ba.branchId)) {
+          branchUserIds.add(ba.userId);
+        }
+      }
+      for (const u of allUsers) {
+        if (u.branchId && targetBranches.includes(u.branchId)) {
+          branchUserIds.add(u.id);
+        }
+      }
+      
+      const filtered = allUsers.filter((u: any) => branchUserIds.has(u.id));
+      res.json(filtered.map((u: any) => ({ id: u.id, username: u.username, firstName: u.firstName, lastName: u.lastName })));
+    } catch (error) {
+      console.error("Error fetching branch cashiers:", error);
+      res.status(500).json({ error: "Failed to fetch cashiers" });
+    }
+  });
+
   app.post("/api/users", isAuthenticated, requirePermission("users", "create"), async (req, res) => {
     try {
       const { username, password, firstName, lastName, role, branchId } = req.body;

@@ -162,7 +162,7 @@ export default function CashierShiftPerformance() {
   }, [user, canViewAllCashiers]);
 
   const { data: allUsers = [] } = useQuery<User[]>({
-    queryKey: ["/api/users"],
+    queryKey: ["/api/branch-cashiers"],
     enabled: canViewAllCashiers,
   });
 

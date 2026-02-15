@@ -140,7 +140,7 @@ export default function TimesheetPage() {
   }, [userBranchId, selectedBranch]);
 
   const { data: allUsers = [] } = useQuery<User[]>({
-    queryKey: ["/api/users"],
+    queryKey: [`/api/branch-cashiers${selectedBranch && selectedBranch !== "all" ? `?branchId=${selectedBranch}` : ""}`],
   });
 
   // Fetch branch employees - always fetch to combine with users

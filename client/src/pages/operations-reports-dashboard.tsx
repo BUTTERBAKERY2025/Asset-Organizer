@@ -748,9 +748,10 @@ export default function OperationsReportsDashboardPage() {
     }
   }, [userBranchId, filters.branchId]);
 
-  // Query for users (cashiers)
+  // Query for users (cashiers) - uses branch-specific endpoint accessible to all authenticated users
+  const cashierBranchParam = filters.branchId ? `?branchId=${filters.branchId}` : "";
   const { data: users } = useQuery<{ id: string; username: string; firstName: string | null; lastName: string | null }[]>({
-    queryKey: ["/api/users"],
+    queryKey: [`/api/branch-cashiers${cashierBranchParam}`],
   });
 
   const queryString = new URLSearchParams({

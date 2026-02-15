@@ -224,7 +224,7 @@ export default function IncentivesManagement() {
   });
 
   const { data: allUsers = [] } = useQuery<any[]>({
-    queryKey: ["/api/users"],
+    queryKey: ["/api/branch-cashiers"],
   });
 
   const ledgerQueryEnabled = !!walletCashierId;
