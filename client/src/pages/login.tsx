@@ -17,6 +17,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
+  const [honeypot, setHoneypot] = useState("");
+  const [formKey, setFormKey] = useState(0);
   
   const { setupInteractionListener } = useWelcomeSound("systemWelcomeSound");
 
@@ -34,15 +36,21 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
     
+    if (honeypot) {
+      setError("فشل تسجيل الدخول");
+      return;
+    }
+    
     try {
       const userData = await login({ username, password, rememberMe });
-      // Redirect attendance_clerk directly to attendance-check page
       if (userData?.role === "attendance_clerk") {
         setLocation("/attendance-check");
       } else {
         setLocation("/");
       }
     } catch (err: any) {
+      setPassword("");
+      setFormKey(prev => prev + 1);
       setError(err.message || "فشل تسجيل الدخول");
     }
   };
@@ -147,7 +155,16 @@ export default function LoginPage() {
                 <p className="text-[#1a3a2f]/50 text-[10px] sm:text-xs mt-1">Only Authorized Persons</p>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5" dir="rtl" autoComplete="off">
+              <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5" dir="rtl" autoComplete="off" key={formKey}>
+                <input
+                  type="text"
+                  name="website_url"
+                  value={honeypot}
+                  onChange={(e) => setHoneypot(e.target.value)}
+                  tabIndex={-1}
+                  aria-hidden="true"
+                  style={{ position: 'absolute', left: '-9999px', opacity: 0, height: 0, width: 0 }}
+                />
                 <div>
                   <Input
                     id="username"
@@ -156,10 +173,15 @@ export default function LoginPage() {
                     placeholder="اسم المستخدم"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
+                    onFocus={(e) => e.target.removeAttribute('readonly')}
+                    readOnly
                     autoComplete="off"
                     className="h-11 sm:h-12 bg-[#F5F0E6] border-[#1a3a2f]/20 text-[#1a3a2f] placeholder:text-[#1a3a2f]/40 focus:border-[#e67e22] focus:ring-[#e67e22]/20 rounded-xl text-right text-sm sm:text-base"
                     data-testid="input-username"
                     required
+                    data-lpignore="true"
+                    data-1p-ignore="true"
+                    data-form-type="other"
                   />
                 </div>
                 
@@ -171,10 +193,15 @@ export default function LoginPage() {
                     placeholder="كلمة المرور"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    onFocus={(e) => e.target.removeAttribute('readonly')}
+                    readOnly
                     autoComplete="new-password"
                     className="h-11 sm:h-12 bg-[#F5F0E6] border-[#1a3a2f]/20 text-[#1a3a2f] placeholder:text-[#1a3a2f]/40 focus:border-[#e67e22] focus:ring-[#e67e22]/20 rounded-xl text-right text-sm sm:text-base"
                     data-testid="input-password"
                     required
+                    data-lpignore="true"
+                    data-1p-ignore="true"
+                    data-form-type="other"
                   />
                 </div>
 

@@ -70,7 +70,18 @@ declare module "express-session" {
     userId?: string;
     activeBranchId?: string;
     lastActivity?: number;
+    fingerprint?: string;
+    createdAt?: number;
+    ipAddress?: string;
   }
+}
+
+import crypto from "crypto";
+
+function generateSessionFingerprint(req: any): string {
+  const ua = req.headers['user-agent'] || '';
+  const uaCore = ua.replace(/\d+[\._]\d+[\._]?\d*/g, 'X');
+  return crypto.createHash('sha256').update(uaCore).digest('hex').substring(0, 32);
 }
 
 const isProduction = process.env.NODE_ENV === "production";
@@ -112,6 +123,7 @@ export const loginRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: false,
+  validate: { trustProxy: false, xForwardedForHeader: false },
 });
 
 export const apiRateLimiter = rateLimit({
@@ -267,6 +279,9 @@ export async function setupAuth(app: Express) {
           
           req.session.userId = user.id;
           req.session.lastActivity = Date.now();
+          req.session.fingerprint = generateSessionFingerprint(req);
+          req.session.createdAt = Date.now();
+          req.session.ipAddress = clientIp;
           
           if (rememberMe) {
             req.session.cookie.maxAge = 24 * 60 * 60 * 1000;
@@ -325,6 +340,14 @@ export async function setupAuth(app: Express) {
                   lastActivityAt: new Date(),
                   expiresAt: sessionExpiry,
                 });
+                
+                // SECURITY: Invalidate all OTHER sessions for this user (single session enforcement)
+                try {
+                  const currentSessionId = req.sessionID;
+                  await storage.invalidateAllUserSessionsExcept(user.id, currentSessionId);
+                } catch (e) {
+                  console.warn("Failed to invalidate old sessions:", e);
+                }
               } catch (logError) {
                 console.error("Failed to create audit log for login:", logError);
               }
@@ -357,6 +380,11 @@ export async function setupAuth(app: Express) {
 
   // Get current user
   app.get("/api/auth/me", async (req, res) => {
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, private',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+    });
     try {
       if (!req.session.userId) {
         return res.json(null);
@@ -417,6 +445,11 @@ export async function setupAuth(app: Express) {
   });
 
   app.get("/api/auth/init", async (req, res) => {
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, private',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+    });
     try {
       if (!req.session.userId) {
         return res.json({ user: null, branches: [], permissions: [] });
@@ -561,6 +594,46 @@ export async function setupAuth(app: Express) {
     }
   });
 
+  // Re-authentication endpoint for sensitive operations
+  app.post("/api/auth/verify-password", async (req, res) => {
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, private',
+      'Pragma': 'no-cache',
+    });
+    try {
+      if (!req.session.userId) {
+        return res.status(401).json({ error: "غير مصرح" });
+      }
+      const { password } = req.body;
+      if (!password) {
+        return res.status(400).json({ error: "كلمة المرور مطلوبة" });
+      }
+      const user = await storage.getUser(req.session.userId);
+      if (!user) {
+        return res.status(401).json({ error: "غير مصرح" });
+      }
+      const bcrypt = await import("bcrypt");
+      const isValid = await bcrypt.compare(password, user.password || '');
+      if (!isValid) {
+        logSecurityAlert({
+          alertType: 'reauth_failed',
+          severity: 'medium',
+          userId: user.id,
+          userName: user.username || 'unknown',
+          module: 'auth',
+          action: 'verify_password_failed',
+          ipAddress: req.ip || req.socket?.remoteAddress,
+          userAgent: req.headers['user-agent'],
+        });
+        return res.status(403).json({ error: "كلمة المرور غير صحيحة" });
+      }
+      res.json({ verified: true });
+    } catch (error) {
+      console.error("Password verification error:", error);
+      res.status(500).json({ error: "حدث خطأ أثناء التحقق" });
+    }
+  });
+
   // Logout endpoint
   app.post("/api/auth/logout", async (req, res) => {
     const userId = req.session.userId;
@@ -608,12 +681,56 @@ export async function setupAuth(app: Express) {
   });
 }
 
+const SERVER_INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes server-side inactivity timeout
+const MAX_SESSION_AGE = 12 * 60 * 60 * 1000; // 12 hours absolute max session lifetime
+
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
   if (!req.session.userId) {
     return res.status(401).json({ message: "غير مصرح" });
   }
 
   const userId = req.session.userId;
+  const now = Date.now();
+
+  // SECURITY: Server-side inactivity timeout check
+  if (req.session.lastActivity && (now - req.session.lastActivity) > SERVER_INACTIVITY_TIMEOUT) {
+    const sessionId = req.sessionID;
+    req.session.destroy(() => {});
+    if (sessionId) storage.invalidateSession(sessionId).catch(() => {});
+    return res.status(401).json({ message: "انتهت الجلسة بسبب عدم النشاط. يرجى تسجيل الدخول مرة أخرى" });
+  }
+
+  // SECURITY: Absolute session lifetime check (prevent indefinite sessions)
+  if (req.session.createdAt && (now - req.session.createdAt) > MAX_SESSION_AGE) {
+    const sessionId = req.sessionID;
+    req.session.destroy(() => {});
+    if (sessionId) storage.invalidateSession(sessionId).catch(() => {});
+    return res.status(401).json({ message: "انتهت صلاحية الجلسة. يرجى تسجيل الدخول مرة أخرى" });
+  }
+
+  // SECURITY: Session fingerprint validation - prevent session hijacking
+  if (req.session.fingerprint) {
+    const currentFingerprint = generateSessionFingerprint(req);
+    if (req.session.fingerprint !== currentFingerprint) {
+      console.warn(`[Security] Session fingerprint mismatch for user ${userId}. Expected: ${req.session.fingerprint.substring(0,8)}..., Got: ${currentFingerprint.substring(0,8)}...`);
+      logSecurityAlert({
+        alertType: 'session_hijack_attempt',
+        severity: 'critical',
+        userId,
+        module: 'auth',
+        action: 'session_fingerprint_mismatch',
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers['user-agent'],
+      });
+      const sessionId = req.sessionID;
+      req.session.destroy(() => {});
+      if (sessionId) storage.invalidateSession(sessionId).catch(() => {});
+      return res.status(401).json({ message: "تم اكتشاف تغيير في بصمة الجلسة. يرجى تسجيل الدخول مرة أخرى" });
+    }
+  }
+
+  // Update last activity timestamp
+  req.session.lastActivity = now;
 
   // Check in-memory cache first (eliminates DB queries for 30s)
   const cached = getCachedAuth(userId);
@@ -631,7 +748,6 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     // Throttled session activity update (also on cache hits)
     if (req.sessionID) {
       const lastUpdate = sessionActivityThrottle.get(req.sessionID);
-      const now = Date.now();
       if (!lastUpdate || now - lastUpdate > 60_000) {
         sessionActivityThrottle.set(req.sessionID, now);
         storage.updateSessionActivity(req.sessionID).catch(() => {});

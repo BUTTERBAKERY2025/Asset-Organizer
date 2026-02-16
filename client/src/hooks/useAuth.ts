@@ -23,17 +23,24 @@ export function useAuth() {
   const { data: user, isLoading } = useQuery<AuthUser | null>({
     queryKey: ["/api/auth/me"],
     queryFn: async () => {
-      const res = await fetch("/api/auth/me", { credentials: "include" });
+      const res = await fetch("/api/auth/me", {
+        credentials: "include",
+        headers: { 'Cache-Control': 'no-cache' },
+      });
+      if (res.status === 401 || res.status === 403) {
+        queryClient.setQueryData(["/api/auth/me"], null);
+        return null;
+      }
       if (!res.ok) return null;
       return res.json();
     },
     retry: 1,
     retryDelay: 500,
-    staleTime: 1000 * 60 * 5, // 5 minutes - balance between performance and session freshness
-    gcTime: 1000 * 60 * 30, // 30 minutes
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
-    refetchOnReconnect: false,
+    staleTime: 1000 * 60 * 5,
+    gcTime: 1000 * 60 * 30,
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
+    refetchOnReconnect: true,
   });
 
   const loginMutation = useMutation({

@@ -524,6 +524,14 @@ export async function registerRoutes(
       }
       
       invalidateAuthCache(req.params.id);
+      // SECURITY: Force logout when password or role changes
+      if (password || role !== undefined || isActive === 'inactive') {
+        try {
+          await storage.invalidateAllUserSessions(req.params.id);
+        } catch (e) {
+          console.warn("Failed to invalidate user sessions after update:", e);
+        }
+      }
       const { password: _, ...safeUser } = user;
       res.json(safeUser);
     } catch (error) {
@@ -544,6 +552,9 @@ export async function registerRoutes(
         return res.status(404).json({ error: "User not found" });
       }
       invalidateAuthCache(req.params.id);
+      try {
+        await storage.invalidateAllUserSessions(req.params.id);
+      } catch (e) {}
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting user:", error);
