@@ -332,6 +332,40 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/branch-staff", isAuthenticated, async (req, res) => {
+    try {
+      const currentUser = getCurrentUser(req);
+      if (!currentUser) return res.status(401).json({ error: "Not authenticated" });
+      const branchId = req.query.branchId as string | undefined;
+      if (!branchId) return res.json([]);
+      
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, branchId);
+        if (!hasAccess) return res.json([]);
+      }
+      
+      const allUsers = await getCachedUsers();
+      const branchAccessList = await db.select().from(userBranchAccess).where(eq(userBranchAccess.branchId, branchId));
+      const branchUserIds = new Set(branchAccessList.map(ba => ba.userId));
+      
+      const filtered = allUsers.filter((u: any) => 
+        (branchUserIds.has(u.id) || u.branchId === branchId) && u.isActive === "active"
+      );
+      
+      res.json(filtered.map((u: any) => ({
+        id: u.id,
+        username: u.username,
+        firstName: u.firstName || "",
+        lastName: u.lastName || "",
+        role: u.role || "employee",
+        jobTitle: u.jobTitle || "",
+      })));
+    } catch (error) {
+      console.error("Error fetching branch staff:", error);
+      res.status(500).json({ error: "Failed to fetch staff" });
+    }
+  });
+
   app.post("/api/users", isAuthenticated, requirePermission("users", "create"), async (req, res) => {
     try {
       const { username, password, firstName, lastName, role, branchId } = req.body;

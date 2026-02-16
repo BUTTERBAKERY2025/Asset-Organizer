@@ -649,7 +649,7 @@ export default function ShiftReportsPage() {
                                   size="sm"
                                   onClick={() => openReport(shift, "closing")}
                                   disabled={!shift.closingCompleted && !shift.openingCompleted}
-                                  className={`h-7 px-2 text-[10px] ${shift.closingCompleted ? "text-green-700 hover:bg-green-100 font-semibold" : shift.openingCompleted ? "text-blue-700 hover:bg-blue-100" : "text-gray-300"}`}
+                                  className={`h-7 px-2 text-[10px] ${shift.closingCompleted ? "text-green-700 hover:bg-green-100 font-semibold" : shift.openingCompleted ? "text-blue-700 hover:bg-blue-100" : "text-gray-400"}`}
                                   data-testid={`btn-view-closing-${shift.id}`}
                                 >
                                   <Eye className="h-3 w-3 ml-0.5" />
@@ -1053,7 +1053,7 @@ export default function ShiftReportsPage() {
                   </div>
                   <div>
                     <p className="text-lg font-bold">تقرير {reportType === "opening" ? "الفتح" : "الإغلاق"}</p>
-                    <p className="text-amber-100 text-xs font-normal">{getBranchName(selectedShift?.branchId || "")} - {selectedShift?.shiftDate}</p>
+                    <p className="text-white/90 text-xs font-normal">{getBranchName(selectedShift?.branchId || "")} - {selectedShift?.shiftDate}</p>
                   </div>
                 </div>
                 <Button onClick={() => handlePrint()} className="gap-2 bg-white/20 hover:bg-white/30 border border-white/30 text-white" data-testid="btn-print-report">
@@ -1164,7 +1164,7 @@ export default function ShiftReportsPage() {
                                 />
                               ) : (
                                 <div className="h-12 w-12 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center">
-                                  <Camera className="h-4 w-4 text-gray-300" />
+                                  <Camera className="h-4 w-4 text-gray-400" />
                                 </div>
                               )}
                             </div>

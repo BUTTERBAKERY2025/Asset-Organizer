@@ -233,12 +233,11 @@ export default function BranchShiftsPage() {
   });
 
   const { data: branchEmployees = [] } = useQuery<any[]>({
-    queryKey: ["/api/users", "branch-employees", selectedBranch],
+    queryKey: ["/api/branch-staff", selectedBranch],
     queryFn: async () => {
-      const res = await fetch(`/api/users?branchId=${selectedBranch}`, { credentials: "include" });
+      const res = await fetch(`/api/branch-staff?branchId=${selectedBranch}`, { credentials: "include" });
       if (!res.ok) return [];
-      const users = await res.json();
-      return users.filter((u: any) => u.branchId === selectedBranch && u.isActive === "active");
+      return res.json();
     },
     enabled: !!selectedBranch,
     staleTime: 15000,
@@ -459,7 +458,7 @@ export default function BranchShiftsPage() {
               </Link>
               <div>
                 <h1 className="text-xl sm:text-2xl font-bold" data-testid="text-page-title">نظام فتح وإغلاق الفروع</h1>
-                <p className="text-amber-100 text-sm mt-0.5">قوائم التحقق اليومية مع التوثيق المصور</p>
+                <p className="text-white/90 text-sm mt-0.5">قوائم التحقق اليومية مع التوثيق المصور</p>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -529,7 +528,7 @@ export default function BranchShiftsPage() {
                         {branch.closingStatus === "completed" ? <span>تم الإغلاق {closingTime && <span className="text-[10px] font-mono" dir="ltr">{closingTime}</span>}</span> : "لم يغلق"}
                       </div>
                     </div>
-                    {branch.shift?.supervisorName && <p className="text-[10px] text-gray-400 mt-1.5 truncate">{branch.shift.supervisorName}</p>}
+                    {branch.shift?.supervisorName && <p className="text-[11px] text-gray-600 mt-1.5 truncate">{branch.shift.supervisorName}</p>}
                   </div>
                 );
               })}
@@ -657,17 +656,17 @@ export default function BranchShiftsPage() {
                   <div className="text-center">
                     <p className="text-3xl font-bold text-amber-600">{Math.round(progressPercentage)}%</p>
                     <p className="text-xs text-gray-500">البنود المكتملة</p>
-                    <p className="text-xs text-gray-400">{completedItems}/{totalItems}</p>
+                    <p className="text-xs text-gray-500">{completedItems}/{totalItems}</p>
                   </div>
                   <div className="text-center">
                     <p className={`text-3xl font-bold ${photosPercentage === 100 ? "text-green-600" : "text-red-500"}`}>{photosUploaded}</p>
                     <p className="text-xs text-gray-500">الصور المرفقة</p>
-                    <p className="text-xs text-gray-400">من {totalItems}</p>
+                    <p className="text-xs text-gray-500">من {totalItems}</p>
                   </div>
                   <div className="text-center">
                     <p className={`text-3xl font-bold ${hasSignature ? "text-green-600" : "text-red-500"}`}>{hasSignature ? "✓" : "✗"}</p>
                     <p className="text-xs text-gray-500">التوقيع</p>
-                    <p className="text-xs text-gray-400">{hasSignature ? "تم" : "مطلوب"}</p>
+                    <p className="text-xs text-gray-500">{hasSignature ? "تم" : "مطلوب"}</p>
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -708,7 +707,7 @@ export default function BranchShiftsPage() {
                             <p className="font-bold text-sm sm:text-base">{template.name}</p>
                             <div className="flex items-center gap-2 mt-0.5">
                               <span className="text-xs text-gray-500">{template.items.length} بند</span>
-                              <span className="text-xs text-gray-300">|</span>
+                              <span className="text-xs text-gray-400">|</span>
                               <span className={`text-xs flex items-center gap-0.5 ${templatePhotos === template.items.length ? "text-green-600" : "text-red-500"}`}>
                                 <Camera className="h-3 w-3" />{templatePhotos}/{template.items.length}
                               </span>
