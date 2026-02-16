@@ -757,6 +757,7 @@ export default function UsersPage() {
                     className="text-left h-11 sm:h-10"
                     dir="ltr"
                     required
+                    autoComplete="new-password"
                     data-testid="input-password"
                   />
                 </div>
@@ -1514,6 +1515,7 @@ export default function UsersPage() {
                 placeholder="اتركها فارغة للإبقاء على كلمة المرور الحالية"
                 className="text-left"
                 dir="ltr"
+                autoComplete="new-password"
                 data-testid="input-edit-password"
               />
               <p className="text-xs text-muted-foreground">اتركها فارغة إذا لم ترد تغيير كلمة المرور</p>
@@ -1621,6 +1623,7 @@ export default function UsersPage() {
                 placeholder="أدخل كلمة المرور الجديدة"
                 className="text-left"
                 dir="ltr"
+                autoComplete="new-password"
                 data-testid="input-new-password"
               />
               <p className="text-xs text-muted-foreground">يجب أن تكون كلمة المرور قوية وآمنة</p>

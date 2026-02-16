@@ -176,7 +176,6 @@ export function getSession() {
     cookie: {
       httpOnly: true,
       secure: isProduction,
-      maxAge: sessionTtl,
       sameSite: isProduction ? "strict" : "lax",
       path: "/",
     },
@@ -227,6 +226,10 @@ export async function setupAuth(app: Express) {
   // Rate limiting and CSRF/origin validation are applied globally in index.ts
 
   app.post("/api/auth/login", loginRateLimiter, async (req, res) => {
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
+      'Pragma': 'no-cache',
+    });
     try {
       const { username, password, rememberMe } = req.body;
       
@@ -268,7 +271,8 @@ export async function setupAuth(app: Express) {
           if (rememberMe) {
             req.session.cookie.maxAge = 24 * 60 * 60 * 1000;
           } else {
-            req.session.cookie.maxAge = 8 * 60 * 60 * 1000;
+            req.session.cookie.maxAge = undefined as any;
+            req.session.cookie.expires = undefined as any;
           }
         
           const userBranches = await storage.getUserBranchAccess(user.id);

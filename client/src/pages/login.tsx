@@ -147,14 +147,16 @@ export default function LoginPage() {
                 <p className="text-[#1a3a2f]/50 text-[10px] sm:text-xs mt-1">Only Authorized Persons</p>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5" dir="rtl">
+              <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5" dir="rtl" autoComplete="off">
                 <div>
                   <Input
                     id="username"
+                    name="btr_user_field"
                     type="text"
                     placeholder="اسم المستخدم"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
+                    autoComplete="off"
                     className="h-11 sm:h-12 bg-[#F5F0E6] border-[#1a3a2f]/20 text-[#1a3a2f] placeholder:text-[#1a3a2f]/40 focus:border-[#e67e22] focus:ring-[#e67e22]/20 rounded-xl text-right text-sm sm:text-base"
                     data-testid="input-username"
                     required
@@ -164,10 +166,12 @@ export default function LoginPage() {
                 <div>
                   <Input
                     id="password"
+                    name="btr_pass_field"
                     type="password"
                     placeholder="كلمة المرور"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    autoComplete="new-password"
                     className="h-11 sm:h-12 bg-[#F5F0E6] border-[#1a3a2f]/20 text-[#1a3a2f] placeholder:text-[#1a3a2f]/40 focus:border-[#e67e22] focus:ring-[#e67e22]/20 rounded-xl text-right text-sm sm:text-base"
                     data-testid="input-password"
                     required
