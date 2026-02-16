@@ -41,6 +41,9 @@ import {
   AlertTriangle,
   Table,
   Eye,
+  DoorOpen,
+  DoorClosed,
+  PenTool,
 } from "lucide-react";
 
 interface Branch {
@@ -1041,152 +1044,194 @@ export default function ShiftReportsPage() {
         </Tabs>
 
         <Dialog open={!!selectedShift} onOpenChange={() => setSelectedShift(null)}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="flex items-center justify-between">
-                <span>
-                  تقرير {reportType === "opening" ? "الفتح" : "الإغلاق"} - {getBranchName(selectedShift?.branchId || "")}
-                </span>
-                <Button onClick={() => handlePrint()} className="gap-2" data-testid="btn-print-report">
+          <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto p-0">
+            <DialogHeader className="sticky top-0 z-10 bg-gradient-to-l from-amber-600 via-amber-500 to-orange-500 p-4 sm:p-5 text-white rounded-t-lg">
+              <DialogTitle className="flex items-center justify-between text-white">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-white/20 rounded-xl">
+                    {reportType === "opening" ? <DoorOpen className="h-5 w-5" /> : <DoorClosed className="h-5 w-5" />}
+                  </div>
+                  <div>
+                    <p className="text-lg font-bold">تقرير {reportType === "opening" ? "الفتح" : "الإغلاق"}</p>
+                    <p className="text-amber-100 text-xs font-normal">{getBranchName(selectedShift?.branchId || "")} - {selectedShift?.shiftDate}</p>
+                  </div>
+                </div>
+                <Button onClick={() => handlePrint()} className="gap-2 bg-white/20 hover:bg-white/30 border border-white/30 text-white" data-testid="btn-print-report">
                   <Printer className="h-4 w-4" />
                   طباعة
                 </Button>
               </DialogTitle>
             </DialogHeader>
 
-            <div ref={printRef} className="p-4 print:p-8" dir="rtl">
-              <div className="text-center mb-6 print:mb-8">
-                <h1 className="text-2xl font-bold mb-2">شركة الزبد الأفضل التجارية</h1>
+            <div ref={printRef} className="p-4 sm:p-6 print:p-8" dir="rtl">
+              <div className="text-center mb-6 print:mb-8 hidden print:block">
+                <h1 className="text-2xl font-bold mb-1">شركة الزبد الأفضل التجارية</h1>
                 <h2 className="text-xl font-semibold text-amber-600">BUTTER BAKERY</h2>
-                <h3 className="text-lg mt-4">
-                  تقرير {reportType === "opening" ? "فتح" : "إغلاق"} الفرع
-                </h3>
+                <div className="w-32 h-1 bg-amber-500 mx-auto mt-3 mb-4 rounded-full" />
+                <h3 className="text-lg">تقرير {reportType === "opening" ? "فتح" : "إغلاق"} الفرع</h3>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 mb-6 p-4 bg-gray-50 rounded-lg print:bg-white print:border">
-                <div>
-                  <span className="text-muted-foreground">الفرع:</span>
-                  <span className="font-semibold mr-2">{getBranchName(selectedShift?.branchId || "")}</span>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6 p-4 bg-gradient-to-l from-amber-50/60 to-white rounded-xl border-2 border-amber-200 print:bg-white print:border">
+                <div className="space-y-1">
+                  <span className="text-xs text-gray-500 block">الفرع</span>
+                  <span className="font-bold text-sm block">{getBranchName(selectedShift?.branchId || "")}</span>
                 </div>
-                <div>
-                  <span className="text-muted-foreground">التاريخ:</span>
-                  <span className="font-semibold mr-2">{selectedShift?.shiftDate}</span>
+                <div className="space-y-1">
+                  <span className="text-xs text-gray-500 block">التاريخ</span>
+                  <span className="font-bold text-sm block">{selectedShift?.shiftDate}</span>
                 </div>
-                <div>
-                  <span className="text-muted-foreground">نوع الشفت:</span>
-                  <span className="font-semibold mr-2">{getShiftTypeName(selectedShift?.shiftType || "")}</span>
+                <div className="space-y-1">
+                  <span className="text-xs text-gray-500 block">نوع الشفت</span>
+                  <Badge className={`text-white text-xs ${getShiftTypeColor(selectedShift?.shiftType || "")}`}>{getShiftTypeName(selectedShift?.shiftType || "")}</Badge>
                 </div>
-                <div>
-                  <span className="text-muted-foreground">المشرف:</span>
-                  <span className="font-semibold mr-2">{selectedShift?.supervisorName || "-"}</span>
+                <div className="space-y-1">
+                  <span className="text-xs text-gray-500 block">المشرف</span>
+                  <span className="font-bold text-sm block">{selectedShift?.supervisorName || "-"}</span>
                 </div>
-                <div>
-                  <span className="text-muted-foreground">عدد الموظفين:</span>
-                  <span className="font-semibold mr-2">{selectedShift?.employeeCount || "-"}</span>
+                <div className="space-y-1">
+                  <span className="text-xs text-gray-500 block">عدد الموظفين</span>
+                  <span className="font-bold text-sm block">{selectedShift?.employeeCount || "-"}</span>
                 </div>
-                <div>
-                  <span className="text-muted-foreground">وقت الإكمال:</span>
-                  <span className="font-semibold mr-2">
+                <div className="space-y-1">
+                  <span className="text-xs text-gray-500 block">وقت الإكمال</span>
+                  <span className="font-bold text-sm block">
                     {reportType === "opening"
                       ? selectedShift?.openingCompletedAt
-                        ? new Date(selectedShift.openingCompletedAt).toLocaleString("en-GB")
+                        ? new Date(selectedShift.openingCompletedAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true })
                         : "-"
                       : selectedShift?.closingCompletedAt
-                        ? new Date(selectedShift.closingCompletedAt).toLocaleString("en-GB")
+                        ? new Date(selectedShift.closingCompletedAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true })
                         : "-"}
                   </span>
                 </div>
-                <div className="col-span-2">
-                  <span className="text-muted-foreground">نسبة الإكمال:</span>
-                  <span className="font-semibold mr-2">{completionPercentage}%</span>
-                  <Progress value={completionPercentage} className="mt-2 h-2" />
+                <div className="col-span-2 sm:col-span-3 pt-2 border-t mt-1">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs text-gray-500">نسبة الإكمال</span>
+                    <span className={`text-sm font-bold ${completionPercentage === 100 ? "text-green-600" : "text-amber-600"}`}>{completionPercentage}%</span>
+                  </div>
+                  <Progress value={completionPercentage} className={`h-2.5 ${completionPercentage === 100 ? '[&>div]:bg-green-500' : ''}`} />
                 </div>
               </div>
 
-              <Separator className="my-6" />
-
               {responsesLoading ? (
-                <div className="flex items-center justify-center py-8">
+                <div className="flex items-center justify-center py-12">
                   <Loader2 className="h-8 w-8 animate-spin text-amber-600" />
-                  <span className="mr-2">جاري تحميل البيانات...</span>
+                  <span className="mr-3 text-gray-500">جاري تحميل البيانات...</span>
                 </div>
-              ) : filteredTemplates.map((template) => (
-                <div key={template.id} className="mb-6">
-                  <h4 className="font-semibold text-lg mb-3 text-amber-700">{template.name}</h4>
-                  <table className="w-full border-collapse">
-                    <thead>
-                      <tr className="bg-gray-100 print:bg-gray-200">
-                        <th className="border p-2 text-right w-8">#</th>
-                        <th className="border p-2 text-right">البند</th>
-                        <th className="border p-2 text-center w-20">الحالة</th>
-                        <th className="border p-2 text-center w-20">صورة</th>
-                        <th className="border p-2 text-right">ملاحظات</th>
-                      </tr>
-                    </thead>
-                    <tbody>
+              ) : filteredTemplates.map((template) => {
+                const templateResponses = template.items.map(item => getResponseForItem(item.id));
+                const templateCompleted = templateResponses.filter(r => r?.isCompleted).length;
+                const templatePhotos = templateResponses.filter(r => r?.photoUrl).length;
+                return (
+                  <div key={template.id} className="mb-6 print:break-inside-avoid">
+                    <div className="flex items-center justify-between mb-3 p-3 bg-gradient-to-l from-amber-100 to-amber-50 rounded-xl border border-amber-200">
+                      <h4 className="font-bold text-base text-amber-800">{template.name}</h4>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-xs bg-white">
+                          <CheckCircle2 className="h-3 w-3 ml-1 text-green-600" />
+                          {templateCompleted}/{template.items.length}
+                        </Badge>
+                        <Badge variant="outline" className="text-xs bg-white">
+                          <Camera className="h-3 w-3 ml-1 text-blue-600" />
+                          {templatePhotos}/{template.items.length}
+                        </Badge>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
                       {template.items.map((item, idx) => {
                         const response = getResponseForItem(item.id);
                         return (
-                          <tr key={item.id} className="hover:bg-gray-50">
-                            <td className="border p-2 text-center">{idx + 1}</td>
-                            <td className="border p-2">{item.title}</td>
-                            <td className="border p-2 text-center">
-                              {response?.isCompleted ? (
-                                <CheckCircle2 className="h-5 w-5 text-green-600 mx-auto" />
-                              ) : (
-                                <XCircle className="h-5 w-5 text-red-500 mx-auto" />
+                          <div key={item.id} className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${response?.isCompleted ? "bg-green-50/50 border-green-200" : "bg-red-50/50 border-red-200"}`}>
+                            <div className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${response?.isCompleted ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"}`}>
+                              {idx + 1}
+                            </div>
+                            <span className="flex-1 text-sm leading-snug">{item.title}</span>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {response?.notes && (
+                                <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-lg">{response.notes}</span>
                               )}
-                            </td>
-                            <td className="border p-2 text-center">
+                              {response?.isCompleted ? (
+                                <CheckCircle2 className="h-5 w-5 text-green-600" />
+                              ) : (
+                                <XCircle className="h-5 w-5 text-red-500" />
+                              )}
                               {response?.photoUrl ? (
                                 <img
                                   src={response.photoUrl}
-                                  alt="صورة البند"
-                                  className="h-16 w-16 object-cover rounded mx-auto cursor-pointer hover:opacity-80 hover:ring-2 hover:ring-amber-400 transition-all"
+                                  alt=""
+                                  className="h-12 w-12 object-cover rounded-lg border-2 border-green-400 cursor-pointer hover:scale-110 transition-transform shadow-sm"
                                   onClick={() => setPreviewImage(response.photoUrl || null)}
                                 />
                               ) : (
-                                <span className="text-muted-foreground">-</span>
+                                <div className="h-12 w-12 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center">
+                                  <Camera className="h-4 w-4 text-gray-300" />
+                                </div>
                               )}
-                            </td>
-                            <td className="border p-2 text-sm">{response?.notes || "-"}</td>
-                          </tr>
+                            </div>
+                          </div>
                         );
                       })}
-                    </tbody>
-                  </table>
-                </div>
-              ))}
+                    </div>
+
+                    {templatePhotos > 0 && (
+                      <div className="mt-3 p-3 bg-gray-50 rounded-xl border print:break-inside-avoid">
+                        <p className="text-xs font-bold text-gray-500 mb-2 flex items-center gap-1">
+                          <Camera className="h-3.5 w-3.5" />
+                          معرض الصور - {template.name}
+                        </p>
+                        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                          {template.items.map((item, idx) => {
+                            const response = getResponseForItem(item.id);
+                            if (!response?.photoUrl) return null;
+                            return (
+                              <div key={item.id} className="relative group cursor-pointer" onClick={() => setPreviewImage(response.photoUrl || null)}>
+                                <img src={response.photoUrl} alt="" className="w-full aspect-square object-cover rounded-lg border-2 border-gray-200 group-hover:border-amber-400 transition-all shadow-sm" />
+                                <div className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[9px] p-1 rounded-b-lg text-center truncate">
+                                  {idx + 1}. {item.title}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
 
               {shiftSignatures.length > 0 && (
-                <>
-                  <Separator className="my-6" />
-                  <h4 className="font-semibold text-lg mb-4">التوقيعات</h4>
-                  <div className="grid grid-cols-2 gap-4">
+                <div className="mt-6 print:break-inside-avoid">
+                  <div className="flex items-center gap-2 mb-4 p-3 bg-gradient-to-l from-indigo-50 to-white rounded-xl border border-indigo-200">
+                    <PenTool className="h-5 w-5 text-indigo-600" />
+                    <h4 className="font-bold text-base text-indigo-800">التوقيعات</h4>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {shiftSignatures
-                      .filter((sig) => sig.signatureType === reportType)
+                      .filter((sig) => sig.signatureType === reportType || sig.signatureType === `${reportType}_supervisor`)
                       .map((sig) => (
-                        <div key={sig.id} className="border rounded-lg p-4">
-                          <div className="text-sm text-muted-foreground mb-2">
-                            {sig.signerRole} - {sig.signerName}
+                        <div key={sig.id} className="border-2 border-indigo-200 rounded-xl p-4 bg-gradient-to-b from-indigo-50 to-white">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <User className="h-4 w-4 text-indigo-600" />
+                              <span className="font-bold text-sm">{sig.signerName}</span>
+                            </div>
+                            <Badge variant="outline" className="text-xs">{sig.signerRole === "supervisor" ? "المشرف" : sig.signerRole}</Badge>
                           </div>
-                          <img
-                            src={sig.signatureData}
-                            alt="توقيع"
-                            className="max-h-20 mx-auto"
-                          />
-                          <div className="text-xs text-center text-muted-foreground mt-2">
-                            {new Date(sig.signedAt).toLocaleString("en-GB")}
+                          <div className="bg-white rounded-lg border p-3 shadow-inner">
+                            <img src={sig.signatureData} alt="توقيع" className="max-h-24 mx-auto" />
+                          </div>
+                          <div className="text-xs text-center text-gray-400 mt-2">
+                            {new Date(sig.signedAt).toLocaleString("ar-SA", { dateStyle: "medium", timeStyle: "short" })}
                           </div>
                         </div>
                       ))}
                   </div>
-                </>
+                </div>
               )}
 
-              <div className="mt-8 pt-4 border-t text-center text-sm text-muted-foreground print:mt-12">
-                <p>BUTTER BAKERY SYSTEM - CEO COMMAND</p>
-                <p>{new Date().toLocaleString("en-GB")}</p>
+              <div className="mt-8 pt-4 border-t-2 border-amber-200 text-center print:mt-12">
+                <p className="text-sm font-bold text-amber-700">BUTTER BAKERY SYSTEM</p>
+                <p className="text-xs text-gray-400 mt-1">{new Date().toLocaleString("ar-SA", { dateStyle: "full", timeStyle: "short" })}</p>
               </div>
             </div>
           </DialogContent>
