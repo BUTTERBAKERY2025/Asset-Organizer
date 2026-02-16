@@ -6808,6 +6808,12 @@ export class DatabaseStorage implements IStorage {
       .where(eq(userSessions.userId, userId));
   }
 
+  async invalidateAllUserSessionsExcept(userId: string, exceptSessionId: string): Promise<void> {
+    await db.update(userSessions)
+      .set({ isActive: false })
+      .where(and(eq(userSessions.userId, userId), sql`${userSessions.sessionId} != ${exceptSessionId}`));
+  }
+
   async getActiveSessionCount(userId: string): Promise<number> {
     const sessions = await db.select().from(userSessions)
       .where(and(eq(userSessions.userId, userId), eq(userSessions.isActive, true)));
