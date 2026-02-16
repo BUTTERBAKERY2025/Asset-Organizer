@@ -232,17 +232,6 @@ export default function BranchShiftsPage() {
     retryDelay: 1000,
   });
 
-  const { data: branchEmployees = [] } = useQuery<any[]>({
-    queryKey: ["/api/branch-staff", selectedBranch],
-    queryFn: async () => {
-      const res = await fetch(`/api/branch-staff?branchId=${selectedBranch}`, { credentials: "include" });
-      if (!res.ok) return [];
-      return res.json();
-    },
-    enabled: !!selectedBranch,
-    staleTime: 15000,
-  });
-
   useEffect(() => { setSupervisorName(""); }, [selectedBranch]);
 
   const todayDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Riyadh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
@@ -260,11 +249,6 @@ export default function BranchShiftsPage() {
   useEffect(() => {
     if (shiftEmployeeCountData?.count && shiftEmployeeCountData.count > 0) setEmployeeCount(shiftEmployeeCountData.count);
   }, [shiftEmployeeCountData]);
-
-  const branchSupervisors = branchEmployees.filter((u: any) => 
-    u.jobTitle && (u.jobTitle.includes("مشرف") || u.jobTitle.includes("مدير") || u.jobTitle.includes("supervisor") || u.jobTitle.includes("manager") || u.role === "admin" || u.role === "manager")
-  );
-  const supervisorOptions = branchSupervisors.length > 0 ? branchSupervisors : branchEmployees;
 
   const { data: templates = [], isLoading: loadingTemplates } = useQuery<TemplateWithItems[]>({
     queryKey: ["/api/branch-shifts/all-items", activeTab],
@@ -571,18 +555,7 @@ export default function BranchShiftsPage() {
                 </div>
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold">اسم المشرف / المدير *</Label>
-                  {supervisorOptions.length > 0 ? (
-                    <Select value={supervisorName} onValueChange={setSupervisorName}>
-                      <SelectTrigger className="h-11 border-2 focus:border-amber-400" data-testid="select-supervisor">
-                        <SelectValue placeholder="اختر المشرف أو المدير" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {supervisorOptions.map((user: any) => <SelectItem key={user.id} value={`${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username}>{user.firstName || ''} {user.lastName || ''} {user.jobTitle ? `- ${user.jobTitle}` : ''}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <Input value={supervisorName} onChange={(e) => setSupervisorName(e.target.value)} placeholder="أدخل اسم المشرف" className="h-11 border-2 focus:border-amber-400" data-testid="input-supervisor" />
-                  )}
+                  <Input value={supervisorName} onChange={(e) => setSupervisorName(e.target.value)} placeholder="أدخل اسم المشرف أو المدير" className="h-11 border-2 focus:border-amber-400" data-testid="input-supervisor" />
                 </div>
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold">عدد الموظفين</Label>
