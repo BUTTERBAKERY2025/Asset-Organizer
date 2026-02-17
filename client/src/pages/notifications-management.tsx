@@ -341,8 +341,8 @@ export default function NotificationsManagement() {
   }, [notifications, statusFilter, typeFilter]);
 
   return (
-    <div className="min-h-screen bg-[#F5F0E6] p-4 md:p-6" dir="rtl" style={{ fontFamily: "'Cairo', sans-serif" }}>
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="p-3 sm:p-4 md:p-6 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl" style={{ fontFamily: "'Cairo', sans-serif" }}>
+      <div className="space-y-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-gray-800 flex items-center gap-3" data-testid="page-title">
