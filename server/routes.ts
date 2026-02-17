@@ -29051,10 +29051,17 @@ export async function registerRoutes(
     try {
       const data = req.body;
       data.createdBy = (req as any).user?.id;
+      if (data.startDate && typeof data.startDate === 'string') data.startDate = new Date(data.startDate);
+      if (data.endDate && typeof data.endDate === 'string') data.endDate = new Date(data.endDate);
+      if (!data.startDate) data.startDate = null;
+      if (!data.endDate) data.endDate = null;
+      delete data.id;
+      delete data.createdAt;
+      delete data.updatedAt;
       const notification = await storage.createSystemNotification(data);
       res.status(201).json(notification);
-    } catch (error) {
-      console.error("Error creating notification:", error);
+    } catch (error: any) {
+      console.error("Error creating notification:", error?.message || error);
       res.status(500).json({ error: "فشل في إنشاء الإشعار" });
     }
   });
