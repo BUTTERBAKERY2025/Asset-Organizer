@@ -775,6 +775,27 @@ export default function NotificationsManagement() {
                   </TabsContent>
 
                   <TabsContent value="scheduling" className="mt-4 space-y-4">
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-2">
+                      <p className="text-sm text-amber-800">
+                        اتركي حقول التاريخ فارغة لتفعيل الإشعار فوراً. أو حددي تاريخ بداية ونهاية لجدولته.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 mb-2">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          data-testid="checkbox-immediate"
+                          checked={!form.startDate && !form.endDate}
+                          onChange={e => {
+                            if (e.target.checked) {
+                              updateForm({ startDate: null, endDate: null });
+                            }
+                          }}
+                          className="w-4 h-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                        />
+                        <span className="text-sm font-medium text-gray-700">تفعيل فوري (بدون جدولة)</span>
+                      </label>
+                    </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <Label className="text-sm font-medium mb-2 block">تاريخ البداية</Label>
