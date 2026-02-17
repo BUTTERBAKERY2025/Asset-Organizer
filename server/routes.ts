@@ -28488,172 +28488,6 @@ export async function registerRoutes(
     }
   });
 
-  // =====================================================
-  // نظام التنبيهات الموحدة - System Notifications API
-  // =====================================================
-
-  // Get all notifications for current user
-  app.get("/api/system-notifications", isAuthenticated, async (req, res) => {
-    try {
-      const user = getCurrentUser(req);
-      const branchId = parseQueryString(req.query.branchId);
-      const notifications = await storage.getSystemNotifications(user.id, branchId);
-      res.json(notifications);
-    } catch (error) {
-      console.error("Error getting notifications:", error);
-      res.status(500).json({ error: "فشل في جلب التنبيهات" });
-    }
-  });
-
-  // Get unread notifications
-  app.get("/api/system-notifications/unread", isAuthenticated, async (req, res) => {
-    try {
-      const user = getCurrentUser(req);
-      const notifications = await storage.getUnreadSystemNotifications(user.id);
-      res.json(notifications);
-    } catch (error) {
-      console.error("Error getting unread notifications:", error);
-      res.status(500).json({ error: "فشل في جلب التنبيهات غير المقروءة" });
-    }
-  });
-
-  // Get notification stats
-  app.get("/api/system-notifications/stats", isAuthenticated, async (req, res) => {
-    try {
-      const user = getCurrentUser(req);
-      const stats = await storage.getSystemNotificationStats(user.id);
-      res.json(stats);
-    } catch (error) {
-      console.error("Error getting notification stats:", error);
-      res.status(500).json({ error: "فشل في جلب إحصائيات التنبيهات" });
-    }
-  });
-
-  // Create notification
-  app.post("/api/system-notifications", isAuthenticated, async (req, res) => {
-    try {
-      const user = getCurrentUser(req);
-      const notification = await storage.createSystemNotification({
-        ...req.body,
-        createdBy: user.id,
-      });
-      res.status(201).json(notification);
-    } catch (error) {
-      console.error("Error creating notification:", error);
-      res.status(500).json({ error: "فشل في إنشاء التنبيه" });
-    }
-  });
-
-  // Mark notification as read
-  app.post("/api/system-notifications/:id/read", isAuthenticated, async (req, res) => {
-    try {
-      const notification = await storage.markSystemNotificationAsRead(parseInt(req.params.id));
-      if (!notification) {
-        return res.status(404).json({ error: "التنبيه غير موجود" });
-      }
-      res.json(notification);
-    } catch (error) {
-      console.error("Error marking notification as read:", error);
-      res.status(500).json({ error: "فشل في تحديث التنبيه" });
-    }
-  });
-
-  // Mark all notifications as read
-  app.post("/api/system-notifications/read-all", isAuthenticated, async (req, res) => {
-    try {
-      const user = getCurrentUser(req);
-      await storage.markAllSystemNotificationsAsRead(user.id);
-      res.json({ success: true });
-    } catch (error) {
-      console.error("Error marking all notifications as read:", error);
-      res.status(500).json({ error: "فشل في تحديث التنبيهات" });
-    }
-  });
-
-  // Dismiss notification
-  app.post("/api/system-notifications/:id/dismiss", isAuthenticated, async (req, res) => {
-    try {
-      await storage.dismissSystemNotification(parseInt(req.params.id));
-      res.json({ success: true });
-    } catch (error) {
-      console.error("Error dismissing notification:", error);
-      res.status(500).json({ error: "فشل في إخفاء التنبيه" });
-    }
-  });
-
-  // Delete notification
-  app.delete("/api/system-notifications/:id", isAuthenticated, async (req, res) => {
-    try {
-      await storage.deleteSystemNotification(parseInt(req.params.id));
-      res.json({ success: true });
-    } catch (error) {
-      console.error("Error deleting notification:", error);
-      res.status(500).json({ error: "فشل في حذف التنبيه" });
-    }
-  });
-
-  // Generate automatic reminders for upcoming meetings and tasks
-  app.post("/api/system-notifications/generate-reminders", isAuthenticated, async (req, res) => {
-    try {
-      const user = getCurrentUser(req);
-      const now = new Date();
-      const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-      
-      // Get upcoming meetings (next 24 hours)
-      const meetings = await storage.getExecMeetings();
-      const upcomingMeetings = meetings.filter((m: any) => {
-        const meetingDate = new Date(m.startAt);
-        return meetingDate >= now && meetingDate <= tomorrow && m.status === 'scheduled';
-      });
-
-      // Get tasks due soon (next 24 hours)
-      const tasks = await storage.getExecTasks();
-      const upcomingTasks = tasks.filter((t: any) => {
-        if (!t.dueDate) return false;
-        const dueDate = new Date(t.dueDate);
-        return dueDate >= now && dueDate <= tomorrow && t.status !== 'completed';
-      });
-
-      const createdReminders: any[] = [];
-
-      // Create meeting reminders
-      for (const meeting of upcomingMeetings) {
-        const notification = await storage.createSystemNotification({
-          type: 'meeting',
-          title: `تذكير: ${meeting.title}`,
-          message: `لديك اجتماع قادم في ${new Date(meeting.startAt).toLocaleTimeString('en-GB')}`,
-          priority: 'high',
-          userId: user.id,
-          createdBy: user.id,
-        });
-        createdReminders.push(notification);
-      }
-
-      // Create task reminders
-      for (const task of upcomingTasks) {
-        const notification = await storage.createSystemNotification({
-          type: 'task',
-          title: `تذكير: ${task.title}`,
-          message: `موعد استحقاق المهمة يقترب`,
-          priority: task.priority === 'urgent' ? 'urgent' : 'high',
-          userId: user.id,
-          createdBy: user.id,
-        });
-        createdReminders.push(notification);
-      }
-
-      res.json({ 
-        success: true, 
-        remindersCreated: createdReminders.length,
-        meetings: upcomingMeetings.length,
-        tasks: upcomingTasks.length
-      });
-    } catch (error) {
-      console.error("Error generating reminders:", error);
-      res.status(500).json({ error: "فشل في إنشاء التذكيرات" });
-    }
-  });
-
   // Export meetings to JSON (for Excel export on frontend)
   app.get("/api/executive/meetings/export", isAuthenticated, async (req, res) => {
     try {
@@ -29192,6 +29026,16 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/system-notifications/read-stats", isAuthenticated, requirePermission("settings", "view"), async (req, res) => {
+    try {
+      const stats = await storage.getNotificationReadStats();
+      res.json(stats);
+    } catch (error) {
+      console.error("Error getting notification read stats:", error);
+      res.status(500).json({ error: "فشل في جلب إحصائيات القراءة" });
+    }
+  });
+
   app.get("/api/system-notifications/:id", isAuthenticated, requirePermission("settings", "view"), async (req, res) => {
     try {
       const notification = await storage.getSystemNotification(parseInt(req.params.id));
@@ -29269,17 +29113,6 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error dismissing notification:", error);
       res.status(500).json({ error: "فشل في إخفاء الإشعار" });
-    }
-  });
-
-
-  app.get("/api/system-notifications/read-stats", isAuthenticated, requirePermission("settings", "view"), async (req, res) => {
-    try {
-      const stats = await storage.getNotificationReadStats();
-      res.json(stats);
-    } catch (error) {
-      console.error("Error getting notification read stats:", error);
-      res.status(500).json({ error: "فشل في جلب إحصائيات القراءة" });
     }
   });
   return httpServer;
