@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { Layout } from "@/components/layout";
 import type { SystemNotification, Branch } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -341,6 +342,7 @@ export default function NotificationsManagement() {
   }, [notifications, statusFilter, typeFilter]);
 
   return (
+    <Layout>
     <div className="p-3 sm:p-4 md:p-6 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl" style={{ fontFamily: "'Cairo', sans-serif" }}>
       <div className="space-y-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -1178,5 +1180,6 @@ export default function NotificationsManagement() {
         </>
       )}
     </div>
+    </Layout>
   );
 }
