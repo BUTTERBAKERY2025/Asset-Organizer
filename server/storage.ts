@@ -1938,41 +1938,40 @@ export class DatabaseStorage implements IStorage {
       return cached.data;
     }
     
-    // Build a map of module -> actions from all sources
-    // Key format: "module:action" -> boolean (true = granted, false = denied)
     const permissionState = new Map<string, boolean>();
     
-    // 1. Get direct user permissions (base layer)
     const directPerms = await db
       .select()
       .from(userPermissions)
       .where(eq(userPermissions.userId, userId));
     
-    for (const perm of directPerms) {
-      for (const action of perm.actions) {
-        permissionState.set(`${perm.module}:${action}`, true);
+    const hasCustomPermissions = directPerms.some(p => p.actions.length > 0);
+    
+    if (hasCustomPermissions) {
+      for (const perm of directPerms) {
+        for (const action of perm.actions) {
+          permissionState.set(`${perm.module}:${action}`, true);
+        }
+      }
+    } else {
+      const rolePermsFromAssignments = await db
+        .select({
+          module: permissions.module,
+          action: permissions.action,
+        })
+        .from(userAssignments)
+        .innerJoin(rolePermissions, eq(userAssignments.roleId, rolePermissions.roleId))
+        .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
+        .where(and(
+          eq(userAssignments.userId, userId),
+          eq(userAssignments.isActive, true)
+        ));
+      
+      for (const rp of rolePermsFromAssignments) {
+        permissionState.set(`${rp.module}:${rp.action}`, true);
       }
     }
     
-    // 2. Get permissions from assigned roles (single optimized query)
-    const rolePermsFromAssignments = await db
-      .select({
-        module: permissions.module,
-        action: permissions.action,
-      })
-      .from(userAssignments)
-      .innerJoin(rolePermissions, eq(userAssignments.roleId, rolePermissions.roleId))
-      .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
-      .where(and(
-        eq(userAssignments.userId, userId),
-        eq(userAssignments.isActive, true)
-      ));
-    
-    for (const rp of rolePermsFromAssignments) {
-      permissionState.set(`${rp.module}:${rp.action}`, true);
-    }
-    
-    // 3. Apply permission overrides (highest priority - can grant or deny)
     const overrides = await db
       .select({
         module: permissions.module,
@@ -1985,22 +1984,19 @@ export class DatabaseStorage implements IStorage {
       .where(eq(userPermissionOverrides.userId, userId));
     
     for (const override of overrides) {
-      // Check if override has expired
       if (override.expiresAt && new Date(override.expiresAt).getTime() < now) {
-        continue; // Skip expired overrides
+        continue;
       }
       
       const key = `${override.module}:${override.action}`;
       if (override.allow) {
-        // Grant permission
         permissionState.set(key, true);
       } else {
-        // Deny permission - remove it
         permissionState.delete(key);
       }
     }
     
-    // 4. Convert to module -> actions format
+    // Convert to module -> actions format
     const moduleActionsMap = new Map<string, Set<string>>();
     Array.from(permissionState.entries()).forEach(([key, granted]) => {
       if (granted) {
@@ -2047,36 +2043,37 @@ export class DatabaseStorage implements IStorage {
       .from(userPermissions)
       .where(eq(userPermissions.userId, userId));
     
-    for (const perm of directPerms) {
-      for (const action of perm.actions) {
-        result.push({
-          module: perm.module,
-          action,
-          source: 'direct',
-          isActive: true,
-        });
+    const hasCustomPermissions = directPerms.some(p => p.actions.length > 0);
+    
+    if (hasCustomPermissions) {
+      for (const perm of directPerms) {
+        for (const action of perm.actions) {
+          result.push({
+            module: perm.module,
+            action,
+            source: 'direct',
+            isActive: true,
+          });
+        }
       }
-    }
-    
-    const rolePermsFromAssignments = await db
-      .select({
-        module: permissions.module,
-        action: permissions.action,
-        permissionId: permissions.id,
-        roleName: roles.name,
-      })
-      .from(userAssignments)
-      .innerJoin(rolePermissions, eq(userAssignments.roleId, rolePermissions.roleId))
-      .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
-      .innerJoin(roles, eq(userAssignments.roleId, roles.id))
-      .where(and(
-        eq(userAssignments.userId, userId),
-        eq(userAssignments.isActive, true)
-      ));
-    
-    for (const rp of rolePermsFromAssignments) {
-      const existingDirect = result.find(r => r.module === rp.module && r.action === rp.action && r.source === 'direct');
-      if (!existingDirect) {
+    } else {
+      const rolePermsFromAssignments = await db
+        .select({
+          module: permissions.module,
+          action: permissions.action,
+          permissionId: permissions.id,
+          roleName: roles.name,
+        })
+        .from(userAssignments)
+        .innerJoin(rolePermissions, eq(userAssignments.roleId, rolePermissions.roleId))
+        .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
+        .innerJoin(roles, eq(userAssignments.roleId, roles.id))
+        .where(and(
+          eq(userAssignments.userId, userId),
+          eq(userAssignments.isActive, true)
+        ));
+      
+      for (const rp of rolePermsFromAssignments) {
         result.push({
           module: rp.module,
           action: rp.action,
