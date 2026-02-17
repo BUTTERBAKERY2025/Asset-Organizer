@@ -284,9 +284,9 @@ export async function setupAuth(app: Express) {
           req.session.ipAddress = clientIp;
           
           if (rememberMe) {
-            req.session.cookie.maxAge = 24 * 60 * 60 * 1000;
+            req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000;
           } else {
-            req.session.cookie.maxAge = undefined as any;
+            req.session.cookie.maxAge = 8 * 60 * 60 * 1000;
             req.session.cookie.expires = undefined as any;
           }
         
@@ -327,7 +327,7 @@ export async function setupAuth(app: Express) {
                 const userAgentStr = req.headers['user-agent'] || '';
                 const deviceInfo = parseUserAgent(userAgentStr);
                 const sessionExpiry = rememberMe 
-                  ? new Date(Date.now() + 24 * 60 * 60 * 1000) 
+                  ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) 
                   : new Date(Date.now() + 8 * 60 * 60 * 1000);
                 
                 await storage.createUserSession({

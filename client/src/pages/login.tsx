@@ -10,6 +10,8 @@ import { Loader2, Settings, BarChart3, Building2, Briefcase } from "lucide-react
 import logo from "@assets/logo_butter_bakery__1768502624540.png";
 import welcomeGraphic from "@assets/generated_images/man_beard_imac_facing_left.png";
 
+const REMEMBER_KEY = "__btr_ru";
+
 export default function LoginPage() {
   const [, setLocation] = useLocation();
   const { login, isLoggingIn, isAuthenticated } = useAuth();
@@ -27,6 +29,21 @@ export default function LoginPage() {
     return cleanup;
   }, [setupInteractionListener]);
 
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(REMEMBER_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.u && typeof parsed.u === "string" && parsed.u.length <= 100) {
+          setUsername(parsed.u);
+          setRememberMe(true);
+        }
+      }
+    } catch {
+      localStorage.removeItem(REMEMBER_KEY);
+    }
+  }, []);
+
   if (isAuthenticated) {
     setLocation("/");
     return null;
@@ -43,6 +60,13 @@ export default function LoginPage() {
     
     try {
       const userData = await login({ username, password, rememberMe });
+
+      if (rememberMe) {
+        localStorage.setItem(REMEMBER_KEY, JSON.stringify({ u: username }));
+      } else {
+        localStorage.removeItem(REMEMBER_KEY);
+      }
+
       if (userData?.role === "attendance_clerk") {
         setLocation("/attendance-check");
       } else {
