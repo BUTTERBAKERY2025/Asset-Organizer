@@ -29048,7 +29048,7 @@ export async function registerRoutes(
   app.post("/api/system-notifications", isAuthenticated, requirePermission("settings", "create"), async (req, res) => {
     try {
       const data = { ...req.body };
-      data.createdBy = (req as any).user?.id;
+      data.createdBy = req.session.userId;
       if (data.startDate && typeof data.startDate === 'string') data.startDate = new Date(data.startDate);
       if (data.endDate && typeof data.endDate === 'string') data.endDate = new Date(data.endDate);
       if (!data.startDate || data.startDate === '') data.startDate = null;
@@ -29101,8 +29101,8 @@ export async function registerRoutes(
 
   app.get("/api/active-notifications", isAuthenticated, async (req, res) => {
     try {
-      const userId = (req as any).user?.id;
-      const user = (req as any).user;
+      const userId = req.session.userId;
+      const user = (req as any).currentUser;
       const branchId = user?.activeBranch || user?.branchId || "";
       const notifications = await storage.getActiveNotificationsForUser(userId, branchId);
       res.json(notifications);
@@ -29114,7 +29114,7 @@ export async function registerRoutes(
 
   app.post("/api/system-notifications/:id/read", isAuthenticated, async (req, res) => {
     try {
-      const userId = (req as any).user?.id;
+      const userId = req.session.userId;
       const read = await storage.markNotificationRead(parseInt(req.params.id), userId);
       res.json(read);
     } catch (error) {
@@ -29125,7 +29125,7 @@ export async function registerRoutes(
 
   app.post("/api/system-notifications/:id/dismiss", isAuthenticated, async (req, res) => {
     try {
-      const userId = (req as any).user?.id;
+      const userId = req.session.userId;
       const dismissed = await storage.dismissNotification(parseInt(req.params.id), userId);
       res.json(dismissed);
     } catch (error) {
