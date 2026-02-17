@@ -29068,7 +29068,16 @@ export async function registerRoutes(
 
   app.patch("/api/system-notifications/:id", isAuthenticated, requirePermission("settings", "edit"), async (req, res) => {
     try {
-      const notification = await storage.updateSystemNotification(parseInt(req.params.id), req.body);
+      const data = { ...req.body };
+      if (data.startDate && typeof data.startDate === 'string') data.startDate = new Date(data.startDate);
+      if (data.endDate && typeof data.endDate === 'string') data.endDate = new Date(data.endDate);
+      if (data.startDate === '' || data.startDate === null) data.startDate = null;
+      if (data.endDate === '' || data.endDate === null) data.endDate = null;
+      delete data.id;
+      delete data.createdAt;
+      delete data.updatedAt;
+      delete data.createdBy;
+      const notification = await storage.updateSystemNotification(parseInt(req.params.id), data);
       if (!notification) return res.status(404).json({ error: "الإشعار غير موجود" });
       res.json(notification);
     } catch (error) {
