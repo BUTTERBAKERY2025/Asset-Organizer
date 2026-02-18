@@ -7755,8 +7755,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateBranchShiftProfile(id: number, profile: Partial<InsertBranchShiftProfile>): Promise<BranchShiftProfile | undefined> {
+    const { id: _id, createdAt: _ca, updatedAt: _ua, ...cleanData } = profile as any;
     const [updated] = await db.update(branchShiftProfiles)
-      .set({ ...profile, updatedAt: new Date() })
+      .set({ ...cleanData, updatedAt: new Date() })
       .where(eq(branchShiftProfiles.id, id))
       .returning();
     return updated;
@@ -7772,12 +7773,13 @@ export class DatabaseStorage implements IStorage {
   async upsertBranchShiftProfiles(branchId: string, profiles: InsertBranchShiftProfile[]): Promise<BranchShiftProfile[]> {
     const results: BranchShiftProfile[] = [];
     for (const profile of profiles) {
-      const existing = await this.getBranchShiftProfileByCode(branchId, profile.shiftCode);
+      const { id: _id, createdAt: _ca, updatedAt: _ua, ...cleanProfile } = profile as any;
+      const existing = await this.getBranchShiftProfileByCode(branchId, cleanProfile.shiftCode);
       if (existing) {
-        const updated = await this.updateBranchShiftProfile(existing.id, profile);
+        const updated = await this.updateBranchShiftProfile(existing.id, cleanProfile);
         if (updated) results.push(updated);
       } else {
-        const created = await this.createBranchShiftProfile({ ...profile, branchId });
+        const created = await this.createBranchShiftProfile({ ...cleanProfile, branchId });
         results.push(created);
       }
     }
