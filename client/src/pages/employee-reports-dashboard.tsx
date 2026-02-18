@@ -33,7 +33,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { getQueryFn } from "@/lib/queryClient";
 import { useBranches } from "@/hooks/useBranches";
-import * as XLSX from "xlsx";
 import {
   BarChart,
   Bar,
@@ -781,7 +780,8 @@ export default function EmployeeReportsDashboardPage() {
     return { salaryClosingData: data, salaryClosingUnlinkedCount: unlinkedList.length, salaryClosingUnlinkedRecords: unlinkedList, salaryClosingUnlinkedSummary: unlinkedSummary };
   }, [salaryClosingBranch, salaryClosingMonth, employees, attendanceRecords]);
 
-  const exportUnlinkedRecordsToExcel = () => {
+  const exportUnlinkedRecordsToExcel = async () => {
+    const XLSX = await import("xlsx");
     if (unlinkedRecords.length === 0) return;
     const data = unlinkedRecords.map((rec, index) => ({
       [isRTL ? "م" : "#"]: index + 1,
@@ -801,7 +801,8 @@ export default function EmployeeReportsDashboardPage() {
     XLSX.writeFile(wb, `${isRTL ? "سجلات_حضور_غير_مرتبطة" : "unlinked_attendance_records"}_${selectedMonth}.xlsx`);
   };
 
-  const exportAttendanceToExcel = () => {
+  const exportAttendanceToExcel = async () => {
+    const XLSX = await import("xlsx");
     const data = filteredEmployees.map((emp, index) => {
       const attendance = attendanceByEmployee.get(emp.id) || { present: 0, absent: 0, late: 0, total: 0 };
       const rate = attendance.total > 0 ? Math.round((attendance.present / attendance.total) * 100) : 0;
@@ -822,8 +823,9 @@ export default function EmployeeReportsDashboardPage() {
     XLSX.writeFile(wb, `${isRTL ? "تقرير_الحضور" : "attendance_report"}_${selectedMonth}.xlsx`);
   };
 
-  const exportSalaryClosingToExcel = () => {
+  const exportSalaryClosingToExcel = async () => {
     if (salaryClosingData.length === 0) return;
+    const XLSX = await import("xlsx");
     const wb = XLSX.utils.book_new();
     
     const summaryData = [
@@ -937,7 +939,8 @@ export default function EmployeeReportsDashboardPage() {
 
   // ==================== NEW EXPORT FUNCTIONS ====================
 
-  const exportBranchComparisonToExcel = () => {
+  const exportBranchComparisonToExcel = async () => {
+    const XLSX = await import("xlsx");
     if (branchComparisonData.length === 0) return;
     const data = branchComparisonData.map((branch, index) => ({
       [isRTL ? "م" : "#"]: index + 1,
@@ -994,7 +997,8 @@ export default function EmployeeReportsDashboardPage() {
     }
   };
 
-  const exportJobComparisonToExcel = () => {
+  const exportJobComparisonToExcel = async () => {
+    const XLSX = await import("xlsx");
     if (jobComparisonData.length === 0) return;
     const data: any[] = [];
     jobComparisonData.forEach((job, jobIndex) => {
@@ -1051,7 +1055,8 @@ export default function EmployeeReportsDashboardPage() {
     }
   };
 
-  const exportSalariesTableToExcel = () => {
+  const exportSalariesTableToExcel = async () => {
+    const XLSX = await import("xlsx");
     if (filteredEmployees.length === 0) return;
     const data = filteredEmployees.map((emp, index) => {
       const allowances = (emp.housingAllowance || 0) + (emp.transportAllowance || 0) + (emp.foodAllowance || 0) + (emp.otherAllowances || 0);
@@ -1113,8 +1118,9 @@ export default function EmployeeReportsDashboardPage() {
     }
   };
 
-  const exportAnalyticsToExcel = () => {
+  const exportAnalyticsToExcel = async () => {
     if (filteredEmployees.length === 0) return;
+    const XLSX = await import("xlsx");
     const wb = XLSX.utils.book_new();
     
     const empData = filteredEmployees.map((emp, index) => {
@@ -1152,7 +1158,8 @@ export default function EmployeeReportsDashboardPage() {
     XLSX.writeFile(wb, `${isRTL ? "تحليلات_الموظفين" : "employee_analytics"}_${selectedMonth}.xlsx`);
   };
 
-  const exportKPIsToExcel = () => {
+  const exportKPIsToExcel = async () => {
+    const XLSX = await import("xlsx");
     const wb = XLSX.utils.book_new();
     
     const kpiData = [
@@ -3686,7 +3693,8 @@ export default function EmployeeReportsDashboardPage() {
                     <Button
                       variant="outline"
                       className="h-auto py-4 flex flex-col items-center gap-2"
-                      onClick={() => {
+                      onClick={async () => {
+                        const XLSX = await import("xlsx");
                         const data = complianceMetrics.gosiReport.map(r => ({
                           [isRTL ? "اسم الموظف" : "Employee Name"]: r.emp.employeeName,
                           [isRTL ? "رقم الهوية" : "ID Number"]: r.emp.iqamaNumber || "",
@@ -3709,7 +3717,8 @@ export default function EmployeeReportsDashboardPage() {
                     <Button
                       variant="outline"
                       className="h-auto py-4 flex flex-col items-center gap-2"
-                      onClick={() => {
+                      onClick={async () => {
+                        const XLSX = await import("xlsx");
                         const data = filteredEmployees.filter(e => e.nationality !== "سعودي" && e.status === "active").map(emp => ({
                           [isRTL ? "اسم الموظف" : "Employee Name"]: emp.employeeName,
                           [isRTL ? "الجنسية" : "Nationality"]: emp.nationality,
@@ -3733,7 +3742,8 @@ export default function EmployeeReportsDashboardPage() {
                     <Button
                       variant="outline"
                       className="h-auto py-4 flex flex-col items-center gap-2"
-                      onClick={() => {
+                      onClick={async () => {
+                        const XLSX = await import("xlsx");
                         const data = complianceMetrics.branchSaudization.map(b => ({
                           [isRTL ? "الفرع" : "Branch"]: b.branchName,
                           [isRTL ? "إجمالي الموظفين" : "Total Employees"]: b.total,
@@ -5508,7 +5518,8 @@ export default function EmployeeReportsDashboardPage() {
             {/* Health Certificates Tab */}
             <TabsContent value="health-certificates" className="space-y-4" data-testid="tab-content-health-certificates">
               <div className="flex justify-end mb-4 gap-2">
-                <Button variant="outline" size="sm" onClick={() => {
+                <Button variant="outline" size="sm" onClick={async () => {
+                  const XLSX = await import("xlsx");
                   const ws = XLSX.utils.json_to_sheet(healthCertificateAnalysis.needsRenewal.map(emp => ({
                     "رقم الموظف": emp.employeeNumber || "",
                     "الاسم": emp.employeeName,
@@ -5784,8 +5795,9 @@ export default function EmployeeReportsDashboardPage() {
             {/* Comprehensive Comparisons Tab */}
             <TabsContent value="comparisons" className="space-y-4" data-testid="tab-content-comparisons">
               <div className="flex justify-end mb-4 gap-2">
-                <Button variant="outline" size="sm" onClick={() => {
+                <Button variant="outline" size="sm" onClick={async () => {
                   if (!comprehensiveComparisons) return;
+                  const XLSX = await import("xlsx");
                   const wb = XLSX.utils.book_new();
                   const branchSheet = XLSX.utils.json_to_sheet(comprehensiveComparisons.branchSalaryStats.map(b => ({
                     [isRTL ? "الفرع" : "Branch"]: b.branchName,

@@ -1,17 +1,28 @@
 import type { MaterialTransfer, MaterialTransferItem } from "@shared/schema";
-import pdfMakeRtl from "@digicole/pdfmake-rtl/build/pdfmake";
-import vfs from "@digicole/pdfmake-rtl/build/vfs_fonts";
 
-// Initialize pdfMake-RTL with fonts (supports Arabic)
-const pdfMake = pdfMakeRtl as any;
-// vfs_fonts exports vfs directly as default export
-pdfMake.vfs = (vfs as any).default || vfs;
-
-// Flag to track if Amiri font is loaded
+let pdfMake: any = null;
 let amiriFontLoaded = false;
+let cachedLogoBase64: string | null = null;
+
+async function getPdfMake() {
+  if (pdfMake) return pdfMake;
+  const [pdfModule, vfsModule] = await Promise.all([
+    import("@digicole/pdfmake-rtl/build/pdfmake"),
+    import("@digicole/pdfmake-rtl/build/vfs_fonts"),
+  ]);
+  pdfMake = pdfModule.default as any;
+  const vfs = vfsModule.default as any;
+  pdfMake.vfs = vfs.default || vfs;
+  pdfMake.fonts = {
+    Nillima: { normal: 'Nillima.ttf', bold: 'Nillima.ttf', italics: 'Nillima.ttf', bolditalics: 'Nillima.ttf' },
+    Roboto: { normal: 'Nillima.ttf', bold: 'Nillima.ttf', italics: 'Nillima.ttf', bolditalics: 'Nillima.ttf' },
+  };
+  return pdfMake;
+}
 
 async function loadAmiriFont(): Promise<void> {
   if (amiriFontLoaded) return;
+  const pm = await getPdfMake();
   try {
     const [regularRes, boldRes] = await Promise.all([
       fetch('/assets/Amiri-Regular.ttf'),
@@ -23,27 +34,12 @@ async function loadAmiriFont(): Promise<void> {
         blobToBase64(regularBlob),
         blobToBase64(boldBlob)
       ]);
-      pdfMake.vfs['Amiri-Regular.ttf'] = regularBase64.split(',')[1];
-      pdfMake.vfs['Amiri-Bold.ttf'] = boldBase64.split(',')[1];
-      pdfMake.fonts = {
-        Amiri: {
-          normal: 'Amiri-Regular.ttf',
-          bold: 'Amiri-Bold.ttf',
-          italics: 'Amiri-Regular.ttf',
-          bolditalics: 'Amiri-Bold.ttf',
-        },
-        Nillima: {
-          normal: 'Nillima.ttf',
-          bold: 'Nillima.ttf',
-          italics: 'Nillima.ttf',
-          bolditalics: 'Nillima.ttf',
-        },
-        Roboto: {
-          normal: 'Nillima.ttf',
-          bold: 'Nillima.ttf',
-          italics: 'Nillima.ttf',
-          bolditalics: 'Nillima.ttf',
-        }
+      pm.vfs['Amiri-Regular.ttf'] = regularBase64.split(',')[1];
+      pm.vfs['Amiri-Bold.ttf'] = boldBase64.split(',')[1];
+      pm.fonts = {
+        Amiri: { normal: 'Amiri-Regular.ttf', bold: 'Amiri-Bold.ttf', italics: 'Amiri-Regular.ttf', bolditalics: 'Amiri-Bold.ttf' },
+        Nillima: { normal: 'Nillima.ttf', bold: 'Nillima.ttf', italics: 'Nillima.ttf', bolditalics: 'Nillima.ttf' },
+        Roboto: { normal: 'Nillima.ttf', bold: 'Nillima.ttf', italics: 'Nillima.ttf', bolditalics: 'Nillima.ttf' },
       };
       amiriFontLoaded = true;
     }
@@ -60,24 +56,6 @@ function blobToBase64(blob: Blob): Promise<string> {
     reader.readAsDataURL(blob);
   });
 }
-
-pdfMake.fonts = {
-  Nillima: {
-    normal: 'Nillima.ttf',
-    bold: 'Nillima.ttf',
-    italics: 'Nillima.ttf',
-    bolditalics: 'Nillima.ttf',
-  },
-  Roboto: {
-    normal: 'Nillima.ttf',
-    bold: 'Nillima.ttf',
-    italics: 'Nillima.ttf',
-    bolditalics: 'Nillima.ttf',
-  }
-};
-
-// Cache for logo base64
-let cachedLogoBase64: string | null = null;
 
 async function getLogoBase64(): Promise<string | null> {
   if (cachedLogoBase64) return cachedLogoBase64;
@@ -142,7 +120,7 @@ export async function generateTransferPdf(
   transfer: MaterialTransferWithNames,
   items: TransferItemWithAvailable[]
 ): Promise<void> {
-  
+  const pm = await getPdfMake();
   await loadAmiriFont();
   const logoBase64 = await getLogoBase64();
   const statusLabel = STATUS_OPTIONS.find(s => s.value === transfer.status)?.labelAr || transfer.status;
@@ -177,68 +155,44 @@ export async function generateTransferPdf(
     pageSize: 'A4',
     pageOrientation: 'portrait',
     pageMargins: [20, 15, 20, 30],
-    
     footer: (currentPage: number, pageCount: number) => ({
       columns: [
         { text: `صفحة ${currentPage} من ${pageCount}`, alignment: 'center', fontSize: 8, color: '#666' },
       ],
       margin: [20, 5, 20, 0]
     }),
-    
     content: [
       {
         columns: [
           logoBase64 ? { image: logoBase64, width: 50, alignment: 'right' } : { text: '', width: 50 },
-          { 
-            stack: [
-              { text: 'BUTTER BAKERY', fontSize: 14, bold: true, color: '#D4A853', alignment: 'center' },
-            ],
-            width: '*',
-            margin: [0, 12, 0, 0]
-          },
+          { stack: [{ text: 'BUTTER BAKERY', fontSize: 14, bold: true, color: '#D4A853', alignment: 'center' }], width: '*', margin: [0, 12, 0, 0] },
           { text: 'أمر تحويل مواد', fontSize: 12, bold: true, alignment: 'left', width: 80, margin: [0, 12, 0, 0] },
         ],
         margin: [0, 0, 0, 8]
       },
-      
       { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 555, y2: 0, lineWidth: 2, lineColor: '#D4A853' }], margin: [0, 0, 0, 10] },
-      
       {
-        table: {
-          widths: ['auto', '*', 'auto', '*', 'auto', '*'],
-          body: [
-            [
-              { text: 'رقم التحويل:', fontSize: 9, color: '#666', border: [false, false, false, false] },
-              { text: transfer.transferNumber, fontSize: 10, bold: true, border: [false, false, false, false] },
-              { text: 'الحالة:', fontSize: 9, color: '#666', border: [false, false, false, false] },
-              { text: statusLabel, fontSize: 10, bold: true, color: '#16a34a', border: [false, false, false, false] },
-              { text: 'التاريخ:', fontSize: 9, color: '#666', border: [false, false, false, false] },
-              { text: transferDate, fontSize: 10, bold: true, border: [false, false, false, false] },
-            ]
-          ]
-        },
-        layout: 'noBorders',
-        margin: [0, 0, 0, 6]
+        table: { widths: ['auto', '*', 'auto', '*', 'auto', '*'], body: [[
+          { text: 'رقم التحويل:', fontSize: 9, color: '#666', border: [false, false, false, false] },
+          { text: transfer.transferNumber, fontSize: 10, bold: true, border: [false, false, false, false] },
+          { text: 'الحالة:', fontSize: 9, color: '#666', border: [false, false, false, false] },
+          { text: statusLabel, fontSize: 10, bold: true, color: '#16a34a', border: [false, false, false, false] },
+          { text: 'التاريخ:', fontSize: 9, color: '#666', border: [false, false, false, false] },
+          { text: transferDate, fontSize: 10, bold: true, border: [false, false, false, false] },
+        ]] },
+        layout: 'noBorders', margin: [0, 0, 0, 6]
       },
-      
       {
-        table: {
-          widths: ['auto', '*', 'auto', 'auto', 'auto', '*'],
-          body: [
-            [
-              { text: 'من:', fontSize: 8, color: '#666', border: [false, false, false, false] },
-              { text: srcName, fontSize: 9, bold: true, border: [false, false, false, false] },
-              { text: '←', fontSize: 10, alignment: 'center', border: [false, false, false, false] },
-              { text: 'إلى:', fontSize: 8, color: '#666', border: [false, false, false, false] },
-              { text: destName, fontSize: 9, bold: true, border: [false, false, false, false] },
-              { text: '', border: [false, false, false, false] },
-            ]
-          ]
-        },
-        layout: 'noBorders',
-        margin: [0, 0, 0, 4]
+        table: { widths: ['auto', '*', 'auto', 'auto', 'auto', '*'], body: [[
+          { text: 'من:', fontSize: 8, color: '#666', border: [false, false, false, false] },
+          { text: srcName, fontSize: 9, bold: true, border: [false, false, false, false] },
+          { text: '←', fontSize: 10, alignment: 'center', border: [false, false, false, false] },
+          { text: 'إلى:', fontSize: 8, color: '#666', border: [false, false, false, false] },
+          { text: destName, fontSize: 9, bold: true, border: [false, false, false, false] },
+          { text: '', border: [false, false, false, false] },
+        ]] },
+        layout: 'noBorders', margin: [0, 0, 0, 4]
       },
-      
       {
         columns: [
           { text: `وقت الطلب: ${requestDate}`, fontSize: 7, color: '#888', alignment: 'right' },
@@ -246,115 +200,52 @@ export async function generateTransferPdf(
         ],
         margin: [0, 0, 0, 6]
       },
-      
-      ...(transfer.driverName || transfer.vehicleNumber ? [
-        {
-          table: {
-            widths: ['auto', '*', 'auto', '*'],
-            body: [
-              [
-                { text: 'السائق:', fontSize: 8, color: '#666', border: [false, false, false, false] },
-                { text: transfer.driverName || '-', fontSize: 9, bold: true, border: [false, false, false, false] },
-                { text: 'المركبة:', fontSize: 8, color: '#666', border: [false, false, false, false] },
-                { text: transfer.vehicleNumber || '-', fontSize: 9, bold: true, border: [false, false, false, false] },
-              ]
-            ]
-          },
-          layout: 'noBorders',
-          margin: [0, 0, 0, 6]
-        }
-      ] : []),
-      
+      ...(transfer.driverName || transfer.vehicleNumber ? [{
+        table: { widths: ['auto', '*', 'auto', '*'], body: [[
+          { text: 'السائق:', fontSize: 8, color: '#666', border: [false, false, false, false] },
+          { text: transfer.driverName || '-', fontSize: 9, bold: true, border: [false, false, false, false] },
+          { text: 'المركبة:', fontSize: 8, color: '#666', border: [false, false, false, false] },
+          { text: transfer.vehicleNumber || '-', fontSize: 9, bold: true, border: [false, false, false, false] },
+        ]] },
+        layout: 'noBorders', margin: [0, 0, 0, 6]
+      }] : []),
       { text: 'الأصناف المحولة:', fontSize: 10, bold: true, margin: [0, 2, 0, 4] },
-      
       {
-        table: {
-          headerRows: 1,
-          widths: [60, 30, 30, 35, 50, '*', 18],
-          body: tableBody
-        },
+        table: { headerRows: 1, widths: [60, 30, 30, 35, 50, '*', 18], body: tableBody },
         layout: {
           hLineWidth: (i: number, node: any) => (i === 0 || i === 1 || i === node.table.body.length) ? 0.5 : 0.25,
-          vLineWidth: () => 0.25,
-          hLineColor: () => '#ccc',
-          vLineColor: () => '#ccc',
-          paddingTop: () => 2,
-          paddingBottom: () => 2,
-          paddingLeft: () => 3,
-          paddingRight: () => 3,
+          vLineWidth: () => 0.25, hLineColor: () => '#ccc', vLineColor: () => '#ccc',
+          paddingTop: () => 2, paddingBottom: () => 2, paddingLeft: () => 3, paddingRight: () => 3,
           fillColor: (rowIndex: number) => rowIndex === 0 ? '#f0f0f0' : null
         },
         margin: [0, 0, 0, 6]
       },
-      
-      ...(transfer.notes ? [
-        {
-          columns: [
-            { text: 'ملاحظات:', fontSize: 8, color: '#666', width: 'auto' },
-            { text: transfer.notes, fontSize: 8, margin: [5, 0, 0, 0] }
-          ],
-          margin: [0, 0, 0, 8]
-        }
-      ] : []),
-      
+      ...(transfer.notes ? [{
+        columns: [
+          { text: 'ملاحظات:', fontSize: 8, color: '#666', width: 'auto' },
+          { text: transfer.notes, fontSize: 8, margin: [5, 0, 0, 0] }
+        ],
+        margin: [0, 0, 0, 8]
+      }] : []),
       {
-        table: {
-          widths: ['*', '*', '*'],
-          body: [
-            [
-              { 
-                stack: [
-                  { text: 'توقيع المستلم', fontSize: 8, bold: true, alignment: 'center' },
-                  { text: '', margin: [0, 15, 0, 0] },
-                  { text: '_______________', fontSize: 10, alignment: 'center' },
-                ],
-                border: [true, true, true, true],
-                margin: [2, 3, 2, 3]
-              },
-              { 
-                stack: [
-                  { text: 'توقيع المُرسل', fontSize: 8, bold: true, alignment: 'center' },
-                  { text: '', margin: [0, 15, 0, 0] },
-                  { text: '_______________', fontSize: 10, alignment: 'center' },
-                ],
-                border: [true, true, true, true],
-                margin: [2, 3, 2, 3]
-              },
-              { 
-                stack: [
-                  { text: 'توقيع المدير', fontSize: 8, bold: true, alignment: 'center' },
-                  { text: '', margin: [0, 15, 0, 0] },
-                  { text: '_______________', fontSize: 10, alignment: 'center' },
-                ],
-                border: [true, true, true, true],
-                margin: [2, 3, 2, 3]
-              }
-            ]
-          ]
-        },
-        layout: {
-          hLineWidth: () => 0.5,
-          vLineWidth: () => 0.5,
-          hLineColor: () => '#ccc',
-          vLineColor: () => '#ccc',
-        },
+        table: { widths: ['*', '*', '*'], body: [[
+          { stack: [{ text: 'توقيع المستلم', fontSize: 8, bold: true, alignment: 'center' }, { text: '', margin: [0, 15, 0, 0] }, { text: '_______________', fontSize: 10, alignment: 'center' }], border: [true, true, true, true], margin: [2, 3, 2, 3] },
+          { stack: [{ text: 'توقيع المُرسل', fontSize: 8, bold: true, alignment: 'center' }, { text: '', margin: [0, 15, 0, 0] }, { text: '_______________', fontSize: 10, alignment: 'center' }], border: [true, true, true, true], margin: [2, 3, 2, 3] },
+          { stack: [{ text: 'توقيع المدير', fontSize: 8, bold: true, alignment: 'center' }, { text: '', margin: [0, 15, 0, 0] }, { text: '_______________', fontSize: 10, alignment: 'center' }], border: [true, true, true, true], margin: [2, 3, 2, 3] },
+        ]] },
+        layout: { hLineWidth: () => 0.5, vLineWidth: () => 0.5, hLineColor: () => '#ccc', vLineColor: () => '#ccc' },
         margin: [0, 6, 0, 0]
       }
     ],
-    styles: {
-      tableHeader: { bold: true, fontSize: 8, fillColor: '#f0f0f0' }
-    },
-    defaultStyle: {
-      font: amiriFontLoaded ? 'Amiri' : 'Nillima',
-      fontSize: 10,
-      alignment: 'right'
-    }
+    styles: { tableHeader: { bold: true, fontSize: 8, fillColor: '#f0f0f0' } },
+    defaultStyle: { font: amiriFontLoaded ? 'Amiri' : 'Nillima', fontSize: 10, alignment: 'right' }
   };
 
-  pdfMake.createPdf(docDefinition as any).download(`transfer-${transfer.transferNumber}.pdf`);
+  pm.createPdf(docDefinition as any).download(`transfer-${transfer.transferNumber}.pdf`);
 }
 
 export async function generateQuickTransferPdf(transfer: MaterialTransferWithNames): Promise<void> {
+  const pm = await getPdfMake();
   await loadAmiriFont();
   const logoBase64 = await getLogoBase64();
   const statusLabel = STATUS_OPTIONS.find(s => s.value === transfer.status)?.labelAr || transfer.status;
@@ -368,68 +259,39 @@ export async function generateQuickTransferPdf(transfer: MaterialTransferWithNam
     pageSize: 'A4',
     pageOrientation: 'portrait',
     pageMargins: [20, 15, 20, 30],
-    
-    footer: {
-      columns: [
-        { text: 'صفحة 1 من 1', alignment: 'center', fontSize: 8, color: '#666' },
-      ],
-      margin: [20, 5, 20, 0]
-    },
-    
+    footer: { columns: [{ text: 'صفحة 1 من 1', alignment: 'center', fontSize: 8, color: '#666' }], margin: [20, 5, 20, 0] },
     content: [
       {
         columns: [
           logoBase64 ? { image: logoBase64, width: 50, alignment: 'right' } : { text: '', width: 50 },
-          { 
-            stack: [
-              { text: 'BUTTER BAKERY', fontSize: 14, bold: true, color: '#D4A853', alignment: 'center' },
-            ],
-            width: '*',
-            margin: [0, 12, 0, 0]
-          },
+          { stack: [{ text: 'BUTTER BAKERY', fontSize: 14, bold: true, color: '#D4A853', alignment: 'center' }], width: '*', margin: [0, 12, 0, 0] },
           { text: 'أمر تحويل مواد', fontSize: 12, bold: true, alignment: 'left', width: 80, margin: [0, 12, 0, 0] },
         ],
         margin: [0, 0, 0, 8]
       },
-      
       { canvas: [{ type: 'line', x1: 0, y1: 0, x2: 555, y2: 0, lineWidth: 2, lineColor: '#D4A853' }], margin: [0, 0, 0, 10] },
-      
       {
-        table: {
-          widths: ['auto', '*', 'auto', '*', 'auto', '*'],
-          body: [
-            [
-              { text: 'رقم التحويل:', fontSize: 9, color: '#666', border: [false, false, false, false] },
-              { text: transfer.transferNumber, fontSize: 10, bold: true, border: [false, false, false, false] },
-              { text: 'الحالة:', fontSize: 9, color: '#666', border: [false, false, false, false] },
-              { text: statusLabel, fontSize: 10, bold: true, color: '#16a34a', border: [false, false, false, false] },
-              { text: 'التاريخ:', fontSize: 9, color: '#666', border: [false, false, false, false] },
-              { text: transferDate, fontSize: 10, bold: true, border: [false, false, false, false] },
-            ]
-          ]
-        },
-        layout: 'noBorders',
-        margin: [0, 0, 0, 6]
+        table: { widths: ['auto', '*', 'auto', '*', 'auto', '*'], body: [[
+          { text: 'رقم التحويل:', fontSize: 9, color: '#666', border: [false, false, false, false] },
+          { text: transfer.transferNumber, fontSize: 10, bold: true, border: [false, false, false, false] },
+          { text: 'الحالة:', fontSize: 9, color: '#666', border: [false, false, false, false] },
+          { text: statusLabel, fontSize: 10, bold: true, color: '#16a34a', border: [false, false, false, false] },
+          { text: 'التاريخ:', fontSize: 9, color: '#666', border: [false, false, false, false] },
+          { text: transferDate, fontSize: 10, bold: true, border: [false, false, false, false] },
+        ]] },
+        layout: 'noBorders', margin: [0, 0, 0, 6]
       },
-      
       {
-        table: {
-          widths: ['auto', '*', 'auto', 'auto', '*', 'auto'],
-          body: [
-            [
-              { text: 'من:', fontSize: 8, color: '#666', border: [false, false, false, false] },
-              { text: srcName, fontSize: 9, bold: true, border: [false, false, false, false] },
-              { text: '←', fontSize: 10, alignment: 'center', border: [false, false, false, false] },
-              { text: 'إلى:', fontSize: 8, color: '#666', border: [false, false, false, false] },
-              { text: destName, fontSize: 9, bold: true, border: [false, false, false, false] },
-              { text: '', border: [false, false, false, false] },
-            ]
-          ]
-        },
-        layout: 'noBorders',
-        margin: [0, 0, 0, 4]
+        table: { widths: ['auto', '*', 'auto', 'auto', '*', 'auto'], body: [[
+          { text: 'من:', fontSize: 8, color: '#666', border: [false, false, false, false] },
+          { text: srcName, fontSize: 9, bold: true, border: [false, false, false, false] },
+          { text: '←', fontSize: 10, alignment: 'center', border: [false, false, false, false] },
+          { text: 'إلى:', fontSize: 8, color: '#666', border: [false, false, false, false] },
+          { text: destName, fontSize: 9, bold: true, border: [false, false, false, false] },
+          { text: '', border: [false, false, false, false] },
+        ]] },
+        layout: 'noBorders', margin: [0, 0, 0, 4]
       },
-      
       {
         columns: [
           { text: `وقت الطلب: ${requestDate}`, fontSize: 7, color: '#888', alignment: 'right' },
@@ -437,93 +299,35 @@ export async function generateQuickTransferPdf(transfer: MaterialTransferWithNam
         ],
         margin: [0, 0, 0, 6]
       },
-      
-      ...(transfer.driverName || transfer.vehicleNumber ? [
-        {
-          table: {
-            widths: ['auto', '*', 'auto', '*'],
-            body: [
-              [
-                { text: 'السائق:', fontSize: 8, color: '#666', border: [false, false, false, false] },
-                { text: transfer.driverName || '-', fontSize: 9, bold: true, border: [false, false, false, false] },
-                { text: 'المركبة:', fontSize: 8, color: '#666', border: [false, false, false, false] },
-                { text: transfer.vehicleNumber || '-', fontSize: 9, bold: true, border: [false, false, false, false] },
-              ]
-            ]
-          },
-          layout: 'noBorders',
-          margin: [0, 0, 0, 6]
-        }
-      ] : []),
-      
+      ...(transfer.driverName || transfer.vehicleNumber ? [{
+        table: { widths: ['auto', '*', 'auto', '*'], body: [[
+          { text: 'السائق:', fontSize: 8, color: '#666', border: [false, false, false, false] },
+          { text: transfer.driverName || '-', fontSize: 9, bold: true, border: [false, false, false, false] },
+          { text: 'المركبة:', fontSize: 8, color: '#666', border: [false, false, false, false] },
+          { text: transfer.vehicleNumber || '-', fontSize: 9, bold: true, border: [false, false, false, false] },
+        ]] },
+        layout: 'noBorders', margin: [0, 0, 0, 6]
+      }] : []),
+      { text: 'ملاحظة: للحصول على قائمة الأصناف، استخدم زر عرض ثم PDF', fontSize: 8, color: '#888', alignment: 'center', margin: [0, 10, 0, 10] },
+      ...(transfer.notes ? [{
+        columns: [
+          { text: 'ملاحظات:', fontSize: 8, color: '#666', width: 'auto' },
+          { text: transfer.notes, fontSize: 8, margin: [5, 0, 0, 0] }
+        ],
+        margin: [0, 0, 0, 8]
+      }] : []),
       {
-        text: 'ملاحظة: للحصول على قائمة الأصناف، استخدم زر عرض ثم PDF',
-        fontSize: 8,
-        color: '#888',
-        alignment: 'center',
-        margin: [0, 10, 0, 10]
-      },
-      
-      ...(transfer.notes ? [
-        {
-          columns: [
-            { text: 'ملاحظات:', fontSize: 8, color: '#666', width: 'auto' },
-            { text: transfer.notes, fontSize: 8, margin: [5, 0, 0, 0] }
-          ],
-          margin: [0, 0, 0, 8]
-        }
-      ] : []),
-      
-      {
-        table: {
-          widths: ['*', '*', '*'],
-          body: [
-            [
-              { 
-                stack: [
-                  { text: 'توقيع المستلم', fontSize: 8, bold: true, alignment: 'center' },
-                  { text: '', margin: [0, 15, 0, 0] },
-                  { text: '_______________', fontSize: 10, alignment: 'center' },
-                ],
-                border: [true, true, true, true],
-                margin: [2, 3, 2, 3]
-              },
-              { 
-                stack: [
-                  { text: 'توقيع المُرسل', fontSize: 8, bold: true, alignment: 'center' },
-                  { text: '', margin: [0, 15, 0, 0] },
-                  { text: '_______________', fontSize: 10, alignment: 'center' },
-                ],
-                border: [true, true, true, true],
-                margin: [2, 3, 2, 3]
-              },
-              { 
-                stack: [
-                  { text: 'توقيع المدير', fontSize: 8, bold: true, alignment: 'center' },
-                  { text: '', margin: [0, 15, 0, 0] },
-                  { text: '_______________', fontSize: 10, alignment: 'center' },
-                ],
-                border: [true, true, true, true],
-                margin: [2, 3, 2, 3]
-              }
-            ]
-          ]
-        },
-        layout: {
-          hLineWidth: () => 0.5,
-          vLineWidth: () => 0.5,
-          hLineColor: () => '#ccc',
-          vLineColor: () => '#ccc',
-        },
+        table: { widths: ['*', '*', '*'], body: [[
+          { stack: [{ text: 'توقيع المستلم', fontSize: 8, bold: true, alignment: 'center' }, { text: '', margin: [0, 15, 0, 0] }, { text: '_______________', fontSize: 10, alignment: 'center' }], border: [true, true, true, true], margin: [2, 3, 2, 3] },
+          { stack: [{ text: 'توقيع المُرسل', fontSize: 8, bold: true, alignment: 'center' }, { text: '', margin: [0, 15, 0, 0] }, { text: '_______________', fontSize: 10, alignment: 'center' }], border: [true, true, true, true], margin: [2, 3, 2, 3] },
+          { stack: [{ text: 'توقيع المدير', fontSize: 8, bold: true, alignment: 'center' }, { text: '', margin: [0, 15, 0, 0] }, { text: '_______________', fontSize: 10, alignment: 'center' }], border: [true, true, true, true], margin: [2, 3, 2, 3] },
+        ]] },
+        layout: { hLineWidth: () => 0.5, vLineWidth: () => 0.5, hLineColor: () => '#ccc', vLineColor: () => '#ccc' },
         margin: [0, 6, 0, 0]
       }
     ],
-    defaultStyle: {
-      font: amiriFontLoaded ? 'Amiri' : 'Nillima',
-      fontSize: 10,
-      alignment: 'right'
-    }
+    defaultStyle: { font: amiriFontLoaded ? 'Amiri' : 'Nillima', fontSize: 10, alignment: 'right' }
   };
 
-  pdfMake.createPdf(docDefinition as any).download(`transfer-${transfer.transferNumber}.pdf`);
+  pm.createPdf(docDefinition as any).download(`transfer-${transfer.transferNumber}.pdf`);
 }

@@ -26,7 +26,6 @@ import {
   PieChart, Pie, Cell, LineChart, Line, Legend, AreaChart, Area
 } from "recharts";
 import type { Branch, CashierSalesJournal, JournalAttachment } from "@shared/schema";
-import * as XLSX from "xlsx";
 import { printHtmlContent } from "@/lib/print-utils";
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
@@ -1014,9 +1013,10 @@ export default function OperationsReportsDashboardPage() {
     return `${value.toFixed(1)}%`;
   };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (!report) return;
 
+    const XLSX = await import("xlsx");
     const wb = XLSX.utils.book_new();
 
     const salesData = [
@@ -3797,7 +3797,8 @@ export default function OperationsReportsDashboardPage() {
                 };
 
                 // Excel export for returns
-                const handleExportReturnsExcel = () => {
+                const handleExportReturnsExcel = async () => {
+                  const XLSX = await import("xlsx");
                   const wb = XLSX.utils.book_new();
                   
                   // Summary sheet
@@ -4332,7 +4333,8 @@ export default function OperationsReportsDashboardPage() {
                 };
 
                 // Excel export for discrepancies
-                const handleExportDiscrepanciesExcel = () => {
+                const handleExportDiscrepanciesExcel = async () => {
+                  const XLSX = await import("xlsx");
                   const wb = XLSX.utils.book_new();
                   
                   // Summary sheet
@@ -5073,7 +5075,8 @@ export default function OperationsReportsDashboardPage() {
                         variant="outline"
                         className="gap-2 border-green-600 text-green-600 hover:bg-green-50" 
                         data-testid="button-export-payment-mismatch-excel"
-                        onClick={() => {
+                        onClick={async () => {
+                          const XLSX = await import("xlsx");
                           const wb = XLSX.utils.book_new();
                           
                           const summaryData = [
@@ -6098,8 +6101,9 @@ export default function OperationsReportsDashboardPage() {
                   التقرير التنفيذي الشامل
                 </h2>
                 <div className="flex gap-2">
-                  <Button variant="outline" className="gap-2" data-testid="button-export-executive-excel" onClick={() => {
+                  <Button variant="outline" className="gap-2" data-testid="button-export-executive-excel" onClick={async () => {
                     if (!executiveSummary) return;
+                    const XLSX = await import("xlsx");
                     const wb = XLSX.utils.book_new();
                     
                     const summaryData = [

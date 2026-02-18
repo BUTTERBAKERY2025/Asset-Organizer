@@ -10,7 +10,6 @@ import { Upload, Download, FileSpreadsheet, CheckCircle2, XCircle, AlertTriangle
 import { useToast } from "@/hooks/use-toast";
 import { useBranches } from "@/hooks/useBranches";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import * as XLSX from "xlsx";
 
 interface ExcelImportDialogProps {
   open: boolean;
@@ -115,7 +114,8 @@ export function ExcelImportDialog({ open, onOpenChange }: ExcelImportDialogProps
     onOpenChange(false);
   };
 
-  const downloadTemplate = () => {
+  const downloadTemplate = async () => {
+    const XLSX = await import("xlsx");
     const templateData = [
       TEMPLATE_COLUMNS.reduce((acc, col) => {
         acc[col.label] = col.required ? `(مطلوب) مثال: ${getExampleValue(col.key)}` : `مثال: ${getExampleValue(col.key)}`;
@@ -160,8 +160,9 @@ export function ExcelImportDialog({ open, onOpenChange }: ExcelImportDialogProps
     setFileName(file.name);
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
+        const XLSX = await import("xlsx");
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: "array" });
         const sheetName = workbook.SheetNames[0];

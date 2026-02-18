@@ -17,7 +17,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, Printer, AlertTriangle, XCircle, HelpCircle, Download, ArrowRight } from "lucide-react";
 import { Link } from "wouter";
 import { useReactToPrint } from "react-to-print";
-import * as XLSX from "xlsx";
 import type { Branch, InventoryItem } from "@shared/schema";
 import { PrintHeader, PrintFooter } from "@/components/print-header";
 import { finalizeBrandedWorkbook } from "@/lib/excel-utils";
@@ -90,7 +89,8 @@ export default function MaintenancePage() {
     }
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
+    const XLSX = await import("xlsx");
     const exportData = problemItems.map(item => ({
       "المعرف": item.id,
       "الفرع": branchMap[item.branchId] || item.branchId,
@@ -106,7 +106,7 @@ export default function MaintenancePage() {
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "تقرير الصيانة");
-    finalizeBrandedWorkbook(workbook, "تقرير الصيانة والأصناف المفقودة");
+    await finalizeBrandedWorkbook(workbook, "تقرير الصيانة والأصناف المفقودة");
     XLSX.writeFile(workbook, "maintenance_report.xlsx");
   };
 

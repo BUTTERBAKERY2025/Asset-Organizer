@@ -9,7 +9,6 @@ import { useReactToPrint } from "react-to-print";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Link } from "wouter";
-import * as XLSX from "xlsx";
 import { Layout } from "@/components/layout";
 import { 
   FileText, 
@@ -126,7 +125,8 @@ export default function ExecutiveReports() {
     documentTitle: `تقرير السكرتارية التنفيذية - ${format(new Date(), 'yyyy-MM-dd')}`,
   });
 
-  const exportToExcel = (data: any[], filename: string, sheetName: string) => {
+  const exportToExcel = async (data: any[], filename: string, sheetName: string) => {
+    const XLSX = await import("xlsx");
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, sheetName);

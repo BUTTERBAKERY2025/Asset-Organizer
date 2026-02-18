@@ -19,7 +19,6 @@ import { Link } from "wouter";
 import { ExportButtons } from "@/components/export-buttons";
 import { TablePagination } from "@/components/ui/pagination";
 import { useReactToPrint } from "react-to-print";
-import * as XLSX from "xlsx";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from "recharts";
 import type { ConstructionProject, ConstructionCategory, Contractor, ProjectWorkItem } from "@shared/schema";
 
@@ -487,7 +486,8 @@ export default function ConstructionReportsPage() {
     }, 500);
   };
 
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
+    const XLSX = await import("xlsx");
     const projectsData = filteredProjects.map(project => ({
       "الفرع": branchMap[project.branchId] || project.branchId,
       "اسم المشروع": project.title,

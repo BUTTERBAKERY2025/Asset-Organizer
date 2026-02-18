@@ -19,7 +19,6 @@ import { useLocation, Link } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
-import * as XLSX from "xlsx";
 
 interface SalesDataUpload {
   id: number;
@@ -231,8 +230,9 @@ export default function SalesDataUploadsPage() {
   const parseExcelFile = async (file: File): Promise<any[]> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
         try {
+          const XLSX = await import("xlsx");
           const data = e.target?.result;
           const workbook = XLSX.read(data, { type: "binary" });
           const firstSheet = workbook.Sheets[workbook.SheetNames[0]];

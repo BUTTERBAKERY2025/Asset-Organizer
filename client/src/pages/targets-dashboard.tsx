@@ -12,7 +12,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Target, TrendingUp, TrendingDown, Building2, Users, Trophy, ChevronLeft, Calendar, Award, AlertTriangle, Bell, Clock, CheckCircle2, FileSpreadsheet, FileText, ArrowRight, Star, Gift, DollarSign } from "lucide-react";
 import { Link } from "wouter";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend, PieChart, Pie, Cell } from "recharts";
-import * as XLSX from "xlsx";
 import { useBranches } from "@/hooks/useBranches";
 
 interface BranchPerformance {
@@ -240,7 +239,8 @@ export default function TargetsDashboard() {
   const totalAchieved = leaderboard?.branches.reduce((sum, b) => sum + b.achieved, 0) || 0;
   const overallPercent = totalTarget > 0 ? (totalAchieved / totalTarget) * 100 : 0;
 
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
+    const XLSX = await import("xlsx");
     const wb = XLSX.utils.book_new();
     
     if (leaderboard?.branches?.length) {
@@ -313,11 +313,12 @@ export default function TargetsDashboard() {
     XLSX.writeFile(wb, `تقرير_الأهداف_${selectedMonth}.xlsx`);
   };
 
-  const exportBranchReport = () => {
+  const exportBranchReport = async () => {
     if (selectedBranch === "all" || !branchProgress) {
       return;
     }
     
+    const XLSX = await import("xlsx");
     const branchName = branches.find(b => b.id === selectedBranch)?.name || selectedBranch;
     const wb = XLSX.utils.book_new();
     

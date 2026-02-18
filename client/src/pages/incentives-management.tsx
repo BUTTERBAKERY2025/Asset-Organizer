@@ -21,7 +21,6 @@ import {
   Trash2, TrendingUp, Users, Calendar, Eye, Pencil, RefreshCw, MoreVertical
 } from "lucide-react";
 import { Link } from "wouter";
-import * as XLSX from "xlsx";
 import type {
   Branch, IncentiveTier, IncentiveAward,
   CashierDailyChallenge, ProductCommission, BranchAchievementBonus,
@@ -715,7 +714,8 @@ export default function IncentivesManagement() {
     approved: ledgerEntries.filter((e) => e.status === "approved" || e.status === "paid").length,
   };
 
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
+    const XLSX = await import("xlsx");
     const wb = XLSX.utils.book_new();
 
     if (awards?.length) {

@@ -35,7 +35,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import * as XLSX from "xlsx";
 import { useReactToPrint } from "react-to-print";
 
 const DESTINATION_TYPES = [
@@ -200,7 +199,8 @@ export default function FinishedGoodsInventoryPage() {
 
   const handlePrint = useReactToPrint({ contentRef: printRef });
 
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
+    const XLSX = await import("xlsx");
     if (!filteredInventory.length) {
       toast({ title: "لا توجد بيانات للتصدير", variant: "destructive" });
       return;

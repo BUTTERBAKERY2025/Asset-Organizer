@@ -10,7 +10,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import { Skeleton } from "@/components/ui/skeleton";
-import * as XLSX from "xlsx";
 import {
   ArrowRight,
   Calendar,
@@ -98,7 +97,8 @@ export default function BranchDailyClosureDetailPage() {
 
   const branchName = branches?.find((b: any) => b.id === closure?.branchId)?.name || closure?.branchId;
 
-  const exportBankCommissionExcel = () => {
+  const exportBankCommissionExcel = async () => {
+    const XLSX = await import("xlsx");
     if (!closure) return;
 
     const bankPayments = (closure.payments || []).filter((p: any) => BANK_COMMISSION_RATES[p.paymentMethod]);

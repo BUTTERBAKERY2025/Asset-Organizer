@@ -17,7 +17,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Target, Plus, Calendar, TrendingUp, Building2, Settings, Play, Edit, Trash2, Copy, Lock, Unlock, FileSpreadsheet, FileText, CheckCircle, RefreshCw, Zap, PenLine, Save, X, ArrowRight, Users, Award } from "lucide-react";
 import { Link } from "wouter";
-import * as XLSX from "xlsx";
 import { downloadArabicPdf } from "@/lib/pdfmake-arabic";
 import type { Branch, BranchMonthlyTarget, TargetWeightProfile, TargetDailyAllocation, SeasonHoliday } from "@shared/schema";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -399,7 +398,8 @@ export default function TargetsPlanning() {
   const branchesWithTargets = new Set(targets.map(t => t.branchId));
   const branchesWithoutTargets = branches.filter(b => !branchesWithTargets.has(b.id));
 
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
+    const XLSX = await import("xlsx");
     const wb = XLSX.utils.book_new();
     
     if (targets?.length) {

@@ -42,7 +42,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useBranches } from "@/hooks/useBranches";
 import { Plus, Pencil, Trash2, Search, Loader2, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Eye, Upload, Download, Camera, ArrowRight } from "lucide-react";
 import { Link } from "wouter";
-import * as XLSX from "xlsx";
 import type { InventoryItem } from "@shared/schema";
 import { AssetDetailsDialog } from "@/components/asset-details-dialog";
 import { CameraCapture } from "@/components/camera-capture";
@@ -215,8 +214,9 @@ export default function ManagePage() {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
+        const XLSX = await import("xlsx");
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: "array" });
         const sheetName = workbook.SheetNames[0];
@@ -239,7 +239,8 @@ export default function ManagePage() {
     importMutation.mutate({ items: importPreview, branchId: importBranch });
   };
 
-  const downloadTemplate = () => {
+  const downloadTemplate = async () => {
+    const XLSX = await import("xlsx");
     const template = [
       { name: "اسم الصنف", category: "المطبخ", quantity: 1, unit: "حبة", price: 100, status: "good", notes: "ملاحظات" }
     ];

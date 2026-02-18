@@ -8,7 +8,6 @@ import { Separator } from "@/components/ui/separator";
 import { Printer, Download, X, Package, Calendar, DollarSign, MapPin, FileText, Hash, Clock, AlertTriangle, CheckCircle2, XCircle, HelpCircle, Wrench, ArrowLeftRight, ArrowRight } from "lucide-react";
 import { useBranches } from "@/hooks/useBranches";
 import type { InventoryItem, AssetTransfer } from "@shared/schema";
-import * as XLSX from "xlsx";
 
 interface ItemCardDialogProps {
   item: InventoryItem | null;
@@ -93,7 +92,7 @@ export function ItemCardDialog({ item, branchName, open, onOpenChange }: ItemCar
     documentTitle: item ? `كارت صنف - ${item.name}` : "كارت صنف",
   });
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (!item) return;
     
     const total = (item.price || 0) * item.quantity;
@@ -120,6 +119,7 @@ export function ItemCardDialog({ item, branchName, open, onOpenChange }: ItemCar
       { الحقل: "آخر تحديث", القيمة: formatDate(item.updatedAt) },
     ];
 
+    const XLSX = await import("xlsx");
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "كارت الصنف");

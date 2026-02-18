@@ -1,11 +1,11 @@
-import * as XLSX from "xlsx";
-
 const BRANDING_SHEET_NAME = "غلاف التقرير";
 
-export function addBrandingSheet(workbook: XLSX.WorkBook, reportTitle: string) {
+export async function addBrandingSheet(workbook: any, reportTitle: string) {
   if (workbook.SheetNames.includes(BRANDING_SHEET_NAME)) {
     return workbook;
   }
+  
+  const XLSX = await import("xlsx");
   
   const currentDate = new Date().toLocaleDateString('en-GB', {
     year: 'numeric',
@@ -52,11 +52,12 @@ export function addBrandingSheet(workbook: XLSX.WorkBook, reportTitle: string) {
   return workbook;
 }
 
-export function createBrandedWorkbook(reportTitle: string): XLSX.WorkBook {
+export async function createBrandedWorkbook(reportTitle: string) {
+  const XLSX = await import("xlsx");
   const wb = XLSX.utils.book_new();
   return wb;
 }
 
-export function finalizeBrandedWorkbook(workbook: XLSX.WorkBook, reportTitle: string): XLSX.WorkBook {
+export async function finalizeBrandedWorkbook(workbook: any, reportTitle: string) {
   return addBrandingSheet(workbook, reportTitle);
 }

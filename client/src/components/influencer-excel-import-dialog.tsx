@@ -16,7 +16,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Download, Upload, FileSpreadsheet, CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import * as XLSX from "xlsx";
 
 interface InfluencerExcelImportDialogProps {
   open: boolean;
@@ -152,7 +151,8 @@ export function InfluencerExcelImportDialog({ open, onOpenChange }: InfluencerEx
     onOpenChange(false);
   };
 
-  const downloadTemplate = () => {
+  const downloadTemplate = async () => {
+    const XLSX = await import("xlsx");
     const wb = XLSX.utils.book_new();
     const headers = TEMPLATE_COLUMNS.map(col => col.label);
     const exampleRow = TEMPLATE_COLUMNS.map(col => getExampleValue(col.key));
@@ -197,8 +197,9 @@ export function InfluencerExcelImportDialog({ open, onOpenChange }: InfluencerEx
     setFileName(file.name);
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
+        const XLSX = await import("xlsx");
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: "array" });
         const sheetName = workbook.SheetNames[0];

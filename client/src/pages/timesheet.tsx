@@ -17,7 +17,6 @@ import { ar, enUS } from "date-fns/locale";
 import { Calendar, FileText, Pen, Printer, Download, Loader2, CheckCircle, Clock, AlertCircle, User, Check, XCircle, ArrowRight } from "lucide-react";
 import { useLocation } from "wouter";
 import SignatureCanvas from "react-signature-canvas";
-import * as XLSX from "xlsx";
 
 interface Branch {
   id: string;
@@ -317,7 +316,8 @@ export default function TimesheetPage() {
     return `${employee.firstName || ""} ${employee.lastName || ""}`.trim() || employee.username || t("timesheet.unknownEmployee");
   }, [allUsers, branchEmployees, t]);
 
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
+    const XLSX = await import("xlsx");
     if (!selectedReport || reportEntries.length === 0) {
       toast({ title: t("common.alert"), description: t("timesheet.noDataToExport"), variant: "destructive" });
       return;

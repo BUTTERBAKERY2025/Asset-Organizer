@@ -22,7 +22,6 @@ import { Label } from "@/components/ui/label";
 import { Search, Download, Printer, CheckCircle2, AlertTriangle, XCircle, HelpCircle, Loader2, Upload, ArrowRight } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import * as XLSX from "xlsx";
 import { finalizeBrandedWorkbook } from "@/lib/excel-utils";
 import type { Branch, InventoryItem } from "@shared/schema";
 import { AdvancedFilters, defaultFilters, type FilterConfig } from "@/components/advanced-filters";
@@ -197,7 +196,8 @@ export default function InventoryPage() {
     documentTitle: isGlobalSearch ? "بحث شامل - كل الفروع" : `جرد الأصول - ${currentBranchName}`,
   });
 
-  const handleExport = () => {
+  const handleExport = async () => {
+    const XLSX = await import("xlsx");
     const itemsToExport = isGlobalSearch ? allItems : currentBranchItems;
     
     const exportData = itemsToExport.map(item => {
@@ -246,7 +246,7 @@ export default function InventoryPage() {
     XLSX.utils.book_append_sheet(wb, ws, "المخزون");
     
     const reportTitle = isGlobalSearch ? "تقرير المخزون - جميع الفروع" : `تقرير المخزون - ${currentBranchName}`;
-    finalizeBrandedWorkbook(wb, reportTitle);
+    await finalizeBrandedWorkbook(wb, reportTitle);
     
     const date = new Date().toISOString().split('T')[0];
     const fileName = `inventory_${isGlobalSearch ? 'all_branches' : activeBranch}_${date}.xlsx`;

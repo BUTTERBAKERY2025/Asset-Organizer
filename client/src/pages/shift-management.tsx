@@ -24,7 +24,6 @@ import { format, startOfWeek, endOfWeek, addDays, addWeeks, subWeeks, startOfMon
 import { ar, enUS } from "date-fns/locale";
 import { useTranslation } from "react-i18next";
 import type { User, Branch, SchedulePeriod, EmployeeSchedule, AttendanceRecord, BranchEmployee, WeeklyScheduleLock, ScheduleChangeAudit } from "@shared/schema";
-import * as XLSX from "xlsx";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 
 const DAYS_AR = ["السبت", "الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة"];
@@ -588,7 +587,7 @@ export default function ShiftManagementPage() {
     }
   };
 
-  const exportWeeklyReport = () => {
+  const exportWeeklyReport = async () => {
     if (selectedBranch === "all") {
       toast({ title: "تنبيه", description: "يرجى اختيار فرع محدد أولاً", variant: "destructive" });
       return;
@@ -646,6 +645,7 @@ export default function ShiftManagementPage() {
         reportData.push(row);
       });
       
+      const XLSX = await import("xlsx");
       const ws = XLSX.utils.json_to_sheet(reportData);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "تقرير الدوام");
@@ -711,6 +711,7 @@ export default function ShiftManagementPage() {
         });
       });
       
+      const XLSX = await import("xlsx");
       const ws = XLSX.utils.json_to_sheet(reportData);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "التقرير الشهري");
@@ -828,7 +829,7 @@ export default function ShiftManagementPage() {
     return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
   };
 
-  const exportScheduleToExcel = () => {
+  const exportScheduleToExcel = async () => {
     if (selectedBranch === "all") {
       toast({ title: "تنبيه", description: "يرجى اختيار فرع محدد أولاً", variant: "destructive" });
       return;
@@ -866,6 +867,7 @@ export default function ShiftManagementPage() {
         reportData.push(row);
       });
       
+      const XLSX = await import("xlsx");
       const ws = XLSX.utils.json_to_sheet(reportData);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "جدول الدوام");
@@ -1160,7 +1162,7 @@ export default function ShiftManagementPage() {
     }
   };
 
-  const exportAttendanceToExcel = () => {
+  const exportAttendanceToExcel = async () => {
     if (selectedBranch === "all") {
       toast({ title: "تنبيه", description: "يرجى اختيار فرع محدد أولاً", variant: "destructive" });
       return;
@@ -1212,6 +1214,7 @@ export default function ShiftManagementPage() {
           });
         });
       });
+      const XLSX = await import("xlsx");
       const ws = XLSX.utils.json_to_sheet(reportRows);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "سجل الحضور");
@@ -1416,7 +1419,7 @@ export default function ShiftManagementPage() {
   const [, navigate] = useLocation();
 
   // Download Excel template for importing schedules
-  const downloadImportTemplate = () => {
+  const downloadImportTemplate = async () => {
     if (selectedBranch === "all") {
       toast({ title: "تنبيه", description: "يرجى اختيار فرع محدد أولاً", variant: "destructive" });
       return;
@@ -1438,11 +1441,11 @@ export default function ShiftManagementPage() {
       return row;
     });
 
+    const XLSX = await import("xlsx");
     const ws = XLSX.utils.json_to_sheet(templateData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Schedule Template");
     
-    // Add instructions sheet
     const instructions = [
       { "التعليمات Instructions": "كيفية ملء الجدول / How to fill the schedule:" },
       { "التعليمات Instructions": "" },
@@ -1470,8 +1473,9 @@ export default function ShiftManagementPage() {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
+        const XLSX = await import("xlsx");
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: "array" });
         const sheetName = workbook.SheetNames[0];
@@ -2427,7 +2431,7 @@ export default function ShiftManagementPage() {
                     <Button 
                       variant="outline" 
                       className="flex-1 gap-2"
-                      onClick={() => {
+                      onClick={async () => {
                         try {
                           const reportData = reportFilteredEmployees.map(employee => {
                             const empIdStr = String(employee.id);
@@ -2446,6 +2450,7 @@ export default function ShiftManagementPage() {
                               "نسبة الحضور": `${rate}%`
                             };
                           });
+                          const XLSX = await import("xlsx");
                           const ws = XLSX.utils.json_to_sheet(reportData);
                           const wb = XLSX.utils.book_new();
                           XLSX.utils.book_append_sheet(wb, ws, "تقرير تفصيلي");
@@ -2609,7 +2614,7 @@ export default function ShiftManagementPage() {
                   <Button 
                     variant="outline" 
                     className="w-full mt-4 gap-2"
-                    onClick={() => {
+                    onClick={async () => {
                       try {
                         const reportData = reportFilteredEmployees.map(employee => {
                           const empIdStr = String(employee.id);
@@ -2664,6 +2669,7 @@ export default function ShiftManagementPage() {
                             "الفرق": ((totalActualMinutes - totalScheduledMinutes) / 60).toFixed(1)
                           };
                         });
+                        const XLSX = await import("xlsx");
                         const ws = XLSX.utils.json_to_sheet(reportData);
                         const wb = XLSX.utils.book_new();
                         XLSX.utils.book_append_sheet(wb, ws, "ساعات العمل");
@@ -2791,7 +2797,7 @@ export default function ShiftManagementPage() {
                   <Button 
                     variant="outline" 
                     className="w-full mt-4 gap-2"
-                    onClick={() => {
+                    onClick={async () => {
                       try {
                         const reportData = reportFilteredEmployees.map(employee => {
                           const empAttendance = getReportAttendance(employee);
@@ -2840,6 +2846,7 @@ export default function ShiftManagementPage() {
                             "نسبة الالتزام": checkInCount > 0 ? `${Math.round((onTimeCount / checkInCount) * 100)}%` : '0%'
                           };
                         });
+                        const XLSX = await import("xlsx");
                         const ws = XLSX.utils.json_to_sheet(reportData);
                         const wb = XLSX.utils.book_new();
                         XLSX.utils.book_append_sheet(wb, ws, "الانضباط");
@@ -2919,7 +2926,7 @@ export default function ShiftManagementPage() {
                   <Button 
                     variant="outline" 
                     className="w-full mt-4 gap-2"
-                    onClick={() => {
+                    onClick={async () => {
                       try {
                         const reportData: any[] = [];
                         reportFilteredEmployees.forEach(employee => {
@@ -2942,6 +2949,7 @@ export default function ShiftManagementPage() {
                           });
                         });
                         
+                        const XLSX = await import("xlsx");
                         const ws = XLSX.utils.json_to_sheet(reportData);
                         const wb = XLSX.utils.book_new();
                         XLSX.utils.book_append_sheet(wb, ws, "الغياب");
@@ -3181,7 +3189,7 @@ export default function ShiftManagementPage() {
                             <Button 
                               variant="outline" 
                               className="flex-1 gap-2"
-                              onClick={() => {
+                              onClick={async () => {
                                 try {
                                   const selectedEmp = filteredEmployees.find(e => String(e.id) === signatureReportEmployee);
                                   const reportData = employeeReportData.map(record => {
@@ -3208,6 +3216,7 @@ export default function ShiftManagementPage() {
                                       "التوقيع": record.checkInSignature || record.checkOutSignature ? "موقع" : "غير موقع"
                                     };
                                   });
+                                  const XLSX = await import("xlsx");
                                   const ws = XLSX.utils.json_to_sheet(reportData);
                                   const wb = XLSX.utils.book_new();
                                   XLSX.utils.book_append_sheet(wb, ws, "تقرير الموظف");

@@ -30,7 +30,6 @@ import { z } from "zod";
 import { useReactToPrint } from "react-to-print";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "react-i18next";
-import * as XLSX from "xlsx";
 import {
   Users,
   ChevronLeft,
@@ -1367,8 +1366,9 @@ export default function BranchEmployeesPage() {
     setImportFile(file);
     
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       try {
+        const XLSX = await import("xlsx");
         const data = new Uint8Array(event.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: "array" });
         const sheetName = workbook.SheetNames[0];
@@ -1397,6 +1397,7 @@ export default function BranchEmployeesPage() {
     try {
       const reader = new FileReader();
       reader.onload = async (event) => {
+        const XLSX = await import("xlsx");
         const data = new Uint8Array(event.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: "array" });
         const sheetName = workbook.SheetNames[0];
@@ -1477,7 +1478,8 @@ export default function BranchEmployeesPage() {
     documentTitle: "موظفي الفروع - BUTTER BAKERY",
   });
 
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
+    const XLSX = await import("xlsx");
     const data = filteredEmployees.map((emp: BranchEmployee, index: number) => ({
       "م": index + 1,
       "الاسم": emp.employeeName,

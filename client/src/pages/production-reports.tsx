@@ -45,7 +45,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useProductionContext } from "@/contexts/ProductionContext";
 import { useBranches } from "@/hooks/useBranches";
-import * as XLSX from "xlsx";
 import {
   LineChart,
   Line,
@@ -781,6 +780,7 @@ export default function ProductionReportsPage() {
     setIsExporting("excel");
     
     try {
+      const XLSX = await import("xlsx");
       const wb = XLSX.utils.book_new();
       const branchName = branches?.find(b => b.id === selectedBranch)?.name || "جميع الفروع";
       

@@ -11,7 +11,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Loader2, Hammer, DollarSign, Clock, CheckCircle2, AlertTriangle, TrendingUp, TrendingDown, Building2, Users, Download, FileSpreadsheet, Printer, BarChart3, PieChartIcon, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line, ComposedChart, Area } from "recharts";
 import { useReactToPrint } from "react-to-print";
-import * as XLSX from "xlsx";
 import { finalizeBrandedWorkbook } from "@/lib/excel-utils";
 import type { ConstructionProject, Contractor, ConstructionCategory, ProjectWorkItem } from "@shared/schema";
 
@@ -208,7 +207,8 @@ export default function ConstructionDashboardPage() {
       .slice(0, 5);
   }, [projects]);
 
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
+    const XLSX = await import("xlsx");
     const projectsData = projects.map(p => ({
       'المشروع': p.title,
       'الفرع': branchMap[p.branchId] || p.branchId,
@@ -247,7 +247,7 @@ export default function ConstructionDashboardPage() {
     const ws3 = XLSX.utils.json_to_sheet(branchData);
     XLSX.utils.book_append_sheet(wb, ws3, "الفروع");
 
-    finalizeBrandedWorkbook(wb, "تقرير لوحة تحكم المشاريع الإنشائية");
+    await finalizeBrandedWorkbook(wb, "تقرير لوحة تحكم المشاريع الإنشائية");
     XLSX.writeFile(wb, `تقرير_لوحة_التحكم_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 

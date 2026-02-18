@@ -27,7 +27,6 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Link } from "wouter";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line, Legend, PieChart, Pie, Cell } from "recharts";
-import * as XLSX from "xlsx";
 import type { Branch, PerformanceAlert, ShiftPerformanceTracking, User, CashierIncentiveStatement } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -592,7 +591,8 @@ export default function CashierShiftPerformance() {
     });
   };
 
-  const handleExportStatementExcel = (stmt: any) => {
+  const handleExportStatementExcel = async (stmt: any) => {
+    const XLSX = await import("xlsx");
     const data = stmt.statementData ? JSON.parse(stmt.statementData) : null;
     if (!data) return;
     
@@ -840,7 +840,8 @@ export default function CashierShiftPerformance() {
     }).format(amount) + ' ر.س';
   };
 
-  const exportReportExcel = () => {
+  const exportReportExcel = async () => {
+    const XLSX = await import("xlsx");
     if (cashierJournals.length === 0) return toast.error("لا توجد بيانات للتصدير");
     const data = cashierJournals.map(j => ({
       'التاريخ': j.date,

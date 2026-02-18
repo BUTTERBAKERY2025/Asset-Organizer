@@ -42,7 +42,6 @@ import {
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowRight, Plus, Pencil, Trash2, Loader2, Building2, Calendar, DollarSign, CheckCircle2, Clock, Pause, FileSpreadsheet, Printer, Download, ChevronDown, Calculator } from "lucide-react";
-import * as XLSX from "xlsx";
 import { useRef, useMemo } from "react";
 import { useReactToPrint } from "react-to-print";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -423,7 +422,8 @@ export default function ConstructionProjectDetailPage() {
     setOpenCategories(prev => ({ ...prev, [categoryId]: !prev[categoryId] }));
   };
 
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
+    const XLSX = await import("xlsx");
     const wb = XLSX.utils.book_new();
     
     const projectInfo = [{

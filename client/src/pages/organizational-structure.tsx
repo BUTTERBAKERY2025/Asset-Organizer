@@ -3,7 +3,6 @@ import { Link } from "wouter";
 import { Layout } from "@/components/layout";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useReactToPrint } from "react-to-print";
-import * as XLSX from "xlsx";
 import { useTranslation } from "react-i18next";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -787,7 +786,8 @@ export default function OrganizationalStructurePage() {
 
   const handlePrint = useReactToPrint({ contentRef: printRef });
 
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
+    const XLSX = await import("xlsx");
     const data = roles.map((role: OrgJobRole) => ({
       "المستوى": role.level,
       "المسمى الوظيفي": role.titleAr,

@@ -13,7 +13,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Link } from "wouter";
 import { useReactToPrint } from "react-to-print";
-import * as XLSX from "xlsx";
 import {
   ChevronLeft,
   FileText,
@@ -325,7 +324,8 @@ export default function ShiftReportsPage() {
 
   const completionPercentage = allItems.length > 0 ? Math.round((completedCount / allItems.length) * 100) : 0;
 
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
+    const XLSX = await import("xlsx");
     const shiftsToExport = (activeView === "analytics" ? rangeShifts : shifts).filter((shift) => {
       if (selectedBranch !== "all" && shift.branchId !== selectedBranch) return false;
       if (selectedShiftType !== "all" && shift.shiftType !== selectedShiftType) return false;

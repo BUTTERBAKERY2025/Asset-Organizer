@@ -16,7 +16,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, TrendingUp, TrendingDown, DollarSign, Percent, Award, AlertTriangle, Building, Plus, Calculator, BarChart3, PieChart, RefreshCw, FileText, ArrowUp, ArrowDown, Minus, Target, Wallet, Receipt, ShoppingCart, Users, Home, Lightbulb, Package, Trash2, ChevronDown, ChevronUp, ChevronLeft, Download, Upload, FileSpreadsheet, History, Printer } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart as RePieChart, Pie, Cell, LineChart, Line, AreaChart, Area, ComposedChart } from "recharts";
 import { useToast } from "@/hooks/use-toast";
-import * as XLSX from "xlsx";
 import { downloadArabicPdf, downloadEnhancedPnLPdf, getArabicDefaultStyle, getArabicTableHeaderStyle } from "@/lib/pdfmake-arabic";
 
 const MONTHS_AR = [
@@ -310,7 +309,7 @@ function generatePnLPdfReport(
   return docDefinition;
 }
 
-function exportPnLToExcel(
+async function exportPnLToExcel(
   branchName: string,
   period: string,
   metrics: any,
@@ -319,6 +318,7 @@ function exportPnLToExcel(
   opex: any[],
   fixedCosts: any[]
 ) {
+  const XLSX = await import("xlsx");
   const wb = XLSX.utils.book_new();
 
   const summaryData = [
@@ -383,11 +383,12 @@ function exportPnLToExcel(
 }
 
 // دالة تصدير التقرير المحسن من البيانات الفعلية (enhanced-summary)
-function exportEnhancedPnLToExcel(
+async function exportEnhancedPnLToExcel(
   branchName: string,
   period: string,
   enhancedData: any
 ) {
+  const XLSX = await import("xlsx");
   const wb = XLSX.utils.book_new();
   const totals = enhancedData.totals;
   
@@ -651,7 +652,8 @@ function generateEnhancedPnLPdfReport(
   return docDefinition;
 }
 
-function generatePnLExcelTemplate() {
+async function generatePnLExcelTemplate() {
+  const XLSX = await import("xlsx");
   const wb = XLSX.utils.book_new();
 
   // Sales Sheet
@@ -743,7 +745,8 @@ interface ParseResult {
   unmappedLabels: { sheet: string; labels: string[] }[];
 }
 
-function parseExcelPnLData(workbook: XLSX.WorkBook): ParseResult {
+async function parseExcelPnLData(workbook: any): Promise<ParseResult> {
+  const XLSX = await import("xlsx");
   const channelMap: Record<string, string> = {
     "نقدي": "cash",
     "بطاقة": "card",
@@ -1416,11 +1419,12 @@ export default function PnLDashboard() {
     if (!file || !selectedPeriodId) return;
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
+        const XLSX = await import("xlsx");
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: "array" });
-        const parsedData = parseExcelPnLData(workbook);
+        const parsedData = await parseExcelPnLData(workbook);
         
         // Check for unmapped labels - abort if any found
         if (parsedData.unmappedLabels.length > 0) {
@@ -1748,14 +1752,14 @@ export default function PnLDashboard() {
                     <Button
                       variant="default"
                       className="h-11 sm:h-9 bg-green-600 hover:bg-green-700"
-                      onClick={() => {
+                      onClick={async () => {
                         if (!enhancedPnL?.totals?.grossSales && enhancedPnL?.totals?.grossSales !== 0) {
                           toast({ title: "لا توجد بيانات", description: "لا توجد يوميات صندوق معتمدة لهذه الفترة", variant: "destructive" });
                           return;
                         }
                         const branchLabel = selectedBranch?.name || "جميع الفروع";
                         const period = `${MONTHS_AR[selectedMonth - 1]} ${selectedYear}`;
-                        exportEnhancedPnLToExcel(
+                        await exportEnhancedPnLToExcel(
                           branchLabel,
                           period,
                           enhancedPnL
@@ -1801,10 +1805,10 @@ export default function PnLDashboard() {
                     <Button
                       variant="outline"
                       className="h-11 sm:h-9"
-                      onClick={() => {
+                      onClick={async () => {
                         if (selectedBranch && completePnL) {
                           const period = `${MONTHS_AR[selectedMonth - 1]} ${selectedYear}`;
-                          exportPnLToExcel(
+                          await exportPnLToExcel(
                             selectedBranch.name,
                             period,
                             completePnL.metrics,

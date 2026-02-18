@@ -10,16 +10,28 @@ export function serveStatic(app: Express) {
     );
   }
 
-  app.use(express.static(distPath));
+  const assetsPath = path.join(distPath, "assets");
+  if (fs.existsSync(assetsPath)) {
+    app.use("/assets", express.static(assetsPath, {
+      maxAge: "1y",
+      immutable: true,
+      etag: false,
+      lastModified: false,
+    }));
+  }
 
-  // fall through to index.html if the file doesn't exist (SPA routing)
-  // but skip public HTML pages like vote-resolution.html
+  app.use(express.static(distPath, {
+    maxAge: "1h",
+    etag: true,
+  }));
+
   app.use("*", (_req, res) => {
     const requestedFile = path.basename(_req.originalUrl.split('?')[0].split('#')[0]);
     const publicFilePath = path.resolve(distPath, requestedFile);
     if (requestedFile.endsWith('.html') && fs.existsSync(publicFilePath)) {
       return res.sendFile(publicFilePath);
     }
+    res.setHeader("Cache-Control", "no-cache");
     res.sendFile(path.resolve(distPath, "index.html"));
   });
 }

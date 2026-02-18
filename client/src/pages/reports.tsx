@@ -18,7 +18,6 @@ import { Link } from "wouter";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useReactToPrint } from "react-to-print";
-import * as XLSX from "xlsx";
 import { PieChart as RechartsPie, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { PrintHeader, PrintFooter } from "@/components/print-header";
 import { finalizeBrandedWorkbook } from "@/lib/excel-utils";
@@ -199,7 +198,8 @@ export default function ReportsPage() {
     value: c.value,
   }));
 
-  const exportToExcel = (type: string) => {
+  const exportToExcel = async (type: string) => {
+    const XLSX = await import("xlsx");
     const wb = XLSX.utils.book_new();
     
     if (type === "full" || type === "assets") {
@@ -285,7 +285,7 @@ export default function ReportsPage() {
     }
 
     const reportTitle = type === "full" ? "تقرير الأصول الشامل" : `تقرير ${type}`;
-    finalizeBrandedWorkbook(wb, reportTitle);
+    await finalizeBrandedWorkbook(wb, reportTitle);
     
     const fileName = type === "full" 
       ? `تقرير_الأصول_الشامل_${new Date().toLocaleDateString("en-GB")}.xlsx`
@@ -1020,7 +1020,8 @@ export default function ReportsPage() {
                       </Button>
                       <Button 
                         disabled={!selectedBranch || selectedBranch === "all"}
-                        onClick={() => {
+                        onClick={async () => {
+                          const XLSX = await import("xlsx");
                           const wb = XLSX.utils.book_new();
                           const branchName = selectedBranch === "all" 
                             ? "جميع الفروع" 
@@ -1049,7 +1050,7 @@ export default function ReportsPage() {
                           const summaryWs = XLSX.utils.json_to_sheet(summaryData);
                           XLSX.utils.book_append_sheet(wb, summaryWs, "ملخص");
                           
-                          finalizeBrandedWorkbook(wb, "محضر جرد الأصول");
+                          await finalizeBrandedWorkbook(wb, "محضر جرد الأصول");
                           XLSX.writeFile(wb, `محضر_جرد_${branchName}_${countReportDate}.xlsx`);
                         }}
                         className="h-9"

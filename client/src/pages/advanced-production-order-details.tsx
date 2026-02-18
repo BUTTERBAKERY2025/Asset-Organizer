@@ -23,7 +23,6 @@ import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import { useRef, useState } from "react";
 import { useReactToPrint } from "react-to-print";
-import * as XLSX from "xlsx";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -219,8 +218,9 @@ export default function AdvancedProductionOrderDetailsPage() {
     }
   };
 
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
     if (!orderData) return;
+    const XLSX = await import("xlsx");
     const { order, items, comparison } = orderData;
     
     const orderInfo = [

@@ -48,7 +48,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Link } from "wouter";
-import * as XLSX from "xlsx";
 
 interface DailyProductionBatch {
   id: number;
@@ -719,8 +718,9 @@ export default function DailyProductionPage() {
     return { value: Math.abs(diff), direction: diff >= 0 ? "up" : "down" };
   };
 
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
     if (!batches || batches.length === 0) return;
+    const XLSX = await import("xlsx");
     
     const data = batches.map(b => ({
       "الوقت": formatFullDateTime(b.producedAt),

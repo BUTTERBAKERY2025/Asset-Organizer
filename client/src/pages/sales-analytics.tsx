@@ -41,7 +41,6 @@ import {
   ArrowRight
 } from "lucide-react";
 import { Link } from "wouter";
-import * as XLSX from "xlsx";
 import {
   BarChart,
   Bar,
@@ -181,7 +180,8 @@ export default function SalesAnalytics() {
     setLastUpdated(new Date());
   };
 
-  const exportToExcel = (data: any[], sheetName: string, fileName: string) => {
+  const exportToExcel = async (data: any[], sheetName: string, fileName: string) => {
+    const XLSX = await import("xlsx");
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, sheetName);
