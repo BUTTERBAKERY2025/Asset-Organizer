@@ -29213,6 +29213,13 @@ export async function registerRoutes(
 
   app.delete("/api/pos/branch-products/:id", isAuthenticated, requirePermission("event_pos", "delete"), async (req, res) => {
     try {
+      const product = await storage.getBranchProductById(Number(req.params.id));
+      if (!product) {
+        return res.status(404).json({ error: "المنتج غير موجود" });
+      }
+      if (!await canAccessBranch(req, product.branchId)) {
+        return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
+      }
       await storage.removeBranchProduct(Number(req.params.id));
       res.json({ success: true });
     } catch (error: any) {
@@ -29222,7 +29229,15 @@ export async function registerRoutes(
 
   app.patch("/api/pos/branch-products/:id", isAuthenticated, requirePermission("event_pos", "edit"), async (req, res) => {
     try {
-      const updated = await storage.updateBranchProduct(Number(req.params.id), req.body);
+      const product = await storage.getBranchProductById(Number(req.params.id));
+      if (!product) {
+        return res.status(404).json({ error: "المنتج غير موجود" });
+      }
+      if (!await canAccessBranch(req, product.branchId)) {
+        return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
+      }
+      const { branchId, ...safeData } = req.body;
+      const updated = await storage.updateBranchProduct(Number(req.params.id), safeData);
       res.json(updated);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -29245,14 +29260,28 @@ export async function registerRoutes(
 
   app.post("/api/pos/invoice-settings", isAuthenticated, requirePermission("event_pos", "edit"), async (req, res) => {
     try {
-      const { branchId, businessName, vatNumber, invoicePrefix } = req.body;
+      const { branchId } = req.body;
       if (!branchId) {
         return res.status(400).json({ error: "branchId مطلوب" });
       }
       if (!await canAccessBranch(req, branchId)) {
         return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
       }
-      const settings = await storage.upsertPosInvoiceSettings(req.body);
+      const sanitizedSettings = {
+        branchId: req.body.branchId,
+        businessName: req.body.businessName || "",
+        businessNameEn: req.body.businessNameEn || "",
+        vatNumber: req.body.vatNumber || "",
+        crNumber: req.body.crNumber || "",
+        address: req.body.address || "",
+        city: req.body.city || "",
+        phone: req.body.phone || "",
+        footerText: req.body.footerText || "",
+        showQrCode: req.body.showQrCode ?? true,
+        invoicePrefix: req.body.invoicePrefix || "EV",
+        logoUrl: req.body.logoUrl || "",
+      };
+      const settings = await storage.upsertPosInvoiceSettings(sanitizedSettings);
       res.json(settings);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -29273,7 +29302,7 @@ export async function registerRoutes(
       const settings = await storage.getPosInvoiceSettings(saleData.branchId);
       const prefix = settings?.invoicePrefix || "EV";
       saleData.invoiceNumber = `${prefix}-${String(invoiceNum).padStart(6, '0')}`;
-      saleData.cashierId = req.session?.userId || saleData.cashierId;
+      saleData.cashierId = (req as any).currentUser?.id || req.session?.userId;
 
       const sale = await storage.createPosSale(saleData, items);
       res.status(201).json(sale);
@@ -29304,6 +29333,9 @@ export async function registerRoutes(
     try {
       const sale = await storage.getPosSaleById(Number(req.params.id));
       if (!sale) return res.status(404).json({ error: "عملية البيع غير موجودة" });
+      if (!await canAccessBranch(req, sale.branchId)) {
+        return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
+      }
       const items = await storage.getPosSaleItems(sale.id);
       res.json({ ...sale, items });
     } catch (error: any) {

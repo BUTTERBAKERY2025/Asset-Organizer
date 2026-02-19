@@ -1270,6 +1270,7 @@ export interface IStorage {
 
   // Event POS - Branch Products
   getBranchProducts(branchId: string): Promise<BranchProduct[]>;
+  getBranchProductById(id: number): Promise<BranchProduct | undefined>;
   addBranchProduct(data: InsertBranchProduct): Promise<BranchProduct>;
   removeBranchProduct(id: number): Promise<boolean>;
   updateBranchProduct(id: number, data: Partial<InsertBranchProduct>): Promise<BranchProduct | undefined>;
@@ -13996,6 +13997,11 @@ export class DatabaseStorage implements IStorage {
   async addBranchProduct(data: InsertBranchProduct): Promise<BranchProduct> {
     const [result] = await db.insert(branchProducts).values(data).returning();
     return result;
+  }
+
+  async getBranchProductById(id: number): Promise<BranchProduct | undefined> {
+    const [result] = await db.select().from(branchProducts).where(eq(branchProducts.id, id));
+    return result || undefined;
   }
 
   async removeBranchProduct(id: number): Promise<boolean> {
