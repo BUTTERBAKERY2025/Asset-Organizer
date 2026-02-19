@@ -1030,6 +1030,25 @@ export default function EventPosPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 w-9 p-0 rounded-xl hover:bg-orange-100 text-orange-500 hover:text-orange-700 touch-manipulation"
+                    onClick={async () => {
+                      try {
+                        const res = await apiRequest("GET", `/api/pos/sale/${sale.id}`);
+                        const saleDetails = await res.json();
+                        setLastSale(saleDetails);
+                        setShowHistory(false);
+                        setShowReceipt(true);
+                      } catch (err) {
+                        toast({ title: "خطأ", description: "فشل في تحميل بيانات الفاتورة", variant: "destructive" });
+                      }
+                    }}
+                    data-testid={`button-reprint-${sale.id}`}
+                  >
+                    <Printer className="w-4 h-4" />
+                  </Button>
                   <span className={`text-[11px] font-bold px-3 py-1 rounded-full ${
                     sale.paymentMethod === "cash" 
                       ? "bg-green-100 text-green-700" 
