@@ -20552,14 +20552,16 @@ export async function registerRoutes(
         };
       });
       
+      console.log(`[BULK SCHEDULES] Saving ${validatedSchedules.length} schedules for branch ${validatedSchedules[0]?.branchId}`);
       const created = await storage.createBulkEmployeeSchedules(validatedSchedules);
+      console.log(`[BULK SCHEDULES] Successfully saved ${created.length} schedules`);
       res.status(201).json(created);
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
       }
-      console.error("Error creating bulk employee schedules:", error);
-      res.status(500).json({ error: "فشل في إنشاء الجداول" });
+      console.error("Error creating bulk employee schedules:", error?.message || error, error?.stack);
+      res.status(500).json({ error: "فشل في إنشاء الجداول", details: error?.message });
     }
   });
 

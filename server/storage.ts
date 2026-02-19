@@ -7962,7 +7962,6 @@ export class DatabaseStorage implements IStorage {
     
     const results: EmployeeSchedule[] = [];
     
-    // Deduplicate input schedules by employeeId + scheduleDate + branchId
     const inputSeen = new Set<string>();
     const deduplicatedSchedules = schedules.filter(s => {
       const key = `${s.employeeId}_${s.scheduleDate}_${s.branchId}`;
@@ -7972,40 +7971,62 @@ export class DatabaseStorage implements IStorage {
     });
     
     for (const schedule of deduplicatedSchedules) {
-      let existing: EmployeeSchedule[] = [];
-      
-      if (schedule.branchEmployeeId) {
-        existing = await db.select().from(employeeSchedules)
-          .where(and(
-            eq(employeeSchedules.branchEmployeeId, schedule.branchEmployeeId),
-            schedule.branchId ? eq(employeeSchedules.branchId, schedule.branchId) : isNull(employeeSchedules.branchId),
-            eq(employeeSchedules.scheduleDate, schedule.scheduleDate)
-          ))
-          .limit(1);
-      }
-      
-      if (existing.length === 0) {
-        existing = await db.select().from(employeeSchedules)
-          .where(and(
-            eq(employeeSchedules.employeeId, schedule.employeeId),
-            schedule.branchId ? eq(employeeSchedules.branchId, schedule.branchId) : isNull(employeeSchedules.branchId),
-            eq(employeeSchedules.scheduleDate, schedule.scheduleDate)
-          ))
-          .limit(1);
-      }
-      
-      if (existing.length > 0) {
-        const [updated] = await db.update(employeeSchedules)
-          .set({ 
-            ...schedule, 
-            updatedAt: new Date() 
-          })
-          .where(eq(employeeSchedules.id, existing[0].id))
-          .returning();
-        results.push(updated);
-      } else {
-        const [created] = await db.insert(employeeSchedules).values(schedule).returning();
-        results.push(created);
+      try {
+        const cleanData = {
+          employeeId: schedule.employeeId,
+          employeeName: schedule.employeeName,
+          branchId: schedule.branchId || null,
+          branchEmployeeId: schedule.branchEmployeeId || null,
+          scheduleDate: schedule.scheduleDate,
+          dayOfWeek: schedule.dayOfWeek,
+          shiftType: schedule.shiftType || null,
+          startTime: schedule.startTime || null,
+          endTime: schedule.endTime || null,
+          isOff: schedule.isOff ?? false,
+          breakDuration: schedule.breakDuration ?? 60,
+          status: schedule.status || "scheduled",
+          notes: schedule.notes || null,
+          periodId: schedule.periodId || null,
+        };
+
+        let existing: EmployeeSchedule[] = [];
+        
+        if (cleanData.branchEmployeeId) {
+          existing = await db.select().from(employeeSchedules)
+            .where(and(
+              eq(employeeSchedules.branchEmployeeId, cleanData.branchEmployeeId),
+              cleanData.branchId ? eq(employeeSchedules.branchId, cleanData.branchId) : isNull(employeeSchedules.branchId),
+              eq(employeeSchedules.scheduleDate, cleanData.scheduleDate)
+            ))
+            .limit(1);
+        }
+        
+        if (existing.length === 0) {
+          existing = await db.select().from(employeeSchedules)
+            .where(and(
+              eq(employeeSchedules.employeeId, cleanData.employeeId),
+              cleanData.branchId ? eq(employeeSchedules.branchId, cleanData.branchId) : isNull(employeeSchedules.branchId),
+              eq(employeeSchedules.scheduleDate, cleanData.scheduleDate)
+            ))
+            .limit(1);
+        }
+        
+        if (existing.length > 0) {
+          const [updated] = await db.update(employeeSchedules)
+            .set({ 
+              ...cleanData,
+              updatedAt: new Date() 
+            })
+            .where(eq(employeeSchedules.id, existing[0].id))
+            .returning();
+          results.push(updated);
+        } else {
+          const [created] = await db.insert(employeeSchedules).values(cleanData).returning();
+          results.push(created);
+        }
+      } catch (itemError: any) {
+        console.error(`[BULK SCHEDULE] Failed for employee ${schedule.employeeId} date ${schedule.scheduleDate}:`, itemError?.message);
+        throw itemError;
       }
     }
     
