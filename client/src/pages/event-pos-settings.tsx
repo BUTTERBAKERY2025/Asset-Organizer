@@ -15,7 +15,8 @@ import {
   Plus, Trash2, Check, X, Save, Store,
   FileText, Hash, Phone, MapPin, Building2,
   Sparkles, Loader2, AlertCircle, Eye, EyeOff,
-  GripVertical, DollarSign, Tag, ChevronRight
+  GripVertical, DollarSign, Tag, ChevronRight,
+  ImageIcon, Upload
 } from "lucide-react";
 
 const EVENT_BRANCH_ID = "EVENT-BB";
@@ -63,6 +64,7 @@ export default function EventPosSettingsPage() {
     footerText: "شكراً لزيارتكم",
     showQrCode: true,
     invoicePrefix: "EV",
+    logoUrl: "",
   });
 
   useEffect(() => {
@@ -78,9 +80,24 @@ export default function EventPosSettingsPage() {
         footerText: invoiceSettings.footerText || "شكراً لزيارتكم",
         showQrCode: invoiceSettings.showQrCode ?? true,
         invoicePrefix: invoiceSettings.invoicePrefix || "EV",
+        logoUrl: invoiceSettings.logoUrl || "",
       });
     }
   }, [invoiceSettings, settingsLoading]);
+
+  const handleLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 500 * 1024) {
+      toast({ title: "حجم الصورة كبير جداً", description: "الحد الأقصى 500 كيلوبايت", variant: "destructive" });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setSettingsForm(f => ({ ...f, logoUrl: reader.result as string }));
+    };
+    reader.readAsDataURL(file);
+  };
 
   const availableToAdd = useMemo(() => {
     const existingIds = new Set(branchProducts.map((bp: any) => bp.productId));
@@ -474,6 +491,67 @@ export default function EventPosSettingsPage() {
                       onChange={e => setSettingsForm(f => ({ ...f, crNumber: e.target.value }))}
                       className="rounded-lg h-9 text-sm"
                       dir="ltr"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="rounded-2xl border-gray-200 shadow-sm">
+                <CardHeader className="pb-3 border-b bg-gray-50 rounded-t-2xl">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <ImageIcon className="w-4 h-4 text-orange-500" />
+                    شعار الفاتورة
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-4 space-y-3">
+                  <p className="text-[11px] text-gray-400">يظهر الشعار في أعلى الفاتورة المطبوعة بشكل مصغر</p>
+                  {settingsForm.logoUrl ? (
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="w-full bg-gray-50 rounded-xl p-4 flex items-center justify-center border border-dashed border-gray-200">
+                        <img
+                          src={settingsForm.logoUrl}
+                          alt="شعار الفاتورة"
+                          className="max-h-20 max-w-[180px] object-contain"
+                          data-testid="img-logo-preview"
+                        />
+                      </div>
+                      <div className="flex gap-2 w-full">
+                        <label className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-medium text-gray-600 cursor-pointer transition-colors">
+                          <Upload className="w-3.5 h-3.5" />
+                          تغيير الشعار
+                          <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden" onChange={handleLogoFileChange} data-testid="input-logo-file-change" />
+                        </label>
+                        <button
+                          onClick={() => setSettingsForm(f => ({ ...f, logoUrl: "" }))}
+                          className="flex items-center gap-1 px-3 py-2 bg-red-50 hover:bg-red-100 rounded-lg text-xs font-medium text-red-500 transition-colors"
+                          data-testid="button-remove-logo"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          حذف
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center justify-center gap-3 p-6 bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl cursor-pointer hover:border-orange-300 hover:bg-orange-50/30 transition-colors" data-testid="label-upload-logo">
+                      <div className="w-14 h-14 bg-gray-100 rounded-2xl flex items-center justify-center">
+                        <Upload className="w-7 h-7 text-gray-300" />
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xs font-bold text-gray-500">اضغط لرفع الشعار</p>
+                        <p className="text-[10px] text-gray-400 mt-1">PNG, JPG, SVG - الحد الأقصى 500 كيلوبايت</p>
+                      </div>
+                      <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden" onChange={handleLogoFileChange} data-testid="input-logo-file" />
+                    </label>
+                  )}
+                  <div>
+                    <label className="text-[11px] font-medium text-gray-500 mb-1 block">أو أدخل رابط الشعار مباشرة</label>
+                    <Input
+                      value={settingsForm.logoUrl.startsWith("data:") ? "" : settingsForm.logoUrl}
+                      onChange={e => setSettingsForm(f => ({ ...f, logoUrl: e.target.value }))}
+                      placeholder="https://example.com/logo.png"
+                      className="rounded-lg h-8 text-[11px]"
+                      dir="ltr"
+                      data-testid="input-logo-url"
                     />
                   </div>
                 </CardContent>

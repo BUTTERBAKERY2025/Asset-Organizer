@@ -706,6 +706,14 @@ export default function EventPosPage() {
           {lastSale && (
             <div ref={receiptRef} className="bg-white p-5 text-sm border rounded-xl" style={{ fontFamily: "Cairo, sans-serif" }}>
               <div className="text-center border-b pb-3 mb-3">
+                {invoiceSettings?.logoUrl && (
+                  <img
+                    src={invoiceSettings.logoUrl}
+                    alt="شعار"
+                    className="max-h-14 max-w-[140px] object-contain mx-auto mb-2"
+                    data-testid="img-receipt-logo"
+                  />
+                )}
                 <h3 className="font-bold text-base">{invoiceSettings?.businessName || "باتر بيكري"}</h3>
                 {invoiceSettings?.businessNameEn && <p className="text-[10px] text-gray-500">{invoiceSettings.businessNameEn}</p>}
                 {invoiceSettings?.address && <p className="text-[10px] text-gray-600">{invoiceSettings.address}</p>}
