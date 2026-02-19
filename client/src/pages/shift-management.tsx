@@ -384,37 +384,13 @@ export default function ShiftManagementPage() {
         throw new Error("لا توجد بيانات جداول للحفظ - تأكد من وجود موظفين نشطين في الفرع");
       }
 
-      const CHUNK_SIZE = 50;
-      let totalSaved = 0;
-      let totalCount = schedules.length;
-      const allErrors: string[] = [];
-
-      for (let i = 0; i < schedules.length; i += CHUNK_SIZE) {
-        const chunk = schedules.slice(i, i + CHUNK_SIZE);
-        try {
-          const res = await apiRequest("POST", "/api/employee-schedules/bulk", { schedules: chunk });
-          const contentType = res.headers.get("content-type") || "";
-          if (!contentType.includes("application/json")) {
-            throw new Error(`خطأ في الخادم (${res.status}) - يرجى المحاولة مرة أخرى`);
-          }
-          const result = await res.json();
-          totalSaved += (result.saved || 0);
-          if (result.errors) allErrors.push(...result.errors);
-        } catch (chunkErr: any) {
-          const rawMsg = chunkErr?.message || "";
-          if (rawMsg.includes("<!DOCTYPE") || rawMsg.includes("<html")) {
-            allErrors.push(`خطأ في الخادم - انتهاء وقت الاستجابة (دفعة ${Math.floor(i/CHUNK_SIZE)+1})`);
-          } else {
-            allErrors.push(rawMsg.length > 100 ? rawMsg.substring(0, 100) : rawMsg);
-          }
-        }
+      const res = await apiRequest("POST", "/api/employee-schedules/bulk", { schedules });
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        throw new Error(`خطأ في الخادم (${res.status}) - يرجى المحاولة مرة أخرى`);
       }
-
-      if (totalSaved === 0 && allErrors.length > 0) {
-        throw new Error(allErrors[0] || "فشل في حفظ جميع الجداول");
-      }
-
-      return { saved: totalSaved, total: totalCount, errors: allErrors.length > 0 ? allErrors : undefined, skippedCount };
+      const result = await res.json();
+      return { ...result, skippedCount };
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/employee-schedules"] });

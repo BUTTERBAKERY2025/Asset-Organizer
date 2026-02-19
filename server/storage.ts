@@ -7970,9 +7970,49 @@ export class DatabaseStorage implements IStorage {
       inputSeen.add(key);
       return true;
     });
-    
-    for (const schedule of deduplicatedSchedules) {
-      try {
+
+    try {
+      const branchIds = Array.from(new Set(deduplicatedSchedules.map(s => s.branchId).filter(Boolean))) as string[];
+      const dates = Array.from(new Set(deduplicatedSchedules.map(s => s.scheduleDate).filter(Boolean)));
+      const branchEmpIds = Array.from(new Set(deduplicatedSchedules.map(s => s.branchEmployeeId).filter(Boolean))) as number[];
+      const empIds = Array.from(new Set(deduplicatedSchedules.map(s => s.employeeId).filter(Boolean)));
+
+      let existingRecords: EmployeeSchedule[] = [];
+      if (dates.length > 0 && branchIds.length > 0) {
+        const branchDateFilter = and(
+          inArray(employeeSchedules.scheduleDate, dates),
+          inArray(employeeSchedules.branchId, branchIds)
+        )!;
+        
+        const conditions: any[] = [];
+        if (branchEmpIds.length > 0) {
+          conditions.push(and(branchDateFilter, inArray(employeeSchedules.branchEmployeeId, branchEmpIds)));
+        }
+        if (empIds.length > 0) {
+          conditions.push(and(branchDateFilter, inArray(employeeSchedules.employeeId, empIds)));
+        }
+        
+        if (conditions.length > 0) {
+          existingRecords = await db.select().from(employeeSchedules)
+            .where(conditions.length === 1 ? conditions[0] : or(...conditions));
+        }
+      }
+
+      const existingByBranchEmp = new Map<string, EmployeeSchedule>();
+      const existingByEmpId = new Map<string, EmployeeSchedule>();
+      for (const rec of existingRecords) {
+        if (rec.branchEmployeeId && rec.branchId) {
+          existingByBranchEmp.set(`${rec.branchEmployeeId}_${rec.scheduleDate}_${rec.branchId}`, rec);
+        }
+        if (rec.branchId) {
+          existingByEmpId.set(`${rec.employeeId}_${rec.scheduleDate}_${rec.branchId}`, rec);
+        }
+      }
+
+      const toInsert: any[] = [];
+      const toUpdate: { id: number; data: Record<string, any> }[] = [];
+
+      for (const schedule of deduplicatedSchedules) {
         const updateData: Record<string, any> = {
           employeeId: schedule.employeeId,
           employeeName: schedule.employeeName,
@@ -7989,46 +8029,59 @@ export class DatabaseStorage implements IStorage {
           notes: schedule.notes || null,
         };
 
-        let existing: EmployeeSchedule[] = [];
-        
-        if (schedule.branchEmployeeId) {
-          existing = await db.select().from(employeeSchedules)
-            .where(and(
-              eq(employeeSchedules.branchEmployeeId, schedule.branchEmployeeId),
-              schedule.branchId ? eq(employeeSchedules.branchId, schedule.branchId) : isNull(employeeSchedules.branchId),
-              eq(employeeSchedules.scheduleDate, schedule.scheduleDate)
-            ))
-            .limit(1);
+        let existing: EmployeeSchedule | undefined;
+        const sBranchId = schedule.branchId || '';
+        if (schedule.branchEmployeeId && sBranchId) {
+          existing = existingByBranchEmp.get(`${schedule.branchEmployeeId}_${schedule.scheduleDate}_${sBranchId}`);
         }
-        
-        if (existing.length === 0 && schedule.employeeId) {
-          existing = await db.select().from(employeeSchedules)
-            .where(and(
-              eq(employeeSchedules.employeeId, schedule.employeeId),
-              schedule.branchId ? eq(employeeSchedules.branchId, schedule.branchId) : isNull(employeeSchedules.branchId),
-              eq(employeeSchedules.scheduleDate, schedule.scheduleDate)
-            ))
-            .limit(1);
+        if (!existing && schedule.employeeId && sBranchId) {
+          existing = existingByEmpId.get(`${schedule.employeeId}_${schedule.scheduleDate}_${sBranchId}`);
         }
-        
-        if (existing.length > 0) {
-          const [updated] = await db.update(employeeSchedules)
-            .set({ 
-              ...updateData,
-              updatedAt: new Date() 
-            })
-            .where(eq(employeeSchedules.id, existing[0].id))
-            .returning();
-          results.push(updated);
+
+        if (existing) {
+          toUpdate.push({ id: existing.id, data: { ...updateData, updatedAt: new Date() } });
         } else {
-          const [created] = await db.insert(employeeSchedules).values(updateData).returning();
-          results.push(created);
+          toInsert.push(updateData);
         }
-      } catch (itemError: any) {
-        const errMsg = `${schedule.employeeName || schedule.employeeId} (${schedule.scheduleDate}): ${itemError?.message || 'unknown'}`;
-        console.error(`[BULK SCHEDULE] ${errMsg}`);
-        errors.push(errMsg);
       }
+
+      if (toInsert.length > 0) {
+        const BATCH = 100;
+        for (let i = 0; i < toInsert.length; i += BATCH) {
+          try {
+            const batch = toInsert.slice(i, i + BATCH);
+            const inserted = await db.insert(employeeSchedules).values(batch).returning();
+            results.push(...inserted);
+          } catch (insertErr: any) {
+            const errMsg = `خطأ في إدخال دفعة ${Math.floor(i/BATCH)+1}: ${insertErr?.message || 'unknown'}`;
+            console.error(`[BULK SCHEDULE] ${errMsg}`);
+            errors.push(errMsg);
+          }
+        }
+      }
+
+      if (toUpdate.length > 0) {
+        const UPDATE_BATCH = 20;
+        for (let i = 0; i < toUpdate.length; i += UPDATE_BATCH) {
+          const batch = toUpdate.slice(i, i + UPDATE_BATCH);
+          const updatePromises = batch.map(item =>
+            db.update(employeeSchedules)
+              .set(item.data)
+              .where(eq(employeeSchedules.id, item.id))
+              .returning()
+              .then(rows => { if (rows[0]) results.push(rows[0]); })
+              .catch((err: any) => {
+                errors.push(`تحديث #${item.id}: ${err?.message || 'unknown'}`);
+              })
+          );
+          await Promise.all(updatePromises);
+        }
+      }
+
+      console.log(`[BULK SCHEDULE] Batch complete: ${toInsert.length} inserts, ${toUpdate.length} updates, ${results.length} success, ${errors.length} errors`);
+    } catch (batchError: any) {
+      console.error(`[BULK SCHEDULE] Batch operation failed:`, batchError?.message);
+      errors.push(`خطأ عام: ${batchError?.message || 'unknown'}`);
     }
     
     return { results, errors };
