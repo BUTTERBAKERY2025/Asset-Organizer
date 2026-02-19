@@ -243,9 +243,9 @@ export default function EventPosPage() {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50 overflow-hidden" dir="rtl">
+    <div className="h-screen flex flex-col bg-gray-100 overflow-hidden" dir="rtl">
       {/* Top Bar - Compact */}
-      <div className="bg-gradient-to-l from-orange-500 to-amber-500 px-4 py-2.5 flex items-center justify-between shrink-0 shadow-lg">
+      <div className="bg-gradient-to-l from-orange-500 to-amber-500 px-6 py-3 flex items-center justify-between shrink-0 shadow-lg">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
             <Sparkles className="w-5 h-5 text-white" />
@@ -292,12 +292,13 @@ export default function EventPosPage() {
         </div>
       </div>
 
-      {/* Main Content - Full height split (flex-row-reverse for RTL: cart on right, products on left) */}
-      <div className="flex-1 flex flex-row-reverse overflow-hidden">
+      {/* Main Content */}
+      <div className="flex-1 overflow-hidden px-6 py-4">
+        <div className="max-w-6xl mx-auto h-full flex flex-row-reverse gap-4 overflow-hidden">
         {/* Products Area */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden bg-white rounded-2xl shadow-sm border border-gray-200">
           {/* Search + Categories */}
-          <div className="px-3 py-2.5 space-y-2 bg-white border-b shrink-0">
+          <div className="px-4 py-3 space-y-2 border-b shrink-0">
             <div className="relative">
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
               <Input
@@ -349,7 +350,7 @@ export default function EventPosPage() {
           </div>
 
           {/* Products Grid - Scrollable */}
-          <div className="flex-1 overflow-y-auto p-3">
+          <div className="flex-1 overflow-y-auto p-4">
             {productsLoading ? (
               <div className="flex items-center justify-center h-full text-gray-400">
                 <Loader2 className="w-8 h-8 animate-spin ml-2" />
@@ -404,7 +405,7 @@ export default function EventPosPage() {
         </div>
 
         {/* Cart Sidebar - Fixed width */}
-        <div className="w-[340px] lg:w-[380px] bg-white border-r flex flex-col shadow-xl shrink-0">
+        <div className="w-[320px] lg:w-[350px] bg-white flex flex-col rounded-2xl shadow-sm border border-gray-200 shrink-0 overflow-hidden">
           {/* Cart Header */}
           <div className="bg-gray-50 px-4 py-3 border-b flex items-center justify-between shrink-0">
             <h2 className="font-bold text-base flex items-center gap-2 text-gray-700">
@@ -525,6 +526,7 @@ export default function EventPosPage() {
             </button>
           </div>
         </div>
+      </div>
       </div>
 
       {/* Checkout Dialog */}
