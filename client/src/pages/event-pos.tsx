@@ -310,9 +310,10 @@ export default function EventPosPage() {
       </header>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 overflow-hidden px-6 py-4">
+      <div className="max-w-6xl mx-auto h-full flex gap-4 overflow-hidden">
         {/* RIGHT: Products Section */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden bg-white rounded-2xl shadow-sm border border-gray-200">
           {/* Search Bar */}
           <div className="px-5 pt-4 pb-2 shrink-0">
             <div className="relative">
@@ -447,7 +448,7 @@ export default function EventPosPage() {
         </div>
 
         {/* LEFT: Cart Panel */}
-        <div className="w-[340px] bg-white flex flex-col border-r border-gray-200 shadow-[-4px_0_20px_rgba(0,0,0,0.04)] shrink-0">
+        <div className="w-[340px] bg-white flex flex-col rounded-2xl shadow-sm border border-gray-200 shrink-0 overflow-hidden">
           {/* Cart Header */}
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2.5">
@@ -596,6 +597,7 @@ export default function EventPosPage() {
             </div>
           </div>
         </div>
+      </div>
       </div>
 
       {/* Checkout Dialog */}
