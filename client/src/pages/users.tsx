@@ -551,6 +551,7 @@ export default function UsersPage() {
         { module: "cashier_performance", actions: ["view", "view_list", "view_details"] },
         { module: "dashboard", actions: ["view"] },
         { module: "platform_home", actions: ["view"] },
+        { module: "event_pos", actions: ["view", "create"] },
       ],
       supervisor: [
         { module: "dashboard", actions: ["view", "export"] },
@@ -577,6 +578,7 @@ export default function UsersPage() {
         { module: "branch_employees", actions: ["view", "create", "edit"] },
         { module: "employee_reports", actions: ["view", "export", "print"] },
         { module: "reports", actions: ["view", "export", "print"] },
+        { module: "event_pos", actions: ["view", "create", "edit", "delete"] },
       ],
       production_manager: [
         { module: "dashboard", actions: ["view", "export"] },

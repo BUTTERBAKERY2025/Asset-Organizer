@@ -817,6 +817,9 @@ export const MODULE_LABELS: Record<SystemModule, string> = {
   governance_dividends: "توزيعات الأرباح",
   governance_capital: "رأس المال",
   governance_voting: "التصويت",
+  
+  // نقطة بيع الفعاليات
+  event_pos: "نقطة بيع الفعاليات",
 };
 
 // Action labels for UI display (Arabic)
@@ -977,6 +980,10 @@ export const MODULE_GROUPS: { label: string; modules: SystemModule[] }[] = [
       "governance_capital",
       "governance_voting",
     ],
+  },
+  {
+    label: "نقطة بيع الفعاليات",
+    modules: ["event_pos"],
   },
 ];
 

@@ -185,6 +185,9 @@ const MODULE_LABELS: Record<string, string> = {
   
   // فتح وإغلاق الفروع
   branch_closure: "نظام فتح وإغلاق الفروع",
+  
+  // نقطة بيع الفعاليات
+  event_pos: "نقطة بيع الفعاليات",
 };
 
 const ACTION_CATEGORIES: Record<string, { label: string; color: string; actions: string[] }> = {
