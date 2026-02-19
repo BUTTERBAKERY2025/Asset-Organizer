@@ -383,34 +383,77 @@ export default function ShiftManagementPage() {
       if (schedules.length === 0) {
         throw new Error("لا توجد بيانات جداول للحفظ - تأكد من وجود موظفين نشطين في الفرع");
       }
-      const res = await apiRequest("POST", "/api/employee-schedules/bulk", { schedules });
-      const result = await res.json();
-      return { ...result, skippedCount };
+
+      const CHUNK_SIZE = 50;
+      let totalSaved = 0;
+      let totalCount = schedules.length;
+      const allErrors: string[] = [];
+
+      for (let i = 0; i < schedules.length; i += CHUNK_SIZE) {
+        const chunk = schedules.slice(i, i + CHUNK_SIZE);
+        try {
+          const res = await apiRequest("POST", "/api/employee-schedules/bulk", { schedules: chunk });
+          const contentType = res.headers.get("content-type") || "";
+          if (!contentType.includes("application/json")) {
+            throw new Error(`خطأ في الخادم (${res.status}) - يرجى المحاولة مرة أخرى`);
+          }
+          const result = await res.json();
+          totalSaved += (result.saved || 0);
+          if (result.errors) allErrors.push(...result.errors);
+        } catch (chunkErr: any) {
+          const rawMsg = chunkErr?.message || "";
+          if (rawMsg.includes("<!DOCTYPE") || rawMsg.includes("<html")) {
+            allErrors.push(`خطأ في الخادم - انتهاء وقت الاستجابة (دفعة ${Math.floor(i/CHUNK_SIZE)+1})`);
+          } else {
+            allErrors.push(rawMsg.length > 100 ? rawMsg.substring(0, 100) : rawMsg);
+          }
+        }
+      }
+
+      if (totalSaved === 0 && allErrors.length > 0) {
+        throw new Error(allErrors[0] || "فشل في حفظ جميع الجداول");
+      }
+
+      return { saved: totalSaved, total: totalCount, errors: allErrors.length > 0 ? allErrors : undefined, skippedCount };
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/employee-schedules"] });
-      setHasUnsavedChanges(false);
       const warnings: string[] = [];
       if (data?.skippedCount > 0) {
         warnings.push(`تم تخطي ${data.skippedCount} موظف غير نشط`);
       }
       if (data?.errors && data.errors.length > 0) {
         warnings.push(data.errors[0]);
-      }
-      if (warnings.length > 0) {
+        setHasUnsavedChanges(true);
         toast({ 
-          title: `تم حفظ ${data.saved || 0} من ${data.total || 0} جدول`,
+          title: `تم حفظ ${data.saved || 0} من ${data.total || 0} جدول (حفظ جزئي)`,
           description: warnings.join(' - '),
+          variant: "destructive",
         });
       } else {
-        toast({ title: "تم حفظ جدول الدوام بنجاح" });
+        setHasUnsavedChanges(false);
+        if (warnings.length > 0) {
+          toast({ 
+            title: `تم حفظ ${data.saved || 0} من ${data.total || 0} جدول`,
+            description: warnings.join(' - '),
+          });
+        } else {
+          toast({ title: "تم حفظ جدول الدوام بنجاح" });
+        }
       }
     },
     onError: (error: any) => {
-      const msg = error?.message || "خطأ غير معروف";
-      const details = msg.length > 200 ? msg.substring(0, 200) + "..." : msg;
-      console.error("Schedule save error:", msg);
-      toast({ title: "خطأ", description: `فشل في حفظ الجدول: ${details}`, variant: "destructive" });
+      const rawMsg = error?.message || "خطأ غير معروف";
+      let cleanMsg = rawMsg;
+      if (rawMsg.includes("<!DOCTYPE") || rawMsg.includes("<html")) {
+        const statusMatch = rawMsg.match(/^(\d{3}):/);
+        const statusCode = statusMatch ? statusMatch[1] : "502";
+        cleanMsg = `خطأ في الخادم (${statusCode}) - انتهاء وقت الاستجابة. يرجى المحاولة مرة أخرى`;
+      } else if (cleanMsg.length > 150) {
+        cleanMsg = cleanMsg.substring(0, 150) + "...";
+      }
+      console.error("Schedule save error:", rawMsg);
+      toast({ title: "خطأ في حفظ الجدول", description: cleanMsg, variant: "destructive" });
     },
   });
 
