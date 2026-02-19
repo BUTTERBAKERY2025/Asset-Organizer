@@ -259,8 +259,8 @@ function Router() {
       <Route path="/branch-daily-closures">{() => <ModulePage component={BranchDailyClosuresPage} module="daily_closures" />}</Route>
       <Route path="/branch-daily-closing">{() => <ModulePage component={BranchDailyClosingPage} module="daily_closures" />}</Route>
       <Route path="/sales-analytics">{() => <ModulePage component={SalesAnalyticsPage} module="sales_analytics" />}</Route>
-      <Route path="/event-pos">{() => <ModulePage component={EventPosPage} module="event_pos" />}</Route>
       <Route path="/event-pos-settings">{() => <ModulePage component={EventPosSettingsPage} module="event_pos" />}</Route>
+      <Route path="/event-pos">{() => <ModulePage component={EventPosPage} module="event_pos" />}</Route>
       <Route path="/targets-planning">{() => <ModulePage component={TargetsPlanningPage} module="targets_planning" />}</Route>
       <Route path="/targets-dashboard">{() => <ModulePage component={TargetsDashboardPage} module="targets" />}</Route>
       <Route path="/cashier-shift-performance">{() => <ProtectedPage component={CashierShiftPerformancePage} />}</Route>
