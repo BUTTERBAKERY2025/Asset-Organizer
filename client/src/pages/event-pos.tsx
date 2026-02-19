@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -51,9 +52,11 @@ const categoryIcons: Record<string, any> = {
 
 export default function EventPosPage() {
   const { user } = useAuth();
+  const { canEdit, canDelete } = usePermissions();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const receiptRef = useRef<HTMLDivElement>(null);
+  const isManager = canEdit("event_pos");
   
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -275,7 +278,7 @@ export default function EventPosPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          {todaySummary && (
+          {isManager && todaySummary && (
             <>
               <div className="flex items-center gap-1.5 bg-green-50 text-green-700 rounded-lg px-3 py-1.5 border border-green-200">
                 <TrendingUp className="w-3.5 h-3.5" />
@@ -289,23 +292,27 @@ export default function EventPosPage() {
               </div>
             </>
           )}
-          <div className="h-8 w-px bg-gray-200 mx-1" />
-          <button
-            onClick={() => setShowHistory(true)}
-            className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-all active:scale-90 touch-manipulation"
-            title="سجل المبيعات"
-            data-testid="button-history"
-          >
-            <ListOrdered className="w-4.5 h-4.5 text-gray-600" />
-          </button>
-          <a
-            href="/event-pos-settings"
-            className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-all active:scale-90 touch-manipulation"
-            title="الإعدادات"
-            data-testid="button-settings"
-          >
-            <Settings className="w-4.5 h-4.5 text-gray-600" />
-          </a>
+          {isManager && (
+            <>
+              <div className="h-8 w-px bg-gray-200 mx-1" />
+              <button
+                onClick={() => setShowHistory(true)}
+                className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-all active:scale-90 touch-manipulation"
+                title="سجل المبيعات"
+                data-testid="button-history"
+              >
+                <ListOrdered className="w-4.5 h-4.5 text-gray-600" />
+              </button>
+              <a
+                href="/event-pos-settings"
+                className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-all active:scale-90 touch-manipulation"
+                title="الإعدادات"
+                data-testid="button-settings"
+              >
+                <Settings className="w-4.5 h-4.5 text-gray-600" />
+              </a>
+            </>
+          )}
         </div>
       </header>
 
@@ -395,11 +402,13 @@ export default function EventPosPage() {
                   <Package className="w-14 h-14 text-gray-300" />
                 </div>
                 <p className="text-xl font-bold text-gray-400 mb-2">لا توجد أصناف</p>
-                <p className="text-sm text-gray-300 mb-4">أضف منتجات من صفحة الإعدادات</p>
-                <a href="/event-pos-settings" className="inline-flex items-center gap-2 px-6 py-3 bg-orange-500 text-white rounded-xl font-bold text-sm hover:bg-orange-600 transition-colors active:scale-95 touch-manipulation" data-testid="link-add-products">
-                  <Settings className="w-4 h-4" />
-                  إعدادات نقطة البيع
-                </a>
+                <p className="text-sm text-gray-300 mb-4">{isManager ? "أضف منتجات من صفحة الإعدادات" : "تواصل مع المدير لإضافة المنتجات"}</p>
+                {isManager && (
+                  <a href="/event-pos-settings" className="inline-flex items-center gap-2 px-6 py-3 bg-orange-500 text-white rounded-xl font-bold text-sm hover:bg-orange-600 transition-colors active:scale-95 touch-manipulation" data-testid="link-add-products">
+                    <Settings className="w-4 h-4" />
+                    إعدادات نقطة البيع
+                  </a>
+                )}
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-4">

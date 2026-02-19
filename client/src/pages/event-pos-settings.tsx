@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,12 +23,14 @@ import {
 const EVENT_BRANCH_ID = "EVENT-BB";
 
 export default function EventPosSettingsPage() {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
+  const { canEdit } = usePermissions();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("products");
   const [productSearch, setProductSearch] = useState("");
   const [editingPrice, setEditingPrice] = useState<{ id: number; price: string } | null>(null);
+  const hasEditAccess = isAdmin || canEdit("event_pos");
 
   const { data: branchProducts = [], isLoading: productsLoading } = useQuery({
     queryKey: ["/api/pos/branch-products", EVENT_BRANCH_ID],
@@ -203,6 +206,25 @@ export default function EventPosSettingsPage() {
       toast({ title: "تمت إضافة جميع المنتجات" });
     },
   });
+
+  if (!hasEditAccess) {
+    return (
+      <Layout>
+        <div className="min-h-[60vh] flex items-center justify-center" dir="rtl">
+          <div className="text-center space-y-4">
+            <div className="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mx-auto">
+              <Shield className="w-8 h-8 text-red-500" />
+            </div>
+            <h2 className="text-xl font-black text-gray-800">غير مصرح بالوصول</h2>
+            <p className="text-sm text-gray-500">هذه الصفحة متاحة فقط للمديرين والمستخدمين ذوي صلاحية التعديل</p>
+            <a href="/event-pos" className="inline-flex items-center gap-2 px-6 py-3 bg-orange-500 text-white rounded-xl font-bold text-sm hover:bg-orange-600 transition-colors">
+              العودة لنقطة البيع
+            </a>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
