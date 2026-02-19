@@ -3764,12 +3764,34 @@ export class DatabaseStorage implements IStorage {
       .where(journalConditions.length > 0 ? and(...journalConditions) : undefined)
       .orderBy(desc(cashierSalesJournals.journalDate));
 
-    // Sales Report calculations (now working on filtered data)
-    const totalSales = allJournals.reduce((sum, j) => sum + j.totalSales, 0);
-    const cashSales = allJournals.reduce((sum, j) => sum + j.cashTotal, 0);
-    const networkSales = allJournals.reduce((sum, j) => sum + (j.networkTotal || 0), 0);
+    // Also fetch Event POS sales for the same filters
+    const posConditions: any[] = [];
+    if (branchId) {
+      posConditions.push(eq(posSales.branchId, branchId));
+    } else if (branchIds && branchIds.length > 0) {
+      posConditions.push(inArray(posSales.branchId, branchIds));
+    }
+    if (startDate) posConditions.push(gte(posSales.saleDate, startDate));
+    if (endDate) posConditions.push(lte(posSales.saleDate, endDate));
+
+    const allPosSales = await db.select()
+      .from(posSales)
+      .where(posConditions.length > 0 ? and(...posConditions) : undefined);
+
+    const completedPosSales = allPosSales.filter(s => s.status === 'completed');
+
+    // POS sales aggregation
+    const posTotalSales = completedPosSales.reduce((sum, s) => sum + (s.totalAmount || 0), 0);
+    const posCashSales = completedPosSales.filter(s => s.paymentMethod === 'cash').reduce((sum, s) => sum + (s.totalAmount || 0), 0);
+    const posNetworkSales = completedPosSales.filter(s => s.paymentMethod === 'network').reduce((sum, s) => sum + (s.totalAmount || 0), 0);
+    const posTotalTransactions = completedPosSales.length;
+
+    // Sales Report calculations - combine journal data + POS data
+    const totalSales = allJournals.reduce((sum, j) => sum + j.totalSales, 0) + posTotalSales;
+    const cashSales = allJournals.reduce((sum, j) => sum + j.cashTotal, 0) + posCashSales;
+    const networkSales = allJournals.reduce((sum, j) => sum + (j.networkTotal || 0), 0) + posNetworkSales;
     const deliverySales = allJournals.reduce((sum, j) => sum + (j.deliveryTotal || 0), 0);
-    const totalTransactions = allJournals.reduce((sum, j) => sum + (j.transactionCount || 0), 0);
+    const totalTransactions = allJournals.reduce((sum, j) => sum + (j.transactionCount || 0), 0) + posTotalTransactions;
     const avgTickets = allJournals.filter(j => j.averageTicket && j.averageTicket > 0);
     const averageTicket = avgTickets.length > 0 
       ? avgTickets.reduce((sum, j) => sum + (j.averageTicket || 0), 0) / avgTickets.length 
@@ -3787,6 +3809,9 @@ export class DatabaseStorage implements IStorage {
     allJournals.forEach(j => {
       statusCounts[j.status] = (statusCounts[j.status] || 0) + 1;
     });
+    if (completedPosSales.length > 0) {
+      statusCounts['completed'] = (statusCounts['completed'] || 0) + completedPosSales.length;
+    }
     const journalsByStatus = Object.entries(statusCounts).map(([status, count]) => ({ status, count }));
 
     // OPTIMIZED: Payment method breakdown with single JOIN query instead of N+1
@@ -3807,7 +3832,28 @@ export class DatabaseStorage implements IStorage {
         .sort((a, b) => b.amount - a.amount);
     }
 
-    // Daily sales (already optimized - working on filtered data)
+    // Add POS payment methods to breakdown
+    if (posCashSales > 0) {
+      const existingCash = paymentMethodBreakdown.find(p => p.method === 'cash');
+      if (existingCash) {
+        existingCash.amount += posCashSales;
+        existingCash.count += completedPosSales.filter(s => s.paymentMethod === 'cash').length;
+      } else {
+        paymentMethodBreakdown.push({ method: 'cash', amount: posCashSales, count: completedPosSales.filter(s => s.paymentMethod === 'cash').length });
+      }
+    }
+    if (posNetworkSales > 0) {
+      const existingNetwork = paymentMethodBreakdown.find(p => p.method === 'mada');
+      if (existingNetwork) {
+        existingNetwork.amount += posNetworkSales;
+        existingNetwork.count += completedPosSales.filter(s => s.paymentMethod === 'network').length;
+      } else {
+        paymentMethodBreakdown.push({ method: 'mada', amount: posNetworkSales, count: completedPosSales.filter(s => s.paymentMethod === 'network').length });
+      }
+    }
+    paymentMethodBreakdown.sort((a, b) => b.amount - a.amount);
+
+    // Daily sales - combine journal data + POS data
     const dailySalesMap: Record<string, { sales: number; transactions: number }> = {};
     allJournals.forEach(j => {
       if (!dailySalesMap[j.journalDate]) {
@@ -3815,6 +3861,13 @@ export class DatabaseStorage implements IStorage {
       }
       dailySalesMap[j.journalDate].sales += j.totalSales;
       dailySalesMap[j.journalDate].transactions += j.transactionCount || 0;
+    });
+    completedPosSales.forEach(s => {
+      if (!dailySalesMap[s.saleDate]) {
+        dailySalesMap[s.saleDate] = { sales: 0, transactions: 0 };
+      }
+      dailySalesMap[s.saleDate].sales += s.totalAmount || 0;
+      dailySalesMap[s.saleDate].transactions += 1;
     });
     const dailySales = Object.entries(dailySalesMap)
       .map(([date, data]) => ({ date, sales: data.sales, transactions: data.transactions }))
@@ -4042,11 +4095,21 @@ export class DatabaseStorage implements IStorage {
       ordersByBranch.get(o.branchId)!.push(o);
     });
 
+    const posSalesByBranch = new Map<string, typeof completedPosSales>();
+    completedPosSales.forEach(s => {
+      if (!posSalesByBranch.has(s.branchId)) posSalesByBranch.set(s.branchId, []);
+      posSalesByBranch.get(s.branchId)!.push(s);
+    });
+
     const branchComparison = branchesToCompare.map(branch => {
       const branchJournals = journalsByBranch.get(branch.id) || [];
       const branchOrders = ordersByBranch.get(branch.id) || [];
-      const branchSales = branchJournals.reduce((sum, j) => sum + j.totalSales, 0);
-      const branchTransactions = branchJournals.reduce((sum, j) => sum + (j.transactionCount || 0), 0);
+      const branchPosSales = posSalesByBranch.get(branch.id) || [];
+      const journalSales = branchJournals.reduce((sum, j) => sum + j.totalSales, 0);
+      const posSalesTotal = branchPosSales.reduce((sum, s) => sum + (s.totalAmount || 0), 0);
+      const branchSales = journalSales + posSalesTotal;
+      const journalTransactions = branchJournals.reduce((sum, j) => sum + (j.transactionCount || 0), 0);
+      const branchTransactions = journalTransactions + branchPosSales.length;
 
       return {
         branchId: branch.id,
