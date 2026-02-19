@@ -17,7 +17,7 @@ import {
   Target, UsersRound, ClipboardList, Receipt, TrendingUp, Brain, Upload,
   FileBarChart, Gift, PieChart, Shield, Building, Briefcase, BarChart3,
   Zap, Sun, Moon, CloudSun, Loader2, RefreshCw, Languages, Warehouse,
-  PackageCheck, Send, ClipboardCheck, FileText
+  PackageCheck, Send, ClipboardCheck, FileText, Store
 } from "lucide-react";
 import type { SystemModule } from "@shared/schema";
 
@@ -259,6 +259,17 @@ export default function PlatformHomePage() {
         { label: t('subItems.targets'), href: "/targets-dashboard", icon: Target },
         { label: t('subItems.incentives'), href: "/incentives-management", icon: Gift },
         { label: t('subItems.pnl'), href: "/pnl-dashboard", icon: TrendingUp },
+      ],
+    },
+    {
+      title: "نقطة البيع - إيفنت",
+      description: "نظام نقاط البيع للفعاليات والمناسبات الموسمية مع الفواتير الضريبية المبسطة",
+      icon: Store,
+      href: "/event-pos",
+      color: "bg-orange-500",
+      module: "event_pos" as SystemModule,
+      items: [
+        { label: "نقطة البيع", href: "/event-pos", icon: Store },
       ],
     },
     {
