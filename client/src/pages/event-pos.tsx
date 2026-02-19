@@ -15,6 +15,7 @@ import {
   ListOrdered, Zap, Coffee
 } from "lucide-react";
 import { useReactToPrint } from "react-to-print";
+import { QRCodeSVG } from "qrcode.react";
 
 const EVENT_BRANCH_ID = "EVENT-BB";
 
@@ -41,6 +42,38 @@ interface BranchProductWithDetails {
     vatRate: number | null;
     unit: string | null;
   };
+}
+
+function generateZatcaQrBase64(sellerName: string, vatNumber: string, timestamp: string, totalWithVat: string, vatAmount: string): string {
+  const encoder = new TextEncoder();
+  const tlvParts: Uint8Array[] = [];
+  const fields = [
+    { tag: 1, value: sellerName },
+    { tag: 2, value: vatNumber },
+    { tag: 3, value: timestamp },
+    { tag: 4, value: totalWithVat },
+    { tag: 5, value: vatAmount },
+  ];
+  for (const field of fields) {
+    const encoded = encoder.encode(field.value);
+    const tlv = new Uint8Array(2 + encoded.length);
+    tlv[0] = field.tag;
+    tlv[1] = encoded.length;
+    tlv.set(encoded, 2);
+    tlvParts.push(tlv);
+  }
+  const totalLength = tlvParts.reduce((sum, p) => sum + p.length, 0);
+  const combined = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const part of tlvParts) {
+    combined.set(part, offset);
+    offset += part.length;
+  }
+  let binary = "";
+  for (let i = 0; i < combined.length; i++) {
+    binary += String.fromCharCode(combined[i]);
+  }
+  return btoa(binary);
 }
 
 const categoryIcons: Record<string, any> = {
@@ -304,6 +337,15 @@ export default function EventPosPage() {
         .receipt-print img {
           max-height: 40px !important;
           max-width: 50mm !important;
+        }
+        .receipt-print svg {
+          visibility: visible !important;
+          display: block !important;
+          margin: 0 auto !important;
+        }
+        .receipt-print canvas {
+          visibility: visible !important;
+          display: block !important;
         }
       }
     `,
@@ -884,6 +926,33 @@ export default function EventPosPage() {
                   </>
                 )}
               </div>
+
+              {/* Cashier Info */}
+              <div style={{ fontSize: "9px", color: "#555", textAlign: "center", padding: "2px 0" }}>
+                الكاشير: {lastSale.cashierName}
+              </div>
+
+              <hr className="receipt-separator" style={{ border: "none", borderTop: "1px dashed #000", margin: "4px 0" }} />
+
+              {/* ZATCA QR Code */}
+              {invoiceSettings?.showQrCode !== false && invoiceSettings?.vatNumber && (
+                <div style={{ textAlign: "center", padding: "6px 0" }}>
+                  <QRCodeSVG
+                    value={generateZatcaQrBase64(
+                      invoiceSettings?.businessName || "باتر بيكري",
+                      invoiceSettings?.vatNumber || "",
+                      new Date(`${lastSale.saleDate}T${lastSale.saleTime}`).toISOString(),
+                      lastSale.totalAmount?.toFixed(2) || "0.00",
+                      lastSale.vatAmount?.toFixed(2) || "0.00"
+                    )}
+                    size={100}
+                    level="M"
+                    style={{ margin: "0 auto" }}
+                    data-testid="img-zatca-qr"
+                  />
+                  <div style={{ fontSize: "8px", color: "#666", marginTop: "2px" }}>فاتورة ضريبية مبسطة - ZATCA</div>
+                </div>
+              )}
 
               <hr className="receipt-separator" style={{ border: "none", borderTop: "1px dashed #000", margin: "4px 0" }} />
 
