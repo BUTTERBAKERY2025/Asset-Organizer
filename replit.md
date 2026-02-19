@@ -50,6 +50,7 @@ The system uses a modern web architecture with a React-based frontend and a Node
 - **Display Bar & Daily Waste System**: Manages display bar operations with production receipts, daily waste tracking, and approval workflows.
 - **System Notifications & Broadcast Messages**: Interactive notification system for targeted messages with various types, display styles, targeting, scheduling, and read/dismiss tracking.
 - **Accounting Software Integration**: Comprehensive system for automatic journal entries from sales and waste, financial reconciliation, a hierarchical Saudi Chart of Accounts, and export capabilities to Qoyod, Zoho Books, and general CSV.
+- **Event POS (Point of Sale)**: Module for seasonal events with simplified tax invoicing per ZATCA standards, branch-specific product catalog management, multiple payment methods (cash/network), daily sales summary, print-ready receipts, and RBAC-secured endpoints with branch isolation.
 
 ### Performance Optimization
 - **API Response Cache**: Server-side in-memory cache for all GET /api/* responses with per-user+branch isolation and auto-invalidation.

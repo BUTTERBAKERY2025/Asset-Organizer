@@ -29176,6 +29176,154 @@ export async function registerRoutes(
       res.status(500).json({ error: "فشل في إخفاء الإشعار" });
     }
   });
+
+  // ============================================
+  // Event POS API Routes
+  // ============================================
+
+  // Branch Products
+  app.get("/api/pos/branch-products/:branchId", isAuthenticated, requirePermission("event_pos", "view"), async (req, res) => {
+    try {
+      const branchId = req.params.branchId;
+      if (!await canAccessBranch(req, branchId)) {
+        return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
+      }
+      const products = await storage.getBranchProducts(branchId);
+      res.json(products);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/pos/branch-products", isAuthenticated, requirePermission("event_pos", "create"), async (req, res) => {
+    try {
+      const { branchId, productId, isActive, priceOverride, sortOrder } = req.body;
+      if (!branchId || !productId) {
+        return res.status(400).json({ error: "branchId و productId مطلوبان" });
+      }
+      if (!await canAccessBranch(req, branchId)) {
+        return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
+      }
+      const product = await storage.addBranchProduct({ branchId, productId: Number(productId), isActive: isActive ?? true, priceOverride, sortOrder });
+      res.status(201).json(product);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/pos/branch-products/:id", isAuthenticated, requirePermission("event_pos", "delete"), async (req, res) => {
+    try {
+      await storage.removeBranchProduct(Number(req.params.id));
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.patch("/api/pos/branch-products/:id", isAuthenticated, requirePermission("event_pos", "edit"), async (req, res) => {
+    try {
+      const updated = await storage.updateBranchProduct(Number(req.params.id), req.body);
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // POS Invoice Settings
+  app.get("/api/pos/invoice-settings/:branchId", isAuthenticated, requirePermission("event_pos", "view"), async (req, res) => {
+    try {
+      const branchId = req.params.branchId;
+      if (!await canAccessBranch(req, branchId)) {
+        return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
+      }
+      const settings = await storage.getPosInvoiceSettings(branchId);
+      res.json(settings || null);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/pos/invoice-settings", isAuthenticated, requirePermission("event_pos", "edit"), async (req, res) => {
+    try {
+      const { branchId, businessName, vatNumber, invoicePrefix } = req.body;
+      if (!branchId) {
+        return res.status(400).json({ error: "branchId مطلوب" });
+      }
+      if (!await canAccessBranch(req, branchId)) {
+        return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
+      }
+      const settings = await storage.upsertPosInvoiceSettings(req.body);
+      res.json(settings);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // POS Sales
+  app.post("/api/pos/sales", isAuthenticated, requirePermission("event_pos", "create"), async (req, res) => {
+    try {
+      const { items, ...saleData } = req.body;
+      if (!saleData.branchId || !items || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ error: "بيانات البيع غير مكتملة" });
+      }
+      if (!await canAccessBranch(req, saleData.branchId)) {
+        return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
+      }
+      const invoiceNum = await storage.incrementInvoiceNumber(saleData.branchId);
+      const settings = await storage.getPosInvoiceSettings(saleData.branchId);
+      const prefix = settings?.invoicePrefix || "EV";
+      saleData.invoiceNumber = `${prefix}-${String(invoiceNum).padStart(6, '0')}`;
+      saleData.cashierId = req.session?.userId || saleData.cashierId;
+
+      const sale = await storage.createPosSale(saleData, items);
+      res.status(201).json(sale);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/pos/sales/:branchId", isAuthenticated, requirePermission("event_pos", "view"), async (req, res) => {
+    try {
+      const branchId = req.params.branchId;
+      if (!await canAccessBranch(req, branchId)) {
+        return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
+      }
+      const { dateFrom, dateTo } = req.query;
+      const sales = await storage.getPosSales(
+        branchId,
+        dateFrom as string,
+        dateTo as string
+      );
+      res.json(sales);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/pos/sale/:id", isAuthenticated, requirePermission("event_pos", "view"), async (req, res) => {
+    try {
+      const sale = await storage.getPosSaleById(Number(req.params.id));
+      if (!sale) return res.status(404).json({ error: "عملية البيع غير موجودة" });
+      const items = await storage.getPosSaleItems(sale.id);
+      res.json({ ...sale, items });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/pos/summary/:branchId/:date", isAuthenticated, requirePermission("event_pos", "view"), async (req, res) => {
+    try {
+      const branchId = req.params.branchId;
+      if (!await canAccessBranch(req, branchId)) {
+        return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
+      }
+      const summary = await storage.getPosSalesSummary(branchId, req.params.date);
+      res.json(summary);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   return httpServer;
 }
 

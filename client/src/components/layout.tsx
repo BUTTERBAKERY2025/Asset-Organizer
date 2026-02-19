@@ -14,7 +14,7 @@ import {
   Shield, MapPin, Megaphone, UserCheck, Calendar, UsersRound, Building, Briefcase,
   Receipt, PieChart, Lock, Layers, PieChartIcon, Share2, Languages, Warehouse,
   PackageCheck, Send, ShoppingCart, FolderOpen, Landmark, Scale, Vote, FileCheck,
-  Sparkles, Crown, Handshake, DoorOpen, Bell
+  Sparkles, Crown, Handshake, DoorOpen, Bell, Store
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
@@ -203,6 +203,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { href: "/cashier-shift-performance", label: t("sidebar.cashierPerformance"), icon: BarChart3, indent: true },
           { href: "/incentives-management", label: t("sidebar.incentivesManagement"), icon: Gift, module: "incentives", indent: true },
           { href: "/pnl-dashboard", label: t("sidebar.pnlDashboard"), icon: TrendingUp, module: "pnl_dashboard", indent: true },
+          { href: "/event-pos", label: "نقطة البيع - إيفنت", icon: Store, module: "event_pos", indent: true },
         ],
       },
     },

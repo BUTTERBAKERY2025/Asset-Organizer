@@ -502,6 +502,18 @@ import {
   type InsertSystemNotification,
   notificationReads,
   type NotificationRead,
+  branchProducts,
+  type BranchProduct,
+  type InsertBranchProduct,
+  posInvoiceSettings,
+  type PosInvoiceSettings,
+  type InsertPosInvoiceSettings,
+  posSales,
+  type PosSale,
+  type InsertPosSale,
+  posSaleItems,
+  type PosSaleItem,
+  type InsertPosSaleItem,
 } from "@shared/schema";
 
 type TransferHistory = typeof transferHistory.$inferSelect;
@@ -1255,6 +1267,24 @@ export interface IStorage {
   dismissNotification(notificationId: number, userId: string): Promise<NotificationRead>;
   getNotificationReadsByUser(userId: string): Promise<NotificationRead[]>;
   getNotificationReadStats(): Promise<{ notificationId: number; readCount: number; dismissedCount: number; readers: { userId: string; username: string; readAt: Date; dismissed: boolean }[] }[]>;
+
+  // Event POS - Branch Products
+  getBranchProducts(branchId: string): Promise<BranchProduct[]>;
+  addBranchProduct(data: InsertBranchProduct): Promise<BranchProduct>;
+  removeBranchProduct(id: number): Promise<boolean>;
+  updateBranchProduct(id: number, data: Partial<InsertBranchProduct>): Promise<BranchProduct | undefined>;
+
+  // Event POS - Invoice Settings
+  getPosInvoiceSettings(branchId: string): Promise<PosInvoiceSettings | undefined>;
+  upsertPosInvoiceSettings(data: InsertPosInvoiceSettings): Promise<PosInvoiceSettings>;
+  incrementInvoiceNumber(branchId: string): Promise<number>;
+
+  // Event POS - Sales
+  createPosSale(sale: InsertPosSale, items: InsertPosSaleItem[]): Promise<PosSale>;
+  getPosSales(branchId: string, dateFrom?: string, dateTo?: string): Promise<PosSale[]>;
+  getPosSaleById(id: number): Promise<PosSale | undefined>;
+  getPosSaleItems(saleId: number): Promise<PosSaleItem[]>;
+  getPosSalesSummary(branchId: string, date: string): Promise<{ totalSales: number; totalTransactions: number; cashTotal: number; networkTotal: number }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -13921,6 +13951,141 @@ export class DatabaseStorage implements IStorage {
       });
     });
     return Array.from(statsMap.entries()).map(([notificationId, data]) => ({ notificationId, ...data }));
+  }
+
+  // Event POS - Branch Products
+  async getBranchProducts(branchId: string): Promise<any[]> {
+    const results = await db
+      .select({
+        id: branchProducts.id,
+        branchId: branchProducts.branchId,
+        productId: branchProducts.productId,
+        isActive: branchProducts.isActive,
+        priceOverride: branchProducts.priceOverride,
+        sortOrder: branchProducts.sortOrder,
+        createdAt: branchProducts.createdAt,
+        productName: products.name,
+        productCategory: products.category,
+        productPrice: products.basePrice,
+        productUnit: products.unit,
+        productVatRate: products.vatRate,
+      })
+      .from(branchProducts)
+      .leftJoin(products, eq(branchProducts.productId, products.id))
+      .where(eq(branchProducts.branchId, branchId))
+      .orderBy(branchProducts.sortOrder);
+    return results.map(r => ({
+      id: r.id,
+      branchId: r.branchId,
+      productId: r.productId,
+      isActive: r.isActive,
+      priceOverride: r.priceOverride,
+      sortOrder: r.sortOrder,
+      createdAt: r.createdAt,
+      product: {
+        id: r.productId,
+        name: r.productName,
+        category: r.productCategory,
+        basePrice: r.productPrice,
+        unit: r.productUnit,
+        vatRate: r.productVatRate ?? 0.15,
+      },
+    }));
+  }
+
+  async addBranchProduct(data: InsertBranchProduct): Promise<BranchProduct> {
+    const [result] = await db.insert(branchProducts).values(data).returning();
+    return result;
+  }
+
+  async removeBranchProduct(id: number): Promise<boolean> {
+    const result = await db.delete(branchProducts).where(eq(branchProducts.id, id));
+    return true;
+  }
+
+  async updateBranchProduct(id: number, data: Partial<InsertBranchProduct>): Promise<BranchProduct | undefined> {
+    const [result] = await db.update(branchProducts).set(data).where(eq(branchProducts.id, id)).returning();
+    return result || undefined;
+  }
+
+  // Event POS - Invoice Settings
+  async getPosInvoiceSettings(branchId: string): Promise<PosInvoiceSettings | undefined> {
+    const [result] = await db.select().from(posInvoiceSettings).where(eq(posInvoiceSettings.branchId, branchId));
+    return result || undefined;
+  }
+
+  async upsertPosInvoiceSettings(data: InsertPosInvoiceSettings): Promise<PosInvoiceSettings> {
+    const existing = await this.getPosInvoiceSettings(data.branchId);
+    if (existing) {
+      const [result] = await db
+        .update(posInvoiceSettings)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(posInvoiceSettings.branchId, data.branchId))
+        .returning();
+      return result;
+    } else {
+      const [result] = await db.insert(posInvoiceSettings).values(data).returning();
+      return result;
+    }
+  }
+
+  async incrementInvoiceNumber(branchId: string): Promise<number> {
+    const [result] = await db
+      .update(posInvoiceSettings)
+      .set({ nextInvoiceNumber: sql`${posInvoiceSettings.nextInvoiceNumber} + 1` })
+      .where(eq(posInvoiceSettings.branchId, branchId))
+      .returning({ nextInvoiceNumber: posInvoiceSettings.nextInvoiceNumber });
+    if (result) {
+      return result.nextInvoiceNumber - 1;
+    }
+    const [newSettings] = await db
+      .insert(posInvoiceSettings)
+      .values({ branchId, businessName: '', vatNumber: '', nextInvoiceNumber: 2 })
+      .returning({ nextInvoiceNumber: posInvoiceSettings.nextInvoiceNumber });
+    return 1;
+  }
+
+  // Event POS - Sales
+  async createPosSale(sale: InsertPosSale, items: InsertPosSaleItem[]): Promise<PosSale> {
+    return await db.transaction(async (tx) => {
+      const [newSale] = await tx.insert(posSales).values(sale).returning();
+      if (items && items.length > 0) {
+        const saleItems = items.map(item => ({ ...item, saleId: newSale.id }));
+        await tx.insert(posSaleItems).values(saleItems);
+      }
+      return newSale;
+    });
+  }
+
+  async getPosSales(branchId: string, dateFrom?: string, dateTo?: string): Promise<PosSale[]> {
+    const conditions = [eq(posSales.branchId, branchId)];
+    if (dateFrom) conditions.push(gte(posSales.saleDate, dateFrom));
+    if (dateTo) conditions.push(lte(posSales.saleDate, dateTo));
+    return await db.select().from(posSales).where(and(...conditions)).orderBy(desc(posSales.createdAt));
+  }
+
+  async getPosSaleById(id: number): Promise<PosSale | undefined> {
+    const [result] = await db.select().from(posSales).where(eq(posSales.id, id));
+    return result || undefined;
+  }
+
+  async getPosSaleItems(saleId: number): Promise<PosSaleItem[]> {
+    return await db.select().from(posSaleItems).where(eq(posSaleItems.saleId, saleId));
+  }
+
+  async getPosSalesSummary(branchId: string, date: string): Promise<{ totalSales: number; totalTransactions: number; cashTotal: number; networkTotal: number }> {
+    const sales = await db.select().from(posSales).where(
+      and(eq(posSales.branchId, branchId), eq(posSales.saleDate, date))
+    );
+    let totalSales = 0;
+    let cashTotal = 0;
+    let networkTotal = 0;
+    for (const s of sales) {
+      totalSales += s.totalAmount;
+      if (s.paymentMethod === 'cash') cashTotal += s.totalAmount;
+      else networkTotal += s.totalAmount;
+    }
+    return { totalSales, totalTransactions: sales.length, cashTotal, networkTotal };
   }
 }
 

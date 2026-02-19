@@ -634,6 +634,8 @@ export const SYSTEM_MODULES = [
   "governance_dividends",
   "governance_capital",
   "governance_voting",
+  // نقطة البيع
+  "event_pos",
 ] as const;
 
 export type SystemModule = (typeof SYSTEM_MODULES)[number];
@@ -8840,3 +8842,115 @@ export const insertNotificationReadSchema = createInsertSchema(notificationReads
 
 export type NotificationRead = typeof notificationReads.$inferSelect;
 export type InsertNotificationRead = z.infer<typeof insertNotificationReadSchema>;
+
+// ============================================
+// نقطة البيع - Event POS
+// ============================================
+
+// منتجات الفرع - ربط المنتجات بالفروع
+export const branchProducts = pgTable("branch_products", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
+  productId: integer("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+  isActive: boolean("is_active").default(true).notNull(),
+  priceOverride: doublePrecision("price_override"),
+  sortOrder: integer("sort_order").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_branch_product_unique").on(table.branchId, table.productId),
+  index("idx_branch_products_branch").on(table.branchId),
+]);
+
+export const insertBranchProductSchema = createInsertSchema(branchProducts).omit({
+  id: true,
+  createdAt: true,
+});
+export type BranchProduct = typeof branchProducts.$inferSelect;
+export type InsertBranchProduct = z.infer<typeof insertBranchProductSchema>;
+
+// إعدادات الفاتورة الضريبية المبسطة
+export const posInvoiceSettings = pgTable("pos_invoice_settings", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
+  businessName: text("business_name").notNull(),
+  businessNameEn: text("business_name_en"),
+  vatNumber: text("vat_number").notNull(),
+  crNumber: text("cr_number"),
+  address: text("address"),
+  city: text("city"),
+  phone: text("phone"),
+  logoUrl: text("logo_url"),
+  footerText: text("footer_text"),
+  showQrCode: boolean("show_qr_code").default(true).notNull(),
+  invoicePrefix: text("invoice_prefix").default("EV"),
+  nextInvoiceNumber: integer("next_invoice_number").default(1).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_pos_invoice_settings_branch_unique").on(table.branchId),
+]);
+
+export const insertPosInvoiceSettingsSchema = createInsertSchema(posInvoiceSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type PosInvoiceSettings = typeof posInvoiceSettings.$inferSelect;
+export type InsertPosInvoiceSettings = z.infer<typeof insertPosInvoiceSettingsSchema>;
+
+// عمليات البيع POS
+export const posSales = pgTable("pos_sales", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
+  cashierId: varchar("cashier_id").notNull().references(() => users.id),
+  cashierName: text("cashier_name").notNull(),
+  invoiceNumber: text("invoice_number").notNull(),
+  saleDate: text("sale_date").notNull(),
+  saleTime: text("sale_time").notNull(),
+  subtotal: doublePrecision("subtotal").default(0).notNull(),
+  vatAmount: doublePrecision("vat_amount").default(0).notNull(),
+  totalAmount: doublePrecision("total_amount").default(0).notNull(),
+  paymentMethod: text("payment_method").notNull(),
+  amountPaid: doublePrecision("amount_paid").default(0),
+  changeAmount: doublePrecision("change_amount").default(0),
+  customerName: text("customer_name"),
+  customerPhone: text("customer_phone"),
+  journalId: integer("journal_id").references(() => cashierSalesJournals.id),
+  status: text("status").default("completed").notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_pos_sales_branch_date").on(table.branchId, table.saleDate),
+  index("idx_pos_sales_cashier").on(table.cashierId),
+  index("idx_pos_sales_invoice").on(table.invoiceNumber),
+]);
+
+export const insertPosSaleSchema = createInsertSchema(posSales).omit({
+  id: true,
+  createdAt: true,
+});
+export type PosSale = typeof posSales.$inferSelect;
+export type InsertPosSale = z.infer<typeof insertPosSaleSchema>;
+
+// تفاصيل عمليات البيع
+export const posSaleItems = pgTable("pos_sale_items", {
+  id: serial("id").primaryKey(),
+  saleId: integer("sale_id").notNull().references(() => posSales.id, { onDelete: "cascade" }),
+  productId: integer("product_id").notNull().references(() => products.id),
+  productName: text("product_name").notNull(),
+  quantity: integer("quantity").notNull(),
+  unitPrice: doublePrecision("unit_price").notNull(),
+  vatRate: doublePrecision("vat_rate").default(0.15).notNull(),
+  vatAmount: doublePrecision("vat_amount").default(0).notNull(),
+  totalPrice: doublePrecision("total_price").notNull(),
+}, (table) => [
+  index("idx_pos_sale_items_sale").on(table.saleId),
+  index("idx_pos_sale_items_product").on(table.productId),
+])
+
+export const insertPosSaleItemSchema = createInsertSchema(posSaleItems).omit({
+  id: true,
+});
+export type PosSaleItem = typeof posSaleItems.$inferSelect;
+export type InsertPosSaleItem = z.infer<typeof insertPosSaleItemSchema>;
