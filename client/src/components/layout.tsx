@@ -204,6 +204,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { href: "/incentives-management", label: t("sidebar.incentivesManagement"), icon: Gift, module: "incentives", indent: true },
           { href: "/pnl-dashboard", label: t("sidebar.pnlDashboard"), icon: TrendingUp, module: "pnl_dashboard", indent: true },
           { href: "/event-pos", label: "نقطة البيع - إيفنت", icon: Store, module: "event_pos", indent: true },
+          { href: "/event-pos-settings", label: "إعدادات نقطة البيع الموسمية", icon: Settings, module: "event_pos", indent: true },
         ],
       },
     },

@@ -5,10 +5,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -18,6 +17,8 @@ import {
   Sparkles, TrendingUp, Hash, Clock, Loader2
 } from "lucide-react";
 import { useReactToPrint } from "react-to-print";
+
+const EVENT_BRANCH_ID = "EVENT-BB";
 
 interface CartItem {
   productId: number;
@@ -50,7 +51,6 @@ export default function EventPosPage() {
   const queryClient = useQueryClient();
   const receiptRef = useRef<HTMLDivElement>(null);
   
-  const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<string>("cash");
@@ -59,74 +59,40 @@ export default function EventPosPage() {
   const [showReceipt, setShowReceipt] = useState(false);
   const [lastSale, setLastSale] = useState<any>(null);
   const [activeTab, setActiveTab] = useState("pos");
-  const [showSettings, setShowSettings] = useState(false);
-  const [settingsForm, setSettingsForm] = useState({
-    businessName: "باتر بيكري",
-    businessNameEn: "Butter Bakery",
-    vatNumber: "",
-    crNumber: "",
-    address: "",
-    city: "",
-    phone: "",
-    footerText: "شكراً لزيارتكم",
-    showQrCode: true,
-    invoicePrefix: "EV",
-  });
-  const [showProductManager, setShowProductManager] = useState(false);
-
-  const { data: branches } = useQuery({
-    queryKey: ["/api/branches"],
-    queryFn: async () => {
-      const res = await apiRequest("GET", "/api/branches");
-      return res.json();
-    },
-  });
 
   const { data: branchProducts = [], isLoading: productsLoading } = useQuery({
-    queryKey: ["/api/pos/branch-products", selectedBranch],
+    queryKey: ["/api/pos/branch-products", EVENT_BRANCH_ID],
     queryFn: async () => {
-      const res = await apiRequest("GET", `/api/pos/branch-products/${selectedBranch}`);
-      return res.json();
-    },
-    enabled: !!selectedBranch,
-  });
-
-  const { data: allProducts = [] } = useQuery({
-    queryKey: ["/api/products"],
-    queryFn: async () => {
-      const res = await apiRequest("GET", "/api/products");
+      const res = await apiRequest("GET", `/api/pos/branch-products/${EVENT_BRANCH_ID}`);
       return res.json();
     },
   });
 
   const { data: invoiceSettings } = useQuery({
-    queryKey: ["/api/pos/invoice-settings", selectedBranch],
+    queryKey: ["/api/pos/invoice-settings", EVENT_BRANCH_ID],
     queryFn: async () => {
-      const res = await apiRequest("GET", `/api/pos/invoice-settings/${selectedBranch}`);
+      const res = await apiRequest("GET", `/api/pos/invoice-settings/${EVENT_BRANCH_ID}`);
       return res.json();
     },
-    enabled: !!selectedBranch,
   });
 
   const { data: todaySales = [] } = useQuery({
-    queryKey: ["/api/pos/sales", selectedBranch, new Date().toISOString().slice(0, 10)],
+    queryKey: ["/api/pos/sales", EVENT_BRANCH_ID, new Date().toISOString().slice(0, 10)],
     queryFn: async () => {
       const today = new Date().toISOString().slice(0, 10);
-      const res = await apiRequest("GET", `/api/pos/sales/${selectedBranch}?dateFrom=${today}&dateTo=${today}`);
+      const res = await apiRequest("GET", `/api/pos/sales/${EVENT_BRANCH_ID}?dateFrom=${today}&dateTo=${today}`);
       return res.json();
     },
-    enabled: !!selectedBranch,
     refetchInterval: 30000,
   });
 
   const { data: todaySummary } = useQuery({
-    queryKey: ["/api/pos/summary", selectedBranch],
+    queryKey: ["/api/pos/summary", EVENT_BRANCH_ID],
     queryFn: async () => {
       const today = new Date().toISOString().slice(0, 10);
-      const res = await apiRequest("GET", `/api/pos/summary/${selectedBranch}/${today}`);
+      const res = await apiRequest("GET", `/api/pos/summary/${EVENT_BRANCH_ID}/${today}`);
       return res.json();
     },
-    enabled: !!selectedBranch,
     refetchInterval: 30000,
   });
 
@@ -216,7 +182,7 @@ export default function EventPosPage() {
     mutationFn: async () => {
       const now = new Date();
       const saleData = {
-        branchId: selectedBranch,
+        branchId: EVENT_BRANCH_ID,
         cashierId: user?.id || "",
         cashierName: (user as any)?.fullName || user?.username || "",
         saleDate: now.toISOString().slice(0, 10),
@@ -261,38 +227,6 @@ export default function EventPosPage() {
     },
   });
 
-  const saveSettingsMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/pos/invoice-settings", { ...settingsForm, branchId: selectedBranch });
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/pos/invoice-settings"] });
-      setShowSettings(false);
-      toast({ title: "تم حفظ إعدادات الفاتورة" });
-    },
-  });
-
-  const addBranchProductMutation = useMutation({
-    mutationFn: async (productId: number) => {
-      const res = await apiRequest("POST", "/api/pos/branch-products", { branchId: selectedBranch, productId, isActive: true });
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/pos/branch-products"] });
-      toast({ title: "تمت إضافة المنتج" });
-    },
-  });
-
-  const removeBranchProductMutation = useMutation({
-    mutationFn: async (id: number) => {
-      await apiRequest("DELETE", `/api/pos/branch-products/${id}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/pos/branch-products"] });
-    },
-  });
-
   const handlePrint = useReactToPrint({ contentRef: receiptRef });
 
   const handleCheckout = () => {
@@ -311,50 +245,6 @@ export default function EventPosPage() {
     createSaleMutation.mutate();
   };
 
-  if (!selectedBranch) {
-    return (
-      <Layout>
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8" dir="rtl">
-          <div className="flex items-center gap-3 mb-8">
-            <div className="w-12 h-12 bg-gradient-to-br from-orange-400 to-amber-500 rounded-xl flex items-center justify-center shadow-md">
-              <Store className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-800" data-testid="text-pos-title">نقطة البيع - إيفنت موسمي</h1>
-              <p className="text-sm text-gray-500">نظام نقاط البيع للفعاليات والمناسبات</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {branches?.map((b: any) => (
-              <button
-                key={b.id}
-                onClick={() => setSelectedBranch(b.id)}
-                className="group bg-white rounded-xl border-2 border-gray-100 p-5 text-right transition-all hover:border-orange-300 hover:shadow-lg hover:shadow-orange-100/50 active:scale-[0.98]"
-                data-testid={`branch-option-${b.id}`}
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-orange-400 transition-colors" />
-                  <div className="w-10 h-10 bg-orange-50 rounded-lg flex items-center justify-center group-hover:bg-orange-100 transition-colors">
-                    <Store className="w-5 h-5 text-orange-500" />
-                  </div>
-                </div>
-                <h3 className="font-bold text-gray-800 text-base mb-1">{b.name}</h3>
-                <p className="text-xs text-gray-400">{b.location || "اختر للبدء بالبيع"}</p>
-              </button>
-            ))}
-          </div>
-        </div>
-      </Layout>
-    );
-  }
-
-  const branchName = branches?.find((b: any) => b.id === selectedBranch)?.name || selectedBranch;
-
-  const availableToAdd = allProducts.filter((p: any) => 
-    p.isActive === "true" && !branchProducts.some((bp: any) => bp.productId === p.id)
-  );
-
   return (
     <Layout>
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4" dir="rtl">
@@ -362,19 +252,17 @@ export default function EventPosPage() {
         <div className="bg-gradient-to-l from-orange-500 to-amber-500 rounded-2xl p-4 sm:p-5 mb-5 shadow-lg shadow-orange-200/40">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <button
-                onClick={() => setSelectedBranch("")}
-                className="w-9 h-9 bg-white/20 rounded-lg flex items-center justify-center hover:bg-white/30 transition-colors"
-                data-testid="button-back"
-              >
-                <ChevronRight className="w-5 h-5 text-white" />
-              </button>
+              <div className="w-11 h-11 bg-white/20 rounded-xl flex items-center justify-center">
+                <Sparkles className="w-6 h-6 text-white" />
+              </div>
               <div>
-                <h1 className="text-lg font-bold text-white flex items-center gap-2">
-                  <Sparkles className="w-5 h-5" />
+                <h1 className="text-lg font-bold text-white flex items-center gap-2" data-testid="text-pos-title">
                   نقطة البيع - إيفنت موسمي
                 </h1>
-                <p className="text-xs text-white/70 mt-0.5">{branchName}</p>
+                <p className="text-xs text-white/70 mt-0.5 flex items-center gap-1">
+                  <Store className="w-3 h-3" />
+                  فرع: إيفنت موسمي
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -390,36 +278,14 @@ export default function EventPosPage() {
                   </div>
                 </div>
               )}
-              <button
-                onClick={() => setShowProductManager(true)}
+              <a
+                href="/event-pos-settings"
                 className="w-9 h-9 bg-white/15 rounded-lg flex items-center justify-center hover:bg-white/25 transition-colors"
-                data-testid="button-manage-products"
-              >
-                <Package className="w-4 h-4 text-white" />
-              </button>
-              <button
-                onClick={() => {
-                  if (invoiceSettings) {
-                    setSettingsForm({
-                      businessName: invoiceSettings.businessName || "باتر بيكري",
-                      businessNameEn: invoiceSettings.businessNameEn || "",
-                      vatNumber: invoiceSettings.vatNumber || "",
-                      crNumber: invoiceSettings.crNumber || "",
-                      address: invoiceSettings.address || "",
-                      city: invoiceSettings.city || "",
-                      phone: invoiceSettings.phone || "",
-                      footerText: invoiceSettings.footerText || "شكراً لزيارتكم",
-                      showQrCode: invoiceSettings.showQrCode ?? true,
-                      invoicePrefix: invoiceSettings.invoicePrefix || "EV",
-                    });
-                  }
-                  setShowSettings(true);
-                }}
-                className="w-9 h-9 bg-white/15 rounded-lg flex items-center justify-center hover:bg-white/25 transition-colors"
+                title="إعدادات نقطة البيع"
                 data-testid="button-settings"
               >
                 <Settings className="w-4 h-4 text-white" />
-              </button>
+              </a>
             </div>
           </div>
         </div>
@@ -495,11 +361,10 @@ export default function EventPosPage() {
                         <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center">
                           <Package className="w-8 h-8 text-gray-300" />
                         </div>
-                        <p className="text-sm font-medium">لا توجد منتجات في هذا الفرع</p>
-                        <Button variant="outline" size="sm" onClick={() => setShowProductManager(true)} className="mt-1 rounded-lg text-xs">
-                          <Plus className="w-3 h-3 ml-1" />
-                          إضافة منتجات
-                        </Button>
+                        <p className="text-sm font-medium">لا توجد أصناف في نقطة البيع</p>
+                        <a href="/event-pos-settings" className="text-xs text-orange-600 hover:text-orange-700 underline">
+                          اذهب للإعدادات لإضافة أصناف
+                        </a>
                       </CardContent>
                     </Card>
                   ) : (
@@ -902,150 +767,6 @@ export default function EventPosPage() {
               طباعة
             </Button>
           </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Invoice Settings Dialog */}
-      <Dialog open={showSettings} onOpenChange={setShowSettings}>
-        <DialogContent className="max-w-md rounded-2xl" dir="rtl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-base">
-              <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
-                <Settings className="w-4 h-4 text-gray-600" />
-              </div>
-              إعدادات الفاتورة الضريبية
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-1">
-            <div>
-              <label className="text-xs font-medium text-gray-600 mb-1 block">اسم المنشأة (عربي)</label>
-              <Input value={settingsForm.businessName} onChange={e => setSettingsForm(f => ({ ...f, businessName: e.target.value }))} className="rounded-lg h-9 text-sm" data-testid="input-business-name" />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-gray-600 mb-1 block">اسم المنشأة (إنجليزي)</label>
-              <Input value={settingsForm.businessNameEn} onChange={e => setSettingsForm(f => ({ ...f, businessNameEn: e.target.value }))} className="rounded-lg h-9 text-sm" />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-gray-600 mb-1 block">الرقم الضريبي *</label>
-              <Input value={settingsForm.vatNumber} onChange={e => setSettingsForm(f => ({ ...f, vatNumber: e.target.value }))} placeholder="300XXXXXXXXX" className="rounded-lg h-9 text-sm" data-testid="input-vat-number" />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-gray-600 mb-1 block">السجل التجاري</label>
-              <Input value={settingsForm.crNumber} onChange={e => setSettingsForm(f => ({ ...f, crNumber: e.target.value }))} className="rounded-lg h-9 text-sm" />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-gray-600 mb-1 block">العنوان</label>
-              <Input value={settingsForm.address} onChange={e => setSettingsForm(f => ({ ...f, address: e.target.value }))} className="rounded-lg h-9 text-sm" />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-xs font-medium text-gray-600 mb-1 block">المدينة</label>
-                <Input value={settingsForm.city} onChange={e => setSettingsForm(f => ({ ...f, city: e.target.value }))} className="rounded-lg h-9 text-sm" />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-gray-600 mb-1 block">الهاتف</label>
-                <Input value={settingsForm.phone} onChange={e => setSettingsForm(f => ({ ...f, phone: e.target.value }))} className="rounded-lg h-9 text-sm" />
-              </div>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-gray-600 mb-1 block">بادئة رقم الفاتورة</label>
-              <Input value={settingsForm.invoicePrefix} onChange={e => setSettingsForm(f => ({ ...f, invoicePrefix: e.target.value }))} placeholder="EV" className="rounded-lg h-9 text-sm" />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-gray-600 mb-1 block">نص أسفل الفاتورة</label>
-              <Input value={settingsForm.footerText} onChange={e => setSettingsForm(f => ({ ...f, footerText: e.target.value }))} className="rounded-lg h-9 text-sm" />
-            </div>
-          </div>
-          <DialogFooter className="mt-2">
-            <Button variant="outline" onClick={() => setShowSettings(false)} className="rounded-xl">إلغاء</Button>
-            <Button onClick={() => saveSettingsMutation.mutate()} disabled={saveSettingsMutation.isPending || !settingsForm.vatNumber} className="rounded-xl" data-testid="button-save-settings">
-              {saveSettingsMutation.isPending ? "جاري الحفظ..." : "حفظ الإعدادات"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Product Manager Dialog */}
-      <Dialog open={showProductManager} onOpenChange={setShowProductManager}>
-        <DialogContent className="max-w-lg max-h-[80vh] overflow-hidden flex flex-col rounded-2xl" dir="rtl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-base">
-              <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
-                <Package className="w-4 h-4 text-orange-600" />
-              </div>
-              إدارة منتجات الفرع
-            </DialogTitle>
-          </DialogHeader>
-          <div className="flex-1 overflow-y-auto space-y-4">
-            <div>
-              <h4 className="font-semibold text-xs text-gray-600 mb-2 flex items-center gap-1">
-                <Check className="w-3.5 h-3.5 text-green-500" />
-                المنتجات المضافة ({branchProducts.length})
-              </h4>
-              <div className="space-y-1.5">
-                {branchProducts.length === 0 && (
-                  <p className="text-xs text-gray-400 text-center py-4">لم يتم إضافة منتجات بعد</p>
-                )}
-                {branchProducts.map((bp: any) => (
-                  <div key={bp.id} className="flex items-center justify-between bg-green-50 rounded-xl px-3 py-2 border border-green-100">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 bg-green-100 rounded-lg flex items-center justify-center">
-                        <Package className="w-3.5 h-3.5 text-green-600" />
-                      </div>
-                      <div>
-                        <span className="font-medium text-xs text-gray-800">{bp.product?.name || `منتج #${bp.productId}`}</span>
-                        <span className="text-[10px] text-gray-400 mr-1.5">{bp.product?.category}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-orange-600">
-                        {(bp.priceOverride ?? bp.product?.basePrice ?? 0).toFixed(2)} ر.س
-                      </span>
-                      <button onClick={() => removeBranchProductMutation.mutate(bp.id)} className="w-7 h-7 rounded-lg flex items-center justify-center text-red-300 hover:text-red-600 hover:bg-red-50 transition-colors">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <h4 className="font-semibold text-xs text-gray-600 mb-2 flex items-center gap-1">
-                <Plus className="w-3.5 h-3.5 text-blue-500" />
-                إضافة منتجات ({availableToAdd.length} متاح)
-              </h4>
-              <div className="space-y-1.5 max-h-52 overflow-y-auto">
-                {availableToAdd.length === 0 && (
-                  <p className="text-xs text-gray-400 text-center py-4">تم إضافة جميع المنتجات المتاحة</p>
-                )}
-                {availableToAdd.map((p: any) => (
-                  <div key={p.id} className="flex items-center justify-between bg-gray-50 rounded-xl px-3 py-2 border border-gray-100">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 bg-gray-100 rounded-lg flex items-center justify-center">
-                        <Package className="w-3.5 h-3.5 text-gray-400" />
-                      </div>
-                      <div>
-                        <span className="font-medium text-xs text-gray-800">{p.name}</span>
-                        <span className="text-[10px] text-gray-400 mr-1.5">{p.category}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-500">{(p.basePrice || 0).toFixed(2)} ر.س</span>
-                      <button
-                        onClick={() => addBranchProductMutation.mutate(p.id)}
-                        className="h-7 px-2.5 rounded-lg text-[10px] font-medium bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors flex items-center gap-0.5 border border-blue-100"
-                        data-testid={`button-add-product-${p.id}`}
-                      >
-                        <Plus className="w-3 h-3" />
-                        إضافة
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
         </DialogContent>
       </Dialog>
     </Layout>

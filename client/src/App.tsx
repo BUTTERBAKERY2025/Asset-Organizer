@@ -68,6 +68,7 @@ const AdvancedProductionOrderFormPage = lazy(() => import("@/pages/advanced-prod
 const AdvancedProductionOrderDetailsPage = lazy(() => import("@/pages/advanced-production-order-details"));
 const SalesDataUploadsPage = lazy(() => import("@/pages/sales-data-uploads"));
 const EventPosPage = lazy(() => import("@/pages/event-pos"));
+const EventPosSettingsPage = lazy(() => import("@/pages/event-pos-settings"));
 const ProductionDashboardPage = lazy(() => import("@/pages/production-dashboard"));
 const DailyProductionPage = lazy(() => import("@/pages/daily-production"));
 const ProductionReportsPage = lazy(() => import("@/pages/production-reports"));
@@ -259,6 +260,7 @@ function Router() {
       <Route path="/branch-daily-closing">{() => <ModulePage component={BranchDailyClosingPage} module="daily_closures" />}</Route>
       <Route path="/sales-analytics">{() => <ModulePage component={SalesAnalyticsPage} module="sales_analytics" />}</Route>
       <Route path="/event-pos">{() => <ModulePage component={EventPosPage} module="event_pos" />}</Route>
+      <Route path="/event-pos-settings">{() => <ModulePage component={EventPosSettingsPage} module="event_pos" />}</Route>
       <Route path="/targets-planning">{() => <ModulePage component={TargetsPlanningPage} module="targets_planning" />}</Route>
       <Route path="/targets-dashboard">{() => <ModulePage component={TargetsDashboardPage} module="targets" />}</Route>
       <Route path="/cashier-shift-performance">{() => <ProtectedPage component={CashierShiftPerformancePage} />}</Route>
