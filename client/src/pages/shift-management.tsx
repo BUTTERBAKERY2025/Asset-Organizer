@@ -354,33 +354,62 @@ export default function ShiftManagementPage() {
   const saveSchedulesMutation = useMutation({
     mutationFn: async () => {
       const schedules: any[] = [];
-      Object.entries(scheduleData).forEach(([employeeId, dates]) => {
-        const employee = filteredEmployees.find(u => String(u.id) === employeeId);
+      const dayNames = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+      Object.entries(scheduleData).forEach(([empKey, dates]) => {
+        const employee = filteredEmployees.find(u => String(u.id) === empKey);
+        if (!employee) return;
         Object.entries(dates).forEach(([dateStr, data]) => {
+          if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return;
           const shiftType = data.isOff ? null : getShiftTypeFromTime(data.startTime);
+          const date = new Date(dateStr + "T12:00:00");
+          const dayOfWeek = dayNames[date.getDay()];
           schedules.push({
-            employeeId: employee?.linkedUserId || `branch_emp_${employee?.id || employeeId}`,
-            employeeName: employee?.employeeName || "غير معروف",
-            branchEmployeeId: employee?.id,
+            employeeId: employee.linkedUserId || `branch_emp_${employee.id}`,
+            employeeName: employee.employeeName || "غير معروف",
+            branchEmployeeId: employee.id,
             scheduleDate: dateStr,
-            startTime: data.isOff ? null : data.startTime,
-            endTime: data.isOff ? null : data.endTime,
+            dayOfWeek,
+            startTime: data.isOff ? null : (data.startTime || null),
+            endTime: data.isOff ? null : (data.endTime || null),
             shiftType: shiftType,
-            isOff: data.isOff,
+            isOff: data.isOff ?? false,
             branchId: selectedBranch,
           });
         });
       });
-      return apiRequest("POST", "/api/employee-schedules/bulk", { schedules });
+      const totalKeys = Object.keys(scheduleData).length;
+      const matchedKeys = new Set(schedules.map((s: any) => String(s.branchEmployeeId)));
+      const skippedCount = totalKeys - matchedKeys.size;
+      if (schedules.length === 0) {
+        throw new Error("لا توجد بيانات جداول للحفظ - تأكد من وجود موظفين نشطين في الفرع");
+      }
+      const res = await apiRequest("POST", "/api/employee-schedules/bulk", { schedules });
+      const result = await res.json();
+      return { ...result, skippedCount };
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/employee-schedules"] });
       setHasUnsavedChanges(false);
-      toast({ title: "تم حفظ جدول الدوام بنجاح" });
+      const warnings: string[] = [];
+      if (data?.skippedCount > 0) {
+        warnings.push(`تم تخطي ${data.skippedCount} موظف غير نشط`);
+      }
+      if (data?.errors && data.errors.length > 0) {
+        warnings.push(data.errors[0]);
+      }
+      if (warnings.length > 0) {
+        toast({ 
+          title: `تم حفظ ${data.saved || 0} من ${data.total || 0} جدول`,
+          description: warnings.join(' - '),
+        });
+      } else {
+        toast({ title: "تم حفظ جدول الدوام بنجاح" });
+      }
     },
     onError: (error: any) => {
-      const details = error?.message || "خطأ غير معروف";
-      console.error("Schedule save error:", details);
+      const msg = error?.message || "خطأ غير معروف";
+      const details = msg.length > 200 ? msg.substring(0, 200) + "..." : msg;
+      console.error("Schedule save error:", msg);
       toast({ title: "خطأ", description: `فشل في حفظ الجدول: ${details}`, variant: "destructive" });
     },
   });

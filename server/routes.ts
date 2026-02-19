@@ -20537,25 +20537,66 @@ export async function registerRoutes(
         }
       }
       
+      const branchIds = [...new Set(schedules.map((s: any) => s.branchId).filter(Boolean))];
+      if (branchIds.length > 0) {
+        const allBranches = await storage.getAllBranches();
+        const validBranchIds = new Set(allBranches.map(b => b.id));
+        const invalidBranches = branchIds.filter(id => !validBranchIds.has(id));
+        if (invalidBranches.length > 0) {
+          console.error(`[BULK SCHEDULES] Invalid branch IDs: ${invalidBranches.join(', ')}`);
+          return res.status(400).json({ 
+            error: `الفروع التالية غير موجودة في قاعدة البيانات: ${invalidBranches.join(', ')}`,
+            invalidBranches 
+          });
+        }
+      }
+
       const dayNames = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
       const userBranchFilter = getEffectiveBranchFilter(req, undefined);
-      const validatedSchedules = schedules.map(s => {
-        const date = new Date(s.scheduleDate);
-        const dayOfWeek = s.dayOfWeek || dayNames[date.getDay()];
-        // For non-admin users, enforce their branch on all schedules
+      const validatedSchedules = schedules.map((s: any) => {
+        const date = new Date(s.scheduleDate + "T12:00:00");
+        const dayOfWeek = s.dayOfWeek || dayNames[date.getDay()] || "sat";
         const branchId = (!isUserAdmin(req) && userBranchFilter.singleBranchId) ? userBranchFilter.singleBranchId : s.branchId;
         return {
-          ...s,
-          branchId,
+          employeeId: String(s.employeeId || ""),
+          employeeName: String(s.employeeName || "Unknown"),
+          branchId: branchId || null,
+          branchEmployeeId: s.branchEmployeeId ? Number(s.branchEmployeeId) : null,
+          scheduleDate: String(s.scheduleDate),
           dayOfWeek,
-          employeeName: s.employeeName || "Unknown",
+          shiftType: s.shiftType || null,
+          startTime: s.startTime || null,
+          endTime: s.endTime || null,
+          isOff: Boolean(s.isOff),
+          breakDuration: s.breakDuration ? Number(s.breakDuration) : 60,
+          status: s.status || "scheduled",
+          notes: s.notes || null,
         };
-      });
+      }).filter((s: any) => s.employeeId && s.scheduleDate);
+      
+      if (validatedSchedules.length === 0) {
+        return res.status(400).json({ error: "لا توجد بيانات صالحة للحفظ" });
+      }
       
       console.log(`[BULK SCHEDULES] Saving ${validatedSchedules.length} schedules for branch ${validatedSchedules[0]?.branchId}`);
-      const created = await storage.createBulkEmployeeSchedules(validatedSchedules);
-      console.log(`[BULK SCHEDULES] Successfully saved ${created.length} schedules`);
-      res.status(201).json(created);
+      const { results: created, errors: saveErrors } = await storage.createBulkEmployeeSchedules(validatedSchedules);
+      console.log(`[BULK SCHEDULES] Saved ${created.length}/${validatedSchedules.length}, errors: ${saveErrors.length}`);
+      
+      if (created.length === 0 && saveErrors.length > 0) {
+        return res.status(500).json({ 
+          error: "فشل في حفظ جميع الجداول", 
+          details: saveErrors.slice(0, 5).join(' | '),
+          saved: 0,
+          failed: saveErrors.length 
+        });
+      }
+      
+      res.status(201).json({ 
+        data: created, 
+        saved: created.length, 
+        total: validatedSchedules.length,
+        errors: saveErrors.length > 0 ? saveErrors.slice(0, 5) : undefined
+      });
     } catch (error: any) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "بيانات غير صالحة", details: error.errors });
