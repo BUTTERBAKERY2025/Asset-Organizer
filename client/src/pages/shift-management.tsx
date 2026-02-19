@@ -378,8 +378,10 @@ export default function ShiftManagementPage() {
       setHasUnsavedChanges(false);
       toast({ title: "تم حفظ جدول الدوام بنجاح" });
     },
-    onError: () => {
-      toast({ title: "خطأ", description: "فشل في حفظ الجدول", variant: "destructive" });
+    onError: (error: any) => {
+      const details = error?.message || "خطأ غير معروف";
+      console.error("Schedule save error:", details);
+      toast({ title: "خطأ", description: `فشل في حفظ الجدول: ${details}`, variant: "destructive" });
     },
   });
 
