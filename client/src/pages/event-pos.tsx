@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useRef } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
@@ -10,9 +10,11 @@ import { useToast } from "@/hooks/use-toast";
 import { 
   ShoppingCart, Plus, Minus, Trash2, CreditCard, Banknote,
   Receipt, Search, Settings, Package, Printer,
-  X, Check, Store, CalendarDays,
+  X, Check, Store, CalendarDays, Percent,
   Sparkles, TrendingUp, Hash, Clock, Loader2,
-  ListOrdered, Zap, Coffee
+  ListOrdered, Zap, Coffee, Pause, Play, Ban,
+  RotateCcw, FileText, Download, Filter, AlertTriangle,
+  SplitSquareHorizontal, Calendar
 } from "lucide-react";
 import { useReactToPrint } from "react-to-print";
 import { QRCodeSVG } from "qrcode.react";
@@ -89,7 +91,9 @@ export default function EventPosPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const receiptRef = useRef<HTMLDivElement>(null);
+  const zReportRef = useRef<HTMLDivElement>(null);
   const isManager = canEdit("event_pos");
+  const canVoid = canDelete("event_pos");
   
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -100,6 +104,52 @@ export default function EventPosPage() {
   const [showHistory, setShowHistory] = useState(false);
   const [lastSale, setLastSale] = useState<any>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
+
+  const [discountType, setDiscountType] = useState<string | null>(null);
+  const [discountValue, setDiscountValue] = useState<string>("");
+  const [showDiscount, setShowDiscount] = useState(false);
+
+  const [splitMode, setSplitMode] = useState(false);
+  const [cashSplitAmount, setCashSplitAmount] = useState<string>("");
+
+  const [showHeld, setShowHeld] = useState(false);
+  const [holdLabel, setHoldLabel] = useState("");
+  const [showHoldDialog, setShowHoldDialog] = useState(false);
+
+  const [showVoid, setShowVoid] = useState(false);
+  const [voidSaleId, setVoidSaleId] = useState<number | null>(null);
+  const [voidReason, setVoidReason] = useState("");
+  const [voidAction, setVoidAction] = useState<"void" | "refund">("void");
+
+  const [showZReport, setShowZReport] = useState(false);
+
+  const [historyDateFrom, setHistoryDateFrom] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [historyDateTo, setHistoryDateTo] = useState<string>(new Date().toISOString().slice(0, 10));
+
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 60000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("pos_cart_backup");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) setCart(parsed);
+      } catch {}
+    }
+  }, []);
+
+  useEffect(() => {
+    if (cart.length > 0) {
+      localStorage.setItem("pos_cart_backup", JSON.stringify(cart));
+    } else {
+      localStorage.removeItem("pos_cart_backup");
+    }
+  }, [cart]);
 
   const { data: branchProducts = [], isLoading: productsLoading } = useQuery({
     queryKey: ["/api/pos/branch-products", EVENT_BRANCH_ID],
@@ -118,10 +168,9 @@ export default function EventPosPage() {
   });
 
   const { data: todaySales = [] } = useQuery({
-    queryKey: ["/api/pos/sales", EVENT_BRANCH_ID, new Date().toISOString().slice(0, 10)],
+    queryKey: ["/api/pos/sales", EVENT_BRANCH_ID, historyDateFrom, historyDateTo],
     queryFn: async () => {
-      const today = new Date().toISOString().slice(0, 10);
-      const res = await apiRequest("GET", `/api/pos/sales/${EVENT_BRANCH_ID}?dateFrom=${today}&dateTo=${today}`);
+      const res = await apiRequest("GET", `/api/pos/sales/${EVENT_BRANCH_ID}?dateFrom=${historyDateFrom}&dateTo=${historyDateTo}`);
       return res.json();
     },
     refetchInterval: 30000,
@@ -135,6 +184,14 @@ export default function EventPosPage() {
       return res.json();
     },
     refetchInterval: 30000,
+  });
+
+  const { data: heldOrders = [], refetch: refetchHeld } = useQuery({
+    queryKey: ["/api/pos/held-orders", EVENT_BRANCH_ID],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/pos/held-orders/${EVENT_BRANCH_ID}`);
+      return res.json();
+    },
   });
 
   const filteredProducts = useMemo(() => {
@@ -161,30 +218,52 @@ export default function EventPosPage() {
   }, [filteredProducts, selectedCategory]);
 
   const cartTotal = useMemo(() => {
-    let subtotal = 0;
-    let vatTotal = 0;
+    let rawSubtotal = 0;
+    let rawVat = 0;
     cart.forEach(item => {
       const priceExclVat = item.unitPrice / (1 + item.vatRate);
-      const itemSubtotal = priceExclVat * item.quantity;
-      const itemVat = (item.unitPrice - priceExclVat) * item.quantity;
-      subtotal += itemSubtotal;
-      vatTotal += itemVat;
+      rawSubtotal += priceExclVat * item.quantity;
+      rawVat += (item.unitPrice - priceExclVat) * item.quantity;
     });
-    return { subtotal: Math.round(subtotal * 100) / 100, vat: Math.round(vatTotal * 100) / 100, total: Math.round((subtotal + vatTotal) * 100) / 100 };
-  }, [cart]);
+    const rawTotal = rawSubtotal + rawVat;
+    let discountAmt = 0;
+    if (discountType === "percentage") {
+      discountAmt = rawTotal * (parseFloat(discountValue) || 0) / 100;
+    } else if (discountType === "fixed") {
+      discountAmt = parseFloat(discountValue) || 0;
+    }
+    discountAmt = Math.min(discountAmt, rawTotal);
+    const discountRatio = rawTotal > 0 ? discountAmt / rawTotal : 0;
+    const adjSubtotal = rawSubtotal * (1 - discountRatio);
+    const adjVat = rawVat * (1 - discountRatio);
+    const finalTotal = adjSubtotal + adjVat;
+    return {
+      subtotal: Math.round(adjSubtotal * 100) / 100,
+      vat: Math.round(adjVat * 100) / 100,
+      rawTotal: Math.round(rawTotal * 100) / 100,
+      discount: Math.round(discountAmt * 100) / 100,
+      total: Math.round(finalTotal * 100) / 100,
+    };
+  }, [cart, discountType, discountValue]);
 
   const cartItemsCount = useMemo(() => cart.reduce((acc, item) => acc + item.quantity, 0), [cart]);
 
   const changeAmount = useMemo(() => {
+    if (splitMode) return 0;
     const paid = parseFloat(amountPaid) || 0;
     return Math.max(0, Math.round((paid - cartTotal.total) * 100) / 100);
-  }, [amountPaid, cartTotal.total]);
+  }, [amountPaid, cartTotal.total, splitMode]);
+
+  const networkSplitAmount = useMemo(() => {
+    if (!splitMode) return 0;
+    const cashPart = parseFloat(cashSplitAmount) || 0;
+    return Math.max(0, Math.round((cartTotal.total - cashPart) * 100) / 100);
+  }, [splitMode, cashSplitAmount, cartTotal.total]);
 
   const addToCart = useCallback((bp: BranchProductWithDetails) => {
     if (!bp.product) return;
     const price = bp.priceOverride ?? bp.product.basePrice ?? 0;
     const vatRate = bp.product.vatRate ?? 0.15;
-    
     setCart(prev => {
       const existing = prev.find(c => c.productId === bp.productId);
       if (existing) {
@@ -207,6 +286,14 @@ export default function EventPosPage() {
     });
   }, []);
 
+  const setQuantityDirect = useCallback((productId: number, qty: number) => {
+    if (qty <= 0) {
+      setCart(prev => prev.filter(c => c.productId !== productId));
+    } else {
+      setCart(prev => prev.map(c => c.productId === productId ? { ...c, quantity: qty } : c));
+    }
+  }, []);
+
   const removeFromCart = useCallback((productId: number) => {
     setCart(prev => prev.filter(c => c.productId !== productId));
   }, []);
@@ -215,11 +302,27 @@ export default function EventPosPage() {
     setCart([]);
     setAmountPaid("");
     setPaymentMethod("cash");
+    setDiscountType(null);
+    setDiscountValue("");
+    setSplitMode(false);
+    setCashSplitAmount("");
   }, []);
 
   const createSaleMutation = useMutation({
     mutationFn: async () => {
       const now = new Date();
+      let finalPaymentMethod = paymentMethod;
+      let cashAmt = 0;
+      let networkAmt = 0;
+      if (splitMode) {
+        finalPaymentMethod = "split";
+        cashAmt = parseFloat(cashSplitAmount) || 0;
+        networkAmt = networkSplitAmount;
+      } else if (paymentMethod === "cash") {
+        cashAmt = cartTotal.total;
+      } else {
+        networkAmt = cartTotal.total;
+      }
       const saleData = {
         branchId: EVENT_BRANCH_ID,
         cashierId: user?.id || "",
@@ -229,9 +332,14 @@ export default function EventPosPage() {
         subtotal: cartTotal.subtotal,
         vatAmount: cartTotal.vat,
         totalAmount: cartTotal.total,
-        paymentMethod,
-        amountPaid: paymentMethod === "cash" ? parseFloat(amountPaid) || cartTotal.total : cartTotal.total,
-        changeAmount: paymentMethod === "cash" ? changeAmount : 0,
+        discountType: discountType || undefined,
+        discountValue: discountType ? (parseFloat(discountValue) || 0) : 0,
+        discountAmount: cartTotal.discount,
+        paymentMethod: finalPaymentMethod,
+        cashAmount: cashAmt,
+        networkAmount: networkAmt,
+        amountPaid: splitMode ? cartTotal.total : (paymentMethod === "cash" ? parseFloat(amountPaid) || cartTotal.total : cartTotal.total),
+        changeAmount: splitMode ? 0 : (paymentMethod === "cash" ? changeAmount : 0),
         status: "completed",
         items: cart.map(item => ({
           productId: item.productId,
@@ -253,7 +361,13 @@ export default function EventPosPage() {
         unitPrice: item.unitPrice,
         vatRate: item.vatRate,
         totalPrice: Math.round(item.unitPrice * item.quantity * 100) / 100,
-      })), paymentMethod, amountPaid: parseFloat(amountPaid) || cartTotal.total, changeAmount });
+      })), paymentMethod: splitMode ? "split" : paymentMethod, 
+        amountPaid: splitMode ? cartTotal.total : (parseFloat(amountPaid) || cartTotal.total), 
+        changeAmount: splitMode ? 0 : changeAmount,
+        cashAmount: splitMode ? (parseFloat(cashSplitAmount) || 0) : (paymentMethod === "cash" ? cartTotal.total : 0),
+        networkAmount: splitMode ? networkSplitAmount : (paymentMethod === "network" ? cartTotal.total : 0),
+        discountType, discountValue: parseFloat(discountValue) || 0, discountAmount: cartTotal.discount,
+      });
       setShowCheckout(false);
       setShowReceipt(true);
       clearCart();
@@ -266,110 +380,162 @@ export default function EventPosPage() {
     },
   });
 
+  const voidMutation = useMutation({
+    mutationFn: async ({ saleId, reason, action }: { saleId: number; reason: string; action: string }) => {
+      const res = await apiRequest("POST", `/api/pos/sales/${saleId}/${action}`, { reason });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/pos/sales"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/pos/summary"] });
+      setShowVoid(false);
+      setVoidReason("");
+      setVoidSaleId(null);
+      toast({ title: voidAction === "void" ? "تم إلغاء الفاتورة" : "تم استرجاع الفاتورة" });
+    },
+    onError: (err: any) => {
+      toast({ title: "خطأ", description: err?.message, variant: "destructive" });
+    },
+  });
+
+  const holdOrderMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/pos/held-orders", {
+        branchId: EVENT_BRANCH_ID,
+        cashierId: user?.id || "",
+        cashierName: (user as any)?.fullName || user?.username || "",
+        label: holdLabel || `طلب ${new Date().toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" })}`,
+        cartData: JSON.stringify(cart),
+        paymentMethod,
+        discountType,
+        discountValue: parseFloat(discountValue) || 0,
+        totalAmount: cartTotal.total,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      clearCart();
+      setShowHoldDialog(false);
+      setHoldLabel("");
+      refetchHeld();
+      toast({ title: "تم تعليق الطلب" });
+    },
+  });
+
+  const deleteHeldMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await apiRequest("DELETE", `/api/pos/held-orders/${id}`);
+    },
+    onSuccess: () => {
+      refetchHeld();
+      toast({ title: "تم حذف الطلب المعلق" });
+    },
+  });
+
   const handlePrint = useReactToPrint({
     contentRef: receiptRef,
     pageStyle: `
-      @page {
-        size: 80mm auto;
-        margin: 0mm;
-      }
+      @page { size: 80mm auto; margin: 0mm; }
       @media print {
-        html, body {
-          width: 80mm !important;
-          margin: 0 !important;
-          padding: 0 !important;
-          background: white !important;
-          -webkit-print-color-adjust: exact !important;
-          print-color-adjust: exact !important;
-          font-family: 'Cairo', sans-serif !important;
-        }
-        body * {
-          visibility: hidden !important;
-        }
-        .receipt-print, .receipt-print * {
-          visibility: visible !important;
-        }
-        .receipt-print {
-          position: absolute !important;
-          top: 0 !important;
-          left: 0 !important;
-          width: 72mm !important;
-          max-width: 72mm !important;
-          margin: 0 !important;
-          padding: 3mm !important;
-          font-size: 11px !important;
-          line-height: 1.4 !important;
-          font-family: 'Cairo', sans-serif !important;
-          color: #000 !important;
-          background: white !important;
-          box-shadow: none !important;
-          border: none !important;
-          border-radius: 0 !important;
-        }
-        .receipt-print div {
-          display: block !important;
-        }
-        .receipt-print .receipt-row {
-          display: flex !important;
-          justify-content: space-between !important;
-        }
-        .receipt-print table {
-          width: 100% !important;
-          border-collapse: collapse !important;
-          border: none !important;
-          box-shadow: none !important;
-        }
-        .receipt-print th, .receipt-print td {
-          border: none !important;
-          padding: 2px 1px !important;
-          font-size: 10px !important;
-          background: transparent !important;
-          color: #000 !important;
-          box-shadow: none !important;
-        }
-        .receipt-print .receipt-separator {
-          visibility: visible !important;
-          border: none !important;
-          border-top: 1px dashed #000 !important;
-          margin: 4px 0 !important;
-          height: 0 !important;
-        }
-        .receipt-print img {
-          max-height: 40px !important;
-          max-width: 50mm !important;
-        }
-        .receipt-print svg {
-          visibility: visible !important;
-          display: block !important;
-          margin: 0 auto !important;
-        }
-        .receipt-print canvas {
-          visibility: visible !important;
-          display: block !important;
-        }
+        html, body { width: 80mm !important; margin: 0 !important; padding: 0 !important; background: white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; font-family: 'Cairo', sans-serif !important; }
+        body * { visibility: hidden !important; }
+        .receipt-print, .receipt-print * { visibility: visible !important; }
+        .receipt-print { position: absolute !important; top: 0 !important; left: 0 !important; width: 72mm !important; max-width: 72mm !important; margin: 0 !important; padding: 3mm !important; font-size: 11px !important; line-height: 1.4 !important; font-family: 'Cairo', sans-serif !important; color: #000 !important; background: white !important; box-shadow: none !important; border: none !important; border-radius: 0 !important; }
+        .receipt-print div { display: block !important; }
+        .receipt-print .receipt-row { display: flex !important; justify-content: space-between !important; }
+        .receipt-print table { width: 100% !important; border-collapse: collapse !important; border: none !important; box-shadow: none !important; }
+        .receipt-print th, .receipt-print td { border: none !important; padding: 2px 1px !important; font-size: 10px !important; background: transparent !important; color: #000 !important; box-shadow: none !important; }
+        .receipt-print .receipt-separator { visibility: visible !important; border: none !important; border-top: 1px dashed #000 !important; margin: 4px 0 !important; height: 0 !important; }
+        .receipt-print img { max-height: 40px !important; max-width: 50mm !important; }
+        .receipt-print svg { visibility: visible !important; display: block !important; margin: 0 auto !important; }
+        .receipt-print canvas { visibility: visible !important; display: block !important; }
+      }
+    `,
+  });
+
+  const handleZReportPrint = useReactToPrint({
+    contentRef: zReportRef,
+    pageStyle: `
+      @page { size: 80mm auto; margin: 0mm; }
+      @media print {
+        html, body { width: 80mm !important; margin: 0 !important; padding: 0 !important; background: white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; font-family: 'Cairo', sans-serif !important; }
+        body * { visibility: hidden !important; }
+        .zreport-print, .zreport-print * { visibility: visible !important; }
+        .zreport-print { position: absolute !important; top: 0 !important; left: 0 !important; width: 72mm !important; max-width: 72mm !important; margin: 0 !important; padding: 3mm !important; font-size: 11px !important; line-height: 1.4 !important; font-family: 'Cairo', sans-serif !important; color: #000 !important; background: white !important; }
+        .zreport-print .receipt-row { display: flex !important; justify-content: space-between !important; }
+        .zreport-print .receipt-separator { border: none !important; border-top: 1px dashed #000 !important; margin: 4px 0 !important; }
       }
     `,
   });
 
   const handleCheckout = () => {
     if (cart.length === 0) return;
-    if (paymentMethod === "cash") {
+    if (!splitMode && paymentMethod === "cash") {
       setAmountPaid(String(cartTotal.total));
     }
     setShowCheckout(true);
   };
 
   const handleCompleteSale = () => {
-    if (paymentMethod === "cash" && (parseFloat(amountPaid) || 0) < cartTotal.total) {
+    if (splitMode) {
+      const cashPart = parseFloat(cashSplitAmount) || 0;
+      if (cashPart < 0 || cashPart > cartTotal.total) {
+        toast({ title: "مبلغ النقد غير صحيح", variant: "destructive" });
+        return;
+      }
+    } else if (paymentMethod === "cash" && (parseFloat(amountPaid) || 0) < cartTotal.total) {
       toast({ title: "المبلغ المدفوع أقل من الإجمالي", variant: "destructive" });
       return;
     }
     createSaleMutation.mutate();
   };
 
-  const now = new Date();
-  const timeStr = now.toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" });
-  const dateStr = now.toLocaleDateString("ar-SA", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  const recallHeldOrder = (order: any) => {
+    try {
+      const items = JSON.parse(order.cartData);
+      setCart(items);
+      if (order.paymentMethod) setPaymentMethod(order.paymentMethod);
+      if (order.discountType) {
+        setDiscountType(order.discountType);
+        setDiscountValue(String(order.discountValue || ""));
+      }
+      deleteHeldMutation.mutate(order.id);
+      setShowHeld(false);
+      toast({ title: "تم استرجاع الطلب" });
+    } catch {
+      toast({ title: "خطأ في استرجاع الطلب", variant: "destructive" });
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === "F1") { e.preventDefault(); handleCheckout(); }
+      if (e.key === "F2") { e.preventDefault(); if (cart.length > 0) setShowHoldDialog(true); }
+      if (e.key === "F3") { e.preventDefault(); setShowHeld(true); }
+      if (e.key === "Escape") { setShowCheckout(false); setShowReceipt(false); setShowHistory(false); setShowHeld(false); setShowVoid(false); }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [cart, cartTotal]);
+
+  const zReportData = useMemo(() => {
+    const completedSales = todaySales.filter((s: any) => s.status === "completed");
+    const voidedSales = todaySales.filter((s: any) => s.status === "voided");
+    const refundedSales = todaySales.filter((s: any) => s.status === "refunded");
+    const totalSales = completedSales.reduce((sum: number, s: any) => sum + (s.totalAmount || 0), 0);
+    const cashTotal = completedSales.filter((s: any) => s.paymentMethod === "cash").reduce((sum: number, s: any) => sum + (s.totalAmount || 0), 0);
+    const networkTotal = completedSales.filter((s: any) => s.paymentMethod === "network").reduce((sum: number, s: any) => sum + (s.totalAmount || 0), 0);
+    const splitTotal = completedSales.filter((s: any) => s.paymentMethod === "split").reduce((sum: number, s: any) => sum + (s.totalAmount || 0), 0);
+    const splitCash = completedSales.filter((s: any) => s.paymentMethod === "split").reduce((sum: number, s: any) => sum + (s.cashAmount || 0), 0);
+    const splitNetwork = completedSales.filter((s: any) => s.paymentMethod === "split").reduce((sum: number, s: any) => sum + (s.networkAmount || 0), 0);
+    const totalDiscount = completedSales.reduce((sum: number, s: any) => sum + (s.discountAmount || 0), 0);
+    const totalVat = completedSales.reduce((sum: number, s: any) => sum + (s.vatAmount || 0), 0);
+    return { completedSales, voidedSales, refundedSales, totalSales, cashTotal, networkTotal, splitTotal, splitCash, splitNetwork, totalDiscount, totalVat, totalCashInDrawer: cashTotal + splitCash };
+  }, [todaySales]);
+
+  const timeStr = currentTime.toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" });
+  const dateStr = currentTime.toLocaleDateString("ar-SA", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 
   return (
     <div className="h-[100dvh] flex flex-col bg-[#f0f2f5] overflow-hidden select-none" dir="rtl">
@@ -394,6 +560,16 @@ export default function EventPosPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          {heldOrders.length > 0 && (
+            <button
+              onClick={() => setShowHeld(true)}
+              className="relative flex items-center gap-1.5 bg-amber-50 text-amber-700 rounded-lg px-3 py-1.5 border border-amber-200 hover:bg-amber-100 transition-all active:scale-95 touch-manipulation"
+              data-testid="button-held-orders"
+            >
+              <Pause className="w-3.5 h-3.5" />
+              <span className="text-xs font-bold">{heldOrders.length} معلق</span>
+            </button>
+          )}
           {isManager && todaySummary && (
             <>
               <div className="flex items-center gap-1.5 bg-green-50 text-green-700 rounded-lg px-3 py-1.5 border border-green-200">
@@ -411,6 +587,14 @@ export default function EventPosPage() {
           {isManager && (
             <>
               <div className="h-8 w-px bg-gray-200 mx-1" />
+              <button
+                onClick={() => setShowZReport(true)}
+                className="w-9 h-9 rounded-xl bg-purple-50 flex items-center justify-center hover:bg-purple-100 transition-all active:scale-90 touch-manipulation border border-purple-200"
+                title="تقرير الوردية (F4)"
+                data-testid="button-zreport"
+              >
+                <FileText className="w-4.5 h-4.5 text-purple-600" />
+              </button>
               <button
                 onClick={() => setShowHistory(true)}
                 className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-all active:scale-90 touch-manipulation"
@@ -437,7 +621,6 @@ export default function EventPosPage() {
       <div className="max-w-6xl mx-auto h-full flex gap-4 overflow-hidden">
         {/* RIGHT: Products Section */}
         <div className="flex-1 flex flex-col overflow-hidden bg-white rounded-2xl shadow-sm border border-gray-200">
-          {/* Search Bar */}
           <div className="px-5 pt-4 pb-2 shrink-0">
             <div className="relative">
               <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -456,7 +639,6 @@ export default function EventPosPage() {
             </div>
           </div>
 
-          {/* Category Chips */}
           {categories.length > 0 && (
             <div className="px-5 pb-3 shrink-0">
               <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
@@ -574,7 +756,6 @@ export default function EventPosPage() {
 
         {/* LEFT: Cart Panel */}
         <div className="w-[340px] bg-white flex flex-col rounded-2xl shadow-sm border border-gray-200 shrink-0 overflow-hidden">
-          {/* Cart Header */}
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 bg-orange-100 rounded-xl flex items-center justify-center">
@@ -587,16 +768,27 @@ export default function EventPosPage() {
                 </p>
               </div>
             </div>
-            {cart.length > 0 && (
-              <button 
-                onClick={clearCart} 
-                className="flex items-center gap-1 text-[12px] font-bold text-red-400 hover:text-red-600 px-3 py-2 rounded-xl hover:bg-red-50 transition-colors active:scale-95 touch-manipulation" 
-                data-testid="button-clear-cart"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                مسح
-              </button>
-            )}
+            <div className="flex items-center gap-1">
+              {cart.length > 0 && (
+                <>
+                  <button
+                    onClick={() => setShowHoldDialog(true)}
+                    className="flex items-center gap-1 text-[11px] font-bold text-amber-500 hover:text-amber-700 px-2 py-1.5 rounded-lg hover:bg-amber-50 transition-colors active:scale-95 touch-manipulation"
+                    title="تعليق الطلب (F2)"
+                    data-testid="button-hold-order"
+                  >
+                    <Pause className="w-3.5 h-3.5" />
+                  </button>
+                  <button 
+                    onClick={clearCart} 
+                    className="flex items-center gap-1 text-[12px] font-bold text-red-400 hover:text-red-600 px-2 py-1.5 rounded-lg hover:bg-red-50 transition-colors active:scale-95 touch-manipulation" 
+                    data-testid="button-clear-cart"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </>
+              )}
+            </div>
           </div>
 
           {/* Cart Items */}
@@ -608,10 +800,15 @@ export default function EventPosPage() {
                 </div>
                 <p className="text-[15px] font-bold text-gray-300 mb-1">السلة فارغة</p>
                 <p className="text-[12px] text-gray-300 text-center">اضغط على أي منتج لإضافته للطلب</p>
+                <div className="mt-4 flex gap-2 text-[10px] text-gray-300">
+                  <span className="bg-gray-100 px-2 py-1 rounded">F1 إتمام</span>
+                  <span className="bg-gray-100 px-2 py-1 rounded">F2 تعليق</span>
+                  <span className="bg-gray-100 px-2 py-1 rounded">F3 معلق</span>
+                </div>
               </div>
             ) : (
               <div className="p-3 space-y-1.5">
-                {cart.map((item, idx) => (
+                {cart.map((item) => (
                   <div 
                     key={item.productId} 
                     className="bg-gray-50/80 rounded-2xl p-3.5 transition-all" 
@@ -639,7 +836,13 @@ export default function EventPosPage() {
                         >
                           <Minus className="w-4 h-4 text-gray-500" />
                         </button>
-                        <span className="w-10 text-center text-[14px] font-black text-gray-800">{item.quantity}</span>
+                        <input
+                          type="number"
+                          value={item.quantity}
+                          onChange={e => setQuantityDirect(item.productId, parseInt(e.target.value) || 0)}
+                          className="w-12 text-center text-[14px] font-black text-gray-800 bg-transparent border-none outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          data-testid={`input-qty-${item.productId}`}
+                        />
                         <button 
                           onClick={() => updateQuantity(item.productId, 1)} 
                           className="w-10 h-9 flex items-center justify-center hover:bg-green-50 transition-colors active:scale-90 touch-manipulation border-r border-gray-200" 
@@ -660,7 +863,6 @@ export default function EventPosPage() {
 
           {/* Cart Footer */}
           <div className="border-t border-gray-100 shrink-0">
-            {/* Totals */}
             <div className="px-5 py-3 space-y-1.5 bg-gray-50/50">
               <div className="flex justify-between text-[12px]">
                 <span className="text-gray-400">المجموع بدون ضريبة</span>
@@ -670,6 +872,15 @@ export default function EventPosPage() {
                 <span className="text-gray-400">ضريبة القيمة المضافة 15%</span>
                 <span className="text-gray-500 font-bold">{cartTotal.vat.toFixed(2)}</span>
               </div>
+              {cartTotal.discount > 0 && (
+                <div className="flex justify-between text-[12px]">
+                  <span className="text-red-400 flex items-center gap-1">
+                    <Percent className="w-3 h-3" />
+                    خصم {discountType === "percentage" ? `${discountValue}%` : "ثابت"}
+                  </span>
+                  <span className="text-red-500 font-bold">-{cartTotal.discount.toFixed(2)}</span>
+                </div>
+              )}
               <div className="flex justify-between items-center pt-2 border-t border-gray-200">
                 <span className="text-[15px] font-black text-gray-800">الإجمالي</span>
                 <span className="text-[22px] font-black text-orange-600" data-testid="text-cart-total">
@@ -678,34 +889,64 @@ export default function EventPosPage() {
               </div>
             </div>
 
-            {/* Payment + Checkout */}
             <div className="p-4 space-y-3">
-              <div className="grid grid-cols-2 gap-2">
+              {/* Discount + Split buttons */}
+              <div className="flex gap-2">
                 <button
-                  onClick={() => setPaymentMethod("cash")}
-                  className={`flex items-center justify-center gap-2 py-3.5 rounded-2xl text-[14px] font-bold transition-all active:scale-95 touch-manipulation ${
-                    paymentMethod === "cash"
-                      ? "bg-green-500 text-white shadow-lg shadow-green-500/25"
-                      : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                  onClick={() => setShowDiscount(true)}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[12px] font-bold transition-all active:scale-95 touch-manipulation border ${
+                    discountType
+                      ? "bg-red-50 text-red-600 border-red-200"
+                      : "bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100"
                   }`}
-                  data-testid="button-payment-cash"
+                  data-testid="button-discount"
                 >
-                  <Banknote className="w-5 h-5" />
-                  نقد
+                  <Percent className="w-3.5 h-3.5" />
+                  {discountType ? `خصم ${cartTotal.discount.toFixed(0)} ر.س` : "خصم"}
                 </button>
                 <button
-                  onClick={() => setPaymentMethod("network")}
-                  className={`flex items-center justify-center gap-2 py-3.5 rounded-2xl text-[14px] font-bold transition-all active:scale-95 touch-manipulation ${
-                    paymentMethod === "network"
-                      ? "bg-blue-500 text-white shadow-lg shadow-blue-500/25"
-                      : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                  onClick={() => { setSplitMode(!splitMode); if (!splitMode) setPaymentMethod("split"); else setPaymentMethod("cash"); }}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[12px] font-bold transition-all active:scale-95 touch-manipulation border ${
+                    splitMode
+                      ? "bg-purple-50 text-purple-600 border-purple-200"
+                      : "bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100"
                   }`}
-                  data-testid="button-payment-network"
+                  data-testid="button-split-payment"
                 >
-                  <CreditCard className="w-5 h-5" />
-                  شبكة
+                  <SplitSquareHorizontal className="w-3.5 h-3.5" />
+                  {splitMode ? "دفع مقسم" : "تقسيم"}
                 </button>
               </div>
+
+              {/* Payment Method Selection */}
+              {!splitMode && (
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setPaymentMethod("cash")}
+                    className={`flex items-center justify-center gap-2 py-3.5 rounded-2xl text-[14px] font-bold transition-all active:scale-95 touch-manipulation ${
+                      paymentMethod === "cash"
+                        ? "bg-green-500 text-white shadow-lg shadow-green-500/25"
+                        : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                    }`}
+                    data-testid="button-payment-cash"
+                  >
+                    <Banknote className="w-5 h-5" />
+                    نقد
+                  </button>
+                  <button
+                    onClick={() => setPaymentMethod("network")}
+                    className={`flex items-center justify-center gap-2 py-3.5 rounded-2xl text-[14px] font-bold transition-all active:scale-95 touch-manipulation ${
+                      paymentMethod === "network"
+                        ? "bg-blue-500 text-white shadow-lg shadow-blue-500/25"
+                        : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                    }`}
+                    data-testid="button-payment-network"
+                  >
+                    <CreditCard className="w-5 h-5" />
+                    شبكة
+                  </button>
+                </div>
+              )}
 
               <button
                 className="w-full bg-gradient-to-l from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 disabled:from-gray-200 disabled:to-gray-300 disabled:text-gray-400 text-white font-black text-[16px] py-4 rounded-2xl flex items-center justify-center gap-2.5 transition-all shadow-lg shadow-orange-500/20 disabled:shadow-none active:scale-[0.97] touch-manipulation"
@@ -716,7 +957,7 @@ export default function EventPosPage() {
                 {createSaleMutation.isPending ? (
                   <><Loader2 className="w-5 h-5 animate-spin" /> جاري المعالجة...</>
                 ) : (
-                  <><Receipt className="w-5 h-5" /> إتمام الطلب {cartTotal.total > 0 && <span className="bg-white/20 px-3 py-0.5 rounded-lg text-[13px]">{cartTotal.total.toFixed(2)} ر.س</span>}</>
+                  <><Receipt className="w-5 h-5" /> إتمام الطلب (F1) {cartTotal.total > 0 && <span className="bg-white/20 px-3 py-0.5 rounded-lg text-[13px]">{cartTotal.total.toFixed(2)} ر.س</span>}</>
                 )}
               </button>
             </div>
@@ -724,6 +965,72 @@ export default function EventPosPage() {
         </div>
       </div>
       </div>
+
+      {/* Discount Dialog */}
+      <Dialog open={showDiscount} onOpenChange={setShowDiscount}>
+        <DialogContent className="max-w-[380px] rounded-3xl p-0 overflow-hidden" dir="rtl">
+          <div className="bg-gradient-to-l from-red-500 to-pink-500 p-5">
+            <DialogTitle className="flex items-center gap-3 text-white text-lg font-black">
+              <div className="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center">
+                <Percent className="w-5 h-5 text-white" />
+              </div>
+              إضافة خصم
+            </DialogTitle>
+          </div>
+          <div className="p-5 space-y-4">
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setDiscountType("percentage")}
+                className={`py-3 rounded-xl text-sm font-bold transition-all ${discountType === "percentage" ? "bg-red-500 text-white" : "bg-gray-100 text-gray-600"}`}
+                data-testid="button-discount-percentage"
+              >
+                نسبة مئوية %
+              </button>
+              <button
+                onClick={() => setDiscountType("fixed")}
+                className={`py-3 rounded-xl text-sm font-bold transition-all ${discountType === "fixed" ? "bg-red-500 text-white" : "bg-gray-100 text-gray-600"}`}
+                data-testid="button-discount-fixed"
+              >
+                مبلغ ثابت
+              </button>
+            </div>
+            {discountType && (
+              <div>
+                <label className="text-sm font-bold text-gray-600 mb-2 block">
+                  {discountType === "percentage" ? "نسبة الخصم (%)" : "مبلغ الخصم (ر.س)"}
+                </label>
+                <Input
+                  type="number"
+                  value={discountValue}
+                  onChange={e => setDiscountValue(e.target.value)}
+                  placeholder={discountType === "percentage" ? "10" : "5.00"}
+                  className="text-2xl text-center font-black h-14 rounded-xl"
+                  max={discountType === "percentage" ? 100 : undefined}
+                  autoFocus
+                  data-testid="input-discount-value"
+                />
+                {discountType === "percentage" && (
+                  <div className="flex gap-2 mt-3">
+                    {[5, 10, 15, 20, 25, 50].map(v => (
+                      <button key={v} onClick={() => setDiscountValue(String(v))} className="flex-1 py-2 rounded-lg text-xs font-bold bg-gray-100 hover:bg-red-50 hover:text-red-600 transition-colors" data-testid={`button-discount-quick-${v}`}>{v}%</button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="px-5 pb-5 flex gap-2">
+            {discountType && (
+              <Button variant="outline" onClick={() => { setDiscountType(null); setDiscountValue(""); }} className="rounded-xl h-11 text-sm font-bold text-red-500">
+                إزالة الخصم
+              </Button>
+            )}
+            <Button onClick={() => setShowDiscount(false)} className="flex-1 rounded-xl h-11 bg-red-500 hover:bg-red-600 font-bold" data-testid="button-apply-discount">
+              تطبيق
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Checkout Dialog */}
       <Dialog open={showCheckout} onOpenChange={setShowCheckout}>
@@ -740,66 +1047,91 @@ export default function EventPosPage() {
             <div className="bg-gradient-to-l from-orange-50 to-amber-50 rounded-2xl p-6 text-center border border-orange-100">
               <div className="text-sm text-gray-500 mb-2">الإجمالي المطلوب</div>
               <div className="text-[42px] font-black text-orange-600 leading-tight">{cartTotal.total.toFixed(2)} <span className="text-lg">ر.س</span></div>
+              {cartTotal.discount > 0 && <div className="text-xs text-red-500 mt-1">شامل خصم {cartTotal.discount.toFixed(2)} ر.س</div>}
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => setPaymentMethod("cash")}
-                className={`flex items-center justify-center gap-2 py-4 rounded-2xl text-base font-bold transition-all active:scale-95 touch-manipulation ${
-                  paymentMethod === "cash" ? "bg-green-500 text-white shadow-lg shadow-green-500/30" : "bg-gray-100 text-gray-600"
-                }`}
-                data-testid="button-checkout-cash"
-              >
-                <Banknote className="w-6 h-6" /> نقد
-              </button>
-              <button
-                onClick={() => setPaymentMethod("network")}
-                className={`flex items-center justify-center gap-2 py-4 rounded-2xl text-base font-bold transition-all active:scale-95 touch-manipulation ${
-                  paymentMethod === "network" ? "bg-blue-500 text-white shadow-lg shadow-blue-500/30" : "bg-gray-100 text-gray-600"
-                }`}
-                data-testid="button-checkout-network"
-              >
-                <CreditCard className="w-6 h-6" /> شبكة
-              </button>
-            </div>
-            {paymentMethod === "cash" && (
+
+            {splitMode ? (
               <div className="space-y-4">
+                <div className="text-center text-sm font-bold text-purple-600 flex items-center justify-center gap-2">
+                  <SplitSquareHorizontal className="w-4 h-4" />
+                  دفع مقسم (نقد + شبكة)
+                </div>
                 <div>
-                  <label className="text-sm font-bold text-gray-600 mb-2 block">المبلغ المدفوع</label>
+                  <label className="text-sm font-bold text-gray-600 mb-2 block flex items-center gap-1">
+                    <Banknote className="w-4 h-4 text-green-500" />
+                    المبلغ النقدي
+                  </label>
                   <Input
                     type="number"
-                    value={amountPaid}
-                    onChange={e => setAmountPaid(e.target.value)}
-                    className="text-3xl text-center font-black h-[64px] rounded-2xl border-2 border-gray-200 focus:border-green-400"
+                    value={cashSplitAmount}
+                    onChange={e => setCashSplitAmount(e.target.value)}
+                    className="text-2xl text-center font-black h-14 rounded-xl border-2 border-green-200 focus:border-green-400"
                     autoFocus
-                    data-testid="input-amount-paid"
+                    data-testid="input-cash-split"
                   />
                 </div>
-                {changeAmount > 0 && (
-                  <div className="bg-green-50 rounded-2xl p-4 text-center border-2 border-green-200">
-                    <div className="text-xs text-green-600 mb-1 font-bold">الباقي</div>
-                    <div className="text-3xl font-black text-green-700">{changeAmount.toFixed(2)} ر.س</div>
+                <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-blue-600 flex items-center gap-1"><CreditCard className="w-4 h-4" /> المبلغ بالشبكة</span>
+                    <span className="text-xl font-black text-blue-700">{networkSplitAmount.toFixed(2)} ر.س</span>
                   </div>
-                )}
+                </div>
                 <div className="grid grid-cols-4 gap-2">
-                  {[5, 10, 20, 50, 100, 200, 500].map(v => (
-                    <button 
-                      key={v} 
-                      onClick={() => setAmountPaid(String(v))} 
-                      className="py-3.5 rounded-xl text-[15px] font-bold bg-gray-100 hover:bg-orange-100 hover:text-orange-700 transition-colors active:scale-95 touch-manipulation"
-                      data-testid={`button-quick-amount-${v}`}
-                    >
-                      {v}
-                    </button>
+                  {[10, 20, 50, 100].map(v => (
+                    <button key={v} onClick={() => setCashSplitAmount(String(v))} className="py-3 rounded-xl text-[14px] font-bold bg-gray-100 hover:bg-green-100 hover:text-green-700 transition-colors active:scale-95 touch-manipulation" data-testid={`button-split-quick-${v}`}>{v}</button>
                   ))}
-                  <button 
-                    onClick={() => setAmountPaid(String(cartTotal.total))} 
-                    className="py-3.5 rounded-xl text-[13px] font-bold bg-orange-100 text-orange-700 hover:bg-orange-200 transition-colors active:scale-95 touch-manipulation"
-                    data-testid="button-quick-amount-exact"
-                  >
-                    مطابق
-                  </button>
                 </div>
               </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setPaymentMethod("cash")}
+                    className={`flex items-center justify-center gap-2 py-4 rounded-2xl text-base font-bold transition-all active:scale-95 touch-manipulation ${
+                      paymentMethod === "cash" ? "bg-green-500 text-white shadow-lg shadow-green-500/30" : "bg-gray-100 text-gray-600"
+                    }`}
+                    data-testid="button-checkout-cash"
+                  >
+                    <Banknote className="w-6 h-6" /> نقد
+                  </button>
+                  <button
+                    onClick={() => setPaymentMethod("network")}
+                    className={`flex items-center justify-center gap-2 py-4 rounded-2xl text-base font-bold transition-all active:scale-95 touch-manipulation ${
+                      paymentMethod === "network" ? "bg-blue-500 text-white shadow-lg shadow-blue-500/30" : "bg-gray-100 text-gray-600"
+                    }`}
+                    data-testid="button-checkout-network"
+                  >
+                    <CreditCard className="w-6 h-6" /> شبكة
+                  </button>
+                </div>
+                {paymentMethod === "cash" && (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-sm font-bold text-gray-600 mb-2 block">المبلغ المدفوع</label>
+                      <Input
+                        type="number"
+                        value={amountPaid}
+                        onChange={e => setAmountPaid(e.target.value)}
+                        className="text-3xl text-center font-black h-[64px] rounded-2xl border-2 border-gray-200 focus:border-green-400"
+                        autoFocus
+                        data-testid="input-amount-paid"
+                      />
+                    </div>
+                    {changeAmount > 0 && (
+                      <div className="bg-green-50 rounded-2xl p-4 text-center border-2 border-green-200">
+                        <div className="text-xs text-green-600 mb-1 font-bold">الباقي</div>
+                        <div className="text-3xl font-black text-green-700">{changeAmount.toFixed(2)} ر.س</div>
+                      </div>
+                    )}
+                    <div className="grid grid-cols-4 gap-2">
+                      {[5, 10, 20, 50, 100, 200, 500].map(v => (
+                        <button key={v} onClick={() => setAmountPaid(String(v))} className="py-3.5 rounded-xl text-[15px] font-bold bg-gray-100 hover:bg-orange-100 hover:text-orange-700 transition-colors active:scale-95 touch-manipulation" data-testid={`button-quick-amount-${v}`}>{v}</button>
+                      ))}
+                      <button onClick={() => setAmountPaid(String(cartTotal.total))} className="py-3.5 rounded-xl text-[13px] font-bold bg-orange-100 text-orange-700 hover:bg-orange-200 transition-colors active:scale-95 touch-manipulation" data-testid="button-quick-amount-exact">مطابق</button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
           <div className="px-6 pb-6 flex gap-3">
@@ -830,15 +1162,9 @@ export default function EventPosPage() {
           </DialogHeader>
           {lastSale && (
             <div ref={receiptRef} className="receipt-print bg-white text-black" style={{ fontFamily: "Cairo, sans-serif", width: "72mm", maxWidth: "72mm", padding: "4mm 3mm", fontSize: "11px", lineHeight: 1.4 }}>
-              {/* Header */}
               <div style={{ textAlign: "center", paddingBottom: "4px" }}>
                 {invoiceSettings?.logoUrl && (
-                  <img
-                    src={invoiceSettings.logoUrl}
-                    alt="شعار"
-                    style={{ maxHeight: "40px", maxWidth: "50mm", margin: "0 auto 4px", display: "block", objectFit: "contain" }}
-                    data-testid="img-receipt-logo"
-                  />
+                  <img src={invoiceSettings.logoUrl} alt="شعار" style={{ maxHeight: "40px", maxWidth: "50mm", margin: "0 auto 4px", display: "block", objectFit: "contain" }} data-testid="img-receipt-logo" />
                 )}
                 <div style={{ fontWeight: "bold", fontSize: "13px", marginBottom: "1px" }}>{invoiceSettings?.businessName || "باتر بيكري"}</div>
                 {invoiceSettings?.businessNameEn && <div style={{ fontSize: "9px", color: "#555" }}>{invoiceSettings.businessNameEn}</div>}
@@ -848,19 +1174,13 @@ export default function EventPosPage() {
                 {invoiceSettings?.vatNumber && <div style={{ fontSize: "9px", fontWeight: "600", marginTop: "2px" }}>الرقم الضريبي: {invoiceSettings.vatNumber}</div>}
                 {invoiceSettings?.crNumber && <div style={{ fontSize: "9px" }}>السجل التجاري: {invoiceSettings.crNumber}</div>}
               </div>
-
               <hr className="receipt-separator" style={{ border: "none", borderTop: "1px dashed #000", margin: "4px 0" }} />
-
-              {/* Invoice Info */}
               <div style={{ textAlign: "center", padding: "2px 0" }}>
                 <div style={{ fontWeight: "bold", fontSize: "12px" }}>فاتورة ضريبية مبسطة</div>
                 <div style={{ fontSize: "9px", color: "#333" }}>رقم الفاتورة: {lastSale.invoiceNumber}</div>
                 <div style={{ fontSize: "9px", color: "#333" }}>{lastSale.saleDate} - {lastSale.saleTime}</div>
               </div>
-
               <hr className="receipt-separator" style={{ border: "none", borderTop: "1px dashed #000", margin: "4px 0" }} />
-
-              {/* Items */}
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "10px" }}>
                 <thead>
                   <tr style={{ borderBottom: "1px solid #000" }}>
@@ -881,10 +1201,7 @@ export default function EventPosPage() {
                   ))}
                 </tbody>
               </table>
-
               <hr className="receipt-separator" style={{ border: "none", borderTop: "1px dashed #000", margin: "4px 0" }} />
-
-              {/* Totals */}
               <div style={{ fontSize: "10px" }}>
                 <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", color: "#333" }}>
                   <span>المجموع بدون ضريبة</span>
@@ -894,23 +1211,36 @@ export default function EventPosPage() {
                   <span>ضريبة القيمة المضافة (15%)</span>
                   <span>{lastSale.vatAmount?.toFixed(2)} ر.س</span>
                 </div>
+                {(lastSale.discountAmount || 0) > 0 && (
+                  <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", color: "#c00" }}>
+                    <span>خصم {lastSale.discountType === "percentage" ? `${lastSale.discountValue}%` : "ثابت"}</span>
+                    <span>-{lastSale.discountAmount?.toFixed(2)} ر.س</span>
+                  </div>
+                )}
               </div>
-
               <hr className="receipt-separator" style={{ border: "none", borderTop: "1px dashed #000", margin: "3px 0" }} />
-
               <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", fontWeight: "bold", fontSize: "13px", padding: "3px 0" }}>
                 <span>الإجمالي</span>
                 <span>{lastSale.totalAmount?.toFixed(2)} ر.س</span>
               </div>
-
               <hr className="receipt-separator" style={{ border: "none", borderTop: "1px dashed #000", margin: "3px 0" }} />
-
-              {/* Payment Info */}
               <div style={{ fontSize: "10px" }}>
                 <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}>
                   <span>طريقة الدفع</span>
-                  <span style={{ fontWeight: "600" }}>{lastSale.paymentMethod === "cash" ? "نقد" : "شبكة"}</span>
+                  <span style={{ fontWeight: "600" }}>{lastSale.paymentMethod === "cash" ? "نقد" : lastSale.paymentMethod === "network" ? "شبكة" : "نقد + شبكة"}</span>
                 </div>
+                {lastSale.paymentMethod === "split" && (
+                  <>
+                    <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}>
+                      <span>نقد</span>
+                      <span>{(lastSale.cashAmount || 0).toFixed(2)} ر.س</span>
+                    </div>
+                    <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}>
+                      <span>شبكة</span>
+                      <span>{(lastSale.networkAmount || 0).toFixed(2)} ر.س</span>
+                    </div>
+                  </>
+                )}
                 {lastSale.paymentMethod === "cash" && (
                   <>
                     <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}>
@@ -926,37 +1256,20 @@ export default function EventPosPage() {
                   </>
                 )}
               </div>
-
-              {/* Cashier Info */}
               <div style={{ fontSize: "9px", color: "#555", textAlign: "center", padding: "2px 0" }}>
                 الكاشير: {lastSale.cashierName}
               </div>
-
               <hr className="receipt-separator" style={{ border: "none", borderTop: "1px dashed #000", margin: "4px 0" }} />
-
-              {/* ZATCA QR Code */}
               {invoiceSettings?.showQrCode !== false && invoiceSettings?.vatNumber && (
                 <div style={{ textAlign: "center", padding: "6px 0" }}>
                   <QRCodeSVG
-                    value={generateZatcaQrBase64(
-                      invoiceSettings?.businessName || "باتر بيكري",
-                      invoiceSettings?.vatNumber || "",
-                      new Date(`${lastSale.saleDate}T${lastSale.saleTime}`).toISOString(),
-                      lastSale.totalAmount?.toFixed(2) || "0.00",
-                      lastSale.vatAmount?.toFixed(2) || "0.00"
-                    )}
-                    size={100}
-                    level="M"
-                    style={{ margin: "0 auto" }}
-                    data-testid="img-zatca-qr"
+                    value={generateZatcaQrBase64(invoiceSettings?.businessName || "باتر بيكري", invoiceSettings?.vatNumber || "", new Date(`${lastSale.saleDate}T${lastSale.saleTime}`).toISOString(), lastSale.totalAmount?.toFixed(2) || "0.00", lastSale.vatAmount?.toFixed(2) || "0.00")}
+                    size={100} level="M" style={{ margin: "0 auto" }} data-testid="img-zatca-qr"
                   />
                   <div style={{ fontSize: "8px", color: "#666", marginTop: "2px" }}>فاتورة ضريبية مبسطة - ZATCA</div>
                 </div>
               )}
-
               <hr className="receipt-separator" style={{ border: "none", borderTop: "1px dashed #000", margin: "4px 0" }} />
-
-              {/* Footer */}
               <div style={{ textAlign: "center", padding: "4px 0 2px" }}>
                 <div style={{ fontSize: "10px", color: "#333" }}>{invoiceSettings?.footerText || "شكراً لزيارتكم"}</div>
               </div>
@@ -972,19 +1285,181 @@ export default function EventPosPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Hold Order Dialog */}
+      <Dialog open={showHoldDialog} onOpenChange={setShowHoldDialog}>
+        <DialogContent className="max-w-[380px] rounded-3xl p-0 overflow-hidden" dir="rtl">
+          <div className="bg-gradient-to-l from-amber-500 to-yellow-500 p-5">
+            <DialogTitle className="flex items-center gap-3 text-white text-lg font-black">
+              <div className="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center">
+                <Pause className="w-5 h-5 text-white" />
+              </div>
+              تعليق الطلب
+            </DialogTitle>
+          </div>
+          <div className="p-5 space-y-4">
+            <p className="text-sm text-gray-500">سيتم حفظ الطلب الحالي ({cartItemsCount} صنف - {cartTotal.total.toFixed(2)} ر.س) ويمكنك استرجاعه لاحقاً</p>
+            <div>
+              <label className="text-sm font-bold text-gray-600 mb-2 block">اسم الطلب (اختياري)</label>
+              <Input
+                value={holdLabel}
+                onChange={e => setHoldLabel(e.target.value)}
+                placeholder="مثال: طلب أحمد"
+                className="rounded-xl h-11"
+                autoFocus
+                data-testid="input-hold-label"
+              />
+            </div>
+          </div>
+          <div className="px-5 pb-5 flex gap-2">
+            <Button variant="outline" onClick={() => setShowHoldDialog(false)} className="rounded-xl h-11">إلغاء</Button>
+            <Button
+              onClick={() => holdOrderMutation.mutate()}
+              disabled={holdOrderMutation.isPending}
+              className="flex-1 rounded-xl h-11 bg-amber-500 hover:bg-amber-600 font-bold"
+              data-testid="button-confirm-hold"
+            >
+              {holdOrderMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin ml-1" /> : <Pause className="w-4 h-4 ml-1" />}
+              تعليق
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Held Orders Dialog */}
+      <Dialog open={showHeld} onOpenChange={setShowHeld}>
+        <DialogContent className="max-w-md rounded-3xl max-h-[80vh] overflow-hidden flex flex-col p-0" dir="rtl">
+          <div className="bg-gradient-to-l from-amber-600 to-yellow-500 p-5 shrink-0">
+            <DialogTitle className="flex items-center gap-3 text-white text-lg font-black">
+              <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center">
+                <Pause className="w-5 h-5 text-white" />
+              </div>
+              الطلبات المعلقة ({heldOrders.length})
+            </DialogTitle>
+          </div>
+          <div className="flex-1 overflow-y-auto divide-y divide-gray-100">
+            {heldOrders.length === 0 ? (
+              <div className="p-12 text-center">
+                <Play className="w-12 h-12 mx-auto mb-3 text-gray-200" />
+                <p className="text-sm font-bold text-gray-400">لا توجد طلبات معلقة</p>
+              </div>
+            ) : heldOrders.map((order: any) => {
+              let items: CartItem[] = [];
+              try { items = JSON.parse(order.cartData); } catch {}
+              return (
+                <div key={order.id} className="px-5 py-4 hover:bg-gray-50 transition-colors" data-testid={`held-order-${order.id}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <div className="font-bold text-sm text-gray-800">{order.label || "طلب بدون اسم"}</div>
+                      <div className="text-[11px] text-gray-400 flex items-center gap-1 mt-0.5">
+                        <Clock className="w-3 h-3" />
+                        {new Date(order.createdAt).toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" })}
+                        <span className="mx-1">•</span>
+                        {order.cashierName}
+                      </div>
+                    </div>
+                    <span className="font-black text-orange-600 text-base">{(order.totalAmount || 0).toFixed(2)} <span className="text-[10px] text-gray-400">ر.س</span></span>
+                  </div>
+                  <div className="text-[11px] text-gray-400 mb-3">{items.map(i => `${i.productName} ×${i.quantity}`).join(" • ")}</div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => recallHeldOrder(order)}
+                      className="flex-1 rounded-lg h-9 bg-green-500 hover:bg-green-600 text-white font-bold text-xs gap-1"
+                      data-testid={`button-recall-${order.id}`}
+                    >
+                      <Play className="w-3.5 h-3.5" />
+                      استرجاع
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => deleteHeldMutation.mutate(order.id)}
+                      className="rounded-lg h-9 text-red-500 border-red-200 hover:bg-red-50 text-xs gap-1"
+                      data-testid={`button-delete-held-${order.id}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Void/Refund Dialog */}
+      <Dialog open={showVoid} onOpenChange={setShowVoid}>
+        <DialogContent className="max-w-[400px] rounded-3xl p-0 overflow-hidden" dir="rtl">
+          <div className={`p-5 ${voidAction === "void" ? "bg-gradient-to-l from-red-600 to-red-500" : "bg-gradient-to-l from-amber-600 to-amber-500"}`}>
+            <DialogTitle className="flex items-center gap-3 text-white text-lg font-black">
+              <div className="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center">
+                {voidAction === "void" ? <Ban className="w-5 h-5 text-white" /> : <RotateCcw className="w-5 h-5 text-white" />}
+              </div>
+              {voidAction === "void" ? "إلغاء الفاتورة" : "استرجاع الفاتورة"}
+            </DialogTitle>
+          </div>
+          <div className="p-5 space-y-4">
+            <div className="bg-yellow-50 rounded-xl p-3 flex items-start gap-2 border border-yellow-200">
+              <AlertTriangle className="w-5 h-5 text-yellow-600 shrink-0 mt-0.5" />
+              <p className="text-xs text-yellow-700">{voidAction === "void" ? "سيتم إلغاء هذه الفاتورة نهائياً ولن تحسب في المبيعات" : "سيتم تسجيل استرجاع لهذه الفاتورة"}</p>
+            </div>
+            <div>
+              <label className="text-sm font-bold text-gray-600 mb-2 block">سبب {voidAction === "void" ? "الإلغاء" : "الاسترجاع"} *</label>
+              <Input
+                value={voidReason}
+                onChange={e => setVoidReason(e.target.value)}
+                placeholder="اكتب السبب..."
+                className="rounded-xl h-11"
+                autoFocus
+                data-testid="input-void-reason"
+              />
+            </div>
+          </div>
+          <div className="px-5 pb-5 flex gap-2">
+            <Button variant="outline" onClick={() => setShowVoid(false)} className="rounded-xl h-11">إلغاء</Button>
+            <Button
+              onClick={() => {
+                if (!voidReason.trim()) { toast({ title: "يجب كتابة السبب", variant: "destructive" }); return; }
+                if (voidSaleId) voidMutation.mutate({ saleId: voidSaleId, reason: voidReason, action: voidAction });
+              }}
+              disabled={voidMutation.isPending}
+              className={`flex-1 rounded-xl h-11 font-bold ${voidAction === "void" ? "bg-red-500 hover:bg-red-600" : "bg-amber-500 hover:bg-amber-600"}`}
+              data-testid="button-confirm-void"
+            >
+              {voidMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin ml-1" /> : null}
+              تأكيد {voidAction === "void" ? "الإلغاء" : "الاسترجاع"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Sales History Dialog */}
       <Dialog open={showHistory} onOpenChange={setShowHistory}>
-        <DialogContent className="max-w-lg rounded-3xl max-h-[85vh] overflow-hidden flex flex-col p-0" dir="rtl">
+        <DialogContent className="max-w-2xl rounded-3xl max-h-[85vh] overflow-hidden flex flex-col p-0" dir="rtl">
           <div className="bg-gradient-to-l from-gray-900 to-gray-800 p-5 shrink-0">
             <DialogTitle className="flex items-center gap-3 text-white text-lg font-black">
               <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center">
                 <CalendarDays className="w-5 h-5 text-white" />
               </div>
-              سجل مبيعات اليوم
+              سجل المبيعات
             </DialogTitle>
           </div>
           
-          {todaySummary && (
+          {/* Date Filter */}
+          <div className="px-5 py-3 bg-gray-50 border-b flex items-center gap-3 shrink-0 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-gray-400" />
+              <span className="text-xs font-bold text-gray-500">من:</span>
+              <input type="date" value={historyDateFrom} onChange={e => setHistoryDateFrom(e.target.value)} className="text-xs bg-white border border-gray-200 rounded-lg px-2 py-1.5" data-testid="input-date-from" />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-gray-500">إلى:</span>
+              <input type="date" value={historyDateTo} onChange={e => setHistoryDateTo(e.target.value)} className="text-xs bg-white border border-gray-200 rounded-lg px-2 py-1.5" data-testid="input-date-to" />
+            </div>
+            <button onClick={() => { const today = new Date().toISOString().slice(0,10); setHistoryDateFrom(today); setHistoryDateTo(today); }} className="text-[11px] font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors" data-testid="button-today-filter">اليوم</button>
+          </div>
+
+          {todaySummary && historyDateFrom === new Date().toISOString().slice(0,10) && historyDateTo === new Date().toISOString().slice(0,10) && (
             <div className="grid grid-cols-4 gap-2 p-4 shrink-0 bg-gray-50 border-b">
               <div className="bg-white rounded-xl p-3 text-center border border-gray-100">
                 <TrendingUp className="w-4 h-4 text-green-500 mx-auto mb-1" />
@@ -1013,27 +1488,52 @@ export default function EventPosPage() {
             {todaySales.length === 0 ? (
               <div className="p-16 text-center">
                 <Receipt className="w-14 h-14 mx-auto mb-4 text-gray-200" />
-                <p className="text-base font-bold text-gray-400">لا توجد مبيعات اليوم</p>
+                <p className="text-base font-bold text-gray-400">لا توجد مبيعات</p>
               </div>
             ) : todaySales.map((sale: any) => (
-              <div key={sale.id} className="px-5 py-3.5 hover:bg-gray-50 flex items-center justify-between transition-colors" data-testid={`sale-row-${sale.id}`}>
+              <div key={sale.id} className={`px-5 py-3.5 hover:bg-gray-50 flex items-center justify-between transition-colors ${sale.status === "voided" || sale.status === "refunded" ? "opacity-50" : ""}`} data-testid={`sale-row-${sale.id}`}>
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center">
-                    <Receipt className="w-5 h-5 text-gray-500" />
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${sale.status === "voided" ? "bg-red-100" : sale.status === "refunded" ? "bg-amber-100" : "bg-gray-100"}`}>
+                    {sale.status === "voided" ? <Ban className="w-5 h-5 text-red-500" /> : sale.status === "refunded" ? <RotateCcw className="w-5 h-5 text-amber-500" /> : <Receipt className="w-5 h-5 text-gray-500" />}
                   </div>
                   <div>
-                    <div className="font-bold text-[13px] text-gray-800">{sale.invoiceNumber}</div>
+                    <div className="font-bold text-[13px] text-gray-800 flex items-center gap-2">
+                      {sale.invoiceNumber}
+                      {sale.status === "voided" && <span className="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-bold">ملغاة</span>}
+                      {sale.status === "refunded" && <span className="text-[10px] bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded-full font-bold">مسترجعة</span>}
+                    </div>
                     <div className="text-[11px] text-gray-400 flex items-center gap-1 mt-0.5">
                       <Clock className="w-3 h-3" />
                       {sale.saleTime}
+                      {sale.cashierName && <span className="mx-1">• {sale.cashierName}</span>}
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  {sale.status === "completed" && canVoid && (
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => { setVoidSaleId(sale.id); setVoidAction("void"); setVoidReason(""); setShowVoid(true); }}
+                        className="w-8 h-8 rounded-lg flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                        title="إلغاء الفاتورة"
+                        data-testid={`button-void-${sale.id}`}
+                      >
+                        <Ban className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => { setVoidSaleId(sale.id); setVoidAction("refund"); setVoidReason(""); setShowVoid(true); }}
+                        className="w-8 h-8 rounded-lg flex items-center justify-center text-amber-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                        title="استرجاع"
+                        data-testid={`button-refund-${sale.id}`}
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-9 w-9 p-0 rounded-xl hover:bg-orange-100 text-orange-500 hover:text-orange-700 touch-manipulation"
+                    className="h-8 w-8 p-0 rounded-lg hover:bg-orange-100 text-orange-500 hover:text-orange-700 touch-manipulation"
                     onClick={async () => {
                       try {
                         const res = await apiRequest("GET", `/api/pos/sale/${sale.id}`);
@@ -1041,7 +1541,7 @@ export default function EventPosPage() {
                         setLastSale(saleDetails);
                         setShowHistory(false);
                         setShowReceipt(true);
-                      } catch (err) {
+                      } catch {
                         toast({ title: "خطأ", description: "فشل في تحميل بيانات الفاتورة", variant: "destructive" });
                       }
                     }}
@@ -1049,17 +1549,133 @@ export default function EventPosPage() {
                   >
                     <Printer className="w-4 h-4" />
                   </Button>
-                  <span className={`text-[11px] font-bold px-3 py-1 rounded-full ${
-                    sale.paymentMethod === "cash" 
-                      ? "bg-green-100 text-green-700" 
-                      : "bg-blue-100 text-blue-700"
+                  <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${
+                    sale.paymentMethod === "cash" ? "bg-green-100 text-green-700" : sale.paymentMethod === "network" ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"
                   }`}>
-                    {sale.paymentMethod === "cash" ? "نقد" : "شبكة"}
+                    {sale.paymentMethod === "cash" ? "نقد" : sale.paymentMethod === "network" ? "شبكة" : "مقسم"}
                   </span>
-                  <span className="font-black text-[15px] text-gray-800">{(sale.totalAmount || 0).toFixed(2)} <span className="text-[11px] text-gray-400">ر.س</span></span>
+                  <span className={`font-black text-[15px] ${sale.status !== "completed" ? "line-through text-gray-400" : "text-gray-800"}`}>
+                    {(sale.totalAmount || 0).toFixed(2)} <span className="text-[11px] text-gray-400">ر.س</span>
+                  </span>
                 </div>
               </div>
             ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Z-Report (Shift Closing Report) Dialog */}
+      <Dialog open={showZReport} onOpenChange={setShowZReport}>
+        <DialogContent className="max-w-lg rounded-3xl max-h-[90vh] overflow-hidden flex flex-col p-0" dir="rtl">
+          <div className="bg-gradient-to-l from-purple-700 to-purple-600 p-5 shrink-0">
+            <DialogTitle className="flex items-center gap-3 text-white text-lg font-black">
+              <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center">
+                <FileText className="w-5 h-5 text-white" />
+              </div>
+              تقرير إقفال الوردية (Z-Report)
+            </DialogTitle>
+            <p className="text-purple-200 text-xs mt-1">{new Date().toLocaleDateString("ar-SA", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</p>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto p-5 space-y-4">
+            {/* Printable Content */}
+            <div ref={zReportRef} className="zreport-print bg-white" style={{ fontFamily: "Cairo, sans-serif" }}>
+              <div style={{ textAlign: "center", marginBottom: "8px" }}>
+                <div style={{ fontWeight: "bold", fontSize: "14px" }}>{invoiceSettings?.businessName || "باتر بيكري"}</div>
+                <div style={{ fontSize: "12px", fontWeight: "bold", margin: "4px 0" }}>تقرير إقفال الوردية</div>
+                <div style={{ fontSize: "10px", color: "#555" }}>{new Date().toLocaleDateString("ar-SA")} - {new Date().toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" })}</div>
+                <div style={{ fontSize: "10px", color: "#555" }}>الكاشير: {(user as any)?.fullName || user?.username}</div>
+              </div>
+              <hr className="receipt-separator" style={{ border: "none", borderTop: "1px dashed #000", margin: "6px 0" }} />
+              
+              {/* Sales Summary */}
+              <div style={{ fontSize: "11px" }}>
+                <div style={{ fontWeight: "bold", fontSize: "12px", marginBottom: "4px" }}>ملخص المبيعات</div>
+                <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", padding: "3px 0" }}>
+                  <span>عدد الفواتير المكتملة</span>
+                  <span style={{ fontWeight: "bold" }}>{zReportData.completedSales.length}</span>
+                </div>
+                <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", padding: "3px 0" }}>
+                  <span>إجمالي المبيعات</span>
+                  <span style={{ fontWeight: "bold" }}>{zReportData.totalSales.toFixed(2)} ر.س</span>
+                </div>
+                <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", padding: "3px 0" }}>
+                  <span>إجمالي الضريبة</span>
+                  <span style={{ fontWeight: "bold" }}>{zReportData.totalVat.toFixed(2)} ر.س</span>
+                </div>
+                {zReportData.totalDiscount > 0 && (
+                  <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", color: "#c00" }}>
+                    <span>إجمالي الخصومات</span>
+                    <span style={{ fontWeight: "bold" }}>-{zReportData.totalDiscount.toFixed(2)} ر.س</span>
+                  </div>
+                )}
+              </div>
+              <hr className="receipt-separator" style={{ border: "none", borderTop: "1px dashed #000", margin: "6px 0" }} />
+              
+              {/* Payment Breakdown */}
+              <div style={{ fontSize: "11px" }}>
+                <div style={{ fontWeight: "bold", fontSize: "12px", marginBottom: "4px" }}>تفصيل طرق الدفع</div>
+                <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", padding: "3px 0" }}>
+                  <span>نقد</span>
+                  <span style={{ fontWeight: "bold" }}>{zReportData.cashTotal.toFixed(2)} ر.س</span>
+                </div>
+                <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", padding: "3px 0" }}>
+                  <span>شبكة</span>
+                  <span style={{ fontWeight: "bold" }}>{zReportData.networkTotal.toFixed(2)} ر.س</span>
+                </div>
+                {zReportData.splitTotal > 0 && (
+                  <>
+                    <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", padding: "3px 0" }}>
+                      <span>دفع مقسم (نقد)</span>
+                      <span style={{ fontWeight: "bold" }}>{zReportData.splitCash.toFixed(2)} ر.س</span>
+                    </div>
+                    <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", padding: "3px 0" }}>
+                      <span>دفع مقسم (شبكة)</span>
+                      <span style={{ fontWeight: "bold" }}>{zReportData.splitNetwork.toFixed(2)} ر.س</span>
+                    </div>
+                  </>
+                )}
+              </div>
+              <hr className="receipt-separator" style={{ border: "none", borderTop: "1px dashed #000", margin: "6px 0" }} />
+              
+              {/* Cash in Drawer */}
+              <div style={{ fontSize: "12px", fontWeight: "bold" }}>
+                <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", background: "#f5f5f5", borderRadius: "4px", padding: "6px 8px" }}>
+                  <span>إجمالي النقد في الصندوق</span>
+                  <span>{zReportData.totalCashInDrawer.toFixed(2)} ر.س</span>
+                </div>
+              </div>
+              
+              {/* Void/Refund Summary */}
+              {(zReportData.voidedSales.length > 0 || zReportData.refundedSales.length > 0) && (
+                <>
+                  <hr className="receipt-separator" style={{ border: "none", borderTop: "1px dashed #000", margin: "6px 0" }} />
+                  <div style={{ fontSize: "11px" }}>
+                    <div style={{ fontWeight: "bold", fontSize: "12px", marginBottom: "4px", color: "#c00" }}>الإلغاءات والاسترجاعات</div>
+                    {zReportData.voidedSales.length > 0 && (
+                      <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", padding: "3px 0" }}>
+                        <span>فواتير ملغاة</span>
+                        <span style={{ fontWeight: "bold" }}>{zReportData.voidedSales.length} ({zReportData.voidedSales.reduce((s: number, v: any) => s + v.totalAmount, 0).toFixed(2)} ر.س)</span>
+                      </div>
+                    )}
+                    {zReportData.refundedSales.length > 0 && (
+                      <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", padding: "3px 0" }}>
+                        <span>فواتير مسترجعة</span>
+                        <span style={{ fontWeight: "bold" }}>{zReportData.refundedSales.length} ({zReportData.refundedSales.reduce((s: number, v: any) => s + v.totalAmount, 0).toFixed(2)} ر.س)</span>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="p-4 border-t flex gap-3 shrink-0">
+            <Button variant="outline" onClick={() => setShowZReport(false)} className="rounded-xl h-12 font-bold">إغلاق</Button>
+            <Button onClick={() => handleZReportPrint()} className="flex-1 rounded-xl h-12 bg-purple-600 hover:bg-purple-700 font-bold text-[15px] gap-2" data-testid="button-print-zreport">
+              <Printer className="w-5 h-5" />
+              طباعة التقرير
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

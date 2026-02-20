@@ -8918,19 +8918,32 @@ export const posSales = pgTable("pos_sales", {
   subtotal: doublePrecision("subtotal").default(0).notNull(),
   vatAmount: doublePrecision("vat_amount").default(0).notNull(),
   totalAmount: doublePrecision("total_amount").default(0).notNull(),
+  discountType: text("discount_type"),
+  discountValue: doublePrecision("discount_value").default(0),
+  discountAmount: doublePrecision("discount_amount").default(0),
   paymentMethod: text("payment_method").notNull(),
+  cashAmount: doublePrecision("cash_amount").default(0),
+  networkAmount: doublePrecision("network_amount").default(0),
   amountPaid: doublePrecision("amount_paid").default(0),
   changeAmount: doublePrecision("change_amount").default(0),
   customerName: text("customer_name"),
   customerPhone: text("customer_phone"),
   journalId: integer("journal_id").references(() => cashierSalesJournals.id),
   status: text("status").default("completed").notNull(),
+  voidReason: text("void_reason"),
+  voidedBy: varchar("voided_by"),
+  voidedAt: timestamp("voided_at"),
+  refundReason: text("refund_reason"),
+  refundedBy: varchar("refunded_by"),
+  refundedAt: timestamp("refunded_at"),
+  originalSaleId: integer("original_sale_id"),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   index("idx_pos_sales_branch_date").on(table.branchId, table.saleDate),
   index("idx_pos_sales_cashier").on(table.cashierId),
   index("idx_pos_sales_invoice").on(table.invoiceNumber),
+  index("idx_pos_sales_status").on(table.status),
 ]);
 
 export const insertPosSaleSchema = createInsertSchema(posSales).omit({
@@ -8961,3 +8974,29 @@ export const insertPosSaleItemSchema = createInsertSchema(posSaleItems).omit({
 });
 export type PosSaleItem = typeof posSaleItems.$inferSelect;
 export type InsertPosSaleItem = z.infer<typeof insertPosSaleItemSchema>;
+
+// طلبات معلقة POS
+export const posHeldOrders = pgTable("pos_held_orders", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
+  cashierId: varchar("cashier_id").notNull().references(() => users.id),
+  cashierName: text("cashier_name").notNull(),
+  label: text("label"),
+  cartData: text("cart_data").notNull(),
+  paymentMethod: text("payment_method").default("cash"),
+  customerName: text("customer_name"),
+  discountType: text("discount_type"),
+  discountValue: doublePrecision("discount_value").default(0),
+  totalAmount: doublePrecision("total_amount").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_pos_held_orders_branch").on(table.branchId),
+  index("idx_pos_held_orders_cashier").on(table.cashierId),
+]);
+
+export const insertPosHeldOrderSchema = createInsertSchema(posHeldOrders).omit({
+  id: true,
+  createdAt: true,
+});
+export type PosHeldOrder = typeof posHeldOrders.$inferSelect;
+export type InsertPosHeldOrder = z.infer<typeof insertPosHeldOrderSchema>;

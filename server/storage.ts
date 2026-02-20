@@ -514,6 +514,9 @@ import {
   posSaleItems,
   type PosSaleItem,
   type InsertPosSaleItem,
+  posHeldOrders,
+  type PosHeldOrder,
+  type InsertPosHeldOrder,
 } from "@shared/schema";
 
 type TransferHistory = typeof transferHistory.$inferSelect;
@@ -1286,6 +1289,15 @@ export interface IStorage {
   getPosSaleById(id: number): Promise<PosSale | undefined>;
   getPosSaleItems(saleId: number): Promise<PosSaleItem[]>;
   getPosSalesSummary(branchId: string, date: string): Promise<{ totalSales: number; totalTransactions: number; cashTotal: number; networkTotal: number }>;
+
+  // Event POS - Void/Refund
+  voidPosSale(saleId: number, reason: string, voidedBy: string): Promise<PosSale | undefined>;
+  refundPosSale(saleId: number, reason: string, refundedBy: string): Promise<PosSale | undefined>;
+
+  // Event POS - Held Orders
+  createHeldOrder(data: InsertPosHeldOrder): Promise<PosHeldOrder>;
+  getHeldOrders(branchId: string): Promise<PosHeldOrder[]>;
+  deleteHeldOrder(id: number): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -14143,18 +14155,61 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getPosSalesSummary(branchId: string, date: string): Promise<{ totalSales: number; totalTransactions: number; cashTotal: number; networkTotal: number }> {
-    const sales = await db.select().from(posSales).where(
-      and(eq(posSales.branchId, branchId), eq(posSales.saleDate, date))
-    );
-    let totalSales = 0;
-    let cashTotal = 0;
-    let networkTotal = 0;
-    for (const s of sales) {
-      totalSales += s.totalAmount;
-      if (s.paymentMethod === 'cash') cashTotal += s.totalAmount;
-      else networkTotal += s.totalAmount;
-    }
-    return { totalSales, totalTransactions: sales.length, cashTotal, networkTotal };
+    const [result] = await db.execute(sql`
+      SELECT 
+        COALESCE(SUM(total_amount), 0) as "totalSales",
+        COUNT(*) as "totalTransactions",
+        COALESCE(SUM(CASE WHEN payment_method = 'cash' THEN total_amount ELSE 0 END), 0) as "cashTotal",
+        COALESCE(SUM(CASE WHEN payment_method != 'cash' THEN total_amount ELSE 0 END), 0) as "networkTotal"
+      FROM pos_sales 
+      WHERE branch_id = ${branchId} AND sale_date = ${date} AND status = 'completed'
+    `);
+    return {
+      totalSales: Number(result.totalSales) || 0,
+      totalTransactions: Number(result.totalTransactions) || 0,
+      cashTotal: Number(result.cashTotal) || 0,
+      networkTotal: Number(result.networkTotal) || 0,
+    };
+  }
+
+  async voidPosSale(saleId: number, reason: string, voidedBy: string): Promise<PosSale | undefined> {
+    const [sale] = await db.select().from(posSales).where(eq(posSales.id, saleId));
+    if (!sale || sale.status !== 'completed') return undefined;
+    const [updated] = await db.update(posSales).set({
+      status: 'voided',
+      voidReason: reason,
+      voidedBy,
+      voidedAt: new Date(),
+    }).where(eq(posSales.id, saleId)).returning();
+    return updated || undefined;
+  }
+
+  async refundPosSale(saleId: number, reason: string, refundedBy: string): Promise<PosSale | undefined> {
+    const [sale] = await db.select().from(posSales).where(eq(posSales.id, saleId));
+    if (!sale || sale.status !== 'completed') return undefined;
+    const [updated] = await db.update(posSales).set({
+      status: 'refunded',
+      refundReason: reason,
+      refundedBy,
+      refundedAt: new Date(),
+    }).where(eq(posSales.id, saleId)).returning();
+    return updated || undefined;
+  }
+
+  async createHeldOrder(data: InsertPosHeldOrder): Promise<PosHeldOrder> {
+    const [order] = await db.insert(posHeldOrders).values(data).returning();
+    return order;
+  }
+
+  async getHeldOrders(branchId: string): Promise<PosHeldOrder[]> {
+    return await db.select().from(posHeldOrders)
+      .where(eq(posHeldOrders.branchId, branchId))
+      .orderBy(desc(posHeldOrders.createdAt));
+  }
+
+  async deleteHeldOrder(id: number): Promise<boolean> {
+    const result = await db.delete(posHeldOrders).where(eq(posHeldOrders.id, id)).returning();
+    return result.length > 0;
   }
 }
 

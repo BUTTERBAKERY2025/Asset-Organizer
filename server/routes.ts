@@ -29298,6 +29298,17 @@ export async function registerRoutes(
       if (!await canAccessBranch(req, saleData.branchId)) {
         return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
       }
+      if (saleData.paymentMethod === "split") {
+        const cashAmt = Number(saleData.cashAmount) || 0;
+        const networkAmt = Number(saleData.networkAmount) || 0;
+        if (cashAmt < 0 || networkAmt < 0) {
+          return res.status(400).json({ error: "مبالغ الدفع المقسم غير صالحة" });
+        }
+        const totalAmt = Number(saleData.totalAmount) || 0;
+        if (Math.abs(cashAmt + networkAmt - totalAmt) > 0.02) {
+          return res.status(400).json({ error: "مجموع النقد والشبكة لا يتطابق مع الإجمالي" });
+        }
+      }
       const invoiceNum = await storage.incrementInvoiceNumber(saleData.branchId);
       const settings = await storage.getPosInvoiceSettings(saleData.branchId);
       const prefix = settings?.invoicePrefix || "EV";
@@ -29351,6 +29362,79 @@ export async function registerRoutes(
       }
       const summary = await storage.getPosSalesSummary(branchId, req.params.date);
       res.json(summary);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/pos/sales/:id/void", isAuthenticated, requirePermission("event_pos", "delete"), async (req, res) => {
+    try {
+      const saleId = Number(req.params.id);
+      if (isNaN(saleId)) return res.status(400).json({ error: "معرف غير صالح" });
+      const { reason } = req.body;
+      if (!reason) return res.status(400).json({ error: "سبب الإلغاء مطلوب" });
+      const currentUser = getCurrentUser(req);
+      const result = await storage.voidPosSale(saleId, reason, currentUser.id);
+      if (!result) return res.status(400).json({ error: "لا يمكن إلغاء هذه العملية" });
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/pos/sales/:id/refund", isAuthenticated, requirePermission("event_pos", "delete"), async (req, res) => {
+    try {
+      const saleId = Number(req.params.id);
+      if (isNaN(saleId)) return res.status(400).json({ error: "معرف غير صالح" });
+      const { reason } = req.body;
+      if (!reason) return res.status(400).json({ error: "سبب الاسترداد مطلوب" });
+      const currentUser = getCurrentUser(req);
+      const result = await storage.refundPosSale(saleId, reason, currentUser.id);
+      if (!result) return res.status(400).json({ error: "لا يمكن استرداد هذه العملية" });
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/pos/held-orders/:branchId", isAuthenticated, requirePermission("event_pos", "view"), async (req, res) => {
+    try {
+      const branchId = req.params.branchId;
+      if (!await canAccessBranch(req, branchId)) {
+        return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
+      }
+      const orders = await storage.getHeldOrders(branchId);
+      res.json(orders);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/pos/held-orders", isAuthenticated, requirePermission("event_pos", "create"), async (req, res) => {
+    try {
+      const { branchId, cashierId, cashierName, label, cartData, paymentMethod, customerName, discountType, discountValue, totalAmount } = req.body;
+      if (!branchId || !cashierId || !cashierName || !cartData) {
+        return res.status(400).json({ error: "بيانات ناقصة" });
+      }
+      if (!await canAccessBranch(req, branchId)) {
+        return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
+      }
+      const order = await storage.createHeldOrder({
+        branchId, cashierId, cashierName, label, cartData, paymentMethod, customerName, discountType, discountValue, totalAmount,
+      });
+      res.status(201).json(order);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/pos/held-orders/:id", isAuthenticated, requirePermission("event_pos", "create"), async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const deleted = await storage.deleteHeldOrder(id);
+      if (!deleted) return res.status(404).json({ error: "الطلب غير موجود" });
+      res.json({ success: true });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

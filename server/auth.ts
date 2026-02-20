@@ -970,6 +970,15 @@ export async function canAccessBranch(req: any, branchId: string): Promise<boole
   // Admin can access all branches
   if (user.role === "admin") return true;
   
+  // Check if user has the required permission for the module linked to this branch
+  // Users with event_pos permissions should access EVENT-BB branch
+  if (branchId === "EVENT-BB") {
+    const hasEventPosAccess = await storage.hasPermission(user.id, "event_pos", "view");
+    if (hasEventPosAccess) {
+      return true;
+    }
+  }
+  
   // Use pre-loaded branch access from middleware (more efficient)
   const userBranches = req.userBranchAccess || await storage.getUserBranchAccess(user.id);
   
