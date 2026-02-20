@@ -8105,6 +8105,104 @@ export async function registerRoutes(
     }
   });
 
+  // Consolidated incentives bundle endpoint
+  app.get("/api/incentives/bundle", isAuthenticated, async (req, res) => {
+    try {
+      const user = getCurrentUser(req);
+      const yearMonth = req.query.yearMonth as string | undefined;
+      const isAdmin = user.role === 'admin';
+
+      const [
+        pointSettingsResult,
+        challengesResult,
+        commissionsResult,
+        branchBonusesResult,
+        tiersResult,
+        awardsResult,
+        cashiersResult,
+      ] = await Promise.all([
+        (async () => {
+          try {
+            const settings = await storage.getPointSettings();
+            return settings || { pointValue: 0.5, maxDailyPoints: null, maxMonthlyPoints: null, seasonalMultiplier: 1, isActive: true };
+          } catch (e) { return {}; }
+        })(),
+        (async () => {
+          try {
+            const all = await storage.getAllDailyChallenges();
+            if (!isAdmin && user.branchId) {
+              return all.filter((c: any) => c.branchId === user.branchId);
+            }
+            return all;
+          } catch (e) { return []; }
+        })(),
+        (async () => {
+          try {
+            const all = await storage.getAllProductCommissions();
+            if (!isAdmin && user.branchId) {
+              return all.filter((c: any) => c.branchId === user.branchId);
+            }
+            return all;
+          } catch (e) { return []; }
+        })(),
+        (async () => {
+          try {
+            const all = await storage.getAllBranchBonuses();
+            if (!isAdmin && user.branchId) {
+              return all.filter((b: any) => b.branchId === user.branchId);
+            }
+            return all;
+          } catch (e) { return []; }
+        })(),
+        (async () => {
+          try {
+            return await storage.getAllIncentiveTiers();
+          } catch (e) { return []; }
+        })(),
+        (async () => {
+          try {
+            if (typeof (storage as any).getAllIncentiveAwards === 'function') {
+              return await (storage as any).getAllIncentiveAwards();
+            }
+            if (typeof (storage as any).getIncentiveAwards === 'function') {
+              return await (storage as any).getIncentiveAwards();
+            }
+            return [];
+          } catch (e) { return []; }
+        })(),
+        (async () => {
+          try {
+            const allUsers = await storage.getAllUsers();
+            return allUsers.map((u: any) => ({ id: u.id, username: u.username, firstName: u.firstName, lastName: u.lastName }));
+          } catch (e) { return []; }
+        })(),
+      ]);
+
+      const result: any = {
+        pointSettings: pointSettingsResult,
+        challenges: challengesResult,
+        commissions: commissionsResult,
+        branchBonuses: branchBonusesResult,
+        tiers: tiersResult,
+        awards: awardsResult,
+        cashiers: cashiersResult,
+      };
+
+      if (yearMonth) {
+        try {
+          result.topCashierPoints = await storage.getTopCashierPoints(yearMonth, 50);
+        } catch (e) {
+          result.topCashierPoints = [];
+        }
+      }
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching incentives bundle:", error);
+      res.status(500).json({ error: "Failed to fetch incentives bundle" });
+    }
+  });
+
   // ==========================================
   // نظام النقاط والعمولات الذكي - Smart Points System
   // ==========================================
@@ -17655,6 +17753,155 @@ export async function registerRoutes(
   });
 
   // ==========================================
+  // Cashier Performance Bundle API - بيانات أداء الكاشير المجمعة
+  // ==========================================
+
+  app.get("/api/cashier-performance/bundle", isAuthenticated, requirePermission("cashier_performance", "view"), async (req, res) => {
+    try {
+      const { branchId, date, shiftType, yearMonth } = req.query;
+
+      const branchFilter = getEffectiveBranchFilter(req, branchId as string | undefined);
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بالوصول" });
+      }
+
+      const canViewAll = await canUserViewAllCashiers(req);
+      const currentUser = getCurrentUser(req);
+
+      const [cashierSales, performanceAlerts, shiftTracking, incentiveTiers] = await Promise.all([
+        (async () => {
+          try {
+            const filters: any = {};
+            if (date) {
+              filters.startDate = date as string;
+              filters.endDate = date as string;
+            }
+            if (branchFilter.singleBranchId) {
+              filters.branchId = branchFilter.singleBranchId;
+            }
+
+            let journals = await storage.getCashierSalesJournals(filters);
+
+            if (!branchFilter.singleBranchId && branchFilter.branchIds) {
+              journals = journals.filter(j => branchFilter.branchIds!.includes(j.branchId));
+            }
+
+            if (shiftType && shiftType !== 'all') {
+              journals = journals.filter(j => j.shiftType === shiftType);
+            }
+
+            const salesByCashier: Record<string, {
+              cashierId: string;
+              cashierName: string;
+              branchId: string;
+              shiftType: string;
+              totalSales: number;
+              transactionCount: number;
+              averageTicket: number;
+            }> = {};
+
+            for (const journal of journals) {
+              const key = `${journal.cashierId}-${journal.shiftType}`;
+              if (!salesByCashier[key]) {
+                salesByCashier[key] = {
+                  cashierId: journal.cashierId || '',
+                  cashierName: journal.cashierName || '',
+                  branchId: journal.branchId || '',
+                  shiftType: journal.shiftType || '',
+                  totalSales: 0,
+                  transactionCount: 0,
+                  averageTicket: 0,
+                };
+              }
+              salesByCashier[key].totalSales += Number(journal.totalSales || 0);
+              salesByCashier[key].transactionCount += Number(journal.transactionCount || 0);
+            }
+
+            for (const key in salesByCashier) {
+              const data = salesByCashier[key];
+              data.averageTicket = data.transactionCount > 0
+                ? Math.round((data.totalSales / data.transactionCount) * 100) / 100
+                : 0;
+            }
+
+            let result = Object.values(salesByCashier);
+
+            if (!canViewAll) {
+              result = result.filter(r => String(r.cashierId) === String(currentUser.id));
+            }
+
+            return result;
+          } catch (e) {
+            console.error("[bundle] cashierSales error:", e);
+            return [];
+          }
+        })(),
+
+        (async () => {
+          try {
+            const filters: any = {};
+            if (branchFilter.singleBranchId) filters.branchId = branchFilter.singleBranchId;
+            else if (branchId) filters.branchId = branchId;
+            if (date) filters.date = date;
+
+            let alerts = await storage.getAllPerformanceAlerts(filters);
+
+            if (branchFilter.branchIds) {
+              alerts = alerts.filter(a => branchFilter.branchIds!.includes(a.branchId || ''));
+            }
+
+            if (!canViewAll) {
+              alerts = alerts.filter(a => String(a.cashierId) === String(currentUser.id));
+            }
+
+            return alerts;
+          } catch (e) {
+            console.error("[bundle] performanceAlerts error:", e);
+            return [];
+          }
+        })(),
+
+        (async () => {
+          try {
+            const filters: any = {};
+            if (branchFilter.singleBranchId) filters.branchId = branchFilter.singleBranchId;
+            else if (branchId) filters.branchId = branchId;
+            if (date) filters.date = date;
+
+            let tracking = await storage.getAllShiftPerformanceTracking(filters);
+
+            if (branchFilter.branchIds) {
+              tracking = tracking.filter(t => branchFilter.branchIds!.includes(t.branchId || ''));
+            }
+
+            return tracking;
+          } catch (e) {
+            console.error("[bundle] shiftTracking error:", e);
+            return [];
+          }
+        })(),
+
+        (async () => {
+          try {
+            const allTiers = await storage.getAllIncentiveTiers();
+            return allTiers
+              .filter((t: any) => t.isActive !== false)
+              .sort((a: any, b: any) => (a.sortOrder || 0) - (b.sortOrder || 0));
+          } catch (e) {
+            console.error("[bundle] incentiveTiers error:", e);
+            return [];
+          }
+        })(),
+      ]);
+
+      res.json({ cashierSales, performanceAlerts, shiftTracking, incentiveTiers });
+    } catch (error) {
+      console.error("Error fetching cashier performance bundle:", error);
+      res.status(500).json({ error: "فشل في جلب بيانات الأداء المجمعة" });
+    }
+  });
+
+  // ==========================================
   // Cashier Performance Sales Data API - بيانات مبيعات أداء الكاشير
   // ==========================================
 
@@ -22875,7 +23122,88 @@ export async function registerRoutes(
   // =====================================================
   // Branch Employees API - موظفي الفروع
   // =====================================================
-  
+
+  app.get("/api/branch-employees/bundle", isAuthenticated, requirePermission("branch_employees", "view"), async (req, res) => {
+    try {
+      const queryBranchId = req.query.branchId as string | undefined;
+      const allowedBranches = getAllowedBranchIds(req);
+
+      const [employees, stats, systemUsers] = await Promise.all([
+        (async () => {
+          try {
+            let emps;
+            if (allowedBranches === null) {
+              if (queryBranchId) {
+                emps = await storage.getBranchEmployeesByBranch(queryBranchId);
+              } else {
+                emps = await storage.getAllBranchEmployees();
+              }
+            } else if (allowedBranches.length > 0) {
+              if (queryBranchId && allowedBranches.includes(queryBranchId)) {
+                emps = await storage.getBranchEmployeesByBranch(queryBranchId);
+              } else {
+                const allEmps = await Promise.all(
+                  allowedBranches.map(branchId => storage.getBranchEmployeesByBranch(branchId))
+                );
+                emps = allEmps.flat();
+              }
+            } else {
+              emps = [];
+            }
+            return emps;
+          } catch (e) {
+            console.error("Bundle: employees fetch failed", e);
+            return [];
+          }
+        })(),
+        (async () => {
+          try {
+            if (allowedBranches === null) {
+              return await storage.getBranchEmployeeStats(queryBranchId ?? undefined);
+            }
+            if (allowedBranches.length > 0) {
+              if (queryBranchId && allowedBranches.includes(queryBranchId)) {
+                return await storage.getBranchEmployeeStats(queryBranchId);
+              }
+              return await storage.getBranchEmployeeStats(undefined);
+            }
+            return { total: 0, byJobTitle: {}, byBranch: {} };
+          } catch (e) {
+            console.error("Bundle: stats fetch failed", e);
+            return { total: 0, byJobTitle: {}, byBranch: {} };
+          }
+        })(),
+        (async () => {
+          try {
+            const allUsers = await storage.getAllUsers();
+            let filtered = allUsers;
+            if (allowedBranches !== null && allowedBranches.length > 0) {
+              filtered = allUsers.filter((u: any) => !u.branchId || allowedBranches.includes(u.branchId));
+            } else if (allowedBranches !== null && allowedBranches.length === 0) {
+              return [];
+            }
+            return filtered.map((u: any) => ({
+              id: u.id,
+              username: u.username,
+              firstName: u.firstName,
+              lastName: u.lastName,
+              role: u.role,
+              branchId: u.branchId,
+            }));
+          } catch (e) {
+            console.error("Bundle: systemUsers fetch failed", e);
+            return [];
+          }
+        })(),
+      ]);
+
+      res.json({ employees, stats, systemUsers });
+    } catch (error) {
+      console.error("Error fetching branch employees bundle:", error);
+      res.status(500).json({ error: "فشل في جلب بيانات الموظفين المجمعة" });
+    }
+  });
+
   // Get all branch employees or filter by branch
   app.get("/api/branch-employees", isAuthenticated, requirePermission("branch_employees", "view"), async (req, res) => {
     try {
@@ -25443,6 +25771,55 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error fetching warehouse dashboard stats:", error);
       res.status(500).json({ error: "فشل في جلب إحصائيات المستودع" });
+    }
+  });
+
+  // Warehouse Bundle - consolidated data for warehouse reports page
+  app.get("/api/warehouse/bundle", isAuthenticated, requirePermission("warehouse", "view"), async (req, res) => {
+    try {
+      const branchId = req.query.branchId as string | undefined;
+      const month = req.query.month as string | undefined;
+      const year = req.query.year as string | undefined;
+      const startDate = req.query.startDate as string | undefined;
+      const endDate = req.query.endDate as string | undefined;
+
+      const transferFilters: { branchId?: string; startDate?: string; endDate?: string } = {};
+      if (branchId) transferFilters.branchId = branchId;
+      if (startDate) transferFilters.startDate = startDate;
+      if (endDate) transferFilters.endDate = endDate;
+
+      const movementFilters: { branchId?: string } = {};
+      if (branchId) movementFilters.branchId = branchId;
+
+      const [
+        itemsResult,
+        transfersResult,
+        movementLogsResult,
+        branchesResult,
+      ] = await Promise.all([
+        (async () => {
+          try { return await storage.getWarehouseItems({}); } catch (e) { return []; }
+        })(),
+        (async () => {
+          try { return await storage.getMaterialTransfers(transferFilters); } catch (e) { return []; }
+        })(),
+        (async () => {
+          try { return await storage.getWarehouseMovementLogs(movementFilters); } catch (e) { return []; }
+        })(),
+        (async () => {
+          try { return await storage.getAllBranches(); } catch (e) { return []; }
+        })(),
+      ]);
+
+      res.json({
+        items: itemsResult,
+        transfers: transfersResult,
+        movementLogs: movementLogsResult,
+        branches: branchesResult,
+      });
+    } catch (error) {
+      console.error("Error fetching warehouse bundle:", error);
+      res.status(500).json({ error: "فشل في جلب بيانات المستودع" });
     }
   });
 

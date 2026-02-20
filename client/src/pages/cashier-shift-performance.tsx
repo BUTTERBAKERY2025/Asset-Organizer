@@ -235,30 +235,6 @@ export default function CashierShiftPerformance() {
     },
   });
 
-  const { data: performanceAlerts = [], refetch: refetchAlerts } = useQuery<PerformanceAlert[]>({
-    queryKey: ["/api/performance-alerts", selectedBranch, selectedDate],
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      if (selectedBranch !== "all") params.append("branchId", selectedBranch);
-      if (selectedDate) params.append("date", selectedDate);
-      const res = await fetch(`/api/performance-alerts?${params}`);
-      if (!res.ok) return [];
-      return res.json();
-    }
-  });
-
-  const { data: shiftTracking = [], refetch: refetchTracking } = useQuery<ShiftPerformanceTracking[]>({
-    queryKey: ["/api/shift-performance-tracking", selectedBranch, selectedDate],
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      if (selectedBranch !== "all") params.append("branchId", selectedBranch);
-      if (selectedDate) params.append("date", selectedDate);
-      const res = await fetch(`/api/shift-performance-tracking?${params}`);
-      if (!res.ok) return [];
-      return res.json();
-    }
-  });
-
   // Fetch incentive tiers for calculating rewards
   interface IncentiveTier {
     id: number;
@@ -273,15 +249,30 @@ export default function CashierShiftPerformance() {
     sortOrder: number;
   }
 
-  const { data: incentiveTiers = [] } = useQuery<IncentiveTier[]>({
-    queryKey: ["/api/incentive-tiers"],
+  const bundleParams = new URLSearchParams();
+  if (selectedBranch !== "all") bundleParams.append("branchId", selectedBranch);
+  if (selectedDate) bundleParams.append("date", selectedDate);
+  if (selectedShift !== "all") bundleParams.append("shiftType", selectedShift);
+
+  const { data: perfBundle, refetch: refetchBundle } = useQuery<{
+    cashierSales?: any[];
+    performanceAlerts?: any[];
+    shiftTracking?: any[];
+    incentiveTiers?: any[];
+  }>({
+    queryKey: ["/api/cashier-performance/bundle", selectedBranch, selectedDate, selectedShift],
     queryFn: async () => {
-      const res = await fetch("/api/incentive-tiers");
-      if (!res.ok) return [];
-      const data = await res.json();
-      return data.filter((t: IncentiveTier) => t.isActive).sort((a: IncentiveTier, b: IncentiveTier) => (a.sortOrder || 0) - (b.sortOrder || 0));
-    }
+      const res = await fetch(`/api/cashier-performance/bundle?${bundleParams}`);
+      if (!res.ok) return {};
+      return res.json();
+    },
+    staleTime: 30 * 1000,
   });
+
+  const cashierSales = perfBundle?.cashierSales || [];
+  const performanceAlerts = perfBundle?.performanceAlerts || [];
+  const shiftTracking = perfBundle?.shiftTracking || [];
+  const incentiveTiers = (perfBundle?.incentiveTiers || []) as IncentiveTier[];
 
   const currentYearMonth = selectedDate.substring(0, 7);
   const { data: topCashierPoints = [], isLoading: pointsLoading } = useQuery<Array<{ cashierId: string; cashierName: string; branchId: string; branchName: string; totalPoints: number; totalAmount: number; challengeCount: number }>>({
@@ -340,18 +331,6 @@ export default function CashierShiftPerformance() {
     averageTicket: number;
   }
 
-  const { data: cashierSales = [], refetch: refetchSales } = useQuery<CashierSalesData[]>({
-    queryKey: ["/api/cashier-performance-sales", selectedBranch, selectedDate, selectedShift],
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      if (selectedBranch !== "all") params.append("branchId", selectedBranch);
-      if (selectedDate) params.append("date", selectedDate);
-      if (selectedShift !== "all") params.append("shiftType", selectedShift);
-      const res = await fetch(`/api/cashier-performance-sales?${params}`);
-      if (!res.ok) return [];
-      return res.json();
-    }
-  });
 
   // Get actual sales for a specific cashier and shift
   const getCashierActualSales = (cashierId: string, shiftType: string) => {
@@ -1059,9 +1038,7 @@ export default function CashierShiftPerformance() {
 
   const handleRefresh = () => {
     refetchTargets();
-    refetchAlerts();
-    refetchTracking();
-    refetchSales();
+    refetchBundle();
   };
 
   const setQuickDate = (preset: string) => {

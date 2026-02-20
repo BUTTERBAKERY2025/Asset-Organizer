@@ -341,7 +341,7 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/employee-transfers"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/branch-employees"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/branch-employees/bundle"] });
       setIsDetailsDialogOpen(false);
       toast({ title: isRTL ? "تم تنفيذ النقل بنجاح" : "Transfer completed successfully" });
     },
@@ -905,23 +905,25 @@ export default function BranchEmployeesPage() {
     }
   }, [canSelectBranch, userBranchId, selectedBranch]);
 
-  const { data: employees, isLoading } = useQuery({
-    queryKey: ["/api/branch-employees", selectedBranch],
+  const { data: bundle, isLoading } = useQuery<{
+    employees?: any[];
+    stats?: any;
+    systemUsers?: any[];
+  }>({
+    queryKey: ["/api/branch-employees/bundle", selectedBranch],
     queryFn: async () => {
-      const url = selectedBranch === "all" ? "/api/branch-employees" : `/api/branch-employees?branchId=${selectedBranch}`;
+      const url = selectedBranch === "all" 
+        ? "/api/branch-employees/bundle" 
+        : `/api/branch-employees/bundle?branchId=${selectedBranch}`;
       const res = await fetch(url);
       return res.json();
     },
+    staleTime: 60 * 1000,
   });
 
-  const { data: stats } = useQuery({
-    queryKey: ["/api/branch-employees/stats", selectedBranch],
-    queryFn: async () => {
-      const url = selectedBranch === "all" ? "/api/branch-employees/stats" : `/api/branch-employees/stats?branchId=${selectedBranch}`;
-      const res = await fetch(url);
-      return res.json();
-    },
-  });
+  const employees = bundle?.employees;
+  const stats = bundle?.stats;
+  const systemUsers = bundle?.systemUsers;
 
   const { data: employeeAttendance, isLoading: isLoadingAttendance } = useQuery({
     queryKey: ["/api/branch-employees/attendance", viewingEmployee?.id],
@@ -959,15 +961,6 @@ export default function BranchEmployeesPage() {
     setIsDetailsDialogOpen(true);
   };
 
-  const { data: systemUsers } = useQuery({
-    queryKey: ["/api/users"],
-    queryFn: async () => {
-      const res = await fetch("/api/users");
-      if (!res.ok) return [];
-      return res.json();
-    },
-  });
-
   const linkUserMutation = useMutation({
     mutationFn: async ({ employeeId, userId }: { employeeId: number; userId: string }) => {
       const res = await fetch(`/api/branch-employees/${employeeId}/link-user`, {
@@ -979,7 +972,7 @@ export default function BranchEmployeesPage() {
       return res.json();
     },
     onSuccess: (updatedEmployee) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/branch-employees"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/branch-employees/bundle"] });
       setViewingEmployee(updatedEmployee);
       setSelectedUserToLink("");
     },
@@ -1166,7 +1159,7 @@ export default function BranchEmployeesPage() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/branch-employees"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/branch-employees/bundle"] });
       setIsDialogOpen(false);
       form.reset();
       toast({
@@ -1194,7 +1187,7 @@ export default function BranchEmployeesPage() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/branch-employees"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/branch-employees/bundle"] });
       setIsDialogOpen(false);
       setEditingEmployee(null);
       form.reset();
@@ -1224,7 +1217,7 @@ export default function BranchEmployeesPage() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/branch-employees"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/branch-employees/bundle"] });
       setIsDeleteDialogOpen(false);
       setEmployeeToDelete(null);
       toast({
@@ -1450,7 +1443,7 @@ export default function BranchEmployeesPage() {
         
         if (successCount > 0) {
           alert(`تم استيراد ${successCount} موظف بنجاح${errorCount > 0 ? ` (${errorCount} أخطاء)` : ""}`);
-          queryClient.invalidateQueries({ queryKey: ["/api/branch-employees"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/branch-employees/bundle"] });
         } else if (errorCount > 0) {
           alert(`فشل استيراد الموظفين. تحقق من صحة البيانات في ملف Excel`);
         }

@@ -82,24 +82,23 @@ export default function WarehouseReportsPage() {
   const [reportDateTo, setReportDateTo] = useState<string>("");
   const [reportBranchId, setReportBranchId] = useState<string>("all");
 
-  const { data: branches } = useQuery<Branch[]>({
-    queryKey: ["/api/branches"],
+  const { data: bundle } = useQuery<{
+    items?: any[];
+    transfers?: any[];
+    movementLogs?: any[];
+    branches?: any[];
+  }>({
+    queryKey: ["/api/warehouse/bundle", selectedBranch !== "all" ? selectedBranch : undefined],
+    staleTime: 60 * 1000,
   });
 
-  const { data: warehouseItems } = useQuery<WarehouseItem[]>({
-    queryKey: ["/api/warehouse/items"],
-  });
-
-  const { data: transfers } = useQuery<MaterialTransfer[]>({
-    queryKey: ["/api/warehouse/material-transfers"],
-  });
+  const branches = bundle?.branches;
+  const warehouseItems = bundle?.items;
+  const transfers = bundle?.transfers;
+  const movementLogs = bundle?.movementLogs;
 
   const { data: branchStock } = useQuery<BranchStock[]>({
     queryKey: ["/api/warehouse/branch-stock", selectedBranch !== "all" ? selectedBranch : undefined],
-  });
-
-  const { data: movementLogs } = useQuery<any[]>({
-    queryKey: ["/api/warehouse/movement-logs"],
   });
 
   // Monthly report query

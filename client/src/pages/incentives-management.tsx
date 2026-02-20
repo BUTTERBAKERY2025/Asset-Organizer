@@ -156,35 +156,33 @@ export default function IncentivesManagement() {
     pointValue: "0.5", maxDailyPoints: "", maxMonthlyPoints: "", seasonalMultiplier: "1",
   });
 
-  const { data: pointSettings } = useQuery<PointSettings>({
-    queryKey: ["/api/smart-incentives/point-settings"],
+  const { data: bundle, isLoading: bundleLoading } = useQuery<{
+    pointSettings?: any;
+    topCashierPoints?: any[];
+    challenges?: any[];
+    commissions?: any[];
+    branchBonuses?: any[];
+    tiers?: any[];
+    awards?: any[];
+    cashiers?: any[];
+  }>({
+    queryKey: [`/api/incentives/bundle?yearMonth=${selectedMonth}`],
+    staleTime: 60 * 1000,
   });
 
-  const { data: topCashierPoints = [] } = useQuery<Array<{ cashierId: string; cashierName: string; branchId: string; branchName: string; totalPoints: number; totalAmount: number; challengeCount: number }>>({
-    queryKey: ["/api/smart-incentives/top-cashiers", selectedMonth],
-    queryFn: async () => {
-      const res = await fetch(`/api/smart-incentives/top-cashiers?yearMonth=${selectedMonth}&limit=50`, {
-        cache: 'no-store',
-        headers: { 'Cache-Control': 'no-cache' }
-      });
-      if (!res.ok) return [];
-      return res.json();
-    },
-    staleTime: 15000,
-    refetchOnMount: 'always',
-  });
-
-  const { data: challenges = [], isLoading: challengesLoading } = useQuery<CashierDailyChallenge[]>({
-    queryKey: ["/api/smart-incentives/challenges"],
-  });
-
-  const { data: commissions = [], isLoading: commissionsLoading } = useQuery<ProductCommission[]>({
-    queryKey: ["/api/smart-incentives/product-commissions"],
-  });
-
-  const { data: branchBonuses = [], isLoading: branchBonusLoading } = useQuery<BranchAchievementBonus[]>({
-    queryKey: ["/api/smart-incentives/branch-bonus"],
-  });
+  const pointSettings = bundle?.pointSettings;
+  const topCashierPoints = bundle?.topCashierPoints || [];
+  const challenges = bundle?.challenges || [];
+  const commissions = bundle?.commissions || [];
+  const branchBonuses = bundle?.branchBonuses || [];
+  const tiers = bundle?.tiers || [];
+  const awards = bundle?.awards || [];
+  const allUsers = bundle?.cashiers || [];
+  const challengesLoading = bundleLoading;
+  const commissionsLoading = bundleLoading;
+  const branchBonusLoading = bundleLoading;
+  const tiersLoading = bundleLoading;
+  const awardsLoading = bundleLoading;
 
   const branchTargetBranchId = newBranchBonus.branchId;
   const branchTargetYearMonth = newBranchBonus.yearMonth;
@@ -213,18 +211,6 @@ export default function IncentivesManagement() {
       setNewBranchBonus(prev => ({ ...prev, targetAmount: "" }));
     }
   }, [branchTargetBranchId, branchTargetYearMonth, autoTargetAmount, hasAutoTarget, branchTargetFetching, branchTargetEnabled]);
-
-  const { data: tiers = [], isLoading: tiersLoading } = useQuery<IncentiveTier[]>({
-    queryKey: ["/api/incentives/tiers"],
-  });
-
-  const { data: awards = [], isLoading: awardsLoading } = useQuery<IncentiveAward[]>({
-    queryKey: ["/api/incentives/awards"],
-  });
-
-  const { data: allUsers = [] } = useQuery<any[]>({
-    queryKey: ["/api/branch-cashiers"],
-  });
 
   const ledgerQueryEnabled = !!walletCashierId;
   const ledgerParams = new URLSearchParams();
@@ -279,7 +265,7 @@ export default function IncentivesManagement() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/point-settings"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/incentives/bundle?yearMonth=${selectedMonth}`] });
       toast({ title: "تم حفظ إعدادات النقاط بنجاح" });
     },
     onError: () => {
@@ -310,7 +296,7 @@ export default function IncentivesManagement() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/challenges"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/incentives/bundle?yearMonth=${selectedMonth}`] });
       setShowChallengeDialog(false);
       setNewChallenge({ name: "", challengeType: "avg_ticket", branchId: "", cashierId: "", targetValue: "", basePoints: "", bonusPointsPerUnit: "0", shiftType: "", validFrom: "", validTo: "" });
       toast({ title: "تم إنشاء التحدي بنجاح" });
@@ -331,7 +317,7 @@ export default function IncentivesManagement() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/challenges"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/incentives/bundle?yearMonth=${selectedMonth}`] });
       setEditChallenge(null);
       toast({ title: "تم تحديث التحدي بنجاح" });
     },
@@ -347,7 +333,7 @@ export default function IncentivesManagement() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/challenges"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/incentives/bundle?yearMonth=${selectedMonth}`] });
       toast({ title: "تم حذف التحدي بنجاح" });
     },
   });
@@ -375,7 +361,7 @@ export default function IncentivesManagement() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/product-commissions"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/incentives/bundle?yearMonth=${selectedMonth}`] });
       setShowCommissionDialog(false);
       setNewCommission({ productName: "", productCategory: "", commissionType: "weekly_product", branchId: "", cashierId: "", targetQuantity: "", pointsOnTarget: "", bonusPointsPerExtra: "0", validFrom: "", validTo: "" });
       toast({ title: "تم إنشاء العمولة بنجاح" });
@@ -392,7 +378,7 @@ export default function IncentivesManagement() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/product-commissions"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/incentives/bundle?yearMonth=${selectedMonth}`] });
       toast({ title: "تم حذف العمولة بنجاح" });
     },
   });
@@ -426,7 +412,7 @@ export default function IncentivesManagement() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/branch-bonus"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/incentives/bundle?yearMonth=${selectedMonth}`] });
       setShowBranchBonusDialog(false);
       setNewBranchBonus({ branchId: "", yearMonth: "", targetAmount: "", distributionMethod: "contribution_ratio", tiers: [{ fromPercent: "80", toPercent: "99", bonusAmount: "" }] });
       toast({ title: "تم إنشاء مكافأة الفرع بنجاح" });
@@ -443,7 +429,7 @@ export default function IncentivesManagement() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/branch-bonus"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/incentives/bundle?yearMonth=${selectedMonth}`] });
       toast({ title: "تم حذف مكافأة الفرع بنجاح" });
     },
   });
@@ -463,7 +449,7 @@ export default function IncentivesManagement() {
       return res.json();
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/branch-bonus"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/incentives/bundle?yearMonth=${selectedMonth}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/points-ledger"] });
       setCalculationResult(data);
       setShowCalculationResult(true);
@@ -483,7 +469,7 @@ export default function IncentivesManagement() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/branch-bonus"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/incentives/bundle?yearMonth=${selectedMonth}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/points-ledger"] });
       toast({ title: "تم إعادة تعيين الاحتساب - يمكنك إعادة الاحتساب" });
     },
@@ -525,7 +511,7 @@ export default function IncentivesManagement() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/branch-bonus"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/incentives/bundle?yearMonth=${selectedMonth}`] });
       setEditBonusDialogOpen(false);
       setEditBonusData(null);
       toast({ title: "تم تحديث المكافأة بنجاح" });
@@ -549,7 +535,7 @@ export default function IncentivesManagement() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/branch-bonus"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/incentives/bundle?yearMonth=${selectedMonth}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/smart-incentives/points-ledger"] });
       setManualAdjustBonusId(null);
       setManualAmounts({});
@@ -583,7 +569,7 @@ export default function IncentivesManagement() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/incentives/tiers"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/incentives/bundle?yearMonth=${selectedMonth}`] });
       setShowNewTierDialog(false);
       setNewTier({ name: "", description: "", minAchievementPercent: "", maxAchievementPercent: "", rewardType: "fixed", fixedAmount: "", percentageRate: "", applicableTo: "all", sortOrder: "0" });
       toast({ title: "تم إنشاء مستوى الحافز بنجاح" });
@@ -619,7 +605,7 @@ export default function IncentivesManagement() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/incentives/awards"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/incentives/bundle?yearMonth=${selectedMonth}`] });
       toast({ title: "تم اعتماد الحافز بنجاح" });
     },
   });
@@ -631,7 +617,7 @@ export default function IncentivesManagement() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/incentives/awards"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/incentives/bundle?yearMonth=${selectedMonth}`] });
       toast({ title: "تم تسجيل صرف الحافز بنجاح" });
     },
   });
@@ -660,7 +646,7 @@ export default function IncentivesManagement() {
       await Promise.all(promises);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/incentives/awards"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/incentives/bundle?yearMonth=${selectedMonth}`] });
       setCalculatedAwards([]);
       toast({ title: "تم حفظ سجلات الحوافز بنجاح" });
     },
