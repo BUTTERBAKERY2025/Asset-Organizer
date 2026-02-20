@@ -140,6 +140,11 @@ export default function ProductsPage() {
 
   const handleEdit = (product: Product) => {
     setEditingProduct(product);
+    const vatRate = (product as any).vatRate ?? 0.15;
+    const vatRateStr = String(vatRate);
+    const basePrice = product.basePrice || 0;
+    const priceExclVat = basePrice > 0 ? parseFloat((basePrice / (1 + vatRate)).toFixed(2)) : 0;
+    const vatAmount = basePrice > 0 ? parseFloat((basePrice - priceExclVat).toFixed(2)) : 0;
     setFormData({
       name: product.name,
       nameEn: (product as any).nameEn || "",
@@ -147,10 +152,10 @@ export default function ProductsPage() {
       category: product.category,
       productType: (product as any).productType || "finish",
       unit: product.unit || "قطعة",
-      basePrice: product.basePrice?.toString() || "",
-      priceExclVat: (product as any).priceExclVat?.toString() || "",
-      vatAmount: (product as any).vatAmount?.toString() || "",
-      vatRate: (product as any).vatRate?.toString() || "0.15",
+      basePrice: basePrice ? basePrice.toString() : "",
+      priceExclVat: priceExclVat ? priceExclVat.toString() : "",
+      vatAmount: vatAmount ? vatAmount.toString() : "",
+      vatRate: vatRateStr,
     });
     setIsDialogOpen(true);
   };
@@ -158,14 +163,56 @@ export default function ProductsPage() {
   const handlePriceExclVatChange = (value: string) => {
     const priceExclVat = parseFloat(value) || 0;
     const vatRate = parseFloat(formData.vatRate) || 0.15;
-    const vatAmount = priceExclVat * vatRate;
-    const basePrice = priceExclVat + vatAmount;
+    const vatAmount = parseFloat((priceExclVat * vatRate).toFixed(2));
+    const basePrice = parseFloat((priceExclVat + vatAmount).toFixed(2));
     setFormData({
       ...formData,
       priceExclVat: value,
       vatAmount: vatAmount.toFixed(2),
       basePrice: basePrice.toFixed(2),
     });
+  };
+
+  const handleBasePriceChange = (value: string) => {
+    const basePrice = parseFloat(value) || 0;
+    const vatRate = parseFloat(formData.vatRate) || 0.15;
+    const priceExclVat = parseFloat((basePrice / (1 + vatRate)).toFixed(2));
+    const vatAmount = parseFloat((basePrice - priceExclVat).toFixed(2));
+    setFormData({
+      ...formData,
+      basePrice: value,
+      priceExclVat: priceExclVat.toFixed(2),
+      vatAmount: vatAmount.toFixed(2),
+    });
+  };
+
+  const handleVatRateChange = (value: string) => {
+    const vatRate = parseFloat(value) || 0;
+    const priceExclVat = parseFloat(formData.priceExclVat) || 0;
+    if (priceExclVat > 0) {
+      const vatAmount = parseFloat((priceExclVat * vatRate).toFixed(2));
+      const basePrice = parseFloat((priceExclVat + vatAmount).toFixed(2));
+      setFormData({
+        ...formData,
+        vatRate: value,
+        vatAmount: vatAmount.toFixed(2),
+        basePrice: basePrice.toFixed(2),
+      });
+    } else {
+      const basePrice = parseFloat(formData.basePrice) || 0;
+      if (basePrice > 0) {
+        const newPriceExclVat = parseFloat((basePrice / (1 + vatRate)).toFixed(2));
+        const newVatAmount = parseFloat((basePrice - newPriceExclVat).toFixed(2));
+        setFormData({
+          ...formData,
+          vatRate: value,
+          priceExclVat: newPriceExclVat.toFixed(2),
+          vatAmount: newVatAmount.toFixed(2),
+        });
+      } else {
+        setFormData({ ...formData, vatRate: value });
+      }
+    }
   };
 
   const filteredProducts = products.filter(p => {
@@ -337,9 +384,9 @@ export default function ProductsPage() {
                     </div>
                     <div>
                       <Label>نسبة الضريبة</Label>
-                      <Select value={formData.vatRate} onValueChange={v => setFormData({ ...formData, vatRate: v })}>
+                      <Select value={formData.vatRate} onValueChange={handleVatRateChange}>
                         <SelectTrigger className="h-11 sm:h-10">
-                          <SelectValue />
+                          <SelectValue placeholder="اختر نسبة الضريبة" />
                         </SelectTrigger>
                         <SelectContent className="max-h-60 overflow-y-auto">
                           <SelectItem value="0.15">15%</SelectItem>
@@ -376,8 +423,9 @@ export default function ProductsPage() {
                         type="number"
                         step="0.01"
                         value={formData.basePrice}
-                        readOnly
-                        className="bg-muted font-semibold h-11 sm:h-10"
+                        onChange={e => handleBasePriceChange(e.target.value)}
+                        placeholder="0.00"
+                        className="font-semibold h-11 sm:h-10"
                       />
                     </div>
                   </div>
