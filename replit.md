@@ -57,11 +57,13 @@ The system uses a modern web architecture with a React-based frontend and a Node
 - **Tiered Caching Strategy**: Five-tier cache system based on data volatility.
 - **Server-side Caching**: Memoized data fetchers and auth cache.
 - **Batch API**: POST /api/batch for combining multiple GET requests.
+- **Consolidated Reports Bundle**: GET /api/operations/reports-bundle combines 4+ data queries (operations report, cashier journals, cashiers, payment breakdowns) into single parallel request with selectable sections parameter.
 - **Gzip Compression**: All responses >1KB are compressed.
-- **Prefetch on Hover**: Navigation links prefetch API data.
+- **Prefetch on Hover**: Navigation links prefetch API data (heavy report endpoints excluded via SKIP_PREFETCH_ENDPOINTS).
 - **Database Indexes**: Composite indexes for common query patterns.
 - **N+1 Query Elimination**: Batch queries replace per-item loops.
 - **Slow Request Logging**: Logs requests >500ms.
+- **Report Cache TTLs**: Report endpoints cached at 60s server-side; static data (branches, cashiers) cached at 120s.
 
 ### System Design Choices
 - **Shared Schema**: `shared/` directory for database schema.

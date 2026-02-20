@@ -6634,6 +6634,12 @@ export async function registerRoutes(
       if (requestedSections.includes("cashiers")) {
         promises.push(
           (async () => {
+            const canViewAll = await canUserViewAllCashiers(req);
+            if (!canViewAll) {
+              const user = getCurrentUser(req);
+              result.cashiers = [{ id: user.id, username: user.username, firstName: user.firstName || null, lastName: user.lastName || null }];
+              return;
+            }
             const allUsers = await storage.getAllUsers();
             let filtered = allUsers;
             if (effectiveBranchId) {

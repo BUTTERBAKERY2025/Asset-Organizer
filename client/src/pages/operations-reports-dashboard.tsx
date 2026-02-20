@@ -755,7 +755,13 @@ export default function OperationsReportsDashboardPage() {
   }).toString();
 
   const needsPaymentBreakdowns = activeTab === 'apps' || filters.reportType === 'apps' || filters.reportType === 'all';
-  const bundleSections = ["report", "cashierJournals", "cashiers", ...(needsPaymentBreakdowns ? ["paymentBreakdowns"] : [])];
+  const needsCashierJournals = activeTab === 'cashier' || activeTab === 'overview' || activeTab === 'returns' || activeTab === 'discrepancies' || activeTab === 'apps';
+  const bundleSections = [
+    "report",
+    ...(needsCashierJournals ? ["cashierJournals"] : []),
+    "cashiers",
+    ...(needsPaymentBreakdowns ? ["paymentBreakdowns"] : []),
+  ];
   const bundleQueryString = `${queryString}${queryString ? '&' : ''}sections=${bundleSections.join(",")}`;
 
   const { data: bundle, isLoading, refetch } = useQuery<{
