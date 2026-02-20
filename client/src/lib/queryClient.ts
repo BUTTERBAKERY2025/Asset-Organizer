@@ -60,8 +60,9 @@ export const getQueryFn: <T>(options: {
   on401: UnauthorizedBehavior;
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
-  async ({ queryKey }) => {
-    const res = await deduplicatedFetch(queryKey.join("/") as string, {
+  async ({ queryKey, meta }) => {
+    const url = queryKey[0] as string;
+    const res = await deduplicatedFetch(url, {
       credentials: "include",
     });
 
@@ -72,6 +73,16 @@ export const getQueryFn: <T>(options: {
     await throwIfResNotOk(res);
     return await res.json();
   };
+
+export function getStaleTimeForEndpoint(url: string): number {
+  const basePath = url.split("?")[0];
+  for (const [pattern, time] of Object.entries(ENDPOINT_CACHE_TIERS)) {
+    if (basePath === pattern || basePath.startsWith(pattern + "/")) {
+      return time;
+    }
+  }
+  return CACHE_TIMES.MEDIUM;
+}
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -138,6 +149,18 @@ const ENDPOINT_CACHE_TIERS: Record<string, number> = {
   "/api/cashier-journals": CACHE_TIMES.DYNAMIC,
   "/api/command-center": CACHE_TIMES.DYNAMIC,
   "/api/active-notifications": CACHE_TIMES.SHORT,
+  "/api/operations/reports": CACHE_TIMES.MEDIUM,
+  "/api/operations/reports-bundle": CACHE_TIMES.MEDIUM,
+  "/api/operations/stats": CACHE_TIMES.MEDIUM,
+  "/api/reports/branch-overview": CACHE_TIMES.MEDIUM,
+  "/api/reports/executive-summary": CACHE_TIMES.MEDIUM,
+  "/api/reports/payment-mismatch": CACHE_TIMES.MEDIUM,
+  "/api/cashier-payment-breakdowns": CACHE_TIMES.MEDIUM,
+  "/api/branch-cashiers": CACHE_TIMES.LONG,
+  "/api/pos/report": CACHE_TIMES.SHORT,
+  "/api/pos/sales": CACHE_TIMES.SHORT,
+  "/api/targets/progress-summary": CACHE_TIMES.MEDIUM,
+  "/api/targets/leaderboard": CACHE_TIMES.MEDIUM,
 };
 
 // Endpoints that should NOT be prefetched on hover (large datasets)
@@ -147,6 +170,11 @@ const SKIP_PREFETCH_ENDPOINTS = new Set([
   "/api/warehouse-movement-logs",
   "/api/inventory",
   "/api/daily-production",
+  "/api/operations/reports-bundle",
+  "/api/operations/reports",
+  "/api/reports/branch-overview",
+  "/api/reports/executive-summary",
+  "/api/cashier-payment-breakdowns",
 ]);
 
 export function prefetchQuery(queryKey: string[]) {

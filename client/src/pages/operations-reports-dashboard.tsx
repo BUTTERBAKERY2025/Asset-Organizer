@@ -748,47 +748,32 @@ export default function OperationsReportsDashboardPage() {
     }
   }, [userBranchId, filters.branchId]);
 
-  // Query for users (cashiers) - uses branch-specific endpoint accessible to all authenticated users
-  const cashierBranchParam = filters.branchId ? `?branchId=${filters.branchId}` : "";
-  const { data: users } = useQuery<{ id: string; username: string; firstName: string | null; lastName: string | null }[]>({
-    queryKey: [`/api/branch-cashiers${cashierBranchParam}`],
-  });
-
   const queryString = new URLSearchParams({
     ...(filters.branchId && { branchId: filters.branchId }),
     ...(filters.startDate && { startDate: filters.startDate }),
     ...(filters.endDate && { endDate: filters.endDate }),
   }).toString();
 
-  const { data: report, isLoading, refetch } = useQuery<OperationsReport>({
-    queryKey: [`/api/operations/reports?${queryString}`],
+  const needsPaymentBreakdowns = activeTab === 'apps' || filters.reportType === 'apps' || filters.reportType === 'all';
+  const bundleSections = ["report", "cashierJournals", "cashiers", ...(needsPaymentBreakdowns ? ["paymentBreakdowns"] : [])];
+  const bundleQueryString = `${queryString}${queryString ? '&' : ''}sections=${bundleSections.join(",")}`;
+
+  const { data: bundle, isLoading, refetch } = useQuery<{
+    report?: OperationsReport;
+    cashierJournals?: CashierSalesJournal[];
+    cashiers?: { id: string; username: string; firstName: string | null; lastName: string | null }[];
+    paymentBreakdowns?: { paymentMethod: string; amount: number; transactionCount: number; branchId: string; journalDate: string }[];
+  }>({
+    queryKey: [`/api/operations/reports-bundle?${bundleQueryString}`],
     staleTime: 5 * 60 * 1000,
   });
 
-  const cashierQueryString = new URLSearchParams({
-    ...(filters.branchId && { branchId: filters.branchId }),
-    ...(filters.startDate && { startDate: filters.startDate }),
-    ...(filters.endDate && { endDate: filters.endDate }),
-  }).toString();
-
-  const { data: cashierJournals, isLoading: cashierJournalsLoading } = useQuery<CashierSalesJournal[]>({
-    queryKey: [`/api/cashier-journals?${cashierQueryString}`],
-    enabled: activeTab === 'cashier' || activeTab === 'overview' || activeTab === 'returns' || activeTab === 'discrepancies' || activeTab === 'apps',
-    staleTime: 5 * 60 * 1000,
-  });
-
-  // Query for payment breakdowns for apps report
-  const paymentBreakdownsQueryString = new URLSearchParams({
-    ...(filters.branchId && { branchId: filters.branchId }),
-    ...(filters.startDate && { startDate: filters.startDate }),
-    ...(filters.endDate && { endDate: filters.endDate }),
-  }).toString();
-
-  const { data: allPaymentBreakdowns, isLoading: paymentBreakdownsLoading } = useQuery<{ paymentMethod: string; amount: number; transactionCount: number; branchId: string; journalDate: string }[]>({
-    queryKey: [`/api/cashier-payment-breakdowns?${paymentBreakdownsQueryString}`],
-    enabled: activeTab === 'apps' || filters.reportType === 'apps' || filters.reportType === 'all',
-    staleTime: 2 * 60 * 1000,
-  });
+  const report = bundle?.report;
+  const cashierJournals = bundle?.cashierJournals;
+  const users = bundle?.cashiers;
+  const allPaymentBreakdowns = bundle?.paymentBreakdowns;
+  const cashierJournalsLoading = isLoading;
+  const paymentBreakdownsLoading = isLoading;
 
   // Get current month for targets
   const currentYearMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;

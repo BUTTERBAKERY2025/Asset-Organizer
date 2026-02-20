@@ -66,6 +66,18 @@ const ROUTE_TTL: Record<string, number> = {
   "/api/system-notifications": 60_000,
   "/api/active-notifications": 60_000,
   "/api/biometric-settings": 120_000,
+  "/api/operations/reports": 60_000,
+  "/api/operations/reports-bundle": 60_000,
+  "/api/operations/stats": 60_000,
+  "/api/reports/branch-overview": 60_000,
+  "/api/reports/executive-summary": 60_000,
+  "/api/reports/payment-mismatch": 60_000,
+  "/api/cashier-payment-breakdowns": 60_000,
+  "/api/branch-cashiers": 120_000,
+  "/api/pos/report": 60_000,
+  "/api/pos/sales": 45_000,
+  "/api/targets/progress-summary": 60_000,
+  "/api/targets/leaderboard": 60_000,
 };
 
 function getTTL(path: string): number {

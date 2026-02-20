@@ -6576,6 +6576,120 @@ export async function registerRoutes(
     }
   });
 
+  // ============================================================
+  // CONSOLIDATED Operations Reports Bundle - Single API call replaces 10+ individual calls
+  // ============================================================
+  app.get("/api/operations/reports-bundle", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
+    try {
+      const { branchId, startDate, endDate, sections } = req.query;
+      const queryBranchId = branchId as string | undefined;
+      const branchFilter = getEffectiveBranchFilter(req, queryBranchId);
+
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بالوصول" });
+      }
+
+      const requestedSections = sections ? (sections as string).split(",") : ["report", "cashierJournals", "cashiers"];
+      const effectiveBranchId = branchFilter.singleBranchId;
+      const result: Record<string, any> = {};
+
+      const promises: Promise<void>[] = [];
+
+      if (requestedSections.includes("report")) {
+        promises.push(
+          storage.getOperationsReport({
+            branchId: effectiveBranchId || undefined,
+            branchIds: branchFilter.branchIds || undefined,
+            startDate: startDate as string | undefined,
+            endDate: endDate as string | undefined,
+          }).then(r => { result.report = r; })
+        );
+      }
+
+      if (requestedSections.includes("cashierJournals")) {
+        promises.push(
+          (async () => {
+            let journals = await storage.getAllCashierJournals();
+            if (effectiveBranchId) {
+              journals = journals.filter(j => j.branchId === effectiveBranchId);
+            } else if (branchFilter.branchIds) {
+              journals = journals.filter(j => branchFilter.branchIds!.includes(j.branchId));
+            }
+            const canViewAll = await canUserViewAllCashiers(req);
+            if (!canViewAll) {
+              const user = getCurrentUser(req);
+              journals = journals.filter(j => String(j.cashierId) === String(user.id));
+            }
+            if (startDate && typeof startDate === 'string') {
+              journals = journals.filter(j => j.journalDate && j.journalDate >= (startDate as string));
+            }
+            if (endDate && typeof endDate === 'string') {
+              journals = journals.filter(j => j.journalDate && j.journalDate <= (endDate as string));
+            }
+            result.cashierJournals = journals;
+          })()
+        );
+      }
+
+      if (requestedSections.includes("cashiers")) {
+        promises.push(
+          (async () => {
+            const allUsers = await storage.getAllUsers();
+            let filtered = allUsers;
+            if (effectiveBranchId) {
+              filtered = allUsers.filter((u: any) => u.branchId === effectiveBranchId);
+            } else if (branchFilter.branchIds) {
+              filtered = allUsers.filter((u: any) => u.branchId && branchFilter.branchIds!.includes(u.branchId));
+            }
+            result.cashiers = filtered.map((u: any) => ({ id: u.id, username: u.username, firstName: u.firstName, lastName: u.lastName }));
+          })()
+        );
+      }
+
+      if (requestedSections.includes("paymentBreakdowns")) {
+        promises.push(
+          (async () => {
+            let journals = await storage.getAllCashierJournals();
+            if (effectiveBranchId) {
+              journals = journals.filter(j => j.branchId === effectiveBranchId);
+            } else if (branchFilter.branchIds) {
+              journals = journals.filter(j => branchFilter.branchIds!.includes(j.branchId));
+            }
+            const canViewAll = await canUserViewAllCashiers(req);
+            if (!canViewAll) {
+              const user = getCurrentUser(req);
+              journals = journals.filter(j => String(j.cashierId) === String(user.id));
+            }
+            if (startDate && typeof startDate === 'string') {
+              journals = journals.filter(j => j.journalDate && j.journalDate >= (startDate as string));
+            }
+            if (endDate && typeof endDate === 'string') {
+              journals = journals.filter(j => j.journalDate && j.journalDate <= (endDate as string));
+            }
+            const journalIds = journals.map(j => j.id);
+            if (journalIds.length === 0) {
+              result.paymentBreakdowns = [];
+              return;
+            }
+            const breakdownPromises = journalIds.map(async (journalId) => {
+              const breakdowns = await storage.getPaymentBreakdowns(journalId);
+              const journal = journals.find(j => j.id === journalId);
+              return breakdowns.map(b => ({ ...b, branchId: journal?.branchId, journalDate: journal?.journalDate }));
+            });
+            const arrays = await Promise.all(breakdownPromises);
+            result.paymentBreakdowns = arrays.flat();
+          })()
+        );
+      }
+
+      await Promise.all(promises);
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching operations reports bundle:", error);
+      res.status(500).json({ error: "Failed to fetch operations reports bundle" });
+    }
+  });
+
   // Branch Overview Report - Asset Readiness, Inventory, Maintenance
   app.get("/api/reports/branch-overview", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
