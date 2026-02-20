@@ -1298,6 +1298,22 @@ export interface IStorage {
   createHeldOrder(data: InsertPosHeldOrder): Promise<PosHeldOrder>;
   getHeldOrders(branchId: string): Promise<PosHeldOrder[]>;
   deleteHeldOrder(id: number): Promise<boolean>;
+
+  getPosSalesReport(branchId: string, startDate: string, endDate: string): Promise<{
+    totalSales: number;
+    totalTransactions: number;
+    cashTotal: number;
+    networkTotal: number;
+    splitTotal: number;
+    voidedCount: number;
+    voidedAmount: number;
+    refundedCount: number;
+    refundedAmount: number;
+    discountTotal: number;
+    vatTotal: number;
+    dailySales: { date: string; sales: number; transactions: number }[];
+    paymentBreakdown: { method: string; amount: number; count: number }[];
+  }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -14210,6 +14226,62 @@ export class DatabaseStorage implements IStorage {
   async deleteHeldOrder(id: number): Promise<boolean> {
     const result = await db.delete(posHeldOrders).where(eq(posHeldOrders.id, id)).returning();
     return result.length > 0;
+  }
+
+  async getPosSalesReport(branchId: string, startDate: string, endDate: string): Promise<any> {
+    const summaryResult = await db.execute(sql`
+      SELECT 
+        COALESCE(SUM(CASE WHEN status = 'completed' THEN total_amount ELSE 0 END), 0) as "totalSales",
+        COALESCE(SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END), 0) as "totalTransactions",
+        COALESCE(SUM(CASE WHEN status = 'completed' AND payment_method = 'cash' THEN total_amount ELSE 0 END), 0) as "cashTotal",
+        COALESCE(SUM(CASE WHEN status = 'completed' AND payment_method = 'network' THEN total_amount ELSE 0 END), 0) as "networkTotal",
+        COALESCE(SUM(CASE WHEN status = 'completed' AND payment_method = 'split' THEN total_amount ELSE 0 END), 0) as "splitTotal",
+        COALESCE(SUM(CASE WHEN status = 'voided' THEN 1 ELSE 0 END), 0) as "voidedCount",
+        COALESCE(SUM(CASE WHEN status = 'voided' THEN total_amount ELSE 0 END), 0) as "voidedAmount",
+        COALESCE(SUM(CASE WHEN status = 'refunded' THEN 1 ELSE 0 END), 0) as "refundedCount",
+        COALESCE(SUM(CASE WHEN status = 'refunded' THEN total_amount ELSE 0 END), 0) as "refundedAmount",
+        COALESCE(SUM(CASE WHEN status = 'completed' THEN COALESCE(discount_amount, 0) ELSE 0 END), 0) as "discountTotal",
+        COALESCE(SUM(CASE WHEN status = 'completed' THEN COALESCE(vat_amount, 0) ELSE 0 END), 0) as "vatTotal"
+      FROM pos_sales 
+      WHERE branch_id = ${branchId} AND sale_date >= ${startDate} AND sale_date <= ${endDate}
+    `);
+    const summary: any = (summaryResult as any).rows?.[0] || summaryResult[0] || {};
+
+    const dailyResult = await db.execute(sql`
+      SELECT sale_date as "date", 
+        COALESCE(SUM(total_amount), 0) as "sales",
+        COUNT(*) as "transactions"
+      FROM pos_sales 
+      WHERE branch_id = ${branchId} AND sale_date >= ${startDate} AND sale_date <= ${endDate} AND status = 'completed'
+      GROUP BY sale_date ORDER BY sale_date
+    `);
+    const dailySalesRows: any[] = (dailyResult as any).rows || dailyResult || [];
+
+    const paymentResult = await db.execute(sql`
+      SELECT payment_method as "method",
+        COALESCE(SUM(total_amount), 0) as "amount",
+        COUNT(*) as "count"
+      FROM pos_sales 
+      WHERE branch_id = ${branchId} AND sale_date >= ${startDate} AND sale_date <= ${endDate} AND status = 'completed'
+      GROUP BY payment_method
+    `);
+    const paymentRows: any[] = (paymentResult as any).rows || paymentResult || [];
+
+    return {
+      totalSales: Number(summary.totalSales) || 0,
+      totalTransactions: Number(summary.totalTransactions) || 0,
+      cashTotal: Number(summary.cashTotal) || 0,
+      networkTotal: Number(summary.networkTotal) || 0,
+      splitTotal: Number(summary.splitTotal) || 0,
+      voidedCount: Number(summary.voidedCount) || 0,
+      voidedAmount: Number(summary.voidedAmount) || 0,
+      refundedCount: Number(summary.refundedCount) || 0,
+      refundedAmount: Number(summary.refundedAmount) || 0,
+      discountTotal: Number(summary.discountTotal) || 0,
+      vatTotal: Number(summary.vatTotal) || 0,
+      dailySales: Array.isArray(dailySalesRows) ? dailySalesRows.map((r: any) => ({ date: r.date, sales: Number(r.sales) || 0, transactions: Number(r.transactions) || 0 })) : [],
+      paymentBreakdown: Array.isArray(paymentRows) ? paymentRows.map((r: any) => ({ method: r.method, amount: Number(r.amount) || 0, count: Number(r.count) || 0 })) : [],
+    };
   }
 }
 

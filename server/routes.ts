@@ -29440,6 +29440,22 @@ export async function registerRoutes(
     }
   });
 
+  // Event POS Report for Operations Dashboard
+  app.get("/api/pos/report/:branchId", isAuthenticated, requirePermission("event_pos", "view"), async (req, res) => {
+    try {
+      const branchId = req.params.branchId;
+      if (!await canAccessBranch(req, branchId)) {
+        return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
+      }
+      const startDate = (req.query.startDate as string) || new Date().toISOString().slice(0, 10);
+      const endDate = (req.query.endDate as string) || new Date().toISOString().slice(0, 10);
+      const report = await storage.getPosSalesReport(branchId, startDate, endDate);
+      res.json(report);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   return httpServer;
 }
 

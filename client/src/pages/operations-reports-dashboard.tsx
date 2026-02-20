@@ -19,7 +19,7 @@ import {
   CheckCircle, XCircle, Clock, AlertTriangle, Download, Wallet, CreditCard, Truck,
   Building2, Activity, Target, Package, FileText, Eye, Image, FileDown, Filter,
   Calendar, RefreshCw, Printer, ExternalLink, Receipt, ClipboardList, PieChart as PieChartIcon,
-  Gift, Trophy, User, ChevronDown, ArrowRight
+  Gift, Trophy, User, ChevronDown, ArrowRight, Zap
 } from "lucide-react";
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -80,6 +80,7 @@ const REPORT_TYPES = [
   { value: "shifts", label: "تقارير الورديات", icon: Clock },
   { value: "production", label: "تقارير الإنتاج", icon: Factory },
   { value: "quality", label: "تقارير الجودة", icon: CheckCircle },
+  { value: "event-pos", label: "إيفنت موسمي", icon: Zap },
 ];
 
 const DELIVERY_APPS = [
@@ -814,6 +815,26 @@ export default function OperationsReportsDashboardPage() {
     },
     enabled: activeTab === 'targets',
     staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: eventPosReport, isLoading: eventPosLoading } = useQuery<{
+    totalSales: number;
+    totalTransactions: number;
+    cashTotal: number;
+    networkTotal: number;
+    splitTotal: number;
+    voidedCount: number;
+    voidedAmount: number;
+    refundedCount: number;
+    refundedAmount: number;
+    discountTotal: number;
+    vatTotal: number;
+    dailySales: { date: string; sales: number; transactions: number }[];
+    paymentBreakdown: { method: string; amount: number; count: number }[];
+  }>({
+    queryKey: [`/api/pos/report/EVENT-BB?startDate=${filters.startDate || ''}&endDate=${filters.endDate || ''}`],
+    enabled: activeTab === 'event-pos',
+    staleTime: 2 * 60 * 1000,
   });
 
   // Query for targets leaderboard - lazy load when targets tab is active
@@ -1657,8 +1678,10 @@ export default function OperationsReportsDashboardPage() {
         return ["production"];
       case "apps":
         return ["apps"];
+      case "event-pos":
+        return ["event-pos"];
       default:
-        return ["overview", "sales", "targets", "production", "shifts", "cashier", "apps", "returns", "discrepancies", "payment-mismatch", "branches", "executive"];
+        return ["overview", "sales", "targets", "production", "shifts", "cashier", "apps", "returns", "discrepancies", "payment-mismatch", "branches", "event-pos", "executive"];
     }
   };
 
@@ -2109,6 +2132,13 @@ export default function OperationsReportsDashboardPage() {
                     <TabsTrigger value="branches" data-testid="tab-branches" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-cyan-100 data-[state=active]:text-cyan-800">
                       <Building2 className="w-4 h-4" />
                       الفروع
+                    </TabsTrigger>
+                  )}
+                  {visibleTabs.includes("event-pos") && (
+                    <TabsTrigger value="event-pos" data-testid="tab-event-pos" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-orange-100 data-[state=active]:text-orange-800">
+                      <Zap className="w-4 h-4" />
+                      <span className="hidden sm:inline">إيفنت موسمي</span>
+                      <span className="sm:hidden">إيفنت</span>
                     </TabsTrigger>
                   )}
                   {visibleTabs.includes("executive") && (
@@ -6439,6 +6469,145 @@ export default function OperationsReportsDashboardPage() {
                     <FileText className="w-12 h-12 text-muted-foreground" />
                     <p className="text-muted-foreground">لا توجد بيانات تنفيذية متاحة</p>
                   </CardContent>
+                </Card>
+              )}
+            </TabsContent>
+
+            <TabsContent value="event-pos" className="space-y-6">
+              {eventPosLoading ? (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {[1,2,3,4].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}
+                </div>
+              ) : eventPosReport ? (
+                <>
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                    <KPICard
+                      title="إجمالي المبيعات"
+                      value={`${eventPosReport.totalSales.toFixed(2)} ر.س`}
+                      icon={DollarSign}
+                      color="text-green-600"
+                      bgColor="bg-green-100"
+                    />
+                    <KPICard
+                      title="عدد الفواتير"
+                      value={eventPosReport.totalTransactions}
+                      icon={Receipt}
+                      color="text-blue-600"
+                      bgColor="bg-blue-100"
+                    />
+                    <KPICard
+                      title="مبيعات نقدية"
+                      value={`${eventPosReport.cashTotal.toFixed(2)} ر.س`}
+                      icon={Wallet}
+                      color="text-emerald-600"
+                      bgColor="bg-emerald-100"
+                    />
+                    <KPICard
+                      title="مبيعات شبكة"
+                      value={`${eventPosReport.networkTotal.toFixed(2)} ر.س`}
+                      icon={CreditCard}
+                      color="text-blue-600"
+                      bgColor="bg-blue-100"
+                    />
+                    <KPICard
+                      title="متوسط الفاتورة"
+                      value={`${eventPosReport.totalTransactions > 0 ? (eventPosReport.totalSales / eventPosReport.totalTransactions).toFixed(2) : '0.00'} ر.س`}
+                      icon={TrendingUp}
+                      color="text-amber-600"
+                      bgColor="bg-amber-100"
+                    />
+                    <KPICard
+                      title="ضريبة القيمة المضافة"
+                      value={`${eventPosReport.vatTotal.toFixed(2)} ر.س`}
+                      icon={FileText}
+                      color="text-purple-600"
+                      bgColor="bg-purple-100"
+                    />
+                  </div>
+
+                  {(eventPosReport.voidedCount > 0 || eventPosReport.refundedCount > 0 || eventPosReport.discountTotal > 0) && (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {eventPosReport.discountTotal > 0 && (
+                        <KPICard title="إجمالي الخصومات" value={`${eventPosReport.discountTotal.toFixed(2)} ر.س`} icon={Gift} color="text-red-600" bgColor="bg-red-100" />
+                      )}
+                      {eventPosReport.voidedCount > 0 && (
+                        <KPICard title="فواتير ملغاة" value={`${eventPosReport.voidedCount} (${eventPosReport.voidedAmount.toFixed(2)} ر.س)`} icon={XCircle} color="text-red-600" bgColor="bg-red-100" />
+                      )}
+                      {eventPosReport.refundedCount > 0 && (
+                        <KPICard title="فواتير مسترجعة" value={`${eventPosReport.refundedCount} (${eventPosReport.refundedAmount.toFixed(2)} ر.س)`} icon={Receipt} color="text-amber-600" bgColor="bg-amber-100" />
+                      )}
+                      {eventPosReport.splitTotal > 0 && (
+                        <KPICard title="دفع مقسم" value={`${eventPosReport.splitTotal.toFixed(2)} ر.س`} icon={Activity} color="text-purple-600" bgColor="bg-purple-100" />
+                      )}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {eventPosReport.dailySales.length > 0 && (
+                      <Card>
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm font-bold flex items-center gap-2">
+                            <BarChart3 className="w-4 h-4 text-orange-500" />
+                            المبيعات اليومية
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <ResponsiveContainer width="100%" height={280}>
+                            <BarChart data={eventPosReport.dailySales}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                              <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+                              <YAxis tick={{ fontSize: 10 }} />
+                              <Tooltip formatter={(v: any) => `${Number(v).toFixed(2)} ر.س`} />
+                              <Bar dataKey="sales" fill="#f97316" radius={[4, 4, 0, 0]} name="المبيعات" />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {eventPosReport.paymentBreakdown.length > 0 && (
+                      <Card>
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm font-bold flex items-center gap-2">
+                            <PieChartIcon className="w-4 h-4 text-orange-500" />
+                            توزيع طرق الدفع
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <ResponsiveContainer width="100%" height={280}>
+                            <PieChart>
+                              <Pie
+                                data={eventPosReport.paymentBreakdown.map(p => ({
+                                  ...p,
+                                  name: p.method === 'cash' ? 'نقد' : p.method === 'network' ? 'شبكة' : 'مقسم'
+                                }))}
+                                dataKey="amount"
+                                nameKey="name"
+                                cx="50%"
+                                cy="50%"
+                                outerRadius={100}
+                                label={({ name, percent }: any) => `${name} ${(percent * 100).toFixed(0)}%`}
+                              >
+                                {eventPosReport.paymentBreakdown.map((_: any, index: number) => (
+                                  <Cell key={`cell-${index}`} fill={["#10B981", "#3B82F6", "#8B5CF6"][index % 3]} />
+                                ))}
+                              </Pie>
+                              <Tooltip formatter={(v: any) => `${Number(v).toFixed(2)} ر.س`} />
+                              <Legend />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <Card className="p-12">
+                  <div className="text-center text-muted-foreground">
+                    <Zap className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                    <p className="font-bold">لا توجد بيانات مبيعات إيفنت موسمي</p>
+                    <p className="text-sm mt-1">اختر نطاق تاريخ مناسب لعرض التقرير</p>
+                  </div>
                 </Card>
               )}
             </TabsContent>
