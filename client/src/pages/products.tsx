@@ -128,7 +128,7 @@ export default function ProductsPage() {
       priceExclVat: formData.priceExclVat ? parseFloat(formData.priceExclVat) : null,
       vatAmount: formData.vatAmount ? parseFloat(formData.vatAmount) : null,
       vatRate: formData.vatRate ? parseFloat(formData.vatRate) : 0.15,
-      isActive: true,
+      isActive: "true",
     };
 
     if (editingProduct) {

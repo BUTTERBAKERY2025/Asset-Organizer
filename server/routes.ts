@@ -3973,7 +3973,11 @@ export async function registerRoutes(
 
   app.post("/api/products", isAuthenticated, requirePermission("operations", "create"), async (req, res) => {
     try {
-      const validatedData = insertProductSchema.parse(req.body);
+      const body = { ...req.body };
+      if (typeof body.isActive === 'boolean') {
+        body.isActive = body.isActive ? "true" : "false";
+      }
+      const validatedData = insertProductSchema.parse(body);
       const product = await storage.createProduct(validatedData);
       res.status(201).json(product);
     } catch (error) {
@@ -3985,7 +3989,11 @@ export async function registerRoutes(
   app.patch("/api/products/:id", isAuthenticated, requirePermission("operations", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
-      const product = await storage.updateProduct(id, req.body);
+      const body = { ...req.body };
+      if (typeof body.isActive === 'boolean') {
+        body.isActive = body.isActive ? "true" : "false";
+      }
+      const product = await storage.updateProduct(id, body);
       if (!product) {
         return res.status(404).json({ error: "Product not found" });
       }
