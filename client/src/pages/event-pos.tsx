@@ -98,6 +98,7 @@ export default function EventPosPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<string>("cash");
+  const [cardType, setCardType] = useState<string>("mada");
   const [amountPaid, setAmountPaid] = useState<string>("");
   const [showCheckout, setShowCheckout] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
@@ -336,6 +337,7 @@ export default function EventPosPage() {
         discountValue: discountType ? (parseFloat(discountValue) || 0) : 0,
         discountAmount: cartTotal.discount,
         paymentMethod: finalPaymentMethod,
+        cardType: (finalPaymentMethod === "network" || finalPaymentMethod === "split") ? cardType : null,
         cashAmount: cashAmt,
         networkAmount: networkAmt,
         amountPaid: splitMode ? cartTotal.total : (paymentMethod === "cash" ? parseFloat(amountPaid) || cartTotal.total : cartTotal.total),
@@ -362,6 +364,7 @@ export default function EventPosPage() {
         vatRate: item.vatRate,
         totalPrice: Math.round(item.unitPrice * item.quantity * 100) / 100,
       })), paymentMethod: splitMode ? "split" : paymentMethod, 
+        cardType: (splitMode || paymentMethod === "network") ? cardType : null,
         amountPaid: splitMode ? cartTotal.total : (parseFloat(amountPaid) || cartTotal.total), 
         changeAmount: splitMode ? 0 : changeAmount,
         cashAmount: splitMode ? (parseFloat(cashSplitAmount) || 0) : (paymentMethod === "cash" ? cartTotal.total : 0),
@@ -1076,6 +1079,29 @@ export default function EventPosPage() {
                     <span className="text-xl font-black text-blue-700">{networkSplitAmount.toFixed(2)} ر.س</span>
                   </div>
                 </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-gray-600 block">نوع البطاقة</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => setCardType("mada")}
+                      className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95 touch-manipulation border-2 ${
+                        cardType === "mada" ? "bg-green-50 border-green-500 text-green-700" : "bg-white border-gray-200 text-gray-600"
+                      }`}
+                      data-testid="button-split-card-mada"
+                    >
+                      <CreditCard className="w-4 h-4" /> مدى
+                    </button>
+                    <button
+                      onClick={() => setCardType("visa_mastercard")}
+                      className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95 touch-manipulation border-2 ${
+                        cardType === "visa_mastercard" ? "bg-blue-50 border-blue-500 text-blue-700" : "bg-white border-gray-200 text-gray-600"
+                      }`}
+                      data-testid="button-split-card-visa"
+                    >
+                      <CreditCard className="w-4 h-4" /> فيزا / ماستركارد
+                    </button>
+                  </div>
+                </div>
                 <div className="grid grid-cols-4 gap-2">
                   {[10, 20, 50, 100].map(v => (
                     <button key={v} onClick={() => setCashSplitAmount(String(v))} className="py-3 rounded-xl text-[14px] font-bold bg-gray-100 hover:bg-green-100 hover:text-green-700 transition-colors active:scale-95 touch-manipulation" data-testid={`button-split-quick-${v}`}>{v}</button>
@@ -1104,6 +1130,33 @@ export default function EventPosPage() {
                     <CreditCard className="w-6 h-6" /> شبكة
                   </button>
                 </div>
+                {paymentMethod === "network" && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-bold text-gray-600 block">نوع البطاقة</label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        onClick={() => setCardType("mada")}
+                        className={`flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-bold transition-all active:scale-95 touch-manipulation border-2 ${
+                          cardType === "mada" ? "bg-green-50 border-green-500 text-green-700 shadow-md" : "bg-white border-gray-200 text-gray-600 hover:border-green-300"
+                        }`}
+                        data-testid="button-card-mada"
+                      >
+                        <CreditCard className="w-5 h-5" />
+                        مدى
+                      </button>
+                      <button
+                        onClick={() => setCardType("visa_mastercard")}
+                        className={`flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm font-bold transition-all active:scale-95 touch-manipulation border-2 ${
+                          cardType === "visa_mastercard" ? "bg-blue-50 border-blue-500 text-blue-700 shadow-md" : "bg-white border-gray-200 text-gray-600 hover:border-blue-300"
+                        }`}
+                        data-testid="button-card-visa"
+                      >
+                        <CreditCard className="w-5 h-5" />
+                        فيزا / ماستركارد
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {paymentMethod === "cash" && (
                   <div className="space-y-4">
                     <div>
@@ -1254,6 +1307,12 @@ export default function EventPosPage() {
                     <td style={{ textAlign: "right", padding: "2px 2px" }}>طريقة الدفع</td>
                     <td style={{ textAlign: "left", padding: "2px 2px", fontWeight: "600", whiteSpace: "nowrap" }}>{lastSale.paymentMethod === "cash" ? "نقد" : lastSale.paymentMethod === "network" ? "شبكة" : "نقد + شبكة"}</td>
                   </tr>
+                  {lastSale.cardType && (lastSale.paymentMethod === "network" || lastSale.paymentMethod === "split") && (
+                    <tr>
+                      <td style={{ textAlign: "right", padding: "2px 2px" }}>نوع البطاقة</td>
+                      <td style={{ textAlign: "left", padding: "2px 2px", fontWeight: "600", whiteSpace: "nowrap" }}>{lastSale.cardType === "mada" ? "مدى" : "فيزا / ماستركارد"}</td>
+                    </tr>
+                  )}
                   {lastSale.paymentMethod === "split" && (
                     <>
                       <tr>

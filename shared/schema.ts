@@ -8924,6 +8924,7 @@ export const posSales = pgTable("pos_sales", {
   paymentMethod: text("payment_method").notNull(),
   cashAmount: doublePrecision("cash_amount").default(0),
   networkAmount: doublePrecision("network_amount").default(0),
+  cardType: text("card_type"),
   amountPaid: doublePrecision("amount_paid").default(0),
   changeAmount: doublePrecision("change_amount").default(0),
   customerName: text("customer_name"),
