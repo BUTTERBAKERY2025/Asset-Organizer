@@ -185,3 +185,21 @@
     --tw-shadow-colored: 0 0 #0000;
   }
 }
+
+.page-content {
+  contain: layout style;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 500px;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.transition-all {
+  transition-duration: 100ms !important;
+}
+
+.transition-colors {
+  transition-duration: 75ms !important;
+}
