@@ -822,6 +822,7 @@ export default function OperationsReportsDashboardPage() {
     vatTotal: number;
     dailySales: { date: string; sales: number; transactions: number }[];
     paymentBreakdown: { method: string; amount: number; count: number }[];
+    productSales: { productId: number; productName: string; totalQuantity: number; totalRevenue: number; totalVat: number; invoiceCount: number; avgPrice: number }[];
   }>({
     queryKey: [`/api/pos/report/EVENT-BB?startDate=${filters.startDate || ''}&endDate=${filters.endDate || ''}`],
     enabled: activeTab === 'event-pos',
@@ -6591,6 +6592,135 @@ export default function OperationsReportsDashboardPage() {
                       </Card>
                     )}
                   </div>
+
+                  {eventPosReport.productSales && eventPosReport.productSales.length > 0 && (
+                    <>
+                      <Card>
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm font-bold flex items-center gap-2">
+                            <Package className="w-4 h-4 text-orange-500" />
+                            المبيعات حسب المنتجات
+                          </CardTitle>
+                          <CardDescription>تفاصيل المنتجات المباعة في إيفنت موسمي</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm" dir="rtl">
+                              <thead>
+                                <tr className="border-b border-gray-200">
+                                  <th className="text-right py-3 px-3 font-bold text-gray-600">#</th>
+                                  <th className="text-right py-3 px-3 font-bold text-gray-600">المنتج</th>
+                                  <th className="text-center py-3 px-3 font-bold text-gray-600">الكمية المباعة</th>
+                                  <th className="text-center py-3 px-3 font-bold text-gray-600">عدد الفواتير</th>
+                                  <th className="text-center py-3 px-3 font-bold text-gray-600">متوسط السعر</th>
+                                  <th className="text-center py-3 px-3 font-bold text-gray-600">الضريبة</th>
+                                  <th className="text-left py-3 px-3 font-bold text-gray-600">إجمالي المبيعات</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {eventPosReport.productSales.map((p, idx) => {
+                                  const maxRevenue = Math.max(...eventPosReport.productSales.map(ps => ps.totalRevenue));
+                                  const barWidth = maxRevenue > 0 ? (p.totalRevenue / maxRevenue) * 100 : 0;
+                                  return (
+                                    <tr key={p.productId} className="border-b border-gray-100 hover:bg-orange-50/50 transition-colors">
+                                      <td className="py-2.5 px-3 text-gray-400 text-xs">{idx + 1}</td>
+                                      <td className="py-2.5 px-3">
+                                        <div className="font-bold text-gray-800">{p.productName}</div>
+                                      </td>
+                                      <td className="py-2.5 px-3 text-center">
+                                        <Badge variant="secondary" className="bg-blue-100 text-blue-700 font-bold">{p.totalQuantity}</Badge>
+                                      </td>
+                                      <td className="py-2.5 px-3 text-center text-gray-600">{p.invoiceCount}</td>
+                                      <td className="py-2.5 px-3 text-center text-gray-600">{p.avgPrice.toFixed(2)} ر.س</td>
+                                      <td className="py-2.5 px-3 text-center text-gray-500">{p.totalVat.toFixed(2)}</td>
+                                      <td className="py-2.5 px-3 text-left">
+                                        <div className="flex items-center gap-2">
+                                          <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                            <div className="h-full bg-gradient-to-l from-orange-500 to-amber-400 rounded-full" style={{ width: `${barWidth}%` }} />
+                                          </div>
+                                          <span className="font-black text-orange-600 whitespace-nowrap">{p.totalRevenue.toFixed(2)} ر.س</span>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                              <tfoot>
+                                <tr className="border-t-2 border-gray-300 bg-gray-50">
+                                  <td colSpan={2} className="py-3 px-3 font-black text-gray-700">الإجمالي</td>
+                                  <td className="py-3 px-3 text-center font-black text-blue-700">
+                                    {eventPosReport.productSales.reduce((s, p) => s + p.totalQuantity, 0)}
+                                  </td>
+                                  <td className="py-3 px-3 text-center font-bold text-gray-600">
+                                    {eventPosReport.productSales.reduce((s, p) => s + p.invoiceCount, 0)}
+                                  </td>
+                                  <td className="py-3 px-3"></td>
+                                  <td className="py-3 px-3 text-center font-bold text-gray-600">
+                                    {eventPosReport.productSales.reduce((s, p) => s + p.totalVat, 0).toFixed(2)}
+                                  </td>
+                                  <td className="py-3 px-3 text-left font-black text-orange-600">
+                                    {eventPosReport.productSales.reduce((s, p) => s + p.totalRevenue, 0).toFixed(2)} ر.س
+                                  </td>
+                                </tr>
+                              </tfoot>
+                            </table>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <Card>
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-bold flex items-center gap-2">
+                              <BarChart3 className="w-4 h-4 text-orange-500" />
+                              أعلى المنتجات مبيعاً (حسب الإيرادات)
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <ResponsiveContainer width="100%" height={300}>
+                              <BarChart data={eventPosReport.productSales.slice(0, 10)} layout="vertical">
+                                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                                <XAxis type="number" tick={{ fontSize: 10 }} />
+                                <YAxis dataKey="productName" type="category" width={100} tick={{ fontSize: 10 }} />
+                                <Tooltip formatter={(v: any) => `${Number(v).toFixed(2)} ر.س`} />
+                                <Bar dataKey="totalRevenue" fill="#f97316" radius={[0, 4, 4, 0]} name="الإيرادات" />
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </CardContent>
+                        </Card>
+
+                        <Card>
+                          <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-bold flex items-center gap-2">
+                              <PieChartIcon className="w-4 h-4 text-orange-500" />
+                              توزيع المبيعات حسب المنتج
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <ResponsiveContainer width="100%" height={300}>
+                              <PieChart>
+                                <Pie
+                                  data={eventPosReport.productSales.slice(0, 8).map(p => ({ name: p.productName, value: p.totalRevenue }))}
+                                  dataKey="value"
+                                  nameKey="name"
+                                  cx="50%"
+                                  cy="50%"
+                                  outerRadius={100}
+                                  label={({ name, percent }: any) => `${name} ${(percent * 100).toFixed(0)}%`}
+                                >
+                                  {eventPosReport.productSales.slice(0, 8).map((_: any, index: number) => (
+                                    <Cell key={`cell-prod-${index}`} fill={COLORS[index % COLORS.length]} />
+                                  ))}
+                                </Pie>
+                                <Tooltip formatter={(v: any) => `${Number(v).toFixed(2)} ر.س`} />
+                                <Legend />
+                              </PieChart>
+                            </ResponsiveContainer>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    </>
+                  )}
                 </>
               ) : (
                 <Card className="p-12">

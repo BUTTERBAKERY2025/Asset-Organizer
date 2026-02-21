@@ -14267,6 +14267,23 @@ export class DatabaseStorage implements IStorage {
     `);
     const paymentRows: any[] = (paymentResult as any).rows || paymentResult || [];
 
+    const productSalesResult = await db.execute(sql`
+      SELECT 
+        psi.product_id as "productId",
+        psi.product_name as "productName",
+        SUM(psi.quantity) as "totalQuantity",
+        SUM(psi.total_price) as "totalRevenue",
+        SUM(psi.vat_amount) as "totalVat",
+        COUNT(DISTINCT psi.sale_id) as "invoiceCount",
+        ROUND(AVG(psi.unit_price)::numeric, 2) as "avgPrice"
+      FROM pos_sale_items psi
+      INNER JOIN pos_sales ps ON psi.sale_id = ps.id
+      WHERE ps.branch_id = ${branchId} AND ps.sale_date >= ${startDate} AND ps.sale_date <= ${endDate} AND ps.status = 'completed'
+      GROUP BY psi.product_id, psi.product_name
+      ORDER BY SUM(psi.total_price) DESC
+    `);
+    const productSalesRows: any[] = (productSalesResult as any).rows || productSalesResult || [];
+
     return {
       totalSales: Number(summary.totalSales) || 0,
       totalTransactions: Number(summary.totalTransactions) || 0,
@@ -14281,6 +14298,15 @@ export class DatabaseStorage implements IStorage {
       vatTotal: Number(summary.vatTotal) || 0,
       dailySales: Array.isArray(dailySalesRows) ? dailySalesRows.map((r: any) => ({ date: r.date, sales: Number(r.sales) || 0, transactions: Number(r.transactions) || 0 })) : [],
       paymentBreakdown: Array.isArray(paymentRows) ? paymentRows.map((r: any) => ({ method: r.method, amount: Number(r.amount) || 0, count: Number(r.count) || 0 })) : [],
+      productSales: Array.isArray(productSalesRows) ? productSalesRows.map((r: any) => ({
+        productId: Number(r.productId) || 0,
+        productName: r.productName || '',
+        totalQuantity: Number(r.totalQuantity) || 0,
+        totalRevenue: Number(r.totalRevenue) || 0,
+        totalVat: Number(r.totalVat) || 0,
+        invoiceCount: Number(r.invoiceCount) || 0,
+        avgPrice: Number(r.avgPrice) || 0,
+      })) : [],
     };
   }
 }
