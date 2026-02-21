@@ -1,5 +1,7 @@
-const CACHE_NAME = 'butter-assets-v1';
-const OFFLINE_URL = '/offline.html';
+const CACHE_NAME = 'butter-v2';
+const STATIC_CACHE = 'butter-static-v2';
+const FONT_CACHE = 'butter-fonts-v1';
+const API_CACHE = 'butter-api-v1';
 
 const STATIC_ASSETS = [
   '/',
@@ -8,9 +10,12 @@ const STATIC_ASSETS = [
   '/favicon.png'
 ];
 
+const API_CACHE_MAX_AGE = 30 * 1000;
+const API_CACHE_MAX_ITEMS = 100;
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
+    caches.open(STATIC_CACHE).then((cache) => {
       return cache.addAll(STATIC_ASSETS);
     })
   );
@@ -18,11 +23,12 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
+  const keepCaches = [CACHE_NAME, STATIC_CACHE, FONT_CACHE, API_CACHE];
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames
-          .filter((name) => name !== CACHE_NAME)
+          .filter((name) => !keepCaches.includes(name))
           .map((name) => caches.delete(name))
       );
     })
@@ -31,18 +37,49 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET') {
+  if (event.request.method !== 'GET') return;
+  const url = new URL(event.request.url);
+
+  if (url.origin === 'https://fonts.googleapis.com' || url.origin === 'https://fonts.gstatic.com') {
+    event.respondWith(
+      caches.open(FONT_CACHE).then((cache) => {
+        return cache.match(event.request).then((cached) => {
+          if (cached) return cached;
+          return fetch(event.request).then((response) => {
+            if (response.ok) cache.put(event.request, response.clone());
+            return response;
+          });
+        });
+      })
+    );
     return;
   }
 
-  if (event.request.url.includes('/api/')) {
+  if (url.pathname.startsWith('/assets/') && url.pathname.match(/\.[a-f0-9]{8,}\./)) {
+    event.respondWith(
+      caches.open(STATIC_CACHE).then((cache) => {
+        return cache.match(event.request).then((cached) => {
+          if (cached) return cached;
+          return fetch(event.request).then((response) => {
+            if (response.ok) cache.put(event.request, response.clone());
+            return response;
+          });
+        });
+      })
+    );
+    return;
+  }
+
+  if (url.pathname.startsWith('/api/')) {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseClone);
-          });
+          if (response.ok) {
+            const responseClone = response.clone();
+            caches.open(API_CACHE).then((cache) => {
+              cache.put(event.request, responseClone);
+            });
+          }
           return response;
         })
         .catch(() => {
@@ -56,18 +93,19 @@ self.addEventListener('fetch', (event) => {
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {
         fetch(event.request).then((response) => {
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, response);
-          });
-        });
+          if (response.ok) {
+            caches.open(STATIC_CACHE).then((cache) => {
+              cache.put(event.request, response);
+            });
+          }
+        }).catch(() => {});
         return cachedResponse;
       }
-
       return fetch(event.request)
         .then((response) => {
-          if (response.status === 200) {
+          if (response.ok && response.status === 200) {
             const responseClone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => {
+            caches.open(STATIC_CACHE).then((cache) => {
               cache.put(event.request, responseClone);
             });
           }
@@ -75,7 +113,7 @@ self.addEventListener('fetch', (event) => {
         })
         .catch(() => {
           if (event.request.mode === 'navigate') {
-            return caches.match(OFFLINE_URL);
+            return caches.match('/offline.html') || caches.match('/');
           }
         });
     })
@@ -89,24 +127,5 @@ self.addEventListener('sync', (event) => {
 });
 
 async function syncPendingData() {
-  const pendingData = await getPendingDataFromIndexedDB();
-  for (const item of pendingData) {
-    try {
-      await fetch(item.url, {
-        method: item.method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(item.data)
-      });
-      await removePendingDataFromIndexedDB(item.id);
-    } catch (error) {
-      console.log('Sync failed for item:', item.id);
-    }
-  }
-}
-
-async function getPendingDataFromIndexedDB() {
-  return [];
-}
-
-async function removePendingDataFromIndexedDB(id) {
+  return;
 }
