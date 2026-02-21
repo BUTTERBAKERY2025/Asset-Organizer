@@ -101,7 +101,7 @@ import { authRateLimiter, biometricRateLimiter, uploadRateLimiter, apiRateLimite
 import { registerGovernanceRoutes } from "./governance-routes";
 import { registerSocialResponsibilityRoutes } from "./social-responsibility-routes";
 import { registerSecurityRoutes } from "./security-routes";
-import { apiCacheMiddleware, invalidateCacheForPath } from "./api-cache";
+import { apiCacheMiddleware, invalidateCacheForPath, jsonSlimMiddleware } from "./api-cache";
 import { registerBatchRoute } from "./batch-api";
 
 // Normalize date to YYYY-MM-DD format
@@ -148,6 +148,7 @@ export async function registerRoutes(
     }
     next();
   });
+  app.use(jsonSlimMiddleware);
   app.use(apiCacheMiddleware);
 
   const BATCH_ALLOWED_PREFIXES = [

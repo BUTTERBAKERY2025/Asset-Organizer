@@ -3,4 +3,14 @@ import App from "./App";
 import "./index.css";
 import "./lib/i18n";
 
-createRoot(document.getElementById("root")!).render(<App />);
+const root = createRoot(document.getElementById("root")!);
+root.render(<App />);
+
+const loader = document.getElementById("initial-loader");
+if (loader) {
+  requestAnimationFrame(() => {
+    loader.style.transition = "opacity 150ms";
+    loader.style.opacity = "0";
+    setTimeout(() => loader.remove(), 150);
+  });
+}

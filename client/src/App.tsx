@@ -142,21 +142,21 @@ function AppLoadingFallback() {
   );
 }
 
-function PageLoadingFallback() {
+const PageLoadingFallback = React.memo(function PageLoadingFallback() {
   return (
     <div className="p-6 space-y-4 animate-pulse" dir="rtl">
       <div className="h-8 w-48 bg-muted rounded-lg" />
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {[...Array(3)].map((_, i) => (
-          <div key={i} className="h-28 bg-card rounded-xl shadow-sm border border-border/30" />
-        ))}
+        <div className="h-28 bg-card rounded-xl shadow-sm border border-border/30" />
+        <div className="h-28 bg-card rounded-xl shadow-sm border border-border/30" />
+        <div className="h-28 bg-card rounded-xl shadow-sm border border-border/30" />
       </div>
       <div className="h-64 bg-card rounded-xl shadow-sm border border-border/30" />
     </div>
   );
-}
+});
 
-function ProtectedPage({ component: Component }: { component: React.ComponentType }) {
+const ProtectedPage = React.memo(function ProtectedPage({ component: Component }: { component: React.ComponentType }) {
   return (
     <ProtectedRoute>
       <Suspense fallback={<PageLoadingFallback />}>
@@ -164,9 +164,9 @@ function ProtectedPage({ component: Component }: { component: React.ComponentTyp
       </Suspense>
     </ProtectedRoute>
   );
-}
+});
 
-function ModulePage({ component: Component, module }: { component: React.ComponentType; module: SystemModule }) {
+const ModulePage = React.memo(function ModulePage({ component: Component, module }: { component: React.ComponentType; module: SystemModule }) {
   return (
     <ModuleProtectedRoute module={module}>
       <Suspense fallback={<PageLoadingFallback />}>
@@ -174,9 +174,9 @@ function ModulePage({ component: Component, module }: { component: React.Compone
       </Suspense>
     </ModuleProtectedRoute>
   );
-}
+});
 
-function AdminPage({ component: Component, module }: { component: React.ComponentType; module?: SystemModule }) {
+const AdminPage = React.memo(function AdminPage({ component: Component, module }: { component: React.ComponentType; module?: SystemModule }) {
   if (module) {
     return (
       <ModuleProtectedRoute module={module} requiredRole="admin">
@@ -193,9 +193,9 @@ function AdminPage({ component: Component, module }: { component: React.Componen
       </Suspense>
     </ProtectedRoute>
   );
-}
+});
 
-function Router() {
+const Router = React.memo(function Router() {
   return (
     <Switch>
       <Route path="/">{() => <ProtectedPage component={PlatformHomePage} />}</Route>
@@ -358,7 +358,7 @@ function Router() {
       <Route component={NotFound} />
     </Switch>
   );
-}
+});
 
 function App() {
   useEffect(() => {

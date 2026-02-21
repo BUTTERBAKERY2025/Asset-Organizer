@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 
 let preloadHeaders: string[] = [];
+let indexHtmlCache: Buffer | null = null;
 
 function buildPreloadHeaders(distPath: string) {
   const assetsPath = path.join(distPath, "assets");
@@ -12,10 +13,23 @@ function buildPreloadHeaders(distPath: string) {
   const mainJs = files.find(f => f.startsWith("index-") && f.endsWith(".js"));
   const mainCss = files.find(f => f.startsWith("index-") && f.endsWith(".css"));
   const layoutJs = files.find(f => f.startsWith("layout-") && f.endsWith(".js"));
+  const reactDomJs = files.find(f => f.startsWith("react-dom-") && f.endsWith(".js"));
+  const reactCoreJs = files.find(f => f.startsWith("react-core-") && f.endsWith(".js"));
+  const routerJs = files.find(f => f.startsWith("router-") && f.endsWith(".js"));
   
   if (mainCss) preloadHeaders.push(`</assets/${mainCss}>; rel=preload; as=style`);
-  if (mainJs) preloadHeaders.push(`</assets/${mainJs}>; rel=preload; as=script; crossorigin`);
-  if (layoutJs) preloadHeaders.push(`</assets/${layoutJs}>; rel=preload; as=script; crossorigin`);
+  if (reactCoreJs) preloadHeaders.push(`</assets/${reactCoreJs}>; rel=modulepreload`);
+  if (reactDomJs) preloadHeaders.push(`</assets/${reactDomJs}>; rel=modulepreload`);
+  if (mainJs) preloadHeaders.push(`</assets/${mainJs}>; rel=modulepreload`);
+  if (layoutJs) preloadHeaders.push(`</assets/${layoutJs}>; rel=modulepreload`);
+  if (routerJs) preloadHeaders.push(`</assets/${routerJs}>; rel=modulepreload`);
+}
+
+function cacheIndexHtml(distPath: string) {
+  const indexPath = path.resolve(distPath, "index.html");
+  if (fs.existsSync(indexPath)) {
+    indexHtmlCache = fs.readFileSync(indexPath);
+  }
 }
 
 export function serveStatic(app: Express) {
@@ -27,6 +41,7 @@ export function serveStatic(app: Express) {
   }
 
   buildPreloadHeaders(distPath);
+  cacheIndexHtml(distPath);
 
   const assetsPath = path.join(distPath, "assets");
   if (fs.existsSync(assetsPath)) {
@@ -41,6 +56,7 @@ export function serveStatic(app: Express) {
   app.use(express.static(distPath, {
     maxAge: "1h",
     etag: true,
+    index: false,
   }));
 
   app.use("*", (_req, res) => {
@@ -50,9 +66,14 @@ export function serveStatic(app: Express) {
       return res.sendFile(publicFilePath);
     }
     res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
     if (preloadHeaders.length > 0) {
       res.setHeader("Link", preloadHeaders.join(", "));
     }
-    res.sendFile(path.resolve(distPath, "index.html"));
+    if (indexHtmlCache) {
+      res.send(indexHtmlCache);
+    } else {
+      res.sendFile(path.resolve(distPath, "index.html"));
+    }
   });
 }

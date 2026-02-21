@@ -14,7 +14,14 @@ const app = express();
 const httpServer = createServer(app);
 
 app.set('trust proxy', 1);
-app.use(compression({ threshold: 512, level: 6 }));
+app.use(compression({
+  threshold: 256,
+  level: 6,
+  filter: (req, res) => {
+    if (req.headers['x-no-compression']) return false;
+    return compression.filter(req, res);
+  },
+}));
 app.use(securityHeaders);
 app.use('/api/', (req, res, next) => {
   if (req.path.startsWith('/public/') && req.method === 'GET') {

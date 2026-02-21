@@ -271,3 +271,7 @@ export function getCacheStats() {
     maxSize: MAX_CACHE_SIZE,
   };
 }
+
+export function jsonSlimMiddleware(_req: Request, _res: Response, next: NextFunction) {
+  next();
+}
