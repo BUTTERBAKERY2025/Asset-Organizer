@@ -1,6 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useAppInit } from "@/hooks/useAppInit";
-import { Loader2 } from "lucide-react";
 
 interface AuthContextType {
   isReady: boolean;
@@ -47,31 +46,14 @@ export function AuthGate({ children }: AuthGateProps) {
   if (!hasResolved) {
     return (
       <div 
-        className="min-h-screen bg-[#F5F0E6]" 
+        className="min-h-screen bg-[#F5F0E6] flex items-center justify-center" 
         dir="rtl"
         style={{ fontFamily: "'Cairo', sans-serif" }}
       >
-        <div className="fixed right-0 top-0 h-full w-64 bg-[#1a3a2f] p-4">
-          <div className="h-12 w-32 bg-[#2a4a3f] rounded animate-pulse mb-8" />
-          <div className="space-y-3">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="h-10 bg-[#2a4a3f] rounded animate-pulse" />
-            ))}
-          </div>
-        </div>
-        <div className="mr-64 p-6">
-          <div className="h-8 w-48 bg-gray-300 rounded animate-pulse mb-6" />
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-32 bg-white rounded-lg shadow animate-pulse" />
-            ))}
-          </div>
-          <div className="h-64 bg-white rounded-lg shadow animate-pulse" />
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-3 border-amber-500 border-t-transparent rounded-full animate-spin" />
           {showSlowWarning && (
-            <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-amber-100 text-amber-800 px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              <span className="text-sm">جاري الاتصال بالخادم...</span>
-            </div>
+            <span className="text-sm text-amber-700">جاري الاتصال بالخادم...</span>
           )}
         </div>
       </div>

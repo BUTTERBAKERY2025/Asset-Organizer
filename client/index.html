@@ -37,28 +37,13 @@
   </head>
   <body>
     <div id="root">
-      <div id="initial-loader" style="min-height:100vh;display:flex;background:#F5F0E6;font-family:'Cairo',sans-serif;direction:rtl">
-        <div style="width:288px;background:#fff;border-left:1px solid #e8e0d0;padding:16px;display:none" id="il-side">
-          <div class="sk" style="height:40px;border-radius:8px;margin-bottom:24px"></div>
-          <div class="sk" style="height:36px;border-radius:8px;margin-bottom:12px"></div>
-          <div class="sk" style="height:36px;border-radius:8px;margin-bottom:12px"></div>
-          <div class="sk" style="height:36px;border-radius:8px;margin-bottom:12px"></div>
-          <div class="sk" style="height:36px;border-radius:8px;margin-bottom:12px"></div>
-          <div class="sk" style="height:36px;border-radius:8px;margin-bottom:12px"></div>
-          <div class="sk" style="height:36px;border-radius:8px;margin-bottom:12px"></div>
-        </div>
-        <div style="flex:1;padding:24px">
-          <div class="sk" style="height:32px;width:200px;border-radius:8px;margin-bottom:24px"></div>
-          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px">
-            <div class="sk" style="height:100px;border-radius:12px"></div>
-            <div class="sk" style="height:100px;border-radius:12px"></div>
-            <div class="sk" style="height:100px;border-radius:12px"></div>
-          </div>
-          <div class="sk" style="height:250px;border-radius:12px"></div>
+      <div id="initial-loader" style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#F5F0E6;font-family:'Cairo',sans-serif;direction:rtl">
+        <div style="text-align:center">
+          <div style="width:40px;height:40px;border:3px solid #d4a853;border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite;margin:0 auto"></div>
         </div>
       </div>
     </div>
-    <script>if(window.innerWidth>=768)document.getElementById('il-side').style.display='block'</script>
+    <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
     <script type="module" src="/src/main.tsx"></script>
     <script>
       if ('serviceWorker' in navigator) {

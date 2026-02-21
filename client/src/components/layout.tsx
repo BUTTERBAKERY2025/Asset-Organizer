@@ -88,17 +88,34 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const handleLinkHover = useCallback((href: string) => {
     preloadRoute(href);
     const apiMap: Record<string, string[]> = {
+      "/": ["/api/command-center"],
+      "/dashboard": ["/api/dashboard/stats"],
+      "/inventory": ["/api/inventory"],
+      "/branches": ["/api/branches"],
+      "/maintenance": ["/api/maintenance-records"],
+      "/users": ["/api/users"],
+      "/construction-projects": ["/api/construction-projects"],
+      "/contractors": ["/api/contractors"],
+      "/operations": ["/api/operations/products"],
+      "/products": ["/api/operations/products", "/api/product-categories"],
+      "/cashier-journals": ["/api/branch-cashiers"],
+      "/branch-daily-closures": ["/api/branches"],
+      "/sales-analytics": ["/api/branches", "/api/branch-cashiers"],
+      "/targets-planning": ["/api/targets"],
+      "/targets-dashboard": ["/api/targets/progress-summary"],
+      "/branch-employees": ["/api/branch-employees"],
+      "/shift-management": ["/api/shifts"],
       "/marketing": ["/api/marketing/campaigns", "/api/marketing/influencers"],
       "/marketing-campaigns": ["/api/marketing/campaigns"],
       "/marketing-influencers": ["/api/marketing/influencers"],
       "/influencer-contracts": ["/api/marketing/influencer-contracts"],
-      "/inventory": ["/api/inventory"],
-      "/dashboard": ["/api/dashboard/stats"],
-      "/construction-projects": ["/api/construction-projects"],
-      "/operations": ["/api/operations/products"],
-      "/warehouse": ["/api/warehouse/items", "/api/warehouse/dashboard-stats"],
-      "/transfer-requests": ["/api/warehouse/material-requests"],
+      "/warehouse": ["/api/warehouse/items"],
+      "/transfer-requests": ["/api/transfer-requests"],
       "/warehouse-inventory": ["/api/warehouse/items"],
+      "/documents": ["/api/documents"],
+      "/rbac-management": ["/api/roles", "/api/permissions"],
+      "/settings": ["/api/branches"],
+      "/event-pos": ["/api/branches"],
     };
     const queries = apiMap[href];
     if (queries) {
@@ -650,7 +667,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto scroll-smooth safe-area-inset-bottom page-content">
+        <div key={location} className="flex-1 overflow-auto scroll-smooth safe-area-inset-bottom page-content page-enter">
           {children}
         </div>
       </main>
