@@ -617,23 +617,23 @@ export default function EventPosPage() {
       </header>
 
       {/* Main Content Area */}
-      <div className="flex-1 overflow-hidden px-6 py-4">
-      <div className="max-w-6xl mx-auto h-full flex gap-4 overflow-hidden">
+      <div className="flex-1 overflow-hidden px-3 py-2 md:px-4 md:py-3">
+      <div className="max-w-[1400px] mx-auto h-full flex gap-3 overflow-hidden">
         {/* RIGHT: Products Section */}
         <div className="flex-1 flex flex-col overflow-hidden bg-white rounded-2xl shadow-sm border border-gray-200">
-          <div className="px-5 pt-4 pb-2 shrink-0">
+          <div className="px-3 pt-3 pb-1.5 shrink-0">
             <div className="relative">
-              <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input
                 placeholder="ابحث عن منتج بالاسم أو الفئة..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="pr-12 pl-10 bg-white border-gray-200 h-[52px] text-[15px] rounded-2xl shadow-sm focus:shadow-md transition-shadow"
+                className="pr-10 pl-9 bg-white border-gray-200 h-10 text-[13px] rounded-xl shadow-sm focus:shadow-md transition-shadow"
                 data-testid="input-search-product"
               />
               {searchQuery && (
-                <button onClick={() => setSearchQuery("")} className="absolute left-4 top-1/2 -translate-y-1/2 w-7 h-7 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center transition-colors" data-testid="button-clear-search">
-                  <X className="w-4 h-4 text-gray-500" />
+                <button onClick={() => setSearchQuery("")} className="absolute left-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center transition-colors" data-testid="button-clear-search">
+                  <X className="w-3.5 h-3.5 text-gray-500" />
                 </button>
               )}
             </div>
@@ -644,16 +644,16 @@ export default function EventPosPage() {
               <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
                 <button
                   onClick={() => setSelectedCategory("all")}
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-[13px] font-bold whitespace-nowrap transition-all active:scale-95 touch-manipulation border ${
+                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[12px] font-bold whitespace-nowrap transition-all active:scale-95 touch-manipulation border ${
                     selectedCategory === "all"
-                      ? "bg-gray-900 text-white border-gray-900 shadow-lg shadow-gray-900/20"
+                      ? "bg-gray-900 text-white border-gray-900 shadow-md"
                       : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
                   }`}
                   data-testid="category-all"
                 >
-                  <Sparkles className="w-3.5 h-3.5" />
+                  <Sparkles className="w-3 h-3" />
                   الكل
-                  <span className={`text-[11px] font-bold ${selectedCategory === "all" ? "text-gray-400" : "text-gray-400"}`}>
+                  <span className={`text-[10px] font-bold ${selectedCategory === "all" ? "text-gray-400" : "text-gray-400"}`}>
                     {filteredProducts.length}
                   </span>
                 </button>
@@ -664,14 +664,14 @@ export default function EventPosPage() {
                     <button
                       key={cat}
                       onClick={() => setSelectedCategory(cat)}
-                      className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-[13px] font-bold whitespace-nowrap transition-all active:scale-95 touch-manipulation border ${
+                      className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[12px] font-bold whitespace-nowrap transition-all active:scale-95 touch-manipulation border ${
                         selectedCategory === cat
-                          ? "bg-orange-500 text-white border-orange-500 shadow-lg shadow-orange-500/20"
+                          ? "bg-orange-500 text-white border-orange-500 shadow-md"
                           : "bg-white text-gray-600 border-gray-200 hover:border-orange-300"
                       }`}
                       data-testid={`category-${cat}`}
                     >
-                      <IconComp className="w-3.5 h-3.5" />
+                      <IconComp className="w-3 h-3" />
                       {cat}
                       <span className={`text-[11px] font-bold ${selectedCategory === cat ? "text-orange-200" : "text-gray-400"}`}>
                         {count}
@@ -709,7 +709,7 @@ export default function EventPosPage() {
                 )}
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5">
                 {displayProducts.map((bp: BranchProductWithDetails) => {
                   const price = bp.priceOverride ?? bp.product?.basePrice ?? 0;
                   const inCart = cart.find(c => c.productId === bp.productId);
@@ -717,34 +717,34 @@ export default function EventPosPage() {
                     <button
                       key={bp.id}
                       onClick={() => addToCart(bp)}
-                      className={`group relative bg-white rounded-[20px] p-5 text-center transition-all duration-200 active:scale-[0.96] select-none touch-manipulation ${
+                      className={`group relative bg-white rounded-xl p-2.5 text-center transition-all duration-150 active:scale-[0.96] select-none touch-manipulation ${
                         inCart 
-                          ? "ring-[3px] ring-orange-400 shadow-xl shadow-orange-100/60" 
-                          : "shadow-sm hover:shadow-lg border border-gray-100 hover:border-orange-200"
+                          ? "ring-2 ring-orange-400 shadow-lg shadow-orange-100/60" 
+                          : "shadow-sm hover:shadow-md border border-gray-100 hover:border-orange-200"
                       }`}
                       data-testid={`product-card-${bp.productId}`}
                     >
                       {inCart && (
-                        <div className="absolute -top-2 -left-2 min-w-[32px] h-8 bg-orange-500 text-white rounded-xl text-sm px-2 flex items-center justify-center font-black shadow-lg shadow-orange-300/50 z-10">
+                        <div className="absolute -top-1.5 -left-1.5 min-w-[24px] h-6 bg-orange-500 text-white rounded-lg text-[11px] px-1.5 flex items-center justify-center font-black shadow-md shadow-orange-300/50 z-10">
                           {inCart.quantity}
                         </div>
                       )}
-                      <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-3 transition-colors ${
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center mx-auto mb-1.5 transition-colors ${
                         inCart 
-                          ? "bg-orange-500 shadow-md shadow-orange-200" 
+                          ? "bg-orange-500 shadow-sm" 
                           : "bg-gradient-to-br from-orange-50 to-amber-50 group-hover:from-orange-100 group-hover:to-amber-100"
                       }`}>
-                        <Package className={`w-8 h-8 ${inCart ? "text-white" : "text-orange-400"}`} />
+                        <Package className={`w-5 h-5 ${inCart ? "text-white" : "text-orange-400"}`} />
                       </div>
-                      <div className="text-[15px] font-bold text-gray-800 mb-1 line-clamp-2 leading-snug min-h-[40px] flex items-center justify-center">
+                      <div className="text-[12px] font-bold text-gray-800 mb-0.5 line-clamp-2 leading-tight min-h-[32px] flex items-center justify-center">
                         {bp.product?.name}
                       </div>
-                      <div className="text-[11px] text-gray-400 mb-3 font-medium">{bp.product?.category}</div>
-                      <div className={`rounded-xl py-2.5 px-4 transition-colors ${
+                      <div className="text-[10px] text-gray-400 mb-1.5 font-medium">{bp.product?.category}</div>
+                      <div className={`rounded-lg py-1.5 px-2 transition-colors ${
                         inCart ? "bg-orange-50 border border-orange-200" : "bg-gray-50"
                       }`}>
-                        <span className="text-orange-600 font-black text-xl">{price.toFixed(2)}</span>
-                        <span className="text-[11px] text-orange-400 mr-1 font-bold">ر.س</span>
+                        <span className="text-orange-600 font-black text-[15px]">{price.toFixed(2)}</span>
+                        <span className="text-[10px] text-orange-400 mr-0.5 font-bold">ر.س</span>
                       </div>
                     </button>
                   );
@@ -755,15 +755,15 @@ export default function EventPosPage() {
         </div>
 
         {/* LEFT: Cart Panel */}
-        <div className="w-[340px] bg-white flex flex-col rounded-2xl shadow-sm border border-gray-200 shrink-0 overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 bg-orange-100 rounded-xl flex items-center justify-center">
-                <ShoppingCart className="w-5 h-5 text-orange-600" />
+        <div className="w-[300px] bg-white flex flex-col rounded-2xl shadow-sm border border-gray-200 shrink-0 overflow-hidden">
+          <div className="px-3 py-2.5 border-b border-gray-100 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
+                <ShoppingCart className="w-4 h-4 text-orange-600" />
               </div>
               <div>
-                <h2 className="font-black text-[15px] text-gray-800 leading-tight">الطلب الحالي</h2>
-                <p className="text-[11px] text-gray-400 mt-0.5">
+                <h2 className="font-black text-[13px] text-gray-800 leading-tight">الطلب الحالي</h2>
+                <p className="text-[10px] text-gray-400 mt-0.5">
                   {cartItemsCount > 0 ? `${cartItemsCount} صنف` : "لا توجد أصناف"}
                 </p>
               </div>
@@ -794,30 +794,30 @@ export default function EventPosPage() {
           {/* Cart Items */}
           <div className="flex-1 overflow-y-auto">
             {cart.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full px-6">
-                <div className="w-20 h-20 bg-gray-50 rounded-[1.5rem] flex items-center justify-center mb-4">
-                  <ShoppingCart className="w-10 h-10 text-gray-200" />
+              <div className="flex flex-col items-center justify-center h-full px-4">
+                <div className="w-14 h-14 bg-gray-50 rounded-xl flex items-center justify-center mb-3">
+                  <ShoppingCart className="w-7 h-7 text-gray-200" />
                 </div>
-                <p className="text-[15px] font-bold text-gray-300 mb-1">السلة فارغة</p>
-                <p className="text-[12px] text-gray-300 text-center">اضغط على أي منتج لإضافته للطلب</p>
-                <div className="mt-4 flex gap-2 text-[10px] text-gray-300">
-                  <span className="bg-gray-100 px-2 py-1 rounded">F1 إتمام</span>
-                  <span className="bg-gray-100 px-2 py-1 rounded">F2 تعليق</span>
-                  <span className="bg-gray-100 px-2 py-1 rounded">F3 معلق</span>
+                <p className="text-[13px] font-bold text-gray-300 mb-1">السلة فارغة</p>
+                <p className="text-[11px] text-gray-300 text-center">اضغط على أي منتج لإضافته للطلب</p>
+                <div className="mt-3 flex gap-1.5 text-[9px] text-gray-300">
+                  <span className="bg-gray-100 px-1.5 py-0.5 rounded">F1 إتمام</span>
+                  <span className="bg-gray-100 px-1.5 py-0.5 rounded">F2 تعليق</span>
+                  <span className="bg-gray-100 px-1.5 py-0.5 rounded">F3 معلق</span>
                 </div>
               </div>
             ) : (
-              <div className="p-3 space-y-1.5">
+              <div className="p-2 space-y-1">
                 {cart.map((item) => (
                   <div 
                     key={item.productId} 
-                    className="bg-gray-50/80 rounded-2xl p-3.5 transition-all" 
+                    className="bg-gray-50/80 rounded-xl p-2.5 transition-all" 
                     data-testid={`cart-item-${item.productId}`}
                   >
-                    <div className="flex items-start justify-between mb-2.5">
-                      <div className="flex-1 min-w-0 ml-2">
-                        <div className="text-[13px] font-bold text-gray-800 truncate leading-tight">{item.productName}</div>
-                        <div className="text-[11px] text-gray-400 mt-0.5">{item.unitPrice.toFixed(2)} ر.س / وحدة</div>
+                    <div className="flex items-start justify-between mb-1.5">
+                      <div className="flex-1 min-w-0 ml-1.5">
+                        <div className="text-[12px] font-bold text-gray-800 truncate leading-tight">{item.productName}</div>
+                        <div className="text-[10px] text-gray-400 mt-0.5">{item.unitPrice.toFixed(2)} ر.س</div>
                       </div>
                       <button 
                         onClick={() => removeFromCart(item.productId)} 
@@ -863,17 +863,17 @@ export default function EventPosPage() {
 
           {/* Cart Footer */}
           <div className="border-t border-gray-100 shrink-0">
-            <div className="px-5 py-3 space-y-1.5 bg-gray-50/50">
-              <div className="flex justify-between text-[12px]">
+            <div className="px-3 py-2 space-y-1 bg-gray-50/50">
+              <div className="flex justify-between text-[11px]">
                 <span className="text-gray-400">المجموع بدون ضريبة</span>
                 <span className="text-gray-500 font-bold">{cartTotal.subtotal.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-[12px]">
+              <div className="flex justify-between text-[11px]">
                 <span className="text-gray-400">ضريبة القيمة المضافة 15%</span>
                 <span className="text-gray-500 font-bold">{cartTotal.vat.toFixed(2)}</span>
               </div>
               {cartTotal.discount > 0 && (
-                <div className="flex justify-between text-[12px]">
+                <div className="flex justify-between text-[11px]">
                   <span className="text-red-400 flex items-center gap-1">
                     <Percent className="w-3 h-3" />
                     خصم {discountType === "percentage" ? `${discountValue}%` : "ثابت"}
@@ -881,39 +881,39 @@ export default function EventPosPage() {
                   <span className="text-red-500 font-bold">-{cartTotal.discount.toFixed(2)}</span>
                 </div>
               )}
-              <div className="flex justify-between items-center pt-2 border-t border-gray-200">
-                <span className="text-[15px] font-black text-gray-800">الإجمالي</span>
-                <span className="text-[22px] font-black text-orange-600" data-testid="text-cart-total">
-                  {cartTotal.total.toFixed(2)} <span className="text-[12px]">ر.س</span>
+              <div className="flex justify-between items-center pt-1.5 border-t border-gray-200">
+                <span className="text-[13px] font-black text-gray-800">الإجمالي</span>
+                <span className="text-[18px] font-black text-orange-600" data-testid="text-cart-total">
+                  {cartTotal.total.toFixed(2)} <span className="text-[11px]">ر.س</span>
                 </span>
               </div>
             </div>
 
-            <div className="p-4 space-y-3">
+            <div className="p-3 space-y-2">
               {/* Discount + Split buttons */}
               <div className="flex gap-2">
                 <button
                   onClick={() => setShowDiscount(true)}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[12px] font-bold transition-all active:scale-95 touch-manipulation border ${
+                  className={`flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-[11px] font-bold transition-all active:scale-95 touch-manipulation border ${
                     discountType
                       ? "bg-red-50 text-red-600 border-red-200"
                       : "bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100"
                   }`}
                   data-testid="button-discount"
                 >
-                  <Percent className="w-3.5 h-3.5" />
+                  <Percent className="w-3 h-3" />
                   {discountType ? `خصم ${cartTotal.discount.toFixed(0)} ر.س` : "خصم"}
                 </button>
                 <button
                   onClick={() => { setSplitMode(!splitMode); if (!splitMode) setPaymentMethod("split"); else setPaymentMethod("cash"); }}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[12px] font-bold transition-all active:scale-95 touch-manipulation border ${
+                  className={`flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-[11px] font-bold transition-all active:scale-95 touch-manipulation border ${
                     splitMode
                       ? "bg-purple-50 text-purple-600 border-purple-200"
                       : "bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100"
                   }`}
                   data-testid="button-split-payment"
                 >
-                  <SplitSquareHorizontal className="w-3.5 h-3.5" />
+                  <SplitSquareHorizontal className="w-3 h-3" />
                   {splitMode ? "دفع مقسم" : "تقسيم"}
                 </button>
               </div>
@@ -923,33 +923,33 @@ export default function EventPosPage() {
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={() => setPaymentMethod("cash")}
-                    className={`flex items-center justify-center gap-2 py-3.5 rounded-2xl text-[14px] font-bold transition-all active:scale-95 touch-manipulation ${
+                    className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[12px] font-bold transition-all active:scale-95 touch-manipulation ${
                       paymentMethod === "cash"
-                        ? "bg-green-500 text-white shadow-lg shadow-green-500/25"
+                        ? "bg-green-500 text-white shadow-md shadow-green-500/25"
                         : "bg-gray-100 text-gray-500 hover:bg-gray-200"
                     }`}
                     data-testid="button-payment-cash"
                   >
-                    <Banknote className="w-5 h-5" />
+                    <Banknote className="w-4 h-4" />
                     نقد
                   </button>
                   <button
                     onClick={() => setPaymentMethod("network")}
-                    className={`flex items-center justify-center gap-2 py-3.5 rounded-2xl text-[14px] font-bold transition-all active:scale-95 touch-manipulation ${
+                    className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[12px] font-bold transition-all active:scale-95 touch-manipulation ${
                       paymentMethod === "network"
-                        ? "bg-blue-500 text-white shadow-lg shadow-blue-500/25"
+                        ? "bg-blue-500 text-white shadow-md shadow-blue-500/25"
                         : "bg-gray-100 text-gray-500 hover:bg-gray-200"
                     }`}
                     data-testid="button-payment-network"
                   >
-                    <CreditCard className="w-5 h-5" />
+                    <CreditCard className="w-4 h-4" />
                     شبكة
                   </button>
                 </div>
               )}
 
               <button
-                className="w-full bg-gradient-to-l from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 disabled:from-gray-200 disabled:to-gray-300 disabled:text-gray-400 text-white font-black text-[16px] py-4 rounded-2xl flex items-center justify-center gap-2.5 transition-all shadow-lg shadow-orange-500/20 disabled:shadow-none active:scale-[0.97] touch-manipulation"
+                className="w-full bg-gradient-to-l from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 disabled:from-gray-200 disabled:to-gray-300 disabled:text-gray-400 text-white font-black text-[14px] py-3 rounded-xl flex items-center justify-center gap-2 transition-all shadow-md shadow-orange-500/20 disabled:shadow-none active:scale-[0.97] touch-manipulation"
                 disabled={cart.length === 0 || createSaleMutation.isPending}
                 onClick={handleCheckout}
                 data-testid="button-checkout"
