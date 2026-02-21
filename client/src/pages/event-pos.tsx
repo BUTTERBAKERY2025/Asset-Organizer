@@ -443,10 +443,6 @@ export default function EventPosPage() {
         .receipt-print, .receipt-print * { visibility: visible !important; box-sizing: border-box !important; }
         .receipt-print { position: absolute !important; top: 0 !important; right: 0 !important; left: 0 !important; width: 100% !important; max-width: 80mm !important; margin: 0 !important; padding: 2mm 3mm !important; font-size: 9px !important; line-height: 1.3 !important; font-family: 'Cairo', sans-serif !important; color: #000 !important; background: white !important; box-shadow: none !important; border: none !important; border-radius: 0 !important; page-break-inside: avoid !important; overflow: hidden !important; word-wrap: break-word !important; overflow-wrap: break-word !important; direction: rtl !important; }
         .receipt-print div { display: block !important; page-break-inside: avoid !important; overflow: hidden !important; word-wrap: break-word !important; }
-        .receipt-print span { overflow: hidden !important; text-overflow: ellipsis !important; }
-        .receipt-print .receipt-row { display: flex !important; justify-content: space-between !important; gap: 4px !important; flex-wrap: nowrap !important; direction: rtl !important; width: 100% !important; }
-        .receipt-print .receipt-row span:first-child { flex: 1 1 auto !important; overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important; text-align: right !important; }
-        .receipt-print .receipt-row span:last-child { flex: 0 0 auto !important; white-space: nowrap !important; text-align: left !important; }
         .receipt-print table { width: 100% !important; border-collapse: collapse !important; border: none !important; box-shadow: none !important; page-break-inside: avoid !important; table-layout: fixed !important; direction: rtl !important; }
         .receipt-print th, .receipt-print td { border: none !important; padding: 2px 2px !important; font-size: 9px !important; background: transparent !important; color: #000 !important; box-shadow: none !important; overflow: hidden !important; word-wrap: break-word !important; text-overflow: ellipsis !important; }
         .receipt-print .receipt-separator { visibility: visible !important; border: none !important; border-top: 1px dashed #000 !important; margin: 3px 0 !important; height: 0 !important; padding: 0 !important; }
@@ -1212,60 +1208,80 @@ export default function EventPosPage() {
                 </tbody>
               </table>
               <hr className="receipt-separator" style={{ border: "none", borderTop: "1px dashed #000", margin: "3px 0" }} />
-              <div style={{ fontSize: "9px", width: "100%", overflow: "hidden" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", padding: "1px 0", color: "#333", direction: "rtl", width: "100%" }}>
-                  <span style={{ textAlign: "right" }}>المجموع بدون ضريبة</span>
-                  <span style={{ whiteSpace: "nowrap", textAlign: "left" }}>{lastSale.subtotal?.toFixed(2)} ر.س</span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", padding: "1px 0", color: "#333", direction: "rtl", width: "100%" }}>
-                  <span style={{ textAlign: "right" }}>ضريبة القيمة المضافة 15%</span>
-                  <span style={{ whiteSpace: "nowrap", textAlign: "left" }}>{lastSale.vatAmount?.toFixed(2)} ر.س</span>
-                </div>
-                {(lastSale.discountAmount || 0) > 0 && (
-                  <div style={{ display: "flex", justifyContent: "space-between", padding: "1px 0", color: "#c00", direction: "rtl", width: "100%" }}>
-                    <span style={{ textAlign: "right" }}>خصم {lastSale.discountType === "percentage" ? `${lastSale.discountValue}%` : "ثابت"}</span>
-                    <span style={{ whiteSpace: "nowrap", textAlign: "left" }}>-{lastSale.discountAmount?.toFixed(2)} ر.س</span>
-                  </div>
-                )}
-              </div>
+              <table dir="rtl" style={{ width: "100%", borderCollapse: "collapse", fontSize: "9px", tableLayout: "fixed", direction: "rtl" }}>
+                <colgroup>
+                  <col style={{ width: "60%" }} />
+                  <col style={{ width: "40%" }} />
+                </colgroup>
+                <tbody>
+                  <tr>
+                    <td style={{ textAlign: "right", padding: "2px 2px", color: "#333" }}>المجموع بدون ضريبة</td>
+                    <td style={{ textAlign: "left", padding: "2px 2px", color: "#333", whiteSpace: "nowrap" }}>{lastSale.subtotal?.toFixed(2)} ر.س</td>
+                  </tr>
+                  <tr>
+                    <td style={{ textAlign: "right", padding: "2px 2px", color: "#333" }}>ضريبة القيمة المضافة 15%</td>
+                    <td style={{ textAlign: "left", padding: "2px 2px", color: "#333", whiteSpace: "nowrap" }}>{lastSale.vatAmount?.toFixed(2)} ر.س</td>
+                  </tr>
+                  {(lastSale.discountAmount || 0) > 0 && (
+                    <tr>
+                      <td style={{ textAlign: "right", padding: "2px 2px", color: "#c00" }}>خصم {lastSale.discountType === "percentage" ? `${lastSale.discountValue}%` : "ثابت"}</td>
+                      <td style={{ textAlign: "left", padding: "2px 2px", color: "#c00", whiteSpace: "nowrap" }}>-{lastSale.discountAmount?.toFixed(2)} ر.س</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
               <hr className="receipt-separator" style={{ border: "none", borderTop: "1px dashed #000", margin: "3px 0" }} />
-              <div style={{ display: "flex", justifyContent: "space-between", fontWeight: "bold", fontSize: "12px", padding: "2px 0", direction: "rtl", width: "100%" }}>
-                <span>الإجمالي</span>
-                <span style={{ whiteSpace: "nowrap" }}>{lastSale.totalAmount?.toFixed(2)} ر.س</span>
-              </div>
+              <table dir="rtl" style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", direction: "rtl" }}>
+                <colgroup>
+                  <col style={{ width: "50%" }} />
+                  <col style={{ width: "50%" }} />
+                </colgroup>
+                <tbody>
+                  <tr>
+                    <td style={{ textAlign: "right", padding: "3px 2px", fontWeight: "bold", fontSize: "12px" }}>الإجمالي</td>
+                    <td style={{ textAlign: "left", padding: "3px 2px", fontWeight: "bold", fontSize: "12px", whiteSpace: "nowrap" }}>{lastSale.totalAmount?.toFixed(2)} ر.س</td>
+                  </tr>
+                </tbody>
+              </table>
               <hr className="receipt-separator" style={{ border: "none", borderTop: "1px dashed #000", margin: "3px 0" }} />
-              <div style={{ fontSize: "9px", width: "100%", overflow: "hidden" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", padding: "1px 0", direction: "rtl", width: "100%" }}>
-                  <span>طريقة الدفع</span>
-                  <span style={{ fontWeight: "600", whiteSpace: "nowrap" }}>{lastSale.paymentMethod === "cash" ? "نقد" : lastSale.paymentMethod === "network" ? "شبكة" : "نقد + شبكة"}</span>
-                </div>
-                {lastSale.paymentMethod === "split" && (
-                  <>
-                    <div style={{ display: "flex", justifyContent: "space-between", padding: "1px 0", direction: "rtl", width: "100%" }}>
-                      <span>نقد</span>
-                      <span style={{ whiteSpace: "nowrap" }}>{(lastSale.cashAmount || 0).toFixed(2)} ر.س</span>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", padding: "1px 0", direction: "rtl", width: "100%" }}>
-                      <span>شبكة</span>
-                      <span style={{ whiteSpace: "nowrap" }}>{(lastSale.networkAmount || 0).toFixed(2)} ر.س</span>
-                    </div>
-                  </>
-                )}
-                {lastSale.paymentMethod === "cash" && (
-                  <>
-                    <div style={{ display: "flex", justifyContent: "space-between", padding: "1px 0", direction: "rtl", width: "100%" }}>
-                      <span>المبلغ المدفوع</span>
-                      <span style={{ whiteSpace: "nowrap" }}>{lastSale.amountPaid?.toFixed(2)} ر.س</span>
-                    </div>
-                    {lastSale.changeAmount > 0 && (
-                      <div style={{ display: "flex", justifyContent: "space-between", padding: "1px 0", direction: "rtl", width: "100%" }}>
-                        <span>الباقي</span>
-                        <span style={{ whiteSpace: "nowrap" }}>{lastSale.changeAmount?.toFixed(2)} ر.س</span>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
+              <table dir="rtl" style={{ width: "100%", borderCollapse: "collapse", fontSize: "9px", tableLayout: "fixed", direction: "rtl" }}>
+                <colgroup>
+                  <col style={{ width: "50%" }} />
+                  <col style={{ width: "50%" }} />
+                </colgroup>
+                <tbody>
+                  <tr>
+                    <td style={{ textAlign: "right", padding: "2px 2px" }}>طريقة الدفع</td>
+                    <td style={{ textAlign: "left", padding: "2px 2px", fontWeight: "600", whiteSpace: "nowrap" }}>{lastSale.paymentMethod === "cash" ? "نقد" : lastSale.paymentMethod === "network" ? "شبكة" : "نقد + شبكة"}</td>
+                  </tr>
+                  {lastSale.paymentMethod === "split" && (
+                    <>
+                      <tr>
+                        <td style={{ textAlign: "right", padding: "2px 2px" }}>نقد</td>
+                        <td style={{ textAlign: "left", padding: "2px 2px", whiteSpace: "nowrap" }}>{(lastSale.cashAmount || 0).toFixed(2)} ر.س</td>
+                      </tr>
+                      <tr>
+                        <td style={{ textAlign: "right", padding: "2px 2px" }}>شبكة</td>
+                        <td style={{ textAlign: "left", padding: "2px 2px", whiteSpace: "nowrap" }}>{(lastSale.networkAmount || 0).toFixed(2)} ر.س</td>
+                      </tr>
+                    </>
+                  )}
+                  {lastSale.paymentMethod === "cash" && (
+                    <>
+                      <tr>
+                        <td style={{ textAlign: "right", padding: "2px 2px" }}>المبلغ المدفوع</td>
+                        <td style={{ textAlign: "left", padding: "2px 2px", whiteSpace: "nowrap" }}>{lastSale.amountPaid?.toFixed(2)} ر.س</td>
+                      </tr>
+                      {lastSale.changeAmount > 0 && (
+                        <tr>
+                          <td style={{ textAlign: "right", padding: "2px 2px" }}>الباقي</td>
+                          <td style={{ textAlign: "left", padding: "2px 2px", whiteSpace: "nowrap" }}>{lastSale.changeAmount?.toFixed(2)} ر.س</td>
+                        </tr>
+                      )}
+                    </>
+                  )}
+                </tbody>
+              </table>
               <div style={{ fontSize: "8px", color: "#555", textAlign: "center", padding: "2px 0" }}>
                 الكاشير: {lastSale.cashierName}
               </div>
