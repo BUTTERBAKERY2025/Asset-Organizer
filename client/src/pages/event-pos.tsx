@@ -435,19 +435,20 @@ export default function EventPosPage() {
   const handlePrint = useReactToPrint({
     contentRef: receiptRef,
     pageStyle: `
-      @page { size: 80mm auto; margin: 0mm; }
+      @page { size: 80mm auto !important; margin: 0 !important; padding: 0 !important; }
       @media print {
-        html, body { width: 80mm !important; margin: 0 !important; padding: 0 !important; background: white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; font-family: 'Cairo', sans-serif !important; }
+        * { box-sizing: border-box !important; }
+        html, body { width: 80mm !important; height: auto !important; margin: 0 !important; padding: 0 !important; background: white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; font-family: 'Cairo', sans-serif !important; overflow: visible !important; }
         body * { visibility: hidden !important; }
         .receipt-print, .receipt-print * { visibility: visible !important; }
-        .receipt-print { position: absolute !important; top: 0 !important; left: 0 !important; width: 72mm !important; max-width: 72mm !important; margin: 0 !important; padding: 3mm !important; font-size: 11px !important; line-height: 1.4 !important; font-family: 'Cairo', sans-serif !important; color: #000 !important; background: white !important; box-shadow: none !important; border: none !important; border-radius: 0 !important; }
-        .receipt-print div { display: block !important; }
+        .receipt-print { position: absolute !important; top: 0 !important; left: 0 !important; width: 76mm !important; max-width: 76mm !important; margin: 0 !important; padding: 2mm !important; font-size: 11px !important; line-height: 1.3 !important; font-family: 'Cairo', sans-serif !important; color: #000 !important; background: white !important; box-shadow: none !important; border: none !important; border-radius: 0 !important; page-break-inside: avoid !important; overflow: visible !important; }
+        .receipt-print div { display: block !important; page-break-inside: avoid !important; }
         .receipt-print .receipt-row { display: flex !important; justify-content: space-between !important; }
-        .receipt-print table { width: 100% !important; border-collapse: collapse !important; border: none !important; box-shadow: none !important; }
-        .receipt-print th, .receipt-print td { border: none !important; padding: 2px 1px !important; font-size: 10px !important; background: transparent !important; color: #000 !important; box-shadow: none !important; }
-        .receipt-print .receipt-separator { visibility: visible !important; border: none !important; border-top: 1px dashed #000 !important; margin: 4px 0 !important; height: 0 !important; }
-        .receipt-print img { max-height: 40px !important; max-width: 50mm !important; }
-        .receipt-print svg { visibility: visible !important; display: block !important; margin: 0 auto !important; }
+        .receipt-print table { width: 100% !important; border-collapse: collapse !important; border: none !important; box-shadow: none !important; page-break-inside: avoid !important; }
+        .receipt-print th, .receipt-print td { border: none !important; padding: 1px 0 !important; font-size: 10px !important; background: transparent !important; color: #000 !important; box-shadow: none !important; }
+        .receipt-print .receipt-separator { visibility: visible !important; border: none !important; border-top: 1px dashed #000 !important; margin: 2px 0 !important; height: 0 !important; padding: 0 !important; }
+        .receipt-print img { max-height: 35px !important; max-width: 45mm !important; }
+        .receipt-print svg { visibility: visible !important; display: block !important; margin: 0 auto !important; max-width: 25mm !important; max-height: 25mm !important; }
         .receipt-print canvas { visibility: visible !important; display: block !important; }
       }
     `,
@@ -1161,81 +1162,81 @@ export default function EventPosPage() {
             </DialogTitle>
           </DialogHeader>
           {lastSale && (
-            <div ref={receiptRef} className="receipt-print bg-white text-black" style={{ fontFamily: "Cairo, sans-serif", width: "72mm", maxWidth: "72mm", padding: "4mm 3mm", fontSize: "11px", lineHeight: 1.4 }}>
-              <div style={{ textAlign: "center", paddingBottom: "4px" }}>
+            <div ref={receiptRef} className="receipt-print bg-white text-black" style={{ fontFamily: "Cairo, sans-serif", width: "76mm", maxWidth: "76mm", padding: "2mm", fontSize: "10px", lineHeight: 1.2, boxSizing: "border-box" }}>
+              <div style={{ textAlign: "center", paddingBottom: "2px" }}>
                 {invoiceSettings?.logoUrl && (
-                  <img src={invoiceSettings.logoUrl} alt="شعار" style={{ maxHeight: "40px", maxWidth: "50mm", margin: "0 auto 4px", display: "block", objectFit: "contain" }} data-testid="img-receipt-logo" />
+                  <img src={invoiceSettings.logoUrl} alt="شعار" style={{ maxHeight: "30px", maxWidth: "40mm", margin: "0 auto 2px", display: "block", objectFit: "contain" }} data-testid="img-receipt-logo" />
                 )}
-                <div style={{ fontWeight: "bold", fontSize: "13px", marginBottom: "1px" }}>{invoiceSettings?.businessName || "باتر بيكري"}</div>
-                {invoiceSettings?.businessNameEn && <div style={{ fontSize: "9px", color: "#555" }}>{invoiceSettings.businessNameEn}</div>}
-                {invoiceSettings?.address && <div style={{ fontSize: "9px", color: "#555" }}>{invoiceSettings.address}</div>}
-                {invoiceSettings?.city && <div style={{ fontSize: "9px", color: "#555" }}>{invoiceSettings.city}</div>}
-                {invoiceSettings?.phone && <div style={{ fontSize: "9px", color: "#555" }}>هاتف: {invoiceSettings.phone}</div>}
-                {invoiceSettings?.vatNumber && <div style={{ fontSize: "9px", fontWeight: "600", marginTop: "2px" }}>الرقم الضريبي: {invoiceSettings.vatNumber}</div>}
-                {invoiceSettings?.crNumber && <div style={{ fontSize: "9px" }}>السجل التجاري: {invoiceSettings.crNumber}</div>}
+                <div style={{ fontWeight: "bold", fontSize: "12px", marginBottom: "0" }}>{invoiceSettings?.businessName || "باتر بيكري"}</div>
+                {invoiceSettings?.businessNameEn && <div style={{ fontSize: "8px", color: "#555", margin: 0 }}>{invoiceSettings.businessNameEn}</div>}
+                {invoiceSettings?.address && <div style={{ fontSize: "8px", color: "#555", margin: 0 }}>{invoiceSettings.address}</div>}
+                {invoiceSettings?.city && <div style={{ fontSize: "8px", color: "#555", margin: 0 }}>{invoiceSettings.city}</div>}
+                {invoiceSettings?.phone && <div style={{ fontSize: "8px", color: "#555", margin: 0 }}>هاتف: {invoiceSettings.phone}</div>}
+                {invoiceSettings?.vatNumber && <div style={{ fontSize: "8px", fontWeight: "600", margin: 0 }}>الرقم الضريبي: {invoiceSettings.vatNumber}</div>}
+                {invoiceSettings?.crNumber && <div style={{ fontSize: "8px", margin: 0 }}>السجل التجاري: {invoiceSettings.crNumber}</div>}
               </div>
-              <hr className="receipt-separator" style={{ border: "none", borderTop: "1px dashed #000", margin: "4px 0" }} />
-              <div style={{ textAlign: "center", padding: "2px 0" }}>
-                <div style={{ fontWeight: "bold", fontSize: "12px" }}>فاتورة ضريبية مبسطة</div>
-                <div style={{ fontSize: "9px", color: "#333" }}>رقم الفاتورة: {lastSale.invoiceNumber}</div>
-                <div style={{ fontSize: "9px", color: "#333" }}>{lastSale.saleDate} - {lastSale.saleTime}</div>
+              <hr className="receipt-separator" style={{ border: "none", borderTop: "1px dashed #000", margin: "2px 0" }} />
+              <div style={{ textAlign: "center", padding: "1px 0" }}>
+                <div style={{ fontWeight: "bold", fontSize: "11px" }}>فاتورة ضريبية مبسطة</div>
+                <div style={{ fontSize: "8px", color: "#333" }}>رقم الفاتورة: {lastSale.invoiceNumber}</div>
+                <div style={{ fontSize: "8px", color: "#333" }}>{lastSale.saleDate} - {lastSale.saleTime}</div>
               </div>
-              <hr className="receipt-separator" style={{ border: "none", borderTop: "1px dashed #000", margin: "4px 0" }} />
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "10px" }}>
+              <hr className="receipt-separator" style={{ border: "none", borderTop: "1px dashed #000", margin: "2px 0" }} />
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "9px" }}>
                 <thead>
                   <tr style={{ borderBottom: "1px solid #000" }}>
-                    <th style={{ textAlign: "right", padding: "3px 0", fontWeight: "bold", fontSize: "9px" }}>الصنف</th>
-                    <th style={{ textAlign: "center", padding: "3px 0", fontWeight: "bold", fontSize: "9px", width: "30px" }}>الكمية</th>
-                    <th style={{ textAlign: "center", padding: "3px 0", fontWeight: "bold", fontSize: "9px", width: "45px" }}>السعر</th>
-                    <th style={{ textAlign: "left", padding: "3px 0", fontWeight: "bold", fontSize: "9px", width: "50px" }}>المبلغ</th>
+                    <th style={{ textAlign: "right", padding: "2px 0", fontWeight: "bold", fontSize: "8px" }}>الصنف</th>
+                    <th style={{ textAlign: "center", padding: "2px 0", fontWeight: "bold", fontSize: "8px", width: "25px" }}>الكمية</th>
+                    <th style={{ textAlign: "center", padding: "2px 0", fontWeight: "bold", fontSize: "8px", width: "40px" }}>السعر</th>
+                    <th style={{ textAlign: "left", padding: "2px 0", fontWeight: "bold", fontSize: "8px", width: "45px" }}>المبلغ</th>
                   </tr>
                 </thead>
                 <tbody>
                   {lastSale.items?.map((item: any, i: number) => (
                     <tr key={i} style={{ borderBottom: "1px dotted #ccc" }}>
-                      <td style={{ padding: "3px 0", fontSize: "10px", wordBreak: "break-word", maxWidth: "35mm" }}>{item.productName}</td>
-                      <td style={{ textAlign: "center", padding: "3px 0", fontSize: "10px" }}>{item.quantity}</td>
-                      <td style={{ textAlign: "center", padding: "3px 0", fontSize: "10px" }}>{item.unitPrice?.toFixed(2)}</td>
-                      <td style={{ textAlign: "left", padding: "3px 0", fontSize: "10px" }}>{item.totalPrice?.toFixed(2)}</td>
+                      <td style={{ padding: "1px 0", fontSize: "9px", wordBreak: "break-word", maxWidth: "35mm" }}>{item.productName}</td>
+                      <td style={{ textAlign: "center", padding: "1px 0", fontSize: "9px" }}>{item.quantity}</td>
+                      <td style={{ textAlign: "center", padding: "1px 0", fontSize: "9px" }}>{item.unitPrice?.toFixed(2)}</td>
+                      <td style={{ textAlign: "left", padding: "1px 0", fontSize: "9px" }}>{item.totalPrice?.toFixed(2)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              <hr className="receipt-separator" style={{ border: "none", borderTop: "1px dashed #000", margin: "4px 0" }} />
-              <div style={{ fontSize: "10px" }}>
-                <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", color: "#333" }}>
+              <hr className="receipt-separator" style={{ border: "none", borderTop: "1px dashed #000", margin: "2px 0" }} />
+              <div style={{ fontSize: "9px" }}>
+                <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", padding: "1px 0", color: "#333" }}>
                   <span>المجموع بدون ضريبة</span>
                   <span>{lastSale.subtotal?.toFixed(2)} ر.س</span>
                 </div>
-                <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", color: "#333" }}>
+                <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", padding: "1px 0", color: "#333" }}>
                   <span>ضريبة القيمة المضافة (15%)</span>
                   <span>{lastSale.vatAmount?.toFixed(2)} ر.س</span>
                 </div>
                 {(lastSale.discountAmount || 0) > 0 && (
-                  <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", padding: "2px 0", color: "#c00" }}>
+                  <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", padding: "1px 0", color: "#c00" }}>
                     <span>خصم {lastSale.discountType === "percentage" ? `${lastSale.discountValue}%` : "ثابت"}</span>
                     <span>-{lastSale.discountAmount?.toFixed(2)} ر.س</span>
                   </div>
                 )}
               </div>
-              <hr className="receipt-separator" style={{ border: "none", borderTop: "1px dashed #000", margin: "3px 0" }} />
-              <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", fontWeight: "bold", fontSize: "13px", padding: "3px 0" }}>
+              <hr className="receipt-separator" style={{ border: "none", borderTop: "1px dashed #000", margin: "2px 0" }} />
+              <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", fontWeight: "bold", fontSize: "12px", padding: "2px 0" }}>
                 <span>الإجمالي</span>
                 <span>{lastSale.totalAmount?.toFixed(2)} ر.س</span>
               </div>
-              <hr className="receipt-separator" style={{ border: "none", borderTop: "1px dashed #000", margin: "3px 0" }} />
-              <div style={{ fontSize: "10px" }}>
-                <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}>
+              <hr className="receipt-separator" style={{ border: "none", borderTop: "1px dashed #000", margin: "2px 0" }} />
+              <div style={{ fontSize: "9px" }}>
+                <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", padding: "1px 0" }}>
                   <span>طريقة الدفع</span>
                   <span style={{ fontWeight: "600" }}>{lastSale.paymentMethod === "cash" ? "نقد" : lastSale.paymentMethod === "network" ? "شبكة" : "نقد + شبكة"}</span>
                 </div>
                 {lastSale.paymentMethod === "split" && (
                   <>
-                    <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}>
+                    <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", padding: "1px 0" }}>
                       <span>نقد</span>
                       <span>{(lastSale.cashAmount || 0).toFixed(2)} ر.س</span>
                     </div>
-                    <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}>
+                    <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", padding: "1px 0" }}>
                       <span>شبكة</span>
                       <span>{(lastSale.networkAmount || 0).toFixed(2)} ر.س</span>
                     </div>
@@ -1243,12 +1244,12 @@ export default function EventPosPage() {
                 )}
                 {lastSale.paymentMethod === "cash" && (
                   <>
-                    <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}>
+                    <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", padding: "1px 0" }}>
                       <span>المبلغ المدفوع</span>
                       <span>{lastSale.amountPaid?.toFixed(2)} ر.س</span>
                     </div>
                     {lastSale.changeAmount > 0 && (
-                      <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}>
+                      <div className="receipt-row" style={{ display: "flex", justifyContent: "space-between", padding: "1px 0" }}>
                         <span>الباقي</span>
                         <span>{lastSale.changeAmount?.toFixed(2)} ر.س</span>
                       </div>
@@ -1256,22 +1257,21 @@ export default function EventPosPage() {
                   </>
                 )}
               </div>
-              <div style={{ fontSize: "9px", color: "#555", textAlign: "center", padding: "2px 0" }}>
+              <div style={{ fontSize: "8px", color: "#555", textAlign: "center", padding: "1px 0" }}>
                 الكاشير: {lastSale.cashierName}
               </div>
-              <hr className="receipt-separator" style={{ border: "none", borderTop: "1px dashed #000", margin: "4px 0" }} />
+              <hr className="receipt-separator" style={{ border: "none", borderTop: "1px dashed #000", margin: "2px 0" }} />
               {invoiceSettings?.showQrCode !== false && invoiceSettings?.vatNumber && (
-                <div style={{ textAlign: "center", padding: "6px 0" }}>
+                <div style={{ textAlign: "center", padding: "2px 0" }}>
                   <QRCodeSVG
                     value={generateZatcaQrBase64(invoiceSettings?.businessName || "باتر بيكري", invoiceSettings?.vatNumber || "", new Date(`${lastSale.saleDate}T${lastSale.saleTime}`).toISOString(), lastSale.totalAmount?.toFixed(2) || "0.00", lastSale.vatAmount?.toFixed(2) || "0.00")}
-                    size={100} level="M" style={{ margin: "0 auto" }} data-testid="img-zatca-qr"
+                    size={70} level="L" style={{ margin: "0 auto", width: "20mm", height: "20mm" }} data-testid="img-zatca-qr"
                   />
-                  <div style={{ fontSize: "8px", color: "#666", marginTop: "2px" }}>فاتورة ضريبية مبسطة - ZATCA</div>
+                  <div style={{ fontSize: "7px", color: "#666", marginTop: "1px" }}>فاتورة ضريبية مبسطة - ZATCA</div>
                 </div>
               )}
-              <hr className="receipt-separator" style={{ border: "none", borderTop: "1px dashed #000", margin: "4px 0" }} />
-              <div style={{ textAlign: "center", padding: "4px 0 2px" }}>
-                <div style={{ fontSize: "10px", color: "#333" }}>{invoiceSettings?.footerText || "شكراً لزيارتكم"}</div>
+              <div style={{ textAlign: "center", padding: "2px 0 1px" }}>
+                <div style={{ fontSize: "9px", color: "#333" }}>{invoiceSettings?.footerText || "شكراً لزيارتكم"}</div>
               </div>
             </div>
           )}
