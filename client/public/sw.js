@@ -78,12 +78,24 @@ self.addEventListener('fetch', (event) => {
             const responseClone = response.clone();
             caches.open(API_CACHE).then((cache) => {
               cache.put(event.request, responseClone);
+              cache.keys().then((keys) => {
+                if (keys.length > API_CACHE_MAX_ITEMS) {
+                  keys.slice(0, keys.length - API_CACHE_MAX_ITEMS).forEach((key) => cache.delete(key));
+                }
+              });
             });
           }
           return response;
         })
         .catch(() => {
-          return caches.match(event.request);
+          return caches.match(event.request).then((cached) => {
+            if (!cached) return cached;
+            const dateHeader = cached.headers.get('date');
+            if (dateHeader && (Date.now() - new Date(dateHeader).getTime()) > API_CACHE_MAX_AGE) {
+              return undefined;
+            }
+            return cached;
+          });
         })
     );
     return;
