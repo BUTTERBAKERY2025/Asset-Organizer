@@ -25,7 +25,6 @@ export function useAuth() {
     queryFn: async () => {
       const res = await fetch("/api/auth/me", {
         credentials: "include",
-        headers: { 'Cache-Control': 'no-cache' },
       });
       if (res.status === 401 || res.status === 403) {
         queryClient.setQueryData(["/api/auth/me"], null);
@@ -38,8 +37,8 @@ export function useAuth() {
     retryDelay: 500,
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 30,
-    refetchOnWindowFocus: true,
-    refetchOnMount: true,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
     refetchOnReconnect: true,
   });
 

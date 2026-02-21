@@ -21,28 +21,45 @@
     <meta name="twitter:image" content="/butter-logo.png" />
 
     <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="dns-prefetch" href="https://fonts.googleapis.com">
+    <link rel="dns-prefetch" href="https://fonts.gstatic.com">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
-    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" as="style">
-    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'"  />
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+    <style>
+      @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+      .sk{background:linear-gradient(90deg,#e8e0d0 25%,#f0e8d8 50%,#e8e0d0 75%);background-size:200% 100%;animation:shimmer 1.5s infinite}
+    </style>
   </head>
   <body>
     <div id="root">
-      <div id="initial-loader" style="min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #F5F0E6; font-family: 'Cairo', sans-serif;">
-        <div style="width: 50px; height: 50px; border: 4px solid #1a3a2f20; border-top-color: #e67e22; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-        <p style="margin-top: 16px; color: #1a3a2f; font-size: 14px;">جاري تحميل النظام...</p>
-        <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+      <div id="initial-loader" style="min-height:100vh;display:flex;background:#F5F0E6;font-family:'Cairo',sans-serif;direction:rtl">
+        <div style="width:288px;background:#fff;border-left:1px solid #e8e0d0;padding:16px;display:none" id="il-side">
+          <div class="sk" style="height:40px;border-radius:8px;margin-bottom:24px"></div>
+          <div class="sk" style="height:36px;border-radius:8px;margin-bottom:12px"></div>
+          <div class="sk" style="height:36px;border-radius:8px;margin-bottom:12px"></div>
+          <div class="sk" style="height:36px;border-radius:8px;margin-bottom:12px"></div>
+          <div class="sk" style="height:36px;border-radius:8px;margin-bottom:12px"></div>
+          <div class="sk" style="height:36px;border-radius:8px;margin-bottom:12px"></div>
+          <div class="sk" style="height:36px;border-radius:8px;margin-bottom:12px"></div>
+        </div>
+        <div style="flex:1;padding:24px">
+          <div class="sk" style="height:32px;width:200px;border-radius:8px;margin-bottom:24px"></div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px">
+            <div class="sk" style="height:100px;border-radius:12px"></div>
+            <div class="sk" style="height:100px;border-radius:12px"></div>
+            <div class="sk" style="height:100px;border-radius:12px"></div>
+          </div>
+          <div class="sk" style="height:250px;border-radius:12px"></div>
+        </div>
       </div>
     </div>
+    <script>if(window.innerWidth>=768)document.getElementById('il-side').style.display='block'</script>
     <script type="module" src="/src/main.tsx"></script>
     <script>
       if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
-            .then(reg => console.log('SW registered'))
-            .catch(err => console.log('SW registration failed'));
-        });
+        navigator.serviceWorker.register('/sw.js').catch(()=>{});
       }
     </script>
   </body>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import logo from "@assets/logo_-5_1765206843638.png";
@@ -23,13 +23,14 @@ import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { NotificationsDropdown } from "@/components/notifications-dropdown";
-import { NotificationDisplay } from "@/components/NotificationDisplay";
-import { GlobalSearch } from "@/components/global-search";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import type { SystemModule } from "@shared/schema";
+
+const NotificationsDropdown = lazy(() => import("@/components/notifications-dropdown").then(m => ({ default: m.NotificationsDropdown })));
+const NotificationDisplay = lazy(() => import("@/components/NotificationDisplay").then(m => ({ default: m.NotificationDisplay })));
+const GlobalSearch = lazy(() => import("@/components/global-search").then(m => ({ default: m.GlobalSearch })));
 
 const ROLE_KEYS: Record<string, string> = {
   admin: "roles.admin",
@@ -135,11 +136,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const allStandaloneItems: NavItem[] = [
+  const allStandaloneItems: NavItem[] = useMemo(() => [
     { href: "/", label: t("sidebar.home"), icon: Home, module: "dashboard" },
-  ];
+  ], [t]);
 
-  const allNavGroups: { key: string; group: NavGroup }[] = [
+  const allNavGroups: { key: string; group: NavGroup }[] = useMemo(() => [
     {
       key: "hr",
       group: {
@@ -311,9 +312,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
         ],
       },
     },
-  ];
+  ], [t]);
 
-  const allBottomItems: NavItem[] = [];
+  const allBottomItems: NavItem[] = useMemo(() => [], []);
 
   const SMART_INCENTIVES_MODULES: SystemModule[] = [
     "smart_incentives_settings" as SystemModule,
@@ -361,9 +362,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const bottomItems = useMemo(() => filterItemsByPermission(allBottomItems), [isAdmin, canView]);
 
-  const isGroupActive = (items: NavItem[]) => items.some(item => location === item.href);
+  const isGroupActive = useCallback((items: NavItem[]) => items.some(item => location === item.href), [location]);
 
-  const renderNavItem = (item: NavItem, inGroup = false) => (
+  const renderNavItem = useCallback((item: NavItem, inGroup = false) => (
     <Link key={item.href} href={item.href}>
       <div
         className={cn(
@@ -390,7 +391,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         )}
       </div>
     </Link>
-  );
+  ), [location, handleLinkHover]);
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -401,9 +402,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <h1 className="text-base font-bold text-amber-700 leading-tight">{t("platformName")}</h1>
               <p className="text-[10px] text-amber-600/70 font-medium">{t("systemSubtitle")}</p>
             </div>
-            {isAuthenticated && isAdmin && <NotificationsDropdown />}
+            {isAuthenticated && isAdmin && <Suspense fallback={<div className="w-8 h-8" />}><NotificationsDropdown /></Suspense>}
           </div>
-          {isAuthenticated && <GlobalSearch />}
+          {isAuthenticated && <Suspense fallback={<div className="h-9 bg-muted/30 rounded-lg animate-pulse" />}><GlobalSearch /></Suspense>}
         </div>
 
         <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent">
@@ -643,7 +644,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <img src={logo} alt="Butter Bakery" className="h-8 object-contain" />
           
           <div className="flex items-center gap-2">
-            {isAuthenticated && isAdmin && <NotificationsDropdown />}
+            {isAuthenticated && isAdmin && <Suspense fallback={<div className="w-8 h-8" />}><NotificationsDropdown /></Suspense>}
           </div>
         </header>
 
@@ -651,7 +652,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           {children}
         </div>
       </main>
-      {isAuthenticated && <NotificationDisplay />}
+      {isAuthenticated && <Suspense fallback={null}><NotificationDisplay /></Suspense>}
     </div>
   );
 }

@@ -150,9 +150,14 @@ function AppLoadingFallback() {
 
 function PageLoadingFallback() {
   return (
-    <div className="min-h-[400px] flex flex-col items-center justify-center" dir="rtl">
-      <Loader2 className="w-8 h-8 text-[#e67e22] animate-spin" />
-      <p className="mt-3 text-[#1a3a2f] text-sm">جاري التحميل...</p>
+    <div className="p-6 space-y-4 animate-pulse" dir="rtl">
+      <div className="h-8 w-48 bg-muted rounded-lg" />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {[...Array(3)].map((_, i) => (
+          <div key={i} className="h-28 bg-card rounded-xl shadow-sm border border-border/30" />
+        ))}
+      </div>
+      <div className="h-64 bg-card rounded-xl shadow-sm border border-border/30" />
     </div>
   );
 }
