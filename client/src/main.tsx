@@ -2,6 +2,9 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
 import "./lib/i18n";
+import { hydrateFromPersistentCache } from "./lib/queryClient";
+
+hydrateFromPersistentCache();
 
 const root = createRoot(document.getElementById("root")!);
 root.render(<App />);

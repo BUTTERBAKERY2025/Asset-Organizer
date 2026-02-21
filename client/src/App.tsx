@@ -16,7 +16,7 @@ import type { SystemModule } from "@shared/schema";
 
 import NotFound from "@/pages/not-found";
 import LoginPage from "@/pages/login";
-import { makeLazy, preloadPage } from "@/lib/pagePreloader";
+import { makeLazy, startAggressivePreload, prefetchAdjacentPages } from "@/lib/pagePreloader";
 
 const PlatformHomePage = makeLazy("platform-home");
 const DashboardPage = makeLazy("dashboard");
@@ -358,11 +358,7 @@ const Router = React.memo(function Router() {
 
 function App() {
   useEffect(() => {
-    const PRIORITY_PAGES = ["platform-home", "dashboard", "cashier-journals", "operations-dashboard", "branch-employees"];
-    const idle = (window as any).requestIdleCallback || ((cb: Function) => setTimeout(cb, 200));
-    idle(() => {
-      PRIORITY_PAGES.forEach(p => preloadPage(p));
-    });
+    startAggressivePreload();
   }, []);
 
   return (

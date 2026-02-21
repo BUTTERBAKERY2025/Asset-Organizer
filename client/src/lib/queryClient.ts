@@ -1,4 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { getCachedData, setCachedData, shouldPersist } from "./persistentCache";
 
 const CACHE_TIMES = {
   STATIC: 1000 * 60 * 60, // 1 hour - for rarely changing data (branches, permissions)
@@ -27,7 +28,11 @@ async function deduplicatedFetch(url: string, options?: RequestInit): Promise<Re
     const cloned = await existing;
     return cloned.clone();
   }
-  const promise = fetch(url, options).then(res => {
+  const fetchOptions: RequestInit = {
+    ...options,
+    keepalive: true,
+  };
+  const promise = fetch(url, fetchOptions).then(res => {
     inflightRequests.delete(url);
     return res;
   }).catch(err => {
@@ -71,7 +76,12 @@ export const getQueryFn: <T>(options: {
     }
 
     await throwIfResNotOk(res);
-    return await res.json();
+    const data = await res.json();
+    if (shouldPersist(url)) {
+      const ttl = ENDPOINT_CACHE_TIERS[url.split('?')[0]] ?? CACHE_TIMES.MEDIUM;
+      setCachedData(url, data, ttl);
+    }
+    return data;
   };
 
 export function getStaleTimeForEndpoint(url: string): number {
@@ -209,7 +219,6 @@ export function prefetchQuery(queryKey: string[]) {
 
 export const STATIC_QUERIES = [
   ["/api/branches"],
-  // Note: /api/my-permissions uses MEDIUM cache tier, prefetched on auth only
 ];
 
 export function prefetchStaticData() {
@@ -223,6 +232,23 @@ export function prefetchStaticData() {
       staleTime: CACHE_TIMES.STATIC,
     });
   });
+}
+
+export function hydrateFromPersistentCache() {
+  const endpoints = [
+    '/api/branches', '/api/products', '/api/product-categories',
+    '/api/departments', '/api/roles',
+    '/api/operations/products', '/api/branch-cashiers',
+    '/api/chart-of-accounts', '/api/contractors',
+    '/api/dashboard/stats', '/api/command-center',
+    '/api/warehouse/items', '/api/targets',
+  ];
+  for (const url of endpoints) {
+    const cached = getCachedData(url);
+    if (cached !== undefined) {
+      queryClient.setQueryData([url], cached);
+    }
+  }
 }
 
 export { CACHE_TIMES };

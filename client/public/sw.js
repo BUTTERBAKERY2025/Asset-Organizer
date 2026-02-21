@@ -1,7 +1,7 @@
-const CACHE_NAME = 'butter-v3';
-const STATIC_CACHE = 'butter-static-v3';
-const FONT_CACHE = 'butter-fonts-v2';
-const API_CACHE = 'butter-api-v2';
+const CACHE_NAME = 'butter-v4';
+const STATIC_CACHE = 'butter-static-v4';
+const FONT_CACHE = 'butter-fonts-v3';
+const API_CACHE = 'butter-api-v3';
 
 const STATIC_ASSETS = [
   '/',
@@ -52,7 +52,22 @@ self.addEventListener('fetch', (event) => {
     if (url.pathname.includes('/export') || url.pathname.includes('/download') || url.pathname.includes('/pdf')) {
       return;
     }
-    event.respondWith(networkFirst(event.request));
+    if (url.pathname.startsWith('/api/auth/')) {
+      return;
+    }
+    const SAFE_STALE_ENDPOINTS = [
+      '/api/branches', '/api/products', '/api/product-categories',
+      '/api/departments', '/api/roles', '/api/operations/products',
+      '/api/contractors', '/api/chart-of-accounts',
+      '/api/targets', '/api/construction-projects',
+      '/api/warehouse/items', '/api/branch-cashiers',
+    ];
+    const basePath = url.pathname.split('?')[0];
+    if (SAFE_STALE_ENDPOINTS.includes(basePath)) {
+      event.respondWith(apiStaleWhileRevalidate(event.request));
+    } else {
+      event.respondWith(networkFirst(event.request));
+    }
     return;
   }
 
@@ -117,6 +132,27 @@ async function staleWhileRevalidate(request) {
     }
     return response;
   }).catch(() => cached || new Response('', { status: 503 }));
+
+  return cached || fetchPromise;
+}
+
+async function apiStaleWhileRevalidate(request) {
+  const cache = await caches.open(API_CACHE);
+  const cached = await cache.match(request);
+
+  const fetchPromise = fetch(request).then((response) => {
+    if (response.ok) {
+      cache.put(request, response.clone());
+      trimCache(API_CACHE, API_CACHE_MAX_ITEMS);
+    }
+    return response;
+  }).catch(() => {
+    if (cached) return cached;
+    return new Response(JSON.stringify({ error: 'offline' }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  });
 
   return cached || fetchPromise;
 }

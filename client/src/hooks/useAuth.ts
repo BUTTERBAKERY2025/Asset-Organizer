@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { User, Branch } from "@shared/schema";
+import { clearPersistentCache, setCurrentUser } from "@/lib/persistentCache";
 
 type UserWithoutPassword = Omit<User, 'password'>;
 
@@ -57,6 +58,7 @@ export function useAuth() {
       return res.json();
     },
     onSuccess: (userData) => {
+      setCurrentUser(userData?.id?.toString() || null);
       queryClient.setQueryData(["/api/auth/me"], userData);
       queryClient.invalidateQueries({ queryKey: ["/api/my-permissions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/branches"] });
@@ -73,6 +75,8 @@ export function useAuth() {
       return res.json();
     },
     onSuccess: () => {
+      clearPersistentCache();
+      setCurrentUser(null);
       queryClient.setQueryData(["/api/auth/me"], null);
       queryClient.clear();
     },

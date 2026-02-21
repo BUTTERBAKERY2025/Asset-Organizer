@@ -244,6 +244,9 @@ process.on("SIGINT", () => gracefulShutdown("SIGINT"));
   // Other ports are firewalled. Default to 5000 if not specified.
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
+  httpServer.keepAliveTimeout = 65000;
+  httpServer.headersTimeout = 66000;
+
   const port = parseInt(process.env.PORT || "5000", 10);
   httpServer.listen(
     {

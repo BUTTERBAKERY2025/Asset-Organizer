@@ -1,11 +1,12 @@
-import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
+import { useState, useEffect, useCallback, useMemo, lazy, Suspense, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import logo from "@assets/logo_-5_1765206843638.png";
 import { useTranslation } from "react-i18next";
 import { changeLanguage } from "@/lib/i18n";
 import { prefetchQuery } from "@/lib/queryClient";
-import { preloadRoute } from "@/lib/pagePreloader";
+import { preloadRoute, prefetchAdjacentPages } from "@/lib/pagePreloader";
+import { saveScrollPosition, getScrollPosition } from "@/lib/scrollMemory";
 import { 
   LayoutDashboard, FileText, LogOut, ClipboardEdit, Building2, AlertTriangle, 
   CalendarCheck, LogIn, Users, Loader2, HardHat, Hammer, ChevronDown, ChevronLeft, 
@@ -77,13 +78,23 @@ export function Layout({ children }: { children: React.ReactNode }) {
     settings: false,
   });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const prevLocationRef = useRef(location);
 
   useEffect(() => {
+    if (prevLocationRef.current !== location && contentRef.current) {
+      saveScrollPosition(prevLocationRef.current, contentRef.current.scrollTop);
+    }
+    prevLocationRef.current = location;
     setMobileMenuOpen(false);
+    prefetchAdjacentPages(location);
+    requestAnimationFrame(() => {
+      if (contentRef.current) {
+        const saved = getScrollPosition(location);
+        contentRef.current.scrollTop = saved;
+      }
+    });
   }, [location]);
-
-  // Note: Removed prefetchStaticData() - queries handle their own caching
-  // This reduces duplicate requests on initial load
 
   const handleLinkHover = useCallback((href: string) => {
     preloadRoute(href);
@@ -667,7 +678,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <div key={location} className="flex-1 overflow-auto scroll-smooth safe-area-inset-bottom page-content page-enter">
+        <div ref={contentRef} key={location} className="flex-1 overflow-auto scroll-smooth safe-area-inset-bottom page-content page-enter">
           {children}
         </div>
       </main>

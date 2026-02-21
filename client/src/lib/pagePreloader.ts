@@ -126,6 +126,93 @@ export function preloadPage(pageKey: string) {
   }
 }
 
+const PRIORITY_WAVE_1 = [
+  "platform-home", "dashboard", "cashier-journals", "operations-dashboard", "branch-employees",
+];
+const PRIORITY_WAVE_2 = [
+  "sales-analytics", "products", "production-dashboard", "warehouse-dashboard",
+  "marketing-dashboard", "event-pos", "branch-daily-closures", "targets-dashboard",
+  "shift-management", "attendance-dashboard", "branch-shifts",
+];
+const PRIORITY_WAVE_3 = [
+  "executive-dashboard", "settings-dashboard", "rbac-management", "pnl-dashboard",
+  "documents", "inventory", "construction-projects", "daily-production",
+  "advanced-production-orders", "incentives-management", "security-management",
+];
+
+let preloadStarted = false;
+
+function shouldLimitPreloading(): boolean {
+  const nav = navigator as any;
+  if (nav.connection) {
+    if (nav.connection.saveData) return true;
+    const ect = nav.connection.effectiveType;
+    if (ect === 'slow-2g' || ect === '2g') return true;
+  }
+  if (nav.deviceMemory && nav.deviceMemory < 2) return true;
+  return false;
+}
+
+export function startAggressivePreload() {
+  if (preloadStarted) return;
+  preloadStarted = true;
+
+  const limited = shouldLimitPreloading();
+  const idle = (window as any).requestIdleCallback || ((cb: Function) => setTimeout(cb, 100));
+
+  idle(() => {
+    PRIORITY_WAVE_1.forEach(p => preloadPage(p));
+
+    if (limited) return;
+
+    setTimeout(() => {
+      idle(() => {
+        PRIORITY_WAVE_2.forEach(p => preloadPage(p));
+
+        setTimeout(() => {
+          idle(() => {
+            PRIORITY_WAVE_3.forEach(p => preloadPage(p));
+
+            setTimeout(() => {
+              idle(() => {
+                const allKeys = Object.keys(pageImports);
+                allKeys.forEach(p => preloadPage(p));
+              });
+            }, 3000);
+          });
+        }, 2000);
+      });
+    }, 1000);
+  });
+}
+
+const ADJACENT_PAGES: Record<string, string[]> = {
+  "/": ["dashboard", "cashier-journals", "operations-dashboard", "branch-employees"],
+  "/dashboard": ["inventory", "manage", "reports"],
+  "/cashier-journals": ["cashier-journal-form", "branch-daily-closures", "sales-analytics", "cashier-shift-performance"],
+  "/operations": ["products", "quality-control", "branch-shifts", "operations-reports-dashboard", "display-bar-waste"],
+  "/branch-employees": ["shift-management", "attendance-check", "timesheet", "organizational-structure", "employee-reports-dashboard"],
+  "/production-dashboard": ["daily-production", "advanced-production-orders", "production-reports", "finished-goods-inventory"],
+  "/marketing": ["marketing-campaigns", "marketing-influencers", "marketing-calendar", "marketing-reports"],
+  "/warehouse": ["transfer-requests", "warehouse-inventory", "branch-stock", "warehouse-reports"],
+  "/executive": ["executive-meetings", "executive-tasks", "executive-correspondence", "documents"],
+  "/settings": ["security-management", "rbac-management", "users", "audit-logs"],
+  "/sales-analytics": ["cashier-journals", "targets-dashboard", "pnl-dashboard"],
+  "/event-pos": ["event-pos-settings"],
+  "/construction-projects": ["contractors", "contracts", "construction-reports"],
+  "/governance": ["governance-board-members", "governance-shareholders", "governance-meetings"],
+};
+
+export function prefetchAdjacentPages(currentRoute: string) {
+  const adjacent = ADJACENT_PAGES[currentRoute];
+  if (adjacent) {
+    const idle = (window as any).requestIdleCallback || ((cb: Function) => setTimeout(cb, 50));
+    idle(() => {
+      adjacent.forEach(p => preloadPage(p));
+    });
+  }
+}
+
 const ROUTE_TO_PAGE: Record<string, string> = {
   "/": "platform-home",
   "/dashboard": "dashboard",
