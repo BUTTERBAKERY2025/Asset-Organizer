@@ -144,14 +144,10 @@ function AppLoadingFallback() {
 
 const PageLoadingFallback = React.memo(function PageLoadingFallback() {
   return (
-    <div className="p-6 space-y-4 animate-pulse" dir="rtl">
-      <div className="h-8 w-48 bg-muted rounded-lg" />
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="h-28 bg-card rounded-xl shadow-sm border border-border/30" />
-        <div className="h-28 bg-card rounded-xl shadow-sm border border-border/30" />
-        <div className="h-28 bg-card rounded-xl shadow-sm border border-border/30" />
+    <div className="flex items-center justify-center min-h-[60vh]">
+      <div className="flex flex-col items-center gap-3">
+        <div className="w-8 h-8 border-3 border-amber-500 border-t-transparent rounded-full animate-spin" />
       </div>
-      <div className="h-64 bg-card rounded-xl shadow-sm border border-border/30" />
     </div>
   );
 });
