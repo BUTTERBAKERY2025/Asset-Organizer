@@ -151,9 +151,12 @@ export function apiCacheMiddleware(req: Request, res: Response, next: NextFuncti
       res.set("X-Cache", "HIT-304");
       return res.status(304).end();
     }
+    const age = Math.floor((Date.now() - entry.timestamp) / 1000);
+    const maxAge = Math.floor(ttl / 1000);
     res.set("X-Cache", "HIT");
     res.set("ETag", etag);
-    res.set("Cache-Control", `private, max-age=${Math.floor(ttl / 1000)}`);
+    res.set("Cache-Control", `private, max-age=${maxAge}, stale-while-revalidate=${maxAge * 2}`);
+    res.set("Age", String(age));
     res.set("Content-Type", entry.headers["content-type"] || "application/json");
     if (entry.headers["content-encoding"]) {
       res.set("Content-Encoding", entry.headers["content-encoding"]);
@@ -169,14 +172,18 @@ export function apiCacheMiddleware(req: Request, res: Response, next: NextFuncti
   res.json = function(body: any) {
     if (!captured && res.statusCode >= 200 && res.statusCode < 300) {
       captured = true;
+      const now = Date.now();
       const data = Buffer.from(JSON.stringify(body));
       cache.set(key, {
         data,
         headers: { "content-type": "application/json; charset=utf-8" },
         statusCode: res.statusCode,
-        timestamp: Date.now(),
+        timestamp: now,
       });
       evictOldest();
+      const maxAge = Math.floor(ttl / 1000);
+      res.set("ETag", `"${now}"`);
+      res.set("Cache-Control", `private, max-age=${maxAge}, stale-while-revalidate=${maxAge * 2}`);
     }
     res.set("X-Cache", "MISS");
     return originalJson(body);

@@ -80,20 +80,28 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const prevLocationRef = useRef(location);
+  const animFrameRef = useRef<number>(0);
 
   useEffect(() => {
-    if (prevLocationRef.current !== location && contentRef.current) {
-      saveScrollPosition(prevLocationRef.current, contentRef.current.scrollTop);
+    if (prevLocationRef.current !== location) {
+      if (contentRef.current) {
+        saveScrollPosition(prevLocationRef.current, contentRef.current.scrollTop);
+        const el = contentRef.current;
+        el.classList.remove('page-enter');
+        cancelAnimationFrame(animFrameRef.current);
+        animFrameRef.current = requestAnimationFrame(() => {
+          el.classList.add('page-enter');
+          const saved = getScrollPosition(location);
+          el.scrollTop = saved;
+        });
+      }
     }
     prevLocationRef.current = location;
     setMobileMenuOpen(false);
     prefetchAdjacentPages(location);
-    requestAnimationFrame(() => {
-      if (contentRef.current) {
-        const saved = getScrollPosition(location);
-        contentRef.current.scrollTop = saved;
-      }
-    });
+    return () => {
+      cancelAnimationFrame(animFrameRef.current);
+    };
   }, [location]);
 
   const handleLinkHover = useCallback((href: string) => {
@@ -678,7 +686,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <div ref={contentRef} key={location} className="flex-1 overflow-auto scroll-smooth safe-area-inset-bottom page-content page-enter">
+        <div ref={contentRef} className="flex-1 overflow-auto scroll-smooth safe-area-inset-bottom page-content page-enter">
           {children}
         </div>
       </main>

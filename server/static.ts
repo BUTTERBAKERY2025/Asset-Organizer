@@ -16,6 +16,9 @@ function buildPreloadHeaders(distPath: string) {
   const reactDomJs = files.find(f => f.startsWith("react-dom-") && f.endsWith(".js"));
   const reactCoreJs = files.find(f => f.startsWith("react-core-") && f.endsWith(".js"));
   const routerJs = files.find(f => f.startsWith("router-") && f.endsWith(".js"));
+  const vendorJs = files.find(f => f.startsWith("vendor-") && f.endsWith(".js"));
+  const queryJs = files.find(f => f.startsWith("query-") && f.endsWith(".js"));
+  const uiJs = files.find(f => f.startsWith("ui-") && f.endsWith(".js"));
   
   if (mainCss) preloadHeaders.push(`</assets/${mainCss}>; rel=preload; as=style`);
   if (reactCoreJs) preloadHeaders.push(`</assets/${reactCoreJs}>; rel=modulepreload`);
@@ -23,6 +26,9 @@ function buildPreloadHeaders(distPath: string) {
   if (mainJs) preloadHeaders.push(`</assets/${mainJs}>; rel=modulepreload`);
   if (layoutJs) preloadHeaders.push(`</assets/${layoutJs}>; rel=modulepreload`);
   if (routerJs) preloadHeaders.push(`</assets/${routerJs}>; rel=modulepreload`);
+  if (vendorJs) preloadHeaders.push(`</assets/${vendorJs}>; rel=modulepreload`);
+  if (queryJs) preloadHeaders.push(`</assets/${queryJs}>; rel=modulepreload`);
+  if (uiJs) preloadHeaders.push(`</assets/${uiJs}>; rel=modulepreload`);
 }
 
 function cacheIndexHtml(distPath: string) {

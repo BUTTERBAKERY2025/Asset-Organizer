@@ -30,12 +30,13 @@ export const pool = new Pool({
   connectionString,
   ssl: isSupabase ? { rejectUnauthorized: false } : undefined,
   connectionTimeoutMillis: isSupabase ? 15000 : 5000,
-  idleTimeoutMillis: isSupabase ? 120000 : 60000,
+  idleTimeoutMillis: isSupabase ? 120000 : 30000,
   max: isSupabase ? 15 : 25,
-  min: isSupabase ? 3 : 5,
+  min: isSupabase ? 3 : 8,
   statement_timeout: isSupabase ? 45000 : 30000,
   keepAlive: true,
-  keepAliveInitialDelayMillis: 10000,
+  keepAliveInitialDelayMillis: 5000,
+  allowExitOnIdle: false,
 });
 
 pool.on('error', (err) => {

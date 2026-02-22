@@ -6,6 +6,8 @@ import { hydrateFromPersistentCache } from "./lib/queryClient";
 
 hydrateFromPersistentCache();
 
+fetch("/api/auth/me", { credentials: "include", priority: "high" } as RequestInit).catch(() => {});
+
 const root = createRoot(document.getElementById("root")!);
 root.render(<App />);
 

@@ -188,8 +188,7 @@
 
 .page-content {
   contain: layout style;
-  content-visibility: auto;
-  contain-intrinsic-size: auto 500px;
+  will-change: scroll-position;
 }
 
 * {
@@ -205,12 +204,12 @@
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from { opacity: 0; transform: translateZ(0); }
+  to { opacity: 1; transform: translateZ(0); }
 }
 
 .page-enter {
-  animation: fadeIn 120ms ease-out;
+  animation: fadeIn 80ms ease-out;
 }
 
 ::view-transition-old(root) {
@@ -219,5 +218,26 @@
 }
 
 ::view-transition-new(root) {
-  animation: fadeIn 100ms ease-out;
+  animation: fadeIn 80ms ease-out;
+}
+
+table {
+  contain: layout style;
+}
+
+.animate-spin {
+  will-change: transform;
+}
+
+.perf-contain {
+  contain: layout style paint;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-enter {
+    animation: none;
+  }
+  .transition-all, .transition-colors {
+    transition-duration: 0ms !important;
+  }
 }
