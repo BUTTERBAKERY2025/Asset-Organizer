@@ -176,6 +176,8 @@ const ENDPOINT_CACHE_TIERS: Record<string, number> = {
   "/api/warehouse/bundle": CACHE_TIMES.MEDIUM,
   "/api/branch-employees/bundle": CACHE_TIMES.MEDIUM,
   "/api/cashier-performance/bundle": CACHE_TIMES.SHORT,
+  "/api/employee-reports/bundle": CACHE_TIMES.MEDIUM,
+  "/api/shift-management/bundle": CACHE_TIMES.SHORT,
 };
 
 // Endpoints that should NOT be prefetched on hover (large datasets)
@@ -194,6 +196,8 @@ const SKIP_PREFETCH_ENDPOINTS = new Set([
   "/api/warehouse/bundle",
   "/api/branch-employees/bundle",
   "/api/cashier-performance/bundle",
+  "/api/employee-reports/bundle",
+  "/api/shift-management/bundle",
 ]);
 
 export function prefetchQuery(queryKey: string[]) {

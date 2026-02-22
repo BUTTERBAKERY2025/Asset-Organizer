@@ -104,55 +104,36 @@ export default function ShiftManagementPage() {
   const { user } = useAuth();
   const { branches, userBranchId, canSelectBranch } = useBranches();
   
-  const { data: shiftProfiles } = useQuery<{shiftCode: string; displayName: string; startTime: string; endTime: string; isActive: boolean}[]>({
-    queryKey: ["/api/shift-profiles", selectedBranch],
-    queryFn: async () => {
-      const res = await apiRequest("GET", `/api/shift-profiles/${selectedBranch}`);
-      return res.json();
-    },
-    enabled: selectedBranch !== "all",
-  });
-  const { data: users } = useQuery<User[]>({ queryKey: [`/api/branch-cashiers${selectedBranch && selectedBranch !== "all" ? `?branchId=${selectedBranch}` : ""}`] });
-  const { data: branchEmployees } = useQuery<BranchEmployee[]>({
-    queryKey: ["/api/branch-employees", selectedBranch, "active"],
-    queryFn: async () => {
-      const url = selectedBranch !== "all" 
-        ? `/api/branch-employees?branchId=${selectedBranch}&status=active` 
-        : "/api/branch-employees?status=active";
-      const res = await apiRequest("GET", url);
-      return res.json();
-    },
-  });
-  const { data: periods } = useQuery<SchedulePeriod[]>({
-    queryKey: ["/api/schedule-periods", selectedBranch],
-  });
   const startDateStr = format(currentWeekStart, "yyyy-MM-dd");
   const endDateStr = format(addDays(currentWeekStart, 6), "yyyy-MM-dd");
-  
-  const { data: employeeSchedules } = useQuery<EmployeeSchedule[]>({
-    queryKey: ["/api/employee-schedules", { branchId: selectedBranch, startDate: startDateStr, endDate: endDateStr }],
+
+  const { data: shiftBundle } = useQuery<{
+    shiftProfiles: {shiftCode: string; displayName: string; startTime: string; endTime: string; isActive: boolean}[];
+    employees: BranchEmployee[];
+    schedules: EmployeeSchedule[];
+    attendance: AttendanceRecord[];
+    weeklyLock: WeeklyScheduleLock[];
+  }>({
+    queryKey: ["/api/shift-management/bundle", selectedBranch, startDateStr, endDateStr],
     queryFn: async () => {
-      const res = await apiRequest("GET", `/api/employee-schedules?branchId=${selectedBranch}&startDate=${startDateStr}&endDate=${endDateStr}`);
+      const params = new URLSearchParams({ branchId: selectedBranch, startDate: startDateStr, endDate: endDateStr });
+      const res = await fetch(`/api/shift-management/bundle?${params.toString()}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch");
       return res.json();
     },
-    enabled: selectedBranch !== "all",
-  });
-  const { data: attendanceRecords } = useQuery<AttendanceRecord[]>({
-    queryKey: ["/api/attendance", { branchId: selectedBranch, startDate: startDateStr, endDate: endDateStr }],
-    queryFn: async () => {
-      const res = await apiRequest("GET", `/api/attendance?branchId=${selectedBranch}&startDate=${startDateStr}&endDate=${endDateStr}`);
-      return res.json();
-    },
-    enabled: selectedBranch !== "all",
+    enabled: selectedBranch !== "all" && selectedBranch !== "",
+    staleTime: 30_000,
   });
 
-  const { data: weeklyLock } = useQuery<WeeklyScheduleLock[]>({
-    queryKey: ["/api/weekly-schedule-locks", { branchId: selectedBranch, weekStartDate: startDateStr }],
-    queryFn: async () => {
-      const res = await apiRequest("GET", `/api/weekly-schedule-locks?branchId=${selectedBranch}&weekStartDate=${startDateStr}`);
-      return res.json();
-    },
-    enabled: selectedBranch !== "all",
+  const shiftProfiles = shiftBundle?.shiftProfiles;
+  const branchEmployees = shiftBundle?.employees;
+  const employeeSchedules = shiftBundle?.schedules;
+  const attendanceRecords = shiftBundle?.attendance;
+  const weeklyLock = shiftBundle?.weeklyLock;
+
+  const { data: users } = useQuery<User[]>({ queryKey: [`/api/branch-cashiers${selectedBranch && selectedBranch !== "all" ? `?branchId=${selectedBranch}` : ""}`] });
+  const { data: periods } = useQuery<SchedulePeriod[]>({
+    queryKey: ["/api/schedule-periods", selectedBranch],
   });
 
   const { data: auditTrail } = useQuery<ScheduleChangeAudit[]>({
@@ -265,6 +246,7 @@ export default function ShiftManagementPage() {
       });
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/shift-management/bundle"] });
       queryClient.invalidateQueries({ queryKey: ["/api/weekly-schedule-locks"] });
     },
     onError: (error: any) => {
@@ -393,6 +375,7 @@ export default function ShiftManagementPage() {
       return { ...result, skippedCount };
     },
     onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/shift-management/bundle"] });
       queryClient.invalidateQueries({ queryKey: ["/api/employee-schedules"] });
       const warnings: string[] = [];
       if (data?.skippedCount > 0) {
@@ -631,6 +614,7 @@ export default function ShiftManagementPage() {
         title: "تم نسخ الجدول بنجاح", 
         description: `تم نسخ ${schedulesToSave.length} جدول للأسبوع ${format(nextWeekStart, "dd/MM")} - ${format(addDays(nextWeekStart, 6), "dd/MM")}` 
       });
+      queryClient.invalidateQueries({ queryKey: ["/api/shift-management/bundle"] });
       queryClient.invalidateQueries({ queryKey: ["/api/employee-schedules"] });
     } catch (error) {
       toast({ title: "خطأ", description: "فشل في نسخ الجدول", variant: "destructive" });
@@ -1642,6 +1626,7 @@ export default function ShiftManagementPage() {
       setIsImportDialogOpen(false);
       setImportData([]);
       setImportErrors([]);
+      queryClient.invalidateQueries({ queryKey: ["/api/shift-management/bundle"] });
       queryClient.invalidateQueries({ queryKey: ["/api/employee-schedules"] });
     } catch (error) {
       toast({ title: "خطأ", description: "فشل في حفظ الجداول المستوردة", variant: "destructive" });

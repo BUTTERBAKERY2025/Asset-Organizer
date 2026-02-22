@@ -127,29 +127,42 @@ export default function EmployeeReportsDashboardPage() {
     }
   }, [userBranchId, canSelectBranch]);
 
-  const { data: employees, isLoading: employeesLoading } = useQuery<BranchEmployee[]>({
-    queryKey: ["/api/branch-employees"],
-    queryFn: getQueryFn({ on401: "returnNull" }),
+  const { data: bundle, isLoading: bundleLoading } = useQuery<{
+    employees: BranchEmployee[];
+    attendance: AttendanceRecord[];
+    schedules: any[];
+  }>({
+    queryKey: ["/api/employee-reports/bundle", selectedBranch, selectedMonth],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (selectedBranch && selectedBranch !== "all") params.set("branchId", selectedBranch);
+      if (selectedMonth) params.set("month", selectedMonth);
+      const res = await fetch(`/api/employee-reports/bundle?${params.toString()}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch");
+      return res.json();
+    },
+    enabled: !!selectedBranch,
+    staleTime: 60_000,
   });
 
-  const { data: attendanceRecords, isLoading: attendanceLoading } = useQuery<AttendanceRecord[]>({
-    queryKey: ["/api/attendance"],
-    queryFn: getQueryFn({ on401: "returnNull" }),
-  });
+  const employees = bundle?.employees;
+  const attendanceRecords = bundle?.attendance;
+  const employeeSchedules = bundle?.schedules;
+  const employeesLoading = bundleLoading;
+  const attendanceLoading = bundleLoading;
 
   const { data: timesheetReports } = useQuery<TimesheetReport[]>({
     queryKey: ["/api/timesheet-reports"],
     queryFn: getQueryFn({ on401: "returnNull" }),
-  });
-
-  const { data: employeeSchedules } = useQuery<{ id: number; employeeId: string; branchEmployeeId: number | null; scheduleDate: string; shiftStart: string; shiftEnd: string; status: string }[]>({
-    queryKey: ["/api/employee-schedules", { startDate: `${selectedMonth}-01`, endDate: `${selectedMonth}-31` }],
-    queryFn: getQueryFn({ on401: "returnNull" }),
+    enabled: activeTab === "timesheets",
+    staleTime: 60_000,
   });
 
   const { data: cashierJournals } = useQuery<{ id: number; branchId: string; cashierName: string; cashierId: string; reportDate: string; totalSales: number; totalCash: number; status: string }[]>({
     queryKey: ["/api/cashier-journals"],
     queryFn: getQueryFn({ on401: "returnNull" }),
+    enabled: activeTab === "performance",
+    staleTime: 60_000,
   });
 
   const getBranchName = (branchId: string) => {

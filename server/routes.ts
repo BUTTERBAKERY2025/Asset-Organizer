@@ -23213,6 +23213,134 @@ export async function registerRoutes(
     }
   });
 
+  // Employee reports bundle - server-side filtered for performance
+  app.get("/api/employee-reports/bundle", isAuthenticated, requirePermission("branch_employees", "view"), async (req, res) => {
+    try {
+      const queryBranchId = req.query.branchId as string | undefined;
+      const month = req.query.month as string | undefined; // format: YYYY-MM
+      const allowedBranches = getAllowedBranchIds(req);
+      const branchFilter = getEffectiveBranchFilter(req, queryBranchId);
+
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بالوصول" });
+      }
+
+      const monthStart = month ? `${month}-01` : undefined;
+      let monthEnd: string | undefined;
+      if (month) {
+        const [y, m] = month.split("-").map(Number);
+        const lastDay = new Date(y, m, 0).getDate();
+        monthEnd = `${month}-${String(lastDay).padStart(2, "0")}`;
+      }
+
+      const [employees, attendance, schedules] = await Promise.all([
+        (async () => {
+          try {
+            if (allowedBranches === null) {
+              if (queryBranchId && queryBranchId !== "all") {
+                return await storage.getBranchEmployeesByBranch(queryBranchId);
+              }
+              return await storage.getAllBranchEmployees();
+            } else if (allowedBranches.length > 0) {
+              if (queryBranchId && queryBranchId !== "all" && allowedBranches.includes(queryBranchId)) {
+                return await storage.getBranchEmployeesByBranch(queryBranchId);
+              }
+              const allEmps = await Promise.all(
+                allowedBranches.map(branchId => storage.getBranchEmployeesByBranch(branchId))
+              );
+              return allEmps.flat();
+            }
+            return [];
+          } catch (e) { return []; }
+        })(),
+        (async () => {
+          try {
+            const filters: any = {};
+            if (branchFilter.singleBranchId) filters.branchId = branchFilter.singleBranchId;
+            if (monthStart) filters.startDate = monthStart;
+            if (monthEnd) filters.endDate = monthEnd;
+            let records = await storage.getAllAttendanceRecords(filters);
+            if (branchFilter.branchIds !== null && !branchFilter.singleBranchId) {
+              const allowedSet = new Set(branchFilter.branchIds);
+              records = records.filter((r: any) => allowedSet.has(r.branchId));
+            }
+            return records;
+          } catch (e) { return []; }
+        })(),
+        (async () => {
+          try {
+            if (!monthStart || !monthEnd) return [];
+            if (branchFilter.singleBranchId) {
+              return await storage.getEmployeeSchedulesByBranchAndDateRange(
+                branchFilter.singleBranchId, monthStart, monthEnd
+              );
+            }
+            if (branchFilter.branchIds && branchFilter.branchIds.length > 0) {
+              const allSchedules = await Promise.all(
+                branchFilter.branchIds.map(bid =>
+                  storage.getEmployeeSchedulesByBranchAndDateRange(bid, monthStart!, monthEnd!).catch(() => [])
+                )
+              );
+              return allSchedules.flat();
+            }
+            return [];
+          } catch (e) { return []; }
+        })(),
+      ]);
+
+      res.json({ employees, attendance, schedules });
+    } catch (error) {
+      console.error("Error fetching employee reports bundle:", error);
+      res.status(500).json({ error: "فشل في جلب بيانات تقارير الموظفين" });
+    }
+  });
+
+  // Shift management bundle - combines multiple queries into one
+  app.get("/api/shift-management/bundle", isAuthenticated, requirePermission("shifts", "view"), async (req, res) => {
+    try {
+      const branchId = req.query.branchId as string;
+      const startDate = req.query.startDate as string;
+      const endDate = req.query.endDate as string;
+
+      if (!branchId || branchId === "all") {
+        return res.json({ shiftProfiles: [], employees: [], schedules: [], attendance: [], weeklyLock: [] });
+      }
+
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول" });
+        }
+      }
+
+      const [shiftProfiles, employees, schedules, attendance, weeklyLock] = await Promise.all([
+        storage.getBranchShiftProfiles(branchId).catch(() => []),
+        storage.getBranchEmployeesByBranch(branchId).then(
+          emps => emps.filter((e: any) => e.status === "active")
+        ).catch(() => []),
+        (startDate && endDate)
+          ? storage.getEmployeeSchedulesByBranchAndDateRange(branchId, startDate, endDate).catch(() => [])
+          : Promise.resolve([]),
+        (startDate && endDate)
+          ? storage.getAllAttendanceRecords({ branchId, startDate, endDate }).catch(() => [])
+          : Promise.resolve([]),
+        (startDate)
+          ? db.select().from(weeklyScheduleLocks).where(
+              and(
+                eq(weeklyScheduleLocks.branchId, branchId),
+                eq(weeklyScheduleLocks.weekStartDate, startDate)
+              )
+            ).catch(() => [])
+          : Promise.resolve([]),
+      ]);
+
+      res.json({ shiftProfiles, employees, schedules, attendance, weeklyLock });
+    } catch (error) {
+      console.error("Error fetching shift management bundle:", error);
+      res.status(500).json({ error: "فشل في جلب بيانات إدارة الورديات" });
+    }
+  });
+
   // Get all branch employees or filter by branch
   app.get("/api/branch-employees", isAuthenticated, requirePermission("branch_employees", "view"), async (req, res) => {
     try {
