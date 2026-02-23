@@ -30154,6 +30154,22 @@ export async function registerRoutes(
     }
   });
 
+
+  // Event POS Product Sales Details for Excel Export
+  app.get("/api/pos/report/:branchId/product-details", isAuthenticated, requirePermission("event_pos", "view"), async (req, res) => {
+    try {
+      const branchId = req.params.branchId;
+      if (!await canAccessBranch(req, branchId)) {
+        return res.status(403).json({ error: "لا يمكنك الوصول لهذا الفرع" });
+      }
+      const startDate = (req.query.startDate as string) || new Date().toISOString().slice(0, 10);
+      const endDate = (req.query.endDate as string) || new Date().toISOString().slice(0, 10);
+      const details = await storage.getPosProductSalesDetails(branchId, startDate, endDate);
+      res.json(details);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
   return httpServer;
 }
 

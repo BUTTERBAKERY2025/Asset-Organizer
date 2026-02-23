@@ -6597,11 +6597,54 @@ export default function OperationsReportsDashboardPage() {
                     <>
                       <Card>
                         <CardHeader className="pb-2">
-                          <CardTitle className="text-sm font-bold flex items-center gap-2">
-                            <Package className="w-4 h-4 text-orange-500" />
-                            المبيعات حسب المنتجات
-                          </CardTitle>
-                          <CardDescription>تفاصيل المنتجات المباعة في إيفنت موسمي</CardDescription>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <CardTitle className="text-sm font-bold flex items-center gap-2">
+                                <Package className="w-4 h-4 text-orange-500" />
+                                المبيعات حسب المنتجات
+                              </CardTitle>
+                              <CardDescription>تفاصيل المنتجات المباعة في إيفنت موسمي</CardDescription>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              data-testid="button-export-event-products"
+                              className="gap-1 text-xs"
+                              onClick={async () => {
+                                try {
+                                  const res = await fetch(`/api/pos/report/EVENT-BB/product-details?startDate=${filters.startDate || ''}&endDate=${filters.endDate || ''}`);
+                                  if (!res.ok) throw new Error('فشل جلب البيانات');
+                                  const details = await res.json();
+                                  const XLSX = await import("xlsx");
+                                  const paymentLabels: Record<string, string> = { cash: 'نقد', network: 'شبكة', split: 'مقسم' };
+                                  const excelData = details.map((item: any, idx: number) => ({
+                                    '#': idx + 1,
+                                    'المنتج': item.productName,
+                                    'الكمية': item.quantity,
+                                    'سعر الوحدة': item.unitPrice,
+                                    'الإجمالي': item.totalPrice,
+                                    'الضريبة': item.vatAmount,
+                                    'التاريخ': item.saleDate,
+                                    'طريقة الدفع': paymentLabels[item.paymentMethod] || item.paymentMethod,
+                                    'رقم الفاتورة': item.invoiceNumber,
+                                  }));
+                                  const ws = XLSX.utils.json_to_sheet(excelData);
+                                  ws['!cols'] = [
+                                    { wch: 5 }, { wch: 25 }, { wch: 8 }, { wch: 12 },
+                                    { wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 18 }
+                                  ];
+                                  const wb = XLSX.utils.book_new();
+                                  XLSX.utils.book_append_sheet(wb, ws, "المبيعات حسب المنتجات");
+                                  XLSX.writeFile(wb, `مبيعات_إيفنت_${filters.startDate || 'all'}_${filters.endDate || 'all'}.xlsx`);
+                                } catch (e) {
+                                  console.error('Export error:', e);
+                                }
+                              }}
+                            >
+                              <FileDown className="w-4 h-4" />
+                              تصدير Excel
+                            </Button>
+                          </div>
                         </CardHeader>
                         <CardContent>
                           <div className="overflow-x-auto">

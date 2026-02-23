@@ -1314,6 +1314,16 @@ export interface IStorage {
     dailySales: { date: string; sales: number; transactions: number }[];
     paymentBreakdown: { method: string; amount: number; count: number }[];
   }>;
+  getPosProductSalesDetails(branchId: string, startDate: string, endDate: string): Promise<{
+    productName: string;
+    quantity: number;
+    unitPrice: number;
+    totalPrice: number;
+    vatAmount: number;
+    saleDate: string;
+    paymentMethod: string;
+    invoiceNumber: string;
+  }[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -14479,6 +14489,38 @@ export class DatabaseStorage implements IStorage {
         avgPrice: Number(r.avgPrice) || 0,
       })) : [],
     };
+  }
+
+  async getPosProductSalesDetails(branchId: string, startDate: string, endDate: string): Promise<any[]> {
+    const result = await db.execute(sql`
+      SELECT 
+        psi.product_name as "productName",
+        psi.quantity as "quantity",
+        psi.unit_price as "unitPrice",
+        psi.total_price as "totalPrice",
+        psi.vat_amount as "vatAmount",
+        ps.sale_date as "saleDate",
+        ps.payment_method as "paymentMethod",
+        ps.invoice_number as "invoiceNumber"
+      FROM pos_sale_items psi
+      INNER JOIN pos_sales ps ON psi.sale_id = ps.id
+      WHERE ps.branch_id = ${branchId} 
+        AND ps.sale_date >= ${startDate} 
+        AND ps.sale_date <= ${endDate} 
+        AND ps.status = 'completed'
+      ORDER BY ps.sale_date DESC, psi.product_name
+    `);
+    const rows: any[] = (result as any).rows || result || [];
+    return rows.map((r: any) => ({
+      productName: r.productName || '',
+      quantity: Number(r.quantity) || 0,
+      unitPrice: Number(r.unitPrice) || 0,
+      totalPrice: Number(r.totalPrice) || 0,
+      vatAmount: Number(r.vatAmount) || 0,
+      saleDate: r.saleDate || '',
+      paymentMethod: r.paymentMethod || '',
+      invoiceNumber: r.invoiceNumber || '',
+    }));
   }
 }
 
