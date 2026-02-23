@@ -137,6 +137,22 @@ export async function registerRoutes(
   // Setup authentication
   await setupAuth(app);
 
+  app.get("/api/version", (_req, res) => {
+    res.json({ version: "2026-02-23-v3", build: Date.now(), status: "ok" });
+  });
+
+  app.get("/api/attendance-debug", async (_req, res) => {
+    try {
+      const branchId = (_req.query.branchId as string) || "tabuk";
+      const shiftType = (_req.query.shiftType as string) || "evening";
+      const date = (_req.query.date as string) || new Date().toISOString().split("T")[0];
+      const employees = await storage.getScheduledEmployeesForAttendance(branchId, shiftType, date);
+      res.json({ count: employees.length, branchId, shiftType, date, names: employees.map((e: any) => e.employeeName) });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.use('/api/', (req, res, next) => {
     if (req.method === "POST" || req.method === "PUT" || req.method === "PATCH" || req.method === "DELETE") {
       const pathParts = req.path.split("/").filter(Boolean);
