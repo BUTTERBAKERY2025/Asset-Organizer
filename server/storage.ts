@@ -8589,6 +8589,130 @@ export class DatabaseStorage implements IStorage {
     }).map(({ _isDeleted, _isTransferred, ...rest }: any) => rest);
 
     if (uniqueEmployees.length === 0) {
+      // Fallback 1: Look for the most recent schedules for this branch+shift and replicate
+      // First try with exact shiftType match in the query
+      let recentSchedules = await db.select({
+        employeeId: employeeSchedules.employeeId,
+        employeeName: employeeSchedules.employeeName,
+        branchEmployeeId: employeeSchedules.branchEmployeeId,
+        startTime: employeeSchedules.startTime,
+        endTime: employeeSchedules.endTime,
+        shiftType: employeeSchedules.shiftType,
+      })
+      .from(employeeSchedules)
+      .where(and(
+        eq(employeeSchedules.branchId, branchId),
+        eq(employeeSchedules.isOff, false),
+        eq(employeeSchedules.status, 'scheduled'),
+        eq(employeeSchedules.shiftType, shiftType),
+        lte(employeeSchedules.scheduleDate, date)
+      ))
+      .orderBy(desc(employeeSchedules.scheduleDate))
+      .limit(100);
+
+      // If no results with exact shiftType, try without shiftType filter and infer from startTime
+      if (recentSchedules.length === 0) {
+        recentSchedules = await db.select({
+          employeeId: employeeSchedules.employeeId,
+          employeeName: employeeSchedules.employeeName,
+          branchEmployeeId: employeeSchedules.branchEmployeeId,
+          startTime: employeeSchedules.startTime,
+          endTime: employeeSchedules.endTime,
+          shiftType: employeeSchedules.shiftType,
+        })
+        .from(employeeSchedules)
+        .where(and(
+          eq(employeeSchedules.branchId, branchId),
+          eq(employeeSchedules.isOff, false),
+          eq(employeeSchedules.status, 'scheduled'),
+          lte(employeeSchedules.scheduleDate, date)
+        ))
+        .orderBy(desc(employeeSchedules.scheduleDate))
+        .limit(100);
+      }
+
+      // Filter by shift type from startTime if shiftType column didn't match
+      const recentFiltered = recentSchedules.filter(s => {
+        if (s.shiftType === shiftType) return true;
+        if (!s.startTime) return false;
+        const hour = parseInt(s.startTime.split(":")[0], 10);
+        if (shiftType === "morning" && hour >= 5 && hour < 12) return true;
+        if (shiftType === "evening" && hour >= 12 && hour < 20) return true;
+        if (shiftType === "night" && (hour >= 20 || hour < 5)) return true;
+        return false;
+      });
+
+      // Deduplicate by employeeId (take first = most recent)
+      const seenRecent = new Set<string>();
+      const deduped = recentFiltered.filter(s => {
+        if (seenRecent.has(s.employeeId)) return false;
+        seenRecent.add(s.employeeId);
+        return true;
+      });
+
+      if (deduped.length > 0) {
+        // Batch resolve names from branch_employees
+        const recentBranchEmpIds = new Set<number>();
+        for (const s of deduped) {
+          if (s.employeeId.startsWith('branch_emp_')) {
+            const id = parseInt(s.employeeId.replace('branch_emp_', ''), 10);
+            if (!isNaN(id)) recentBranchEmpIds.add(id);
+          }
+          if (s.branchEmployeeId) recentBranchEmpIds.add(s.branchEmployeeId);
+        }
+        const recentBranchEmpLookup = new Map<number, any>();
+        if (recentBranchEmpIds.size > 0) {
+          const emps = await db.select().from(branchEmployees)
+            .where(inArray(branchEmployees.id, Array.from(recentBranchEmpIds)));
+          for (const emp of emps) recentBranchEmpLookup.set(emp.id, emp);
+        }
+
+        // Batch attendance
+        const recentIds = deduped.map(s => s.employeeId);
+        const recentAtt = recentIds.length > 0
+          ? await db.select().from(attendanceRecords)
+              .where(and(eq(attendanceRecords.attendanceDate, date), inArray(attendanceRecords.employeeId, recentIds)))
+          : [];
+        const recentAttMap = new Map<string, any>();
+        for (const r of recentAtt) recentAttMap.set(r.employeeId, r);
+
+        // Filter out transferred/inactive employees
+        const validEmployees = deduped.filter(s => {
+          if (s.employeeId.startsWith('branch_emp_')) {
+            const id = parseInt(s.employeeId.replace('branch_emp_', ''), 10);
+            const emp = recentBranchEmpLookup.get(id);
+            if (emp && (emp.branchId !== branchId || emp.status !== 'active')) return false;
+          }
+          return true;
+        });
+
+        return validEmployees.map((s, idx) => {
+          let name = s.employeeName;
+          let nameEn = '';
+          if (s.employeeId.startsWith('branch_emp_')) {
+            const id = parseInt(s.employeeId.replace('branch_emp_', ''), 10);
+            const emp = recentBranchEmpLookup.get(id);
+            if (emp?.employeeName) { name = emp.employeeName; nameEn = emp.employeeNameEn || ''; }
+          }
+          if (nameIsUnresolved(name) && s.branchEmployeeId) {
+            const emp = recentBranchEmpLookup.get(s.branchEmployeeId);
+            if (emp?.employeeName) { name = emp.employeeName; nameEn = emp.employeeNameEn || ''; }
+          }
+          return {
+            id: idx + 1,
+            employeeId: s.employeeId,
+            employeeName: name || 'غير معروف',
+            employeeNameEn: nameEn,
+            startTime: s.startTime,
+            endTime: s.endTime,
+            shiftType,
+            scheduleDate: date,
+            attendance: recentAttMap.get(s.employeeId) || null,
+          };
+        }).filter(e => !nameIsUnresolved(e.employeeName));
+      }
+
+      // Fallback 2: Show all active branch employees with default shift times
       const branchEmps = await this.getBranchEmployeesByBranch(branchId);
       const activeEmployees = branchEmps.filter(emp => emp.status === 'active');
 
@@ -8599,7 +8723,6 @@ export class DatabaseStorage implements IStorage {
       };
       const defaultTimes = shiftTimes[shiftType] || shiftTimes.morning;
 
-      // BATCH: Get all attendance in one query for fallback employees
       const fallbackIds = activeEmployees.map(emp => `branch_emp_${emp.id}`);
       const fallbackAttendance = fallbackIds.length > 0
         ? await db.select().from(attendanceRecords)
