@@ -46,6 +46,7 @@ pool.on('error', (err) => {
 pool.on('connect', (client) => {
   if (isSupabase) {
     client.query('SET statement_timeout = 45000').catch(() => {});
+    client.query('SET plan_cache_mode = force_generic_plan').catch(() => {});
   }
 });
 
@@ -56,7 +57,7 @@ export async function warmupPool() {
     const client = await pool.connect();
     await client.query('SELECT 1');
     client.release();
-    const warmupCount = Math.min(3, isSupabase ? 2 : 3);
+    const warmupCount = isSupabase ? 4 : 3;
     const warmups = Array.from({ length: warmupCount }, async () => {
       const c = await pool.connect();
       await c.query('SELECT 1');

@@ -100,10 +100,10 @@ export const queryClient = new QueryClient({
       queryFn: getQueryFn({ on401: "throw" }),
       refetchInterval: false,
       refetchOnWindowFocus: false,
-      refetchOnMount: true,
-      refetchOnReconnect: false,
+      refetchOnMount: "always",
+      refetchOnReconnect: "always",
       staleTime: CACHE_TIMES.MEDIUM,
-      gcTime: 1000 * 60 * 60,
+      gcTime: 1000 * 60 * 120,
       retry: (failureCount, error) => {
         if (error instanceof Error && error.message.startsWith("401")) {
           return false;

@@ -1,9 +1,45 @@
-import express, { type Express } from "express";
+import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import fs from "fs";
 import path from "path";
 
 let preloadHeaders: string[] = [];
 let indexHtmlCache: Buffer | null = null;
+
+function servePrecompressed(staticRoot: string) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const acceptEncoding = req.headers["accept-encoding"] || "";
+    const filePath = path.join(staticRoot, req.path);
+
+    if (typeof acceptEncoding === "string" && acceptEncoding.includes("br")) {
+      const brPath = filePath + ".br";
+      if (fs.existsSync(brPath)) {
+        res.set("Content-Encoding", "br");
+        res.set("Vary", "Accept-Encoding");
+        const ext = path.extname(filePath);
+        if (ext === ".js") res.set("Content-Type", "application/javascript; charset=utf-8");
+        else if (ext === ".css") res.set("Content-Type", "text/css; charset=utf-8");
+        else if (ext === ".html") res.set("Content-Type", "text/html; charset=utf-8");
+        return res.sendFile(brPath);
+      }
+    }
+
+    if (typeof acceptEncoding === "string" && acceptEncoding.includes("gzip")) {
+      const gzPath = filePath + ".gz";
+      if (fs.existsSync(gzPath)) {
+        res.set("Content-Encoding", "gzip");
+        res.set("Vary", "Accept-Encoding");
+        const ext = path.extname(filePath);
+        if (ext === ".js") res.set("Content-Type", "application/javascript; charset=utf-8");
+        else if (ext === ".css") res.set("Content-Type", "text/css; charset=utf-8");
+        else if (ext === ".html") res.set("Content-Type", "text/html; charset=utf-8");
+        return res.sendFile(gzPath);
+      }
+    }
+
+    res.set("Vary", "Accept-Encoding");
+    next();
+  };
+}
 
 function buildPreloadHeaders(distPath: string) {
   const assetsPath = path.join(distPath, "assets");
@@ -51,6 +87,7 @@ export function serveStatic(app: Express) {
 
   const assetsPath = path.join(distPath, "assets");
   if (fs.existsSync(assetsPath)) {
+    app.use("/assets", servePrecompressed(assetsPath));
     app.use("/assets", express.static(assetsPath, {
       maxAge: "1y",
       immutable: true,
@@ -59,6 +96,7 @@ export function serveStatic(app: Express) {
     }));
   }
 
+  app.use(servePrecompressed(distPath));
   app.use(express.static(distPath, {
     maxAge: "1h",
     etag: true,

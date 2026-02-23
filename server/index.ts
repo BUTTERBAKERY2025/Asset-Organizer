@@ -15,8 +15,8 @@ const httpServer = createServer(app);
 
 app.set('trust proxy', 1);
 app.use(compression({
-  threshold: 128,
-  level: 4,
+  threshold: 256,
+  level: 6,
   memLevel: 8,
   filter: (req, res) => {
     if (req.headers['x-no-compression']) return false;
@@ -231,10 +231,14 @@ process.on("SIGINT", () => gracefulShutdown("SIGINT"));
     }
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
   if (process.env.NODE_ENV === "production") {
+    try {
+      const { execFileSync } = await import("child_process");
+      execFileSync("node", ["scripts/precompress.js"], { timeout: 30000 });
+      log("Static assets precompressed", "precompress");
+    } catch (e) {
+      log("Precompression skipped", "precompress");
+    }
     serveStatic(app);
   } else {
     const { setupVite } = await import("./vite");

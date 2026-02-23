@@ -8,7 +8,7 @@ interface CacheEntry {
 }
 
 const cache = new Map<string, CacheEntry>();
-const MAX_CACHE_SIZE = 1000;
+const MAX_CACHE_SIZE = 2000;
 const DEFAULT_TTL = 45_000;
 
 const ROUTE_TTL: Record<string, number> = {
@@ -160,6 +160,7 @@ export function apiCacheMiddleware(req: Request, res: Response, next: NextFuncti
     res.set("ETag", etag);
     res.set("Cache-Control", `private, max-age=${maxAge}, stale-while-revalidate=${maxAge * 2}`);
     res.set("Age", String(age));
+    res.set("Vary", "Accept-Encoding");
     res.set("Content-Type", entry.headers["content-type"] || "application/json");
     if (entry.headers["content-encoding"]) {
       res.set("Content-Encoding", entry.headers["content-encoding"]);
@@ -177,16 +178,19 @@ export function apiCacheMiddleware(req: Request, res: Response, next: NextFuncti
       captured = true;
       const now = Date.now();
       const data = Buffer.from(JSON.stringify(body));
-      cache.set(key, {
-        data,
-        headers: { "content-type": "application/json; charset=utf-8" },
-        statusCode: res.statusCode,
-        timestamp: now,
-      });
-      evictOldest();
+      if (data.length >= 1024) {
+        cache.set(key, {
+          data,
+          headers: { "content-type": "application/json; charset=utf-8" },
+          statusCode: res.statusCode,
+          timestamp: now,
+        });
+        evictOldest();
+      }
       const maxAge = Math.floor(ttl / 1000);
       res.set("ETag", `"${now}"`);
       res.set("Cache-Control", `private, max-age=${maxAge}, stale-while-revalidate=${maxAge * 2}`);
+      res.set("Vary", "Accept-Encoding");
     }
     res.set("X-Cache", "MISS");
     return originalJson(body);
@@ -196,14 +200,17 @@ export function apiCacheMiddleware(req: Request, res: Response, next: NextFuncti
     if (!captured && res.statusCode >= 200 && res.statusCode < 300 && body) {
       captured = true;
       const data = Buffer.isBuffer(body) ? body : Buffer.from(typeof body === "string" ? body : JSON.stringify(body));
-      const contentType = res.getHeader("content-type") as string || "application/octet-stream";
-      cache.set(key, {
-        data,
-        headers: { "content-type": contentType },
-        statusCode: res.statusCode,
-        timestamp: Date.now(),
-      });
-      evictOldest();
+      if (data.length >= 1024) {
+        const contentType = res.getHeader("content-type") as string || "application/octet-stream";
+        cache.set(key, {
+          data,
+          headers: { "content-type": contentType },
+          statusCode: res.statusCode,
+          timestamp: Date.now(),
+        });
+        evictOldest();
+      }
+      res.set("Vary", "Accept-Encoding");
     }
     res.set("X-Cache", "MISS");
     return originalSend(body);

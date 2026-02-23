@@ -1,7 +1,7 @@
-const CACHE_NAME = 'butter-v4';
-const STATIC_CACHE = 'butter-static-v4';
-const FONT_CACHE = 'butter-fonts-v3';
-const API_CACHE = 'butter-api-v3';
+const CACHE_NAME = 'butter-v5';
+const STATIC_CACHE = 'butter-static-v5';
+const FONT_CACHE = 'butter-fonts-v4';
+const API_CACHE = 'butter-api-v4';
 
 const STATIC_ASSETS = [
   '/',
@@ -9,9 +9,9 @@ const STATIC_ASSETS = [
   '/favicon.png'
 ];
 
-const API_CACHE_MAX_AGE = 30 * 1000;
-const API_CACHE_MAX_ITEMS = 80;
-const STATIC_CACHE_MAX_ITEMS = 200;
+const API_CACHE_MAX_AGE = 60 * 1000;
+const API_CACHE_MAX_ITEMS = 150;
+const STATIC_CACHE_MAX_ITEMS = 400;
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -29,9 +29,8 @@ self.addEventListener('activate', (event) => {
           .filter((name) => !keepCaches.includes(name))
           .map((name) => caches.delete(name))
       )
-    )
+    ).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', (event) => {
@@ -48,8 +47,13 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  if (url.pathname.endsWith('.js') || url.pathname.endsWith('.css')) {
+    event.respondWith(cacheFirst(event.request, STATIC_CACHE));
+    return;
+  }
+
   if (url.pathname.startsWith('/api/')) {
-    if (url.pathname.includes('/export') || url.pathname.includes('/download') || url.pathname.includes('/pdf')) {
+    if (url.pathname.includes('/export') || url.pathname.includes('/download') || url.pathname.includes('/pdf') || url.pathname.includes('/file/')) {
       return;
     }
     if (url.pathname.startsWith('/api/auth/')) {
@@ -61,12 +65,14 @@ self.addEventListener('fetch', (event) => {
       '/api/contractors', '/api/chart-of-accounts',
       '/api/targets', '/api/construction-projects',
       '/api/warehouse/items', '/api/branch-cashiers',
+      '/api/biometric-settings', '/api/point-settings',
+      '/api/product-commissions', '/api/checklist-templates',
     ];
     const basePath = url.pathname.split('?')[0];
     if (SAFE_STALE_ENDPOINTS.includes(basePath)) {
       event.respondWith(apiStaleWhileRevalidate(event.request));
     } else {
-      event.respondWith(networkFirst(event.request));
+      event.respondWith(networkFirstFast(event.request));
     }
     return;
   }
@@ -82,39 +88,36 @@ self.addEventListener('fetch', (event) => {
 });
 
 async function cacheFirst(request, cacheName) {
-  const cache = await caches.open(cacheName);
-  const cached = await cache.match(request);
+  const cached = await caches.match(request);
   if (cached) return cached;
   try {
     const response = await fetch(request);
-    if (response.ok) cache.put(request, response.clone());
+    if (response.ok) {
+      const cache = await caches.open(cacheName);
+      cache.put(request, response.clone());
+    }
     return response;
   } catch (e) {
     return new Response('', { status: 503 });
   }
 }
 
-async function networkFirst(request) {
+async function networkFirstFast(request) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 3000);
   try {
-    const response = await fetch(request);
+    const response = await fetch(request, { signal: controller.signal });
+    clearTimeout(timeoutId);
     if (response.ok) {
       const cache = await caches.open(API_CACHE);
       cache.put(request, response.clone());
-      trimCache(API_CACHE, API_CACHE_MAX_ITEMS);
+      trimCacheAsync(API_CACHE, API_CACHE_MAX_ITEMS);
     }
     return response;
   } catch (e) {
+    clearTimeout(timeoutId);
     const cached = await caches.match(request);
-    if (cached) {
-      const dateHeader = cached.headers.get('date');
-      if (dateHeader && (Date.now() - new Date(dateHeader).getTime()) > API_CACHE_MAX_AGE) {
-        return new Response(JSON.stringify({ error: 'offline' }), {
-          status: 503,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-      return cached;
-    }
+    if (cached) return cached;
     return new Response(JSON.stringify({ error: 'offline' }), {
       status: 503,
       headers: { 'Content-Type': 'application/json' }
@@ -123,12 +126,13 @@ async function networkFirst(request) {
 }
 
 async function staleWhileRevalidate(request) {
-  const cache = await caches.open(STATIC_CACHE);
-  const cached = await cache.match(request);
+  const cached = await caches.match(request);
   const fetchPromise = fetch(request).then((response) => {
     if (response.ok) {
-      cache.put(request, response.clone());
-      trimCache(STATIC_CACHE, STATIC_CACHE_MAX_ITEMS);
+      const cache = caches.open(STATIC_CACHE).then(c => {
+        c.put(request, response.clone());
+        trimCacheAsync(STATIC_CACHE, STATIC_CACHE_MAX_ITEMS);
+      });
     }
     return response;
   }).catch(() => cached || new Response('', { status: 503 }));
@@ -137,13 +141,14 @@ async function staleWhileRevalidate(request) {
 }
 
 async function apiStaleWhileRevalidate(request) {
-  const cache = await caches.open(API_CACHE);
-  const cached = await cache.match(request);
+  const cached = await caches.match(request);
 
   const fetchPromise = fetch(request).then((response) => {
     if (response.ok) {
-      cache.put(request, response.clone());
-      trimCache(API_CACHE, API_CACHE_MAX_ITEMS);
+      caches.open(API_CACHE).then(cache => {
+        cache.put(request, response.clone());
+        trimCacheAsync(API_CACHE, API_CACHE_MAX_ITEMS);
+      });
     }
     return response;
   }).catch(() => {
@@ -157,14 +162,19 @@ async function apiStaleWhileRevalidate(request) {
   return cached || fetchPromise;
 }
 
-async function trimCache(cacheName, maxItems) {
-  const cache = await caches.open(cacheName);
-  const keys = await cache.keys();
-  if (keys.length > maxItems) {
-    for (let i = 0; i < keys.length - maxItems; i++) {
-      await cache.delete(keys[i]);
+let trimPending = new Set();
+function trimCacheAsync(cacheName, maxItems) {
+  if (trimPending.has(cacheName)) return;
+  trimPending.add(cacheName);
+  setTimeout(async () => {
+    trimPending.delete(cacheName);
+    const cache = await caches.open(cacheName);
+    const keys = await cache.keys();
+    if (keys.length > maxItems) {
+      const toDelete = keys.slice(0, keys.length - maxItems);
+      await Promise.all(toDelete.map(k => cache.delete(k)));
     }
-  }
+  }, 5000);
 }
 
 self.addEventListener('message', (event) => {
