@@ -82,6 +82,9 @@ const ROUTE_TTL: Record<string, number> = {
   "/api/warehouse/bundle": 60_000,
   "/api/branch-employees/bundle": 60_000,
   "/api/cashier-performance/bundle": 45_000,
+  "/api/attendance-check/bundle": 15_000,
+  "/api/scheduled-employees-for-attendance": 15_000,
+  "/api/biometric/branch": 60_000,
 };
 
 function getTTL(path: string): number {

@@ -17,6 +17,7 @@ import { Clock, LogIn, LogOut, Check, Pencil, RotateCcw, Building2, User, Timer,
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
+import type { Locale } from "date-fns";
 import type { Branch, EmployeeSchedule, AttendanceRecord } from "@shared/schema";
 
 const LiveClock = memo(function LiveClock({ dateLocale }: { dateLocale: Locale }) {
@@ -119,6 +120,24 @@ export default function AttendanceCheckPage() {
 
   const scheduledEmployees = attendanceBundle?.employees;
   const biometricStatusMap = attendanceBundle?.biometricStatus;
+
+  // Prefetch all shift types when branch is selected so data is ready instantly
+  useEffect(() => {
+    if (selectedBranch && selectedDate) {
+      const shifts = ["morning", "evening", "night"];
+      shifts.forEach(shift => {
+        queryClient.prefetchQuery({
+          queryKey: ["/api/attendance-check/bundle", selectedBranch, shift, selectedDate],
+          queryFn: async () => {
+            const res = await fetch(`/api/attendance-check/bundle?branchId=${selectedBranch}&shiftType=${shift}&date=${selectedDate}`, { credentials: "include" });
+            if (!res.ok) return { employees: [], biometricStatus: {} };
+            return res.json();
+          },
+          staleTime: 15_000,
+        });
+      });
+    }
+  }, [selectedBranch, selectedDate, queryClient]);
 
   useEffect(() => {
     if (userBranchId && !selectedBranch) {
@@ -707,8 +726,17 @@ export default function AttendanceCheckPage() {
             </CardHeader>
             <CardContent>
               {loadingEmployees ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                <div className="space-y-3 py-4">
+                  {[1,2,3,4,5].map(i => (
+                    <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 animate-pulse">
+                      <div className="w-10 h-10 rounded-full bg-muted" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-4 bg-muted rounded w-1/3" />
+                        <div className="h-3 bg-muted rounded w-1/4" />
+                      </div>
+                      <div className="h-8 w-20 bg-muted rounded" />
+                    </div>
+                  ))}
                 </div>
               ) : !scheduledEmployees || scheduledEmployees.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
