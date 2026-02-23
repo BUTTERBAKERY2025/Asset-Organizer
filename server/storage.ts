@@ -8465,15 +8465,20 @@ export class DatabaseStorage implements IStorage {
       eq(employeeSchedules.status, 'scheduled')
     ));
 
+    // Deterministic shift matching: actual startTime takes priority over shiftType label
+    // This handles cases where shiftType label doesn't match actual work hours
+    const inferShiftFromTime = (startTime: string): string => {
+      const hour = parseInt(startTime.split(":")[0], 10);
+      if (hour >= 5 && hour < 12) return "morning";
+      if (hour >= 12 && hour < 20) return "evening";
+      return "night";
+    };
+
     const filteredSchedules = schedules.filter(s => {
-      if (s.shiftType === shiftType) return true;
-      if (!s.shiftType && s.startTime) {
-        const hour = parseInt(s.startTime.split(":")[0], 10);
-        if (shiftType === "morning" && hour >= 5 && hour < 12) return true;
-        if (shiftType === "evening" && hour >= 12 && hour < 20) return true;
-        if (shiftType === "night" && (hour >= 20 || hour < 5)) return true;
+      if (s.startTime) {
+        return inferShiftFromTime(s.startTime) === shiftType;
       }
-      return false;
+      return s.shiftType === shiftType;
     });
 
     // BATCH: Get all attendance records for this branch+date in ONE query
@@ -8631,15 +8636,16 @@ export class DatabaseStorage implements IStorage {
         .limit(100);
       }
 
-      // Filter by shift type from startTime if shiftType column didn't match
+      // Deterministic: actual startTime takes priority over shiftType label
+      const inferShift = (startTime: string): string => {
+        const hour = parseInt(startTime.split(":")[0], 10);
+        if (hour >= 5 && hour < 12) return "morning";
+        if (hour >= 12 && hour < 20) return "evening";
+        return "night";
+      };
       const recentFiltered = recentSchedules.filter(s => {
-        if (s.shiftType === shiftType) return true;
-        if (!s.startTime) return false;
-        const hour = parseInt(s.startTime.split(":")[0], 10);
-        if (shiftType === "morning" && hour >= 5 && hour < 12) return true;
-        if (shiftType === "evening" && hour >= 12 && hour < 20) return true;
-        if (shiftType === "night" && (hour >= 20 || hour < 5)) return true;
-        return false;
+        if (s.startTime) return inferShift(s.startTime) === shiftType;
+        return s.shiftType === shiftType;
       });
 
       // Deduplicate by employeeId (take first = most recent)
