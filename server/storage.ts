@@ -8447,6 +8447,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getScheduledEmployeesForAttendance(branchId: string, shiftType: string, date: string): Promise<any[]> {
+    console.log(`[ATTENDANCE-DEBUG] Query params: branchId=${branchId}, shiftType=${shiftType}, date=${date}`);
+
     const schedules = await db.select({
       id: employeeSchedules.id,
       employeeId: employeeSchedules.employeeId,
@@ -8465,8 +8467,14 @@ export class DatabaseStorage implements IStorage {
       eq(employeeSchedules.status, 'scheduled')
     ));
 
+    console.log(`[ATTENDANCE-DEBUG] Main query returned ${schedules.length} schedules for date=${date}`);
+    if (schedules.length > 0) {
+      console.log(`[ATTENDANCE-DEBUG] Sample schedules:`, schedules.slice(0, 3).map(s => ({
+        employeeId: s.employeeId, shiftType: s.shiftType, startTime: s.startTime, endTime: s.endTime
+      })));
+    }
+
     // Deterministic shift matching: actual startTime takes priority over shiftType label
-    // This handles cases where shiftType label doesn't match actual work hours
     const inferShiftFromTime = (startTime: string): string => {
       const hour = parseInt(startTime.split(":")[0], 10);
       if (hour >= 5 && hour < 12) return "morning";
@@ -8476,10 +8484,17 @@ export class DatabaseStorage implements IStorage {
 
     const filteredSchedules = schedules.filter(s => {
       if (s.startTime) {
-        return inferShiftFromTime(s.startTime) === shiftType;
+        const inferred = inferShiftFromTime(s.startTime);
+        const match = inferred === shiftType;
+        if (!match) {
+          console.log(`[ATTENDANCE-DEBUG] Employee ${s.employeeId} has shiftType=${s.shiftType} startTime=${s.startTime} -> inferred=${inferred}, requested=${shiftType} -> SKIPPED`);
+        }
+        return match;
       }
       return s.shiftType === shiftType;
     });
+
+    console.log(`[ATTENDANCE-DEBUG] After filter: ${filteredSchedules.length} employees match shiftType=${shiftType}`);
 
     // BATCH: Get all attendance records for this branch+date in ONE query
     const allEmployeeIds = filteredSchedules.map(s => s.employeeId);
@@ -8594,6 +8609,7 @@ export class DatabaseStorage implements IStorage {
     }).map(({ _isDeleted, _isTransferred, ...rest }: any) => rest);
 
     if (uniqueEmployees.length === 0) {
+      console.log(`[ATTENDANCE-DEBUG] No employees found for today. Trying fallback...`);
       // Fallback 1: Look for the most recent schedules for this branch+shift and replicate
       // First try with exact shiftType match in the query
       let recentSchedules = await db.select({
@@ -8615,6 +8631,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(employeeSchedules.scheduleDate))
       .limit(100);
 
+      console.log(`[ATTENDANCE-DEBUG] Fallback1 exact shiftType query: ${recentSchedules.length} results`);
       // If no results with exact shiftType, try without shiftType filter and infer from startTime
       if (recentSchedules.length === 0) {
         recentSchedules = await db.select({
@@ -8643,10 +8660,18 @@ export class DatabaseStorage implements IStorage {
         if (hour >= 12 && hour < 20) return "evening";
         return "night";
       };
+      if (recentSchedules.length > 0) {
+        console.log(`[ATTENDANCE-DEBUG] Fallback1 without shiftType filter: ${recentSchedules.length} results, samples:`, recentSchedules.slice(0, 3).map(s => ({
+          employeeId: s.employeeId, shiftType: s.shiftType, startTime: s.startTime
+        })));
+      }
+
       const recentFiltered = recentSchedules.filter(s => {
         if (s.startTime) return inferShift(s.startTime) === shiftType;
         return s.shiftType === shiftType;
       });
+
+      console.log(`[ATTENDANCE-DEBUG] Fallback1 after time-based filter: ${recentFiltered.length} employees`);
 
       // Deduplicate by employeeId (take first = most recent)
       const seenRecent = new Set<string>();
@@ -8718,7 +8743,9 @@ export class DatabaseStorage implements IStorage {
         }).filter(e => !nameIsUnresolved(e.employeeName));
       }
 
+      console.log(`[ATTENDANCE-DEBUG] Fallback1 deduped: ${deduped.length} unique employees`);
       // Fallback 2: Show all active branch employees with default shift times
+      console.log(`[ATTENDANCE-DEBUG] Entering Fallback2 - showing all active branch employees`);
       const branchEmps = await this.getBranchEmployeesByBranch(branchId);
       const activeEmployees = branchEmps.filter(emp => emp.status === 'active');
 
