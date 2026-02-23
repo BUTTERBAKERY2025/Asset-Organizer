@@ -8447,8 +8447,6 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getScheduledEmployeesForAttendance(branchId: string, shiftType: string, date: string): Promise<any[]> {
-    // Get employees scheduled for this branch, shift type, and date
-    // Also include schedules where shiftType is null but time matches the requested shift
     const schedules = await db.select({
       id: employeeSchedules.id,
       employeeId: employeeSchedules.employeeId,
@@ -8467,7 +8465,6 @@ export class DatabaseStorage implements IStorage {
       eq(employeeSchedules.status, 'scheduled')
     ));
 
-    // Filter by shift type or infer from start time
     const filteredSchedules = schedules.filter(s => {
       if (s.shiftType === shiftType) return true;
       if (!s.shiftType && s.startTime) {
@@ -8479,139 +8476,157 @@ export class DatabaseStorage implements IStorage {
       return false;
     });
 
-    // Get attendance for these employees today and resolve names
-    const employeesWithAttendance = await Promise.all(
-      filteredSchedules.map(async (schedule) => {
-        const attendance = await this.getAttendanceByEmployeeAndDate(schedule.employeeId, date);
-        
-        let resolvedName = schedule.employeeName;
-        let resolvedNameEn = '';
-        
-        // Helper to lookup branch employee by ID
-        const lookupBranchEmployee = async (empId: number) => {
-          const [branchEmp] = await db.select()
-            .from(branchEmployees)
-            .where(eq(branchEmployees.id, empId))
-            .limit(1);
-          return branchEmp;
-        };
-        
-        const nameIsUnresolved = (name: string | null | undefined) => !name || name === 'Unknown' || name === 'غير معروف';
-        
-        // Strategy 1: If employeeId is branch_emp_XX format, parse and lookup
-        if (schedule.employeeId.startsWith('branch_emp_')) {
-          try {
-            const branchEmpId = parseInt(schedule.employeeId.replace('branch_emp_', ''), 10);
-            if (!isNaN(branchEmpId)) {
-              const branchEmp = await lookupBranchEmployee(branchEmpId);
-              if (branchEmp?.employeeName) {
-                resolvedName = branchEmp.employeeName;
-                resolvedNameEn = branchEmp.employeeNameEn || '';
-              }
-            }
-          } catch (e) {
-            // Continue to fallback
-          }
-        }
-        
-        // Strategy 2: If name still unresolved and we have branchEmployeeId, use it directly
-        if (nameIsUnresolved(resolvedName) && schedule.branchEmployeeId) {
-          try {
-            const branchEmp = await lookupBranchEmployee(schedule.branchEmployeeId);
-            if (branchEmp?.employeeName) {
-              resolvedName = branchEmp.employeeName;
-              resolvedNameEn = branchEmp.employeeNameEn || '';
-            }
-          } catch (e) {
-            // Continue to fallback
-          }
-        }
-        
-        // Strategy 3: If still unresolved and employeeId is not branch_emp_ format, try users table
-        if (nameIsUnresolved(resolvedName) && !schedule.employeeId.startsWith('branch_emp_')) {
-          try {
-            const employee = await this.getUser(schedule.employeeId);
-            if (employee) {
-              resolvedName = `${employee.firstName || ''} ${employee.lastName || ''}`.trim() || employee.username || 'غير معروف';
-            }
-          } catch (e) {
-            // Continue
-          }
-        }
-        
-        const finalName = resolvedName || 'غير معروف';
-        return {
-          ...schedule,
-          employeeName: finalName,
-          employeeNameEn: resolvedNameEn || '',
-          attendance: attendance || null,
-          _isDeleted: nameIsUnresolved(finalName)
-        };
-      })
-    );
+    // BATCH: Get all attendance records for this branch+date in ONE query
+    const allEmployeeIds = filteredSchedules.map(s => s.employeeId);
+    const allAttendance = allEmployeeIds.length > 0
+      ? await db.select().from(attendanceRecords)
+          .where(and(
+            eq(attendanceRecords.attendanceDate, date),
+            inArray(attendanceRecords.employeeId, allEmployeeIds)
+          ))
+      : [];
+    const attendanceMap = new Map<string, any>();
+    for (const rec of allAttendance) {
+      attendanceMap.set(rec.employeeId, rec);
+    }
 
-    const verifiedEmployees = await Promise.all(
-      employeesWithAttendance.map(async (emp) => {
-        if (emp.employeeId.startsWith('branch_emp_')) {
-          try {
-            const branchEmpId = parseInt(emp.employeeId.replace('branch_emp_', ''), 10);
-            if (!isNaN(branchEmpId)) {
-              const [currentBranchEmp] = await db.select({ branchId: branchEmployees.branchId, status: branchEmployees.status })
-                .from(branchEmployees)
-                .where(eq(branchEmployees.id, branchEmpId))
-                .limit(1);
-              if (currentBranchEmp && (currentBranchEmp.branchId !== branchId || currentBranchEmp.status !== 'active')) {
-                return { ...emp, _isTransferred: true };
-              }
-            }
-          } catch (e) {}
+    // BATCH: Collect all branch employee IDs that need lookup
+    const branchEmpIdsToLookup = new Set<number>();
+    for (const s of filteredSchedules) {
+      if (s.employeeId.startsWith('branch_emp_')) {
+        const id = parseInt(s.employeeId.replace('branch_emp_', ''), 10);
+        if (!isNaN(id)) branchEmpIdsToLookup.add(id);
+      }
+      if (s.branchEmployeeId) branchEmpIdsToLookup.add(s.branchEmployeeId);
+    }
+    const branchEmpLookup = new Map<number, any>();
+    if (branchEmpIdsToLookup.size > 0) {
+      const lookupIds = Array.from(branchEmpIdsToLookup);
+      const emps = await db.select().from(branchEmployees)
+        .where(inArray(branchEmployees.id, lookupIds));
+      for (const emp of emps) {
+        branchEmpLookup.set(emp.id, emp);
+      }
+    }
+
+    const nameIsUnresolved = (name: string | null | undefined) => !name || name === 'Unknown' || name === 'غير معروف';
+
+    // BATCH: Lookup users table for non-branch_emp employees with unresolved names
+    const userIdsToLookup = filteredSchedules
+      .filter(s => !s.employeeId.startsWith('branch_emp_') && nameIsUnresolved(s.employeeName))
+      .map(s => s.employeeId);
+    const userLookup = new Map<string, any>();
+    if (userIdsToLookup.length > 0) {
+      const foundUsers = await db.select().from(users).where(inArray(users.id, userIdsToLookup));
+      for (const u of foundUsers) {
+        userLookup.set(u.id, u);
+      }
+    }
+
+    const employeesWithAttendance = filteredSchedules.map(schedule => {
+      const attendance = attendanceMap.get(schedule.employeeId) || null;
+      let resolvedName = schedule.employeeName;
+      let resolvedNameEn = '';
+
+      if (schedule.employeeId.startsWith('branch_emp_')) {
+        const branchEmpId = parseInt(schedule.employeeId.replace('branch_emp_', ''), 10);
+        if (!isNaN(branchEmpId)) {
+          const branchEmp = branchEmpLookup.get(branchEmpId);
+          if (branchEmp?.employeeName) {
+            resolvedName = branchEmp.employeeName;
+            resolvedNameEn = branchEmp.employeeNameEn || '';
+          }
         }
-        return emp;
-      })
-    );
+      }
+
+      if (nameIsUnresolved(resolvedName) && schedule.branchEmployeeId) {
+        const branchEmp = branchEmpLookup.get(schedule.branchEmployeeId);
+        if (branchEmp?.employeeName) {
+          resolvedName = branchEmp.employeeName;
+          resolvedNameEn = branchEmp.employeeNameEn || '';
+        }
+      }
+
+      // Fallback: resolve from users table for non-branch_emp employees
+      if (nameIsUnresolved(resolvedName) && !schedule.employeeId.startsWith('branch_emp_')) {
+        const user = userLookup.get(schedule.employeeId);
+        if (user) {
+          resolvedName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username || 'غير معروف';
+        }
+      }
+
+      const finalName = resolvedName || 'غير معروف';
+      const _isDeleted = nameIsUnresolved(finalName);
+
+      let _isTransferred = false;
+      if (schedule.employeeId.startsWith('branch_emp_')) {
+        const branchEmpId = parseInt(schedule.employeeId.replace('branch_emp_', ''), 10);
+        if (!isNaN(branchEmpId)) {
+          const currentBranchEmp = branchEmpLookup.get(branchEmpId);
+          if (currentBranchEmp && (currentBranchEmp.branchId !== branchId || currentBranchEmp.status !== 'active')) {
+            _isTransferred = true;
+          }
+        }
+      }
+
+      return {
+        ...schedule,
+        employeeName: finalName,
+        employeeNameEn: resolvedNameEn || '',
+        attendance,
+        _isDeleted,
+        _isTransferred,
+      };
+    });
 
     const seenEmployeeIds = new Set<string>();
-    const uniqueEmployees = verifiedEmployees.filter(emp => {
+    const uniqueEmployees = employeesWithAttendance.filter(emp => {
       if (emp._isDeleted) return false;
-      if ((emp as any)._isTransferred) return false;
+      if (emp._isTransferred) return false;
       if (seenEmployeeIds.has(emp.employeeId)) return false;
       seenEmployeeIds.add(emp.employeeId);
       return true;
     }).map(({ _isDeleted, _isTransferred, ...rest }: any) => rest);
 
-    // If no schedules found for today, fallback to branch employees with default shift times
     if (uniqueEmployees.length === 0) {
       const branchEmps = await this.getBranchEmployeesByBranch(branchId);
       const activeEmployees = branchEmps.filter(emp => emp.status === 'active');
-      
-      // Define default shift times
+
       const shiftTimes: Record<string, { start: string; end: string }> = {
         morning: { start: "06:00", end: "14:00" },
         evening: { start: "14:00", end: "22:00" },
         night: { start: "22:00", end: "06:00" }
       };
-      
       const defaultTimes = shiftTimes[shiftType] || shiftTimes.morning;
-      
-      const fallbackEmployees = await Promise.all(
-        activeEmployees.map(async (emp) => {
-          const employeeId = `branch_emp_${emp.id}`;
-          const attendance = await this.getAttendanceByEmployeeAndDate(employeeId, date);
-          return {
-            id: emp.id,
-            employeeId,
-            employeeName: emp.employeeName,
-            employeeNameEn: emp.employeeNameEn || '',
-            startTime: defaultTimes.start,
-            endTime: defaultTimes.end,
-            shiftType,
-            scheduleDate: date,
-            attendance: attendance || null
-          };
-        })
-      );
-      
-      return fallbackEmployees;
+
+      // BATCH: Get all attendance in one query for fallback employees
+      const fallbackIds = activeEmployees.map(emp => `branch_emp_${emp.id}`);
+      const fallbackAttendance = fallbackIds.length > 0
+        ? await db.select().from(attendanceRecords)
+            .where(and(
+              eq(attendanceRecords.attendanceDate, date),
+              inArray(attendanceRecords.employeeId, fallbackIds)
+            ))
+        : [];
+      const fallbackAttMap = new Map<string, any>();
+      for (const rec of fallbackAttendance) {
+        fallbackAttMap.set(rec.employeeId, rec);
+      }
+
+      return activeEmployees.map(emp => {
+        const employeeId = `branch_emp_${emp.id}`;
+        return {
+          id: emp.id,
+          employeeId,
+          employeeName: emp.employeeName,
+          employeeNameEn: emp.employeeNameEn || '',
+          startTime: defaultTimes.start,
+          endTime: defaultTimes.end,
+          shiftType,
+          scheduleDate: date,
+          attendance: fallbackAttMap.get(employeeId) || null
+        };
+      });
     }
 
     return uniqueEmployees;

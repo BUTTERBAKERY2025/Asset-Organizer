@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback, memo } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,24 @@ import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
 import type { Branch, EmployeeSchedule, AttendanceRecord } from "@shared/schema";
+
+const LiveClock = memo(function LiveClock({ dateLocale }: { dateLocale: Locale }) {
+  const [time, setTime] = useState(new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  return (
+    <>
+      <div className="text-3xl sm:text-4xl font-bold text-amber-600 tabular-nums">
+        {format(time, "hh:mm:ss", { locale: dateLocale })}
+      </div>
+      <div className="text-xs sm:text-sm text-muted-foreground">
+        {format(time, "a", { locale: dateLocale })}
+      </div>
+    </>
+  );
+});
 
 function base64urlToBuffer(base64url: string): Uint8Array {
   let base64 = base64url.replace(/-/g, "+").replace(/_/g, "/");
@@ -55,7 +73,6 @@ export default function AttendanceCheckPage() {
   const [selectedShift, setSelectedShift] = useState<string>("");
   const [selectedEmployee, setSelectedEmployee] = useState<ScheduledEmployee | null>(null);
   const [signatureMode, setSignatureMode] = useState<"check_in" | "check_out" | null>(null);
-  const [currentTime, setCurrentTime] = useState(new Date());
   const [locationStatus, setLocationStatus] = useState<"idle" | "checking" | "valid" | "invalid" | "error" | "no_location">("idle");
   const [locationDistance, setLocationDistance] = useState<number | null>(null);
   const [isCheckingLocation, setIsCheckingLocation] = useState(false);
@@ -85,32 +102,23 @@ export default function AttendanceCheckPage() {
 
   const { branches, userBranchId, canSelectBranch } = useBranches();
 
-  const { data: scheduledEmployees, isLoading: loadingEmployees } = useQuery<ScheduledEmployee[]>({
-    queryKey: ["/api/scheduled-employees-for-attendance", selectedBranch, selectedShift, selectedDate],
+  const { data: attendanceBundle, isLoading: loadingEmployees } = useQuery<{
+    employees: ScheduledEmployee[];
+    biometricStatus: Record<string, { hasCredential: boolean; hasPin: boolean; credentialCount: number; lastUsed: string | null; registrationMethod: string | null }>;
+  }>({
+    queryKey: ["/api/attendance-check/bundle", selectedBranch, selectedShift, selectedDate],
     queryFn: async () => {
-      if (!selectedBranch || !selectedShift) return [];
-      const res = await fetch(`/api/scheduled-employees-for-attendance?branchId=${selectedBranch}&shiftType=${selectedShift}&date=${selectedDate}`);
-      if (!res.ok) return [];
+      if (!selectedBranch || !selectedShift) return { employees: [], biometricStatus: {} };
+      const res = await fetch(`/api/attendance-check/bundle?branchId=${selectedBranch}&shiftType=${selectedShift}&date=${selectedDate}`, { credentials: "include" });
+      if (!res.ok) return { employees: [], biometricStatus: {} };
       return res.json();
     },
     enabled: !!selectedBranch && !!selectedShift,
+    staleTime: 15_000,
   });
 
-  const { data: biometricStatusMap } = useQuery<Record<string, { hasCredential: boolean; hasPin: boolean; credentialCount: number; lastUsed: string | null; registrationMethod: string | null }>>({
-    queryKey: ["/api/biometric/branch", selectedBranch],
-    queryFn: async () => {
-      if (!selectedBranch) return {};
-      const res = await fetch(`/api/biometric/branch/${selectedBranch}`);
-      if (!res.ok) return {};
-      return res.json();
-    },
-    enabled: !!selectedBranch,
-  });
-
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
+  const scheduledEmployees = attendanceBundle?.employees;
+  const biometricStatusMap = attendanceBundle?.biometricStatus;
 
   useEffect(() => {
     if (userBranchId && !selectedBranch) {
@@ -138,7 +146,7 @@ export default function AttendanceCheckPage() {
       return apiRequest("POST", "/api/attendance/check-in-employee", data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/scheduled-employees-for-attendance"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/attendance-check/bundle"] });
       toast({ title: t("attendanceCheck.checkInSuccess"), description: `${t("attendanceCheck.time")}: ${format(new Date(), "hh:mm a", { locale: dateLocale })}` });
       closeSignatureDialog();
     },
@@ -152,7 +160,7 @@ export default function AttendanceCheckPage() {
       return apiRequest("POST", "/api/attendance/check-out-employee", data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/scheduled-employees-for-attendance"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/attendance-check/bundle"] });
       toast({ title: t("attendanceCheck.checkOutSuccess"), description: `${t("attendanceCheck.time")}: ${format(new Date(), "hh:mm a", { locale: dateLocale })}` });
       closeSignatureDialog();
     },
@@ -572,10 +580,10 @@ export default function AttendanceCheckPage() {
           </div>
           <div className={isRTL ? "text-left" : "text-right"}>
             <div className="text-xl sm:text-2xl md:text-3xl font-mono font-bold text-primary" data-testid="current-time">
-              {format(currentTime, "hh:mm:ss", { locale: dateLocale })}
+              <LiveClock dateLocale={dateLocale} />
             </div>
             <div className="text-xs sm:text-sm text-muted-foreground">
-              {format(currentTime, "EEEE, dd MMMM yyyy", { locale: dateLocale })}
+              {format(new Date(), "EEEE, dd MMMM yyyy", { locale: dateLocale })}
             </div>
           </div>
         </div>
@@ -997,12 +1005,7 @@ export default function AttendanceCheckPage() {
               </div>
 
               <div className="text-center p-2 sm:p-3 bg-muted rounded-lg">
-                <div className="text-2xl sm:text-3xl font-mono font-bold text-primary">
-                  {format(currentTime, "hh:mm:ss", { locale: dateLocale })}
-                </div>
-                <div className="text-xs sm:text-sm text-muted-foreground">
-                  {format(currentTime, "a", { locale: dateLocale })}
-                </div>
+                <LiveClock dateLocale={dateLocale} />
               </div>
 
               <div className="p-2 sm:p-3 rounded-lg bg-amber-50 border border-amber-300">

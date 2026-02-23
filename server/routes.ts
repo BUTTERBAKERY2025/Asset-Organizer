@@ -22267,6 +22267,53 @@ export async function registerRoutes(
     }
   });
 
+  // Attendance check bundle - combines scheduled employees + biometric status
+  app.get("/api/attendance-check/bundle", isAuthenticated, requirePermission("attendance_check", "view"), async (req, res) => {
+    try {
+      const { branchId, shiftType, date } = req.query;
+      if (!branchId || !shiftType || !date) {
+        return res.status(400).json({ error: "الفرع والوردية والتاريخ مطلوبين" });
+      }
+      const branchIdStr = parseQueryString(branchId);
+      const shiftTypeStr = parseQueryString(shiftType);
+      const dateStr = parseQueryString(date);
+      if (!branchIdStr || !shiftTypeStr || !dateStr) {
+        return res.status(400).json({ error: "الفرع والوردية والتاريخ مطلوبين" });
+      }
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, branchIdStr);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لموظفي هذا الفرع" });
+        }
+      }
+      const [scheduledEmployees, biometricCredentials] = await Promise.all([
+        storage.getScheduledEmployeesForAttendance(branchIdStr, shiftTypeStr, dateStr),
+        storage.getBiometricCredentialsByBranch(branchIdStr).catch(() => []),
+      ]);
+      const biometricStatusMap: Record<string, { hasCredential: boolean; hasPin: boolean; credentialCount: number; lastUsed: string | null; registrationMethod: string | null }> = {};
+      for (const cred of biometricCredentials) {
+        if (!biometricStatusMap[cred.employeeId]) {
+          biometricStatusMap[cred.employeeId] = { hasCredential: true, hasPin: false, credentialCount: 0, lastUsed: null, registrationMethod: null };
+        }
+        biometricStatusMap[cred.employeeId].credentialCount++;
+        if (cred.registrationMethod === "pin") biometricStatusMap[cred.employeeId].hasPin = true;
+        if (!biometricStatusMap[cred.employeeId].registrationMethod && cred.registrationMethod) {
+          biometricStatusMap[cred.employeeId].registrationMethod = cred.registrationMethod;
+        }
+        if (cred.lastUsedAt) {
+          const lastUsed = cred.lastUsedAt.toISOString();
+          if (!biometricStatusMap[cred.employeeId].lastUsed || lastUsed > biometricStatusMap[cred.employeeId].lastUsed!) {
+            biometricStatusMap[cred.employeeId].lastUsed = lastUsed;
+          }
+        }
+      }
+      res.json({ employees: scheduledEmployees, biometricStatus: biometricStatusMap });
+    } catch (error) {
+      console.error("Error fetching attendance check bundle:", error);
+      res.status(500).json({ error: "فشل في جلب بيانات الحضور" });
+    }
+  });
+
   // Get scheduled employees for attendance (branch manager or attendance clerk tool)
   app.get("/api/scheduled-employees-for-attendance", isAuthenticated, requirePermission("attendance_check", "view"), async (req, res) => {
     try {
