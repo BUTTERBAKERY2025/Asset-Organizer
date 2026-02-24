@@ -223,6 +223,9 @@ export function prefetchQuery(queryKey: string[]) {
 
 export const STATIC_QUERIES = [
   ["/api/branches"],
+  ["/api/product-categories"],
+  ["/api/departments"],
+  ["/api/roles"],
 ];
 
 export function prefetchStaticData() {

@@ -15,9 +15,9 @@ const httpServer = createServer(app);
 
 app.set('trust proxy', 1);
 app.use(compression({
-  threshold: 256,
-  level: 6,
-  memLevel: 8,
+  threshold: 128,
+  level: 4,
+  memLevel: 9,
   filter: (req, res) => {
     if (req.headers['x-no-compression']) return false;
     return compression.filter(req, res);

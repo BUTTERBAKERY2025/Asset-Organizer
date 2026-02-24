@@ -233,6 +233,14 @@ table {
   contain: layout style paint;
 }
 
+.page-content {
+  contain: layout style;
+}
+
+nav [data-state] {
+  contain: layout style;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .page-enter {
     animation: none;

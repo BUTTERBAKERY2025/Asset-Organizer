@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, lazy, Suspense, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, lazy, Suspense, useRef, startTransition } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import logo from "@assets/logo_-5_1765206843638.png";
@@ -65,18 +65,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const { canView } = usePermissions();
   const { t, i18n } = useTranslation("platformHome");
   const currentLang = i18n.language;
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
-    hr: false,
-    production: false,
-    operations: false,
-    sales: false,
-    assets: false,
-    construction: false,
-    marketing: false,
-    warehouse: false,
-    executive: false,
-    settings: false,
-  });
+  const getInitialOpenGroups = useCallback(() => {
+    const groups: Record<string, boolean> = {
+      hr: false, production: false, operations: false, sales: false,
+      assets: false, construction: false, marketing: false, warehouse: false,
+      executive: false, settings: false,
+    };
+    return groups;
+  }, []);
+  const [openGroups, setOpenGroups] = useState(getInitialOpenGroups);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const prevLocationRef = useRef(location);
@@ -86,22 +83,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
     if (prevLocationRef.current !== location) {
       if (contentRef.current) {
         saveScrollPosition(prevLocationRef.current, contentRef.current.scrollTop);
-        const el = contentRef.current;
-        el.classList.remove('page-enter');
-        cancelAnimationFrame(animFrameRef.current);
-        animFrameRef.current = requestAnimationFrame(() => {
-          el.classList.add('page-enter');
-          const saved = getScrollPosition(location);
-          el.scrollTop = saved;
-        });
+        const saved = getScrollPosition(location);
+        contentRef.current.scrollTop = saved;
       }
     }
     prevLocationRef.current = location;
     setMobileMenuOpen(false);
     prefetchAdjacentPages(location);
-    return () => {
-      cancelAnimationFrame(animFrameRef.current);
-    };
   }, [location]);
 
   const handleLinkHover = useCallback((href: string) => {
@@ -122,19 +110,27 @@ export function Layout({ children }: { children: React.ReactNode }) {
       "/sales-analytics": ["/api/branches", "/api/branch-cashiers"],
       "/targets-planning": ["/api/targets"],
       "/targets-dashboard": ["/api/targets/progress-summary"],
-      "/branch-employees": ["/api/branch-employees"],
-      "/shift-management": ["/api/shifts"],
+      "/branch-employees": ["/api/branch-employees/bundle"],
+      "/shift-management": ["/api/shift-management/bundle"],
       "/marketing": ["/api/marketing/campaigns", "/api/marketing/influencers"],
       "/marketing-campaigns": ["/api/marketing/campaigns"],
       "/marketing-influencers": ["/api/marketing/influencers"],
       "/influencer-contracts": ["/api/marketing/influencer-contracts"],
-      "/warehouse": ["/api/warehouse/items"],
+      "/warehouse": ["/api/warehouse/bundle"],
       "/transfer-requests": ["/api/transfer-requests"],
       "/warehouse-inventory": ["/api/warehouse/items"],
       "/documents": ["/api/documents"],
       "/rbac-management": ["/api/roles", "/api/permissions"],
       "/settings": ["/api/branches"],
       "/event-pos": ["/api/branches"],
+      "/production-dashboard": ["/api/daily-production-stats"],
+      "/daily-production": ["/api/daily-production"],
+      "/attendance-check": ["/api/attendance-check/bundle"],
+      "/executive": ["/api/executive"],
+      "/pnl-dashboard": ["/api/pnl"],
+      "/incentives-management": ["/api/incentives/bundle"],
+      "/cashier-shift-performance": ["/api/cashier-performance/bundle"],
+      "/employee-reports": ["/api/employee-reports/bundle"],
     };
     const queries = apiMap[href];
     if (queries) {
@@ -402,8 +398,20 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const isGroupActive = useCallback((items: NavItem[]) => items.some(item => location === item.href), [location]);
 
+  const handleNavClick = useCallback((e: React.MouseEvent, href: string) => {
+    e.preventDefault();
+    startTransition(() => {
+      setLocation(href);
+    });
+  }, [setLocation]);
+
   const renderNavItem = useCallback((item: NavItem, inGroup = false) => (
-    <Link key={item.href} href={item.href}>
+    <a
+      key={item.href}
+      href={item.href}
+      onClick={(e) => handleNavClick(e, item.href)}
+      className="block"
+    >
       <div
         className={cn(
           "flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg transition-all duration-200 cursor-pointer text-[12px] group",
@@ -428,8 +436,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
         )}
       </div>
-    </Link>
-  ), [location, handleLinkHover]);
+    </a>
+  ), [location, handleLinkHover, handleNavClick]);
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -607,7 +615,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     </CollapsibleTrigger>
                     <CollapsibleContent className="space-y-0.5 mt-0.5">
                       {group.items.map(item => (
-                        <Link key={item.href} href={item.href}>
+                        <a
+                          key={item.href}
+                          href={item.href}
+                          onClick={(e) => handleNavClick(e, item.href)}
+                          className="block"
+                        >
                           <div
                             className={cn(
                               "flex items-center gap-2 px-3 py-2 rounded-md transition-colors cursor-pointer text-sm",
@@ -622,7 +635,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                             <item.icon className={cn("flex-shrink-0", item.indent ? "w-3.5 h-3.5" : "w-4 h-4")} />
                             <span>{item.label}</span>
                           </div>
-                        </Link>
+                        </a>
                       ))}
                     </CollapsibleContent>
                   </Collapsible>

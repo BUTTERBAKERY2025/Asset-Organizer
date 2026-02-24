@@ -10,8 +10,8 @@ const STATIC_ASSETS = [
 ];
 
 const API_CACHE_MAX_AGE = 60 * 1000;
-const API_CACHE_MAX_ITEMS = 150;
-const STATIC_CACHE_MAX_ITEMS = 400;
+const API_CACHE_MAX_ITEMS = 200;
+const STATIC_CACHE_MAX_ITEMS = 500;
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -67,6 +67,8 @@ self.addEventListener('fetch', (event) => {
       '/api/warehouse/items', '/api/branch-cashiers',
       '/api/biometric-settings', '/api/point-settings',
       '/api/product-commissions', '/api/checklist-templates',
+      '/api/my-permissions', '/api/users',
+      '/api/governance', '/api/security',
     ];
     const basePath = url.pathname.split('?')[0];
     if (SAFE_STALE_ENDPOINTS.includes(basePath)) {

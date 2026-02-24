@@ -206,10 +206,7 @@ const ADJACENT_PAGES: Record<string, string[]> = {
 export function prefetchAdjacentPages(currentRoute: string) {
   const adjacent = ADJACENT_PAGES[currentRoute];
   if (adjacent) {
-    const idle = (window as any).requestIdleCallback || ((cb: Function) => setTimeout(cb, 50));
-    idle(() => {
-      adjacent.forEach(p => preloadPage(p));
-    });
+    adjacent.forEach(p => preloadPage(p));
   }
 }
 
