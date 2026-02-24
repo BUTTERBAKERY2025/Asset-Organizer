@@ -115,6 +115,8 @@ const PERSIST_ENDPOINTS = new Set([
   '/api/warehouse/items',
   '/api/targets',
   '/api/construction-projects',
+  '/api/my-permissions',
+  '/api/auth/me',
 ]);
 
 export function shouldPersist(url: string): boolean {

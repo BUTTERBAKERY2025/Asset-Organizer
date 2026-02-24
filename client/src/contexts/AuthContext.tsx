@@ -39,7 +39,7 @@ export function AuthGate({ children }: AuthGateProps) {
       if (!hasResolved) {
         setShowSlowWarning(true);
       }
-    }, 2000);
+    }, 3000);
     return () => clearTimeout(timeout);
   }, [hasResolved]);
 

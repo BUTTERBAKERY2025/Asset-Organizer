@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect } from "react";
+import React, { Suspense, useEffect, useTransition, useCallback } from "react";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -144,10 +144,14 @@ function AppLoadingFallback() {
 
 const PageLoadingFallback = React.memo(function PageLoadingFallback() {
   return (
-    <div className="flex items-center justify-center min-h-[60vh]">
-      <div className="flex flex-col items-center gap-3">
-        <div className="w-8 h-8 border-3 border-amber-500 border-t-transparent rounded-full animate-spin" />
+    <div className="min-h-[60vh] p-6 space-y-4 animate-pulse" dir="rtl">
+      <div className="h-8 bg-amber-100/60 rounded-lg w-48" />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="h-28 bg-amber-50/80 rounded-xl" />
+        <div className="h-28 bg-amber-50/80 rounded-xl" />
+        <div className="h-28 bg-amber-50/80 rounded-xl" />
       </div>
+      <div className="h-64 bg-amber-50/60 rounded-xl" />
     </div>
   );
 });

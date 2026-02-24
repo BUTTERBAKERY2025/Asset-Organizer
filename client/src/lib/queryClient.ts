@@ -100,7 +100,7 @@ export const queryClient = new QueryClient({
       queryFn: getQueryFn({ on401: "throw" }),
       refetchInterval: false,
       refetchOnWindowFocus: false,
-      refetchOnMount: "always",
+      refetchOnMount: false,
       refetchOnReconnect: "always",
       staleTime: CACHE_TIMES.MEDIUM,
       gcTime: 1000 * 60 * 120,
@@ -246,6 +246,7 @@ export function hydrateFromPersistentCache() {
     '/api/chart-of-accounts', '/api/contractors',
     '/api/dashboard/stats', '/api/command-center',
     '/api/warehouse/items', '/api/targets',
+    '/api/my-permissions', '/api/auth/me',
   ];
   for (const url of endpoints) {
     const cached = getCachedData(url);

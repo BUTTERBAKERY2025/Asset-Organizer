@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { setCachedData } from "@/lib/persistentCache";
 import type { Branch } from "@shared/schema";
 
 interface InitData {
@@ -6,6 +7,8 @@ interface InitData {
   branches: Branch[];
   permissions: { module: string; actions: string[] }[];
 }
+
+const FIVE_MINUTES = 1000 * 60 * 5;
 
 export function useAppInit() {
   const queryClient = useQueryClient();
@@ -18,16 +21,19 @@ export function useAppInit() {
       const data = await res.json();
       if (data.user) {
         queryClient.setQueryData(["/api/auth/me"], data.user);
+        setCachedData("/api/auth/me", data.user, FIVE_MINUTES);
       }
       if (data.branches) {
         queryClient.setQueryData(["/api/branches"], data.branches);
+        setCachedData("/api/branches", data.branches, FIVE_MINUTES);
       }
       if (data.permissions) {
         queryClient.setQueryData(["/api/my-permissions"], data.permissions);
+        setCachedData("/api/my-permissions", data.permissions, FIVE_MINUTES);
       }
       return data;
     },
-    staleTime: 1000 * 60 * 5,
+    staleTime: FIVE_MINUTES,
     gcTime: 1000 * 60 * 30,
     refetchOnWindowFocus: false,
     refetchOnMount: false,

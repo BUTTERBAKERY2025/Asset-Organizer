@@ -104,7 +104,7 @@ async function cacheFirst(request, cacheName) {
 
 async function networkFirstFast(request) {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 3000);
+  const timeoutId = setTimeout(() => controller.abort(), 2000);
   try {
     const response = await fetch(request, { signal: controller.signal });
     clearTimeout(timeoutId);

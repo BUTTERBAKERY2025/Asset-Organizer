@@ -122,7 +122,7 @@ export function preloadPage(pageKey: string) {
   const loader = pageImports[pageKey];
   if (loader) {
     preloadedChunks.add(pageKey);
-    loader();
+    preloadAndCache(pageKey);
   }
 }
 
@@ -178,11 +178,11 @@ export function startAggressivePreload() {
                 const allKeys = Object.keys(pageImports);
                 allKeys.forEach(p => preloadPage(p));
               });
-            }, 3000);
+            }, 1500);
           });
-        }, 2000);
+        }, 800);
       });
-    }, 1000);
+    }, 500);
   });
 }
 
@@ -327,8 +327,21 @@ export function preloadRoute(href: string) {
   if (pageKey) preloadPage(pageKey);
 }
 
+const resolvedModules = new Map<string, any>();
+
+export function preloadAndCache(key: string): Promise<any> {
+  const existing = resolvedModules.get(key);
+  if (existing) return Promise.resolve(existing);
+  const loader = pageImports[key];
+  if (!loader) return Promise.reject(new Error(`Unknown page: ${key}`));
+  return loader().then(mod => {
+    resolvedModules.set(key, mod);
+    return mod;
+  });
+}
+
 export function makeLazy(key: string) {
-  return React.lazy(() => pageImports[key]());
+  return React.lazy(() => preloadAndCache(key));
 }
 
 import React from "react";
