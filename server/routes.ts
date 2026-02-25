@@ -6619,6 +6619,27 @@ export async function registerRoutes(
       const effectiveBranchId = branchFilter.singleBranchId;
       const result: Record<string, any> = {};
 
+      const needsJournals = requestedSections.includes("cashierJournals") || requestedSections.includes("paymentBreakdowns");
+      const canViewAll = needsJournals || requestedSections.includes("cashiers") ? await canUserViewAllCashiers(req) : true;
+      const currentUser = !canViewAll ? getCurrentUser(req) : null;
+
+      let sharedJournals: any[] | null = null;
+      const getFilteredJournals = async () => {
+        if (sharedJournals !== null) return sharedJournals;
+        const dbFilters: any = {};
+        if (effectiveBranchId) {
+          dbFilters.branchId = effectiveBranchId;
+        } else if (branchFilter.branchIds) {
+          dbFilters.branchIds = branchFilter.branchIds;
+        }
+        if (startDate && typeof startDate === 'string') dbFilters.startDate = startDate;
+        if (endDate && typeof endDate === 'string') dbFilters.endDate = endDate;
+        if (!canViewAll && currentUser) dbFilters.cashierId = String(currentUser.id);
+        const { journals } = await storage.getCashierJournalsFiltered(dbFilters);
+        sharedJournals = journals;
+        return journals;
+      };
+
       const promises: Promise<void>[] = [];
 
       if (requestedSections.includes("report")) {
@@ -6634,36 +6655,15 @@ export async function registerRoutes(
 
       if (requestedSections.includes("cashierJournals")) {
         promises.push(
-          (async () => {
-            let journals = await storage.getAllCashierJournals();
-            if (effectiveBranchId) {
-              journals = journals.filter(j => j.branchId === effectiveBranchId);
-            } else if (branchFilter.branchIds) {
-              journals = journals.filter(j => branchFilter.branchIds!.includes(j.branchId));
-            }
-            const canViewAll = await canUserViewAllCashiers(req);
-            if (!canViewAll) {
-              const user = getCurrentUser(req);
-              journals = journals.filter(j => String(j.cashierId) === String(user.id));
-            }
-            if (startDate && typeof startDate === 'string') {
-              journals = journals.filter(j => j.journalDate && j.journalDate >= (startDate as string));
-            }
-            if (endDate && typeof endDate === 'string') {
-              journals = journals.filter(j => j.journalDate && j.journalDate <= (endDate as string));
-            }
-            result.cashierJournals = journals;
-          })()
+          getFilteredJournals().then(journals => { result.cashierJournals = journals; })
         );
       }
 
       if (requestedSections.includes("cashiers")) {
         promises.push(
           (async () => {
-            const canViewAll = await canUserViewAllCashiers(req);
-            if (!canViewAll) {
-              const user = getCurrentUser(req);
-              result.cashiers = [{ id: user.id, username: user.username, firstName: user.firstName || null, lastName: user.lastName || null }];
+            if (!canViewAll && currentUser) {
+              result.cashiers = [{ id: currentUser.id, username: currentUser.username, firstName: currentUser.firstName || null, lastName: currentUser.lastName || null }];
               return;
             }
             const allUsers = await storage.getAllUsers();
@@ -6681,35 +6681,26 @@ export async function registerRoutes(
       if (requestedSections.includes("paymentBreakdowns")) {
         promises.push(
           (async () => {
-            let journals = await storage.getAllCashierJournals();
-            if (effectiveBranchId) {
-              journals = journals.filter(j => j.branchId === effectiveBranchId);
-            } else if (branchFilter.branchIds) {
-              journals = journals.filter(j => branchFilter.branchIds!.includes(j.branchId));
-            }
-            const canViewAll = await canUserViewAllCashiers(req);
-            if (!canViewAll) {
-              const user = getCurrentUser(req);
-              journals = journals.filter(j => String(j.cashierId) === String(user.id));
-            }
-            if (startDate && typeof startDate === 'string') {
-              journals = journals.filter(j => j.journalDate && j.journalDate >= (startDate as string));
-            }
-            if (endDate && typeof endDate === 'string') {
-              journals = journals.filter(j => j.journalDate && j.journalDate <= (endDate as string));
-            }
-            const journalIds = journals.map(j => j.id);
+            const journals = await getFilteredJournals();
+            const journalIds = journals.map((j: any) => j.id);
             if (journalIds.length === 0) {
               result.paymentBreakdowns = [];
               return;
             }
-            const breakdownPromises = journalIds.map(async (journalId) => {
-              const breakdowns = await storage.getPaymentBreakdowns(journalId);
-              const journal = journals.find(j => j.id === journalId);
-              return breakdowns.map(b => ({ ...b, branchId: journal?.branchId, journalDate: journal?.journalDate }));
-            });
-            const arrays = await Promise.all(breakdownPromises);
-            result.paymentBreakdowns = arrays.flat();
+            const batchSize = 20;
+            const allBreakdowns: any[] = [];
+            for (let i = 0; i < journalIds.length; i += batchSize) {
+              const batch = journalIds.slice(i, i + batchSize);
+              const batchResults = await Promise.all(
+                batch.map(async (journalId: number) => {
+                  const breakdowns = await storage.getPaymentBreakdowns(journalId);
+                  const journal = journals.find((j: any) => j.id === journalId);
+                  return breakdowns.map((b: any) => ({ ...b, branchId: journal?.branchId, journalDate: journal?.journalDate }));
+                })
+              );
+              allBreakdowns.push(...batchResults.flat());
+            }
+            result.paymentBreakdowns = allBreakdowns;
           })()
         );
       }

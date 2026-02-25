@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -241,20 +241,27 @@ function AlertBanner({ alerts }: { alerts: { type: 'warning' | 'danger' | 'info'
   );
 }
 
-function QuickStatsRow({ report, cashierJournals }: { report: OperationsReport; cashierJournals: CashierSalesJournal[] }) {
+function QuickStatsRow({ report, cashierJournals, hasActiveFilters }: { report: OperationsReport; cashierJournals: CashierSalesJournal[]; hasActiveFilters: boolean }) {
   const shortageCount = cashierJournals.filter(j => j.discrepancyStatus === 'shortage').length;
   const pendingApproval = cashierJournals.filter(j => j.status === 'submitted').length;
+  
+  const filteredTotalSales = hasActiveFilters
+    ? cashierJournals.reduce((sum, j) => sum + (j.totalSales || 0), 0)
+    : report.salesReport.totalSales;
+  const filteredTransactions = hasActiveFilters
+    ? cashierJournals.reduce((sum, j) => sum + (j.transactionCount || 0), 0)
+    : report.salesReport.totalTransactions;
   
   const formatCurrency = (amount: number) => new Intl.NumberFormat("en-SA", { style: "currency", currency: "SAR", maximumFractionDigits: 0 }).format(amount);
   
   return (
     <div className="grid grid-cols-2 md:grid-cols-6 gap-3 p-4 rounded-xl bg-gradient-to-r from-slate-900 to-slate-800 text-white">
       <div className="text-center">
-        <p className="text-2xl font-bold text-green-400">{formatCurrency(report.salesReport.totalSales)}</p>
+        <p className="text-2xl font-bold text-green-400">{formatCurrency(filteredTotalSales)}</p>
         <p className="text-xs text-slate-400">إجمالي المبيعات</p>
       </div>
       <div className="text-center">
-        <p className="text-2xl font-bold text-blue-400">{report.salesReport.totalTransactions}</p>
+        <p className="text-2xl font-bold text-blue-400">{filteredTransactions}</p>
         <p className="text-xs text-slate-400">العمليات</p>
       </div>
       <div className="text-center">
@@ -754,17 +761,9 @@ export default function OperationsReportsDashboardPage() {
     ...(filters.endDate && { endDate: filters.endDate }),
   }).toString();
 
-  const needsPaymentBreakdowns = activeTab === 'apps' || filters.reportType === 'apps' || filters.reportType === 'all';
-  const needsCashierJournals = activeTab === 'cashier' || activeTab === 'overview' || activeTab === 'returns' || activeTab === 'discrepancies' || activeTab === 'apps';
-  const bundleSections = [
-    "report",
-    ...(needsCashierJournals ? ["cashierJournals"] : []),
-    "cashiers",
-    ...(needsPaymentBreakdowns ? ["paymentBreakdowns"] : []),
-  ];
-  const bundleQueryString = `${queryString}${queryString ? '&' : ''}sections=${bundleSections.join(",")}`;
+  const bundleQueryString = `${queryString}${queryString ? '&' : ''}sections=report,cashierJournals,cashiers,paymentBreakdowns`;
 
-  const { data: bundle, isLoading, refetch } = useQuery<{
+  const { data: bundle, isLoading, isFetching, refetch } = useQuery<{
     report?: OperationsReport;
     cashierJournals?: CashierSalesJournal[];
     cashiers?: { id: string; username: string; firstName: string | null; lastName: string | null }[];
@@ -772,6 +771,7 @@ export default function OperationsReportsDashboardPage() {
   }>({
     queryKey: [`/api/operations/reports-bundle?${bundleQueryString}`],
     staleTime: 5 * 60 * 1000,
+    placeholderData: (prev) => prev,
   });
 
   const report = bundle?.report;
@@ -1537,6 +1537,8 @@ export default function OperationsReportsDashboardPage() {
     });
   }, [cashierJournals, filters.cashierId, filters.journalStatus, filters.discrepancyFilter, filters.shiftType, filters.paymentCategory]);
 
+  const hasActiveLocalFilters = !!(filters.cashierId || filters.journalStatus !== "all" || filters.discrepancyFilter !== "all" || filters.shiftType !== "all" || filters.paymentCategory !== "all");
+
   // OPTIMIZED: Calculate payment category totals with useMemo
   const paymentCategoryStats = useMemo(() => ({
     cash: filteredCashierJournals.reduce((sum, j) => sum + (j.cashTotal || 0), 0),
@@ -2027,15 +2029,15 @@ export default function OperationsReportsDashboardPage() {
           </Card>
         </Collapsible>
 
-        {isLoading ? (
+        {isLoading && !bundle ? (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {[...Array(8)].map((_, i) => (
               <Skeleton key={i} className="h-24" />
             ))}
           </div>
         ) : report ? (
-          <>
-            <QuickStatsRow report={report} cashierJournals={filteredCashierJournals} />
+          <>{isFetching && <div className="fixed top-2 left-1/2 -translate-x-1/2 z-50 bg-amber-100 text-amber-800 px-4 py-1.5 rounded-full text-sm font-medium shadow-lg animate-pulse">جاري تحديث البيانات...</div>}
+            <QuickStatsRow report={report} cashierJournals={filteredCashierJournals} hasActiveFilters={hasActiveLocalFilters} />
             
             <AlertBanner alerts={[
               ...(filteredCashierJournals.filter(j => j.discrepancyStatus === 'shortage').length > 0 
