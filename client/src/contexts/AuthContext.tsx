@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useAppInit } from "@/hooks/useAppInit";
+import { hasValidSession, getCachedUser } from "@/lib/persistentCache";
 
 interface AuthContextType {
   isReady: boolean;
@@ -22,26 +23,19 @@ interface AuthGateProps {
 export function AuthGate({ children }: AuthGateProps) {
   const { isLoading, isAuthenticated } = useAppInit();
   
-  const [hasResolved, setHasResolved] = useState(false);
-  const [showSlowWarning, setShowSlowWarning] = useState(false);
+  const hasCachedSession = hasValidSession();
+  const cachedUser = getCachedUser();
+  
+  const canShowApp = !isLoading || (hasCachedSession && !!cachedUser);
+  const effectiveAuth = isLoading ? !!cachedUser : isAuthenticated;
 
-  const authResolved = !isLoading;
+  const [hasResolved, setHasResolved] = useState(canShowApp);
 
   useEffect(() => {
-    if (authResolved && !hasResolved) {
+    if (canShowApp && !hasResolved) {
       setHasResolved(true);
     }
-  }, [authResolved, hasResolved]);
-
-  useEffect(() => {
-    if (hasResolved) return;
-    const timeout = setTimeout(() => {
-      if (!hasResolved) {
-        setShowSlowWarning(true);
-      }
-    }, 3000);
-    return () => clearTimeout(timeout);
-  }, [hasResolved]);
+  }, [canShowApp, hasResolved]);
 
   if (!hasResolved) {
     return (
@@ -52,16 +46,14 @@ export function AuthGate({ children }: AuthGateProps) {
       >
         <div className="flex flex-col items-center gap-3">
           <div className="w-10 h-10 border-3 border-amber-500 border-t-transparent rounded-full animate-spin" />
-          {showSlowWarning && (
-            <span className="text-sm text-amber-700">جاري الاتصال بالخادم...</span>
-          )}
+          <span className="text-sm text-amber-700">جاري الاتصال بالنظام...</span>
         </div>
       </div>
     );
   }
 
   return (
-    <AuthContext.Provider value={{ isReady: true, isAuthenticated }}>
+    <AuthContext.Provider value={{ isReady: true, isAuthenticated: effectiveAuth }}>
       {children}
     </AuthContext.Provider>
   );

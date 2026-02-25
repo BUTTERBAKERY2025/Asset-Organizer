@@ -31,23 +31,32 @@
       <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap&subset=arabic,latin" rel="stylesheet" />
     </noscript>
     <style>
+      @keyframes spin{to{transform:rotate(360deg)}}
       @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
       .sk{background:linear-gradient(90deg,#e8e0d0 25%,#f0e8d8 50%,#e8e0d0 75%);background-size:200% 100%;animation:shimmer 1.5s infinite}
+      #initial-loader{min-height:100vh;background:#F5F0E6;font-family:system-ui,'Cairo',sans-serif;direction:rtl}
+      .il-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:12px}
+      .il-spin{width:36px;height:36px;border:3px solid #d4a853;border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite}
+      .il-text{font-size:13px;color:#92400e;opacity:0;transition:opacity .3s}
     </style>
   </head>
   <body>
     <div id="root">
-      <div id="initial-loader" style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#F5F0E6;font-family:'Cairo',sans-serif;direction:rtl">
-        <div style="text-align:center">
-          <div style="width:40px;height:40px;border:3px solid #d4a853;border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite;margin:0 auto"></div>
+      <div id="initial-loader">
+        <div class="il-wrap">
+          <div class="il-spin"></div>
+          <div class="il-text" id="il-msg"></div>
         </div>
       </div>
     </div>
-    <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+    <script>
+      setTimeout(function(){var m=document.getElementById('il-msg');if(m){m.textContent='جاري تحميل النظام...';m.style.opacity='1'}},800);
+      setTimeout(function(){var m=document.getElementById('il-msg');if(m)m.textContent='جاري الاتصال بالخادم...'},3000);
+    </script>
     <script type="module" src="/src/main.tsx"></script>
     <script>
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').catch(()=>{});
+        navigator.serviceWorker.register('/sw.js').catch(function(){});
       }
     </script>
   </body>

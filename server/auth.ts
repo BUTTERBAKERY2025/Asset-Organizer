@@ -460,6 +460,8 @@ export async function setupAuth(app: Express) {
       
       let user: any, userBranches: any[], activeBranch: any, permissions: any[];
       
+      const allBranchesPromise = storage.getAllBranches();
+
       if (cached) {
         const { password: _, ...safeUser } = cached.user;
         user = safeUser;
@@ -491,7 +493,7 @@ export async function setupAuth(app: Express) {
         permissions = [];
       }
       
-      const allBranches = await storage.getAllBranches();
+      const allBranches = await allBranchesPromise;
       let filteredBranches: any[] = [];
       if (user.role === "admin") {
         filteredBranches = allBranches;

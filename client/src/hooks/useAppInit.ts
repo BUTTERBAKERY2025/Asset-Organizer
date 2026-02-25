@@ -16,6 +16,12 @@ export function useAppInit() {
   const { data, isLoading } = useQuery<InitData>({
     queryKey: ["/api/auth/init"],
     queryFn: async () => {
+      const pending = (window as any).__initPromise;
+      if (pending) {
+        (window as any).__initPromise = null;
+        const result = await pending;
+        return result;
+      }
       const res = await fetch("/api/auth/init", { credentials: "include", priority: "high" as any });
       if (!res.ok) return { user: null, branches: [], permissions: [] };
       const data = await res.json();
