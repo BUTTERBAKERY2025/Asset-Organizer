@@ -98,6 +98,15 @@ The system uses a modern web architecture with a React-based frontend and a Node
 - **Unified Supabase Storage**: All file uploads are handled by Supabase Storage via `POST /api/uploads?folder=<folder>`.
 - **Download Flow**: Authenticated `GET /api/uploads/file/<path>` or `GET /api/documents/file/<filename>` serves files.
 
+### Security Hardening (Completed)
+- **Authentication enforcement**: All debug endpoints require `isAuthenticated` + `requirePermission`.
+- **Error message sanitization**: All 500 error responses return generic Arabic messages instead of `error.message` to prevent internal info leaks.
+- **SQL injection protection**: Backup/restore table names validated against `BACKUP_TABLES` whitelist + regex; dynamic column names use allowlist.
+- **CSRF protection**: `csrfProtection` middleware applied globally via `server/index.ts`; session cookies use `httpOnly`, `sameSite: strict`, `secure` in production.
+- **Rate limiting**: Applied to login, biometric, upload, and general API endpoints.
+- **Session security**: Fingerprint validation, 12h absolute lifetime, inactivity timeout, single-session enforcement.
+- **Security headers**: X-Frame-Options, HSTS, X-Content-Type-Options, Permissions-Policy, Referrer-Policy.
+
 ### External System Integrations
 - **Accounting Integration**: API endpoints for exporting financial reports.
 - **SMS/WhatsApp Notifications**: Notification queue system ready for Twilio integration.

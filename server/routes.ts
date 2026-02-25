@@ -141,7 +141,7 @@ export async function registerRoutes(
     res.json({ version: "2026-02-23-v3", build: Date.now(), status: "ok" });
   });
 
-  app.get("/api/attendance-debug", async (_req, res) => {
+  app.get("/api/attendance-debug", isAuthenticated, requirePermission("branch_employees", "view"), async (_req, res) => {
     try {
       const branchId = (_req.query.branchId as string) || "tabuk";
       const shiftType = (_req.query.shiftType as string) || "evening";
@@ -149,7 +149,8 @@ export async function registerRoutes(
       const employees = await storage.getScheduledEmployeesForAttendance(branchId, shiftType, date);
       res.json({ count: employees.length, branchId, shiftType, date, names: employees.map((e: any) => e.employeeName) });
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      console.error("Attendance debug error:", error);
+      res.status(500).json({ error: "فشل في جلب بيانات الحضور" });
     }
   });
 
@@ -2854,9 +2855,14 @@ export async function registerRoutes(
   app.post("/api/backups", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
     try {
       const { name, selectedTables } = req.body;
+      const safeTableNameRegex = /^[a-z_][a-z0-9_]*$/;
       const tablesToBackup: string[] = selectedTables && Array.isArray(selectedTables) && selectedTables.length > 0
-        ? selectedTables
+        ? selectedTables.filter((t: string) => typeof t === 'string' && safeTableNameRegex.test(t) && BACKUP_TABLES.includes(t))
         : BACKUP_TABLES;
+
+      if (tablesToBackup.length === 0) {
+        return res.status(400).json({ error: "لا توجد جداول صالحة للنسخ الاحتياطي" });
+      }
 
       const backup = await storage.createBackup({
         name: name || `نسخة احتياطية - ${new Date().toLocaleDateString('ar-SA')}`,
@@ -2875,6 +2881,7 @@ export async function registerRoutes(
           let totalRows = 0;
 
           for (const tableName of tablesToBackup) {
+            if (!safeTableNameRegex.test(tableName)) continue;
             try {
               const result = await pool.query(`SELECT * FROM "${tableName}"`);
               backupPayload[tableName] = result.rows;
@@ -11962,7 +11969,8 @@ export async function registerRoutes(
         errorMessage = "خطأ: " + error.message;
       }
       
-      res.status(500).json({ error: errorMessage, details: error?.message, code: error?.code });
+      console.error("Production order error:", error);
+      res.status(500).json({ error: errorMessage });
     }
   });
 
@@ -15197,7 +15205,8 @@ export async function registerRoutes(
         errorMessage = "خطأ: " + error.message;
       }
       
-      res.status(500).json({ error: errorMessage, details: error?.message, code: error?.code });
+      console.error("Sales upload error:", error);
+      res.status(500).json({ error: errorMessage });
     }
   });
 
@@ -21868,11 +21877,13 @@ export async function registerRoutes(
         updateData.deactivationReason = null;
       }
 
+      const allowedCols = new Set(['is_active', 'deactivated_at', 'deactivated_by', 'deactivation_reason']);
       const setClauses: string[] = [];
       const setValues: any[] = [];
       let paramIdx = 1;
       for (const [key, val] of Object.entries(updateData)) {
         const col = key.replace(/([A-Z])/g, '_$1').toLowerCase();
+        if (!allowedCols.has(col)) continue;
         setClauses.push(`${col} = $${paramIdx++}`);
         setValues.push(val);
       }
@@ -25754,7 +25765,7 @@ export async function registerRoutes(
       // Return 400 for not found or validation errors
       const isClientError = error.message?.includes('غير موجودة');
       const statusCode = isClientError ? 400 : 500;
-      res.status(statusCode).json({ error: error.message || "فشل في ترحيل الإنتاج للمخزون" });
+      console.error("Inventory transfer error:", error); res.status(statusCode).json({ error: "فشل في ترحيل الإنتاج للمخزون" });
     }
   });
 
@@ -25844,7 +25855,7 @@ export async function registerRoutes(
                            error.message?.includes('غير موجود') ||
                            error.message?.includes('غير صالح');
       const statusCode = isClientError ? 400 : 500;
-      res.status(statusCode).json({ error: error.message || "فشل في تحويل المخزون" });
+      console.error("Inventory transfer error:", error); res.status(statusCode).json({ error: "فشل في تحويل المخزون" });
     }
   });
 
@@ -26387,7 +26398,7 @@ export async function registerRoutes(
       res.json(transfer);
     } catch (error: any) {
       console.error("Error modifying transfer quantities:", error);
-      res.status(400).json({ error: error.message || "فشل في تعديل الكميات" });
+      console.error("Quantity adjustment error:", error); res.status(400).json({ error: "فشل في تعديل الكميات" });
     }
   });
 
@@ -29847,7 +29858,7 @@ export async function registerRoutes(
       const products = await storage.getBranchProducts(branchId);
       res.json(products);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      console.error("Server error:", error); res.status(500).json({ error: "حدث خطأ في الخادم" });
     }
   });
 
@@ -29863,7 +29874,7 @@ export async function registerRoutes(
       const product = await storage.addBranchProduct({ branchId, productId: Number(productId), isActive: isActive ?? true, priceOverride, sortOrder });
       res.status(201).json(product);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      console.error("Server error:", error); res.status(500).json({ error: "حدث خطأ في الخادم" });
     }
   });
 
@@ -29879,7 +29890,7 @@ export async function registerRoutes(
       await storage.removeBranchProduct(Number(req.params.id));
       res.json({ success: true });
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      console.error("Server error:", error); res.status(500).json({ error: "حدث خطأ في الخادم" });
     }
   });
 
@@ -29896,7 +29907,7 @@ export async function registerRoutes(
       const updated = await storage.updateBranchProduct(Number(req.params.id), safeData);
       res.json(updated);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      console.error("Server error:", error); res.status(500).json({ error: "حدث خطأ في الخادم" });
     }
   });
 
@@ -29910,7 +29921,7 @@ export async function registerRoutes(
       const settings = await storage.getPosInvoiceSettings(branchId);
       res.json(settings || null);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      console.error("Server error:", error); res.status(500).json({ error: "حدث خطأ في الخادم" });
     }
   });
 
@@ -29940,7 +29951,7 @@ export async function registerRoutes(
       const settings = await storage.upsertPosInvoiceSettings(sanitizedSettings);
       res.json(settings);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      console.error("Server error:", error); res.status(500).json({ error: "حدث خطأ في الخادم" });
     }
   });
 
@@ -29974,7 +29985,7 @@ export async function registerRoutes(
       const sale = await storage.createPosSale(saleData, items);
       res.status(201).json(sale);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      console.error("Server error:", error); res.status(500).json({ error: "حدث خطأ في الخادم" });
     }
   });
 
@@ -29992,7 +30003,7 @@ export async function registerRoutes(
       );
       res.json(sales);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      console.error("Server error:", error); res.status(500).json({ error: "حدث خطأ في الخادم" });
     }
   });
 
@@ -30006,7 +30017,7 @@ export async function registerRoutes(
       const items = await storage.getPosSaleItems(sale.id);
       res.json({ ...sale, items });
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      console.error("Server error:", error); res.status(500).json({ error: "حدث خطأ في الخادم" });
     }
   });
 
@@ -30019,7 +30030,7 @@ export async function registerRoutes(
       const summary = await storage.getPosSalesSummary(branchId, req.params.date);
       res.json(summary);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      console.error("Server error:", error); res.status(500).json({ error: "حدث خطأ في الخادم" });
     }
   });
 
@@ -30034,7 +30045,7 @@ export async function registerRoutes(
       if (!result) return res.status(400).json({ error: "لا يمكن إلغاء هذه العملية" });
       res.json(result);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      console.error("Server error:", error); res.status(500).json({ error: "حدث خطأ في الخادم" });
     }
   });
 
@@ -30049,7 +30060,7 @@ export async function registerRoutes(
       if (!result) return res.status(400).json({ error: "لا يمكن استرداد هذه العملية" });
       res.json(result);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      console.error("Server error:", error); res.status(500).json({ error: "حدث خطأ في الخادم" });
     }
   });
 
@@ -30062,7 +30073,7 @@ export async function registerRoutes(
       const orders = await storage.getHeldOrders(branchId);
       res.json(orders);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      console.error("Server error:", error); res.status(500).json({ error: "حدث خطأ في الخادم" });
     }
   });
 
@@ -30080,7 +30091,7 @@ export async function registerRoutes(
       });
       res.status(201).json(order);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      console.error("Server error:", error); res.status(500).json({ error: "حدث خطأ في الخادم" });
     }
   });
 
@@ -30092,7 +30103,7 @@ export async function registerRoutes(
       if (!deleted) return res.status(404).json({ error: "الطلب غير موجود" });
       res.json({ success: true });
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      console.error("Server error:", error); res.status(500).json({ error: "حدث خطأ في الخادم" });
     }
   });
 
@@ -30108,7 +30119,7 @@ export async function registerRoutes(
       const report = await storage.getPosSalesReport(branchId, startDate, endDate);
       res.json(report);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      console.error("Server error:", error); res.status(500).json({ error: "حدث خطأ في الخادم" });
     }
   });
 
@@ -30125,7 +30136,7 @@ export async function registerRoutes(
       const details = await storage.getPosProductSalesDetails(branchId, startDate, endDate);
       res.json(details);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      console.error("Server error:", error); res.status(500).json({ error: "حدث خطأ في الخادم" });
     }
   });
   return httpServer;
