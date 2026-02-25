@@ -58,12 +58,18 @@ The system uses a modern web architecture with a React-based frontend and a Node
 - **Server-side Caching**: Memoized data fetchers and auth cache.
 - **Batch API**: POST /api/batch for combining multiple GET requests.
 - **Consolidated Reports Bundle**: GET /api/operations/reports-bundle combines 4+ data queries (operations report, cashier journals, cashiers, payment breakdowns) into single parallel request with selectable sections parameter.
-- **Gzip Compression**: All responses >1KB are compressed.
+- **Gzip Compression**: All responses >128 bytes are compressed (level 4).
 - **Prefetch on Hover**: Navigation links prefetch API data (heavy report endpoints excluded via SKIP_PREFETCH_ENDPOINTS).
-- **Database Indexes**: Composite indexes for common query patterns.
-- **N+1 Query Elimination**: Batch queries replace per-item loops.
+- **Database Indexes**: 90+ indexes including composite indexes for common query patterns; 45 new branch_id indexes added for all tables.
+- **N+1 Query Elimination**: Batch queries replace per-item loops. Leaderboard uses SQL GROUP BY instead of per-branch queries.
+- **SQL Aggregation**: getCashierJournalStats, getCommandCenterData, waste stats all use SQL COUNT/SUM/AVG FILTER instead of fetching all rows to memory.
+- **Filtered Queries**: All cashier journal endpoints use getCashierJournalsFiltered() with SQL WHERE instead of getAllCashierJournals() + JS filter.
 - **Slow Request Logging**: Logs requests >500ms.
 - **Report Cache TTLs**: Report endpoints cached at 60s server-side; static data (branches, cashiers) cached at 120s.
+- **Client Persistent Cache**: localStorage-based cache (CACHE_VERSION=2) with debounced persist, hydrated on startup for instant rendering.
+- **AuthGate Instant Render**: Shows app immediately from cached session while auth/init validates in background.
+- **Deduplicated Init Fetch**: main.tsx fetch shares result with useAppInit via queryClient.setQueryData, preventing duplicate /api/auth/init requests.
+- **Mobile-Aware Preloading**: Detects low-end devices and slow connections; Wave 3 pages desktop-only; adaptive delays.
 
 ### System Design Choices
 - **Shared Schema**: `shared/` directory for database schema.

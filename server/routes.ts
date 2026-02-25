@@ -5411,47 +5411,25 @@ export async function registerRoutes(
         return res.status(403).json({ error: "غير مصرح بالوصول" });
       }
       
-      // Get all journals first
-      let journals = await storage.getAllCashierJournals();
-      
-      // Apply same filtering as the main journals endpoint
+      const filters: any = {};
       if (!isUserAdmin(req)) {
-        // Get allowed branches
         const allowedBranches = branchFilter.branchIds || (branchFilter.singleBranchId ? [branchFilter.singleBranchId] : []);
-        
         const isManagerUser = await canUserViewAllCashiers(req);
-        
         if (isManagerUser) {
-          journals = journals.filter(j => allowedBranches.includes(j.branchId));
+          filters.branchIds = allowedBranches;
         } else {
-          const userId = String(user.id);
-          journals = journals.filter(j => 
-            allowedBranches.includes(j.branchId) && String(j.cashierId) === userId
-          );
+          filters.branchIds = allowedBranches;
+          filters.cashierId = String(user.id);
         }
       } else if (branchFilter.singleBranchId) {
-        journals = journals.filter(j => j.branchId === branchFilter.singleBranchId);
+        filters.branchId = branchFilter.singleBranchId;
       }
+      if (status && status !== "all") filters.status = status as string;
+      if (cashierId && cashierId !== "all") filters.cashierId = String(cashierId);
+      if (dateFrom) filters.startDate = String(dateFrom);
+      if (dateTo) filters.endDate = String(dateTo);
       
-      // DEBUG: Log journals count after branch filter
-      console.log("[STATS DEBUG] Journals after branch filter:", journals.length);
-      
-      // Apply additional filters to match the table view
-      if (status && status !== "all") {
-        journals = journals.filter(j => j.status === status);
-      }
-      
-      if (cashierId && cashierId !== "all") {
-        journals = journals.filter(j => String(j.cashierId) === String(cashierId));
-      }
-      
-      if (dateFrom) {
-        journals = journals.filter(j => j.journalDate >= String(dateFrom));
-      }
-      
-      if (dateTo) {
-        journals = journals.filter(j => j.journalDate <= String(dateTo));
-      }
+      const { journals } = await storage.getCashierJournalsFiltered(filters);
       
       // Calculate stats from filtered journals using COMPREHENSIVE net variance
       // Net variance = (actualCashDrawer + totalBankTerminalAmount) - (totalSales - returnAmount)
@@ -5508,30 +5486,21 @@ export async function registerRoutes(
         return res.status(403).json({ error: "غير مصرح بالوصول" });
       }
       
-      // Get all journals first with date filter
-      let journals = await storage.getAllCashierJournals();
-      
-      // Apply branch filter
+      const pbFilters: any = {};
       if (branchFilter.singleBranchId) {
-        journals = journals.filter(j => j.branchId === branchFilter.singleBranchId);
+        pbFilters.branchId = branchFilter.singleBranchId;
       } else if (branchFilter.branchIds) {
-        journals = journals.filter(j => branchFilter.branchIds!.includes(j.branchId));
+        pbFilters.branchIds = branchFilter.branchIds;
       }
-      
-      // SECURITY: Non-admin/manager users can only see their own payment breakdowns
       const canViewAllPayments = await canUserViewAllCashiers(req);
       if (!canViewAllPayments) {
         const user = getCurrentUser(req);
-        journals = journals.filter(j => String(j.cashierId) === String(user.id));
+        pbFilters.cashierId = String(user.id);
       }
+      if (startDate && typeof startDate === 'string') pbFilters.startDate = startDate;
+      if (endDate && typeof endDate === 'string') pbFilters.endDate = endDate;
       
-      // Apply date filter
-      if (startDate && typeof startDate === 'string') {
-        journals = journals.filter(j => j.journalDate && j.journalDate >= startDate);
-      }
-      if (endDate && typeof endDate === 'string') {
-        journals = journals.filter(j => j.journalDate && j.journalDate <= endDate);
-      }
+      const { journals } = await storage.getCashierJournalsFiltered(pbFilters);
       
       // Get payment breakdowns for all matching journals
       const journalIds = journals.map(j => j.id);
@@ -6863,23 +6832,15 @@ export async function registerRoutes(
       const allItems = branchFilter.branchIds && !effectiveBranchId
         ? allItemsRaw.filter(i => branchFilter.branchIds!.includes(i.branchId))
         : allItemsRaw;
-      const tempAllJournals = await storage.getAllCashierJournals();
-      let allJournals;
+      const dashJournalFilters: any = {};
       if (effectiveBranchId) {
-        allJournals = tempAllJournals.filter(j => j.branchId === effectiveBranchId);
+        dashJournalFilters.branchId = effectiveBranchId;
       } else if (branchFilter.branchIds) {
-        allJournals = tempAllJournals.filter(j => branchFilter.branchIds!.includes(j.branchId));
-      } else {
-        allJournals = tempAllJournals;
+        dashJournalFilters.branchIds = branchFilter.branchIds;
       }
-      
-      let filteredJournals = allJournals;
-      if (startDate) {
-        filteredJournals = filteredJournals.filter(j => j.journalDate >= (startDate as string));
-      }
-      if (endDate) {
-        filteredJournals = filteredJournals.filter(j => j.journalDate <= (endDate as string));
-      }
+      if (startDate) dashJournalFilters.startDate = startDate as string;
+      if (endDate) dashJournalFilters.endDate = endDate as string;
+      const { journals: filteredJournals } = await storage.getCashierJournalsFiltered(dashJournalFilters);
 
       const goodItems = allItems.filter(i => i.status === 'good').length;
       const maintenanceItems = allItems.filter(i => i.status === 'maintenance' || i.status === 'damaged').length;
@@ -10755,19 +10716,25 @@ export async function registerRoutes(
       const monthlyWasteValue = monthlyWasteReports.reduce((sum, r) => sum + (r.totalValue || 0), 0);
       const monthlyWasteItems = monthlyWasteReports.reduce((sum, r) => sum + (r.totalItems || 0), 0);
       
-      // Get daily sales from cashier journals
-      const allJournals = await storage.getAllCashierJournals();
-      const dailyJournals = allJournals.filter(j => 
-        j.journalDate === date && (!branchId || j.branchId === branchId)
-      );
-      const dailySales = dailyJournals.reduce((sum, j) => sum + (j.totalSales || 0), 0);
-      
-      // Get monthly sales
-      const monthlyJournals = allJournals.filter(j => 
-        j.journalDate >= monthStart && j.journalDate <= monthEnd && 
-        (!branchId || j.branchId === branchId)
-      );
-      const monthlySales = monthlyJournals.reduce((sum, j) => sum + (j.totalSales || 0), 0);
+      const [dailySalesResult, monthlySalesResult] = await Promise.all([
+        db.select({
+          totalSales: sql<number>`coalesce(sum(total_sales), 0)::numeric`,
+        }).from(cashierSalesJournals)
+          .where(and(
+            eq(cashierSalesJournals.journalDate, date),
+            branchId ? eq(cashierSalesJournals.branchId, branchId) : undefined
+          )),
+        db.select({
+          totalSales: sql<number>`coalesce(sum(total_sales), 0)::numeric`,
+        }).from(cashierSalesJournals)
+          .where(and(
+            gte(cashierSalesJournals.journalDate, monthStart),
+            lte(cashierSalesJournals.journalDate, monthEnd),
+            branchId ? eq(cashierSalesJournals.branchId, branchId) : undefined
+          )),
+      ]);
+      const dailySales = Number(dailySalesResult[0]?.totalSales || 0);
+      const monthlySales = Number(monthlySalesResult[0]?.totalSales || 0);
       
       // Calculate waste percentages
       const dailyWastePercent = dailySales > 0 ? (dailyWasteValue / dailySales) * 100 : 0;

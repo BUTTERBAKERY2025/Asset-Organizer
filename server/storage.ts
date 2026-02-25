@@ -3682,7 +3682,6 @@ export class DatabaseStorage implements IStorage {
     return true;
   }
 
-  // Cashier Journal Stats
   async getCashierJournalStats(branchId?: string): Promise<{
     totalJournals: number;
     totalSales: number;
@@ -3692,34 +3691,27 @@ export class DatabaseStorage implements IStorage {
     surplusAmount: number;
     averageTicket: number;
   }> {
-    let journals: CashierSalesJournal[];
-    if (branchId) {
-      journals = await this.getCashierJournalsByBranch(branchId);
-    } else {
-      journals = await this.getAllCashierJournals();
-    }
+    const conditions = branchId ? [eq(cashierSalesJournals.branchId, branchId)] : [];
+    const result = await db.select({
+      totalJournals: sql<number>`count(*)::int`,
+      totalSales: sql<number>`coalesce(sum(total_sales), 0)::numeric`,
+      totalShortages: sql<number>`count(*) filter (where discrepancy_status = 'shortage')::int`,
+      totalSurpluses: sql<number>`count(*) filter (where discrepancy_status = 'surplus')::int`,
+      shortageAmount: sql<number>`coalesce(sum(discrepancy_amount) filter (where discrepancy_status = 'shortage'), 0)::numeric`,
+      surplusAmount: sql<number>`coalesce(sum(discrepancy_amount) filter (where discrepancy_status = 'surplus'), 0)::numeric`,
+      averageTicket: sql<number>`coalesce(avg(average_ticket) filter (where average_ticket > 0), 0)::numeric`,
+    }).from(cashierSalesJournals)
+      .where(conditions.length > 0 ? and(...conditions) : undefined);
 
-    const totalJournals = journals.length;
-    const totalSales = journals.reduce((sum, j) => sum + j.totalSales, 0);
-    const shortageJournals = journals.filter(j => j.discrepancyStatus === 'shortage');
-    const surplusJournals = journals.filter(j => j.discrepancyStatus === 'surplus');
-    const totalShortages = shortageJournals.length;
-    const totalSurpluses = surplusJournals.length;
-    const shortageAmount = shortageJournals.reduce((sum, j) => sum + j.discrepancyAmount, 0);
-    const surplusAmount = surplusJournals.reduce((sum, j) => sum + j.discrepancyAmount, 0);
-    const avgTickets = journals.filter(j => j.averageTicket && j.averageTicket > 0);
-    const averageTicket = avgTickets.length > 0 
-      ? avgTickets.reduce((sum, j) => sum + (j.averageTicket || 0), 0) / avgTickets.length 
-      : 0;
-
+    const row = result[0];
     return {
-      totalJournals,
-      totalSales,
-      totalShortages,
-      totalSurpluses,
-      shortageAmount,
-      surplusAmount,
-      averageTicket,
+      totalJournals: Number(row?.totalJournals || 0),
+      totalSales: Number(row?.totalSales || 0),
+      totalShortages: Number(row?.totalShortages || 0),
+      totalSurpluses: Number(row?.totalSurpluses || 0),
+      shortageAmount: Number(row?.shortageAmount || 0),
+      surplusAmount: Number(row?.surplusAmount || 0),
+      averageTicket: Number(row?.averageTicket || 0),
     };
   }
 
@@ -4481,62 +4473,70 @@ export class DatabaseStorage implements IStorage {
     branches: { branchId: string; branchName: string; target: number; achieved: number; percent: number; rank: number }[];
     cashiers: { cashierId: string; cashierName: string; branchId: string; target: number; achieved: number; percent: number; rank: number }[];
   }> {
-    const allBranches = await this.getAllBranches();
-    const allTargets = await this.getAllBranchMonthlyTargets();
-    const monthTargets = allTargets.filter(t => t.yearMonth === yearMonth);
-    
     const startDate = `${yearMonth}-01`;
     const endDate = `${yearMonth}-31`;
     
-    const branchPerformance: { branchId: string; branchName: string; target: number; achieved: number; percent: number; rank: number }[] = [];
-    
-    for (const branch of allBranches) {
+    const [allBranches, allTargets, branchSalesResult, cashierSalesResult] = await Promise.all([
+      this.getAllBranches(),
+      this.getAllBranchMonthlyTargets(),
+      db.select({
+        branchId: cashierSalesJournals.branchId,
+        totalSales: sql<number>`coalesce(sum(total_sales), 0)::numeric`,
+      }).from(cashierSalesJournals)
+        .where(and(
+          gte(cashierSalesJournals.journalDate, startDate),
+          lte(cashierSalesJournals.journalDate, endDate),
+          or(
+            eq(cashierSalesJournals.status, 'approved'),
+            eq(cashierSalesJournals.status, 'posted')
+          )
+        ))
+        .groupBy(cashierSalesJournals.branchId),
+      db.select({
+        cashierId: cashierSalesJournals.cashierId,
+        cashierName: cashierSalesJournals.cashierName,
+        branchId: cashierSalesJournals.branchId,
+        totalSales: sql<number>`coalesce(sum(total_sales), 0)::numeric`,
+      }).from(cashierSalesJournals)
+        .where(and(
+          gte(cashierSalesJournals.journalDate, startDate),
+          lte(cashierSalesJournals.journalDate, endDate),
+          or(
+            eq(cashierSalesJournals.status, 'approved'),
+            eq(cashierSalesJournals.status, 'posted')
+          )
+        ))
+        .groupBy(cashierSalesJournals.cashierId, cashierSalesJournals.cashierName, cashierSalesJournals.branchId),
+    ]);
+
+    const monthTargets = allTargets.filter(t => t.yearMonth === yearMonth);
+    const branchSalesMap: Record<string, number> = {};
+    for (const row of branchSalesResult) {
+      branchSalesMap[row.branchId] = Number(row.totalSales);
+    }
+
+    const branchPerformance = allBranches.map(branch => {
       const branchTarget = monthTargets.find(t => t.branchId === branch.id);
-      const journals = await this.getCashierJournalsByBranch(branch.id);
-      const branchMonthJournals = journals.filter((j: CashierSalesJournal) => 
-        j.journalDate >= startDate && j.journalDate <= endDate && (j.status === 'approved' || j.status === 'posted')
-      );
-      
-      const achieved = branchMonthJournals.reduce((sum: number, j: CashierSalesJournal) => sum + j.totalSales, 0);
+      const achieved = branchSalesMap[branch.id] || 0;
       const target = branchTarget?.targetAmount || 0;
       const percent = target > 0 ? (achieved / target) * 100 : 0;
-      
-      branchPerformance.push({
-        branchId: branch.id,
-        branchName: branch.name,
-        target,
-        achieved,
-        percent,
-        rank: 0
-      });
-    }
+      return { branchId: branch.id, branchName: branch.name, target, achieved, percent, rank: 0 };
+    });
 
     branchPerformance.sort((a, b) => b.percent - a.percent);
     branchPerformance.forEach((b, i) => b.rank = i + 1);
 
-    const allJournals = await this.getAllCashierJournals();
-    const monthJournals = allJournals.filter((j: CashierSalesJournal) => 
-      j.journalDate >= startDate && j.journalDate <= endDate && (j.status === 'approved' || j.status === 'posted')
-    );
-
-    const cashierSales: Record<string, { cashierName: string; branchId: string; total: number }> = {};
-    monthJournals.forEach((j: CashierSalesJournal) => {
-      if (!cashierSales[j.cashierId]) {
-        cashierSales[j.cashierId] = { cashierName: j.cashierName, branchId: j.branchId, total: 0 };
-      }
-      cashierSales[j.cashierId].total += j.totalSales;
-    });
-
-    const cashierPerformance = Object.entries(cashierSales).map(([cashierId, data]) => {
-      const branchTarget = monthTargets.find(t => t.branchId === data.branchId);
+    const cashierPerformance = cashierSalesResult.map(row => {
+      const branchTarget = monthTargets.find(t => t.branchId === row.branchId);
       const target = branchTarget?.targetAmount ? branchTarget.targetAmount / 30 : 0;
-      const percent = target > 0 ? (data.total / target) * 100 : 0;
+      const achieved = Number(row.totalSales);
+      const percent = target > 0 ? (achieved / target) * 100 : 0;
       return {
-        cashierId,
-        cashierName: data.cashierName,
-        branchId: data.branchId,
+        cashierId: row.cashierId,
+        cashierName: row.cashierName,
+        branchId: row.branchId,
         target,
-        achieved: data.total,
+        achieved,
         percent,
         rank: 0
       };
@@ -6476,9 +6476,9 @@ export class DatabaseStorage implements IStorage {
       yesterdayProdStats,
       targetData,
       orderCountResult,
-      invItems,
-      journals,
-      yesterdayJournals,
+      invAggResult,
+      cashierAggResult,
+      yesterdayCashierAgg,
       wasteReportsList,
     ] = await Promise.all([
       this.getDailyProductionStats(branchId, date),
@@ -6493,11 +6493,35 @@ export class DatabaseStorage implements IStorage {
           eq(advancedProductionOrders.targetBranchId, branchId)
         ) : undefined)
         .groupBy(advancedProductionOrders.status),
-      branchId === 'all'
-        ? db.select().from(inventoryItems)
-        : this.getInventoryItemsByBranch(branchId),
-      this.getCashierJournalsByDate(date),
-      this.getCashierJournalsByDate(yesterdayStr),
+      db.select({
+        totalItems: sql<number>`count(*)::int`,
+        totalValue: sql<number>`coalesce(sum(price * greatest(quantity, 1)), 0)::numeric`,
+        lowStockCount: sql<number>`count(*) filter (where quantity < 5)::int`,
+        maintenanceNeeded: sql<number>`count(*) filter (where status = 'maintenance')::int`,
+        goodCondition: sql<number>`count(*) filter (where status = 'good')::int`,
+        damaged: sql<number>`count(*) filter (where status = 'damaged' or status = 'missing')::int`,
+      }).from(inventoryItems)
+        .where(branchId !== 'all' ? eq(inventoryItems.branchId, branchId) : undefined),
+      db.select({
+        totalSales: sql<number>`coalesce(sum(total_sales), 0)::numeric`,
+        totalJournals: sql<number>`count(*)::int`,
+        shortages: sql<number>`count(*) filter (where discrepancy_status = 'shortage')::int`,
+        surpluses: sql<number>`count(*) filter (where discrepancy_status = 'surplus')::int`,
+        shortageAmount: sql<number>`coalesce(sum(discrepancy_amount) filter (where discrepancy_status = 'shortage'), 0)::numeric`,
+        surplusAmount: sql<number>`coalesce(sum(discrepancy_amount) filter (where discrepancy_status = 'surplus'), 0)::numeric`,
+        averageTicket: sql<number>`coalesce(avg(average_ticket) filter (where average_ticket > 0), 0)::numeric`,
+      }).from(cashierSalesJournals)
+        .where(and(
+          eq(cashierSalesJournals.journalDate, date),
+          branchId !== 'all' ? eq(cashierSalesJournals.branchId, branchId) : undefined
+        )),
+      db.select({
+        totalSales: sql<number>`coalesce(sum(total_sales), 0)::numeric`,
+      }).from(cashierSalesJournals)
+        .where(and(
+          eq(cashierSalesJournals.journalDate, yesterdayStr),
+          branchId !== 'all' ? eq(cashierSalesJournals.branchId, branchId) : undefined
+        )),
       this.getWasteReports(branchId !== 'all' ? branchId : undefined, date, date),
     ]);
 
@@ -6511,21 +6535,10 @@ export class DatabaseStorage implements IStorage {
     const activeOrders = (orderCounts['pending'] || 0) + (orderCounts['in_progress'] || 0);
     const completedOrders = orderCounts['completed'] || 0;
 
-    const totalValue = invItems.reduce((sum, i) => sum + ((i.price || 0) * (i.quantity || 1)), 0);
-    const lowStockCount = invItems.filter(i => (i.quantity || 0) < 5).length;
-    const maintenanceNeeded = invItems.filter(i => i.status === 'maintenance').length;
-    const goodCondition = invItems.filter(i => i.status === 'good').length;
-    const damaged = invItems.filter(i => i.status === 'damaged' || i.status === 'missing').length;
-
-    const filteredJournals = branchId !== 'all' ? journals.filter(j => j.branchId === branchId) : journals;
-    const filteredYesterdayJournals = branchId !== 'all' 
-      ? yesterdayJournals.filter(j => j.branchId === branchId) 
-      : yesterdayJournals;
-    
-    const totalSales = filteredJournals.reduce((sum, j) => sum + j.totalSales, 0);
-    const yesterdaySales = filteredYesterdayJournals.reduce((sum, j) => sum + j.totalSales, 0);
-    const shortageJournals = filteredJournals.filter(j => j.discrepancyStatus === 'shortage');
-    const surplusJournals = filteredJournals.filter(j => j.discrepancyStatus === 'surplus');
+    const inv = invAggResult[0] || { totalItems: 0, totalValue: 0, lowStockCount: 0, maintenanceNeeded: 0, goodCondition: 0, damaged: 0 };
+    const cashierStats = cashierAggResult[0] || { totalSales: 0, totalJournals: 0, shortages: 0, surpluses: 0, shortageAmount: 0, surplusAmount: 0, averageTicket: 0 };
+    const totalSales = Number(cashierStats.totalSales);
+    const yesterdaySales = Number(yesterdayCashierAgg[0]?.totalSales || 0);
 
     let totalWastedQuantity = 0;
     let totalWastedValue = 0;
@@ -6561,23 +6574,21 @@ export class DatabaseStorage implements IStorage {
         completedOrders,
       },
       inventory: {
-        totalItems: invItems.length,
-        totalValue,
-        lowStockCount,
-        maintenanceNeeded,
-        goodCondition,
-        damaged,
+        totalItems: Number(inv.totalItems),
+        totalValue: Number(inv.totalValue),
+        lowStockCount: Number(inv.lowStockCount),
+        maintenanceNeeded: Number(inv.maintenanceNeeded),
+        goodCondition: Number(inv.goodCondition),
+        damaged: Number(inv.damaged),
       },
       cashier: {
         totalSales,
-        totalJournals: filteredJournals.length,
-        shortages: shortageJournals.length,
-        surpluses: surplusJournals.length,
-        shortageAmount: shortageJournals.reduce((sum, j) => sum + j.discrepancyAmount, 0),
-        surplusAmount: surplusJournals.reduce((sum, j) => sum + j.discrepancyAmount, 0),
-        averageTicket: filteredJournals.length > 0 
-          ? filteredJournals.reduce((sum, j) => sum + (j.averageTicket || 0), 0) / filteredJournals.length 
-          : 0,
+        totalJournals: Number(cashierStats.totalJournals),
+        shortages: Number(cashierStats.shortages),
+        surpluses: Number(cashierStats.surpluses),
+        shortageAmount: Number(cashierStats.shortageAmount),
+        surplusAmount: Number(cashierStats.surplusAmount),
+        averageTicket: Number(cashierStats.averageTicket),
       },
       waste: {
         totalReports: wasteReportsList.length,
