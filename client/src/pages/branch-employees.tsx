@@ -982,14 +982,17 @@ export default function BranchEmployeesPage() {
   const { data: employeeSettingsData, isLoading: isLoadingSettings } = useQuery({
     queryKey: ["/api/employee-settings"],
     queryFn: async () => {
-      const res = await fetch("/api/employee-settings");
-      return res.json() as Promise<EmployeeSetting[]>;
+      const res = await fetch("/api/employee-settings", { credentials: "include" });
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
     },
   });
 
   const settingsByCategory = React.useMemo(() => {
     const grouped: Record<string, EmployeeSetting[]> = {};
-    employeeSettingsData?.forEach((setting) => {
+    const settingsArr = Array.isArray(employeeSettingsData) ? employeeSettingsData : [];
+    settingsArr.forEach((setting) => {
       if (!grouped[setting.category]) {
         grouped[setting.category] = [];
       }
