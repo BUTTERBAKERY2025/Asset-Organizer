@@ -1377,6 +1377,21 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(users);
   }
 
+  async getUsersByBranch(branchId?: string, branchIds?: string[]): Promise<Pick<User, 'id' | 'username' | 'firstName' | 'lastName'>[]> {
+    const conditions = [];
+    if (branchId) {
+      conditions.push(eq(users.branchId, branchId));
+    } else if (branchIds && branchIds.length > 0) {
+      conditions.push(inArray(users.branchId, branchIds));
+    }
+    return await db.select({
+      id: users.id,
+      username: users.username,
+      firstName: users.firstName,
+      lastName: users.lastName,
+    }).from(users).where(conditions.length > 0 ? and(...conditions) : undefined);
+  }
+
   async getUsersByIds(ids: string[]): Promise<User[]> {
     if (ids.length === 0) return [];
     return await db.select().from(users).where(inArray(users.id, ids));
@@ -3632,6 +3647,12 @@ export class DatabaseStorage implements IStorage {
   async getPaymentBreakdowns(journalId: number): Promise<CashierPaymentBreakdown[]> {
     return await db.select().from(cashierPaymentBreakdowns)
       .where(eq(cashierPaymentBreakdowns.journalId, journalId));
+  }
+
+  async getPaymentBreakdownsByJournalIds(journalIds: number[]): Promise<CashierPaymentBreakdown[]> {
+    if (journalIds.length === 0) return [];
+    return await db.select().from(cashierPaymentBreakdowns)
+      .where(inArray(cashierPaymentBreakdowns.journalId, journalIds));
   }
 
   async createPaymentBreakdown(breakdown: InsertCashierPaymentBreakdown): Promise<CashierPaymentBreakdown> {

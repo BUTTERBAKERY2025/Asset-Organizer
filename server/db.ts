@@ -175,6 +175,8 @@ export async function runStartupMigrations() {
       `CREATE INDEX IF NOT EXISTS idx_documents_branch ON documents(branch_id)`,
       `CREATE INDEX IF NOT EXISTS idx_cashier_journals_cashier ON cashier_journals(cashier_id)`,
       `CREATE INDEX IF NOT EXISTS idx_cashier_journals_discrepancy ON cashier_journals(discrepancy_status)`,
+      `CREATE INDEX IF NOT EXISTS idx_payment_breakdowns_journal ON cashier_payment_breakdowns(journal_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_cashier_journals_branch_date ON cashier_sales_journals(branch_id, journal_date)`,
     ];
     for (const mig of migrations) {
       try { await pool.query(mig); } catch (e) { /* index may already exist or table not found */ }

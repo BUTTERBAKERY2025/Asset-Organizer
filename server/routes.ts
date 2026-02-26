@@ -6642,14 +6642,7 @@ export async function registerRoutes(
               result.cashiers = [{ id: currentUser.id, username: currentUser.username, firstName: currentUser.firstName || null, lastName: currentUser.lastName || null }];
               return;
             }
-            const allUsers = await storage.getAllUsers();
-            let filtered = allUsers;
-            if (effectiveBranchId) {
-              filtered = allUsers.filter((u: any) => u.branchId === effectiveBranchId);
-            } else if (branchFilter.branchIds) {
-              filtered = allUsers.filter((u: any) => u.branchId && branchFilter.branchIds!.includes(u.branchId));
-            }
-            result.cashiers = filtered.map((u: any) => ({ id: u.id, username: u.username, firstName: u.firstName, lastName: u.lastName }));
+            result.cashiers = await storage.getUsersByBranch(effectiveBranchId || undefined, branchFilter.branchIds || undefined);
           })()
         );
       }
@@ -6663,20 +6656,12 @@ export async function registerRoutes(
               result.paymentBreakdowns = [];
               return;
             }
-            const batchSize = 20;
-            const allBreakdowns: any[] = [];
-            for (let i = 0; i < journalIds.length; i += batchSize) {
-              const batch = journalIds.slice(i, i + batchSize);
-              const batchResults = await Promise.all(
-                batch.map(async (journalId: number) => {
-                  const breakdowns = await storage.getPaymentBreakdowns(journalId);
-                  const journal = journals.find((j: any) => j.id === journalId);
-                  return breakdowns.map((b: any) => ({ ...b, branchId: journal?.branchId, journalDate: journal?.journalDate }));
-                })
-              );
-              allBreakdowns.push(...batchResults.flat());
-            }
-            result.paymentBreakdowns = allBreakdowns;
+            const journalMap = new Map(journals.map((j: any) => [j.id, j]));
+            const allBreakdowns = await storage.getPaymentBreakdownsByJournalIds(journalIds);
+            result.paymentBreakdowns = allBreakdowns.map((b: any) => {
+              const journal = journalMap.get(b.journalId);
+              return { ...b, branchId: journal?.branchId, journalDate: journal?.journalDate };
+            });
           })()
         );
       }
