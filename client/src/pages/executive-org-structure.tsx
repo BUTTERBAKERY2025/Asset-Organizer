@@ -5,32 +5,68 @@ import { ArrowLeft, Printer, Building2 } from "lucide-react";
 import React, { useRef } from "react";
 import { useReactToPrint } from "react-to-print";
 
-function NodeBox({
+const COLORS = {
+  gold: { header: "#92600a", headerBg: "#f5e6c8", border: "#d4a843", accent: "#b8860b" },
+  dark: { header: "#1e293b", headerBg: "#334155", border: "#475569", accent: "#64748b" },
+  indigo: { header: "#312e81", headerBg: "#4338ca", border: "#6366f1", accent: "#818cf8" },
+  emerald: { header: "#064e3b", headerBg: "#059669", border: "#34d399", accent: "#6ee7b7" },
+  blue: { header: "#1e3a5f", headerBg: "#2563eb", border: "#60a5fa", accent: "#93c5fd" },
+  orange: { header: "#7c2d12", headerBg: "#ea580c", border: "#fb923c", accent: "#fdba74" },
+  purple: { header: "#4c1d95", headerBg: "#7c3aed", border: "#a78bfa", accent: "#c4b5fd" },
+  cyan: { header: "#164e63", headerBg: "#0891b2", border: "#22d3ee", accent: "#67e8f9" },
+  teal: { header: "#134e4a", headerBg: "#0d9488", border: "#2dd4bf", accent: "#5eead4" },
+  red: { header: "#7f1d1d", headerBg: "#dc2626", border: "#f87171", accent: "#fca5a5" },
+  violet: { header: "#4c1d95", headerBg: "#7c3aed", border: "#a78bfa", accent: "#c4b5fd" },
+  slate: { header: "#334155", headerBg: "#64748b", border: "#94a3b8", accent: "#cbd5e1" },
+};
+
+function OrgNode({
   title,
   subtitle,
   items,
-  bg,
-  textColor = "text-white",
-  className = "",
+  color,
+  width,
+  prominent = false,
 }: {
   title: string;
   subtitle?: string;
   items?: string[];
-  bg: string;
-  textColor?: string;
-  className?: string;
+  color: keyof typeof COLORS;
+  width?: number;
+  prominent?: boolean;
 }) {
+  const c = COLORS[color];
+  const w = width || 220;
   return (
-    <div className={`rounded-lg shadow-md border overflow-hidden ${className}`}>
-      <div className={`${bg} px-4 py-2.5 text-center`}>
-        <h3 className={`text-[11px] font-bold ${textColor} leading-snug`}>{title}</h3>
-        {subtitle && <p className={`text-[9px] ${textColor} opacity-75 mt-0.5`}>{subtitle}</p>}
+    <div
+      style={{
+        width: w,
+        borderRadius: 8,
+        border: `2px solid ${c.border}`,
+        overflow: "hidden",
+        background: "#fff",
+        boxShadow: prominent ? `0 4px 16px ${c.border}40` : "0 1px 4px rgba(0,0,0,0.08)",
+      }}
+    >
+      <div
+        style={{
+          background: c.headerBg,
+          padding: prominent ? "10px 12px" : "7px 10px",
+          textAlign: "center",
+        }}
+      >
+        <div style={{ color: "#fff", fontWeight: 700, fontSize: prominent ? 13 : 11, lineHeight: 1.4 }}>
+          {title}
+        </div>
+        {subtitle && (
+          <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 8, marginTop: 2 }}>{subtitle}</div>
+        )}
       </div>
       {items && items.length > 0 && (
-        <div className="bg-white px-3 py-2 space-y-0.5">
+        <div style={{ padding: "6px 10px" }}>
           {items.map((item, i) => (
-            <div key={i} className="text-[9px] text-slate-600 leading-snug flex items-start gap-1">
-              <span className="text-slate-300 shrink-0 mt-px">◆</span>
+            <div key={i} style={{ display: "flex", gap: 5, fontSize: 9, color: "#475569", lineHeight: 1.5, alignItems: "flex-start" }}>
+              <span style={{ color: c.border, flexShrink: 0, marginTop: 1 }}>●</span>
               <span>{item}</span>
             </div>
           ))}
@@ -40,19 +76,15 @@ function NodeBox({
   );
 }
 
-function SectionBox({
-  name,
-  tasks,
-}: {
-  name: string;
-  tasks: string[];
-}) {
+function DeptSection({ name, tasks }: { name: string; tasks: string[] }) {
   return (
-    <div className="bg-white rounded border border-slate-200 p-2">
-      <h5 className="text-[9px] font-bold text-slate-800 mb-1 border-b border-slate-100 pb-1">{name}</h5>
+    <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 5, padding: "5px 8px" }}>
+      <div style={{ fontSize: 9, fontWeight: 700, color: "#334155", marginBottom: 2, borderBottom: "1px solid #e2e8f0", paddingBottom: 2 }}>
+        {name}
+      </div>
       {tasks.map((t, i) => (
-        <div key={i} className="text-[8px] text-slate-500 leading-snug flex items-start gap-1">
-          <span className="text-slate-300 shrink-0">–</span>
+        <div key={i} style={{ fontSize: 8, color: "#64748b", lineHeight: 1.5, display: "flex", gap: 4, alignItems: "flex-start" }}>
+          <span style={{ color: "#cbd5e1", flexShrink: 0 }}>–</span>
           <span>{t}</span>
         </div>
       ))}
@@ -60,10 +92,26 @@ function SectionBox({
   );
 }
 
-function VertLine({ h = 20 }: { h?: number }) {
+function Connector({ vertical = 20 }: { vertical?: number }) {
   return (
-    <div className="flex justify-center" style={{ height: h }}>
-      <div className="w-[2px] h-full bg-slate-300 rounded-full" />
+    <div style={{ display: "flex", justifyContent: "center" }}>
+      <div style={{ width: 2, height: vertical, background: "#94a3b8", borderRadius: 1 }} />
+    </div>
+  );
+}
+
+function HorizontalBranch({ width, drops }: { width: string; drops: number }) {
+  return (
+    <div style={{ margin: "0 auto", width }}>
+      <div style={{ display: "flex", justifyContent: "center" }}>
+        <div style={{ width: 2, height: 14, background: "#94a3b8", borderRadius: 1 }} />
+      </div>
+      <div style={{ height: 2, background: "#94a3b8", borderRadius: 1 }} />
+      <div style={{ display: "flex", justifyContent: "space-between" }}>
+        {Array.from({ length: drops }).map((_, i) => (
+          <div key={i} style={{ width: 2, height: 14, background: "#94a3b8", borderRadius: 1 }} />
+        ))}
+      </div>
     </div>
   );
 }
@@ -75,10 +123,17 @@ export default function ExecutiveOrgStructure() {
     contentRef: printRef,
     documentTitle: "الهيكل التنظيمي - شركة الزبد الأفضل التجارية",
     pageStyle: `
-      @page { size: A3 landscape; margin: 8mm; }
+      @page { 
+        size: A3 landscape; 
+        margin: 12mm; 
+      }
       @media print {
-        body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-        * { font-family: 'Cairo', 'Segoe UI', sans-serif !important; }
+        html, body { 
+          -webkit-print-color-adjust: exact !important; 
+          print-color-adjust: exact !important;
+          color-adjust: exact !important;
+        }
+        * { font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif !important; }
       }
     `,
   });
@@ -88,23 +143,24 @@ export default function ExecutiveOrgStructure() {
       <div className="p-3 sm:p-4 md:p-6" dir="rtl">
         <div className="max-w-full mx-auto space-y-4">
 
-          <div className="flex items-center justify-between bg-slate-800 rounded-lg px-4 py-3 print:hidden">
+          <div className="flex items-center justify-between rounded-lg px-4 py-3 print:hidden" style={{ background: "#1e293b" }}>
             <div className="flex items-center gap-3">
-              <Building2 className="h-6 w-6 text-amber-400" />
+              <Building2 className="h-6 w-6" style={{ color: "#d4a843" }} />
               <div>
                 <h1 className="text-lg font-bold text-white">الهيكل التنظيمي</h1>
-                <p className="text-xs text-slate-400">شركة الزبد الأفضل التجارية</p>
+                <p className="text-xs" style={{ color: "#94a3b8" }}>شركة الزبد الأفضل التجارية</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <Button
                 onClick={() => handlePrint()}
                 size="sm"
-                className="bg-amber-600 hover:bg-amber-700 text-white"
+                style={{ background: "#b8860b", color: "#fff" }}
+                className="hover:opacity-90"
                 data-testid="btn-print-org"
               >
                 <Printer className="h-4 w-4 ml-1.5" />
-                تصدير PDF
+                طباعة / تصدير PDF
               </Button>
               <Link href="/executive">
                 <Button variant="ghost" size="sm" className="text-slate-300 hover:text-white hover:bg-slate-700" data-testid="btn-back-executive">
@@ -117,45 +173,54 @@ export default function ExecutiveOrgStructure() {
           <div className="overflow-x-auto pb-4">
             <div
               ref={printRef}
-              className="min-w-[1200px] bg-gradient-to-b from-slate-50 to-white rounded-xl border border-slate-200 shadow-sm"
               dir="rtl"
-              style={{ padding: "28px 32px" }}
+              style={{
+                minWidth: 1250,
+                background: "#ffffff",
+                borderRadius: 12,
+                border: "1px solid #e2e8f0",
+                padding: "30px 36px",
+                fontFamily: "'Cairo', 'Segoe UI', Tahoma, sans-serif",
+              }}
             >
 
-              {/* Print header */}
-              <div className="text-center mb-5">
-                <div className="inline-block">
-                  <h1 className="text-lg font-bold text-slate-900 tracking-wide">الهيكل التنظيمي</h1>
-                  <p className="text-[11px] text-slate-500 mt-0.5">شركة الزبد الأفضل التجارية — حوكمة الشركات المساهمة</p>
-                  <div className="w-32 h-[2px] bg-amber-500 mx-auto mt-2 rounded-full" />
+              {/* Header */}
+              <div style={{ textAlign: "center", marginBottom: 24 }}>
+                <div style={{ display: "inline-block", borderBottom: "3px solid #b8860b", paddingBottom: 10 }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: "#1e293b", letterSpacing: 1 }}>الهيكل التنظيمي</div>
+                  <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>شركة الزبد الأفضل التجارية</div>
+                  <div style={{ fontSize: 9, color: "#94a3b8", marginTop: 2 }}>وفقاً لمعايير حوكمة الشركات المساهمة — نظام الشركات السعودي</div>
                 </div>
               </div>
 
-              {/* ═══ LEVEL 0: الجمعية العامة ═══ */}
-              <div className="text-center">
-                <NodeBox
+              {/* LEVEL 0: الجمعية العامة */}
+              <div style={{ display: "flex", justifyContent: "center" }}>
+                <OrgNode
                   title="الجمعية العامة للمساهمين"
-                  subtitle="General Assembly"
-                  bg="bg-gradient-to-b from-amber-700 to-amber-800 border-amber-600"
+                  subtitle="General Assembly of Shareholders"
+                  color="gold"
+                  width={280}
+                  prominent
                   items={[
                     "اعتماد القوائم المالية السنوية",
                     "تعيين وعزل أعضاء مجلس الإدارة",
                     "تعيين مراجع الحسابات الخارجي",
                     "اعتماد زيادة / تخفيض رأس المال",
-                    "اعتماد الأرباح الموزعة",
+                    "إقرار توزيع الأرباح",
                   ]}
-                  className="max-w-[280px] mx-auto"
                 />
               </div>
 
-              <VertLine h={16} />
+              <Connector vertical={18} />
 
-              {/* ═══ LEVEL 1: مجلس الإدارة ═══ */}
-              <div className="text-center">
-                <NodeBox
+              {/* LEVEL 1: مجلس الإدارة */}
+              <div style={{ display: "flex", justifyContent: "center" }}>
+                <OrgNode
                   title="مجلس الإدارة"
                   subtitle="Board of Directors"
-                  bg="bg-gradient-to-b from-slate-800 to-slate-900 border-slate-700"
+                  color="dark"
+                  width={280}
+                  prominent
                   items={[
                     "رسم التوجهات الاستراتيجية",
                     "اعتماد الخطط والميزانيات السنوية",
@@ -163,61 +228,57 @@ export default function ExecutiveOrgStructure() {
                     "تعيين وتقييم الرئيس التنفيذي",
                     "اعتماد السياسات والإجراءات الجوهرية",
                   ]}
-                  className="max-w-[280px] mx-auto"
                 />
               </div>
 
-              {/* Board sub-entities row */}
-              <VertLine h={10} />
-              <div className="relative mx-auto" style={{ width: "52%" }}>
-                <div className="h-[2px] bg-slate-300 rounded-full" />
-                <div className="flex justify-between">
-                  {[0, 1, 2].map(i => <div key={i} className="w-[2px] h-3 bg-slate-300 rounded-full" />)}
-                </div>
-              </div>
-              <div className="flex justify-center gap-4">
-                <NodeBox
+              {/* Board sub-entities */}
+              <HorizontalBranch width="58%" drops={3} />
+
+              <div style={{ display: "flex", justifyContent: "center", gap: 16 }}>
+                <OrgNode
                   title="رئيس مجلس الإدارة"
-                  subtitle="Chairman"
-                  bg="bg-gradient-to-b from-amber-600 to-amber-700 border-amber-500"
+                  subtitle="Chairman of the Board"
+                  color="gold"
+                  width={210}
                   items={[
                     "رئاسة اجتماعات المجلس",
                     "التوقيع على القرارات الاستراتيجية",
                     "تمثيل الشركة أمام الجهات الرسمية",
                   ]}
-                  className="w-[210px]"
                 />
-                <NodeBox
+                <OrgNode
                   title="لجنة المراجعة"
                   subtitle="Audit Committee"
-                  bg="bg-gradient-to-b from-red-700 to-red-800 border-red-600"
+                  color="red"
+                  width={210}
                   items={[
                     "مراجعة القوائم المالية",
                     "تقييم نظام الرقابة الداخلية",
                     "التوصية بتعيين المراجع الخارجي",
                   ]}
-                  className="w-[210px]"
                 />
-                <NodeBox
+                <OrgNode
                   title="لجنة المكافآت والترشيحات"
-                  subtitle="Remuneration & Nomination"
-                  bg="bg-gradient-to-b from-violet-700 to-violet-800 border-violet-600"
+                  subtitle="Remuneration & Nomination Committee"
+                  color="violet"
+                  width={210}
                   items={[
-                    "سياسات مكافآت أعضاء المجلس والتنفيذيين",
-                    "ترشيح أعضاء المجلس",
-                    "تقييم أداء المجلس والإدارة التنفيذية",
+                    "سياسات مكافآت الأعضاء والتنفيذيين",
+                    "ترشيح أعضاء المجلس الجدد",
+                    "تقييم أداء المجلس والإدارة",
                   ]}
-                  className="w-[210px]"
                 />
               </div>
 
-              {/* ═══ LEVEL 2: الرئيس التنفيذي ═══ */}
-              <VertLine h={16} />
-              <div className="text-center">
-                <NodeBox
+              {/* LEVEL 2: CEO */}
+              <Connector vertical={18} />
+              <div style={{ display: "flex", justifyContent: "center" }}>
+                <OrgNode
                   title="الرئيس التنفيذي"
                   subtitle="Chief Executive Officer (CEO)"
-                  bg="bg-gradient-to-b from-indigo-700 to-indigo-800 border-indigo-600"
+                  color="indigo"
+                  width={280}
+                  prominent
                   items={[
                     "تنفيذ قرارات مجلس الإدارة",
                     "الإشراف على جميع الإدارات التنفيذية",
@@ -225,206 +286,173 @@ export default function ExecutiveOrgStructure() {
                     "اعتماد العقود والمصروفات الرأسمالية",
                     "ضمان الالتزام والحوكمة",
                   ]}
-                  className="max-w-[280px] mx-auto"
                 />
               </div>
 
-              {/* ═══ LEVEL 3: الإدارات الرئيسية ═══ */}
-              <VertLine h={12} />
-              <div className="relative mx-auto" style={{ width: "92%" }}>
-                <div className="h-[2px] bg-slate-300 rounded-full" />
-                <div className="flex justify-between">
-                  {[0, 1, 2, 3, 4].map(i => <div key={i} className="w-[2px] h-3 bg-slate-300 rounded-full" />)}
-                </div>
-              </div>
+              {/* LEVEL 3: Departments */}
+              <HorizontalBranch width="94%" drops={5} />
 
-              <div className="flex gap-3 justify-center" style={{ width: "92%", margin: "0 auto" }}>
+              <div style={{ display: "flex", gap: 10, width: "94%", margin: "0 auto" }}>
 
-                {/* 1 - Finance */}
-                <div className="flex-1 space-y-1.5">
-                  <NodeBox
-                    title="الإدارة المالية"
-                    subtitle="Finance & Accounting"
-                    bg="bg-gradient-to-b from-emerald-600 to-emerald-700 border-emerald-500"
-                    className="w-full"
-                  />
-                  <div className="space-y-1">
-                    <SectionBox name="المحاسبة العامة" tasks={["القيود اليومية", "ميزان المراجعة", "القوائم المالية", "مطابقة الحسابات"]} />
-                    <SectionBox name="قسم الموردين (AP)" tasks={["مراجعة الفواتير", "مطابقة PO/GRN", "جدول أعمار الديون", "إدارة السداد"]} />
-                    <SectionBox name="قسم العملاء (AR)" tasks={["متابعة التحصيل", "مطابقة المبيعات", "أعمار الذمم"]} />
-                    <SectionBox name="الخزينة (Treasury)" tasks={["التدفقات النقدية", "الحسابات البنكية", "تقارير السيولة"]} />
-                    <SectionBox name="الرواتب (Payroll)" tasks={["مسير الرواتب", "الاستقطاعات", "سداد التأمينات"]} />
+                {/* Finance */}
+                <div style={{ flex: 1 }}>
+                  <OrgNode title="الإدارة المالية" subtitle="Finance & Accounting" color="emerald" width={undefined as any} />
+                  <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
+                    <DeptSection name="المحاسبة العامة" tasks={["القيود اليومية", "ميزان المراجعة", "القوائم المالية", "مطابقة الحسابات"]} />
+                    <DeptSection name="قسم الموردين (AP)" tasks={["مراجعة الفواتير", "مطابقة PO/GRN", "جدول أعمار الديون", "إدارة السداد"]} />
+                    <DeptSection name="قسم العملاء (AR)" tasks={["متابعة التحصيل", "مطابقة المبيعات", "أعمار الذمم"]} />
+                    <DeptSection name="الخزينة (Treasury)" tasks={["التدفقات النقدية", "الحسابات البنكية", "تقارير السيولة"]} />
+                    <DeptSection name="الرواتب (Payroll)" tasks={["مسير الرواتب", "الاستقطاعات", "سداد التأمينات"]} />
                   </div>
                 </div>
 
-                {/* 2 - Operations */}
-                <div className="flex-1 space-y-1.5">
-                  <NodeBox
-                    title="إدارة التشغيل"
-                    subtitle="Operations"
-                    bg="bg-gradient-to-b from-blue-600 to-blue-700 border-blue-500"
-                    className="w-full"
-                  />
-                  <div className="space-y-1">
-                    <SectionBox name="إدارة الفروع" tasks={["الأداء اليومي", "أهداف المبيعات", "ضبط الهدر", "مراقبة الجودة"]} />
-                    <SectionBox name="إدارة الإنتاج" tasks={["خطوط الإنتاج", "مراقبة المواد الخام", "الالتزام بالوصفات", "الكفاءة التشغيلية"]} />
-                    <SectionBox name="إدارة الجودة" tasks={["فحص المنتجات", "الالتزام الصحي", "تقارير الامتثال"]} />
-                    <SectionBox name="التخطيط والتوريد الداخلي" tasks={["تخطيط الاحتياجات", "طلبات الفروع", "مراقبة الاستهلاك"]} />
+                {/* Operations */}
+                <div style={{ flex: 1 }}>
+                  <OrgNode title="إدارة التشغيل" subtitle="Operations" color="blue" width={undefined as any} />
+                  <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
+                    <DeptSection name="إدارة الفروع" tasks={["الأداء اليومي", "أهداف المبيعات", "ضبط الهدر", "مراقبة الجودة"]} />
+                    <DeptSection name="إدارة الإنتاج" tasks={["خطوط الإنتاج", "المواد الخام", "الالتزام بالوصفات", "الكفاءة التشغيلية"]} />
+                    <DeptSection name="إدارة الجودة" tasks={["فحص المنتجات", "الالتزام الصحي", "تقارير الامتثال"]} />
+                    <DeptSection name="التخطيط والتوريد الداخلي" tasks={["تخطيط الاحتياجات", "طلبات الفروع", "مراقبة الاستهلاك"]} />
                   </div>
                 </div>
 
-                {/* 3 - Procurement */}
-                <div className="flex-1 space-y-1.5">
-                  <NodeBox
-                    title="المشتريات وسلسلة الإمداد"
-                    subtitle="Procurement & Supply Chain"
-                    bg="bg-gradient-to-b from-orange-600 to-orange-700 border-orange-500"
-                    className="w-full"
-                  />
-                  <div className="space-y-1">
-                    <SectionBox name="قسم المشتريات" tasks={["إدارة الموردين", "التفاوض على الأسعار", "أوامر الشراء", "تقييم الموردين"]} />
-                    <SectionBox name="المستودع المركزي" tasks={["استلام المواد", "التخزين", "الجرد الدوري", "التوزيع للفروع"]} />
-                    <SectionBox name="المستودعات التشغيلية" tasks={["مخزون الفرع", "الجرد اليومي", "تقارير الفروقات"]} />
+                {/* Procurement */}
+                <div style={{ flex: 1 }}>
+                  <OrgNode title="المشتريات وسلسلة الإمداد" subtitle="Procurement & Supply Chain" color="orange" width={undefined as any} />
+                  <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
+                    <DeptSection name="قسم المشتريات" tasks={["إدارة الموردين", "التفاوض على الأسعار", "أوامر الشراء", "تقييم الموردين"]} />
+                    <DeptSection name="المستودع المركزي" tasks={["استلام المواد", "التخزين", "الجرد الدوري", "التوزيع للفروع"]} />
+                    <DeptSection name="المستودعات التشغيلية" tasks={["مخزون الفرع", "الجرد اليومي", "تقارير الفروقات"]} />
                   </div>
                 </div>
 
-                {/* 4 - HR */}
-                <div className="flex-1 space-y-1.5">
-                  <NodeBox
-                    title="الموارد البشرية"
-                    subtitle="Human Resources"
-                    bg="bg-gradient-to-b from-purple-600 to-purple-700 border-purple-500"
-                    className="w-full"
-                  />
-                  <div className="space-y-1">
-                    <SectionBox name="التوظيف" tasks={["استقطاب الموظفين", "المقابلات", "إصدار العقود"]} />
-                    <SectionBox name="شؤون الموظفين" tasks={["ملفات الموظفين", "الإجازات", "المخالصات"]} />
-                    <SectionBox name="الحضور والانصراف" tasks={["متابعة الدوام", "تقارير التأخير", "إدارة الإضافي"]} />
-                    <SectionBox name="الامتثال والتأمينات" tasks={["تسجيل GOSI", "التأمين الطبي", "الالتزام بنظام العمل"]} />
+                {/* HR */}
+                <div style={{ flex: 1 }}>
+                  <OrgNode title="الموارد البشرية" subtitle="Human Resources" color="purple" width={undefined as any} />
+                  <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
+                    <DeptSection name="التوظيف" tasks={["استقطاب الموظفين", "المقابلات", "إصدار العقود"]} />
+                    <DeptSection name="شؤون الموظفين" tasks={["ملفات الموظفين", "الإجازات", "المخالصات"]} />
+                    <DeptSection name="الحضور والانصراف" tasks={["متابعة الدوام", "تقارير التأخير", "إدارة الإضافي"]} />
+                    <DeptSection name="الامتثال والتأمينات" tasks={["تسجيل GOSI", "التأمين الطبي", "الالتزام بنظام العمل"]} />
                   </div>
                 </div>
 
-                {/* 5 - IT */}
-                <div className="flex-1 space-y-1.5">
-                  <NodeBox
-                    title="تقنية المعلومات"
-                    subtitle="Information Technology"
-                    bg="bg-gradient-to-b from-cyan-600 to-cyan-700 border-cyan-500"
-                    className="w-full"
-                  />
-                  <div className="space-y-1">
-                    <SectionBox name="الأنظمة والبنية التحتية" tasks={["أنظمة نقاط البيع (POS)", "أنظمة المحاسبة", "إدارة السيرفرات", "حماية البيانات", "دعم الفروع"]} />
+                {/* IT */}
+                <div style={{ flex: 1 }}>
+                  <OrgNode title="تقنية المعلومات" subtitle="Information Technology" color="cyan" width={undefined as any} />
+                  <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
+                    <DeptSection name="الأنظمة والبنية التحتية" tasks={["أنظمة نقاط البيع POS", "أنظمة المحاسبة", "إدارة السيرفرات", "حماية البيانات", "الدعم الفني للفروع"]} />
                   </div>
                 </div>
               </div>
 
-              {/* ═══ LEVEL 4 & 5: الفروع + الدعم ═══ */}
-              <div className="mt-5 pt-4 border-t-2 border-slate-200">
-                <div className="flex gap-5 justify-center">
+              {/* Bottom section */}
+              <div style={{ marginTop: 24, paddingTop: 16, borderTop: "2px solid #e2e8f0", display: "flex", gap: 14, justifyContent: "center" }}>
 
-                  <div className="w-[340px]">
-                    <div className="rounded-lg border-2 border-teal-400 overflow-hidden shadow-sm">
-                      <div className="bg-gradient-to-b from-teal-600 to-teal-700 px-4 py-2 text-center">
-                        <h3 className="text-[11px] font-bold text-white">هيكل كل فرع</h3>
-                        <p className="text-[8px] text-teal-200">Branch Structure</p>
-                      </div>
-                      <div className="bg-white p-3">
-                        {[
-                          { role: "مدير فرع", indent: 0, weight: "bold", bg: "bg-teal-700 text-white" },
-                          { role: "مساعد مدير فرع", indent: 1, weight: "semibold", bg: "bg-teal-100 text-teal-900" },
-                          { role: "مشرف شيفت", indent: 2, weight: "medium", bg: "bg-teal-50 text-teal-800" },
-                          { role: "مسؤول مخزون", indent: 3, weight: "normal", bg: "bg-white text-slate-700 border border-slate-200" },
-                          { role: "كاشير", indent: 3, weight: "normal", bg: "bg-white text-slate-700 border border-slate-200" },
-                          { role: "موظفي إنتاج", indent: 3, weight: "normal", bg: "bg-white text-slate-700 border border-slate-200" },
-                          { role: "موظفي خدمة عملاء", indent: 3, weight: "normal", bg: "bg-white text-slate-700 border border-slate-200" },
-                          { role: "عمال نظافة", indent: 3, weight: "normal", bg: "bg-white text-slate-700 border border-slate-200" },
-                        ].map((item, i, arr) => (
-                          <React.Fragment key={i}>
-                            <div
-                              className={`rounded px-2.5 py-1 ${item.bg} text-[9px] font-${item.weight}`}
-                              style={{ marginRight: item.indent * 14 }}
-                            >
-                              {item.role}
-                            </div>
-                            {i < arr.length - 1 && (
-                              <div className="flex" style={{ marginRight: item.indent * 14 + 10 }}>
-                                <div className="w-[2px] h-1.5 bg-teal-200 rounded-full" />
-                              </div>
-                            )}
-                          </React.Fragment>
-                        ))}
-                      </div>
-                    </div>
+                {/* Branch */}
+                <div style={{ width: 280, border: "2px solid #2dd4bf", borderRadius: 8, overflow: "hidden", background: "#fff" }}>
+                  <div style={{ background: "#0d9488", padding: "8px 12px", textAlign: "center" }}>
+                    <div style={{ color: "#fff", fontWeight: 700, fontSize: 11 }}>هيكل كل فرع</div>
+                    <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 8 }}>Branch Structure</div>
                   </div>
-
-                  <div className="w-[260px]">
-                    <div className="rounded-lg border-2 border-slate-400 overflow-hidden shadow-sm">
-                      <div className="bg-gradient-to-b from-slate-600 to-slate-700 px-4 py-2 text-center">
-                        <h3 className="text-[11px] font-bold text-white">الدعم التشغيلي</h3>
-                        <p className="text-[8px] text-slate-300">Operational Support</p>
-                      </div>
-                      <div className="bg-white p-3 grid grid-cols-2 gap-1.5">
-                        {["سائقين", "عمال مستودعات", "فني صيانة", "دعم تقني ميداني"].map((r, i) => (
-                          <div key={i} className="bg-slate-50 border border-slate-200 rounded px-2 py-1.5 text-center text-[9px] text-slate-700 font-medium">
-                            {r}
+                  <div style={{ padding: 10 }}>
+                    {[
+                      { role: "مدير الفرع", bg: "#0d9488", color: "#fff", mr: 0 },
+                      { role: "مساعد مدير الفرع", bg: "#ccfbf1", color: "#134e4a", mr: 12 },
+                      { role: "مشرف الشيفت", bg: "#f0fdfa", color: "#115e59", mr: 24 },
+                      { role: "مسؤول المخزون", bg: "#f8fafc", color: "#475569", mr: 36 },
+                      { role: "الكاشير", bg: "#f8fafc", color: "#475569", mr: 36 },
+                      { role: "موظفو الإنتاج", bg: "#f8fafc", color: "#475569", mr: 36 },
+                      { role: "موظفو خدمة العملاء", bg: "#f8fafc", color: "#475569", mr: 36 },
+                      { role: "عمال النظافة", bg: "#f8fafc", color: "#475569", mr: 36 },
+                    ].map((item, i, arr) => (
+                      <React.Fragment key={i}>
+                        <div style={{
+                          background: item.bg, color: item.color, borderRadius: 4, padding: "3px 8px",
+                          fontSize: 9, fontWeight: i < 3 ? 700 : 500, marginRight: item.mr,
+                          border: i >= 3 ? "1px solid #e2e8f0" : "none",
+                        }}>
+                          {item.role}
+                        </div>
+                        {i < arr.length - 1 && (
+                          <div style={{ marginRight: item.mr + 8, height: 6, display: "flex" }}>
+                            <div style={{ width: 2, height: "100%", background: "#99f6e4", borderRadius: 1 }} />
                           </div>
-                        ))}
-                      </div>
-                    </div>
+                        )}
+                      </React.Fragment>
+                    ))}
                   </div>
+                </div>
 
-                  <div className="w-[260px]">
-                    <div className="rounded-lg border-2 border-red-300 overflow-hidden shadow-sm">
-                      <div className="bg-gradient-to-b from-red-700 to-red-800 px-4 py-2 text-center">
-                        <h3 className="text-[11px] font-bold text-white">فصل الصلاحيات</h3>
-                        <p className="text-[8px] text-red-200">Segregation of Duties</p>
+                {/* Support */}
+                <div style={{ width: 220, border: "2px solid #94a3b8", borderRadius: 8, overflow: "hidden", background: "#fff" }}>
+                  <div style={{ background: "#64748b", padding: "8px 12px", textAlign: "center" }}>
+                    <div style={{ color: "#fff", fontWeight: 700, fontSize: 11 }}>الدعم التشغيلي</div>
+                    <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 8 }}>Operational Support</div>
+                  </div>
+                  <div style={{ padding: 10, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5 }}>
+                    {["سائقين", "عمال مستودعات", "فني صيانة", "دعم تقني ميداني"].map((r, i) => (
+                      <div key={i} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 4, padding: "5px 6px", textAlign: "center", fontSize: 9, color: "#475569", fontWeight: 600 }}>
+                        {r}
                       </div>
-                      <div className="bg-white p-2.5 space-y-1">
-                        {[
-                          "المشتريات منفصلة عن السداد",
-                          "التسجيل المحاسبي منفصل عن اعتماد المدفوعات",
-                          "الجرد منفصل عن مسؤول المخزون",
-                          "الرواتب تعتمد من التنفيذي بعد مراجعة المالية",
-                        ].map((s, i) => (
-                          <div key={i} className="flex items-start gap-1.5 text-[9px] text-slate-700 bg-red-50 rounded px-2 py-1">
-                            <span className="text-green-600 font-bold shrink-0">✓</span>
-                            <span>{s}</span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Segregation */}
+                <div style={{ width: 250, border: "2px solid #f87171", borderRadius: 8, overflow: "hidden", background: "#fff" }}>
+                  <div style={{ background: "#dc2626", padding: "8px 12px", textAlign: "center" }}>
+                    <div style={{ color: "#fff", fontWeight: 700, fontSize: 11 }}>فصل الصلاحيات</div>
+                    <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 8 }}>Segregation of Duties</div>
+                  </div>
+                  <div style={{ padding: 8 }}>
+                    {[
+                      "المشتريات منفصلة عن السداد",
+                      "التسجيل المحاسبي منفصل عن اعتماد المدفوعات",
+                      "الجرد منفصل عن مسؤول المخزون",
+                      "الرواتب تُعتمد من التنفيذي بعد مراجعة المالية",
+                    ].map((s, i) => (
+                      <div key={i} style={{ display: "flex", gap: 6, alignItems: "flex-start", background: "#fef2f2", borderRadius: 4, padding: "4px 8px", marginBottom: 3, fontSize: 9, color: "#475569" }}>
+                        <span style={{ color: "#16a34a", fontWeight: 700, flexShrink: 0, fontSize: 10 }}>✓</span>
+                        <span>{s}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Reporting */}
+                <div style={{ width: 180, border: "2px solid #a78bfa", borderRadius: 8, overflow: "hidden", background: "#fff" }}>
+                  <div style={{ background: "#7c3aed", padding: "8px 12px", textAlign: "center" }}>
+                    <div style={{ color: "#fff", fontWeight: 700, fontSize: 11 }}>مسار التقارير</div>
+                    <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 8 }}>Reporting Path</div>
+                  </div>
+                  <div style={{ padding: 8 }}>
+                    {["مجلس الإدارة", "الرئيس التنفيذي", "مدراء الإدارات", "رؤساء الأقسام", "المشرفين", "الموظفين التشغيليين"].map((l, i, a) => (
+                      <React.Fragment key={i}>
+                        <div style={{
+                          borderRadius: 4, padding: "3px 8px", textAlign: "center", fontSize: 9, fontWeight: 600,
+                          background: i === 0 ? "#7c3aed" : i === 1 ? "#ede9fe" : "#fff",
+                          color: i === 0 ? "#fff" : i === 1 ? "#5b21b6" : "#64748b",
+                          border: i > 1 ? "1px solid #e9e5ff" : "none",
+                        }}>
+                          {l}
+                        </div>
+                        {i < a.length - 1 && (
+                          <div style={{ display: "flex", justifyContent: "center", height: 5 }}>
+                            <div style={{ width: 2, height: "100%", background: "#c4b5fd", borderRadius: 1 }} />
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="w-[200px]">
-                    <div className="rounded-lg border-2 border-violet-300 overflow-hidden shadow-sm">
-                      <div className="bg-gradient-to-b from-violet-700 to-violet-800 px-4 py-2 text-center">
-                        <h3 className="text-[11px] font-bold text-white">مسار التقارير</h3>
-                        <p className="text-[8px] text-violet-200">Reporting Path</p>
-                      </div>
-                      <div className="bg-white p-2.5">
-                        {["مجلس الإدارة", "الرئيس التنفيذي", "مدراء الإدارات", "رؤساء الأقسام", "المشرفين", "الموظفين التشغيليين"].map((l, i, a) => (
-                          <React.Fragment key={i}>
-                            <div className={`rounded px-2 py-1 text-center text-[9px] font-medium ${
-                              i === 0 ? "bg-violet-700 text-white" : i === 1 ? "bg-violet-100 text-violet-800" : "bg-white text-slate-600 border border-violet-100"
-                            }`}>
-                              {l}
-                            </div>
-                            {i < a.length - 1 && (
-                              <div className="flex justify-center">
-                                <div className="w-[2px] h-1.5 bg-violet-200 rounded-full" />
-                              </div>
-                            )}
-                          </React.Fragment>
-                        ))}
-                      </div>
-                    </div>
+                        )}
+                      </React.Fragment>
+                    ))}
                   </div>
                 </div>
               </div>
 
-              <div className="mt-5 pt-3 border-t border-slate-200 flex justify-between items-center px-2">
-                <p className="text-[8px] text-slate-400">شركة الزبد الأفضل التجارية — الهيكل التنظيمي المعتمد وفقاً لحوكمة الشركات المساهمة</p>
-                <p className="text-[8px] text-slate-400">سري وخاص — للاستخدام الداخلي فقط</p>
+              {/* Footer */}
+              <div style={{ marginTop: 20, paddingTop: 10, borderTop: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 8, color: "#94a3b8" }}>شركة الزبد الأفضل التجارية — الهيكل التنظيمي المعتمد وفقاً لمعايير حوكمة الشركات المساهمة</span>
+                <span style={{ fontSize: 8, color: "#94a3b8" }}>سري وخاص — للاستخدام الداخلي فقط</span>
               </div>
 
             </div>
