@@ -3,7 +3,6 @@ import { Link } from "wouter";
 import { Layout } from "@/components/layout";
 import { ArrowLeft, Printer, Building2 } from "lucide-react";
 import React, { useRef } from "react";
-import { useReactToPrint } from "react-to-print";
 
 function OrgNode({
   titleAr,
@@ -19,22 +18,21 @@ function OrgNode({
   items?: { ar: string; en: string }[];
   headerBg: string;
   borderColor: string;
-  width?: number;
+  width?: number | string;
   prominent?: boolean;
 }) {
-  const w = width || 220;
   return (
-    <div style={{ width: w, borderRadius: 8, border: `2px solid ${borderColor}`, overflow: "hidden", background: "#fff", boxShadow: prominent ? `0 4px 14px ${borderColor}50` : "0 1px 3px rgba(0,0,0,0.06)" }}>
-      <div style={{ background: headerBg, padding: prominent ? "10px 14px" : "8px 10px", textAlign: "center" }}>
-        <div style={{ color: "#fff", fontWeight: 800, fontSize: prominent ? 13 : 11, lineHeight: 1.5 }}>{titleAr}</div>
-        <div style={{ color: "rgba(255,255,255,0.85)", fontSize: prominent ? 9 : 8, marginTop: 1, fontStyle: "italic" }}>{titleEn}</div>
+    <div style={{ width: width || 200, borderRadius: 6, border: `1.5px solid ${borderColor}`, overflow: "hidden", background: "#fff", boxShadow: prominent ? `0 2px 8px ${borderColor}40` : "0 1px 2px rgba(0,0,0,0.05)" }}>
+      <div style={{ background: headerBg, padding: prominent ? "6px 10px" : "4px 8px", textAlign: "center" }}>
+        <div style={{ color: "#fff", fontWeight: 800, fontSize: prominent ? 11 : 9, lineHeight: 1.4 }}>{titleAr}</div>
+        <div style={{ color: "rgba(255,255,255,0.85)", fontSize: prominent ? 7.5 : 6.5, fontStyle: "italic" }}>{titleEn}</div>
       </div>
       {items && items.length > 0 && (
-        <div style={{ padding: "7px 10px" }}>
+        <div style={{ padding: "4px 7px" }}>
           {items.map((item, i) => (
-            <div key={i} style={{ marginBottom: 3 }}>
-              <div style={{ fontSize: 9, color: "#1e293b", fontWeight: 600, lineHeight: 1.5 }}>{item.ar}</div>
-              <div style={{ fontSize: 8, color: "#94a3b8", lineHeight: 1.4, fontStyle: "italic" }}>{item.en}</div>
+            <div key={i} style={{ marginBottom: 1 }}>
+              <div style={{ fontSize: 7.5, color: "#1e293b", fontWeight: 600, lineHeight: 1.3 }}>{item.ar}</div>
+              <div style={{ fontSize: 6.5, color: "#94a3b8", lineHeight: 1.2, fontStyle: "italic" }}>{item.en}</div>
             </div>
           ))}
         </div>
@@ -45,25 +43,24 @@ function OrgNode({
 
 function DeptSection({ nameAr, nameEn, tasks }: { nameAr: string; nameEn: string; tasks: { ar: string; en: string }[] }) {
   return (
-    <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 5, padding: "5px 8px" }}>
-      <div style={{ borderBottom: "1px solid #e2e8f0", paddingBottom: 3, marginBottom: 3 }}>
-        <div style={{ fontSize: 9, fontWeight: 700, color: "#1e293b" }}>{nameAr}</div>
-        <div style={{ fontSize: 7, color: "#94a3b8", fontStyle: "italic" }}>{nameEn}</div>
+    <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 4, padding: "3px 6px" }}>
+      <div style={{ borderBottom: "1px solid #e2e8f0", paddingBottom: 2, marginBottom: 2 }}>
+        <div style={{ fontSize: 7.5, fontWeight: 700, color: "#1e293b" }}>{nameAr}</div>
+        <div style={{ fontSize: 6, color: "#94a3b8", fontStyle: "italic" }}>{nameEn}</div>
       </div>
       {tasks.map((t, i) => (
-        <div key={i} style={{ marginBottom: 2 }}>
-          <div style={{ fontSize: 8, color: "#334155", lineHeight: 1.4 }}>• {t.ar}</div>
-          <div style={{ fontSize: 7, color: "#a1a1aa", lineHeight: 1.3, paddingRight: 10, fontStyle: "italic" }}>{t.en}</div>
+        <div key={i} style={{ marginBottom: 1 }}>
+          <div style={{ fontSize: 7, color: "#334155", lineHeight: 1.3 }}>• {t.ar} <span style={{ fontSize: 6, color: "#a1a1aa", fontStyle: "italic" }}>({t.en})</span></div>
         </div>
       ))}
     </div>
   );
 }
 
-function VLine({ h = 18 }: { h?: number }) {
+function VLine({ h = 10 }: { h?: number }) {
   return (
     <div style={{ display: "flex", justifyContent: "center" }}>
-      <div style={{ width: 2, height: h, background: "#94a3b8", borderRadius: 1 }} />
+      <div style={{ width: 1.5, height: h, background: "#94a3b8", borderRadius: 1 }} />
     </div>
   );
 }
@@ -72,12 +69,12 @@ function HBranch({ width, drops }: { width: string; drops: number }) {
   return (
     <div style={{ margin: "0 auto", width }}>
       <div style={{ display: "flex", justifyContent: "center" }}>
-        <div style={{ width: 2, height: 12, background: "#94a3b8", borderRadius: 1 }} />
+        <div style={{ width: 1.5, height: 8, background: "#94a3b8", borderRadius: 1 }} />
       </div>
-      <div style={{ height: 2, background: "#94a3b8", borderRadius: 1 }} />
+      <div style={{ height: 1.5, background: "#94a3b8", borderRadius: 1 }} />
       <div style={{ display: "flex", justifyContent: "space-between" }}>
         {Array.from({ length: drops }).map((_, i) => (
-          <div key={i} style={{ width: 2, height: 12, background: "#94a3b8", borderRadius: 1 }} />
+          <div key={i} style={{ width: 1.5, height: 8, background: "#94a3b8", borderRadius: 1 }} />
         ))}
       </div>
     </div>
@@ -87,46 +84,54 @@ function HBranch({ width, drops }: { width: string; drops: number }) {
 export default function ExecutiveOrgStructure() {
   const printRef = useRef<HTMLDivElement>(null);
 
-  const triggerPrint = useReactToPrint({
-    contentRef: printRef,
-    documentTitle: "الهيكل التنظيمي - شركة الزبد الأفضل التجارية",
-    pageStyle: `
-      @page { 
-        size: landscape;
-        margin: 6mm;
-      }
-      @media print {
-        html, body {
-          -webkit-print-color-adjust: exact !important;
-          print-color-adjust: exact !important;
-          color-adjust: exact !important;
-          margin: 0 !important;
-          padding: 0 !important;
-        }
-        * { font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif !important; }
-        .print-container {
-          width: 277mm !important;
-          min-width: unset !important;
-          padding: 5mm !important;
-          border: none !important;
-          border-radius: 0 !important;
-          box-shadow: none !important;
-          page-break-inside: avoid !important;
-          transform-origin: top right !important;
-          font-size: 90% !important;
-        }
-        .no-print { display: none !important; }
-      }
-    `,
-  });
-
   const handlePrint = () => {
-    const styleEl = document.createElement("style");
-    styleEl.id = "org-print-landscape";
-    styleEl.textContent = `@page { size: landscape !important; }`;
-    document.head.appendChild(styleEl);
-    triggerPrint();
-    setTimeout(() => { styleEl.remove(); }, 3000);
+    const el = printRef.current;
+    if (!el) return;
+
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+
+    const content = el.innerHTML;
+    printWindow.document.write(`<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="utf-8">
+<title>الهيكل التنظيمي - شركة الزبد الأفضل التجارية</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+@page { size: landscape; margin: 5mm; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  width: 100%; height: 100%;
+  font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+  color-adjust: exact !important;
+}
+.print-root {
+  width: 287mm;
+  transform-origin: top right;
+  padding: 4mm;
+}
+</style>
+</head>
+<body>
+<div class="print-root">${content}</div>
+<script>
+  window.onload = function() {
+    var root = document.querySelector('.print-root');
+    var pageW = 287;
+    var contentW = root.scrollWidth * 0.264583;
+    if (contentW > pageW) {
+      var scale = pageW / contentW;
+      root.style.transform = 'scale(' + scale + ')';
+      root.style.width = (100 / scale) + '%';
+    }
+    setTimeout(function(){ window.print(); window.close(); }, 500);
+  };
+</script>
+</body></html>`);
+    printWindow.document.close();
   };
 
   return (
@@ -156,14 +161,14 @@ export default function ExecutiveOrgStructure() {
           </div>
 
           <div className="overflow-x-auto pb-4">
-            <div ref={printRef} dir="rtl" className="print-container" style={{ minWidth: 1300, background: "#ffffff", borderRadius: 12, border: "1px solid #e2e8f0", padding: "28px 34px", fontFamily: "'Cairo', 'Segoe UI', Tahoma, sans-serif" }}>
+            <div ref={printRef} dir="rtl" className="print-container" style={{ minWidth: 1100, background: "#ffffff", borderRadius: 12, border: "1px solid #e2e8f0", padding: "14px 18px", fontFamily: "'Cairo', 'Segoe UI', Tahoma, sans-serif" }}>
 
-              <div style={{ textAlign: "center", marginBottom: 22 }}>
-                <div style={{ display: "inline-block", borderBottom: "3px solid #b8860b", paddingBottom: 10 }}>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: "#1e293b" }}>الهيكل التنظيمي</div>
-                  <div style={{ fontSize: 13, color: "#64748b", marginTop: 2, fontStyle: "italic" }}>Organizational Structure</div>
-                  <div style={{ fontSize: 11, color: "#1e293b", marginTop: 4, fontWeight: 600 }}>شركة الزبد الأفضل التجارية</div>
-                  <div style={{ fontSize: 9, color: "#94a3b8", marginTop: 2, fontStyle: "italic" }}>Best Butter Trading Company — Saudi Corporate Governance Standards</div>
+              <div style={{ textAlign: "center", marginBottom: 10 }}>
+                <div style={{ display: "inline-block", borderBottom: "2px solid #b8860b", paddingBottom: 6 }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: "#1e293b" }}>الهيكل التنظيمي</div>
+                  <div style={{ fontSize: 10, color: "#64748b", fontStyle: "italic" }}>Organizational Structure</div>
+                  <div style={{ fontSize: 9, color: "#1e293b", marginTop: 2, fontWeight: 600 }}>شركة الزبد الأفضل التجارية</div>
+                  <div style={{ fontSize: 7, color: "#94a3b8", fontStyle: "italic" }}>Best Butter Trading Company — Saudi Corporate Governance Standards</div>
                 </div>
               </div>
 
@@ -174,13 +179,12 @@ export default function ExecutiveOrgStructure() {
                   titleEn="General Assembly of Shareholders"
                   headerBg="#92600a"
                   borderColor="#d4a843"
-                  width={300}
+                  width={240}
                   prominent
                   items={[
                     { ar: "اعتماد القوائم المالية السنوية", en: "Approve annual financial statements" },
                     { ar: "تعيين وعزل أعضاء مجلس الإدارة", en: "Appoint and dismiss board members" },
                     { ar: "تعيين مراجع الحسابات الخارجي", en: "Appoint external auditor" },
-                    { ar: "اعتماد زيادة / تخفيض رأس المال", en: "Approve capital increase / decrease" },
                     { ar: "إقرار توزيع الأرباح", en: "Approve dividend distribution" },
                   ]}
                 />
@@ -195,31 +199,30 @@ export default function ExecutiveOrgStructure() {
                   titleEn="Board of Directors"
                   headerBg="#1e293b"
                   borderColor="#475569"
-                  width={300}
+                  width={240}
                   prominent
                   items={[
                     { ar: "رسم التوجهات الاستراتيجية", en: "Set strategic direction" },
                     { ar: "اعتماد الخطط والميزانيات السنوية", en: "Approve annual plans and budgets" },
                     { ar: "الرقابة على الأداء التنفيذي", en: "Oversee executive performance" },
                     { ar: "تعيين وتقييم الرئيس التنفيذي", en: "Appoint and evaluate CEO" },
-                    { ar: "اعتماد السياسات الجوهرية", en: "Approve key policies and procedures" },
                   ]}
                 />
               </div>
 
-              <HBranch width="56%" drops={3} />
+              <HBranch width="50%" drops={3} />
 
-              <div style={{ display: "flex", justifyContent: "center", gap: 16 }}>
+              <div style={{ display: "flex", justifyContent: "center", gap: 10 }}>
                 <OrgNode
                   titleAr="رئيس مجلس الإدارة"
                   titleEn="Chairman of the Board"
                   headerBg="#92600a"
                   borderColor="#d4a843"
-                  width={220}
+                  width={185}
                   items={[
                     { ar: "رئاسة اجتماعات المجلس", en: "Chair board meetings" },
                     { ar: "التوقيع على القرارات الاستراتيجية", en: "Sign strategic resolutions" },
-                    { ar: "تمثيل الشركة أمام الجهات الرسمية", en: "Represent company officially" },
+                    { ar: "تمثيل الشركة رسمياً", en: "Represent company officially" },
                   ]}
                 />
                 <OrgNode
@@ -227,23 +230,23 @@ export default function ExecutiveOrgStructure() {
                   titleEn="Audit Committee"
                   headerBg="#b91c1c"
                   borderColor="#ef4444"
-                  width={220}
+                  width={185}
                   items={[
                     { ar: "مراجعة القوائم المالية", en: "Review financial statements" },
-                    { ar: "تقييم نظام الرقابة الداخلية", en: "Assess internal controls" },
-                    { ar: "التوصية بتعيين المراجع الخارجي", en: "Recommend external auditor" },
+                    { ar: "تقييم الرقابة الداخلية", en: "Assess internal controls" },
+                    { ar: "التوصية بتعيين المراجع", en: "Recommend external auditor" },
                   ]}
                 />
                 <OrgNode
                   titleAr="لجنة المكافآت والترشيحات"
-                  titleEn="Remuneration & Nomination Committee"
+                  titleEn="Remuneration & Nomination"
                   headerBg="#6d28d9"
                   borderColor="#8b5cf6"
-                  width={220}
+                  width={185}
                   items={[
-                    { ar: "سياسات مكافآت الأعضاء والتنفيذيين", en: "Executive compensation policies" },
-                    { ar: "ترشيح أعضاء المجلس الجدد", en: "Nominate new board members" },
-                    { ar: "تقييم أداء المجلس والإدارة", en: "Evaluate board & management" },
+                    { ar: "سياسات مكافآت التنفيذيين", en: "Executive compensation" },
+                    { ar: "ترشيح أعضاء المجلس", en: "Nominate board members" },
+                    { ar: "تقييم أداء المجلس", en: "Evaluate board performance" },
                   ]}
                 />
               </div>
@@ -257,13 +260,12 @@ export default function ExecutiveOrgStructure() {
                   titleEn="Chief Executive Officer (CEO)"
                   headerBg="#3730a3"
                   borderColor="#6366f1"
-                  width={300}
+                  width={240}
                   prominent
                   items={[
                     { ar: "تنفيذ قرارات مجلس الإدارة", en: "Execute board resolutions" },
                     { ar: "الإشراف على جميع الإدارات", en: "Oversee all departments" },
                     { ar: "اعتماد الميزانيات التشغيلية", en: "Approve operational budgets" },
-                    { ar: "اعتماد العقود والمصروفات الرأسمالية", en: "Approve contracts and CAPEX" },
                     { ar: "ضمان الالتزام والحوكمة", en: "Ensure compliance and governance" },
                   ]}
                 />
@@ -272,250 +274,222 @@ export default function ExecutiveOrgStructure() {
               <HBranch width="94%" drops={5} />
 
               {/* Departments */}
-              <div style={{ display: "flex", gap: 10, width: "94%", margin: "0 auto" }}>
+              <div style={{ display: "flex", gap: 6, width: "96%", margin: "0 auto" }}>
 
                 {/* Finance */}
                 <div style={{ flex: 1 }}>
-                  <OrgNode titleAr="الإدارة المالية" titleEn="Finance & Accounting" headerBg="#047857" borderColor="#34d399" width={undefined as any} />
-                  <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
+                  <OrgNode titleAr="الإدارة المالية" titleEn="Finance & Accounting" headerBg="#047857" borderColor="#34d399" width="100%" />
+                  <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 3 }}>
                     <DeptSection nameAr="المحاسبة العامة" nameEn="General Accounting" tasks={[
-                      { ar: "القيود اليومية", en: "Daily journal entries" },
+                      { ar: "القيود اليومية", en: "Journal entries" },
                       { ar: "ميزان المراجعة", en: "Trial balance" },
                       { ar: "القوائم المالية", en: "Financial statements" },
-                      { ar: "مطابقة الحسابات", en: "Account reconciliation" },
+                      { ar: "مطابقة الحسابات", en: "Reconciliation" },
                     ]} />
-                    <DeptSection nameAr="قسم الموردين" nameEn="Accounts Payable (AP)" tasks={[
+                    <DeptSection nameAr="قسم الموردين" nameEn="Accounts Payable" tasks={[
                       { ar: "مراجعة الفواتير", en: "Invoice review" },
                       { ar: "مطابقة PO / GRN", en: "PO / GRN matching" },
-                      { ar: "جدول أعمار الديون", en: "Aging schedule" },
-                      { ar: "إدارة السداد", en: "Payment management" },
+                      { ar: "إدارة السداد", en: "Payments" },
                     ]} />
-                    <DeptSection nameAr="قسم العملاء" nameEn="Accounts Receivable (AR)" tasks={[
-                      { ar: "متابعة التحصيل", en: "Collection follow-up" },
+                    <DeptSection nameAr="قسم العملاء" nameEn="Accounts Receivable" tasks={[
+                      { ar: "متابعة التحصيل", en: "Collection" },
                       { ar: "مطابقة المبيعات", en: "Sales reconciliation" },
-                      { ar: "أعمار الذمم", en: "Receivable aging" },
                     ]} />
-                    <DeptSection nameAr="الخزينة" nameEn="Treasury" tasks={[
-                      { ar: "التدفقات النقدية", en: "Cash flow management" },
-                      { ar: "الحسابات البنكية", en: "Bank accounts" },
-                      { ar: "تقارير السيولة", en: "Liquidity reports" },
-                    ]} />
-                    <DeptSection nameAr="الرواتب" nameEn="Payroll" tasks={[
-                      { ar: "مسير الرواتب", en: "Payroll processing" },
-                      { ar: "الاستقطاعات", en: "Deductions" },
-                      { ar: "سداد التأمينات", en: "Insurance payments" },
+                    <DeptSection nameAr="الخزينة والرواتب" nameEn="Treasury & Payroll" tasks={[
+                      { ar: "التدفقات النقدية", en: "Cash flow" },
+                      { ar: "مسير الرواتب", en: "Payroll" },
+                      { ar: "سداد التأمينات", en: "Insurance" },
                     ]} />
                   </div>
                 </div>
 
                 {/* Operations */}
                 <div style={{ flex: 1 }}>
-                  <OrgNode titleAr="إدارة التشغيل" titleEn="Operations" headerBg="#1d4ed8" borderColor="#60a5fa" width={undefined as any} />
-                  <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
-                    <DeptSection nameAr="إدارة الفروع" nameEn="Branch Management" tasks={[
+                  <OrgNode titleAr="إدارة التشغيل" titleEn="Operations" headerBg="#1d4ed8" borderColor="#60a5fa" width="100%" />
+                  <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 3 }}>
+                    <DeptSection nameAr="إدارة الفروع" nameEn="Branch Mgmt" tasks={[
                       { ar: "الأداء اليومي", en: "Daily performance" },
                       { ar: "أهداف المبيعات", en: "Sales targets" },
                       { ar: "ضبط الهدر", en: "Waste control" },
                       { ar: "مراقبة الجودة", en: "Quality control" },
                     ]} />
-                    <DeptSection nameAr="إدارة الإنتاج" nameEn="Production Management" tasks={[
+                    <DeptSection nameAr="إدارة الإنتاج" nameEn="Production" tasks={[
                       { ar: "خطوط الإنتاج", en: "Production lines" },
-                      { ar: "مراقبة المواد الخام", en: "Raw material monitoring" },
+                      { ar: "مراقبة المواد الخام", en: "Raw materials" },
                       { ar: "الالتزام بالوصفات", en: "Recipe compliance" },
-                      { ar: "الكفاءة التشغيلية", en: "Operational efficiency" },
                     ]} />
-                    <DeptSection nameAr="إدارة الجودة" nameEn="Quality Assurance" tasks={[
-                      { ar: "فحص المنتجات", en: "Product inspection" },
+                    <DeptSection nameAr="الجودة والتخطيط" nameEn="QA & Planning" tasks={[
+                      { ar: "فحص المنتجات", en: "Inspection" },
                       { ar: "الالتزام الصحي", en: "Health compliance" },
-                      { ar: "تقارير الامتثال", en: "Compliance reports" },
-                    ]} />
-                    <DeptSection nameAr="التخطيط والتوريد الداخلي" nameEn="Planning & Internal Supply" tasks={[
-                      { ar: "تخطيط الاحتياجات", en: "Requirements planning" },
-                      { ar: "طلبات الفروع", en: "Branch orders" },
-                      { ar: "مراقبة الاستهلاك", en: "Consumption monitoring" },
+                      { ar: "تخطيط الاحتياجات", en: "Demand planning" },
                     ]} />
                   </div>
                 </div>
 
                 {/* Procurement */}
                 <div style={{ flex: 1 }}>
-                  <OrgNode titleAr="المشتريات وسلسلة الإمداد" titleEn="Procurement & Supply Chain" headerBg="#c2410c" borderColor="#fb923c" width={undefined as any} />
-                  <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
+                  <OrgNode titleAr="المشتريات والإمداد" titleEn="Procurement & Supply" headerBg="#c2410c" borderColor="#fb923c" width="100%" />
+                  <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 3 }}>
                     <DeptSection nameAr="قسم المشتريات" nameEn="Purchasing" tasks={[
-                      { ar: "إدارة الموردين", en: "Supplier management" },
-                      { ar: "التفاوض على الأسعار", en: "Price negotiation" },
+                      { ar: "إدارة الموردين", en: "Suppliers" },
+                      { ar: "التفاوض والأسعار", en: "Negotiation" },
                       { ar: "أوامر الشراء", en: "Purchase orders" },
-                      { ar: "تقييم الموردين", en: "Supplier evaluation" },
                     ]} />
                     <DeptSection nameAr="المستودع المركزي" nameEn="Central Warehouse" tasks={[
-                      { ar: "استلام المواد", en: "Material receiving" },
-                      { ar: "التخزين", en: "Storage" },
-                      { ar: "الجرد الدوري", en: "Periodic inventory" },
-                      { ar: "التوزيع للفروع", en: "Branch distribution" },
+                      { ar: "استلام المواد", en: "Receiving" },
+                      { ar: "التخزين والجرد", en: "Storage & count" },
+                      { ar: "التوزيع للفروع", en: "Distribution" },
                     ]} />
-                    <DeptSection nameAr="المستودعات التشغيلية" nameEn="Branch Warehouses" tasks={[
-                      { ar: "مخزون الفرع", en: "Branch inventory" },
+                    <DeptSection nameAr="مستودعات الفروع" nameEn="Branch Warehouses" tasks={[
+                      { ar: "مخزون الفرع", en: "Branch stock" },
                       { ar: "الجرد اليومي", en: "Daily count" },
-                      { ar: "تقارير الفروقات", en: "Variance reports" },
                     ]} />
                   </div>
                 </div>
 
                 {/* HR */}
                 <div style={{ flex: 1 }}>
-                  <OrgNode titleAr="الموارد البشرية" titleEn="Human Resources" headerBg="#7c3aed" borderColor="#a78bfa" width={undefined as any} />
-                  <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
+                  <OrgNode titleAr="الموارد البشرية" titleEn="Human Resources" headerBg="#7c3aed" borderColor="#a78bfa" width="100%" />
+                  <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 3 }}>
                     <DeptSection nameAr="التوظيف" nameEn="Recruitment" tasks={[
                       { ar: "استقطاب الموظفين", en: "Talent acquisition" },
-                      { ar: "المقابلات", en: "Interviews" },
-                      { ar: "إصدار العقود", en: "Contract issuance" },
+                      { ar: "المقابلات والعقود", en: "Interviews & contracts" },
                     ]} />
-                    <DeptSection nameAr="شؤون الموظفين" nameEn="Personnel Affairs" tasks={[
+                    <DeptSection nameAr="شؤون الموظفين" nameEn="Personnel" tasks={[
                       { ar: "ملفات الموظفين", en: "Employee files" },
-                      { ar: "الإجازات", en: "Leave management" },
-                      { ar: "المخالصات", en: "Final settlements" },
+                      { ar: "الإجازات والمخالصات", en: "Leave & settlements" },
                     ]} />
-                    <DeptSection nameAr="الحضور والانصراف" nameEn="Attendance & Time" tasks={[
-                      { ar: "متابعة الدوام", en: "Attendance tracking" },
-                      { ar: "تقارير التأخير", en: "Tardiness reports" },
-                      { ar: "إدارة الإضافي", en: "Overtime management" },
-                    ]} />
-                    <DeptSection nameAr="الامتثال والتأمينات" nameEn="Compliance & Insurance" tasks={[
-                      { ar: "تسجيل GOSI", en: "GOSI registration" },
-                      { ar: "التأمين الطبي", en: "Medical insurance" },
-                      { ar: "الالتزام بنظام العمل", en: "Labor law compliance" },
+                    <DeptSection nameAr="الحضور والامتثال" nameEn="Attendance & Compliance" tasks={[
+                      { ar: "متابعة الدوام", en: "Tracking" },
+                      { ar: "GOSI والتأمين", en: "GOSI & insurance" },
+                      { ar: "نظام العمل", en: "Labor law" },
                     ]} />
                   </div>
                 </div>
 
                 {/* IT */}
                 <div style={{ flex: 1 }}>
-                  <OrgNode titleAr="تقنية المعلومات" titleEn="Information Technology" headerBg="#0e7490" borderColor="#22d3ee" width={undefined as any} />
-                  <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
-                    <DeptSection nameAr="الأنظمة والبنية التحتية" nameEn="Systems & Infrastructure" tasks={[
-                      { ar: "أنظمة نقاط البيع POS", en: "POS systems" },
-                      { ar: "أنظمة المحاسبة", en: "Accounting systems" },
-                      { ar: "إدارة السيرفرات", en: "Server management" },
+                  <OrgNode titleAr="تقنية المعلومات" titleEn="IT" headerBg="#0e7490" borderColor="#22d3ee" width="100%" />
+                  <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 3 }}>
+                    <DeptSection nameAr="الأنظمة والبنية التحتية" nameEn="Systems & Infra" tasks={[
+                      { ar: "أنظمة نقاط البيع", en: "POS systems" },
+                      { ar: "أنظمة المحاسبة", en: "Accounting sys" },
+                      { ar: "إدارة السيرفرات", en: "Servers" },
                       { ar: "حماية البيانات", en: "Data protection" },
-                      { ar: "الدعم الفني للفروع", en: "Branch IT support" },
+                      { ar: "الدعم الفني", en: "IT support" },
                     ]} />
                   </div>
                 </div>
               </div>
 
               {/* Bottom row */}
-              <div style={{ marginTop: 22, paddingTop: 16, borderTop: "2px solid #e2e8f0", display: "flex", gap: 12, justifyContent: "center" }}>
+              <div style={{ marginTop: 10, paddingTop: 8, borderTop: "1.5px solid #e2e8f0", display: "flex", gap: 8, justifyContent: "center" }}>
 
                 {/* Branch Structure */}
-                <div style={{ width: 260, border: "2px solid #2dd4bf", borderRadius: 8, overflow: "hidden", background: "#fff" }}>
-                  <div style={{ background: "#0d9488", padding: "8px 12px", textAlign: "center" }}>
-                    <div style={{ color: "#fff", fontWeight: 700, fontSize: 11 }}>هيكل كل فرع</div>
-                    <div style={{ color: "rgba(255,255,255,0.8)", fontSize: 8, fontStyle: "italic" }}>Branch Structure</div>
+                <div style={{ width: 210, border: "1.5px solid #2dd4bf", borderRadius: 6, overflow: "hidden", background: "#fff" }}>
+                  <div style={{ background: "#0d9488", padding: "4px 8px", textAlign: "center" }}>
+                    <div style={{ color: "#fff", fontWeight: 700, fontSize: 9 }}>هيكل كل فرع</div>
+                    <div style={{ color: "rgba(255,255,255,0.8)", fontSize: 6.5, fontStyle: "italic" }}>Branch Structure</div>
                   </div>
-                  <div style={{ padding: 10 }}>
+                  <div style={{ padding: 6 }}>
                     {[
                       { ar: "مدير الفرع", en: "Branch Manager", bg: "#0d9488", color: "#fff", mr: 0, bold: true },
-                      { ar: "مساعد مدير الفرع", en: "Asst. Branch Manager", bg: "#ccfbf1", color: "#134e4a", mr: 10, bold: true },
-                      { ar: "مشرف الشيفت", en: "Shift Supervisor", bg: "#f0fdfa", color: "#115e59", mr: 20, bold: false },
-                      { ar: "مسؤول المخزون", en: "Inventory Officer", bg: "#f8fafc", color: "#475569", mr: 30, bold: false },
-                      { ar: "الكاشير", en: "Cashier", bg: "#f8fafc", color: "#475569", mr: 30, bold: false },
-                      { ar: "موظفو الإنتاج", en: "Production Staff", bg: "#f8fafc", color: "#475569", mr: 30, bold: false },
-                      { ar: "موظفو خدمة العملاء", en: "Customer Service", bg: "#f8fafc", color: "#475569", mr: 30, bold: false },
-                      { ar: "عمال النظافة", en: "Cleaning Staff", bg: "#f8fafc", color: "#475569", mr: 30, bold: false },
+                      { ar: "مساعد المدير", en: "Asst. Manager", bg: "#ccfbf1", color: "#134e4a", mr: 6, bold: true },
+                      { ar: "مشرف الشيفت", en: "Shift Supervisor", bg: "#f0fdfa", color: "#115e59", mr: 12, bold: false },
+                      { ar: "مسؤول المخزون", en: "Inventory", bg: "#f8fafc", color: "#475569", mr: 18, bold: false },
+                      { ar: "الكاشير", en: "Cashier", bg: "#f8fafc", color: "#475569", mr: 18, bold: false },
+                      { ar: "موظفو الإنتاج", en: "Production", bg: "#f8fafc", color: "#475569", mr: 18, bold: false },
+                      { ar: "خدمة العملاء", en: "Customer Svc", bg: "#f8fafc", color: "#475569", mr: 18, bold: false },
+                      { ar: "عمال النظافة", en: "Cleaning", bg: "#f8fafc", color: "#475569", mr: 18, bold: false },
                     ].map((item, i, arr) => (
                       <React.Fragment key={i}>
-                        <div style={{ background: item.bg, color: item.color, borderRadius: 4, padding: "3px 8px", marginRight: item.mr, border: i >= 3 ? "1px solid #e2e8f0" : "none" }}>
-                          <div style={{ fontSize: 9, fontWeight: item.bold ? 700 : 500 }}>{item.ar}</div>
-                          <div style={{ fontSize: 7, opacity: i === 0 ? 0.8 : 0.6, fontStyle: "italic" }}>{item.en}</div>
+                        <div style={{ background: item.bg, color: item.color, borderRadius: 3, padding: "2px 5px", marginRight: item.mr, border: i >= 3 ? "1px solid #e2e8f0" : "none" }}>
+                          <div style={{ fontSize: 7.5, fontWeight: item.bold ? 700 : 500 }}>{item.ar} <span style={{ fontSize: 6, opacity: 0.7, fontStyle: "italic" }}>({item.en})</span></div>
                         </div>
-                        {i < arr.length - 1 && <div style={{ marginRight: item.mr + 8, height: 4 }}><div style={{ width: 2, height: "100%", background: "#99f6e4", borderRadius: 1 }} /></div>}
+                        {i < arr.length - 1 && <div style={{ marginRight: item.mr + 5, height: 3 }}><div style={{ width: 1.5, height: "100%", background: "#99f6e4", borderRadius: 1 }} /></div>}
                       </React.Fragment>
                     ))}
                   </div>
                 </div>
 
                 {/* Operational Support */}
-                <div style={{ width: 210, border: "2px solid #94a3b8", borderRadius: 8, overflow: "hidden", background: "#fff" }}>
-                  <div style={{ background: "#475569", padding: "8px 12px", textAlign: "center" }}>
-                    <div style={{ color: "#fff", fontWeight: 700, fontSize: 11 }}>الدعم التشغيلي</div>
-                    <div style={{ color: "rgba(255,255,255,0.8)", fontSize: 8, fontStyle: "italic" }}>Operational Support</div>
+                <div style={{ width: 170, border: "1.5px solid #94a3b8", borderRadius: 6, overflow: "hidden", background: "#fff" }}>
+                  <div style={{ background: "#475569", padding: "4px 8px", textAlign: "center" }}>
+                    <div style={{ color: "#fff", fontWeight: 700, fontSize: 9 }}>الدعم التشغيلي</div>
+                    <div style={{ color: "rgba(255,255,255,0.8)", fontSize: 6.5, fontStyle: "italic" }}>Operational Support</div>
                   </div>
-                  <div style={{ padding: 10, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5 }}>
+                  <div style={{ padding: 6, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 3 }}>
                     {[
                       { ar: "سائقين", en: "Drivers" },
-                      { ar: "عمال مستودعات", en: "Warehouse Workers" },
-                      { ar: "فني صيانة", en: "Maintenance Tech." },
-                      { ar: "دعم تقني ميداني", en: "Field IT Support" },
+                      { ar: "عمال مستودعات", en: "Warehouse" },
+                      { ar: "فني صيانة", en: "Maintenance" },
+                      { ar: "دعم تقني", en: "IT Support" },
                     ].map((r, i) => (
-                      <div key={i} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 4, padding: "5px 6px", textAlign: "center" }}>
-                        <div style={{ fontSize: 9, color: "#334155", fontWeight: 600 }}>{r.ar}</div>
-                        <div style={{ fontSize: 7, color: "#94a3b8", fontStyle: "italic" }}>{r.en}</div>
+                      <div key={i} style={{ background: "#f1f5f9", border: "1px solid #e2e8f0", borderRadius: 3, padding: "3px 4px", textAlign: "center" }}>
+                        <div style={{ fontSize: 7.5, color: "#334155", fontWeight: 600 }}>{r.ar}</div>
+                        <div style={{ fontSize: 6, color: "#94a3b8", fontStyle: "italic" }}>{r.en}</div>
                       </div>
                     ))}
                   </div>
                 </div>
 
                 {/* Segregation of Duties */}
-                <div style={{ width: 260, border: "2px solid #f87171", borderRadius: 8, overflow: "hidden", background: "#fff" }}>
-                  <div style={{ background: "#b91c1c", padding: "8px 12px", textAlign: "center" }}>
-                    <div style={{ color: "#fff", fontWeight: 700, fontSize: 11 }}>فصل الصلاحيات</div>
-                    <div style={{ color: "rgba(255,255,255,0.8)", fontSize: 8, fontStyle: "italic" }}>Segregation of Duties</div>
+                <div style={{ width: 220, border: "1.5px solid #f87171", borderRadius: 6, overflow: "hidden", background: "#fff" }}>
+                  <div style={{ background: "#b91c1c", padding: "4px 8px", textAlign: "center" }}>
+                    <div style={{ color: "#fff", fontWeight: 700, fontSize: 9 }}>فصل الصلاحيات</div>
+                    <div style={{ color: "rgba(255,255,255,0.8)", fontSize: 6.5, fontStyle: "italic" }}>Segregation of Duties</div>
                   </div>
-                  <div style={{ padding: 8 }}>
+                  <div style={{ padding: 5 }}>
                     {[
-                      { ar: "المشتريات منفصلة عن السداد", en: "Purchasing is separated from payments" },
-                      { ar: "التسجيل المحاسبي منفصل عن اعتماد المدفوعات", en: "Accounting is separated from payment approval" },
-                      { ar: "الجرد منفصل عن مسؤول المخزون", en: "Inventory count is separated from stock keeper" },
-                      { ar: "الرواتب تُعتمد من التنفيذي بعد مراجعة المالية", en: "Payroll approved by CEO after finance review" },
+                      { ar: "المشتريات منفصلة عن السداد", en: "Purchasing separated from payments" },
+                      { ar: "المحاسبة منفصلة عن اعتماد المدفوعات", en: "Accounting separated from approval" },
+                      { ar: "الجرد منفصل عن مسؤول المخزون", en: "Count separated from stock keeper" },
+                      { ar: "الرواتب تُعتمد بعد مراجعة المالية", en: "Payroll approved after finance review" },
                     ].map((s, i) => (
-                      <div key={i} style={{ background: "#fef2f2", borderRadius: 4, padding: "4px 8px", marginBottom: 3 }}>
-                        <div style={{ fontSize: 9, color: "#1e293b", fontWeight: 600, display: "flex", gap: 5, alignItems: "flex-start" }}>
+                      <div key={i} style={{ background: "#fef2f2", borderRadius: 3, padding: "2px 5px", marginBottom: 2 }}>
+                        <div style={{ fontSize: 7.5, color: "#1e293b", fontWeight: 600, display: "flex", gap: 3, alignItems: "flex-start" }}>
                           <span style={{ color: "#16a34a", fontWeight: 700, flexShrink: 0 }}>✓</span>
-                          <span>{s.ar}</span>
+                          <span>{s.ar} <span style={{ fontSize: 6, color: "#94a3b8", fontStyle: "italic" }}>({s.en})</span></span>
                         </div>
-                        <div style={{ fontSize: 7, color: "#94a3b8", paddingRight: 16, fontStyle: "italic" }}>{s.en}</div>
                       </div>
                     ))}
                   </div>
                 </div>
 
                 {/* Reporting Path */}
-                <div style={{ width: 190, border: "2px solid #a78bfa", borderRadius: 8, overflow: "hidden", background: "#fff" }}>
-                  <div style={{ background: "#6d28d9", padding: "8px 12px", textAlign: "center" }}>
-                    <div style={{ color: "#fff", fontWeight: 700, fontSize: 11 }}>مسار التقارير</div>
-                    <div style={{ color: "rgba(255,255,255,0.8)", fontSize: 8, fontStyle: "italic" }}>Reporting Path</div>
+                <div style={{ width: 150, border: "1.5px solid #a78bfa", borderRadius: 6, overflow: "hidden", background: "#fff" }}>
+                  <div style={{ background: "#6d28d9", padding: "4px 8px", textAlign: "center" }}>
+                    <div style={{ color: "#fff", fontWeight: 700, fontSize: 9 }}>مسار التقارير</div>
+                    <div style={{ color: "rgba(255,255,255,0.8)", fontSize: 6.5, fontStyle: "italic" }}>Reporting Path</div>
                   </div>
-                  <div style={{ padding: 8 }}>
+                  <div style={{ padding: 5 }}>
                     {[
-                      { ar: "مجلس الإدارة", en: "Board of Directors", bg: "#6d28d9", color: "#fff" },
+                      { ar: "مجلس الإدارة", en: "Board", bg: "#6d28d9", color: "#fff" },
                       { ar: "الرئيس التنفيذي", en: "CEO", bg: "#ede9fe", color: "#4c1d95" },
-                      { ar: "مدراء الإدارات", en: "Department Heads", bg: "#fff", color: "#475569" },
-                      { ar: "رؤساء الأقسام", en: "Section Managers", bg: "#fff", color: "#475569" },
+                      { ar: "مدراء الإدارات", en: "Dept Heads", bg: "#fff", color: "#475569" },
+                      { ar: "رؤساء الأقسام", en: "Sections", bg: "#fff", color: "#475569" },
                       { ar: "المشرفين", en: "Supervisors", bg: "#fff", color: "#475569" },
-                      { ar: "الموظفين التشغيليين", en: "Operational Staff", bg: "#fff", color: "#475569" },
+                      { ar: "الموظفين", en: "Staff", bg: "#fff", color: "#475569" },
                     ].map((l, i, a) => (
                       <React.Fragment key={i}>
-                        <div style={{ borderRadius: 4, padding: "3px 8px", textAlign: "center", background: l.bg, color: l.color, border: i > 1 ? "1px solid #ede9fe" : "none" }}>
-                          <div style={{ fontSize: 9, fontWeight: 600 }}>{l.ar}</div>
-                          <div style={{ fontSize: 7, opacity: 0.7, fontStyle: "italic" }}>{l.en}</div>
+                        <div style={{ borderRadius: 3, padding: "2px 5px", textAlign: "center", background: l.bg, color: l.color, border: i > 1 ? "1px solid #ede9fe" : "none" }}>
+                          <div style={{ fontSize: 7.5, fontWeight: 600 }}>{l.ar} <span style={{ fontSize: 6, opacity: 0.7, fontStyle: "italic" }}>({l.en})</span></div>
                         </div>
-                        {i < a.length - 1 && <div style={{ display: "flex", justifyContent: "center", height: 4 }}><div style={{ width: 2, height: "100%", background: "#c4b5fd", borderRadius: 1 }} /></div>}
+                        {i < a.length - 1 && <div style={{ display: "flex", justifyContent: "center", height: 3 }}><div style={{ width: 1.5, height: "100%", background: "#c4b5fd", borderRadius: 1 }} /></div>}
                       </React.Fragment>
                     ))}
                   </div>
                 </div>
               </div>
 
-              <div style={{ marginTop: 18, paddingTop: 8, borderTop: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between" }}>
+              <div style={{ marginTop: 8, paddingTop: 4, borderTop: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between" }}>
                 <div>
-                  <span style={{ fontSize: 8, color: "#94a3b8" }}>شركة الزبد الأفضل التجارية — الهيكل التنظيمي المعتمد وفقاً لمعايير حوكمة الشركات المساهمة</span>
-                  <br />
-                  <span style={{ fontSize: 7, color: "#cbd5e1", fontStyle: "italic" }}>Best Butter Trading Co. — Approved Organizational Structure per Saudi Corporate Governance Standards</span>
+                  <span style={{ fontSize: 7, color: "#94a3b8" }}>شركة الزبد الأفضل التجارية — الهيكل التنظيمي المعتمد وفقاً لمعايير حوكمة الشركات</span>
+                  <span style={{ fontSize: 6, color: "#cbd5e1", fontStyle: "italic", marginRight: 6 }}>Best Butter Trading Co. — Saudi Corporate Governance</span>
                 </div>
-                <div style={{ textAlign: "left" }}>
-                  <span style={{ fontSize: 8, color: "#94a3b8" }}>سري وخاص — للاستخدام الداخلي فقط</span>
-                  <br />
-                  <span style={{ fontSize: 7, color: "#cbd5e1", fontStyle: "italic" }}>Confidential — Internal Use Only</span>
+                <div>
+                  <span style={{ fontSize: 7, color: "#94a3b8" }}>سري — للاستخدام الداخلي</span>
+                  <span style={{ fontSize: 6, color: "#cbd5e1", fontStyle: "italic", marginRight: 6 }}>Confidential</span>
                 </div>
               </div>
 
