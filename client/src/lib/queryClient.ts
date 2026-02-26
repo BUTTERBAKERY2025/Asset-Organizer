@@ -25,15 +25,13 @@ async function deduplicatedFetch(url: string, options?: RequestInit): Promise<Re
   }
   const existing = inflightRequests.get(url);
   if (existing) {
-    const cloned = await existing;
-    return cloned.clone();
+    return existing.then(r => r.clone());
   }
   const fetchOptions: RequestInit = {
     ...options,
     keepalive: true,
   };
   const promise = fetch(url, fetchOptions).then(res => {
-    inflightRequests.delete(url);
     return res;
   }).catch(err => {
     inflightRequests.delete(url);
@@ -41,6 +39,7 @@ async function deduplicatedFetch(url: string, options?: RequestInit): Promise<Re
   });
   inflightRequests.set(url, promise);
   const result = await promise;
+  inflightRequests.delete(url);
   return result.clone();
 }
 

@@ -43,8 +43,8 @@ root.render(<App />);
 const loader = document.getElementById("initial-loader");
 if (loader) {
   requestAnimationFrame(() => {
-    loader.style.transition = "opacity 150ms";
+    loader.style.transition = "opacity 300ms ease-out";
     loader.style.opacity = "0";
-    setTimeout(() => loader.remove(), 150);
+    setTimeout(() => loader.remove(), 300);
   });
 }

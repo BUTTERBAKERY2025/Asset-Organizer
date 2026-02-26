@@ -145,23 +145,27 @@ function AppLoadingFallback() {
 
 const PageLoadingFallback = React.memo(function PageLoadingFallback() {
   return (
-    <div className="min-h-[60vh] p-6 space-y-4 animate-pulse" dir="rtl">
-      <div className="h-8 bg-amber-100/60 rounded-lg w-48" />
+    <div className="min-h-[60vh] p-6 space-y-4" dir="rtl">
+      <div className="h-8 skeleton-shimmer rounded-lg w-48" />
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="h-28 bg-amber-50/80 rounded-xl" />
-        <div className="h-28 bg-amber-50/80 rounded-xl" />
-        <div className="h-28 bg-amber-50/80 rounded-xl" />
+        <div className="h-28 skeleton-shimmer rounded-xl" />
+        <div className="h-28 skeleton-shimmer rounded-xl" style={{ animationDelay: "100ms" }} />
+        <div className="h-28 skeleton-shimmer rounded-xl" style={{ animationDelay: "200ms" }} />
       </div>
-      <div className="h-64 bg-amber-50/60 rounded-xl" />
+      <div className="h-64 skeleton-shimmer rounded-xl" style={{ animationDelay: "150ms" }} />
     </div>
   );
+});
+
+const PageWrapper = React.memo(function PageWrapper({ children }: { children: React.ReactNode }) {
+  return <div className="page-enter">{children}</div>;
 });
 
 const ProtectedPage = React.memo(function ProtectedPage({ component: Component }: { component: React.ComponentType }) {
   return (
     <ProtectedRoute>
       <Suspense fallback={<PageLoadingFallback />}>
-        <Component />
+        <PageWrapper><Component /></PageWrapper>
       </Suspense>
     </ProtectedRoute>
   );
@@ -171,7 +175,7 @@ const ModulePage = React.memo(function ModulePage({ component: Component, module
   return (
     <ModuleProtectedRoute module={module}>
       <Suspense fallback={<PageLoadingFallback />}>
-        <Component />
+        <PageWrapper><Component /></PageWrapper>
       </Suspense>
     </ModuleProtectedRoute>
   );
@@ -182,7 +186,7 @@ const AdminPage = React.memo(function AdminPage({ component: Component, module }
     return (
       <ModuleProtectedRoute module={module} requiredRole="admin">
         <Suspense fallback={<PageLoadingFallback />}>
-          <Component />
+          <PageWrapper><Component /></PageWrapper>
         </Suspense>
       </ModuleProtectedRoute>
     );
@@ -190,7 +194,7 @@ const AdminPage = React.memo(function AdminPage({ component: Component, module }
   return (
     <ProtectedRoute requiredRole="admin">
       <Suspense fallback={<PageLoadingFallback />}>
-        <Component />
+        <PageWrapper><Component /></PageWrapper>
       </Suspense>
     </ProtectedRoute>
   );

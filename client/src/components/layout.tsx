@@ -90,6 +90,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
     prevLocationRef.current = location;
     setMobileMenuOpen(false);
     prefetchAdjacentPages(location);
+    const bar = document.getElementById("nav-progress-bar");
+    if (bar && bar.className === "loading") {
+      bar.className = "complete";
+      setTimeout(() => { bar.className = ""; }, 400);
+    }
   }, [location]);
 
   const handleLinkHover = useCallback((href: string) => {
@@ -400,10 +405,17 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const handleNavClick = useCallback((e: React.MouseEvent, href: string) => {
     e.preventDefault();
+    if (href === location) return;
+    const bar = document.getElementById("nav-progress-bar");
+    if (bar) {
+      bar.className = "";
+      void bar.offsetWidth;
+      bar.className = "loading";
+    }
     startTransition(() => {
       setLocation(href);
     });
-  }, [setLocation]);
+  }, [setLocation, location]);
 
   const renderNavItem = useCallback((item: NavItem, inGroup = false) => (
     <a
@@ -414,7 +426,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     >
       <div
         className={cn(
-          "flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg transition-all duration-200 cursor-pointer text-[12px] group",
+          "nav-item-inner flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg transition-all duration-150 cursor-pointer text-[12px] group",
           inGroup && !item.isHeader && "mr-4 text-[12px]",
           inGroup && item.isHeader && "mr-2 font-semibold",
           item.indent && "mr-6 text-[12px] border-r-2 border-primary/20 pr-3",
