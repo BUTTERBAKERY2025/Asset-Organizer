@@ -91,10 +91,30 @@ export default function ExecutiveOrgStructure() {
     contentRef: printRef,
     documentTitle: "الهيكل التنظيمي - شركة الزبد الأفضل التجارية",
     pageStyle: `
-      @page { size: A3 landscape; margin: 10mm; }
+      @page { 
+        size: 420mm 297mm landscape;
+        margin: 8mm;
+      }
       @media print {
-        html, body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+        html, body {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+          color-adjust: exact !important;
+          width: 100% !important;
+          height: 100% !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          overflow: visible !important;
+        }
         * { font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif !important; }
+        .print-container {
+          width: 100% !important;
+          min-width: unset !important;
+          transform: none !important;
+          page-break-inside: avoid !important;
+          overflow: visible !important;
+        }
+        .no-print { display: none !important; }
       }
     `,
   });
@@ -104,7 +124,7 @@ export default function ExecutiveOrgStructure() {
       <div className="p-3 sm:p-4 md:p-6" dir="rtl">
         <div className="max-w-full mx-auto space-y-4">
 
-          <div className="flex items-center justify-between rounded-lg px-4 py-3 print:hidden" style={{ background: "#1e293b" }}>
+          <div className="flex items-center justify-between rounded-lg px-4 py-3 no-print" style={{ background: "#1e293b" }}>
             <div className="flex items-center gap-3">
               <Building2 className="h-6 w-6" style={{ color: "#d4a843" }} />
               <div>
@@ -126,7 +146,7 @@ export default function ExecutiveOrgStructure() {
           </div>
 
           <div className="overflow-x-auto pb-4">
-            <div ref={printRef} dir="rtl" style={{ minWidth: 1300, background: "#ffffff", borderRadius: 12, border: "1px solid #e2e8f0", padding: "28px 34px", fontFamily: "'Cairo', 'Segoe UI', Tahoma, sans-serif" }}>
+            <div ref={printRef} dir="rtl" className="print-container" style={{ minWidth: 1300, background: "#ffffff", borderRadius: 12, border: "1px solid #e2e8f0", padding: "28px 34px", fontFamily: "'Cairo', 'Segoe UI', Tahoma, sans-serif" }}>
 
               <div style={{ textAlign: "center", marginBottom: 22 }}>
                 <div style={{ display: "inline-block", borderBottom: "3px solid #b8860b", paddingBottom: 10 }}>
