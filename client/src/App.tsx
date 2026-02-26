@@ -109,6 +109,7 @@ const ExecutiveDashboardPage = makeLazy("executive-dashboard");
 const ExecutiveMeetingsPage = makeLazy("executive-meetings");
 const ExecutiveTasksPage = makeLazy("executive-tasks");
 const ExecutiveCorrespondencePage = makeLazy("executive-correspondence");
+const ExecutiveOrgStructurePage = makeLazy("executive-org-structure");
 const DocumentsPage = makeLazy("documents");
 const SharedDocumentPage = makeLazy("shared-document");
 const DiscountCardPage = makeLazy("discount-card");
@@ -333,6 +334,7 @@ const Router = React.memo(function Router() {
       <Route path="/executive/reports">{() => <ModulePage component={ExecutiveReportsPage} module="executive_reports" />}</Route>
       <Route path="/executive/calendar">{() => <ModulePage component={ExecutiveCalendarPage} module="executive_calendar" />}</Route>
       <Route path="/executive/templates">{() => <ModulePage component={CompanyTemplatesPage} module="executive_dashboard" />}</Route>
+      <Route path="/executive/org-structure">{() => <ModulePage component={ExecutiveOrgStructurePage} module="executive_dashboard" />}</Route>
       
       {/* Documents - إدارة الوثائق */}
       <Route path="/documents">{() => <ModulePage component={DocumentsPage} module="documents" />}</Route>

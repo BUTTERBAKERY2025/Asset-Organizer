@@ -19,6 +19,7 @@ import {
   CalendarDays, 
   Shield, 
   Crown,
+  Building2,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
@@ -351,7 +352,18 @@ export default function ExecutiveDashboard() {
           </div>
 
           {/* Quick Links - Compact grid */}
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 sm:gap-3">
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-2 sm:gap-3">
+            <Link href="/executive/org-structure" className="block" data-testid="link-org-structure">
+              <Card className="border-2 border-amber-300 hover:shadow-md transition-all bg-gradient-to-br from-amber-50 to-orange-50 hover:from-amber-100 hover:to-orange-100">
+                <CardContent className="p-3 flex flex-col items-center text-center gap-1.5">
+                  <div className="p-2 bg-amber-200 rounded-lg">
+                    <Building2 className="h-4 w-4 text-amber-800" />
+                  </div>
+                  <span className="text-xs font-bold text-amber-800">الهيكل التنظيمي</span>
+                </CardContent>
+              </Card>
+            </Link>
+
             <Link href="/executive/calendar" className="block">
               <Card className="border border-slate-200 hover:border-purple-300 hover:shadow-sm transition-all bg-white">
                 <CardContent className="p-3 flex flex-col items-center text-center gap-1.5">
