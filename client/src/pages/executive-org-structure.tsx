@@ -5,52 +5,54 @@ import { ArrowLeft, Printer, Building2 } from "lucide-react";
 import React, { useRef } from "react";
 import { useReactToPrint } from "react-to-print";
 
-function OrgBox({
+function NodeBox({
   title,
   subtitle,
   items,
-  color,
-  borderColor,
-  width = "w-56",
-  isRoot = false,
+  bg,
+  textColor = "text-white",
+  className = "",
 }: {
   title: string;
   subtitle?: string;
   items?: string[];
-  color: string;
-  borderColor: string;
-  width?: string;
-  isRoot?: boolean;
+  bg: string;
+  textColor?: string;
+  className?: string;
 }) {
   return (
-    <div className={`${width} inline-block`}>
-      <div className={`rounded-lg border-2 ${borderColor} bg-white shadow-sm overflow-hidden`}>
-        <div className={`${color} px-3 py-2 text-center`}>
-          <h3 className={`font-bold text-white ${isRoot ? "text-sm" : "text-xs"} leading-tight`}>{title}</h3>
-          {subtitle && <p className="text-[9px] text-white/80 mt-0.5">{subtitle}</p>}
-        </div>
-        {items && items.length > 0 && (
-          <div className="px-2.5 py-2 space-y-1">
-            {items.map((item, i) => (
-              <div key={i} className="flex items-start gap-1.5 text-[10px] text-slate-700 leading-tight">
-                <span className="text-slate-400 mt-px shrink-0">•</span>
-                <span>{item}</span>
-              </div>
-            ))}
-          </div>
-        )}
+    <div className={`rounded-lg shadow-md border overflow-hidden ${className}`}>
+      <div className={`${bg} px-4 py-2.5 text-center`}>
+        <h3 className={`text-[11px] font-bold ${textColor} leading-snug`}>{title}</h3>
+        {subtitle && <p className={`text-[9px] ${textColor} opacity-75 mt-0.5`}>{subtitle}</p>}
       </div>
+      {items && items.length > 0 && (
+        <div className="bg-white px-3 py-2 space-y-0.5">
+          {items.map((item, i) => (
+            <div key={i} className="text-[9px] text-slate-600 leading-snug flex items-start gap-1">
+              <span className="text-slate-300 shrink-0 mt-px">◆</span>
+              <span>{item}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-function SubDeptBox({ name, tasks }: { name: string; tasks: string[] }) {
+function SectionBox({
+  name,
+  tasks,
+}: {
+  name: string;
+  tasks: string[];
+}) {
   return (
-    <div className="bg-slate-50 border border-slate-200 rounded-md p-2 text-right min-w-[140px]">
-      <h5 className="text-[10px] font-bold text-slate-800 mb-1 leading-tight">{name}</h5>
+    <div className="bg-white rounded border border-slate-200 p-2">
+      <h5 className="text-[9px] font-bold text-slate-800 mb-1 border-b border-slate-100 pb-1">{name}</h5>
       {tasks.map((t, i) => (
-        <div key={i} className="text-[9px] text-slate-600 leading-tight flex items-start gap-1">
-          <span className="text-slate-300 mt-px shrink-0">•</span>
+        <div key={i} className="text-[8px] text-slate-500 leading-snug flex items-start gap-1">
+          <span className="text-slate-300 shrink-0">–</span>
           <span>{t}</span>
         </div>
       ))}
@@ -58,21 +60,10 @@ function SubDeptBox({ name, tasks }: { name: string; tasks: string[] }) {
   );
 }
 
-function VLine({ height = "h-6" }: { height?: string }) {
+function VertLine({ h = 20 }: { h?: number }) {
   return (
-    <div className="flex justify-center">
-      <div className={`w-px ${height} bg-slate-400`} />
-    </div>
-  );
-}
-
-function HConnector({ count }: { count: number }) {
-  return (
-    <div className="relative flex justify-center">
-      <div className="w-px h-4 bg-slate-400" />
-      <div className="absolute bottom-0 left-1/2 -translate-x-1/2" style={{ width: `${Math.max(80, (count - 1) * 20)}%` }}>
-        <div className="h-px bg-slate-400" />
-      </div>
+    <div className="flex justify-center" style={{ height: h }}>
+      <div className="w-[2px] h-full bg-slate-300 rounded-full" />
     </div>
   );
 }
@@ -84,7 +75,7 @@ export default function ExecutiveOrgStructure() {
     contentRef: printRef,
     documentTitle: "الهيكل التنظيمي - شركة الزبد الأفضل التجارية",
     pageStyle: `
-      @page { size: A3 landscape; margin: 10mm; }
+      @page { size: A3 landscape; margin: 8mm; }
       @media print {
         body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         * { font-family: 'Cairo', 'Segoe UI', sans-serif !important; }
@@ -97,27 +88,26 @@ export default function ExecutiveOrgStructure() {
       <div className="p-3 sm:p-4 md:p-6" dir="rtl">
         <div className="max-w-full mx-auto space-y-4">
 
-          <div className="flex items-center justify-between bg-amber-700 rounded-lg px-4 py-3 print:hidden">
+          <div className="flex items-center justify-between bg-slate-800 rounded-lg px-4 py-3 print:hidden">
             <div className="flex items-center gap-3">
-              <Building2 className="h-6 w-6 text-white" />
+              <Building2 className="h-6 w-6 text-amber-400" />
               <div>
                 <h1 className="text-lg font-bold text-white">الهيكل التنظيمي</h1>
-                <p className="text-xs text-amber-200">شركة الزبد الأفضل التجارية</p>
+                <p className="text-xs text-slate-400">شركة الزبد الأفضل التجارية</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <Button
                 onClick={() => handlePrint()}
-                variant="outline"
                 size="sm"
-                className="bg-white/10 border-white/30 text-white hover:bg-white/20"
+                className="bg-amber-600 hover:bg-amber-700 text-white"
                 data-testid="btn-print-org"
               >
-                <Printer className="h-4 w-4 ml-1" />
+                <Printer className="h-4 w-4 ml-1.5" />
                 تصدير PDF
               </Button>
               <Link href="/executive">
-                <Button variant="ghost" size="sm" className="text-white hover:bg-amber-600" data-testid="btn-back-executive">
+                <Button variant="ghost" size="sm" className="text-slate-300 hover:text-white hover:bg-slate-700" data-testid="btn-back-executive">
                   العودة <ArrowLeft className="h-4 w-4 mr-1" />
                 </Button>
               </Link>
@@ -125,284 +115,303 @@ export default function ExecutiveOrgStructure() {
           </div>
 
           <div className="overflow-x-auto pb-4">
-            <div ref={printRef} className="min-w-[1100px] p-6 bg-white rounded-xl border border-slate-200" dir="rtl">
+            <div
+              ref={printRef}
+              className="min-w-[1200px] bg-gradient-to-b from-slate-50 to-white rounded-xl border border-slate-200 shadow-sm"
+              dir="rtl"
+              style={{ padding: "28px 32px" }}
+            >
 
-              <div className="text-center mb-2 hidden print:block">
-                <h1 className="text-xl font-bold text-slate-900">الهيكل التنظيمي</h1>
-                <p className="text-sm text-slate-600">شركة الزبد الأفضل التجارية</p>
-                <div className="w-24 h-0.5 bg-amber-500 mx-auto mt-2" />
-              </div>
-
-              {/* Level 1: Owner */}
-              <div className="text-center">
-                <OrgBox
-                  title="المالك"
-                  color="bg-gradient-to-b from-amber-600 to-amber-700"
-                  borderColor="border-amber-500"
-                  width="w-52"
-                  isRoot
-                  items={[
-                    "اعتماد التوجه الاستراتيجي",
-                    "اعتماد الخطط طويلة الأجل",
-                    "اعتماد زيادة رأس المال",
-                    "اعتماد الاستحواذات والتحول",
-                  ]}
-                />
-              </div>
-
-              <VLine />
-
-              {/* Level 1: CEO */}
-              <div className="text-center">
-                <OrgBox
-                  title="الرئيس التنفيذي (CEO)"
-                  subtitle="المسؤول التنفيذي الأعلى"
-                  color="bg-gradient-to-b from-indigo-700 to-indigo-800"
-                  borderColor="border-indigo-500"
-                  width="w-60"
-                  isRoot
-                  items={[
-                    "الإشراف على جميع الإدارات",
-                    "اعتماد الميزانيات والعقود الجوهرية",
-                    "اعتماد المصروفات الرأسمالية",
-                    "الإشراف على الالتزام والحوكمة",
-                  ]}
-                />
-              </div>
-
-              {/* Connector from CEO to departments */}
-              <VLine height="h-4" />
-              <div className="relative mx-auto" style={{ width: "90%" }}>
-                <div className="h-px bg-slate-400" />
-                {/* 5 vertical drops */}
-                <div className="flex justify-between">
-                  {[0, 1, 2, 3, 4].map((i) => (
-                    <div key={i} className="w-px h-4 bg-slate-400" />
-                  ))}
+              {/* Print header */}
+              <div className="text-center mb-5">
+                <div className="inline-block">
+                  <h1 className="text-lg font-bold text-slate-900 tracking-wide">الهيكل التنظيمي</h1>
+                  <p className="text-[11px] text-slate-500 mt-0.5">شركة الزبد الأفضل التجارية — حوكمة الشركات المساهمة</p>
+                  <div className="w-32 h-[2px] bg-amber-500 mx-auto mt-2 rounded-full" />
                 </div>
               </div>
 
-              {/* Level 2: Main Departments */}
-              <div className="flex justify-between gap-2" style={{ width: "90%", margin: "0 auto" }}>
+              {/* ═══ LEVEL 0: الجمعية العامة ═══ */}
+              <div className="text-center">
+                <NodeBox
+                  title="الجمعية العامة للمساهمين"
+                  subtitle="General Assembly"
+                  bg="bg-gradient-to-b from-amber-700 to-amber-800 border-amber-600"
+                  items={[
+                    "اعتماد القوائم المالية السنوية",
+                    "تعيين وعزل أعضاء مجلس الإدارة",
+                    "تعيين مراجع الحسابات الخارجي",
+                    "اعتماد زيادة / تخفيض رأس المال",
+                    "اعتماد الأرباح الموزعة",
+                  ]}
+                  className="max-w-[280px] mx-auto"
+                />
+              </div>
 
-                {/* Finance */}
-                <div className="flex-1 text-center">
-                  <OrgBox
+              <VertLine h={16} />
+
+              {/* ═══ LEVEL 1: مجلس الإدارة ═══ */}
+              <div className="text-center">
+                <NodeBox
+                  title="مجلس الإدارة"
+                  subtitle="Board of Directors"
+                  bg="bg-gradient-to-b from-slate-800 to-slate-900 border-slate-700"
+                  items={[
+                    "رسم التوجهات الاستراتيجية",
+                    "اعتماد الخطط والميزانيات السنوية",
+                    "الرقابة على الأداء التنفيذي",
+                    "تعيين وتقييم الرئيس التنفيذي",
+                    "اعتماد السياسات والإجراءات الجوهرية",
+                  ]}
+                  className="max-w-[280px] mx-auto"
+                />
+              </div>
+
+              {/* Board sub-entities row */}
+              <VertLine h={10} />
+              <div className="relative mx-auto" style={{ width: "52%" }}>
+                <div className="h-[2px] bg-slate-300 rounded-full" />
+                <div className="flex justify-between">
+                  {[0, 1, 2].map(i => <div key={i} className="w-[2px] h-3 bg-slate-300 rounded-full" />)}
+                </div>
+              </div>
+              <div className="flex justify-center gap-4">
+                <NodeBox
+                  title="رئيس مجلس الإدارة"
+                  subtitle="Chairman"
+                  bg="bg-gradient-to-b from-amber-600 to-amber-700 border-amber-500"
+                  items={[
+                    "رئاسة اجتماعات المجلس",
+                    "التوقيع على القرارات الاستراتيجية",
+                    "تمثيل الشركة أمام الجهات الرسمية",
+                  ]}
+                  className="w-[210px]"
+                />
+                <NodeBox
+                  title="لجنة المراجعة"
+                  subtitle="Audit Committee"
+                  bg="bg-gradient-to-b from-red-700 to-red-800 border-red-600"
+                  items={[
+                    "مراجعة القوائم المالية",
+                    "تقييم نظام الرقابة الداخلية",
+                    "التوصية بتعيين المراجع الخارجي",
+                  ]}
+                  className="w-[210px]"
+                />
+                <NodeBox
+                  title="لجنة المكافآت والترشيحات"
+                  subtitle="Remuneration & Nomination"
+                  bg="bg-gradient-to-b from-violet-700 to-violet-800 border-violet-600"
+                  items={[
+                    "سياسات مكافآت أعضاء المجلس والتنفيذيين",
+                    "ترشيح أعضاء المجلس",
+                    "تقييم أداء المجلس والإدارة التنفيذية",
+                  ]}
+                  className="w-[210px]"
+                />
+              </div>
+
+              {/* ═══ LEVEL 2: الرئيس التنفيذي ═══ */}
+              <VertLine h={16} />
+              <div className="text-center">
+                <NodeBox
+                  title="الرئيس التنفيذي"
+                  subtitle="Chief Executive Officer (CEO)"
+                  bg="bg-gradient-to-b from-indigo-700 to-indigo-800 border-indigo-600"
+                  items={[
+                    "تنفيذ قرارات مجلس الإدارة",
+                    "الإشراف على جميع الإدارات التنفيذية",
+                    "اعتماد الميزانيات التشغيلية",
+                    "اعتماد العقود والمصروفات الرأسمالية",
+                    "ضمان الالتزام والحوكمة",
+                  ]}
+                  className="max-w-[280px] mx-auto"
+                />
+              </div>
+
+              {/* ═══ LEVEL 3: الإدارات الرئيسية ═══ */}
+              <VertLine h={12} />
+              <div className="relative mx-auto" style={{ width: "92%" }}>
+                <div className="h-[2px] bg-slate-300 rounded-full" />
+                <div className="flex justify-between">
+                  {[0, 1, 2, 3, 4].map(i => <div key={i} className="w-[2px] h-3 bg-slate-300 rounded-full" />)}
+                </div>
+              </div>
+
+              <div className="flex gap-3 justify-center" style={{ width: "92%", margin: "0 auto" }}>
+
+                {/* 1 - Finance */}
+                <div className="flex-1 space-y-1.5">
+                  <NodeBox
                     title="الإدارة المالية"
                     subtitle="Finance & Accounting"
-                    color="bg-gradient-to-b from-emerald-600 to-emerald-700"
-                    borderColor="border-emerald-400"
-                    width="w-full"
+                    bg="bg-gradient-to-b from-emerald-600 to-emerald-700 border-emerald-500"
+                    className="w-full"
                   />
-                  <VLine height="h-3" />
-                  <div className="grid grid-cols-1 gap-1.5 px-1">
-                    <SubDeptBox name="المحاسبة العامة" tasks={["القيود اليومية", "ميزان المراجعة", "القوائم المالية"]} />
-                    <SubDeptBox name="الموردين (AP)" tasks={["مراجعة الفواتير", "مطابقة PO/GRN", "جدول أعمار الديون"]} />
-                    <SubDeptBox name="العملاء (AR)" tasks={["متابعة التحصيل", "مطابقة المبيعات", "أعمار الذمم"]} />
-                    <SubDeptBox name="الخزينة" tasks={["التدفقات النقدية", "الحسابات البنكية", "تقارير السيولة"]} />
-                    <SubDeptBox name="الرواتب" tasks={["مسير الرواتب", "الاستقطاعات", "سداد التأمينات"]} />
+                  <div className="space-y-1">
+                    <SectionBox name="المحاسبة العامة" tasks={["القيود اليومية", "ميزان المراجعة", "القوائم المالية", "مطابقة الحسابات"]} />
+                    <SectionBox name="قسم الموردين (AP)" tasks={["مراجعة الفواتير", "مطابقة PO/GRN", "جدول أعمار الديون", "إدارة السداد"]} />
+                    <SectionBox name="قسم العملاء (AR)" tasks={["متابعة التحصيل", "مطابقة المبيعات", "أعمار الذمم"]} />
+                    <SectionBox name="الخزينة (Treasury)" tasks={["التدفقات النقدية", "الحسابات البنكية", "تقارير السيولة"]} />
+                    <SectionBox name="الرواتب (Payroll)" tasks={["مسير الرواتب", "الاستقطاعات", "سداد التأمينات"]} />
                   </div>
                 </div>
 
-                {/* Operations */}
-                <div className="flex-1 text-center">
-                  <OrgBox
+                {/* 2 - Operations */}
+                <div className="flex-1 space-y-1.5">
+                  <NodeBox
                     title="إدارة التشغيل"
                     subtitle="Operations"
-                    color="bg-gradient-to-b from-blue-600 to-blue-700"
-                    borderColor="border-blue-400"
-                    width="w-full"
+                    bg="bg-gradient-to-b from-blue-600 to-blue-700 border-blue-500"
+                    className="w-full"
                   />
-                  <VLine height="h-3" />
-                  <div className="grid grid-cols-1 gap-1.5 px-1">
-                    <SubDeptBox name="إدارة الفروع" tasks={["الأداء اليومي", "أهداف المبيعات", "ضبط الهدر", "مراقبة الجودة"]} />
-                    <SubDeptBox name="إدارة الإنتاج" tasks={["خطوط الإنتاج", "المواد الخام", "الالتزام بالوصفات"]} />
-                    <SubDeptBox name="إدارة الجودة" tasks={["فحص المنتجات", "الالتزام الصحي", "تقارير الامتثال"]} />
-                    <SubDeptBox name="التخطيط والتوريد" tasks={["تخطيط الاحتياجات", "طلبات الفروع", "مراقبة الاستهلاك"]} />
+                  <div className="space-y-1">
+                    <SectionBox name="إدارة الفروع" tasks={["الأداء اليومي", "أهداف المبيعات", "ضبط الهدر", "مراقبة الجودة"]} />
+                    <SectionBox name="إدارة الإنتاج" tasks={["خطوط الإنتاج", "مراقبة المواد الخام", "الالتزام بالوصفات", "الكفاءة التشغيلية"]} />
+                    <SectionBox name="إدارة الجودة" tasks={["فحص المنتجات", "الالتزام الصحي", "تقارير الامتثال"]} />
+                    <SectionBox name="التخطيط والتوريد الداخلي" tasks={["تخطيط الاحتياجات", "طلبات الفروع", "مراقبة الاستهلاك"]} />
                   </div>
                 </div>
 
-                {/* Procurement */}
-                <div className="flex-1 text-center">
-                  <OrgBox
+                {/* 3 - Procurement */}
+                <div className="flex-1 space-y-1.5">
+                  <NodeBox
                     title="المشتريات وسلسلة الإمداد"
                     subtitle="Procurement & Supply Chain"
-                    color="bg-gradient-to-b from-orange-600 to-orange-700"
-                    borderColor="border-orange-400"
-                    width="w-full"
+                    bg="bg-gradient-to-b from-orange-600 to-orange-700 border-orange-500"
+                    className="w-full"
                   />
-                  <VLine height="h-3" />
-                  <div className="grid grid-cols-1 gap-1.5 px-1">
-                    <SubDeptBox name="قسم المشتريات" tasks={["إدارة الموردين", "التفاوض على الأسعار", "أوامر الشراء", "تقييم الموردين"]} />
-                    <SubDeptBox name="المستودع المركزي" tasks={["استلام المواد", "التخزين", "الجرد الدوري", "التوزيع للفروع"]} />
-                    <SubDeptBox name="مستودعات الفروع" tasks={["مخزون الفرع", "الجرد اليومي", "تقارير الفروقات"]} />
+                  <div className="space-y-1">
+                    <SectionBox name="قسم المشتريات" tasks={["إدارة الموردين", "التفاوض على الأسعار", "أوامر الشراء", "تقييم الموردين"]} />
+                    <SectionBox name="المستودع المركزي" tasks={["استلام المواد", "التخزين", "الجرد الدوري", "التوزيع للفروع"]} />
+                    <SectionBox name="المستودعات التشغيلية" tasks={["مخزون الفرع", "الجرد اليومي", "تقارير الفروقات"]} />
                   </div>
                 </div>
 
-                {/* HR */}
-                <div className="flex-1 text-center">
-                  <OrgBox
+                {/* 4 - HR */}
+                <div className="flex-1 space-y-1.5">
+                  <NodeBox
                     title="الموارد البشرية"
                     subtitle="Human Resources"
-                    color="bg-gradient-to-b from-purple-600 to-purple-700"
-                    borderColor="border-purple-400"
-                    width="w-full"
+                    bg="bg-gradient-to-b from-purple-600 to-purple-700 border-purple-500"
+                    className="w-full"
                   />
-                  <VLine height="h-3" />
-                  <div className="grid grid-cols-1 gap-1.5 px-1">
-                    <SubDeptBox name="التوظيف" tasks={["استقطاب الموظفين", "المقابلات", "إصدار العقود"]} />
-                    <SubDeptBox name="شؤون الموظفين" tasks={["ملفات الموظفين", "الإجازات", "المخالصات"]} />
-                    <SubDeptBox name="الحضور والانصراف" tasks={["متابعة الدوام", "تقارير التأخير", "إدارة الإضافي"]} />
-                    <SubDeptBox name="الامتثال والتأمينات" tasks={["تسجيل GOSI", "التأمين الطبي", "نظام العمل"]} />
+                  <div className="space-y-1">
+                    <SectionBox name="التوظيف" tasks={["استقطاب الموظفين", "المقابلات", "إصدار العقود"]} />
+                    <SectionBox name="شؤون الموظفين" tasks={["ملفات الموظفين", "الإجازات", "المخالصات"]} />
+                    <SectionBox name="الحضور والانصراف" tasks={["متابعة الدوام", "تقارير التأخير", "إدارة الإضافي"]} />
+                    <SectionBox name="الامتثال والتأمينات" tasks={["تسجيل GOSI", "التأمين الطبي", "الالتزام بنظام العمل"]} />
                   </div>
                 </div>
 
-                {/* IT */}
-                <div className="flex-1 text-center">
-                  <OrgBox
+                {/* 5 - IT */}
+                <div className="flex-1 space-y-1.5">
+                  <NodeBox
                     title="تقنية المعلومات"
                     subtitle="Information Technology"
-                    color="bg-gradient-to-b from-cyan-600 to-cyan-700"
-                    borderColor="border-cyan-400"
-                    width="w-full"
+                    bg="bg-gradient-to-b from-cyan-600 to-cyan-700 border-cyan-500"
+                    className="w-full"
                   />
-                  <VLine height="h-3" />
-                  <div className="grid grid-cols-1 gap-1.5 px-1">
-                    <SubDeptBox name="الأنظمة والبنية التحتية" tasks={["أنظمة POS", "أنظمة المحاسبة", "السيرفرات", "حماية البيانات", "دعم الفروع"]} />
+                  <div className="space-y-1">
+                    <SectionBox name="الأنظمة والبنية التحتية" tasks={["أنظمة نقاط البيع (POS)", "أنظمة المحاسبة", "إدارة السيرفرات", "حماية البيانات", "دعم الفروع"]} />
                   </div>
                 </div>
               </div>
 
-              {/* Level 3 & 4: Branch + Support */}
-              <div className="mt-6 pt-4 border-t-2 border-dashed border-slate-300">
-                <div className="flex gap-6 justify-center">
+              {/* ═══ LEVEL 4 & 5: الفروع + الدعم ═══ */}
+              <div className="mt-5 pt-4 border-t-2 border-slate-200">
+                <div className="flex gap-5 justify-center">
 
-                  {/* Branch structure */}
-                  <div className="flex-1 max-w-md">
-                    <div className="text-center">
-                      <div className="inline-block rounded-lg border-2 border-teal-400 bg-white shadow-sm overflow-hidden w-full">
-                        <div className="bg-gradient-to-b from-teal-600 to-teal-700 px-4 py-2 text-center">
-                          <h3 className="text-xs font-bold text-white">المستوى الثالث: هيكل كل فرع</h3>
-                        </div>
-                        <div className="p-3">
-                          <div className="space-y-0">
-                            {[
-                              { role: "مدير فرع", level: 0 },
-                              { role: "مساعد مدير فرع", level: 1 },
-                              { role: "مشرف شيفت", level: 2 },
-                              { role: "مسؤول مخزون", level: 3 },
-                              { role: "كاشير", level: 3 },
-                              { role: "موظفي إنتاج", level: 3 },
-                              { role: "موظفي خدمة عملاء", level: 3 },
-                              { role: "عمال نظافة", level: 4 },
-                            ].map((item, i) => (
-                              <React.Fragment key={i}>
-                                <div
-                                  className={`flex items-center gap-2 rounded-md px-2 py-1.5 ${
-                                    item.level === 0
-                                      ? "bg-teal-700 text-white"
-                                      : item.level === 1
-                                      ? "bg-teal-100 text-teal-900"
-                                      : item.level === 2
-                                      ? "bg-teal-50 text-teal-800"
-                                      : "bg-white text-slate-700 border border-slate-100"
-                                  }`}
-                                  style={{ marginRight: `${item.level * 16}px` }}
-                                >
-                                  <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 ${
-                                    item.level === 0
-                                      ? "bg-white text-teal-700"
-                                      : "bg-teal-200 text-teal-700"
-                                  }`}>
-                                    {i + 1}
-                                  </div>
-                                  <span className="text-[10px] font-medium">{item.role}</span>
-                                </div>
-                                {i < 7 && (
-                                  <div className="flex" style={{ marginRight: `${item.level * 16 + 10}px` }}>
-                                    <div className="w-px h-1.5 bg-teal-300" />
-                                  </div>
-                                )}
-                              </React.Fragment>
-                            ))}
-                          </div>
-                        </div>
+                  <div className="w-[340px]">
+                    <div className="rounded-lg border-2 border-teal-400 overflow-hidden shadow-sm">
+                      <div className="bg-gradient-to-b from-teal-600 to-teal-700 px-4 py-2 text-center">
+                        <h3 className="text-[11px] font-bold text-white">هيكل كل فرع</h3>
+                        <p className="text-[8px] text-teal-200">Branch Structure</p>
+                      </div>
+                      <div className="bg-white p-3">
+                        {[
+                          { role: "مدير فرع", indent: 0, weight: "bold", bg: "bg-teal-700 text-white" },
+                          { role: "مساعد مدير فرع", indent: 1, weight: "semibold", bg: "bg-teal-100 text-teal-900" },
+                          { role: "مشرف شيفت", indent: 2, weight: "medium", bg: "bg-teal-50 text-teal-800" },
+                          { role: "مسؤول مخزون", indent: 3, weight: "normal", bg: "bg-white text-slate-700 border border-slate-200" },
+                          { role: "كاشير", indent: 3, weight: "normal", bg: "bg-white text-slate-700 border border-slate-200" },
+                          { role: "موظفي إنتاج", indent: 3, weight: "normal", bg: "bg-white text-slate-700 border border-slate-200" },
+                          { role: "موظفي خدمة عملاء", indent: 3, weight: "normal", bg: "bg-white text-slate-700 border border-slate-200" },
+                          { role: "عمال نظافة", indent: 3, weight: "normal", bg: "bg-white text-slate-700 border border-slate-200" },
+                        ].map((item, i, arr) => (
+                          <React.Fragment key={i}>
+                            <div
+                              className={`rounded px-2.5 py-1 ${item.bg} text-[9px] font-${item.weight}`}
+                              style={{ marginRight: item.indent * 14 }}
+                            >
+                              {item.role}
+                            </div>
+                            {i < arr.length - 1 && (
+                              <div className="flex" style={{ marginRight: item.indent * 14 + 10 }}>
+                                <div className="w-[2px] h-1.5 bg-teal-200 rounded-full" />
+                              </div>
+                            )}
+                          </React.Fragment>
+                        ))}
                       </div>
                     </div>
                   </div>
 
-                  {/* Operational Support */}
-                  <div className="flex-1 max-w-sm">
-                    <div className="inline-block rounded-lg border-2 border-slate-400 bg-white shadow-sm overflow-hidden w-full">
+                  <div className="w-[260px]">
+                    <div className="rounded-lg border-2 border-slate-400 overflow-hidden shadow-sm">
                       <div className="bg-gradient-to-b from-slate-600 to-slate-700 px-4 py-2 text-center">
-                        <h3 className="text-xs font-bold text-white">المستوى الرابع: الدعم التشغيلي</h3>
+                        <h3 className="text-[11px] font-bold text-white">الدعم التشغيلي</h3>
+                        <p className="text-[8px] text-slate-300">Operational Support</p>
                       </div>
-                      <div className="p-3 grid grid-cols-2 gap-2">
-                        {["سائقين", "عمال مستودعات", "فني صيانة", "دعم تقني ميداني"].map((role, i) => (
-                          <div key={i} className="bg-slate-50 border border-slate-200 rounded-md px-2 py-2 text-center">
-                            <span className="text-[10px] font-medium text-slate-700">{role}</span>
+                      <div className="bg-white p-3 grid grid-cols-2 gap-1.5">
+                        {["سائقين", "عمال مستودعات", "فني صيانة", "دعم تقني ميداني"].map((r, i) => (
+                          <div key={i} className="bg-slate-50 border border-slate-200 rounded px-2 py-1.5 text-center text-[9px] text-slate-700 font-medium">
+                            {r}
                           </div>
                         ))}
                       </div>
                     </div>
                   </div>
-                </div>
-              </div>
 
-              {/* Segregation & Reporting */}
-              <div className="mt-6 pt-4 border-t-2 border-dashed border-slate-300">
-                <div className="flex gap-6 justify-center">
-
-                  {/* Segregation of Duties */}
-                  <div className="flex-1 max-w-md">
-                    <div className="rounded-lg border-2 border-red-300 bg-white shadow-sm overflow-hidden">
-                      <div className="bg-gradient-to-b from-red-600 to-red-700 px-4 py-2 text-center">
-                        <h3 className="text-xs font-bold text-white">فصل الصلاحيات (Segregation of Duties)</h3>
+                  <div className="w-[260px]">
+                    <div className="rounded-lg border-2 border-red-300 overflow-hidden shadow-sm">
+                      <div className="bg-gradient-to-b from-red-700 to-red-800 px-4 py-2 text-center">
+                        <h3 className="text-[11px] font-bold text-white">فصل الصلاحيات</h3>
+                        <p className="text-[8px] text-red-200">Segregation of Duties</p>
                       </div>
-                      <div className="p-3 space-y-1.5">
+                      <div className="bg-white p-2.5 space-y-1">
                         {[
                           "المشتريات منفصلة عن السداد",
                           "التسجيل المحاسبي منفصل عن اعتماد المدفوعات",
                           "الجرد منفصل عن مسؤول المخزون",
-                          "الرواتب تعتمد من الإدارة التنفيذية بعد مراجعة المالية",
-                        ].map((item, i) => (
-                          <div key={i} className="flex items-start gap-2 bg-red-50 rounded-md px-2 py-1.5">
-                            <span className="text-green-600 text-[10px] font-bold mt-px shrink-0">✓</span>
-                            <span className="text-[10px] text-slate-700">{item}</span>
+                          "الرواتب تعتمد من التنفيذي بعد مراجعة المالية",
+                        ].map((s, i) => (
+                          <div key={i} className="flex items-start gap-1.5 text-[9px] text-slate-700 bg-red-50 rounded px-2 py-1">
+                            <span className="text-green-600 font-bold shrink-0">✓</span>
+                            <span>{s}</span>
                           </div>
                         ))}
                       </div>
                     </div>
                   </div>
 
-                  {/* Reporting Path */}
-                  <div className="flex-1 max-w-sm">
-                    <div className="rounded-lg border-2 border-violet-300 bg-white shadow-sm overflow-hidden">
-                      <div className="bg-gradient-to-b from-violet-600 to-violet-700 px-4 py-2 text-center">
-                        <h3 className="text-xs font-bold text-white">مسار التقارير</h3>
+                  <div className="w-[200px]">
+                    <div className="rounded-lg border-2 border-violet-300 overflow-hidden shadow-sm">
+                      <div className="bg-gradient-to-b from-violet-700 to-violet-800 px-4 py-2 text-center">
+                        <h3 className="text-[11px] font-bold text-white">مسار التقارير</h3>
+                        <p className="text-[8px] text-violet-200">Reporting Path</p>
                       </div>
-                      <div className="p-3 space-y-0">
-                        {["المستوى التنفيذي", "مدراء الإدارات", "رؤساء الأقسام", "المشرفين", "الموظفين التشغيليين"].map((level, i, arr) => (
+                      <div className="bg-white p-2.5">
+                        {["مجلس الإدارة", "الرئيس التنفيذي", "مدراء الإدارات", "رؤساء الأقسام", "المشرفين", "الموظفين التشغيليين"].map((l, i, a) => (
                           <React.Fragment key={i}>
-                            <div className={`rounded-md px-3 py-1.5 text-center ${
-                              i === 0
-                                ? "bg-violet-700 text-white"
-                                : i === 1
-                                ? "bg-violet-100 text-violet-900"
-                                : "bg-white border border-violet-100 text-slate-700"
+                            <div className={`rounded px-2 py-1 text-center text-[9px] font-medium ${
+                              i === 0 ? "bg-violet-700 text-white" : i === 1 ? "bg-violet-100 text-violet-800" : "bg-white text-slate-600 border border-violet-100"
                             }`}>
-                              <div className="flex items-center justify-center gap-2">
-                                <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold shrink-0 ${
-                                  i === 0 ? "bg-white text-violet-700" : "bg-violet-200 text-violet-700"
-                                }`}>
-                                  {i + 1}
-                                </div>
-                                <span className="text-[10px] font-medium">{level}</span>
-                              </div>
+                              {l}
                             </div>
-                            {i < arr.length - 1 && (
+                            {i < a.length - 1 && (
                               <div className="flex justify-center">
-                                <div className="w-px h-2 bg-violet-300" />
+                                <div className="w-[2px] h-1.5 bg-violet-200 rounded-full" />
                               </div>
                             )}
                           </React.Fragment>
@@ -413,14 +422,13 @@ export default function ExecutiveOrgStructure() {
                 </div>
               </div>
 
-              {/* Footer */}
-              <div className="mt-4 pt-3 border-t border-slate-200 text-center">
-                <p className="text-[9px] text-slate-400">شركة الزبد الأفضل التجارية — الهيكل التنظيمي المعتمد</p>
+              <div className="mt-5 pt-3 border-t border-slate-200 flex justify-between items-center px-2">
+                <p className="text-[8px] text-slate-400">شركة الزبد الأفضل التجارية — الهيكل التنظيمي المعتمد وفقاً لحوكمة الشركات المساهمة</p>
+                <p className="text-[8px] text-slate-400">سري وخاص — للاستخدام الداخلي فقط</p>
               </div>
 
             </div>
           </div>
-
         </div>
       </div>
     </Layout>
