@@ -87,37 +87,47 @@ function HBranch({ width, drops }: { width: string; drops: number }) {
 export default function ExecutiveOrgStructure() {
   const printRef = useRef<HTMLDivElement>(null);
 
-  const handlePrint = useReactToPrint({
+  const triggerPrint = useReactToPrint({
     contentRef: printRef,
     documentTitle: "الهيكل التنظيمي - شركة الزبد الأفضل التجارية",
     pageStyle: `
       @page { 
-        size: 420mm 297mm landscape;
-        margin: 8mm;
+        size: landscape;
+        margin: 6mm;
       }
       @media print {
         html, body {
           -webkit-print-color-adjust: exact !important;
           print-color-adjust: exact !important;
           color-adjust: exact !important;
-          width: 100% !important;
-          height: 100% !important;
           margin: 0 !important;
           padding: 0 !important;
-          overflow: visible !important;
         }
         * { font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif !important; }
         .print-container {
-          width: 100% !important;
+          width: 277mm !important;
           min-width: unset !important;
-          transform: none !important;
+          padding: 5mm !important;
+          border: none !important;
+          border-radius: 0 !important;
+          box-shadow: none !important;
           page-break-inside: avoid !important;
-          overflow: visible !important;
+          transform-origin: top right !important;
+          font-size: 90% !important;
         }
         .no-print { display: none !important; }
       }
     `,
   });
+
+  const handlePrint = () => {
+    const styleEl = document.createElement("style");
+    styleEl.id = "org-print-landscape";
+    styleEl.textContent = `@page { size: landscape !important; }`;
+    document.head.appendChild(styleEl);
+    triggerPrint();
+    setTimeout(() => { styleEl.remove(); }, 3000);
+  };
 
   return (
     <Layout>
