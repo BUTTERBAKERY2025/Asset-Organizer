@@ -48,6 +48,7 @@ import {
   WifiOff,
   MapPin,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   Loader2,
   Shield,
@@ -234,11 +235,37 @@ export default function BranchShiftsPage() {
 
   useEffect(() => { setSupervisorName(""); }, [selectedBranch]);
 
-  const todayDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Riyadh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  const saudiToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Riyadh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  const [workingDate, setWorkingDate] = useState(() => {
+    const now = new Date();
+    const saudiHour = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Riyadh', hour: 'numeric', hour12: false }).format(now));
+    if (saudiHour >= 0 && saudiHour < 6) {
+      const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Riyadh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(yesterday);
+    }
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Riyadh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+  });
+
+  const isWorkingDateToday = workingDate === saudiToday;
+
+  const goToPreviousDay = () => {
+    const d = new Date(workingDate + "T12:00:00");
+    d.setDate(d.getDate() - 1);
+    setWorkingDate(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Riyadh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d));
+  };
+
+  const goToNextDay = () => {
+    const d = new Date(workingDate + "T12:00:00");
+    d.setDate(d.getDate() + 1);
+    const next = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Riyadh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+    if (next <= saudiToday) setWorkingDate(next);
+  };
+
+  const goToToday = () => setWorkingDate(saudiToday);
   const { data: shiftEmployeeCountData } = useQuery<{ count: number }>({
-    queryKey: ["/api/shifts/employee-count", selectedBranch, todayDate, selectedShiftType],
+    queryKey: ["/api/shifts/employee-count", selectedBranch, workingDate, selectedShiftType],
     queryFn: async () => {
-      const res = await fetch(`/api/shifts/employee-count?branchId=${selectedBranch}&date=${todayDate}&shiftType=${selectedShiftType}`, { credentials: "include" });
+      const res = await fetch(`/api/shifts/employee-count?branchId=${selectedBranch}&date=${workingDate}&shiftType=${selectedShiftType}`, { credentials: "include" });
       if (!res.ok) return { count: 0 };
       return res.json();
     },
@@ -260,7 +287,12 @@ export default function BranchShiftsPage() {
   });
 
   const { data: dashboardData } = useQuery<{ dashboard: any[], shifts: any[] }>({
-    queryKey: ["/api/branch-shifts/dashboard/today"],
+    queryKey: ["/api/branch-shifts/dashboard/today", workingDate],
+    queryFn: async () => {
+      const res = await fetch(`/api/branch-shifts/dashboard/today?date=${workingDate}`, { credentials: "include" });
+      if (!res.ok) return { dashboard: [], shifts: [] };
+      return res.json();
+    },
   });
   const todayShifts = dashboardData?.dashboard || [];
 
@@ -320,7 +352,7 @@ export default function BranchShiftsPage() {
       } catch (e) { console.error("Failed to send notification:", e); }
       if (currentShift) clearLocalStorage(`shift_${currentShift.id}_responses`);
       queryClient.invalidateQueries({ queryKey: ["/api/branch-shifts"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/branch-shifts/dashboard/today"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/branch-shifts/dashboard/today", workingDate] });
       toast({ title: activeTab === "opening" ? "تم إكمال إجراءات الفتح بنجاح" : "تم إكمال إجراءات الإغلاق بنجاح" });
       setCurrentShift(null);
       setResponses({});
@@ -338,7 +370,7 @@ export default function BranchShiftsPage() {
         toast({ title: "يجب إكمال إجراءات الفتح أولاً قبل البدء بالإغلاق", variant: "destructive" }); return;
       }
     }
-    createShiftMutation.mutate({ branchId: selectedBranch, shiftType: selectedShiftType, shiftDate: todayDate, supervisorName, employeeCount, openingTime: activeTab === "opening" ? new Date() : undefined });
+    createShiftMutation.mutate({ branchId: selectedBranch, shiftType: selectedShiftType, shiftDate: workingDate, supervisorName, employeeCount, openingTime: activeTab === "opening" ? new Date() : undefined });
   };
 
   const toggleItem = (itemId: number, checked: boolean) => {
@@ -460,18 +492,38 @@ export default function BranchShiftsPage() {
           </div>
         </div>
 
-        {/* Today's Branch Status */}
+        {/* Branch Status */}
         <Card className="border-0 shadow-md">
           <CardHeader className="pb-3 border-b bg-gradient-to-l from-amber-50/50 to-white">
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
                 <Building2 className="h-5 w-5 text-amber-600" />
-                حالة الفروع اليوم
+                حالة الفروع {isWorkingDateToday ? "اليوم" : ""}
               </CardTitle>
-              <Badge variant="outline" className="bg-white text-xs sm:text-sm">
-                {new Date().toLocaleDateString("ar-SA", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "Asia/Riyadh" })}
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={goToPreviousDay} data-testid="btn-prev-day">
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Badge 
+                  variant="outline" 
+                  className={`bg-white text-xs sm:text-sm cursor-pointer select-none ${!isWorkingDateToday ? "border-amber-500 bg-amber-50 text-amber-800" : ""}`}
+                  onClick={goToToday}
+                  data-testid="badge-working-date"
+                >
+                  {new Date(workingDate + "T12:00:00").toLocaleDateString("ar-SA", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "Asia/Riyadh" })}
+                  {!isWorkingDateToday && <span className="mr-1.5 text-[10px] text-amber-600">(اضغط للعودة لليوم)</span>}
+                </Badge>
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={goToNextDay} disabled={isWorkingDateToday} data-testid="btn-next-day">
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
+            {!isWorkingDateToday && (
+              <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2 text-xs text-amber-800">
+                <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                <span>أنت تعرض بيانات يوم سابق — يمكنك إغلاق فرع تم فتحه في هذا اليوم</span>
+              </div>
+            )}
           </CardHeader>
           <CardContent className="p-3 sm:p-4">
             {todayShifts.length > 0 && (
