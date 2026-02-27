@@ -387,7 +387,7 @@ export async function registerRoutes(
 
   app.post("/api/users", isAuthenticated, requirePermission("users", "create"), async (req, res) => {
     try {
-      const { username, password, firstName, lastName, role, branchId } = req.body;
+      const { username, password, firstName, lastName, role, branchId, branchIds } = req.body;
       
       if (!username || !password) {
         return res.status(400).json({ error: "اسم المستخدم وكلمة المرور مطلوبان" });
@@ -412,10 +412,21 @@ export async function registerRoutes(
         return res.status(400).json({ error: "اسم المستخدم مسجل مسبقاً" });
       }
       
-      // Handle branch assignment including "all_branches" special value
+      // Handle branch assignment: branchIds array (new), branchId string (legacy), or "all_branches"
+      let validBranchIds: string[] = [];
       let assignedBranchId: string | null = null;
       let grantAllBranches = false;
-      if (branchId === "all_branches") {
+      
+      if (Array.isArray(branchIds)) {
+        const allBranches = await getCachedBranches();
+        const allBranchIdSet = new Set(allBranches.map(b => b.id));
+        validBranchIds = [...new Set(branchIds)].filter((id: string) => allBranchIdSet.has(id));
+        if (validBranchIds.length > 1) {
+          assignedBranchId = null;
+        } else if (validBranchIds.length === 1) {
+          assignedBranchId = validBranchIds[0];
+        }
+      } else if (branchId === "all_branches") {
         grantAllBranches = true;
       } else if (branchId && branchId !== "none") {
         assignedBranchId = branchId;
@@ -430,8 +441,17 @@ export async function registerRoutes(
         branchId: assignedBranchId,
       });
       
-      // Grant access to all branches if requested
-      if (grantAllBranches) {
+      // Grant branch access based on selected branches
+      if (validBranchIds.length > 0) {
+        for (let i = 0; i < validBranchIds.length; i++) {
+          await storage.addUserBranchAccess({
+            userId: user.id,
+            branchId: validBranchIds[i],
+            accessLevel: "full",
+            isDefault: i === 0,
+          });
+        }
+      } else if (grantAllBranches) {
         const allBranches = await getCachedBranches();
         for (let i = 0; i < allBranches.length; i++) {
           const branch = allBranches[i];
@@ -454,7 +474,7 @@ export async function registerRoutes(
 
   app.patch("/api/users/:id", isAuthenticated, requirePermission("users", "edit"), async (req, res) => {
     try {
-      const { firstName, lastName, username, role, password, branchId, isActive } = req.body;
+      const { firstName, lastName, username, role, password, branchId, branchIds, isActive } = req.body;
       const updateData: any = {};
       const currentUser = getCurrentUser(req);
       
@@ -505,11 +525,25 @@ export async function registerRoutes(
         updateData.password = password;
       }
       
-      // Handle branch assignment
+      // Handle branch assignment: branchIds array (new), branchId string (legacy), or "all_branches"
+      let validBranchIds: string[] | null = null;
       let grantAllBranches = false;
-      if (branchId !== undefined) {
+      let updateBranchAccess = false;
+      
+      if (Array.isArray(branchIds)) {
+        const allBranches = await getCachedBranches();
+        const allBranchIdSet = new Set(allBranches.map(b => b.id));
+        validBranchIds = [...new Set(branchIds as string[])].filter((id: string) => allBranchIdSet.has(id));
+        updateBranchAccess = true;
+        if (validBranchIds.length > 1) {
+          updateData.branchId = null;
+        } else if (validBranchIds.length === 1) {
+          updateData.branchId = validBranchIds[0];
+        } else {
+          updateData.branchId = null;
+        }
+      } else if (branchId !== undefined) {
         if (branchId === "all_branches") {
-          // Set branchId to null and grant access to all branches via user_branch_access
           updateData.branchId = null;
           grantAllBranches = true;
         } else {
@@ -534,15 +568,25 @@ export async function registerRoutes(
         return res.status(404).json({ error: "User not found" });
       }
       
-      // Grant access to all branches if requested
-      if (grantAllBranches) {
-        // First, remove existing branch access
+      // Update branch access based on selected branches array
+      if (updateBranchAccess && validBranchIds !== null) {
         const existingAccess = await storage.getUserBranchAccess(req.params.id);
         for (const access of existingAccess) {
           await storage.removeUserBranchAccess(req.params.id, access.branchId);
         }
-        
-        // Then, add access to all branches
+        for (let i = 0; i < validBranchIds.length; i++) {
+          await storage.addUserBranchAccess({
+            userId: req.params.id,
+            branchId: validBranchIds[i],
+            accessLevel: "full",
+            isDefault: i === 0,
+          });
+        }
+      } else if (grantAllBranches) {
+        const existingAccess = await storage.getUserBranchAccess(req.params.id);
+        for (const access of existingAccess) {
+          await storage.removeUserBranchAccess(req.params.id, access.branchId);
+        }
         const allBranches = await getCachedBranches();
         for (let i = 0; i < allBranches.length; i++) {
           const branch = allBranches[i];

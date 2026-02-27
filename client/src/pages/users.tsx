@@ -75,7 +75,7 @@ export default function UsersPage() {
     firstName: "",
     lastName: "",
     role: "viewer",
-    branchId: "",
+    branchIds: [] as string[],
   });
   const [editUser, setEditUser] = useState({
     firstName: "",
@@ -83,7 +83,7 @@ export default function UsersPage() {
     username: "",
     role: "viewer",
     password: "",
-    branchId: "",
+    branchIds: [] as string[],
   });
   const [deleteConfirmUser, setDeleteConfirmUser] = useState<SafeUser | null>(null);
   const [resetPasswordUser, setResetPasswordUser] = useState<SafeUser | null>(null);
@@ -141,7 +141,7 @@ export default function UsersPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       toast({ title: "تم إضافة المستخدم بنجاح" });
       setIsAddDialogOpen(false);
-      setNewUser({ username: "", password: "", firstName: "", lastName: "", role: "viewer", branchId: "" });
+      setNewUser({ username: "", password: "", firstName: "", lastName: "", role: "viewer", branchIds: [] });
     },
     onError: (error: Error) => {
       toast({ title: error.message || "فشل إضافة المستخدم", variant: "destructive" });
@@ -185,14 +185,14 @@ export default function UsersPage() {
   });
 
   const updateUserMutation = useMutation({
-    mutationFn: async ({ userId, data }: { userId: string; data: { firstName?: string; lastName?: string; username?: string; role?: string; password?: string; branchId?: string } }) => {
+    mutationFn: async ({ userId, data }: { userId: string; data: { firstName?: string; lastName?: string; username?: string; role?: string; password?: string; branchIds?: string[] } }) => {
       const updateData: any = {};
       if (data.firstName !== undefined) updateData.firstName = data.firstName;
       if (data.lastName !== undefined) updateData.lastName = data.lastName;
       if (data.username !== undefined) updateData.username = data.username;
       if (data.role !== undefined) updateData.role = data.role;
       if (data.password && data.password.trim() !== "") updateData.password = data.password;
-      if (data.branchId !== undefined) updateData.branchId = data.branchId || null;
+      if (data.branchIds !== undefined) updateData.branchIds = data.branchIds;
       
       const res = await fetch(`/api/users/${userId}`, {
         method: "PATCH",
@@ -324,15 +324,26 @@ export default function UsersPage() {
     setIsPermissionsDialogOpen(true);
   };
 
-  const openEditDialog = (user: SafeUser) => {
+  const openEditDialog = async (user: SafeUser) => {
     setSelectedUser(user);
+    let userBranchIds: string[] = [];
+    try {
+      const res = await fetch(`/api/rbac/users/${user.id}/branches`, { credentials: "include" });
+      if (res.ok) {
+        const accessList = await res.json();
+        userBranchIds = accessList.map((a: any) => a.branchId);
+      }
+    } catch {}
+    if (userBranchIds.length === 0 && user.branchId) {
+      userBranchIds = [user.branchId];
+    }
     setEditUser({
       firstName: user.firstName || "",
       lastName: user.lastName || "",
       username: user.username || "",
       role: user.role,
       password: "",
-      branchId: user.branchId || "",
+      branchIds: userBranchIds,
     });
     setIsEditDialogOpen(true);
   };
@@ -779,21 +790,42 @@ export default function UsersPage() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="branch">الفرع</Label>
-                  <Select value={newUser.branchId || "none"} onValueChange={(branchId) => setNewUser({ ...newUser, branchId: branchId === "none" ? "" : branchId })}>
-                    <SelectTrigger className="h-11 sm:h-10" data-testid="select-branch">
-                      <SelectValue placeholder="اختر الفرع" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">بدون فرع</SelectItem>
-                      <SelectItem value="all_branches" className="text-green-600 font-medium">🌐 جميع الفروع</SelectItem>
-                      {branches.map((branch) => (
-                        <SelectItem key={branch.id} value={branch.id}>
-                          {branch.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label>الفروع المسموحة</Label>
+                  <div className="border rounded-lg p-3 space-y-2 max-h-48 overflow-y-auto">
+                    <div className="flex items-center gap-2 pb-2 border-b">
+                      <Checkbox
+                        id="new-all-branches"
+                        checked={newUser.branchIds.length === branches.length && branches.length > 0}
+                        onCheckedChange={(checked) => {
+                          setNewUser({ ...newUser, branchIds: checked ? branches.map(b => b.id) : [] });
+                        }}
+                        data-testid="checkbox-new-all-branches"
+                      />
+                      <label htmlFor="new-all-branches" className="text-sm font-medium text-green-700 cursor-pointer">🌐 جميع الفروع</label>
+                    </div>
+                    {branches.map((branch) => (
+                      <div key={branch.id} className="flex items-center gap-2">
+                        <Checkbox
+                          id={`new-branch-${branch.id}`}
+                          checked={newUser.branchIds.includes(branch.id)}
+                          onCheckedChange={(checked) => {
+                            setNewUser({
+                              ...newUser,
+                              branchIds: checked
+                                ? [...newUser.branchIds, branch.id]
+                                : newUser.branchIds.filter(id => id !== branch.id),
+                            });
+                          }}
+                          data-testid={`checkbox-new-branch-${branch.id}`}
+                        />
+                        <label htmlFor={`new-branch-${branch.id}`} className="text-sm cursor-pointer">{branch.name}</label>
+                      </div>
+                    ))}
+                    {branches.length === 0 && <p className="text-xs text-muted-foreground">لا توجد فروع</p>}
+                  </div>
+                  {newUser.branchIds.length > 0 && (
+                    <p className="text-xs text-muted-foreground">تم اختيار {newUser.branchIds.length} فرع</p>
+                  )}
                 </div>
                 <Button type="submit" className="w-full h-11 sm:h-9" disabled={createUserMutation.isPending} data-testid="button-submit-user">
                   {createUserMutation.isPending ? (
@@ -1523,21 +1555,41 @@ export default function UsersPage() {
               <p className="text-xs text-muted-foreground">اتركها فارغة إذا لم ترد تغيير كلمة المرور</p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="editBranch">الفرع</Label>
-              <Select value={editUser.branchId || "none"} onValueChange={(branchId) => setEditUser({ ...editUser, branchId: branchId === "none" ? "" : branchId })}>
-                <SelectTrigger data-testid="select-edit-branch">
-                  <SelectValue placeholder="اختر الفرع" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">بدون فرع</SelectItem>
-                  <SelectItem value="all_branches" className="text-green-600 font-medium">🌐 جميع الفروع</SelectItem>
-                  {branches.map((branch) => (
-                    <SelectItem key={branch.id} value={branch.id}>
-                      {branch.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>الفروع المسموحة</Label>
+              <div className="border rounded-lg p-3 space-y-2 max-h-48 overflow-y-auto">
+                <div className="flex items-center gap-2 pb-2 border-b">
+                  <Checkbox
+                    id="edit-all-branches"
+                    checked={editUser.branchIds.length === branches.length && branches.length > 0}
+                    onCheckedChange={(checked) => {
+                      setEditUser({ ...editUser, branchIds: checked ? branches.map(b => b.id) : [] });
+                    }}
+                    data-testid="checkbox-edit-all-branches"
+                  />
+                  <label htmlFor="edit-all-branches" className="text-sm font-medium text-green-700 cursor-pointer">🌐 جميع الفروع</label>
+                </div>
+                {branches.map((branch) => (
+                  <div key={branch.id} className="flex items-center gap-2">
+                    <Checkbox
+                      id={`edit-branch-${branch.id}`}
+                      checked={editUser.branchIds.includes(branch.id)}
+                      onCheckedChange={(checked) => {
+                        setEditUser({
+                          ...editUser,
+                          branchIds: checked
+                            ? [...editUser.branchIds, branch.id]
+                            : editUser.branchIds.filter(id => id !== branch.id),
+                        });
+                      }}
+                      data-testid={`checkbox-edit-branch-${branch.id}`}
+                    />
+                    <label htmlFor={`edit-branch-${branch.id}`} className="text-sm cursor-pointer">{branch.name}</label>
+                  </div>
+                ))}
+              </div>
+              {editUser.branchIds.length > 0 && (
+                <p className="text-xs text-muted-foreground">تم اختيار {editUser.branchIds.length} فرع</p>
+              )}
             </div>
             <DialogFooter>
               <Button

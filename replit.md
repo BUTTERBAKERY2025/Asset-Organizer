@@ -34,7 +34,7 @@ The system uses a modern web architecture with a React-based frontend and a Node
 - **Pagination System**: Implemented across data-heavy pages.
 - **Sales Analytics**: Advanced filters, export options, and auto-refresh for sales reports.
 - **Unified Command Center**: Dashboard aggregating KPIs from various modules.
-- **RBAC System**: Comprehensive role-based access control with granular permissions, 2FA, IP whitelisting, and audit trails.
+- **RBAC System**: Comprehensive role-based access control with granular permissions, 2FA, IP whitelisting, and audit trails. Multi-branch access: users can be assigned to specific multiple branches (not just one or all) via checkbox selection in user management; backed by `user_branch_access` table with server-side validation.
 - **P&L Dashboard Enhancements**: Includes advanced financial KPIs.
 - **Marketing Influencers Enhancement**: Management of influencer data.
 - **Branch Employee Integration**: Features for linking employees to user accounts, tracking attendance, schedules, and timesheets.
