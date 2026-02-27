@@ -32,13 +32,18 @@
       <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap&subset=arabic,latin" rel="stylesheet" />
     </noscript>
     <style>
+      @font-face{font-family:'Cairo';font-style:normal;font-weight:400;font-display:swap;src:local('Cairo Regular'),local('Cairo-Regular')}
+      @font-face{font-family:'Cairo';font-style:normal;font-weight:600;font-display:swap;src:local('Cairo SemiBold'),local('Cairo-SemiBold')}
+      @font-face{font-family:'Cairo';font-style:normal;font-weight:700;font-display:swap;src:local('Cairo Bold'),local('Cairo-Bold')}
       @keyframes spin{to{transform:rotate(360deg)}}
       @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+      @keyframes loaderFadeOut{to{opacity:0;visibility:hidden}}
       .sk{background:linear-gradient(90deg,#e8e0d0 25%,#f0e8d8 50%,#e8e0d0 75%);background-size:200% 100%;animation:shimmer 1.5s infinite}
-      #initial-loader{min-height:100vh;background:#F5F0E6;font-family:system-ui,'Cairo',sans-serif;direction:rtl}
-      .il-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:12px}
-      .il-spin{width:36px;height:36px;border:3px solid #d4a853;border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite}
-      .il-text{font-size:13px;color:#92400e;opacity:0;transition:opacity .3s}
+      #initial-loader{min-height:100vh;background:#F5F0E6;font-family:'Cairo',system-ui,sans-serif;direction:rtl;transition:opacity .25s ease-out}
+      #initial-loader.fade-out{animation:loaderFadeOut .25s ease-out forwards}
+      .il-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:14px}
+      .il-spin{width:36px;height:36px;border:3px solid #d4a853;border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite;will-change:transform}
+      .il-text{font-size:13px;color:#92400e;opacity:0;transition:opacity .3s ease}
     </style>
   </head>
   <body>

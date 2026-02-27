@@ -31,16 +31,17 @@ async function deduplicatedFetch(url: string, options?: RequestInit): Promise<Re
     ...options,
     keepalive: true,
   };
-  const promise = fetch(url, fetchOptions).then(res => {
-    return res;
-  }).catch(err => {
+  const promise = fetch(url, fetchOptions).catch(err => {
     inflightRequests.delete(url);
     throw err;
   });
   inflightRequests.set(url, promise);
-  const result = await promise;
-  inflightRequests.delete(url);
-  return result.clone();
+  try {
+    const result = await promise;
+    return result.clone();
+  } finally {
+    inflightRequests.delete(url);
+  }
 }
 
 export async function apiRequest(
@@ -99,7 +100,7 @@ export const queryClient = new QueryClient({
       queryFn: getQueryFn({ on401: "throw" }),
       refetchInterval: false,
       refetchOnWindowFocus: false,
-      refetchOnMount: false,
+      refetchOnMount: true,
       refetchOnReconnect: "always",
       staleTime: CACHE_TIMES.MEDIUM,
       gcTime: 1000 * 60 * 120,

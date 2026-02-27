@@ -145,14 +145,18 @@ function AppLoadingFallback() {
 
 const PageLoadingFallback = React.memo(function PageLoadingFallback() {
   return (
-    <div className="min-h-[60vh] p-6 space-y-4" dir="rtl">
-      <div className="h-8 skeleton-shimmer rounded-lg w-48" />
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="h-28 skeleton-shimmer rounded-xl" />
-        <div className="h-28 skeleton-shimmer rounded-xl" style={{ animationDelay: "100ms" }} />
-        <div className="h-28 skeleton-shimmer rounded-xl" style={{ animationDelay: "200ms" }} />
+    <div className="min-h-[60vh] p-6 space-y-5" dir="rtl" style={{ animation: "fadeInFast 150ms ease-out" }}>
+      <div className="flex items-center gap-3">
+        <div className="h-8 skeleton-shimmer w-48" />
+        <div className="h-6 skeleton-shimmer w-24 opacity-60" />
       </div>
-      <div className="h-64 skeleton-shimmer rounded-xl" style={{ animationDelay: "150ms" }} />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="h-28 skeleton-shimmer" style={{ animationDelay: "0ms" }} />
+        <div className="h-28 skeleton-shimmer" style={{ animationDelay: "80ms" }} />
+        <div className="h-28 skeleton-shimmer" style={{ animationDelay: "160ms" }} />
+      </div>
+      <div className="h-10 skeleton-shimmer w-full max-w-md" style={{ animationDelay: "100ms" }} />
+      <div className="h-64 skeleton-shimmer" style={{ animationDelay: "120ms" }} />
     </div>
   );
 });

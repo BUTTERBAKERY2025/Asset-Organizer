@@ -146,6 +146,12 @@ export async function registerRoutes(
       const branchId = (_req.query.branchId as string) || "tabuk";
       const shiftType = (_req.query.shiftType as string) || "evening";
       const date = (_req.query.date as string) || new Date().toISOString().split("T")[0];
+      if (!isUserAdmin(_req)) {
+        const hasAccess = await canAccessBranch(_req, branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "ليس لديك صلاحية للوصول لهذا الفرع" });
+        }
+      }
       const employees = await storage.getScheduledEmployeesForAttendance(branchId, shiftType, date);
       res.json({ count: employees.length, branchId, shiftType, date, names: employees.map((e: any) => e.employeeName) });
     } catch (error: any) {
@@ -330,12 +336,12 @@ export async function registerRoutes(
         ? [branchId]
         : allowedBranchIds;
       
-      const branchAccessList = await db.select().from(userBranchAccess);
+      const branchAccessList = await db.select().from(userBranchAccess).where(
+        inArray(userBranchAccess.branchId, targetBranches)
+      );
       const branchUserIds = new Set<string>();
       for (const ba of branchAccessList) {
-        if (targetBranches.includes(ba.branchId)) {
-          branchUserIds.add(ba.userId);
-        }
+        branchUserIds.add(ba.userId);
       }
       for (const u of allUsers) {
         if (u.branchId && targetBranches.includes(u.branchId)) {
@@ -11186,7 +11192,10 @@ export async function registerRoutes(
       
       const effectiveBranchId = branchFilter.singleBranchId;
       const reports = await storage.getWasteReports(effectiveBranchId ?? undefined, dateFrom, dateTo);
-      res.json(reports);
+      const filteredReports = branchFilter.branchIds && !effectiveBranchId
+        ? reports.filter(r => branchFilter.branchIds!.includes(r.branchId))
+        : reports;
+      res.json(filteredReports);
     } catch (error) {
       console.error("Error fetching waste reports:", error);
       res.status(500).json({ error: "Failed to fetch waste reports" });
@@ -11208,10 +11217,13 @@ export async function registerRoutes(
       
       const effectiveBranchId = branchFilter.singleBranchId;
       const reports = await storage.getWasteReports(effectiveBranchId ?? undefined, dateFrom, dateTo);
+      const branchFiltered = branchFilter.branchIds && !effectiveBranchId
+        ? reports.filter(r => branchFilter.branchIds!.includes(r.branchId))
+        : reports;
       
       const filtered = status && status !== "all" 
-        ? reports.filter(r => r.status === status) 
-        : reports;
+        ? branchFiltered.filter(r => r.status === status) 
+        : branchFiltered;
       
       const reportsWithItems = await Promise.all(filtered.map(async (report) => {
         const items = await storage.getWasteItems(report.id);
@@ -11258,15 +11270,19 @@ export async function registerRoutes(
     try {
       const currentUser = getCurrentUser(req);
       
-      if (currentUser?.role !== "admin" && req.body.branchId) {
+      if (!isUserAdmin(req) && req.body.branchId) {
         const hasAccess = await canAccessBranch(req, req.body.branchId);
         if (!hasAccess) {
           return res.status(403).json({ error: "ليس لديك صلاحية لإنشاء تقرير هدر لهذا الفرع" });
         }
       }
       
-      // Check for existing report for same branch+date+shift
-      if (req.body.branchId && req.body.reportDate) {
+      if (!req.body.branchId) {
+        return res.status(400).json({ error: "الفرع مطلوب" });
+      }
+      
+      // Check for existing report for same branch+date+shift (only AFTER access check)
+      if (req.body.reportDate) {
         const existingReports = await storage.getWasteReports(req.body.branchId, req.body.reportDate, req.body.reportDate);
         const existingForShift = existingReports.find(r => 
           r.shiftName === (req.body.shiftName || null)

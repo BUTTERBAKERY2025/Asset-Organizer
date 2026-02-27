@@ -84,7 +84,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
       if (contentRef.current) {
         saveScrollPosition(prevLocationRef.current, contentRef.current.scrollTop);
         const saved = getScrollPosition(location);
-        contentRef.current.scrollTop = saved;
+        if (saved > 0) {
+          contentRef.current.scrollTop = saved;
+        } else {
+          contentRef.current.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+        }
       }
     }
     prevLocationRef.current = location;
@@ -93,7 +97,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     const bar = document.getElementById("nav-progress-bar");
     if (bar && bar.className === "loading") {
       bar.className = "complete";
-      setTimeout(() => { bar.className = ""; }, 400);
+      setTimeout(() => { bar.className = ""; }, 300);
     }
   }, [location]);
 
@@ -412,8 +416,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
       void bar.offsetWidth;
       bar.className = "loading";
     }
-    startTransition(() => {
-      setLocation(href);
+    requestAnimationFrame(() => {
+      startTransition(() => {
+        setLocation(href);
+      });
     });
   }, [setLocation, location]);
 
@@ -445,7 +451,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
         <span className="flex-1">{item.label}</span>
         {location === item.href && (
-          <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+          <div className="w-1.5 h-1.5 rounded-full bg-primary nav-active-indicator" />
         )}
       </div>
     </a>
