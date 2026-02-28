@@ -145,18 +145,18 @@ function AppLoadingFallback() {
 
 const PageLoadingFallback = React.memo(function PageLoadingFallback() {
   return (
-    <div className="min-h-[60vh] p-6 space-y-5" dir="rtl" style={{ animation: "fadeInFast 150ms ease-out" }}>
-      <div className="flex items-center gap-3">
+    <div className="min-h-[60vh] p-6 space-y-5" dir="rtl" style={{ animation: "pageSlideIn 250ms cubic-bezier(0.22,1,0.36,1) both" }}>
+      <div className="flex items-center gap-3" style={{ animation: "contentStagger 200ms cubic-bezier(0.22,1,0.36,1) 20ms both" }}>
         <div className="h-8 skeleton-shimmer w-48" />
         <div className="h-6 skeleton-shimmer w-24 opacity-60" />
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="h-28 skeleton-shimmer" style={{ animationDelay: "0ms" }} />
-        <div className="h-28 skeleton-shimmer" style={{ animationDelay: "80ms" }} />
-        <div className="h-28 skeleton-shimmer" style={{ animationDelay: "160ms" }} />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4" style={{ animation: "contentStagger 200ms cubic-bezier(0.22,1,0.36,1) 60ms both" }}>
+        <div className="h-28 skeleton-shimmer rounded-xl" />
+        <div className="h-28 skeleton-shimmer rounded-xl" />
+        <div className="h-28 skeleton-shimmer rounded-xl" />
       </div>
-      <div className="h-10 skeleton-shimmer w-full max-w-md" style={{ animationDelay: "100ms" }} />
-      <div className="h-64 skeleton-shimmer" style={{ animationDelay: "120ms" }} />
+      <div className="h-10 skeleton-shimmer w-full max-w-md rounded-lg" style={{ animation: "contentStagger 200ms cubic-bezier(0.22,1,0.36,1) 100ms both" }} />
+      <div className="h-64 skeleton-shimmer rounded-xl" style={{ animation: "contentStagger 200ms cubic-bezier(0.22,1,0.36,1) 130ms both" }} />
     </div>
   );
 });

@@ -5697,6 +5697,10 @@ export async function registerRoutes(
   // Get P&L branch settings (fixed rent)
   app.get("/api/pnl/branch-settings/:branchId", isAuthenticated, requirePermission("pnl", "view"), async (req, res) => {
     try {
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, req.params.branchId);
+        if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      }
       const settings = await storage.getPnlBranchSettings(req.params.branchId);
       res.json(settings || { branchId: req.params.branchId, monthlyRent: 0 });
     } catch (error) {
@@ -5708,6 +5712,10 @@ export async function registerRoutes(
   // Update P&L branch settings
   app.post("/api/pnl/branch-settings", isAuthenticated, requirePermission("pnl", "edit"), async (req, res) => {
     try {
+      if (!isUserAdmin(req) && req.body.branchId) {
+        const hasAccess = await canAccessBranch(req, req.body.branchId);
+        if (!hasAccess) return res.status(403).json({ error: "غير مصرح بتعديل إعدادات هذا الفرع" });
+      }
       const settings = await storage.upsertPnlBranchSettings(req.body);
       res.json(settings);
     } catch (error) {

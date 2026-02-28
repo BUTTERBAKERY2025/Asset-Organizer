@@ -416,11 +416,22 @@ export function Layout({ children }: { children: React.ReactNode }) {
       void bar.offsetWidth;
       bar.className = "loading";
     }
-    requestAnimationFrame(() => {
+    const navigate = () => {
       startTransition(() => {
         setLocation(href);
       });
-    });
+    };
+    if (typeof (document as any).startViewTransition === 'function') {
+      document.documentElement.classList.add('vt-active');
+      const vt = (document as any).startViewTransition(navigate);
+      vt.finished.then(() => document.documentElement.classList.remove('vt-active')).catch(() => document.documentElement.classList.remove('vt-active'));
+    } else {
+      requestAnimationFrame(navigate);
+    }
+    setTimeout(() => {
+      const b = document.getElementById("nav-progress-bar");
+      if (b && b.className === "loading") { b.className = "complete"; setTimeout(() => { b.className = ""; }, 200); }
+    }, 6000);
   }, [setLocation, location]);
 
   const renderNavItem = useCallback((item: NavItem, inGroup = false) => (

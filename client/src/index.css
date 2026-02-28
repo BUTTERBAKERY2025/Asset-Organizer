@@ -186,11 +186,6 @@
   }
 }
 
-.page-content {
-  contain: layout style;
-  will-change: scroll-position;
-}
-
 * {
   -webkit-tap-highlight-color: transparent;
 }
@@ -204,7 +199,7 @@
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(6px); }
+  from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
@@ -213,16 +208,41 @@
   to { opacity: 1; }
 }
 
+@keyframes pageSlideIn {
+  from { opacity: 0; transform: translateY(8px) scale(0.998); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes contentStagger {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .page-enter {
-  animation: fadeIn 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: pageSlideIn 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.page-enter > * {
+  animation: contentStagger 250ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.page-enter > *:nth-child(1) { animation-delay: 30ms; }
+.page-enter > *:nth-child(2) { animation-delay: 60ms; }
+.page-enter > *:nth-child(3) { animation-delay: 90ms; }
+.page-enter > *:nth-child(4) { animation-delay: 110ms; }
+.page-enter > *:nth-child(5) { animation-delay: 130ms; }
+
+html.vt-active .page-enter,
+html.vt-active .page-enter > * {
+  animation: none;
 }
 
 ::view-transition-old(root) {
-  animation: fadeInFast 80ms ease-out reverse;
+  animation: fadeInFast 100ms ease-out reverse;
 }
 
 ::view-transition-new(root) {
-  animation: fadeIn 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: pageSlideIn 280ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @keyframes nprogress-bar {
@@ -255,8 +275,22 @@
   pointer-events: none;
   width: 0%;
   opacity: 0;
-  box-shadow: 0 0 10px rgba(212, 168, 83, 0.6), 0 0 3px rgba(212, 168, 83, 0.4);
-  transition: opacity 150ms ease;
+  box-shadow: 0 0 8px rgba(212, 168, 83, 0.5), 0 0 2px rgba(212, 168, 83, 0.3);
+  transition: opacity 120ms ease;
+}
+
+#nav-progress-bar::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: -1px;
+  width: 100px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(212, 168, 83, 0.8);
+  box-shadow: 0 0 12px 3px rgba(212, 168, 83, 0.5);
+  opacity: 0;
+  clip: rect(-3px, 104px, 8px, 0);
 }
 
 #nav-progress-bar::after {
@@ -265,24 +299,28 @@
   left: 0;
   top: 0;
   height: 100%;
-  width: 80px;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+  width: 100px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent);
   opacity: 0;
-  transition: opacity 150ms;
+  transition: opacity 120ms;
 }
 
 #nav-progress-bar.loading {
   opacity: 1;
-  animation: nprogress-bar 6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: nprogress-bar 5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+#nav-progress-bar.loading::before {
+  opacity: 1;
 }
 
 #nav-progress-bar.loading::after {
   opacity: 1;
-  animation: nprogress-pulse 1.5s ease-in-out infinite;
+  animation: nprogress-pulse 1.2s ease-in-out infinite;
 }
 
 #nav-progress-bar.complete {
-  animation: nprogress-complete 250ms ease-out forwards;
+  animation: nprogress-complete 200ms ease-out forwards;
 }
 
 @keyframes skeletonShimmer {
@@ -291,10 +329,21 @@
 }
 
 .skeleton-shimmer {
-  background: linear-gradient(90deg, hsl(40 20% 94%) 25%, hsl(40 30% 97%) 37%, hsl(40 20% 94%) 63%);
+  background: linear-gradient(90deg, hsl(40 20% 93%) 25%, hsl(40 25% 96%) 37%, hsl(40 20% 93%) 63%);
   background-size: 400% 100%;
-  animation: skeletonShimmer 1.4s ease infinite;
+  animation: skeletonShimmer 1.6s ease infinite;
   border-radius: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%);
+  animation: skeletonShimmer 1.6s ease infinite;
+  background-size: 400% 100%;
 }
 
 @keyframes nav-active-slide {
@@ -345,6 +394,7 @@ table {
 
 .page-content {
   contain: layout style;
+  will-change: scroll-position;
 }
 
 nav [data-state] {
@@ -353,15 +403,23 @@ nav [data-state] {
 
 nav a {
   -webkit-tap-highlight-color: transparent;
+  transition: transform 120ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (hover: hover) {
+  nav a:hover .nav-item-inner {
+    transform: translateX(-2px);
+    transition: transform 150ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
 }
 
 nav a:active .nav-item-inner {
   transform: scale(0.97);
-  transition: transform 80ms ease;
+  transition: transform 60ms ease;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .page-enter {
+  .page-enter, .page-enter > * {
     animation: none;
   }
   .transition-all, .transition-colors {
@@ -376,6 +434,12 @@ nav a:active .nav-item-inner {
     display: none;
   }
   .nav-active-indicator {
+    animation: none;
+  }
+  nav a:hover .nav-item-inner {
+    transform: none;
+  }
+  .skeleton-shimmer, .skeleton-shimmer::after {
     animation: none;
   }
 }
