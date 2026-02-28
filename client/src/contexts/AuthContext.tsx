@@ -35,7 +35,10 @@ export function AuthGate({ children }: AuthGateProps) {
     if (canShowApp && !hasResolved) {
       setHasResolved(true);
     }
-  }, [canShowApp, hasResolved]);
+    if (!canShowApp && !isLoading && !isAuthenticated && hasResolved) {
+      setHasResolved(false);
+    }
+  }, [canShowApp, hasResolved, isLoading, isAuthenticated]);
 
   if (!hasResolved) {
     return (

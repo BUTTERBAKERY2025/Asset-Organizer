@@ -42,8 +42,8 @@ export function useAppInit() {
     staleTime: FIVE_MINUTES,
     gcTime: 1000 * 60 * 30,
     refetchOnWindowFocus: false,
-    refetchOnMount: false,
-    refetchOnReconnect: false,
+    refetchOnMount: true,
+    refetchOnReconnect: true,
     retry: 1,
   });
 

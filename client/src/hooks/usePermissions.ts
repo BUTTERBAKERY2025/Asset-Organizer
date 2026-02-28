@@ -15,15 +15,15 @@ export function usePermissions() {
   const { data: permissions = [], isLoading } = useQuery<Permission[]>({
     queryKey: ["/api/my-permissions"],
     queryFn: async () => {
-      const res = await fetch("/api/my-permissions");
+      const res = await fetch("/api/my-permissions", { credentials: "include" });
       if (!res.ok) return [];
       return res.json();
     },
     enabled: !!user,
-    staleTime: 1000 * 60 * 5, // 5 minutes - matches MEDIUM cache tier
+    staleTime: 1000 * 60 * 5,
     refetchOnWindowFocus: false,
-    refetchOnMount: false,
-    refetchOnReconnect: false,
+    refetchOnMount: true,
+    refetchOnReconnect: true,
   });
 
   const hasPermission = (module: SystemModule, action: ModuleAction): boolean => {

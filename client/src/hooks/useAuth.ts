@@ -39,7 +39,7 @@ export function useAuth() {
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 30,
     refetchOnWindowFocus: false,
-    refetchOnMount: false,
+    refetchOnMount: true,
     refetchOnReconnect: true,
   });
 
@@ -58,11 +58,11 @@ export function useAuth() {
       return res.json();
     },
     onSuccess: (userData) => {
+      queryClient.clear();
+      clearPersistentCache();
       setCurrentUser(userData?.id?.toString() || null);
       queryClient.setQueryData(["/api/auth/me"], userData);
-      queryClient.invalidateQueries({ queryKey: ["/api/my-permissions"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/branches"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      queryClient.invalidateQueries();
     },
   });
 
