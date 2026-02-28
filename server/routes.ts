@@ -4647,6 +4647,11 @@ export async function registerRoutes(
   // Operations Dashboard Stats
   app.get("/api/operations/stats", isAuthenticated, requirePermission("operations", "view"), async (req, res) => {
     try {
+      const branchFilter = getEffectiveBranchFilter(req, req.query.branchId as string | undefined);
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بالوصول" });
+      }
+      
       const today = new Date().toISOString().split('T')[0];
       const [products, shifts, orders, qualityChecks] = await Promise.all([
         storage.getAllProducts(),
@@ -4655,21 +4660,35 @@ export async function registerRoutes(
         storage.getQualityChecksByDate(today),
       ]);
 
-      const totalProduced = orders.reduce((sum, o) => sum + (o.producedQuantity || 0), 0);
-      const totalWasted = orders.reduce((sum, o) => sum + (o.wastedQuantity || 0), 0);
-      const completedOrders = orders.filter(o => o.status === 'completed').length;
-      const passedChecks = qualityChecks.filter(c => c.result === 'passed').length;
+      let filteredShifts = shifts;
+      let filteredOrders = orders;
+      let filteredChecks = qualityChecks;
+      
+      if (branchFilter.singleBranchId) {
+        filteredShifts = shifts.filter((s: any) => s.branchId === branchFilter.singleBranchId);
+        filteredOrders = orders.filter((o: any) => o.branchId === branchFilter.singleBranchId);
+        filteredChecks = qualityChecks.filter((c: any) => c.branchId === branchFilter.singleBranchId);
+      } else if (branchFilter.branchIds) {
+        filteredShifts = shifts.filter((s: any) => branchFilter.branchIds!.includes(s.branchId));
+        filteredOrders = orders.filter((o: any) => branchFilter.branchIds!.includes(o.branchId));
+        filteredChecks = qualityChecks.filter((c: any) => branchFilter.branchIds!.includes(c.branchId));
+      }
+
+      const totalProduced = filteredOrders.reduce((sum, o) => sum + (o.producedQuantity || 0), 0);
+      const totalWasted = filteredOrders.reduce((sum, o) => sum + (o.wastedQuantity || 0), 0);
+      const completedOrders = filteredOrders.filter(o => o.status === 'completed').length;
+      const passedChecks = filteredChecks.filter(c => c.result === 'passed').length;
 
       res.json({
         productsCount: products.filter(p => p.isActive === 'true').length,
-        todayShifts: shifts.length,
-        todayOrders: orders.length,
+        todayShifts: filteredShifts.length,
+        todayOrders: filteredOrders.length,
         completedOrders,
         totalProduced,
         totalWasted,
         wastePercentage: totalProduced > 0 ? ((totalWasted / totalProduced) * 100).toFixed(1) : 0,
-        qualityChecks: qualityChecks.length,
-        qualityPassRate: qualityChecks.length > 0 ? ((passedChecks / qualityChecks.length) * 100).toFixed(1) : 100,
+        qualityChecks: filteredChecks.length,
+        qualityPassRate: filteredChecks.length > 0 ? ((passedChecks / filteredChecks.length) * 100).toFixed(1) : 100,
       });
     } catch (error) {
       console.error("Error fetching operations stats:", error);
@@ -22914,7 +22933,8 @@ export async function registerRoutes(
       
       const effectiveBranchId = branchFilter.singleBranchId;
 
-      const cacheKey = `attendance_dashboard_stats:${effectiveBranchId || 'all'}`;
+      const branchKey = branchFilter.branchIds ? branchFilter.branchIds.sort().join(',') : (effectiveBranchId || 'all');
+      const cacheKey = `attendance_dashboard_stats:${branchKey}`;
       const cached = getCachedResponse(cacheKey, 30000);
       if (cached) return res.json(cached);
 
@@ -22945,13 +22965,24 @@ export async function registerRoutes(
         storage.getTimesheetReports({})
       ]);
 
-      const activeEmployees = branchEmployeesResult.filter(e => e.status === 'active');
+      let filteredEmployees = branchEmployeesResult;
+      let filteredRecords = todayRecords;
+      let filteredTemplates = templates;
+      let filteredPeriods = periods;
+      if (!effectiveBranchId && branchFilter.branchIds) {
+        filteredEmployees = branchEmployeesResult.filter((e: any) => branchFilter.branchIds!.includes(e.branchId));
+        filteredRecords = todayRecords.filter((r: any) => branchFilter.branchIds!.includes(r.branchId));
+        filteredTemplates = templates.filter((t: any) => branchFilter.branchIds!.includes(t.branchId));
+        filteredPeriods = periods.filter((p: any) => branchFilter.branchIds!.includes(p.branchId));
+      }
+      
+      const activeEmployees = filteredEmployees.filter(e => e.status === 'active');
       const totalEmployees = activeEmployees.length;
-      const presentToday = todayRecords.filter(r => r.status === 'present' || r.status === 'late').length;
-      const lateToday = todayRecords.filter(r => r.status === 'late').length;
+      const presentToday = filteredRecords.filter(r => r.status === 'present' || r.status === 'late').length;
+      const lateToday = filteredRecords.filter(r => r.status === 'late').length;
       const absentToday = Math.max(0, totalEmployees - presentToday);
-      const templatesCount = templates.length;
-      const periodsCount = periods.length;
+      const templatesCount = filteredTemplates.length;
+      const periodsCount = filteredPeriods.length;
       const schedulesCount = schedules.length;
       const reportsCount = reports.length;
       
@@ -22960,7 +22991,7 @@ export async function registerRoutes(
         : 0;
       
       const responseData = {
-        todayAttendance: todayRecords.length,
+        todayAttendance: filteredRecords.length,
         presentToday,
         lateToday,
         absentToday,
@@ -26152,19 +26183,22 @@ export async function registerRoutes(
   // Warehouse Bundle - consolidated data for warehouse reports page
   app.get("/api/warehouse/bundle", isAuthenticated, requirePermission("warehouse", "view"), async (req, res) => {
     try {
-      const branchId = req.query.branchId as string | undefined;
-      const month = req.query.month as string | undefined;
-      const year = req.query.year as string | undefined;
+      const branchFilter = getEffectiveBranchFilter(req, req.query.branchId as string | undefined);
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بالوصول" });
+      }
+      
+      const effectiveBranchId = branchFilter.singleBranchId;
       const startDate = req.query.startDate as string | undefined;
       const endDate = req.query.endDate as string | undefined;
 
       const transferFilters: { branchId?: string; startDate?: string; endDate?: string } = {};
-      if (branchId) transferFilters.branchId = branchId;
+      if (effectiveBranchId) transferFilters.branchId = effectiveBranchId;
       if (startDate) transferFilters.startDate = startDate;
       if (endDate) transferFilters.endDate = endDate;
 
       const movementFilters: { branchId?: string } = {};
-      if (branchId) movementFilters.branchId = branchId;
+      if (effectiveBranchId) movementFilters.branchId = effectiveBranchId;
 
       const [
         itemsResult,
@@ -26186,11 +26220,22 @@ export async function registerRoutes(
         })(),
       ]);
 
+      let transfers = transfersResult;
+      let movementLogs = movementLogsResult;
+      if (!effectiveBranchId && branchFilter.branchIds) {
+        transfers = transfers.filter((t: any) => branchFilter.branchIds!.includes(t.fromBranchId) || branchFilter.branchIds!.includes(t.toBranchId));
+        movementLogs = movementLogs.filter((l: any) => branchFilter.branchIds!.includes(l.branchId));
+      }
+      
+      const branches = branchFilter.branchIds 
+        ? branchesResult.filter((b: any) => branchFilter.branchIds!.includes(b.id))
+        : branchesResult;
+
       res.json({
         items: itemsResult,
-        transfers: transfersResult,
-        movementLogs: movementLogsResult,
-        branches: branchesResult,
+        transfers,
+        movementLogs,
+        branches,
       });
     } catch (error) {
       console.error("Error fetching warehouse bundle:", error);
