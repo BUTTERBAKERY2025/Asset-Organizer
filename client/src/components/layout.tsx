@@ -94,11 +94,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
     prevLocationRef.current = location;
     setMobileMenuOpen(false);
     prefetchAdjacentPages(location);
-    const bar = document.getElementById("nav-progress-bar");
-    if (bar && bar.className === "loading") {
-      bar.className = "complete";
-      setTimeout(() => { bar.className = ""; }, 300);
-    }
+    requestAnimationFrame(() => {
+      const bar = document.getElementById("nav-progress-bar");
+      if (bar && bar.className === "loading") {
+        bar.className = "complete";
+        setTimeout(() => { bar.className = ""; }, 250);
+      }
+    });
   }, [location]);
 
   const handleLinkHover = useCallback((href: string) => {
@@ -426,12 +428,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
       const vt = (document as any).startViewTransition(navigate);
       vt.finished.then(() => document.documentElement.classList.remove('vt-active')).catch(() => document.documentElement.classList.remove('vt-active'));
     } else {
-      requestAnimationFrame(navigate);
+      navigate();
     }
     setTimeout(() => {
       const b = document.getElementById("nav-progress-bar");
-      if (b && b.className === "loading") { b.className = "complete"; setTimeout(() => { b.className = ""; }, 200); }
-    }, 6000);
+      if (b && b.className === "loading") { b.className = "complete"; setTimeout(() => { b.className = ""; }, 250); }
+    }, 5000);
   }, [setLocation, location]);
 
   const renderNavItem = useCallback((item: NavItem, inGroup = false) => (

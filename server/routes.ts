@@ -3797,14 +3797,22 @@ export async function registerRoutes(
   app.get("/api/accounting/journal-entries", isAuthenticated, async (req, res) => {
     try {
       const { branchId, entryType, status, dateFrom, dateTo, reconciliationStatus } = req.query;
-      const entries = await storage.getAllJournalEntries({
-        branchId: branchId as string,
+      const branchFilter = getEffectiveBranchFilter(req, branchId as string | undefined);
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بالوصول" });
+      }
+      const effectiveBranchId = branchFilter.singleBranchId;
+      let entries = await storage.getAllJournalEntries({
+        branchId: effectiveBranchId || (branchId as string),
         entryType: entryType as string,
         status: status as string,
         dateFrom: dateFrom as string,
         dateTo: dateTo as string,
         reconciliationStatus: reconciliationStatus as string,
       });
+      if (!effectiveBranchId && branchFilter.branchIds) {
+        entries = entries.filter((e: any) => branchFilter.branchIds!.includes(e.branchId));
+      }
       res.json(entries);
     } catch (error) {
       console.error("Error fetching journal entries:", error);
@@ -3829,6 +3837,10 @@ export async function registerRoutes(
     try {
       const { dateFrom, dateTo, branchId } = req.body;
       if (!dateFrom || !dateTo) return res.status(400).json({ error: "dateFrom and dateTo are required" });
+      if (branchId && !isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, branchId);
+        if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      }
       const entries = await storage.generateSalesJournalEntries(dateFrom, dateTo, branchId);
       res.json({ count: entries.length, entries });
     } catch (error) {
@@ -3841,6 +3853,10 @@ export async function registerRoutes(
     try {
       const { dateFrom, dateTo, branchId } = req.body;
       if (!dateFrom || !dateTo) return res.status(400).json({ error: "dateFrom and dateTo are required" });
+      if (branchId && !isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, branchId);
+        if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      }
       const entries = await storage.generateWasteJournalEntries(dateFrom, dateTo, branchId);
       res.json({ count: entries.length, entries });
     } catch (error) {
@@ -3876,7 +3892,11 @@ export async function registerRoutes(
     try {
       const { dateFrom, dateTo, branchId } = req.query;
       if (!dateFrom || !dateTo) return res.status(400).json({ error: "dateFrom and dateTo are required" });
-      const summary = await storage.getJournalEntrySummary(dateFrom as string, dateTo as string, branchId as string);
+      const branchFilter = getEffectiveBranchFilter(req, branchId as string | undefined);
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بالوصول" });
+      }
+      const summary = await storage.getJournalEntrySummary(dateFrom as string, dateTo as string, branchFilter.singleBranchId || (branchId as string));
       res.json(summary);
     } catch (error) {
       console.error("Error fetching journal entry summary:", error);
@@ -3888,10 +3908,17 @@ export async function registerRoutes(
   app.get("/api/accounting/reconciliations", isAuthenticated, async (req, res) => {
     try {
       const { branchId, status } = req.query;
-      const reconciliations = await storage.getAllReconciliations({
-        branchId: branchId as string,
+      const branchFilter = getEffectiveBranchFilter(req, branchId as string | undefined);
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بالوصول" });
+      }
+      let reconciliations = await storage.getAllReconciliations({
+        branchId: branchFilter.singleBranchId || (branchId as string),
         status: status as string,
       });
+      if (!branchFilter.singleBranchId && branchFilter.branchIds) {
+        reconciliations = reconciliations.filter((r: any) => branchFilter.branchIds!.includes(r.branchId));
+      }
       res.json(reconciliations);
     } catch (error) {
       console.error("Error fetching reconciliations:", error);
@@ -3903,6 +3930,10 @@ export async function registerRoutes(
     try {
       const { periodFrom, periodTo, branchId } = req.body;
       if (!periodFrom || !periodTo) return res.status(400).json({ error: "periodFrom and periodTo are required" });
+      if (branchId && !isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, branchId);
+        if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      }
       const reconciliation = await storage.generateReconciliation(periodFrom, periodTo, branchId, req.currentUser?.id);
       res.json(reconciliation);
     } catch (error) {
@@ -3955,11 +3986,18 @@ export async function registerRoutes(
   app.get("/api/accounting/export-csv", isAuthenticated, async (req, res) => {
     try {
       const { dateFrom, dateTo, branchId, format } = req.query;
-      const entries = await storage.getAllJournalEntries({
+      const branchFilter = getEffectiveBranchFilter(req, branchId as string | undefined);
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بالوصول" });
+      }
+      let entries = await storage.getAllJournalEntries({
         dateFrom: dateFrom as string,
         dateTo: dateTo as string,
-        branchId: branchId as string,
+        branchId: branchFilter.singleBranchId || (branchId as string),
       });
+      if (!branchFilter.singleBranchId && branchFilter.branchIds) {
+        entries = entries.filter((e: any) => branchFilter.branchIds!.includes(e.branchId));
+      }
 
       const allLines: any[] = [];
       for (const entry of entries) {
@@ -5728,6 +5766,10 @@ export async function registerRoutes(
   app.get("/api/pnl/monthly-inputs/:branchId/:year/:month", isAuthenticated, requirePermission("pnl", "view"), async (req, res) => {
     try {
       const { branchId, year, month } = req.params;
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, branchId);
+        if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      }
       const inputs = await storage.getPnlMonthlyInputs(branchId, parseInt(year), parseInt(month));
       res.json(inputs || { 
         branchId,
@@ -5751,6 +5793,10 @@ export async function registerRoutes(
   // Update P&L monthly inputs
   app.post("/api/pnl/monthly-inputs", isAuthenticated, requirePermission("pnl", "edit"), async (req, res) => {
     try {
+      if (!isUserAdmin(req) && req.body.branchId) {
+        const hasAccess = await canAccessBranch(req, req.body.branchId);
+        if (!hasAccess) return res.status(403).json({ error: "غير مصرح بتعديل بيانات هذا الفرع" });
+      }
       const inputs = await storage.upsertPnlMonthlyInputs({
         ...req.body,
         createdBy: (req as any).user?.id
@@ -5769,10 +5815,16 @@ export async function registerRoutes(
       const yearNum = parseInt(year as string) || new Date().getFullYear();
       const monthNum = parseInt(month as string) || new Date().getMonth() + 1;
       
-      // Get all branches or specific branch
+      const branchFilter = getEffectiveBranchFilter(req, branchId as string | undefined);
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بالوصول" });
+      }
+      
       let branchIds: string[] = [];
-      if (branchId && branchId !== 'all') {
-        branchIds = [branchId as string];
+      if (branchFilter.singleBranchId) {
+        branchIds = [branchFilter.singleBranchId];
+      } else if (branchFilter.branchIds) {
+        branchIds = branchFilter.branchIds;
       } else {
         const branches = await storage.getAllBranches();
         branchIds = branches.map(b => b.id);
@@ -8139,6 +8191,7 @@ export async function registerRoutes(
       const user = getCurrentUser(req);
       const yearMonth = req.query.yearMonth as string | undefined;
       const isAdmin = user.role === 'admin';
+      const allowedBranches = !isAdmin ? getAllowedBranchIds(req) : null;
 
       const [
         pointSettingsResult,
@@ -8158,8 +8211,8 @@ export async function registerRoutes(
         (async () => {
           try {
             const all = await storage.getAllDailyChallenges();
-            if (!isAdmin && user.branchId) {
-              return all.filter((c: any) => c.branchId === user.branchId);
+            if (!isAdmin && allowedBranches) {
+              return all.filter((c: any) => allowedBranches.includes(c.branchId));
             }
             return all;
           } catch (e) { return []; }
@@ -8167,8 +8220,8 @@ export async function registerRoutes(
         (async () => {
           try {
             const all = await storage.getAllProductCommissions();
-            if (!isAdmin && user.branchId) {
-              return all.filter((c: any) => c.branchId === user.branchId);
+            if (!isAdmin && allowedBranches) {
+              return all.filter((c: any) => allowedBranches.includes(c.branchId));
             }
             return all;
           } catch (e) { return []; }
@@ -8176,8 +8229,8 @@ export async function registerRoutes(
         (async () => {
           try {
             const all = await storage.getAllBranchBonuses();
-            if (!isAdmin && user.branchId) {
-              return all.filter((b: any) => b.branchId === user.branchId);
+            if (!isAdmin && allowedBranches) {
+              return all.filter((b: any) => allowedBranches.includes(b.branchId));
             }
             return all;
           } catch (e) { return []; }
@@ -10215,13 +10268,16 @@ export async function registerRoutes(
       }
       
       const effectiveBranchId = branchFilter.singleBranchId;
-      const data = await storage.getTargetsVsActuals(
+      let data = await storage.getTargetsVsActuals(
         effectiveBranchId,
         fromDate as string,
         toDate as string,
         status as string | undefined,
         discrepancyType as string | undefined
       );
+      if (!effectiveBranchId && branchFilter.branchIds) {
+        data = data.filter((d: any) => branchFilter.branchIds!.includes(d.branchId));
+      }
       res.json(data);
     } catch (error) {
       console.error("Error fetching targets vs actuals:", error);
@@ -10247,13 +10303,16 @@ export async function registerRoutes(
       }
       
       const effectiveBranchId = branchFilter.singleBranchId;
-      const data = await storage.getShiftAnalytics(
+      let data = await storage.getShiftAnalytics(
         effectiveBranchId,
         fromDate as string,
         toDate as string,
         status as string | undefined,
         discrepancyType as string | undefined
       );
+      if (!effectiveBranchId && branchFilter.branchIds) {
+        data = data.filter((d: any) => branchFilter.branchIds!.includes(d.branchId));
+      }
       res.json(data);
     } catch (error) {
       console.error("Error fetching shift analytics:", error);
@@ -10286,6 +10345,9 @@ export async function registerRoutes(
         status as string | undefined,
         discrepancyType as string | undefined
       );
+      if (!effectiveBranchId && branchFilter.branchIds) {
+        data = data.filter((d: any) => branchFilter.branchIds!.includes(d.branchId));
+      }
       
       // SECURITY: Non-admin/manager users can only see their own leaderboard data
       const canViewAllFlag = await canUserViewAllCashiers(req);
@@ -10480,6 +10542,9 @@ export async function registerRoutes(
         status as string | undefined,
         discrepancyType as string | undefined
       );
+      if (!effectiveBranchId && branchFilter.branchIds) {
+        data = data.filter((d: any) => branchFilter.branchIds!.includes(d.branchId));
+      }
       
       // SECURITY: When groupBy=cashier, non-admin/manager users can only see their own data
       if (validGroupBy === 'cashier') {
@@ -10530,7 +10595,10 @@ export async function registerRoutes(
       }
       
       const effectiveBranchId = branchFilter.singleBranchId;
-      const receipts = await storage.getDisplayBarReceipts(effectiveBranchId ?? undefined, date);
+      let receipts = await storage.getDisplayBarReceipts(effectiveBranchId ?? undefined, date);
+      if (!effectiveBranchId && branchFilter.branchIds) {
+        receipts = receipts.filter((r: any) => branchFilter.branchIds!.includes(r.branchId));
+      }
       const receiverIds = Array.from(new Set(receipts.map(r => r.receivedBy).filter(Boolean))) as string[];
       let userMap = new Map<string, any>();
       if (receiverIds.length > 0) {
@@ -10610,7 +10678,10 @@ export async function registerRoutes(
       }
       
       const effectiveBranchId = branchFilter.singleBranchId;
-      const summaries = await storage.getDisplayBarDailySummary(effectiveBranchId ?? undefined, date);
+      let summaries = await storage.getDisplayBarDailySummary(effectiveBranchId ?? undefined, date);
+      if (!effectiveBranchId && branchFilter.branchIds) {
+        summaries = summaries.filter((s: any) => branchFilter.branchIds!.includes(s.branchId));
+      }
       res.json(summaries);
     } catch (error) {
       console.error("Error fetching display bar summary:", error);
@@ -16588,11 +16659,21 @@ export async function registerRoutes(
         return res.status(403).json({ error: "غير مصرح بالوصول" });
       }
       
-      const effectiveBranchId = branchFilter.singleBranchId || queryBranchId || 'all';
+      let effectiveBranchId: string;
+      if (branchFilter.singleBranchId) {
+        effectiveBranchId = branchFilter.singleBranchId;
+      } else if (queryBranchId && !isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, queryBranchId);
+        if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+        effectiveBranchId = queryBranchId;
+      } else {
+        effectiveBranchId = queryBranchId || 'all';
+      }
       
       const date = (req.query.date as string) || new Date().toISOString().split('T')[0];
       
-      const cacheKey = `command_center:${effectiveBranchId}:${date}`;
+      const branchKey = branchFilter.branchIds ? branchFilter.branchIds.sort().join(',') : effectiveBranchId;
+      const cacheKey = `command_center:${branchKey}:${date}`;
       const cached = getCachedResponse(cacheKey, 30000);
       if (cached) return res.json(cached);
 
@@ -22986,6 +23067,11 @@ export async function registerRoutes(
         return res.status(400).json({ error: "جميع الحقول مطلوبة: employeeId, branchId, startDate, endDate" });
       }
 
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, branchId);
+        if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      }
+
       // Check if report already exists
       const existing = await storage.getTimesheetReportByEmployeeAndDates(employeeId, startDate, endDate);
       if (existing) {
@@ -26787,13 +26873,30 @@ export async function registerRoutes(
   // Purchasing Requests
   app.get("/api/purchasing/requests", isAuthenticated, requirePermission("warehouse", "view"), async (req, res) => {
     try {
+      const queryBranchId = req.query.branchId as string | undefined;
+      const branchFilter = getEffectiveBranchFilter(req, queryBranchId);
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بالوصول" });
+      }
       const filters: { branchId?: string; status?: string } = {};
-      if (req.query.branchId) filters.branchId = req.query.branchId as string;
+      if (branchFilter.singleBranchId) {
+        filters.branchId = branchFilter.singleBranchId;
+      } else if (queryBranchId && !isUserAdmin(req)) {
+        if (branchFilter.branchIds && !branchFilter.branchIds.includes(queryBranchId)) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+        }
+        filters.branchId = queryBranchId;
+      } else if (queryBranchId) {
+        filters.branchId = queryBranchId;
+      }
       if (req.query.status) filters.status = req.query.status as string;
       if (req.query.startDate) filters.startDate = req.query.startDate as string;
       if (req.query.endDate) filters.endDate = req.query.endDate as string;
       
-      const requests = await storage.getPurchasingRequests(filters);
+      let requests = await storage.getPurchasingRequests(filters);
+      if (!filters.branchId && branchFilter.branchIds) {
+        requests = requests.filter((r: any) => branchFilter.branchIds!.includes(r.branchId));
+      }
       res.json(requests);
     } catch (error) {
       console.error("Error fetching purchasing requests:", error);
@@ -29036,9 +29139,27 @@ export async function registerRoutes(
   // Get travel requests
   app.get("/api/travel-requests", isAuthenticated, requirePermission("executive_travel", "view"), async (req, res) => {
     try {
-      const branchId = parseQueryString(req.query.branchId);
+      const queryBranchId = req.query.branchId as string | undefined;
+      const branchFilter = getEffectiveBranchFilter(req, queryBranchId);
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بالوصول" });
+      }
+      let effectiveBranchId: string | undefined;
+      if (branchFilter.singleBranchId) {
+        effectiveBranchId = branchFilter.singleBranchId;
+      } else if (queryBranchId && !isUserAdmin(req)) {
+        if (branchFilter.branchIds && !branchFilter.branchIds.includes(queryBranchId)) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+        }
+        effectiveBranchId = queryBranchId;
+      } else {
+        effectiveBranchId = queryBranchId;
+      }
       const status = parseQueryString(req.query.status);
-      const requests = await storage.getTravelRequests(branchId, status);
+      let requests = await storage.getTravelRequests(effectiveBranchId, status);
+      if (!effectiveBranchId && branchFilter.branchIds) {
+        requests = requests.filter((r: any) => branchFilter.branchIds!.includes(r.branchId));
+      }
       res.json(requests);
     } catch (error) {
       console.error("Error getting travel requests:", error);
@@ -29061,7 +29182,11 @@ export async function registerRoutes(
   // Get travel stats
   app.get("/api/travel-stats", isAuthenticated, requirePermission("executive_travel", "view"), async (req, res) => {
     try {
-      const branchId = parseQueryString(req.query.branchId);
+      const branchFilter = getEffectiveBranchFilter(req, req.query.branchId as string | undefined);
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بالوصول" });
+      }
+      const branchId = branchFilter.singleBranchId || parseQueryString(req.query.branchId);
       const stats = await storage.getTravelStats(branchId);
       res.json(stats);
     } catch (error) {

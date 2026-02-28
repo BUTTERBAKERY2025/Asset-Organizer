@@ -16,7 +16,7 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
-const inflightRequests = new Map<string, { promise: Promise<Response>; response?: Response }>();
+const inflightRequests = new Map<string, { promise: Promise<Response>; cloneSource?: Response }>();
 
 async function deduplicatedFetch(url: string, options?: RequestInit): Promise<Response> {
   const method = options?.method || "GET";
@@ -25,18 +25,20 @@ async function deduplicatedFetch(url: string, options?: RequestInit): Promise<Re
   }
   const existing = inflightRequests.get(url);
   if (existing) {
-    if (existing.response) {
-      return existing.response.clone();
+    if (existing.cloneSource) {
+      return existing.cloneSource.clone();
     }
-    return existing.promise.then(r => r.clone());
+    const original = await existing.promise;
+    return original.clone();
   }
   const fetchOptions: RequestInit = {
     ...options,
     keepalive: true,
   };
-  const entry: { promise: Promise<Response>; response?: Response } = {
+  const entry: { promise: Promise<Response>; cloneSource?: Response } = {
     promise: fetch(url, fetchOptions).then(r => {
-      entry.response = r;
+      const cloned = r.clone();
+      entry.cloneSource = cloned;
       return r;
     }).catch(err => {
       inflightRequests.delete(url);
@@ -46,9 +48,9 @@ async function deduplicatedFetch(url: string, options?: RequestInit): Promise<Re
   inflightRequests.set(url, entry);
   try {
     const result = await entry.promise;
-    return result.clone();
+    return result;
   } finally {
-    inflightRequests.delete(url);
+    setTimeout(() => inflightRequests.delete(url), 50);
   }
 }
 
