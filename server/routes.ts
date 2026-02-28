@@ -102,7 +102,7 @@ import { authRateLimiter, biometricRateLimiter, uploadRateLimiter, apiRateLimite
 import { registerGovernanceRoutes } from "./governance-routes";
 import { registerSocialResponsibilityRoutes } from "./social-responsibility-routes";
 import { registerSecurityRoutes } from "./security-routes";
-import { apiCacheMiddleware, invalidateCacheForPath, jsonSlimMiddleware } from "./api-cache";
+import { apiCacheMiddleware, invalidateCacheForPath, invalidateCache, jsonSlimMiddleware } from "./api-cache";
 import { registerBatchRoute } from "./batch-api";
 
 // Normalize date to YYYY-MM-DD format
@@ -21101,6 +21101,8 @@ export async function registerRoutes(
       const { results: created, errors: saveErrors } = await storage.createBulkEmployeeSchedules(validatedSchedules);
       console.log(`[BULK SCHEDULES] Saved ${created.length}/${validatedSchedules.length}, errors: ${saveErrors.length}`);
       
+      invalidateCache("schedules");
+      
       if (created.length === 0 && saveErrors.length > 0) {
         return res.status(500).json({ 
           error: "فشل في حفظ جميع الجداول", 
@@ -21151,6 +21153,7 @@ export async function registerRoutes(
       const partialData = insertEmployeeScheduleSchema.partial().parse(req.body);
       const schedule = await storage.updateEmployeeSchedule(id, partialData);
       if (!schedule) return res.status(404).json({ error: "الجدول غير موجود" });
+      invalidateCache("schedules");
       res.json(schedule);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -21178,6 +21181,7 @@ export async function registerRoutes(
       }
       
       await storage.deleteEmployeeSchedule(id);
+      invalidateCache("schedules");
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting employee schedule:", error);
@@ -21263,6 +21267,7 @@ export async function registerRoutes(
         newValue: { shiftProfile, notes },
       });
       
+      invalidateCache("schedules");
       res.status(201).json(lock);
     } catch (error) {
       console.error("Error creating weekly schedule lock:", error);

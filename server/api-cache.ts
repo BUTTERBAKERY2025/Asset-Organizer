@@ -228,6 +228,7 @@ const INVALIDATION_MAP: Record<string, string[]> = {
   "production": ["/api/daily-production", "/api/production-hub", "/api/advanced-production-orders", "/api/command-center", "/api/finished-goods", "/api/production-comparisons"],
   "waste": ["/api/waste-reports", "/api/display-bar-receipts", "/api/command-center"],
   "attendance": ["/api/attendance-records", "/api/shifts", "/api/branch-shifts"],
+  "schedules": ["/api/shift-management/bundle", "/api/employee-schedules", "/api/shift-management"],
   "employees": ["/api/branch-employees", "/api/users"],
   "warehouse": ["/api/warehouse", "/api/transfer-requests"],
   "maintenance": ["/api/maintenance-records"],
