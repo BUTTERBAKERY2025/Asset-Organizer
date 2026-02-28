@@ -146,23 +146,30 @@ function AppLoadingFallback() {
 function DelayedFallback() {
   const [show, setShow] = useState(false);
   useEffect(() => {
-    const t = setTimeout(() => setShow(true), 120);
+    const t = setTimeout(() => setShow(true), 100);
     return () => clearTimeout(t);
   }, []);
   if (!show) return <div className="min-h-[60vh]" />;
   return (
     <div className="min-h-[60vh] p-6 space-y-5 skeleton-delayed" dir="rtl">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="h-8 skeleton-shimmer w-44 rounded-lg" />
+          <div className="h-6 skeleton-shimmer w-20 opacity-50 rounded-md" />
+        </div>
+        <div className="h-9 skeleton-shimmer w-32 rounded-lg opacity-40" />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="h-24 skeleton-shimmer rounded-xl" />
+        <div className="h-24 skeleton-shimmer rounded-xl opacity-90" />
+        <div className="h-24 skeleton-shimmer rounded-xl opacity-80" />
+        <div className="h-24 skeleton-shimmer rounded-xl opacity-70 hidden lg:block" />
+      </div>
       <div className="flex items-center gap-3">
-        <div className="h-8 skeleton-shimmer w-48" />
-        <div className="h-6 skeleton-shimmer w-24 opacity-60" />
+        <div className="h-10 skeleton-shimmer w-full max-w-sm rounded-lg" />
+        <div className="h-10 skeleton-shimmer w-28 rounded-lg opacity-50" />
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="h-28 skeleton-shimmer rounded-xl" />
-        <div className="h-28 skeleton-shimmer rounded-xl" />
-        <div className="h-28 skeleton-shimmer rounded-xl" />
-      </div>
-      <div className="h-10 skeleton-shimmer w-full max-w-md rounded-lg" />
-      <div className="h-64 skeleton-shimmer rounded-xl" />
+      <div className="h-72 skeleton-shimmer rounded-xl" />
     </div>
   );
 }

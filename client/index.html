@@ -25,7 +25,7 @@
     <link rel="dns-prefetch" href="https://fonts.gstatic.com">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap&subset=arabic,latin" rel="stylesheet" media="print" onload="this.media='all'" />
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap&subset=arabic,latin" as="style" onload="this.rel='stylesheet'" />
     <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
     <link rel="modulepreload" href="/src/main.tsx">
     <noscript>
@@ -37,7 +37,7 @@
       @font-face{font-family:'Cairo';font-style:normal;font-weight:700;font-display:swap;src:local('Cairo Bold'),local('Cairo-Bold')}
       @keyframes spin{to{transform:rotate(360deg)}}
       @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
-      @keyframes loaderFadeOut{0%{opacity:1;transform:scale(1)}60%{opacity:0.3}100%{opacity:0;transform:scale(1.01);visibility:hidden;pointer-events:none}}
+      @keyframes loaderFadeOut{0%{opacity:1;transform:scale(1)}50%{opacity:0.4}100%{opacity:0;transform:scale(1.005);visibility:hidden;pointer-events:none}}
       @keyframes loaderPulse{0%,100%{opacity:1}50%{opacity:0.6}}
       @keyframes loaderSpinnerEntry{from{opacity:0;transform:scale(0.8)}to{opacity:1;transform:scale(1)}}
       .sk{background:linear-gradient(90deg,#e8e0d0 25%,#f0e8d8 50%,#e8e0d0 75%);background-size:200% 100%;animation:shimmer 1.5s infinite}

@@ -95,11 +95,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
     setMobileMenuOpen(false);
     prefetchAdjacentPages(location);
     requestAnimationFrame(() => {
-      const bar = document.getElementById("nav-progress-bar");
-      if (bar && bar.className === "loading") {
-        bar.className = "complete";
-        setTimeout(() => { bar.className = ""; }, 200);
-      }
+      requestAnimationFrame(() => {
+        const bar = document.getElementById("nav-progress-bar");
+        if (bar && bar.className === "loading") {
+          bar.className = "complete";
+          setTimeout(() => { bar.className = ""; }, 180);
+        }
+      });
     });
   }, [location]);
 
@@ -432,8 +434,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
     }
     setTimeout(() => {
       const b = document.getElementById("nav-progress-bar");
-      if (b && b.className === "loading") { b.className = "complete"; setTimeout(() => { b.className = ""; }, 200); }
-    }, 3000);
+      if (b && b.className === "loading") { b.className = "complete"; setTimeout(() => { b.className = ""; }, 180); }
+    }, 2500);
   }, [setLocation, location]);
 
   const renderNavItem = useCallback((item: NavItem, inGroup = false) => (

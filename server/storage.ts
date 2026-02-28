@@ -8077,6 +8077,8 @@ export class DatabaseStorage implements IStorage {
       return activeUserIds.has(schedule.employeeId);
     });
     
+    let allSchedules = [...filteredSchedules];
+    
     if (activeUserIds.size > 0) {
       const userSchedules = await db.select().from(employeeSchedules)
         .where(and(
@@ -8086,7 +8088,6 @@ export class DatabaseStorage implements IStorage {
         ))
         .orderBy(employeeSchedules.employeeId, employeeSchedules.scheduleDate);
       
-      const allSchedules = [...filteredSchedules];
       for (const schedule of userSchedules) {
         if (!allSchedules.some(s => s.id === schedule.id)) {
           if (!schedule.branchId || schedule.branchId === branchId) {
@@ -8094,10 +8095,25 @@ export class DatabaseStorage implements IStorage {
           }
         }
       }
-      return allSchedules;
+    }
+
+    const deduped = new Map<string, EmployeeSchedule>();
+    for (const schedule of allSchedules) {
+      const key = schedule.branchEmployeeId
+        ? `be_${schedule.branchEmployeeId}_${schedule.scheduleDate}`
+        : `ei_${schedule.employeeId}_${schedule.scheduleDate}`;
+      const existing = deduped.get(key);
+      if (!existing || schedule.id > existing.id) {
+        deduped.set(key, schedule);
+      }
+    }
+    const dedupedSchedules = Array.from(deduped.values());
+    
+    if (dedupedSchedules.length < allSchedules.length) {
+      console.log(`[SCHEDULES READ] Deduped ${allSchedules.length} → ${dedupedSchedules.length} for branch ${branchId} (${startDate} to ${endDate})`);
     }
     
-    return filteredSchedules;
+    return dedupedSchedules;
   }
 
   async createEmployeeSchedule(schedule: InsertEmployeeSchedule): Promise<EmployeeSchedule> {
