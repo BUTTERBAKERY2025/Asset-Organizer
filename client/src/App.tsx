@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, useTransition, useCallback } from "react";
+import React, { Suspense, useEffect, useTransition, useCallback, useState } from "react";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -143,26 +143,33 @@ function AppLoadingFallback() {
   );
 }
 
-const PageLoadingFallback = React.memo(function PageLoadingFallback() {
+function DelayedFallback() {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setShow(true), 120);
+    return () => clearTimeout(t);
+  }, []);
+  if (!show) return <div className="min-h-[60vh]" />;
   return (
-    <div className="min-h-[60vh] p-6 space-y-5" dir="rtl" style={{ animation: "pageSlideIn 250ms cubic-bezier(0.22,1,0.36,1) both" }}>
-      <div className="flex items-center gap-3" style={{ animation: "contentStagger 200ms cubic-bezier(0.22,1,0.36,1) 20ms both" }}>
+    <div className="min-h-[60vh] p-6 space-y-5 skeleton-delayed" dir="rtl">
+      <div className="flex items-center gap-3">
         <div className="h-8 skeleton-shimmer w-48" />
         <div className="h-6 skeleton-shimmer w-24 opacity-60" />
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4" style={{ animation: "contentStagger 200ms cubic-bezier(0.22,1,0.36,1) 60ms both" }}>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="h-28 skeleton-shimmer rounded-xl" />
         <div className="h-28 skeleton-shimmer rounded-xl" />
         <div className="h-28 skeleton-shimmer rounded-xl" />
       </div>
-      <div className="h-10 skeleton-shimmer w-full max-w-md rounded-lg" style={{ animation: "contentStagger 200ms cubic-bezier(0.22,1,0.36,1) 100ms both" }} />
-      <div className="h-64 skeleton-shimmer rounded-xl" style={{ animation: "contentStagger 200ms cubic-bezier(0.22,1,0.36,1) 130ms both" }} />
+      <div className="h-10 skeleton-shimmer w-full max-w-md rounded-lg" />
+      <div className="h-64 skeleton-shimmer rounded-xl" />
     </div>
   );
-});
+}
+const PageLoadingFallback = React.memo(DelayedFallback);
 
 const PageWrapper = React.memo(function PageWrapper({ children }: { children: React.ReactNode }) {
-  return <div className="page-enter">{children}</div>;
+  return <div className="page-ready">{children}</div>;
 });
 
 const ProtectedPage = React.memo(function ProtectedPage({ component: Component }: { component: React.ComponentType }) {

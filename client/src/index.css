@@ -209,41 +209,33 @@
 }
 
 @keyframes pageSlideIn {
-  from { opacity: 0; transform: translateY(6px); }
+  from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes contentStagger {
-  from { opacity: 0; transform: translateY(5px); }
-  to { opacity: 1; transform: translateY(0); }
+@keyframes pageReady {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-.page-enter {
-  animation: pageSlideIn 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+.page-ready {
+  animation: pageReady 140ms ease-out both;
 }
 
-.page-enter > * {
-  animation: contentStagger 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-.page-enter > *:nth-child(1) { animation-delay: 20ms; }
-.page-enter > *:nth-child(2) { animation-delay: 45ms; }
-.page-enter > *:nth-child(3) { animation-delay: 70ms; }
-.page-enter > *:nth-child(4) { animation-delay: 90ms; }
-.page-enter > *:nth-child(5) { animation-delay: 105ms; }
-.page-enter > *:nth-child(6) { animation-delay: 115ms; }
-
-html.vt-active .page-enter,
-html.vt-active .page-enter > * {
+html.vt-active .page-ready {
   animation: none;
 }
 
+.skeleton-delayed {
+  animation: pageReady 180ms ease-out both;
+}
+
 ::view-transition-old(root) {
-  animation: fadeInFast 120ms ease-out reverse;
+  animation: fadeInFast 80ms ease-out reverse;
 }
 
 ::view-transition-new(root) {
-  animation: pageSlideIn 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: pageReady 100ms ease-out;
 }
 
 @keyframes nprogress-bar {
@@ -325,9 +317,7 @@ html.vt-active .page-enter > * {
 }
 
 .skeleton-shimmer {
-  background: linear-gradient(90deg, hsl(40 20% 93%) 25%, hsl(40 28% 97%) 37%, hsl(40 20% 93%) 63%);
-  background-size: 400% 100%;
-  animation: skeletonFadeIn 200ms ease-out, skeletonShimmer 1.8s ease-in-out infinite 200ms;
+  background: hsl(40 18% 93%);
   border-radius: 8px;
   position: relative;
   overflow: hidden;
@@ -337,8 +327,8 @@ html.vt-active .page-enter > * {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.35) 50%, transparent 100%);
-  animation: skeletonShimmer 1.8s ease-in-out infinite;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%);
+  animation: skeletonShimmer 1.6s ease-in-out infinite;
   background-size: 400% 100%;
 }
 
@@ -421,7 +411,7 @@ nav a:active .nav-item-inner {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .page-enter, .page-enter > * {
+  .page-ready, .skeleton-delayed {
     animation: none !important;
   }
   .transition-all, .transition-colors {

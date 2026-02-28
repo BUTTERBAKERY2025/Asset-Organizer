@@ -98,7 +98,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       const bar = document.getElementById("nav-progress-bar");
       if (bar && bar.className === "loading") {
         bar.className = "complete";
-        setTimeout(() => { bar.className = ""; }, 250);
+        setTimeout(() => { bar.className = ""; }, 200);
       }
     });
   }, [location]);
@@ -432,8 +432,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
     }
     setTimeout(() => {
       const b = document.getElementById("nav-progress-bar");
-      if (b && b.className === "loading") { b.className = "complete"; setTimeout(() => { b.className = ""; }, 250); }
-    }, 5000);
+      if (b && b.className === "loading") { b.className = "complete"; setTimeout(() => { b.className = ""; }, 200); }
+    }, 3000);
   }, [setLocation, location]);
 
   const renderNavItem = useCallback((item: NavItem, inGroup = false) => (
@@ -730,7 +730,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <div ref={contentRef} className="flex-1 overflow-auto scroll-smooth safe-area-inset-bottom page-content page-enter">
+        <div ref={contentRef} className="flex-1 overflow-auto scroll-smooth safe-area-inset-bottom page-content">
           {children}
         </div>
       </main>
