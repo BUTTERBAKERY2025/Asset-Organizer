@@ -23252,7 +23252,16 @@ export async function registerRoutes(
               if (queryBranchId && allowedBranches.includes(queryBranchId)) {
                 return await storage.getBranchEmployeeStats(queryBranchId);
               }
-              return await storage.getBranchEmployeeStats(undefined);
+              const branchStatsArr = await Promise.all(
+                allowedBranches.map(bid => storage.getBranchEmployeeStats(bid))
+              );
+              const merged: { total: number; byJobTitle: Record<string, number>; byBranch: Record<string, number> } = { total: 0, byJobTitle: {}, byBranch: {} };
+              for (const s of branchStatsArr) {
+                merged.total += s.total || 0;
+                for (const [k, v] of Object.entries(s.byJobTitle || {})) merged.byJobTitle[k] = (merged.byJobTitle[k] || 0) + (v as number);
+                for (const [k, v] of Object.entries(s.byBranch || {})) merged.byBranch[k] = (merged.byBranch[k] || 0) + (v as number);
+              }
+              return merged;
             }
             return { total: 0, byJobTitle: {}, byBranch: {} };
           } catch (e) {
@@ -23263,19 +23272,25 @@ export async function registerRoutes(
         (async () => {
           try {
             const allUsers = await storage.getAllUsers();
-            let filtered = allUsers;
-            if (allowedBranches !== null && allowedBranches.length > 0) {
-              filtered = allUsers.filter((u: any) => !u.branchId || allowedBranches.includes(u.branchId));
-            } else if (allowedBranches !== null && allowedBranches.length === 0) {
-              return [];
+            if (allowedBranches === null) {
+              return allUsers.map((u: any) => ({
+                id: u.id, username: u.username, firstName: u.firstName,
+                lastName: u.lastName, role: u.role, branchId: u.branchId,
+              }));
             }
+            if (allowedBranches.length === 0) return [];
+            const allowedSet = new Set(allowedBranches);
+            const branchAccessList = await db.select().from(userBranchAccess).where(
+              inArray(userBranchAccess.branchId, allowedBranches)
+            );
+            const userIdsWithAccess = new Set(branchAccessList.map(ba => ba.userId));
+            const filtered = allUsers.filter((u: any) => {
+              if (u.branchId && allowedSet.has(u.branchId)) return true;
+              return userIdsWithAccess.has(u.id);
+            });
             return filtered.map((u: any) => ({
-              id: u.id,
-              username: u.username,
-              firstName: u.firstName,
-              lastName: u.lastName,
-              role: u.role,
-              branchId: u.branchId,
+              id: u.id, username: u.username, firstName: u.firstName,
+              lastName: u.lastName, role: u.role, branchId: u.branchId,
             }));
           } catch (e) {
             console.error("Bundle: systemUsers fetch failed", e);
@@ -23506,9 +23521,20 @@ export async function registerRoutes(
           const stats = await storage.getBranchEmployeeStats(queryBranchId);
           return res.json(stats);
         }
-        // Get combined stats for all allowed branches
-        const stats = await storage.getBranchEmployeeStats(undefined);
-        return res.json(stats);
+        const branchStatsResults = await Promise.all(
+          allowedBranches.map(bid => storage.getBranchEmployeeStats(bid))
+        );
+        const mergedStats: { total: number; byJobTitle: Record<string, number>; byBranch: Record<string, number> } = { total: 0, byJobTitle: {}, byBranch: {} };
+        for (const s of branchStatsResults) {
+          mergedStats.total += s.total || 0;
+          for (const [k, v] of Object.entries(s.byJobTitle || {})) {
+            mergedStats.byJobTitle[k] = (mergedStats.byJobTitle[k] || 0) + (v as number);
+          }
+          for (const [k, v] of Object.entries(s.byBranch || {})) {
+            mergedStats.byBranch[k] = (mergedStats.byBranch[k] || 0) + (v as number);
+          }
+        }
+        return res.json(mergedStats);
       }
       
       // No access - return empty stats
@@ -23655,6 +23681,17 @@ export async function registerRoutes(
       const { userId } = req.body;
       if (!userId) return res.status(400).json({ error: "معرف المستخدم مطلوب" });
       
+      const existingEmp = await storage.getBranchEmployee(id);
+      if (!existingEmp) {
+        return res.status(404).json({ error: "الموظف غير موجود" });
+      }
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, existingEmp.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بربط موظف من هذا الفرع" });
+        }
+      }
+      
       const employee = await storage.linkBranchEmployeeToUser(id, userId);
       if (!employee) {
         return res.status(404).json({ error: "الموظف غير موجود" });
@@ -23724,6 +23761,17 @@ export async function registerRoutes(
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
       
+      const employee = await storage.getBranchEmployee(id);
+      if (!employee) {
+        return res.status(404).json({ error: "الموظف غير موجود" });
+      }
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, employee.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لجداول هذا الموظف" });
+        }
+      }
+      
       const schedules = await storage.getSchedulesByBranchEmployeeId(id);
       res.json(schedules);
     } catch (error) {
@@ -23739,6 +23787,12 @@ export async function registerRoutes(
       const employee = await storage.getBranchEmployeeByLinkedUserId(userId);
       if (!employee) {
         return res.status(404).json({ error: "لا يوجد موظف فرع مرتبط بهذا المستخدم" });
+      }
+      if (!isUserAdmin(req) && employee.branchId) {
+        const hasAccess = await canAccessBranch(req, employee.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لبيانات هذا الموظف" });
+        }
       }
       res.json(employee);
     } catch (error) {
