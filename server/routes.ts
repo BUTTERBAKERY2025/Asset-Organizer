@@ -8327,19 +8327,17 @@ export async function registerRoutes(
   app.get("/api/smart-incentives/challenges", isAuthenticated, requirePermission("smart_incentives_challenges", "view"), async (req, res) => {
     try {
       const user = getCurrentUser(req);
-      let branchId = req.query.branchId as string | undefined;
-      if (user.role !== 'admin' && !branchId) {
-        branchId = user.branchId || undefined;
-      }
-      if (user.role !== 'admin' && branchId && !(await canAccessBranch(req, branchId))) {
+      const branchFilter = getEffectiveBranchFilter(req, req.query.branchId as string | undefined);
+      if (!branchFilter.hasAccess) {
         return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
       }
+      const branchId = branchFilter.singleBranchId;
       const activeOnly = req.query.active === "true";
       let challenges = activeOnly
         ? await storage.getActiveDailyChallenges(branchId)
         : await storage.getAllDailyChallenges();
-      if (user.role !== 'admin' && !branchId) {
-        challenges = challenges.filter((c: any) => c.branchId === user.branchId);
+      if (!branchId && branchFilter.branchIds) {
+        challenges = challenges.filter((c: any) => branchFilter.branchIds!.includes(c.branchId));
       }
       res.json(challenges);
     } catch (error) {
@@ -8396,7 +8394,7 @@ export async function registerRoutes(
       }
       const existingChallenge = await storage.getDailyChallenge(id);
       if (!existingChallenge) return res.status(404).json({ error: "التحدي غير موجود" });
-      if (user.role !== 'admin' && existingChallenge.branchId && existingChallenge.branchId !== user.branchId) {
+      if (user.role !== 'admin' && existingChallenge.branchId && !(await canAccessBranch(req, existingChallenge.branchId))) {
         return res.status(403).json({ error: "غير مصرح بتعديل تحدي لفرع آخر" });
       }
       if (user.role !== 'admin' && body.branchId && !(await canAccessBranch(req, body.branchId))) {
@@ -8434,12 +8432,11 @@ export async function registerRoutes(
     try {
       const user = getCurrentUser(req);
       let { branchId, date, shiftType } = req.query;
-      if (user.role !== 'admin' && !branchId) {
-        branchId = user.branchId || undefined;
-      }
-      if (user.role !== 'admin' && branchId && !(await canAccessBranch(req, branchId as string))) {
+      const branchFilter = getEffectiveBranchFilter(req, branchId as string | undefined);
+      if (!branchFilter.hasAccess) {
         return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
       }
+      if (branchFilter.singleBranchId) branchId = branchFilter.singleBranchId;
       const targetDate = (date as string) || new Date().toISOString().split('T')[0];
       
       console.log("[challenges-as-targets] branchId:", branchId, "targetDate:", targetDate, "shiftType:", shiftType);
@@ -8555,9 +8552,6 @@ export async function registerRoutes(
         }
       }
 
-      const branchFilter = getEffectiveBranchFilter(req, branchId as string | undefined);
-      if (!branchFilter.hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول" });
-
       let filtered = targets;
       if (branchFilter.branchIds) {
         filtered = filtered.filter(t => branchFilter.branchIds!.includes(t.branchId));
@@ -8578,19 +8572,17 @@ export async function registerRoutes(
   app.get("/api/smart-incentives/product-commissions", isAuthenticated, requirePermission("smart_incentives_commissions", "view"), async (req, res) => {
     try {
       const user = getCurrentUser(req);
-      let branchId = req.query.branchId as string | undefined;
-      if (user.role !== 'admin' && !branchId) {
-        branchId = user.branchId || undefined;
-      }
-      if (user.role !== 'admin' && branchId && !(await canAccessBranch(req, branchId))) {
+      const branchFilter = getEffectiveBranchFilter(req, req.query.branchId as string | undefined);
+      if (!branchFilter.hasAccess) {
         return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
       }
+      const branchId = branchFilter.singleBranchId;
       const activeOnly = req.query.active === "true";
       let commissions = activeOnly
         ? await storage.getActiveProductCommissions(branchId)
         : await storage.getAllProductCommissions();
-      if (user.role !== 'admin' && !branchId) {
-        commissions = commissions.filter((c: any) => c.branchId === user.branchId);
+      if (!branchId && branchFilter.branchIds) {
+        commissions = commissions.filter((c: any) => branchFilter.branchIds!.includes(c.branchId));
       }
       res.json(commissions);
     } catch (error) {
@@ -8648,7 +8640,7 @@ export async function registerRoutes(
       }
       const existingCommission = await storage.getProductCommission(id);
       if (!existingCommission) return res.status(404).json({ error: "عمولة الصنف غير موجودة" });
-      if (user.role !== 'admin' && existingCommission.branchId && existingCommission.branchId !== user.branchId) {
+      if (user.role !== 'admin' && existingCommission.branchId && !(await canAccessBranch(req, existingCommission.branchId))) {
         return res.status(403).json({ error: "غير مصرح بتعديل عمولة لفرع آخر" });
       }
       if (user.role !== 'admin' && req.body.branchId && !(await canAccessBranch(req, req.body.branchId))) {
@@ -8685,8 +8677,11 @@ export async function registerRoutes(
     try {
       const user = getCurrentUser(req);
       let bonuses = await storage.getAllBranchBonuses();
-      if (user.role !== 'admin') {
-        bonuses = bonuses.filter((b: any) => b.branchId === user.branchId);
+      if (!isUserAdmin(req)) {
+        const allowedBranches = getAllowedBranchIds(req);
+        if (allowedBranches) {
+          bonuses = bonuses.filter((b: any) => allowedBranches.includes(b.branchId));
+        }
       }
       res.json(bonuses);
     } catch (error) {
@@ -8738,7 +8733,7 @@ export async function registerRoutes(
       }
       const existingBonus = (await storage.getAllBranchBonuses()).find(b => b.id === id);
       if (!existingBonus) return res.status(404).json({ error: "عمولة الفرع غير موجودة" });
-      if (user.role !== 'admin' && existingBonus.branchId !== user.branchId) {
+      if (user.role !== 'admin' && !(await canAccessBranch(req, existingBonus.branchId))) {
         return res.status(403).json({ error: "غير مصرح بتعديل مكافأة لفرع آخر" });
       }
       if (user.role !== 'admin' && req.body.branchId && !(await canAccessBranch(req, req.body.branchId))) {
@@ -8759,7 +8754,7 @@ export async function registerRoutes(
       const user = getCurrentUser(req);
       const bonus = (await storage.getAllBranchBonuses()).find(b => b.id === id);
       if (!bonus) return res.status(404).json({ error: "المكافأة غير موجودة" });
-      if (user.role !== 'admin' && bonus.branchId !== user.branchId) {
+      if (user.role !== 'admin' && !(await canAccessBranch(req, bonus.branchId))) {
         return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
       }
       await storage.deleteBranchBonus(id);
@@ -9061,11 +9056,14 @@ export async function registerRoutes(
       let ledger;
       if (cashierId) {
         ledger = await storage.getCashierPointsLedger(cashierId, dateFrom, dateTo);
-        if (user.role !== 'admin') {
-          ledger = ledger.filter((e: any) => e.branchId === user.branchId);
+        if (!isUserAdmin(req)) {
+          const allowedBranches = getAllowedBranchIds(req);
+          if (allowedBranches) {
+            ledger = ledger.filter((e: any) => allowedBranches.includes(e.branchId));
+          }
         }
       } else if (branchId) {
-        if (user.role !== 'admin' && branchId !== user.branchId) {
+        if (!isUserAdmin(req) && !(await canAccessBranch(req, branchId))) {
           return res.status(403).json({ error: "غير مصرح بالوصول لبيانات هذا الفرع" });
         }
         ledger = await storage.getBranchPointsLedger(branchId, dateFrom, dateTo);
@@ -9086,8 +9084,11 @@ export async function registerRoutes(
       const limit = parseInt(req.query.limit as string) || 10;
       if (!yearMonth) return res.status(400).json({ error: "yearMonth مطلوب" });
       let topCashiers = await storage.getTopCashiersByPoints(yearMonth, limit);
-      if (user.role !== 'admin') {
-        topCashiers = topCashiers.filter((c: any) => c.branchId === user.branchId);
+      if (!isUserAdmin(req)) {
+        const allowedBranches = getAllowedBranchIds(req);
+        if (allowedBranches) {
+          topCashiers = topCashiers.filter((c: any) => allowedBranches.includes(c.branchId));
+        }
       }
       res.json(topCashiers);
     } catch (error) {
@@ -9104,7 +9105,7 @@ export async function registerRoutes(
       const { cashierId } = req.params;
       const yearMonth = req.query.yearMonth as string | undefined;
       const summary = await storage.getCashierPointsSummary(cashierId, yearMonth);
-      if (user.role !== 'admin' && summary && (summary as any).branchId && (summary as any).branchId !== user.branchId) {
+      if (!isUserAdmin(req) && summary && (summary as any).branchId && !(await canAccessBranch(req, (summary as any).branchId))) {
         return res.status(403).json({ error: "غير مصرح بالوصول لبيانات هذا الكاشير" });
       }
       res.json(summary);
@@ -9376,15 +9377,15 @@ export async function registerRoutes(
     try {
       const user = getCurrentUser(req);
       let { branchId, cashierId, status } = req.query as any;
-      if (user.role !== 'admin' && !branchId) {
-        branchId = user.branchId;
-      }
-      if (user.role !== 'admin' && branchId && !(await canAccessBranch(req, branchId))) {
+      if (!isUserAdmin(req) && branchId && !(await canAccessBranch(req, branchId))) {
         return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
       }
       let statements = await storage.getIncentiveStatements(branchId, cashierId, status);
-      if (user.role !== 'admin') {
-        statements = statements.filter((s: any) => s.branchId === user.branchId);
+      if (!isUserAdmin(req)) {
+        const allowedBranches = getAllowedBranchIds(req);
+        if (allowedBranches) {
+          statements = statements.filter((s: any) => allowedBranches.includes(s.branchId));
+        }
       }
       if (user.role !== 'admin' && user.role !== 'manager') {
         statements = statements.filter((s: any) => s.cashierId === user.id);
@@ -9403,7 +9404,7 @@ export async function registerRoutes(
       if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
       const stmt = await storage.getIncentiveStatement(id);
       if (!stmt) return res.status(404).json({ error: "الكشف غير موجود" });
-      if (user.role !== 'admin' && (stmt as any).branchId !== user.branchId) {
+      if (!isUserAdmin(req) && (stmt as any).branchId && !(await canAccessBranch(req, (stmt as any).branchId))) {
         return res.status(403).json({ error: "غير مصرح بالوصول لهذا الكشف" });
       }
       res.json(stmt);
@@ -9570,12 +9571,17 @@ export async function registerRoutes(
       
       if (cashierId) {
         let sales = await storage.getCashierProductSales(cashierId, date);
-        if (user.role !== 'admin') {
-          sales = sales.filter((s: any) => s.branchId === user.branchId);
+        if (!isUserAdmin(req)) {
+          const allowedBranches = getAllowedBranchIds(req);
+          if (allowedBranches) {
+            sales = sales.filter((s: any) => allowedBranches.includes(s.branchId));
+          }
         }
         res.json(sales);
       } else {
-        const effectiveBranchId = user.role !== 'admin' ? (user.branchId || branchId) : branchId;
+        const branchFilter = getEffectiveBranchFilter(req, branchId);
+        if (!branchFilter.hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول" });
+        const effectiveBranchId = branchFilter.singleBranchId || branchId;
         const allSales = await db.select().from(cashierProductSales)
           .where(and(
             eq(cashierProductSales.branchId, effectiveBranchId),
@@ -25907,7 +25913,10 @@ export async function registerRoutes(
         filters.branchId = branchFilter.singleBranchId;
       }
       
-      const inventory = await storage.getFinishedGoodsInventory(filters);
+      let inventory = await storage.getFinishedGoodsInventory(filters);
+      if (!filters.branchId && branchFilter.branchIds) {
+        inventory = inventory.filter((i: any) => branchFilter.branchIds!.includes(i.branchId));
+      }
       res.json(inventory);
     } catch (error) {
       console.error("Error fetching finished goods inventory:", error);
@@ -26108,7 +26117,10 @@ export async function registerRoutes(
         filters.branchId = branchFilter.singleBranchId;
       }
       
-      const logs = await storage.getProductionInventoryLogs(filters);
+      let logs = await storage.getProductionInventoryLogs(filters);
+      if (!filters.branchId && branchFilter.branchIds) {
+        logs = logs.filter((l: any) => branchFilter.branchIds!.includes(l.branchId));
+      }
       res.json(logs);
     } catch (error) {
       console.error("Error fetching inventory logs:", error);
