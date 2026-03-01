@@ -37,15 +37,18 @@
       @font-face{font-family:'Cairo';font-style:normal;font-weight:700;font-display:swap;src:local('Cairo Bold'),local('Cairo-Bold')}
       @keyframes spin{to{transform:rotate(360deg)}}
       @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
-      @keyframes loaderFadeOut{0%{opacity:1;transform:scale(1)}40%{opacity:0.3}100%{opacity:0;transform:scale(1.003);visibility:hidden;pointer-events:none}}
+      @keyframes loaderFadeOut{0%{opacity:1;transform:scale(1)}40%{opacity:0.3}100%{opacity:0;transform:scale(1.002);visibility:hidden;pointer-events:none}}
       @keyframes loaderPulse{0%,100%{opacity:1}50%{opacity:0.6}}
       @keyframes loaderSpinnerEntry{from{opacity:0;transform:scale(0.8)}to{opacity:1;transform:scale(1)}}
+      @keyframes loaderProgress{0%{width:0}30%{width:35%}60%{width:60%}90%{width:80%}100%{width:85%}}
       .sk{background:linear-gradient(90deg,#e8e0d0 25%,#f0e8d8 50%,#e8e0d0 75%);background-size:200% 100%;animation:shimmer 1.5s infinite}
-      #initial-loader{min-height:100vh;background:#F5F0E6;font-family:'Cairo',system-ui,sans-serif;direction:rtl;transition:opacity .12s ease-out}
-      #initial-loader.fade-out{animation:loaderFadeOut .2s ease-out forwards}
-      .il-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:14px}
-      .il-spin{width:28px;height:28px;border:2.5px solid #d4a853;border-top-color:transparent;border-radius:50%;animation:loaderSpinnerEntry .15s ease-out,spin .55s linear .15s infinite;will-change:transform;contain:strict}
+      #initial-loader{min-height:100vh;background:#F5F0E6;font-family:'Cairo',system-ui,sans-serif;direction:rtl;transition:opacity .15s ease-out;contain:strict}
+      #initial-loader.fade-out{animation:loaderFadeOut .18s ease-out forwards}
+      .il-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:16px}
+      .il-spin{width:30px;height:30px;border:2.5px solid #d4a853;border-top-color:transparent;border-radius:50%;animation:loaderSpinnerEntry .12s ease-out,spin .5s linear .12s infinite;will-change:transform;contain:strict}
       .il-text{font-size:13px;color:#92400e;opacity:0;transition:opacity .3s ease;animation:loaderPulse 2s ease-in-out 1.5s infinite}
+      .il-bar{width:120px;height:2px;background:#e8dcc8;border-radius:2px;overflow:hidden;margin-top:4px;opacity:0;transition:opacity .3s ease .6s}
+      .il-bar-fill{height:100%;background:linear-gradient(90deg,#d4a853,#ebb548);border-radius:2px;animation:loaderProgress 3s ease-out forwards}
     </style>
   </head>
   <body>
@@ -55,11 +58,12 @@
         <div class="il-wrap">
           <div class="il-spin"></div>
           <div class="il-text" id="il-msg"></div>
+          <div class="il-bar" id="il-bar"><div class="il-bar-fill"></div></div>
         </div>
       </div>
     </div>
     <script>
-      setTimeout(function(){var m=document.getElementById('il-msg');if(m){m.textContent='جاري تحميل النظام...';m.style.opacity='1'}},800);
+      setTimeout(function(){var m=document.getElementById('il-msg');if(m){m.textContent='جاري تحميل النظام...';m.style.opacity='1'}var b=document.getElementById('il-bar');if(b)b.style.opacity='1'},600);
       setTimeout(function(){var m=document.getElementById('il-msg');if(m)m.textContent='جاري الاتصال بالخادم...'},3000);
     </script>
     <script type="module" src="/src/main.tsx"></script>

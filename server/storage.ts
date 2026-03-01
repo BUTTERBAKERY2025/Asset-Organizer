@@ -8253,28 +8253,29 @@ export class DatabaseStorage implements IStorage {
 
         if (duplicateIdsToDelete.length > 0) {
           console.log(`[BULK SCHEDULE] Cleaning ${duplicateIdsToDelete.length} duplicate records inside transaction`);
-          const DEL_BATCH = 100;
-          for (let i = 0; i < duplicateIdsToDelete.length; i += DEL_BATCH) {
-            const batch = duplicateIdsToDelete.slice(i, i + DEL_BATCH);
-            await tx.delete(employeeSchedules).where(inArray(employeeSchedules.id, batch));
-          }
+          await tx.delete(employeeSchedules).where(inArray(employeeSchedules.id, duplicateIdsToDelete));
         }
 
-        for (const item of toUpdate) {
-          const [updated] = await tx.update(employeeSchedules)
-            .set(item.data)
-            .where(eq(employeeSchedules.id, item.id))
-            .returning();
-          if (updated) results.push(updated);
+        if (toUpdate.length > 0) {
+          const UPDATE_BATCH = 15;
+          for (let i = 0; i < toUpdate.length; i += UPDATE_BATCH) {
+            const batch = toUpdate.slice(i, i + UPDATE_BATCH);
+            const updateResults = await Promise.all(
+              batch.map(item =>
+                tx.update(employeeSchedules)
+                  .set(item.data)
+                  .where(eq(employeeSchedules.id, item.id))
+                  .returning()
+                  .then(rows => rows[0])
+              )
+            );
+            results.push(...updateResults.filter(Boolean));
+          }
         }
 
         if (toInsert.length > 0) {
-          const BATCH = 50;
-          for (let i = 0; i < toInsert.length; i += BATCH) {
-            const batch = toInsert.slice(i, i + BATCH);
-            const inserted = await tx.insert(employeeSchedules).values(batch).returning();
-            results.push(...inserted);
-          }
+          const inserted = await tx.insert(employeeSchedules).values(toInsert).returning();
+          results.push(...inserted);
         }
 
         console.log(`[BULK SCHEDULE] Transaction complete: ${toInsert.length} inserts, ${toUpdate.length} updates, ${duplicateIdsToDelete.length} duplicates cleaned, ${results.length} total`);

@@ -16,26 +16,31 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
-const inflightRequests = new Map<string, Promise<Response>>();
+const inflightRequests = new Map<string, Promise<{ status: number; statusText: string; headers: Headers; body: ArrayBuffer }>>();
 
 async function deduplicatedFetch(url: string, options?: RequestInit): Promise<Response> {
   const method = options?.method || "GET";
   if (method !== "GET") {
     return fetch(url, options);
   }
-  let promise = inflightRequests.get(url);
-  if (!promise) {
-    promise = fetch(url, { ...options, keepalive: true }).catch(err => {
+  let entry = inflightRequests.get(url);
+  if (!entry) {
+    const fetchPromise = fetch(url, { ...options, keepalive: true });
+    const bodyPromise = fetchPromise.then(async (res) => {
+      const body = await res.arrayBuffer();
+      return { status: res.status, statusText: res.statusText, headers: res.headers, body };
+    }).catch(err => {
       inflightRequests.delete(url);
       throw err;
     });
-    inflightRequests.set(url, promise);
-    promise.then(() => {
+    entry = bodyPromise;
+    inflightRequests.set(url, entry);
+    bodyPromise.then(() => {
       setTimeout(() => inflightRequests.delete(url), 50);
     }).catch(() => {});
   }
-  const master = await promise;
-  return master.clone();
+  const { status, statusText, headers, body } = await entry;
+  return new Response(body.slice(0), { status, statusText, headers });
 }
 
 export async function apiRequest(

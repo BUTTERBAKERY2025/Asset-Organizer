@@ -85,7 +85,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
         saveScrollPosition(prevLocationRef.current, contentRef.current.scrollTop);
         const saved = getScrollPosition(location);
         if (saved > 0) {
-          contentRef.current.scrollTop = saved;
+          requestAnimationFrame(() => {
+            if (contentRef.current) contentRef.current.scrollTop = saved;
+          });
         } else if (contentRef.current.scrollTop > 0) {
           contentRef.current.scrollTo({ top: 0, behavior: contentRef.current.scrollTop < 400 ? "smooth" : "instant" as ScrollBehavior });
         }
@@ -96,9 +98,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
     prefetchAdjacentPages(location);
     requestAnimationFrame(() => {
       const bar = document.getElementById("nav-progress-bar");
-      if (bar && bar.className === "loading") {
+      if (bar && bar.classList.contains("loading")) {
         bar.className = "complete";
-        setTimeout(() => { bar.className = ""; }, 150);
+        setTimeout(() => { bar.className = ""; }, 200);
       }
     });
   }, [location]);
@@ -432,8 +434,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
     }
     setTimeout(() => {
       const b = document.getElementById("nav-progress-bar");
-      if (b && b.className === "loading") { b.className = "complete"; setTimeout(() => { b.className = ""; }, 150); }
-    }, 1500);
+      if (b && b.classList.contains("loading")) { b.className = "complete"; setTimeout(() => { b.className = ""; }, 200); }
+    }, 3000);
   }, [setLocation, location]);
 
   const renderNavItem = useCallback((item: NavItem, inGroup = false) => (
