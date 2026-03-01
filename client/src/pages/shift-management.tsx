@@ -117,7 +117,7 @@ export default function ShiftManagementPage() {
   const startDateStr = format(currentWeekStart, "yyyy-MM-dd");
   const endDateStr = format(addDays(currentWeekStart, 6), "yyyy-MM-dd");
 
-  const { data: shiftBundle } = useQuery<{
+  const { data: shiftBundle, isPlaceholderData: isBundlePlaceholder } = useQuery<{
     shiftProfiles: {shiftCode: string; displayName: string; startTime: string; endTime: string; isActive: boolean}[];
     employees: BranchEmployee[];
     schedules: EmployeeSchedule[];
@@ -132,7 +132,9 @@ export default function ShiftManagementPage() {
       return res.json();
     },
     enabled: selectedBranch !== "all" && selectedBranch !== "",
-    staleTime: 30_000,
+    staleTime: 10_000,
+    refetchOnMount: "always",
+    placeholderData: undefined,
   });
 
   const shiftProfiles = shiftBundle?.shiftProfiles;
@@ -255,8 +257,8 @@ export default function ShiftManagementPage() {
         shiftProfile: data.shiftProfile,
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/shift-management/bundle"] });
+    onSuccess: async () => {
+      await queryClient.refetchQueries({ queryKey: ["/api/shift-management/bundle", selectedBranch, startDateStr, endDateStr] });
       queryClient.invalidateQueries({ queryKey: ["/api/weekly-schedule-locks"] });
     },
     onError: (error: any) => {
@@ -298,6 +300,7 @@ export default function ShiftManagementPage() {
   }, [userBranchId, selectedBranch]);
 
   useEffect(() => {
+    if (isBundlePlaceholder) return;
     const newScheduleData: Record<string, Record<string, ScheduleCell>> = {};
     if (employeeSchedules && Array.isArray(employeeSchedules) && employeeSchedules.length > 0) {
       employeeSchedules.forEach((schedule: EmployeeSchedule) => {
@@ -314,7 +317,7 @@ export default function ShiftManagementPage() {
     }
     setScheduleData(newScheduleData);
     setHasUnsavedChanges(false);
-  }, [employeeSchedules, currentWeekStart, selectedBranch]);
+  }, [employeeSchedules, currentWeekStart, selectedBranch, isBundlePlaceholder]);
 
   const weekDates = useMemo(() => {
     return DAYS_ORDER.map((_, index) => addDays(currentWeekStart, index));
@@ -630,7 +633,7 @@ export default function ShiftManagementPage() {
         title: "تم نسخ الجدول بنجاح", 
         description: `تم نسخ ${schedulesToSave.length} جدول للأسبوع ${format(nextWeekStart, "dd/MM")} - ${format(addDays(nextWeekStart, 6), "dd/MM")}` 
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/shift-management/bundle"] });
+      await queryClient.refetchQueries({ queryKey: ["/api/shift-management/bundle", selectedBranch, startDateStr, endDateStr] });
       queryClient.invalidateQueries({ queryKey: ["/api/employee-schedules"] });
     } catch (error) {
       toast({ title: "خطأ", description: "فشل في نسخ الجدول", variant: "destructive" });
@@ -1642,7 +1645,7 @@ export default function ShiftManagementPage() {
       setIsImportDialogOpen(false);
       setImportData([]);
       setImportErrors([]);
-      queryClient.invalidateQueries({ queryKey: ["/api/shift-management/bundle"] });
+      await queryClient.refetchQueries({ queryKey: ["/api/shift-management/bundle", selectedBranch, startDateStr, endDateStr] });
       queryClient.invalidateQueries({ queryKey: ["/api/employee-schedules"] });
     } catch (error) {
       toast({ title: "خطأ", description: "فشل في حفظ الجداول المستوردة", variant: "destructive" });
