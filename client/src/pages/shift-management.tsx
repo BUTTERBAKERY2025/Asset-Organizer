@@ -388,8 +388,8 @@ export default function ShiftManagementPage() {
       const result = await res.json();
       return { ...result, skippedCount };
     },
-    onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/shift-management/bundle"] });
+    onSuccess: async (data: any) => {
+      await queryClient.refetchQueries({ queryKey: ["/api/shift-management/bundle", selectedBranch, startDateStr, endDateStr] });
       queryClient.invalidateQueries({ queryKey: ["/api/employee-schedules"] });
       const warnings: string[] = [];
       if (data?.skippedCount > 0) {

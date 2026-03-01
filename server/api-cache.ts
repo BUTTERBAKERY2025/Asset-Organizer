@@ -155,10 +155,9 @@ export function apiCacheMiddleware(req: Request, res: Response, next: NextFuncti
       return res.status(304).end();
     }
     const age = Math.floor((Date.now() - entry.timestamp) / 1000);
-    const maxAge = Math.floor(ttl / 1000);
     res.set("X-Cache", "HIT");
     res.set("ETag", etag);
-    res.set("Cache-Control", `private, max-age=${maxAge}, stale-while-revalidate=${maxAge * 2}`);
+    res.set("Cache-Control", "private, no-cache, no-store, must-revalidate");
     res.set("Age", String(age));
     res.set("Vary", "Accept-Encoding");
     res.set("Content-Type", entry.headers["content-type"] || "application/json");
@@ -187,9 +186,8 @@ export function apiCacheMiddleware(req: Request, res: Response, next: NextFuncti
         });
         evictOldest();
       }
-      const maxAge = Math.floor(ttl / 1000);
       res.set("ETag", `"${now}"`);
-      res.set("Cache-Control", `private, max-age=${maxAge}, stale-while-revalidate=${maxAge * 2}`);
+      res.set("Cache-Control", "private, no-cache, no-store, must-revalidate");
       res.set("Vary", "Accept-Encoding");
     }
     res.set("X-Cache", "MISS");
