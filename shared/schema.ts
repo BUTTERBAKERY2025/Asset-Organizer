@@ -4578,6 +4578,7 @@ export const employeeSchedules = pgTable("employee_schedules", {
   index("idx_employee_schedules_date").on(table.scheduleDate),
   index("idx_employee_schedules_branch").on(table.branchId),
   index("idx_employee_schedules_branch_employee").on(table.branchEmployeeId),
+  uniqueIndex("idx_unique_schedule_per_employee_date_branch").on(table.branchEmployeeId, table.scheduleDate, table.branchId),
 ]);
 
 export const insertEmployeeScheduleSchema = createInsertSchema(employeeSchedules).omit({

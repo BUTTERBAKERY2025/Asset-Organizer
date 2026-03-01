@@ -181,6 +181,81 @@ export async function runStartupMigrations() {
     for (const mig of migrations) {
       try { await pool.query(mig); } catch (e) { /* index may already exist or table not found */ }
     }
+
+    try {
+      const dupCheck = await pool.query(`
+        SELECT COUNT(*) as cnt FROM (
+          SELECT branch_employee_id, schedule_date, branch_id, COUNT(*) as c
+          FROM employee_schedules
+          WHERE branch_employee_id IS NOT NULL AND branch_id IS NOT NULL
+          GROUP BY branch_employee_id, schedule_date, branch_id
+          HAVING COUNT(*) > 1
+        ) sub
+      `);
+      const dupCount = parseInt(dupCheck.rows[0]?.cnt || '0', 10);
+      if (dupCount > 0) {
+        console.log(`[SCHEDULE CLEANUP] Found ${dupCount} duplicate schedule groups - cleaning...`);
+        const cleaned = await pool.query(`
+          DELETE FROM employee_schedules
+          WHERE id IN (
+            SELECT id FROM (
+              SELECT id, ROW_NUMBER() OVER (
+                PARTITION BY branch_employee_id, schedule_date, branch_id
+                ORDER BY id DESC
+              ) as rn
+              FROM employee_schedules
+              WHERE branch_employee_id IS NOT NULL AND branch_id IS NOT NULL
+            ) ranked
+            WHERE rn > 1
+          )
+        `);
+        console.log(`[SCHEDULE CLEANUP] Deleted ${cleaned.rowCount} duplicate schedule records`);
+      }
+
+      await pool.query(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_schedule_per_employee_date_branch
+        ON employee_schedules (branch_employee_id, schedule_date, branch_id)
+        WHERE branch_employee_id IS NOT NULL AND branch_id IS NOT NULL
+      `);
+
+      const dupCheck2 = await pool.query(`
+        SELECT COUNT(*) as cnt FROM (
+          SELECT employee_id, schedule_date, branch_id, COUNT(*) as c
+          FROM employee_schedules
+          WHERE branch_employee_id IS NULL AND branch_id IS NOT NULL
+          GROUP BY employee_id, schedule_date, branch_id
+          HAVING COUNT(*) > 1
+        ) sub
+      `);
+      const dupCount2 = parseInt(dupCheck2.rows[0]?.cnt || '0', 10);
+      if (dupCount2 > 0) {
+        console.log(`[SCHEDULE CLEANUP] Found ${dupCount2} employeeId-only duplicate groups - cleaning...`);
+        await pool.query(`
+          DELETE FROM employee_schedules
+          WHERE id IN (
+            SELECT id FROM (
+              SELECT id, ROW_NUMBER() OVER (
+                PARTITION BY employee_id, schedule_date, branch_id
+                ORDER BY id DESC
+              ) as rn
+              FROM employee_schedules
+              WHERE branch_employee_id IS NULL AND branch_id IS NOT NULL
+            ) ranked
+            WHERE rn > 1
+          )
+        `);
+      }
+
+      await pool.query(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_schedule_per_empid_date_branch
+        ON employee_schedules (employee_id, schedule_date, branch_id)
+        WHERE branch_employee_id IS NULL AND branch_id IS NOT NULL
+      `);
+      console.log("[SCHEDULE CLEANUP] Unique indexes on employee_schedules verified");
+    } catch (schedErr: any) {
+      console.error("[SCHEDULE CLEANUP] Error:", schedErr?.message);
+    }
+
     console.log("Startup migrations completed successfully");
   } catch (err) {
     console.error("Startup migration error:", err);

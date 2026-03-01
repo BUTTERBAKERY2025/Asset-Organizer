@@ -72,6 +72,11 @@ The system uses a modern web architecture with a React-based frontend and a Node
 - **Deduplicated Init Fetch**: main.tsx fetch shares result with useAppInit via queryClient.setQueryData, preventing duplicate /api/auth/init requests.
 - **Mobile-Aware Preloading**: Detects low-end devices and slow connections; Wave 3 pages desktop-only; adaptive delays.
 
+### Data Integrity
+- **Employee Schedule Deduplication**: UNIQUE indexes on `employee_schedules(branch_employee_id, schedule_date, branch_id)` and `(employee_id, schedule_date, branch_id)` prevent duplicate schedule entries at database level. Startup migration auto-cleans any existing duplicates before creating constraints.
+- **Transactional Bulk Save**: `createBulkEmployeeSchedules` uses `db.transaction()` for atomic all-or-nothing operations. On failure, all changes are rolled back.
+- **Upsert Pattern**: Both single and bulk schedule saves check for existing records by `branchEmployeeId` first, then `employeeId` fallback, before deciding insert vs update.
+
 ### System Design Choices
 - **Shared Schema**: `shared/` directory for database schema.
 - **Modular Design**: Distinct modules for construction, operations, and cashier functions.
