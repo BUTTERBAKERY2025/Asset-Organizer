@@ -214,13 +214,13 @@
 }
 
 @keyframes pageReady {
-  0% { opacity: 0; transform: translateY(8px) scale(0.999); }
-  60% { opacity: 1; }
-  100% { opacity: 1; transform: translateY(0) scale(1); }
+  0% { opacity: 0; transform: translateY(6px); }
+  50% { opacity: 0.85; }
+  100% { opacity: 1; transform: translateY(0); }
 }
 
 .page-ready {
-  animation: pageReady 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: pageReady 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 html.vt-active .page-ready {
@@ -232,27 +232,26 @@ html.vt-active .page-ready {
 }
 
 ::view-transition-old(root) {
-  animation: fadeInFast 60ms ease-out reverse;
+  animation: fadeInFast 50ms ease-out reverse;
 }
 
 ::view-transition-new(root) {
-  animation: pageReady 120ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: pageReady 100ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @keyframes nprogress-bar {
   0% { width: 0%; }
-  3% { width: 18%; }
-  10% { width: 42%; }
-  20% { width: 58%; }
-  35% { width: 70%; }
-  55% { width: 82%; }
-  80% { width: 90%; }
-  100% { width: 94%; }
+  5% { width: 25%; }
+  15% { width: 50%; }
+  30% { width: 65%; }
+  50% { width: 78%; }
+  70% { width: 88%; }
+  100% { width: 95%; }
 }
 
 @keyframes nprogress-complete {
-  0% { opacity: 1; width: 94%; }
-  40% { width: 100%; opacity: 1; }
+  0% { opacity: 1; }
+  30% { width: 100%; opacity: 1; }
   100% { width: 100%; opacity: 0; height: 0; }
 }
 
@@ -262,7 +261,7 @@ html.vt-active .page-ready {
 }
 
 @keyframes nprogress-glow-pulse {
-  0%, 100% { opacity: 0.5; }
+  0%, 100% { opacity: 0.4; }
   50% { opacity: 1; }
 }
 
@@ -271,15 +270,14 @@ html.vt-active .page-ready {
   top: 0;
   right: 0;
   left: 0;
-  height: 3px;
+  height: 2.5px;
   background: linear-gradient(90deg, #c89630, #d4a853, #f0d080, #ebb548, #d4a853);
   background-size: 300% 100%;
   z-index: 9999;
   pointer-events: none;
   width: 0%;
   opacity: 0;
-  box-shadow: 0 1px 8px rgba(212, 168, 83, 0.5);
-  transition: opacity 80ms ease;
+  box-shadow: 0 0 10px rgba(212, 168, 83, 0.6);
   transform: translateZ(0);
   will-change: width, opacity;
 }
@@ -288,20 +286,20 @@ html.vt-active .page-ready {
   content: '';
   position: absolute;
   left: 0;
-  top: -2px;
-  width: 100px;
-  height: 6px;
+  top: -1px;
+  width: 80px;
+  height: 5px;
   border-radius: 50%;
-  background: radial-gradient(ellipse, rgba(240, 208, 128, 0.95), transparent 70%);
-  box-shadow: 0 0 16px 6px rgba(212, 168, 83, 0.4);
+  background: radial-gradient(ellipse, rgba(240, 208, 128, 0.9), transparent 70%);
+  box-shadow: 0 0 12px 4px rgba(212, 168, 83, 0.35);
   opacity: 0;
-  animation: nprogress-glow-pulse 0.8s ease-in-out infinite;
+  animation: nprogress-glow-pulse 0.6s ease-in-out infinite;
 }
 
 #nav-progress-bar.loading {
   opacity: 1;
-  animation: nprogress-bar 1.6s cubic-bezier(0.08, 0.82, 0.17, 1) forwards,
-             nprogress-shimmer 1s linear infinite;
+  animation: nprogress-bar 1s cubic-bezier(0.08, 0.82, 0.17, 1) forwards,
+             nprogress-shimmer 0.8s linear infinite;
 }
 
 #nav-progress-bar.loading::after {
@@ -309,12 +307,12 @@ html.vt-active .page-ready {
 }
 
 #nav-progress-bar.complete {
-  animation: nprogress-complete 200ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: nprogress-complete 160ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 #nav-progress-bar.complete::after {
   opacity: 0;
-  transition: opacity 100ms;
+  transition: opacity 80ms;
 }
 
 @keyframes skeletonShimmer {
@@ -334,14 +332,15 @@ html.vt-active .page-ready {
   overflow: hidden;
   transform: translateZ(0);
   contain: layout paint;
+  animation: skeletonFadeIn 120ms ease-out both;
 }
 
 .skeleton-shimmer::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.3) 20%, rgba(255,255,255,0.65) 50%, rgba(255,255,255,0.3) 80%, transparent 100%);
-  animation: skeletonShimmer 1.4s ease-in-out infinite;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.25) 15%, rgba(255,255,255,0.6) 50%, rgba(255,255,255,0.25) 85%, transparent 100%);
+  animation: skeletonShimmer 1.2s ease-in-out infinite;
   background-size: 250% 100%;
   will-change: background-position;
 }
@@ -353,13 +352,13 @@ html.vt-active .page-ready {
 
 @keyframes nav-active-glow {
   0% { box-shadow: 0 0 0 rgba(212, 168, 83, 0); }
-  50% { box-shadow: 0 0 10px rgba(212, 168, 83, 0.6); }
-  100% { box-shadow: 0 0 6px rgba(212, 168, 83, 0.3); }
+  40% { box-shadow: 0 0 8px rgba(212, 168, 83, 0.5); }
+  100% { box-shadow: 0 0 4px rgba(212, 168, 83, 0.2); }
 }
 
 .nav-active-indicator {
-  animation: nav-active-slide 200ms cubic-bezier(0.34, 1.56, 0.64, 1),
-             nav-active-glow 500ms ease-out 80ms both;
+  animation: nav-active-slide 160ms cubic-bezier(0.34, 1.56, 0.64, 1),
+             nav-active-glow 400ms ease-out 60ms both;
 }
 
 @keyframes nav-ripple {
@@ -411,20 +410,20 @@ nav [data-state] {
 
 nav a {
   -webkit-tap-highlight-color: transparent;
-  transition: transform 80ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 60ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @media (hover: hover) {
   nav a:hover .nav-item-inner {
-    transform: translateX(-3px);
-    transition: transform 120ms cubic-bezier(0.22, 1, 0.36, 1);
+    transform: translateX(-2px);
+    transition: transform 100ms cubic-bezier(0.22, 1, 0.36, 1);
     background-color: hsl(40 20% 96%);
   }
 }
 
 nav a:active .nav-item-inner {
-  transform: scale(0.97);
-  transition: transform 50ms ease;
+  transform: scale(0.98);
+  transition: transform 40ms ease;
 }
 
 @media (prefers-reduced-motion: reduce) {

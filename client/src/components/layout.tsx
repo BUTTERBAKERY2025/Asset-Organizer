@@ -65,12 +65,50 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const { canView } = usePermissions();
   const { t, i18n } = useTranslation("platformHome");
   const currentLang = i18n.language;
+  const ROUTE_TO_GROUP: Record<string, string> = useMemo(() => ({
+    "/branch-employees": "hr", "/organizational-structure": "hr", "/attendance-dashboard": "hr",
+    "/shift-management": "hr", "/attendance-check": "hr", "/timesheet": "hr", "/employee-reports": "hr",
+    "/production-dashboard": "production", "/advanced-production-orders": "production", "/daily-production": "production",
+    "/finished-goods-inventory": "production", "/sales-data-uploads": "production", "/production-reports": "production",
+    "/production-comparisons": "production", "/production-comparison-reports": "production", "/production": "production",
+    "/product-category-management": "production",
+    "/operations": "operations", "/branch-shifts": "operations", "/shift-reports": "operations",
+    "/products": "operations", "/quality-control": "operations", "/display-bar-waste": "operations",
+    "/operations-employees": "operations", "/operations-reports": "operations",
+    "/cashier-journals": "sales", "/branch-daily-closures": "sales", "/branch-daily-closing": "sales",
+    "/sales-analytics": "sales", "/targets-planning": "sales", "/targets-dashboard": "sales",
+    "/cashier-shift-performance": "sales", "/incentives-management": "sales", "/pnl-dashboard": "sales",
+    "/event-pos": "sales", "/event-pos-settings": "sales",
+    "/dashboard": "assets", "/inventory": "assets", "/manage": "assets", "/asset-transfers": "assets",
+    "/branches": "assets", "/inspections": "assets", "/maintenance": "assets", "/reports": "assets",
+    "/construction-projects": "construction", "/contractors": "construction", "/contracts": "construction",
+    "/payment-requests": "construction", "/budget-planning": "construction", "/construction-reports": "construction",
+    "/construction-dashboard": "construction",
+    "/marketing": "marketing", "/marketing-campaigns": "marketing", "/marketing-social": "marketing",
+    "/social-responsibility": "marketing", "/marketing-influencers": "marketing", "/influencer-contracts": "marketing",
+    "/marketing-calendar": "marketing", "/marketing-tasks": "marketing", "/marketing-reports": "marketing",
+    "/marketing-team": "marketing", "/marketing-goals": "marketing", "/marketing-assets": "marketing",
+    "/marketing-alerts": "marketing", "/marketing-expenses": "marketing",
+    "/warehouse": "warehouse", "/warehouse-dashboard": "warehouse", "/transfer-requests": "warehouse",
+    "/warehouse-inventory": "warehouse", "/branch-stock": "warehouse", "/warehouse-movement-logs": "warehouse",
+    "/purchasing-requests": "warehouse", "/warehouse-reports": "warehouse",
+    "/executive": "executive", "/executive/meetings": "executive", "/executive/tasks": "executive",
+    "/executive/correspondence": "executive", "/executive/calendar": "executive", "/executive/reports": "executive",
+    "/executive/templates": "executive", "/executive/org-structure": "executive",
+    "/documents": "executive", "/governance": "executive", "/visitors": "executive", "/travel-requests": "executive",
+    "/settings": "settings", "/security-management": "settings", "/users": "settings",
+    "/rbac-management": "settings", "/integrations": "settings", "/audit-logs": "settings",
+    "/backups": "settings", "/biometric-settings": "settings", "/notifications-management": "settings",
+  }), []);
+
   const getInitialOpenGroups = useCallback(() => {
     const groups: Record<string, boolean> = {
       hr: false, production: false, operations: false, sales: false,
       assets: false, construction: false, marketing: false, warehouse: false,
       executive: false, settings: false,
     };
+    const activeGroup = ROUTE_TO_GROUP[location];
+    if (activeGroup) groups[activeGroup] = true;
     return groups;
   }, []);
   const [openGroups, setOpenGroups] = useState(getInitialOpenGroups);
@@ -95,6 +133,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
     }
     prevLocationRef.current = location;
     setMobileMenuOpen(false);
+    const activeGroup = ROUTE_TO_GROUP[location];
+    if (activeGroup) {
+      setOpenGroups(prev => prev[activeGroup] ? prev : { ...prev, [activeGroup]: true });
+    }
     prefetchAdjacentPages(location);
     requestAnimationFrame(() => {
       const bar = document.getElementById("nav-progress-bar");
@@ -434,8 +476,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
     }
     setTimeout(() => {
       const b = document.getElementById("nav-progress-bar");
-      if (b && b.classList.contains("loading")) { b.className = "complete"; setTimeout(() => { b.className = ""; }, 200); }
-    }, 3000);
+      if (b && b.classList.contains("loading")) { b.className = "complete"; setTimeout(() => { b.className = ""; }, 180); }
+    }, 1500);
   }, [setLocation, location]);
 
   const renderNavItem = useCallback((item: NavItem, inGroup = false) => (
