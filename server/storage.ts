@@ -8165,128 +8165,114 @@ export class DatabaseStorage implements IStorage {
     });
 
     try {
-      await db.transaction(async (tx) => {
-        const branchIds = Array.from(new Set(deduplicatedSchedules.map(s => s.branchId).filter(Boolean))) as string[];
-        const dates = Array.from(new Set(deduplicatedSchedules.map(s => s.scheduleDate).filter(Boolean)));
-        const branchEmpIds = Array.from(new Set(deduplicatedSchedules.map(s => s.branchEmployeeId).filter(Boolean))) as number[];
-        const empIds = Array.from(new Set(deduplicatedSchedules.map(s => s.employeeId).filter(Boolean)));
+      const withBranchEmpId = deduplicatedSchedules.filter(s => s.branchEmployeeId != null);
+      const withoutBranchEmpId = deduplicatedSchedules.filter(s => s.branchEmployeeId == null);
 
-        let existingRecords: EmployeeSchedule[] = [];
-        if (dates.length > 0 && branchIds.length > 0) {
-          const branchDateFilter = and(
-            inArray(employeeSchedules.scheduleDate, dates),
-            inArray(employeeSchedules.branchId, branchIds)
-          )!;
-          
-          const conditions: any[] = [];
-          if (branchEmpIds.length > 0) {
-            conditions.push(and(branchDateFilter, inArray(employeeSchedules.branchEmployeeId, branchEmpIds)));
-          }
-          if (empIds.length > 0) {
-            conditions.push(and(branchDateFilter, inArray(employeeSchedules.employeeId, empIds)));
-          }
-          
-          if (conditions.length > 0) {
-            existingRecords = await tx.select().from(employeeSchedules)
-              .where(conditions.length === 1 ? conditions[0] : or(...conditions));
-          }
+      if (withBranchEmpId.length > 0) {
+        const { values, placeholders } = this.buildScheduleParams(withBranchEmpId);
+        const sql = `
+          INSERT INTO employee_schedules (employee_id, employee_name, branch_id, branch_employee_id, schedule_date, day_of_week, shift_type, start_time, end_time, is_off, break_duration, notes, status, created_at, updated_at)
+          VALUES ${placeholders}
+          ON CONFLICT (branch_employee_id, schedule_date, branch_id) WHERE branch_employee_id IS NOT NULL AND branch_id IS NOT NULL
+          DO UPDATE SET
+            employee_name = EXCLUDED.employee_name, employee_id = EXCLUDED.employee_id,
+            shift_type = EXCLUDED.shift_type, start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time,
+            is_off = EXCLUDED.is_off, break_duration = EXCLUDED.break_duration, notes = EXCLUDED.notes,
+            day_of_week = EXCLUDED.day_of_week, updated_at = NOW()
+          RETURNING *
+        `;
+        console.log(`[BULK SCHEDULE] UPSERT ${withBranchEmpId.length} records (branchEmployeeId path)`);
+        const result = await pool.query(sql, values);
+        if (result.rows) {
+          for (const row of result.rows) results.push(this.mapScheduleRow(row));
         }
+      }
 
-        const existingByBranchEmp = new Map<string, EmployeeSchedule[]>();
-        const existingByEmpId = new Map<string, EmployeeSchedule[]>();
-        for (const rec of existingRecords) {
-          if (rec.branchEmployeeId && rec.branchId) {
-            const key = `${rec.branchEmployeeId}_${rec.scheduleDate}_${rec.branchId}`;
-            const arr = existingByBranchEmp.get(key) || [];
-            arr.push(rec);
-            existingByBranchEmp.set(key, arr);
-          }
-          if (rec.branchId) {
-            const key = `${rec.employeeId}_${rec.scheduleDate}_${rec.branchId}`;
-            const arr = existingByEmpId.get(key) || [];
-            arr.push(rec);
-            existingByEmpId.set(key, arr);
-          }
-        }
-
-        const toInsert: any[] = [];
-        const toUpdate: { id: number; data: Record<string, any> }[] = [];
-        const duplicateIdsToDelete: number[] = [];
-
-        for (const schedule of deduplicatedSchedules) {
-          const updateData: Record<string, any> = {
-            employeeId: schedule.employeeId,
-            employeeName: schedule.employeeName,
-            branchId: schedule.branchId || null,
-            branchEmployeeId: schedule.branchEmployeeId || null,
-            scheduleDate: schedule.scheduleDate,
-            dayOfWeek: schedule.dayOfWeek || "sat",
-            shiftType: schedule.shiftType || null,
-            startTime: schedule.startTime || null,
-            endTime: schedule.endTime || null,
-            isOff: schedule.isOff ?? false,
-            breakDuration: schedule.breakDuration ?? 60,
-            status: schedule.status || "scheduled",
-            notes: schedule.notes || null,
-          };
-
-          let matchedRecords: EmployeeSchedule[] = [];
-          const sBranchId = schedule.branchId || '';
-          if (schedule.branchEmployeeId && sBranchId) {
-            matchedRecords = existingByBranchEmp.get(`${schedule.branchEmployeeId}_${schedule.scheduleDate}_${sBranchId}`) || [];
-          }
-          if (matchedRecords.length === 0 && schedule.employeeId && sBranchId) {
-            matchedRecords = existingByEmpId.get(`${schedule.employeeId}_${schedule.scheduleDate}_${sBranchId}`) || [];
-          }
-
-          if (matchedRecords.length > 0) {
-            matchedRecords.sort((a, b) => b.id - a.id);
-            const keepRecord = matchedRecords[0];
-            toUpdate.push({ id: keepRecord.id, data: { ...updateData, updatedAt: new Date() } });
-            for (let i = 1; i < matchedRecords.length; i++) {
-              duplicateIdsToDelete.push(matchedRecords[i].id);
+      if (withoutBranchEmpId.length > 0) {
+        const alreadySaved = new Set(results.map(r => `${r.employeeId}_${r.scheduleDate}_${r.branchId}`));
+        const remaining = withoutBranchEmpId.filter(s => !alreadySaved.has(`${s.employeeId}_${s.scheduleDate}_${s.branchId}`));
+        if (remaining.length > 0) {
+          const { values, placeholders } = this.buildScheduleParams(remaining);
+          const sql = `
+            INSERT INTO employee_schedules (employee_id, employee_name, branch_id, branch_employee_id, schedule_date, day_of_week, shift_type, start_time, end_time, is_off, break_duration, notes, status, created_at, updated_at)
+            VALUES ${placeholders}
+            ON CONFLICT (employee_id, schedule_date, branch_id) WHERE branch_employee_id IS NULL AND branch_id IS NOT NULL
+            DO UPDATE SET
+              employee_name = EXCLUDED.employee_name,
+              shift_type = EXCLUDED.shift_type, start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time,
+              is_off = EXCLUDED.is_off, break_duration = EXCLUDED.break_duration, notes = EXCLUDED.notes,
+              day_of_week = EXCLUDED.day_of_week, updated_at = NOW()
+            RETURNING *
+          `;
+          console.log(`[BULK SCHEDULE] UPSERT ${remaining.length} records (employeeId fallback path)`);
+          try {
+            const result2 = await pool.query(sql, values);
+            if (result2.rows) {
+              for (const row of result2.rows) results.push(this.mapScheduleRow(row));
             }
-          } else {
-            toInsert.push(updateData);
+          } catch (e: any) {
+            console.log(`[BULK SCHEDULE] Fallback upsert skipped: ${e?.message}`);
           }
         }
+      }
 
-        if (duplicateIdsToDelete.length > 0) {
-          console.log(`[BULK SCHEDULE] Cleaning ${duplicateIdsToDelete.length} duplicate records inside transaction`);
-          await tx.delete(employeeSchedules).where(inArray(employeeSchedules.id, duplicateIdsToDelete));
-        }
-
-        if (toUpdate.length > 0) {
-          const UPDATE_BATCH = 15;
-          for (let i = 0; i < toUpdate.length; i += UPDATE_BATCH) {
-            const batch = toUpdate.slice(i, i + UPDATE_BATCH);
-            const updateResults = await Promise.all(
-              batch.map(item =>
-                tx.update(employeeSchedules)
-                  .set(item.data)
-                  .where(eq(employeeSchedules.id, item.id))
-                  .returning()
-                  .then(rows => rows[0])
-              )
-            );
-            results.push(...updateResults.filter(Boolean));
-          }
-        }
-
-        if (toInsert.length > 0) {
-          const inserted = await tx.insert(employeeSchedules).values(toInsert).returning();
-          results.push(...inserted);
-        }
-
-        console.log(`[BULK SCHEDULE] Transaction complete: ${toInsert.length} inserts, ${toUpdate.length} updates, ${duplicateIdsToDelete.length} duplicates cleaned, ${results.length} total`);
-      });
+      console.log(`[BULK SCHEDULE] UPSERT complete: ${results.length} records saved in 1-2 queries`);
     } catch (batchError: any) {
-      console.error(`[BULK SCHEDULE] Transaction failed (all rolled back):`, batchError?.message);
-      results.length = 0;
-      errors.push(`خطأ في حفظ الجداول: ${batchError?.message || 'unknown'}`);
+      console.error(`[BULK SCHEDULE] UPSERT failed:`, batchError?.message);
+      
+      if (batchError?.code === '42704' || batchError?.message?.includes('does not exist')) {
+        console.log(`[BULK SCHEDULE] Constraint/index not found, falling back to individual saves`);
+        for (const s of deduplicatedSchedules) {
+          try {
+            const saved = await this.createEmployeeSchedule(s);
+            if (saved) results.push(saved);
+          } catch (e: any) {
+            errors.push(`${s.employeeName}: ${e?.message || 'خطأ'}`);
+          }
+        }
+      } else {
+        errors.push(`خطأ في حفظ الجداول: ${batchError?.message || 'unknown'}`);
+      }
     }
     
     return { results, errors };
+  }
+
+  private buildScheduleParams(schedules: InsertEmployeeSchedule[]): { values: any[]; placeholders: string } {
+    const values: any[] = [];
+    const rows: string[] = [];
+    let i = 1;
+    for (const s of schedules) {
+      rows.push(`($${i}, $${i+1}, $${i+2}, $${i+3}, $${i+4}, $${i+5}, $${i+6}, $${i+7}, $${i+8}, $${i+9}, $${i+10}, $${i+11}, 'scheduled', NOW(), NOW())`);
+      values.push(
+        s.employeeId || null, s.employeeName || null, s.branchId || null, s.branchEmployeeId || null,
+        s.scheduleDate, s.dayOfWeek || 'sat', s.shiftType || null, s.startTime || null,
+        s.endTime || null, s.isOff ?? false, s.breakDuration ?? 60, s.notes || null
+      );
+      i += 12;
+    }
+    return { values, placeholders: rows.join(', ') };
+  }
+
+  private mapScheduleRow(row: any): EmployeeSchedule {
+    return {
+      id: row.id,
+      employeeId: row.employee_id,
+      employeeName: row.employee_name,
+      branchId: row.branch_id,
+      branchEmployeeId: row.branch_employee_id,
+      scheduleDate: row.schedule_date,
+      dayOfWeek: row.day_of_week,
+      shiftType: row.shift_type,
+      startTime: row.start_time,
+      endTime: row.end_time,
+      isOff: row.is_off,
+      breakDuration: row.break_duration,
+      status: row.status,
+      notes: row.notes,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
   }
 
   async getEmployeeScheduleById(id: number): Promise<EmployeeSchedule | undefined> {
