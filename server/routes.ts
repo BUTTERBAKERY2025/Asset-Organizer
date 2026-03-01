@@ -22383,7 +22383,7 @@ export async function registerRoutes(
         return res.status(400).json({ error: "حجم التوقيع كبير جداً" });
       }
 
-      const today = new Date().toISOString().split('T')[0];
+      const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Riyadh', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
       const existingRecord = await storage.getAttendanceByEmployeeAndDate(currentUser?.id, today);
       if (existingRecord && !existingRecord.actualCheckOut) {
         return res.status(400).json({ error: "لقد سجلت حضورك مسبقاً اليوم" });

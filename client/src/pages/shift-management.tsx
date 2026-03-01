@@ -64,6 +64,16 @@ export default function ShiftManagementPage() {
   const [showLockedDialog, setShowLockedDialog] = useState(false);
   const [showAuditTrail, setShowAuditTrail] = useState(false);
   const [showApplyConfirmDialog, setShowApplyConfirmDialog] = useState(false);
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [hasUnsavedChanges]);
   
   // Report filter states
   const [reportPeriod, setReportPeriod] = useState<string>("thisWeek");
@@ -311,6 +321,10 @@ export default function ShiftManagementPage() {
   }, [currentWeekStart]);
 
   const handleScheduleChange = (employeeId: string, dateStr: string, field: keyof ScheduleCell, value: string | boolean) => {
+    if (isScheduleLocked) {
+      toast({ title: "الجدول مقفل", description: "لا يمكن التعديل - الجدول مقفل لهذا الأسبوع", variant: "destructive" });
+      return;
+    }
     setScheduleData(prev => ({
       ...prev,
       [employeeId]: {
@@ -465,6 +479,8 @@ export default function ShiftManagementPage() {
 
   useEffect(() => {
     setSelectedShiftProfile("morning");
+    setScheduleData({});
+    setHasUnsavedChanges(false);
   }, [selectedBranch]);
 
   const selectedProfileValid = useMemo(() => {

@@ -8450,24 +8450,8 @@ export class DatabaseStorage implements IStorage {
       throw new Error("يوجد سجل حضور مفتوح بالفعل لهذا اليوم");
     }
     
-    if (existing) {
-      try {
-        const [updated] = await db.update(attendanceRecords).set({
-          actualCheckIn: now,
-          checkInSignature: signature,
-          deviceInfo,
-          status: 'present',
-          updatedAt: new Date()
-        }).where(eq(attendanceRecords.id, existing.id)).returning();
-        return updated;
-      } catch (error: any) {
-        if (error?.code === '42703') {
-          await pool.query(`UPDATE attendance_records SET actual_check_in = $1, check_in_signature = $2, device_info = $3, status = 'present', updated_at = NOW() WHERE id = $4`, [now, signature, deviceInfo, existing.id]);
-          const record = await this.getAttendanceRecord(existing.id);
-          return record!;
-        }
-        throw error;
-      }
+    if (existing && existing.actualCheckOut) {
+      throw new Error("لقد سجلت حضورك وانصرافك بالفعل اليوم - لا يمكن تسجيل الحضور مرة أخرى");
     }
     
     try {
@@ -8940,11 +8924,14 @@ export class DatabaseStorage implements IStorage {
     
     let existing = await this.getAttendanceByEmployeeAndDate(employeeId, today);
     
-    if (existing && existing.actualCheckIn) {
-      throw new Error("تم تسجيل حضور هذا الموظف مسبقاً");
+    if (existing && existing.actualCheckIn && !existing.actualCheckOut) {
+      throw new Error("تم تسجيل حضور هذا الموظف مسبقاً - لم يسجل انصرافه بعد");
     }
     
-    // Calculate late minutes if scheduled time is provided
+    if (existing && existing.actualCheckIn && existing.actualCheckOut) {
+      throw new Error("تم تسجيل حضور وانصراف هذا الموظف بالفعل اليوم");
+    }
+    
     let lateMinutes = 0;
     if (scheduledStartTime) {
       const scheduled = new Date(`1970-01-01T${scheduledStartTime}`);
@@ -8955,28 +8942,6 @@ export class DatabaseStorage implements IStorage {
     }
     
     const status = lateMinutes > 0 ? 'late' : 'present';
-    
-    if (existing) {
-      try {
-        const [updated] = await db.update(attendanceRecords).set({
-          actualCheckIn: now,
-          checkInSignature: signature,
-          scheduleId: scheduleId,
-          scheduledStartTime: scheduledStartTime,
-          scheduledEndTime: scheduledEndTime,
-          lateMinutes,
-          status,
-          updatedAt: new Date()
-        }).where(eq(attendanceRecords.id, existing.id)).returning();
-        return updated;
-      } catch (error: any) {
-        if (error?.code === '42703') {
-          await pool.query(`UPDATE attendance_records SET actual_check_in = $1, check_in_signature = $2, schedule_id = $3, scheduled_start_time = $4, scheduled_end_time = $5, late_minutes = $6, status = $7, updated_at = NOW() WHERE id = $8`, [now, signature, scheduleId, scheduledStartTime, scheduledEndTime, lateMinutes, status, existing.id]);
-          return (await this.getAttendanceRecord(existing.id))!;
-        }
-        throw error;
-      }
-    }
     
     // Validate scheduleId exists if provided
     if (scheduleId) {
