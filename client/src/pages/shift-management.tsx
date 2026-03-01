@@ -1954,7 +1954,7 @@ export default function ShiftManagementPage() {
                                           <Badge variant="secondary" className="text-xs">{t("shiftManagement.off")}</Badge>
                                         </div>
                                       )}
-                                      {attendance && (
+                                      {!cellData.isOff && attendance && (
                                         <Badge className={`text-xs ${attendance.color}`}>{attendance.label}</Badge>
                                       )}
                                     </div>

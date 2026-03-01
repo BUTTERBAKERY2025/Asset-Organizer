@@ -8145,7 +8145,9 @@ export class DatabaseStorage implements IStorage {
     
     const inputSeen = new Set<string>();
     const deduplicatedSchedules = schedules.filter(s => {
-      const key = `${s.employeeId}_${s.scheduleDate}_${s.branchId}`;
+      const key = s.branchEmployeeId 
+        ? `be_${s.branchEmployeeId}_${s.scheduleDate}_${s.branchId}`
+        : `ei_${s.employeeId}_${s.scheduleDate}_${s.branchId}`;
       if (inputSeen.has(key)) return false;
       inputSeen.add(key);
       return true;
@@ -8178,19 +8180,26 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
-      const existingByBranchEmp = new Map<string, EmployeeSchedule>();
-      const existingByEmpId = new Map<string, EmployeeSchedule>();
+      const existingByBranchEmp = new Map<string, EmployeeSchedule[]>();
+      const existingByEmpId = new Map<string, EmployeeSchedule[]>();
       for (const rec of existingRecords) {
         if (rec.branchEmployeeId && rec.branchId) {
-          existingByBranchEmp.set(`${rec.branchEmployeeId}_${rec.scheduleDate}_${rec.branchId}`, rec);
+          const key = `${rec.branchEmployeeId}_${rec.scheduleDate}_${rec.branchId}`;
+          const arr = existingByBranchEmp.get(key) || [];
+          arr.push(rec);
+          existingByBranchEmp.set(key, arr);
         }
         if (rec.branchId) {
-          existingByEmpId.set(`${rec.employeeId}_${rec.scheduleDate}_${rec.branchId}`, rec);
+          const key = `${rec.employeeId}_${rec.scheduleDate}_${rec.branchId}`;
+          const arr = existingByEmpId.get(key) || [];
+          arr.push(rec);
+          existingByEmpId.set(key, arr);
         }
       }
 
       const toInsert: any[] = [];
       const toUpdate: { id: number; data: Record<string, any> }[] = [];
+      const duplicateIdsToDelete: number[] = [];
 
       for (const schedule of deduplicatedSchedules) {
         const updateData: Record<string, any> = {
@@ -8209,19 +8218,33 @@ export class DatabaseStorage implements IStorage {
           notes: schedule.notes || null,
         };
 
-        let existing: EmployeeSchedule | undefined;
+        let matchedRecords: EmployeeSchedule[] = [];
         const sBranchId = schedule.branchId || '';
         if (schedule.branchEmployeeId && sBranchId) {
-          existing = existingByBranchEmp.get(`${schedule.branchEmployeeId}_${schedule.scheduleDate}_${sBranchId}`);
+          matchedRecords = existingByBranchEmp.get(`${schedule.branchEmployeeId}_${schedule.scheduleDate}_${sBranchId}`) || [];
         }
-        if (!existing && schedule.employeeId && sBranchId) {
-          existing = existingByEmpId.get(`${schedule.employeeId}_${schedule.scheduleDate}_${sBranchId}`);
+        if (matchedRecords.length === 0 && schedule.employeeId && sBranchId) {
+          matchedRecords = existingByEmpId.get(`${schedule.employeeId}_${schedule.scheduleDate}_${sBranchId}`) || [];
         }
 
-        if (existing) {
-          toUpdate.push({ id: existing.id, data: { ...updateData, updatedAt: new Date() } });
+        if (matchedRecords.length > 0) {
+          matchedRecords.sort((a, b) => b.id - a.id);
+          const keepRecord = matchedRecords[0];
+          toUpdate.push({ id: keepRecord.id, data: { ...updateData, updatedAt: new Date() } });
+          for (let i = 1; i < matchedRecords.length; i++) {
+            duplicateIdsToDelete.push(matchedRecords[i].id);
+          }
         } else {
           toInsert.push(updateData);
+        }
+      }
+
+      if (duplicateIdsToDelete.length > 0) {
+        console.log(`[BULK SCHEDULE] Cleaning ${duplicateIdsToDelete.length} duplicate records`);
+        const DEL_BATCH = 100;
+        for (let i = 0; i < duplicateIdsToDelete.length; i += DEL_BATCH) {
+          const batch = duplicateIdsToDelete.slice(i, i + DEL_BATCH);
+          await db.delete(employeeSchedules).where(inArray(employeeSchedules.id, batch));
         }
       }
 
@@ -8258,7 +8281,7 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
-      console.log(`[BULK SCHEDULE] Batch complete: ${toInsert.length} inserts, ${toUpdate.length} updates, ${results.length} success, ${errors.length} errors`);
+      console.log(`[BULK SCHEDULE] Complete: ${toInsert.length} inserts, ${toUpdate.length} updates, ${duplicateIdsToDelete.length} duplicates cleaned, ${results.length} success, ${errors.length} errors`);
     } catch (batchError: any) {
       console.error(`[BULK SCHEDULE] Batch operation failed:`, batchError?.message);
       errors.push(`خطأ عام: ${batchError?.message || 'unknown'}`);
@@ -8668,8 +8691,25 @@ export class DatabaseStorage implements IStorage {
 
     if (uniqueEmployees.length === 0) {
       console.log(`[ATTENDANCE-DEBUG] No employees found for today. Trying fallback...`);
-      // Fallback 1: Look for the most recent schedules for this branch+shift and replicate
-      // First try with exact shiftType match in the query
+      
+      const todayOffEmployees = new Set<string>();
+      const todayOffBranchEmpIds = new Set<number>();
+      const offSchedules = await db.select({
+        employeeId: employeeSchedules.employeeId,
+        branchEmployeeId: employeeSchedules.branchEmployeeId,
+      }).from(employeeSchedules).where(and(
+        eq(employeeSchedules.branchId, branchId),
+        eq(employeeSchedules.scheduleDate, date),
+        eq(employeeSchedules.isOff, true)
+      ));
+      for (const os of offSchedules) {
+        todayOffEmployees.add(os.employeeId);
+        if (os.branchEmployeeId) todayOffBranchEmpIds.add(os.branchEmployeeId);
+      }
+      if (todayOffEmployees.size > 0) {
+        console.log(`[ATTENDANCE-DEBUG] Found ${todayOffEmployees.size} employees marked as OFF today - will exclude from fallback`);
+      }
+
       let recentSchedules = await db.select({
         employeeId: employeeSchedules.employeeId,
         employeeName: employeeSchedules.employeeName,
@@ -8765,10 +8805,12 @@ export class DatabaseStorage implements IStorage {
         const recentAttMap = new Map<string, any>();
         for (const r of recentAtt) recentAttMap.set(r.employeeId, r);
 
-        // Filter out transferred/inactive employees
         const validEmployees = deduped.filter(s => {
+          if (todayOffEmployees.has(s.employeeId)) return false;
+          if (s.branchEmployeeId && todayOffBranchEmpIds.has(s.branchEmployeeId)) return false;
           if (s.employeeId.startsWith('branch_emp_')) {
             const id = parseInt(s.employeeId.replace('branch_emp_', ''), 10);
+            if (todayOffBranchEmpIds.has(id)) return false;
             const emp = recentBranchEmpLookup.get(id);
             if (emp && (emp.branchId !== branchId || emp.status !== 'active')) return false;
           }
@@ -8827,20 +8869,22 @@ export class DatabaseStorage implements IStorage {
         fallbackAttMap.set(rec.employeeId, rec);
       }
 
-      return activeEmployees.map(emp => {
-        const employeeId = `branch_emp_${emp.id}`;
-        return {
-          id: emp.id,
-          employeeId,
-          employeeName: emp.employeeName,
-          employeeNameEn: emp.employeeNameEn || '',
-          startTime: defaultTimes.start,
-          endTime: defaultTimes.end,
-          shiftType,
-          scheduleDate: date,
-          attendance: fallbackAttMap.get(employeeId) || null
-        };
-      });
+      return activeEmployees
+        .filter(emp => !todayOffBranchEmpIds.has(emp.id) && !todayOffEmployees.has(`branch_emp_${emp.id}`))
+        .map(emp => {
+          const employeeId = `branch_emp_${emp.id}`;
+          return {
+            id: emp.id,
+            employeeId,
+            employeeName: emp.employeeName,
+            employeeNameEn: emp.employeeNameEn || '',
+            startTime: defaultTimes.start,
+            endTime: defaultTimes.end,
+            shiftType,
+            scheduleDate: date,
+            attendance: fallbackAttMap.get(employeeId) || null
+          };
+        });
     }
 
     return uniqueEmployees;

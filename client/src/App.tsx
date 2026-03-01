@@ -146,7 +146,7 @@ function AppLoadingFallback() {
 function DelayedFallback() {
   const [show, setShow] = useState(false);
   useEffect(() => {
-    const t = setTimeout(() => setShow(true), 100);
+    const t = setTimeout(() => setShow(true), 80);
     return () => clearTimeout(t);
   }, []);
   if (!show) return <div className="min-h-[60vh]" />;
@@ -154,22 +154,22 @@ function DelayedFallback() {
     <div className="min-h-[60vh] p-6 space-y-5 skeleton-delayed" dir="rtl">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="h-8 skeleton-shimmer w-44 rounded-lg" />
-          <div className="h-6 skeleton-shimmer w-20 opacity-50 rounded-md" />
+          <div className="h-8 skeleton-shimmer w-44 rounded-lg" style={{ animationDelay: '0ms' }} />
+          <div className="h-6 skeleton-shimmer w-20 opacity-40 rounded-md" style={{ animationDelay: '50ms' }} />
         </div>
-        <div className="h-9 skeleton-shimmer w-32 rounded-lg opacity-40" />
+        <div className="h-9 skeleton-shimmer w-32 rounded-lg opacity-35" style={{ animationDelay: '80ms' }} />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        <div className="h-24 skeleton-shimmer rounded-xl" />
-        <div className="h-24 skeleton-shimmer rounded-xl opacity-90" />
-        <div className="h-24 skeleton-shimmer rounded-xl opacity-80" />
-        <div className="h-24 skeleton-shimmer rounded-xl opacity-70 hidden lg:block" />
+        <div className="h-[88px] skeleton-shimmer rounded-xl" style={{ animationDelay: '0ms' }} />
+        <div className="h-[88px] skeleton-shimmer rounded-xl opacity-85" style={{ animationDelay: '60ms' }} />
+        <div className="h-[88px] skeleton-shimmer rounded-xl opacity-75" style={{ animationDelay: '120ms' }} />
+        <div className="h-[88px] skeleton-shimmer rounded-xl opacity-65 hidden lg:block" style={{ animationDelay: '180ms' }} />
       </div>
       <div className="flex items-center gap-3">
-        <div className="h-10 skeleton-shimmer w-full max-w-sm rounded-lg" />
-        <div className="h-10 skeleton-shimmer w-28 rounded-lg opacity-50" />
+        <div className="h-10 skeleton-shimmer w-full max-w-sm rounded-lg" style={{ animationDelay: '40ms' }} />
+        <div className="h-10 skeleton-shimmer w-28 rounded-lg opacity-45" style={{ animationDelay: '100ms' }} />
       </div>
-      <div className="h-72 skeleton-shimmer rounded-xl" />
+      <div className="h-64 skeleton-shimmer rounded-xl" style={{ animationDelay: '60ms' }} />
     </div>
   );
 }

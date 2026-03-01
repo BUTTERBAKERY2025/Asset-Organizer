@@ -240,17 +240,17 @@ html.vt-active .page-ready {
 
 @keyframes nprogress-bar {
   0% { width: 0%; }
-  8% { width: 20%; }
-  25% { width: 45%; }
-  45% { width: 60%; }
-  70% { width: 78%; }
-  90% { width: 88%; }
-  100% { width: 92%; }
+  5% { width: 25%; }
+  15% { width: 50%; }
+  30% { width: 65%; }
+  50% { width: 78%; }
+  80% { width: 88%; }
+  100% { width: 93%; }
 }
 
 @keyframes nprogress-complete {
   0% { opacity: 1; }
-  40% { width: 100%; opacity: 1; }
+  30% { width: 100%; opacity: 1; }
   100% { width: 100%; opacity: 0; }
 }
 
@@ -259,19 +259,26 @@ html.vt-active .page-ready {
   100% { background-position: -200% 0; }
 }
 
+@keyframes nprogress-glow-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
 #nav-progress-bar {
   position: fixed;
   top: 0;
   right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, #d4a853, #e6be6a, #f0d080, #e6be6a, #d4a853);
+  height: 2.5px;
+  background: linear-gradient(90deg, #c89630, #d4a853, #f0d080, #e6be6a, #d4a853);
   background-size: 200% 100%;
   z-index: 9999;
   pointer-events: none;
   width: 0%;
   opacity: 0;
-  box-shadow: 0 0 8px rgba(212, 168, 83, 0.5);
-  transition: opacity 80ms ease;
+  box-shadow: 0 0 10px rgba(212, 168, 83, 0.6);
+  transition: opacity 60ms ease;
+  transform: translateZ(0);
+  will-change: width, opacity;
 }
 
 #nav-progress-bar::after {
@@ -279,18 +286,19 @@ html.vt-active .page-ready {
   position: absolute;
   left: 0;
   top: -1px;
-  width: 60px;
+  width: 80px;
   height: 4px;
   border-radius: 50%;
-  background: rgba(240, 208, 128, 0.85);
-  box-shadow: 0 0 10px 3px rgba(212, 168, 83, 0.5);
+  background: rgba(240, 208, 128, 0.9);
+  box-shadow: 0 0 12px 4px rgba(212, 168, 83, 0.55);
   opacity: 0;
+  animation: nprogress-glow-pulse 1s ease-in-out infinite;
 }
 
 #nav-progress-bar.loading {
   opacity: 1;
-  animation: nprogress-bar 3s cubic-bezier(0.08, 0.82, 0.17, 1) forwards,
-             nprogress-shimmer 1.5s linear infinite;
+  animation: nprogress-bar 2s cubic-bezier(0.08, 0.82, 0.17, 1) forwards,
+             nprogress-shimmer 1.2s linear infinite;
 }
 
 #nav-progress-bar.loading::after {
@@ -298,12 +306,12 @@ html.vt-active .page-ready {
 }
 
 #nav-progress-bar.complete {
-  animation: nprogress-complete 200ms ease-out forwards;
+  animation: nprogress-complete 150ms ease-out forwards;
 }
 
 #nav-progress-bar.complete::after {
   opacity: 0;
-  transition: opacity 100ms;
+  transition: opacity 80ms;
 }
 
 @keyframes skeletonShimmer {
@@ -321,41 +329,44 @@ html.vt-active .page-ready {
   border-radius: 8px;
   position: relative;
   overflow: hidden;
+  transform: translateZ(0);
 }
 
 .skeleton-shimmer::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.5) 40%, rgba(255,255,255,0.6) 50%, rgba(255,255,255,0.5) 60%, transparent 100%);
-  animation: skeletonShimmer 1.4s ease-in-out infinite;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.4) 30%, rgba(255,255,255,0.7) 50%, rgba(255,255,255,0.4) 70%, transparent 100%);
+  animation: skeletonShimmer 1.2s ease-in-out infinite;
   background-size: 300% 100%;
+  will-change: background-position;
 }
 
 @keyframes nav-active-slide {
-  from { opacity: 0; transform: scale(0); }
-  to { opacity: 1; transform: scale(1); }
+  from { opacity: 0; transform: scale(0) rotate(-90deg); }
+  to { opacity: 1; transform: scale(1) rotate(0deg); }
 }
 
 @keyframes nav-active-glow {
   0% { box-shadow: 0 0 0 rgba(212, 168, 83, 0); }
-  50% { box-shadow: 0 0 8px rgba(212, 168, 83, 0.4); }
-  100% { box-shadow: 0 0 4px rgba(212, 168, 83, 0.2); }
+  50% { box-shadow: 0 0 8px rgba(212, 168, 83, 0.5); }
+  100% { box-shadow: 0 0 5px rgba(212, 168, 83, 0.25); }
 }
 
 .nav-active-indicator {
-  animation: nav-active-slide 200ms cubic-bezier(0.22, 1, 0.36, 1),
-             nav-active-glow 500ms ease-out 80ms both;
+  animation: nav-active-slide 250ms cubic-bezier(0.34, 1.56, 0.64, 1),
+             nav-active-glow 600ms ease-out 100ms both;
 }
 
 @keyframes nav-ripple {
-  0% { transform: scale(0); opacity: 0.25; }
+  0% { transform: scale(0); opacity: 0.2; }
   100% { transform: scale(2.5); opacity: 0; }
 }
 
 .nav-item-inner {
   position: relative;
   overflow: hidden;
+  transform: translateZ(0);
 }
 
 .nav-item-inner::after {
@@ -369,7 +380,7 @@ html.vt-active .page-ready {
 }
 
 .nav-item-inner:active::after {
-  animation: nav-ripple 300ms ease-out forwards;
+  animation: nav-ripple 250ms ease-out forwards;
 }
 
 table {
@@ -395,19 +406,19 @@ nav [data-state] {
 
 nav a {
   -webkit-tap-highlight-color: transparent;
-  transition: transform 100ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 80ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @media (hover: hover) {
   nav a:hover .nav-item-inner {
-    transform: translateX(-3px);
-    transition: transform 120ms cubic-bezier(0.22, 1, 0.36, 1);
+    transform: translateX(-2px);
+    transition: transform 100ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 }
 
 nav a:active .nav-item-inner {
-  transform: scale(0.96);
-  transition: transform 50ms ease;
+  transform: scale(0.97);
+  transition: transform 40ms ease;
 }
 
 @media (prefers-reduced-motion: reduce) {
