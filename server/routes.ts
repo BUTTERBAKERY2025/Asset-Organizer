@@ -22668,9 +22668,12 @@ export async function registerRoutes(
       const targetDate = attendanceDate || saudiToday;
       const existingRecord = await storage.getAttendanceByEmployeeAndDate(employeeId, targetDate);
       
-      // If no record exists, reject early
       if (!existingRecord) {
         return res.status(404).json({ error: "لم يتم تسجيل حضور هذا الموظف في هذا التاريخ" });
+      }
+      
+      if (existingRecord.actualCheckOut) {
+        return res.status(400).json({ error: "تم تسجيل انصراف هذا الموظف بالفعل اليوم" });
       }
       
       if (!isUserAdmin(req)) {

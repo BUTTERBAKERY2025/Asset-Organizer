@@ -214,13 +214,13 @@
 }
 
 @keyframes pageReady {
-  0% { opacity: 0; transform: translateY(6px); }
-  50% { opacity: 0.85; }
+  0% { opacity: 0; transform: translateY(5px); }
+  40% { opacity: 0.7; }
   100% { opacity: 1; transform: translateY(0); }
 }
 
 .page-ready {
-  animation: pageReady 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: pageReady 160ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 html.vt-active .page-ready {
@@ -241,17 +241,18 @@ html.vt-active .page-ready {
 
 @keyframes nprogress-bar {
   0% { width: 0%; }
-  5% { width: 25%; }
-  15% { width: 50%; }
-  30% { width: 65%; }
-  50% { width: 78%; }
-  70% { width: 88%; }
-  100% { width: 95%; }
+  3% { width: 18%; }
+  8% { width: 35%; }
+  18% { width: 52%; }
+  35% { width: 68%; }
+  55% { width: 80%; }
+  80% { width: 90%; }
+  100% { width: 94%; }
 }
 
 @keyframes nprogress-complete {
   0% { opacity: 1; }
-  30% { width: 100%; opacity: 1; }
+  20% { width: 100%; opacity: 1; }
   100% { width: 100%; opacity: 0; height: 0; }
 }
 
@@ -261,8 +262,8 @@ html.vt-active .page-ready {
 }
 
 @keyframes nprogress-glow-pulse {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 1; }
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.9; }
 }
 
 #nav-progress-bar {
@@ -277,7 +278,7 @@ html.vt-active .page-ready {
   pointer-events: none;
   width: 0%;
   opacity: 0;
-  box-shadow: 0 0 10px rgba(212, 168, 83, 0.6);
+  box-shadow: 0 0 8px rgba(212, 168, 83, 0.5);
   transform: translateZ(0);
   will-change: width, opacity;
 }
@@ -287,19 +288,19 @@ html.vt-active .page-ready {
   position: absolute;
   left: 0;
   top: -1px;
-  width: 80px;
-  height: 5px;
+  width: 60px;
+  height: 4px;
   border-radius: 50%;
-  background: radial-gradient(ellipse, rgba(240, 208, 128, 0.9), transparent 70%);
-  box-shadow: 0 0 12px 4px rgba(212, 168, 83, 0.35);
+  background: radial-gradient(ellipse, rgba(240, 208, 128, 0.85), transparent 70%);
+  box-shadow: 0 0 10px 3px rgba(212, 168, 83, 0.3);
   opacity: 0;
-  animation: nprogress-glow-pulse 0.6s ease-in-out infinite;
+  animation: nprogress-glow-pulse 0.5s ease-in-out infinite;
 }
 
 #nav-progress-bar.loading {
   opacity: 1;
-  animation: nprogress-bar 1s cubic-bezier(0.08, 0.82, 0.17, 1) forwards,
-             nprogress-shimmer 0.8s linear infinite;
+  animation: nprogress-bar 800ms cubic-bezier(0.12, 0.8, 0.2, 1) forwards,
+             nprogress-shimmer 0.7s linear infinite;
 }
 
 #nav-progress-bar.loading::after {
@@ -307,12 +308,12 @@ html.vt-active .page-ready {
 }
 
 #nav-progress-bar.complete {
-  animation: nprogress-complete 160ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: nprogress-complete 120ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 #nav-progress-bar.complete::after {
   opacity: 0;
-  transition: opacity 80ms;
+  transition: opacity 60ms;
 }
 
 @keyframes skeletonShimmer {
@@ -332,15 +333,15 @@ html.vt-active .page-ready {
   overflow: hidden;
   transform: translateZ(0);
   contain: layout paint;
-  animation: skeletonFadeIn 120ms ease-out both;
+  animation: skeletonFadeIn 100ms ease-out both;
 }
 
 .skeleton-shimmer::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.25) 15%, rgba(255,255,255,0.6) 50%, rgba(255,255,255,0.25) 85%, transparent 100%);
-  animation: skeletonShimmer 1.2s ease-in-out infinite;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.2) 20%, rgba(255,255,255,0.55) 50%, rgba(255,255,255,0.2) 80%, transparent 100%);
+  animation: skeletonShimmer 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   background-size: 250% 100%;
   will-change: background-position;
 }
@@ -410,20 +411,20 @@ nav [data-state] {
 
 nav a {
   -webkit-tap-highlight-color: transparent;
-  transition: transform 60ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 50ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @media (hover: hover) {
   nav a:hover .nav-item-inner {
     transform: translateX(-2px);
-    transition: transform 100ms cubic-bezier(0.22, 1, 0.36, 1);
+    transition: transform 80ms cubic-bezier(0.22, 1, 0.36, 1), background-color 80ms ease;
     background-color: hsl(40 20% 96%);
   }
 }
 
 nav a:active .nav-item-inner {
-  transform: scale(0.98);
-  transition: transform 40ms ease;
+  transform: scale(0.97);
+  transition: transform 30ms ease;
 }
 
 @media (prefers-reduced-motion: reduce) {
