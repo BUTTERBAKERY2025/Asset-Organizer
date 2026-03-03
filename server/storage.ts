@@ -8161,27 +8161,55 @@ export class DatabaseStorage implements IStorage {
     const results: EmployeeSchedule[] = [];
     const errors: string[] = [];
     
+    const timeRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
+    const validShiftTypes = ['morning', 'evening', 'night'];
+    
     const enrichedSchedules = schedules.map(s => {
-      if (!s.branchEmployeeId && s.employeeId?.startsWith('branch_emp_')) {
-        const parsed = parseInt(s.employeeId.replace('branch_emp_', ''), 10);
+      const enriched = { ...s };
+      if (!enriched.branchEmployeeId && enriched.employeeId?.startsWith('branch_emp_')) {
+        const parsed = parseInt(enriched.employeeId.replace('branch_emp_', ''), 10);
         if (!isNaN(parsed)) {
-          return { ...s, branchEmployeeId: parsed };
+          enriched.branchEmployeeId = parsed;
         }
       }
-      return s;
+      if (enriched.startTime && !timeRegex.test(enriched.startTime)) {
+        console.warn(`[BULK SCHEDULE] Invalid startTime "${enriched.startTime}" for ${enriched.employeeName}, defaulting to 08:00`);
+        enriched.startTime = "08:00";
+      }
+      if (enriched.endTime && !timeRegex.test(enriched.endTime)) {
+        console.warn(`[BULK SCHEDULE] Invalid endTime "${enriched.endTime}" for ${enriched.employeeName}, defaulting to 16:00`);
+        enriched.endTime = "16:00";
+      }
+      if (enriched.shiftType && !validShiftTypes.includes(enriched.shiftType)) {
+        console.warn(`[BULK SCHEDULE] Non-standard shiftType "${enriched.shiftType}" for ${enriched.employeeName}, normalizing from time`);
+        if (enriched.startTime) {
+          const hour = parseInt(enriched.startTime.split(":")[0], 10);
+          enriched.shiftType = hour >= 5 && hour < 12 ? 'morning' : hour >= 12 && hour < 20 ? 'evening' : 'night';
+        } else {
+          enriched.shiftType = 'morning';
+        }
+      }
+      return enriched;
     });
 
     const inputSeen = new Set<string>();
     const deduplicatedSchedules = enrichedSchedules.filter(s => {
-      const key = s.branchEmployeeId 
+      const primaryKey = s.branchEmployeeId 
         ? `be_${s.branchEmployeeId}_${s.scheduleDate}_${s.branchId}`
         : `ei_${s.employeeId}_${s.scheduleDate}_${s.branchId}`;
-      if (inputSeen.has(key)) return false;
-      inputSeen.add(key);
+      if (inputSeen.has(primaryKey)) return false;
+      inputSeen.add(primaryKey);
+      if (s.branchEmployeeId && s.employeeId) {
+        const altKey = `ei_${s.employeeId}_${s.scheduleDate}_${s.branchId}`;
+        inputSeen.add(altKey);
+      }
       return true;
     });
 
+    const client = await pool.connect();
     try {
+      await client.query('BEGIN');
+      
       const withBranchEmpId = deduplicatedSchedules.filter(s => s.branchEmployeeId != null);
       const withoutBranchEmpId = deduplicatedSchedules.filter(s => s.branchEmployeeId == null);
 
@@ -8199,7 +8227,7 @@ export class DatabaseStorage implements IStorage {
           RETURNING *
         `;
         console.log(`[BULK SCHEDULE] UPSERT ${withBranchEmpId.length} records (branchEmployeeId path)`);
-        const result = await pool.query(sql, values);
+        const result = await client.query(sql, values);
         if (result.rows) {
           for (const row of result.rows) results.push(this.mapScheduleRow(row));
         }
@@ -8222,20 +8250,18 @@ export class DatabaseStorage implements IStorage {
             RETURNING *
           `;
           console.log(`[BULK SCHEDULE] UPSERT ${remaining.length} records (employeeId fallback path)`);
-          try {
-            const result2 = await pool.query(sql, values);
-            if (result2.rows) {
-              for (const row of result2.rows) results.push(this.mapScheduleRow(row));
-            }
-          } catch (e: any) {
-            console.log(`[BULK SCHEDULE] Fallback upsert skipped: ${e?.message}`);
+          const result2 = await client.query(sql, values);
+          if (result2.rows) {
+            for (const row of result2.rows) results.push(this.mapScheduleRow(row));
           }
         }
       }
 
-      console.log(`[BULK SCHEDULE] UPSERT complete: ${results.length} records saved in 1-2 queries`);
+      await client.query('COMMIT');
+      console.log(`[BULK SCHEDULE] UPSERT complete: ${results.length} records saved in transaction`);
     } catch (batchError: any) {
-      console.error(`[BULK SCHEDULE] UPSERT failed:`, batchError?.message);
+      await client.query('ROLLBACK').catch(() => {});
+      console.error(`[BULK SCHEDULE] UPSERT failed, rolling back:`, batchError?.message);
       
       if (batchError?.code === '42704' || batchError?.message?.includes('does not exist')) {
         console.log(`[BULK SCHEDULE] Constraint/index not found, falling back to individual saves`);
@@ -8250,6 +8276,8 @@ export class DatabaseStorage implements IStorage {
       } else {
         errors.push(`خطأ في حفظ الجداول: ${batchError?.message || 'unknown'}`);
       }
+    } finally {
+      client.release();
     }
     
     return { results, errors };

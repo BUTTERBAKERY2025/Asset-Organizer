@@ -326,7 +326,7 @@ export default function ShiftManagementPage() {
 
       employeeSchedules.forEach((schedule: EmployeeSchedule) => {
         let keyId: string;
-        if (schedule.branchEmployeeId) {
+        if (schedule.branchEmployeeId != null && schedule.branchEmployeeId !== 0) {
           keyId = String(schedule.branchEmployeeId);
         } else {
           keyId = empLookup.get(schedule.employeeId) || schedule.employeeId;

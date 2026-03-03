@@ -21091,7 +21091,7 @@ export async function registerRoutes(
           status: s.status || "scheduled",
           notes: s.notes || null,
         };
-      }).filter((s: any) => s.employeeId && s.scheduleDate);
+      }).filter((s: any) => s.employeeId && s.scheduleDate && s.branchId);
       
       if (validatedSchedules.length === 0) {
         return res.status(400).json({ error: "لا توجد بيانات صالحة للحفظ" });
