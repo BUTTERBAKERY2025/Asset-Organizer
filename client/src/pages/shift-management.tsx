@@ -371,11 +371,18 @@ export default function ShiftManagementPage() {
     setHasUnsavedChanges(true);
   };
 
+  const STANDARD_SHIFT_TYPES = ["morning", "evening", "night"];
+  
   const getShiftTypeFromTime = (startTime: string): string => {
     const hour = parseInt(startTime.split(":")[0], 10);
     if (hour >= 5 && hour < 12) return "morning";
     if (hour >= 12 && hour < 20) return "evening";
     return "night";
+  };
+
+  const normalizeShiftType = (shiftType: string | undefined, startTime: string): string => {
+    if (shiftType && STANDARD_SHIFT_TYPES.includes(shiftType)) return shiftType;
+    return getShiftTypeFromTime(startTime);
   };
 
   const saveSchedulesMutation = useMutation({
@@ -400,7 +407,7 @@ export default function ShiftManagementPage() {
         }
         Object.entries(dates).forEach(([dateStr, data]) => {
           if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return;
-          const shiftType = data.isOff ? null : (data.shiftType || getShiftTypeFromTime(data.startTime || "08:00"));
+          const shiftType = data.isOff ? null : normalizeShiftType(data.shiftType, data.startTime || "08:00");
           const date = new Date(dateStr + "T12:00:00");
           const dayOfWeek = dayNames[date.getDay()];
           schedules.push({
@@ -562,7 +569,8 @@ export default function ShiftManagementPage() {
     const endTime = profile?.endTime || "16:00";
     const profileName = profile?.displayName || "افتراضي";
     
-    const shiftCode = profile?.shiftCode || selectedShiftProfile || "morning";
+    const rawShiftCode = profile?.shiftCode || selectedShiftProfile || "morning";
+    const normalizedCode = normalizeShiftType(rawShiftCode, startTime);
     const newScheduleData: Record<string, Record<string, ScheduleCell>> = {};
     filteredEmployees.forEach(emp => {
       newScheduleData[String(emp.id)] = {};
@@ -573,7 +581,7 @@ export default function ShiftManagementPage() {
           startTime,
           endTime,
           isOff: isFriday,
-          shiftType: isFriday ? undefined : shiftCode,
+          shiftType: isFriday ? undefined : normalizedCode,
         };
       });
     });
@@ -592,11 +600,12 @@ export default function ShiftManagementPage() {
   };
 
   const applyShiftToEmployee = (empId: string) => {
-    const shiftCode = getEmployeeShiftSelection(empId);
-    const profile = activeShiftProfiles.find(p => p.shiftCode === shiftCode);
+    const rawCode = getEmployeeShiftSelection(empId);
+    const profile = activeShiftProfiles.find(p => p.shiftCode === rawCode);
     const startTime = profile?.startTime || "08:00";
     const endTime = profile?.endTime || "16:00";
     const profileName = profile?.displayName || "افتراضي";
+    const normalizedCode = normalizeShiftType(rawCode, startTime);
 
     setScheduleData(prev => {
       const newData = { ...prev };
@@ -610,7 +619,7 @@ export default function ShiftManagementPage() {
           startTime,
           endTime,
           isOff: isFriday,
-          shiftType: isFriday ? undefined : shiftCode,
+          shiftType: isFriday ? undefined : normalizedCode,
         };
       });
       return newData;

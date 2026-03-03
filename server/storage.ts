@@ -8548,9 +8548,11 @@ export class DatabaseStorage implements IStorage {
       return "night";
     };
 
+    const STANDARD_SHIFTS = ["morning", "evening", "night"];
+    
     const filteredSchedules = schedules.filter(s => {
       const storedType = s.shiftType;
-      if (storedType) {
+      if (storedType && STANDARD_SHIFTS.includes(storedType)) {
         const match = storedType === shiftType;
         if (!match) {
           console.log(`[ATTENDANCE-DEBUG] Employee ${s.employeeId} storedShiftType=${storedType}, requested=${shiftType} -> SKIPPED`);
@@ -8561,7 +8563,7 @@ export class DatabaseStorage implements IStorage {
         const inferred = inferShiftFromTime(s.startTime);
         const match = inferred === shiftType;
         if (!match) {
-          console.log(`[ATTENDANCE-DEBUG] Employee ${s.employeeId} no shiftType stored, startTime=${s.startTime} -> inferred=${inferred}, requested=${shiftType} -> SKIPPED`);
+          console.log(`[ATTENDANCE-DEBUG] Employee ${s.employeeId} shiftType=${storedType || 'none'}, startTime=${s.startTime} -> inferred=${inferred}, requested=${shiftType} -> SKIPPED`);
         }
         return match;
       }
