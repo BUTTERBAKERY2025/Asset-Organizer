@@ -8117,6 +8117,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createEmployeeSchedule(schedule: InsertEmployeeSchedule): Promise<EmployeeSchedule> {
+    if (!schedule.branchEmployeeId && schedule.employeeId?.startsWith('branch_emp_')) {
+      const parsed = parseInt(schedule.employeeId.replace('branch_emp_', ''), 10);
+      if (!isNaN(parsed)) {
+        schedule = { ...schedule, branchEmployeeId: parsed };
+      }
+    }
+
     const baseConditions = [
       eq(employeeSchedules.scheduleDate, schedule.scheduleDate),
       schedule.branchId ? eq(employeeSchedules.branchId, schedule.branchId) : isNull(employeeSchedules.branchId),
@@ -8154,8 +8161,18 @@ export class DatabaseStorage implements IStorage {
     const results: EmployeeSchedule[] = [];
     const errors: string[] = [];
     
+    const enrichedSchedules = schedules.map(s => {
+      if (!s.branchEmployeeId && s.employeeId?.startsWith('branch_emp_')) {
+        const parsed = parseInt(s.employeeId.replace('branch_emp_', ''), 10);
+        if (!isNaN(parsed)) {
+          return { ...s, branchEmployeeId: parsed };
+        }
+      }
+      return s;
+    });
+
     const inputSeen = new Set<string>();
-    const deduplicatedSchedules = schedules.filter(s => {
+    const deduplicatedSchedules = enrichedSchedules.filter(s => {
       const key = s.branchEmployeeId 
         ? `be_${s.branchEmployeeId}_${s.scheduleDate}_${s.branchId}`
         : `ei_${s.employeeId}_${s.scheduleDate}_${s.branchId}`;

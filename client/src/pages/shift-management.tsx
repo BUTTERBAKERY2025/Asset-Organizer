@@ -299,12 +299,37 @@ export default function ShiftManagementPage() {
     }
   }, [userBranchId, selectedBranch]);
 
+  const prevWeekRef = useRef(startDateStr);
+  const prevBranchRef = useRef(selectedBranch);
+
   useEffect(() => {
     if (isBundlePlaceholder) return;
+    const weekChanged = prevWeekRef.current !== startDateStr;
+    const branchChanged = prevBranchRef.current !== selectedBranch;
+    prevWeekRef.current = startDateStr;
+    prevBranchRef.current = selectedBranch;
+
+    if (hasUnsavedChanges && !weekChanged && !branchChanged) return;
+
     const newScheduleData: Record<string, Record<string, ScheduleCell>> = {};
     if (employeeSchedules && Array.isArray(employeeSchedules) && employeeSchedules.length > 0) {
+      const empLookup = new Map<string, string>();
+      if (branchEmployees) {
+        for (const emp of branchEmployees) {
+          empLookup.set(`branch_emp_${emp.id}`, String(emp.id));
+          if (emp.linkedUserId) {
+            empLookup.set(emp.linkedUserId, String(emp.id));
+          }
+        }
+      }
+
       employeeSchedules.forEach((schedule: EmployeeSchedule) => {
-        const keyId = schedule.branchEmployeeId ? String(schedule.branchEmployeeId) : schedule.employeeId;
+        let keyId: string;
+        if (schedule.branchEmployeeId) {
+          keyId = String(schedule.branchEmployeeId);
+        } else {
+          keyId = empLookup.get(schedule.employeeId) || schedule.employeeId;
+        }
         if (!newScheduleData[keyId]) {
           newScheduleData[keyId] = {};
         }
@@ -317,7 +342,7 @@ export default function ShiftManagementPage() {
     }
     setScheduleData(newScheduleData);
     setHasUnsavedChanges(false);
-  }, [employeeSchedules, currentWeekStart, selectedBranch, isBundlePlaceholder]);
+  }, [employeeSchedules, currentWeekStart, selectedBranch, isBundlePlaceholder, branchEmployees, hasUnsavedChanges, startDateStr]);
 
   const weekDates = useMemo(() => {
     return DAYS_ORDER.map((_, index) => addDays(currentWeekStart, index));
@@ -354,12 +379,25 @@ export default function ShiftManagementPage() {
     mutationFn: async () => {
       const schedules: any[] = [];
       const dayNames = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+      
+      const empById = new Map<string, typeof filteredEmployees[0]>();
+      for (const emp of filteredEmployees) {
+        empById.set(String(emp.id), emp);
+        empById.set(`branch_emp_${emp.id}`, emp);
+        if (emp.linkedUserId) {
+          empById.set(emp.linkedUserId, emp);
+        }
+      }
+      
       Object.entries(scheduleData).forEach(([empKey, dates]) => {
-        const employee = filteredEmployees.find(u => String(u.id) === empKey);
-        if (!employee) return;
+        const employee = empById.get(empKey);
+        if (!employee) {
+          console.warn(`[SAVE] Skipping unknown key: ${empKey}`);
+          return;
+        }
         Object.entries(dates).forEach(([dateStr, data]) => {
           if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return;
-          const shiftType = data.isOff ? null : getShiftTypeFromTime(data.startTime);
+          const shiftType = data.isOff ? null : getShiftTypeFromTime(data.startTime || "08:00");
           const date = new Date(dateStr + "T12:00:00");
           const dayOfWeek = dayNames[date.getDay()];
           schedules.push({
@@ -368,8 +406,8 @@ export default function ShiftManagementPage() {
             branchEmployeeId: employee.id,
             scheduleDate: dateStr,
             dayOfWeek,
-            startTime: data.isOff ? null : (data.startTime || null),
-            endTime: data.isOff ? null : (data.endTime || null),
+            startTime: data.isOff ? null : (data.startTime || "08:00"),
+            endTime: data.isOff ? null : (data.endTime || "16:00"),
             shiftType: shiftType,
             isOff: data.isOff ?? false,
             branchId: selectedBranch,
@@ -433,24 +471,40 @@ export default function ShiftManagementPage() {
     },
   });
 
+  const attendanceLookup = useMemo(() => {
+    if (!attendanceRecords) return new Map<string, AttendanceRecord>();
+    const map = new Map<string, AttendanceRecord>();
+    for (const r of attendanceRecords) {
+      const dateKey = r.attendanceDate;
+      if (r.branchEmployeeId) {
+        map.set(`${r.branchEmployeeId}_${dateKey}`, r);
+      }
+      if (r.employeeId) {
+        map.set(`${r.employeeId}_${dateKey}`, r);
+        if (r.employeeId.startsWith('branch_emp_')) {
+          const numId = r.employeeId.replace('branch_emp_', '');
+          map.set(`${numId}_${dateKey}`, r);
+        }
+      }
+    }
+    return map;
+  }, [attendanceRecords]);
+
   const getAttendanceForEmployee = (empId: string, dateStr: string, branchEmployee?: typeof filteredEmployees[0]) => {
     if (!attendanceRecords) return null;
-    return attendanceRecords.find(r => {
-      if (r.attendanceDate !== dateStr) return false;
-      if (selectedBranch !== "all" && r.branchId !== selectedBranch) return false;
-      if (branchEmployee) {
-        if (r.branchEmployeeId && r.branchEmployeeId === branchEmployee.id) return true;
-        if (r.employeeId === `branch_emp_${branchEmployee.id}`) return true;
-        if (branchEmployee.linkedUserId && r.employeeId === branchEmployee.linkedUserId) return true;
-        if (r.employeeId === String(branchEmployee.id)) return true;
-        const rName = r.employeeName?.trim().toLowerCase() || '';
-        const eName = branchEmployee.employeeName?.trim().toLowerCase() || '';
-        if (rName && eName && rName === eName && r.branchId === branchEmployee.branchId) return true;
-      } else {
-        if (r.employeeId === empId) return true;
+    if (branchEmployee) {
+      const byBranchEmpId = attendanceLookup.get(`${branchEmployee.id}_${dateStr}`);
+      if (byBranchEmpId) return byBranchEmpId;
+      const byPrefixed = attendanceLookup.get(`branch_emp_${branchEmployee.id}_${dateStr}`);
+      if (byPrefixed) return byPrefixed;
+      if (branchEmployee.linkedUserId) {
+        const byLinked = attendanceLookup.get(`${branchEmployee.linkedUserId}_${dateStr}`);
+        if (byLinked) return byLinked;
       }
-      return false;
-    });
+    }
+    const direct = attendanceLookup.get(`${empId}_${dateStr}`);
+    if (direct) return direct;
+    return null;
   };
 
   const getAttendanceStatus = (employeeId: string, dateStr: string, scheduledStart?: string, branchEmployee?: typeof filteredEmployees[0]) => {
@@ -521,9 +575,7 @@ export default function ShiftManagementPage() {
     setScheduleData(newScheduleData);
     setHasUnsavedChanges(true);
     
-    createLockMutation.mutate({ shiftProfile: profileName });
-    
-    toast({ title: "تم تطبيق الجدول وقفله", description: `${profileName} (${startTime} - ${endTime})، الجمعة إجازة - تم قفل خاصية "تطبيق على الجميع"` });
+    toast({ title: "تم تطبيق الجدول", description: `${profileName} (${startTime} - ${endTime})، الجمعة إجازة - اضغط حفظ لتأكيد التغييرات` });
   };
 
   const getEmployeeShiftSelection = (empId: string) => {
