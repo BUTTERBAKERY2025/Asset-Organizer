@@ -34,6 +34,7 @@ interface ScheduleCell {
   startTime: string;
   endTime: string;
   isOff: boolean;
+  shiftType?: string;
 }
 
 export default function ShiftManagementPage() {
@@ -337,6 +338,7 @@ export default function ShiftManagementPage() {
           startTime: schedule.startTime || "08:00",
           endTime: schedule.endTime || "16:00",
           isOff: schedule.isOff,
+          shiftType: schedule.shiftType || undefined,
         };
       });
     }
@@ -361,6 +363,7 @@ export default function ShiftManagementPage() {
           startTime: prev[employeeId]?.[dateStr]?.startTime || "08:00",
           endTime: prev[employeeId]?.[dateStr]?.endTime || "16:00",
           isOff: prev[employeeId]?.[dateStr]?.isOff || false,
+          shiftType: prev[employeeId]?.[dateStr]?.shiftType,
           [field]: value,
         },
       },
@@ -397,7 +400,7 @@ export default function ShiftManagementPage() {
         }
         Object.entries(dates).forEach(([dateStr, data]) => {
           if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return;
-          const shiftType = data.isOff ? null : getShiftTypeFromTime(data.startTime || "08:00");
+          const shiftType = data.isOff ? null : (data.shiftType || getShiftTypeFromTime(data.startTime || "08:00"));
           const date = new Date(dateStr + "T12:00:00");
           const dayOfWeek = dayNames[date.getDay()];
           schedules.push({
@@ -559,6 +562,7 @@ export default function ShiftManagementPage() {
     const endTime = profile?.endTime || "16:00";
     const profileName = profile?.displayName || "افتراضي";
     
+    const shiftCode = profile?.shiftCode || selectedShiftProfile || "morning";
     const newScheduleData: Record<string, Record<string, ScheduleCell>> = {};
     filteredEmployees.forEach(emp => {
       newScheduleData[String(emp.id)] = {};
@@ -569,6 +573,7 @@ export default function ShiftManagementPage() {
           startTime,
           endTime,
           isOff: isFriday,
+          shiftType: isFriday ? undefined : shiftCode,
         };
       });
     });
@@ -605,6 +610,7 @@ export default function ShiftManagementPage() {
           startTime,
           endTime,
           isOff: isFriday,
+          shiftType: isFriday ? undefined : shiftCode,
         };
       });
       return newData;

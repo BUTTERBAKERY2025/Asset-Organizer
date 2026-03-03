@@ -8541,7 +8541,6 @@ export class DatabaseStorage implements IStorage {
       })));
     }
 
-    // Deterministic shift matching: actual startTime takes priority over shiftType label
     const inferShiftFromTime = (startTime: string): string => {
       const hour = parseInt(startTime.split(":")[0], 10);
       if (hour >= 5 && hour < 12) return "morning";
@@ -8550,15 +8549,23 @@ export class DatabaseStorage implements IStorage {
     };
 
     const filteredSchedules = schedules.filter(s => {
+      const storedType = s.shiftType;
+      if (storedType) {
+        const match = storedType === shiftType;
+        if (!match) {
+          console.log(`[ATTENDANCE-DEBUG] Employee ${s.employeeId} storedShiftType=${storedType}, requested=${shiftType} -> SKIPPED`);
+        }
+        return match;
+      }
       if (s.startTime) {
         const inferred = inferShiftFromTime(s.startTime);
         const match = inferred === shiftType;
         if (!match) {
-          console.log(`[ATTENDANCE-DEBUG] Employee ${s.employeeId} has shiftType=${s.shiftType} startTime=${s.startTime} -> inferred=${inferred}, requested=${shiftType} -> SKIPPED`);
+          console.log(`[ATTENDANCE-DEBUG] Employee ${s.employeeId} no shiftType stored, startTime=${s.startTime} -> inferred=${inferred}, requested=${shiftType} -> SKIPPED`);
         }
         return match;
       }
-      return s.shiftType === shiftType;
+      return false;
     });
 
     console.log(`[ATTENDANCE-DEBUG] After filter: ${filteredSchedules.length} employees match shiftType=${shiftType}`);
