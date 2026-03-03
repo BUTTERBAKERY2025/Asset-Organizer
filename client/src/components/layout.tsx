@@ -127,12 +127,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
             if (contentRef.current) contentRef.current.scrollTop = saved;
           });
         } else if (contentRef.current.scrollTop > 0) {
-          contentRef.current.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+          const scrollDist = contentRef.current.scrollTop;
+          contentRef.current.scrollTo({
+            top: 0,
+            behavior: scrollDist < 800 ? "smooth" : "instant" as ScrollBehavior,
+          });
         }
       }
     }
     prevLocationRef.current = location;
-    setMobileMenuOpen(false);
+    if (mobileMenuOpen) setMobileMenuOpen(false);
     const activeGroup = ROUTE_TO_GROUP[location];
     if (activeGroup) {
       setOpenGroups(prev => prev[activeGroup] ? prev : { ...prev, [activeGroup]: true });
@@ -142,7 +146,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       const bar = document.getElementById("nav-progress-bar");
       if (bar && bar.classList.contains("loading")) {
         bar.className = "complete";
-        setTimeout(() => { bar.className = ""; }, 150);
+        setTimeout(() => { bar.className = ""; }, 180);
       }
     });
   }, [location]);
@@ -476,8 +480,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
     }
     setTimeout(() => {
       const b = document.getElementById("nav-progress-bar");
-      if (b && b.classList.contains("loading")) { b.className = "complete"; setTimeout(() => { b.className = ""; }, 150); }
-    }, 1200);
+      if (b && b.classList.contains("loading")) { b.className = "complete"; setTimeout(() => { b.className = ""; }, 200); }
+    }, 1500);
   }, [setLocation, location]);
 
   const renderNavItem = useCallback((item: NavItem, inGroup = false) => (

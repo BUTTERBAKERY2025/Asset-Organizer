@@ -214,13 +214,13 @@
 }
 
 @keyframes pageReady {
-  0% { opacity: 0; transform: translateY(5px); }
-  40% { opacity: 0.7; }
+  0% { opacity: 0; transform: translateY(6px); }
+  35% { opacity: 0.6; }
   100% { opacity: 1; transform: translateY(0); }
 }
 
 .page-ready {
-  animation: pageReady 160ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: pageReady 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 html.vt-active .page-ready {
@@ -241,13 +241,13 @@ html.vt-active .page-ready {
 
 @keyframes nprogress-bar {
   0% { width: 0%; }
-  3% { width: 18%; }
-  8% { width: 35%; }
-  18% { width: 52%; }
-  35% { width: 68%; }
-  55% { width: 80%; }
-  80% { width: 90%; }
-  100% { width: 94%; }
+  5% { width: 22%; }
+  12% { width: 40%; }
+  25% { width: 58%; }
+  45% { width: 72%; }
+  65% { width: 82%; }
+  85% { width: 91%; }
+  100% { width: 95%; }
 }
 
 @keyframes nprogress-complete {
@@ -278,9 +278,10 @@ html.vt-active .page-ready {
   pointer-events: none;
   width: 0%;
   opacity: 0;
-  box-shadow: 0 0 8px rgba(212, 168, 83, 0.5);
+  box-shadow: 0 0 10px rgba(212, 168, 83, 0.6);
   transform: translateZ(0);
   will-change: width, opacity;
+  contain: layout style;
 }
 
 #nav-progress-bar::after {
@@ -327,21 +328,21 @@ html.vt-active .page-ready {
 }
 
 .skeleton-shimmer {
-  background: hsl(40 18% 93%);
+  background: linear-gradient(135deg, hsl(40 18% 93%) 0%, hsl(40 15% 95%) 100%);
   border-radius: 8px;
   position: relative;
   overflow: hidden;
   transform: translateZ(0);
   contain: layout paint;
-  animation: skeletonFadeIn 100ms ease-out both;
+  animation: skeletonFadeIn 120ms ease-out both;
 }
 
 .skeleton-shimmer::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.2) 20%, rgba(255,255,255,0.55) 50%, rgba(255,255,255,0.2) 80%, transparent 100%);
-  animation: skeletonShimmer 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.15) 15%, rgba(255,255,255,0.5) 45%, rgba(255,255,255,0.6) 55%, rgba(255,255,255,0.15) 85%, transparent 100%);
+  animation: skeletonShimmer 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   background-size: 250% 100%;
   will-change: background-position;
 }
@@ -407,6 +408,23 @@ table {
 
 nav [data-state] {
   contain: layout style;
+}
+
+[data-state="closed"] > [data-radix-collapsible-content] {
+  content-visibility: hidden;
+  contain-intrinsic-size: 0 auto;
+}
+
+[data-radix-collapsible-content] {
+  transition: height 150ms cubic-bezier(0.16, 1, 0.3, 1), opacity 120ms ease;
+}
+
+[data-state="closed"] [data-radix-collapsible-content] {
+  opacity: 0;
+}
+
+[data-state="open"] [data-radix-collapsible-content] {
+  opacity: 1;
 }
 
 nav a {
