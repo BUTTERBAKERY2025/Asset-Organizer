@@ -25,7 +25,7 @@ async function deduplicatedFetch(url: string, options?: RequestInit): Promise<Re
   }
   let entry = inflightRequests.get(url);
   if (!entry) {
-    const fetchPromise = fetch(url, { ...options, keepalive: true, cache: 'no-store' as RequestCache });
+    const fetchPromise = fetch(url, { ...options, cache: 'no-store' as RequestCache });
     const bodyPromise = fetchPromise.then(async (res) => {
       const body = await res.arrayBuffer();
       return { status: res.status, statusText: res.statusText, headers: res.headers, body };

@@ -509,11 +509,6 @@ export default function AttendanceCheckPage() {
       toast({ title: "التوقيع مطلوب", description: "يرجى وضع توقيعك أولاً", variant: "destructive" });
       return;
     }
-
-    if (biometricStatus !== "verified") {
-      toast({ title: "التحقق من الهوية مطلوب", description: "يجب التحقق بالبصمة البيومترية (إصبع أو وجه) أولاً", variant: "destructive" });
-      return;
-    }
     
     if (locationStatus === "invalid") {
       toast({ 
@@ -754,7 +749,7 @@ export default function AttendanceCheckPage() {
                         <TableHead className="text-center">{t("attendanceCheck.endTime")}</TableHead>
                         <TableHead className="text-center hidden md:table-cell">{t("attendanceCheck.checkIn")}</TableHead>
                         <TableHead className="text-center hidden md:table-cell">{t("attendanceCheck.checkOut")}</TableHead>
-                        <TableHead className="text-center">{"البصمة"}</TableHead>
+                        <TableHead className="text-center">{"البصمة (اختياري)"}</TableHead>
                         <TableHead className="text-center">{t("attendanceCheck.status")}</TableHead>
                         <TableHead className="text-center">{t("attendanceCheck.actions")}</TableHead>
                       </TableRow>
@@ -884,7 +879,7 @@ export default function AttendanceCheckPage() {
                 )}
               </DialogTitle>
               <DialogDescription className="text-xs sm:text-sm">
-                يجب التحقق بالبصمة البيومترية (إصبع أو وجه) والتوقيع معاً لإتمام التسجيل
+                يجب وضع التوقيع لإتمام التسجيل. البصمة البيومترية اختيارية.
               </DialogDescription>
             </DialogHeader>
 
@@ -954,80 +949,58 @@ export default function AttendanceCheckPage() {
               <div className={`p-3 rounded-lg border ${
                 biometricStatus === "verified" ? "bg-green-50 border-green-200" :
                 biometricStatus === "verifying" ? "bg-blue-50 border-blue-200" :
-                biometricStatus === "no_credential" ? "bg-gray-50 border-gray-200" :
-                biometricStatus === "failed" ? "bg-red-50 border-red-200" :
-                "bg-amber-50 border-amber-200"
+                "bg-gray-50 border-gray-200"
               }`}>
                 <div className="flex flex-col gap-2">
-                  {biometricStatus === "verified" && (
+                  <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <Fingerprint className="w-5 h-5 text-green-600" />
-                      <p className="text-sm font-medium text-green-700">تم التحقق بالبصمة ✓</p>
+                      <Fingerprint className={`w-4 h-4 ${biometricStatus === "verified" ? "text-green-600" : "text-gray-400"}`} />
+                      <p className={`text-xs font-medium ${biometricStatus === "verified" ? "text-green-700" : "text-gray-500"}`}>
+                        {biometricStatus === "verified" ? "تم التحقق بالبصمة ✓" : "البصمة البيومترية (اختياري)"}
+                      </p>
                     </div>
-                  )}
+                    <Badge variant="outline" className="text-[10px] bg-gray-100 text-gray-500 border-gray-300">اختياري</Badge>
+                  </div>
 
-                  {biometricStatus === "no_credential" && (
-                    <div className="flex flex-col gap-2">
-                      <div className="flex items-center gap-2">
-                        <Fingerprint className="w-5 h-5 text-gray-500" />
-                        <p className="text-sm font-medium text-gray-600">لم يتم تسجيل البصمة - يجب التسجيل أولاً</p>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="gap-1"
-                        onClick={() => selectedEmployee && handleRegisterFingerprint(selectedEmployee.employeeId, selectedEmployee.employeeName)}
-                        disabled={deviceRegisterLoading}
-                        data-testid="btn-register-fingerprint-dialog"
-                      >
-                        {deviceRegisterLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Fingerprint className="w-4 h-4" />}
-                        تسجيل البصمة (إصبع أو وجه)
-                      </Button>
-                    </div>
-                  )}
-
-                  {biometricStatus === "idle" && (
-                    <div className="flex flex-col gap-2">
-                      <div className="flex items-center gap-2">
-                        <Fingerprint className="w-5 h-5 text-amber-600" />
-                        <p className="text-sm font-medium text-amber-700">التحقق بالبصمة البيومترية (إصبع أو وجه)</p>
-                      </div>
-                      <Button
-                        size="sm"
-                        className="gap-1 w-full"
-                        onClick={() => selectedEmployee && handleFingerprintVerify(selectedEmployee.employeeId)}
-                        data-testid="btn-verify-fingerprint"
-                      >
-                        <Fingerprint className="w-4 h-4" />
-                        تحقق بالبصمة
-                      </Button>
-                    </div>
-                  )}
-
-                  {biometricStatus === "verifying" && (
+                  {biometricStatus === "verified" ? null : biometricStatus === "verifying" ? (
                     <div className="flex items-center gap-2">
-                      <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
-                      <p className="text-sm font-medium text-blue-700">جاري التحقق...</p>
+                      <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />
+                      <p className="text-xs text-blue-700">جاري التحقق...</p>
                     </div>
-                  )}
-
-                  {biometricStatus === "failed" && (
-                    <div className="flex flex-col gap-2">
-                      <div className="flex items-center gap-2">
-                        <Fingerprint className="w-5 h-5 text-red-600" />
-                        <p className="text-sm font-medium text-red-700">فشل التحقق من البصمة</p>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        className="gap-1"
-                        onClick={() => setBiometricStatus("idle")}
-                        data-testid="btn-retry-fingerprint"
-                      >
-                        <Fingerprint className="w-4 h-4" />
-                        إعادة المحاولة
-                      </Button>
-                    </div>
+                  ) : biometricStatus === "failed" ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1 text-xs h-7"
+                      onClick={() => setBiometricStatus("idle")}
+                      data-testid="btn-retry-fingerprint"
+                    >
+                      <Fingerprint className="w-3 h-3" />
+                      إعادة المحاولة
+                    </Button>
+                  ) : biometricStatus === "no_credential" ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1 text-xs h-7"
+                      onClick={() => selectedEmployee && handleRegisterFingerprint(selectedEmployee.employeeId, selectedEmployee.employeeName)}
+                      disabled={deviceRegisterLoading}
+                      data-testid="btn-register-fingerprint-dialog"
+                    >
+                      {deviceRegisterLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Fingerprint className="w-3 h-3" />}
+                      تسجيل البصمة (اختياري)
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1 text-xs h-7"
+                      onClick={() => selectedEmployee && handleFingerprintVerify(selectedEmployee.employeeId)}
+                      data-testid="btn-verify-fingerprint"
+                    >
+                      <Fingerprint className="w-3 h-3" />
+                      تحقق بالبصمة (اختياري)
+                    </Button>
                   )}
                 </div>
               </div>
@@ -1081,18 +1054,17 @@ export default function AttendanceCheckPage() {
 
             <div className="flex items-center gap-3 px-1 shrink-0">
               <div className="flex items-center gap-1.5">
-                <Fingerprint className={`w-3.5 h-3.5 ${biometricStatus === "verified" ? "text-green-600" : "text-gray-400"}`} />
-                <div className={`w-3 h-3 rounded-full ${biometricStatus === "verified" ? "bg-green-500" : "bg-gray-300"}`} />
-                <span className={`text-xs font-medium ${biometricStatus === "verified" ? "text-green-700" : "text-gray-500"}`}>
-                  {biometricStatus === "verified" ? "البصمة ✓" : "التحقق مطلوب"}
+                <div className={`w-3 h-3 rounded-full ${hasSignature ? "bg-green-500" : "bg-red-400"}`} />
+                <span className={`text-xs font-medium ${hasSignature ? "text-green-700" : "text-red-500"}`}>
+                  {hasSignature ? "التوقيع ✓" : "التوقيع مطلوب (إلزامي)"}
                 </span>
               </div>
-              <div className="flex items-center gap-1.5">
-                <div className={`w-3 h-3 rounded-full ${hasSignature ? "bg-green-500" : "bg-gray-300"}`} />
-                <span className={`text-xs font-medium ${hasSignature ? "text-green-700" : "text-gray-500"}`}>
-                  {hasSignature ? "التوقيع ✓" : "التوقيع مطلوب"}
-                </span>
-              </div>
+              {biometricStatus === "verified" && (
+                <div className="flex items-center gap-1.5">
+                  <Fingerprint className="w-3.5 h-3.5 text-green-600" />
+                  <span className="text-xs font-medium text-green-700">البصمة ✓</span>
+                </div>
+              )}
             </div>
 
             <div className="flex gap-2 sm:gap-3 shrink-0 pt-2">
@@ -1105,7 +1077,7 @@ export default function AttendanceCheckPage() {
               </Button>
               <Button
                 onClick={handleSubmitSignature}
-                disabled={(signatureMode === "check_in" ? checkInMutation.isPending : checkOutMutation.isPending) || !hasSignature || biometricStatus !== "verified"}
+                disabled={(signatureMode === "check_in" ? checkInMutation.isPending : checkOutMutation.isPending) || !hasSignature}
                 className={`flex-1 gap-1.5 h-9 sm:h-10 text-xs sm:text-sm ${signatureMode === "check_in" ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700"}`}
                 data-testid="btn-submit-signature"
               >
