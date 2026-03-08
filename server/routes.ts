@@ -22686,11 +22686,9 @@ export async function registerRoutes(
         return res.status(400).json({ error: "حجم التوقيع كبير جداً" });
       }
 
-      // SECURITY: Validate biometric verification token server-side (REQUIRED)
       let serverBiometricVerified = false;
       const biometricTokenValue = req.body.biometricToken;
 
-      
       if (biometricVerified && biometricTokenValue) {
         const tokenKey = `token_${biometricTokenValue}`;
         const tokenData = biometricChallenges.get(tokenKey);
@@ -22704,11 +22702,6 @@ export async function registerRoutes(
           }
         }
       }
-
-      if (!serverBiometricVerified) {
-        console.warn("[Biometric Check-out] REJECTED: biometricVerified=", biometricVerified, "hasToken=", !!biometricTokenValue, "employeeId=", employeeId);
-        return res.status(400).json({ error: "التحقق من البصمة مطلوب لتسجيل الانصراف. يرجى وضع البصمة أولاً" });
-      }
       
       let record;
       try {
@@ -22721,7 +22714,7 @@ export async function registerRoutes(
         return res.status(404).json({ error: "لم يتم تسجيل حضور هذا الموظف اليوم" });
       }
       
-      if (record.id) {
+      if (record.id && serverBiometricVerified) {
         try {
           await storage.updateAttendanceRecord(record.id, { biometricCheckOut: true, biometricVerified: true });
         } catch (updateError: any) {
@@ -22729,7 +22722,7 @@ export async function registerRoutes(
         }
       }
       
-      res.json({ ...record, biometricVerified: true });
+      res.json({ ...record, biometricVerified: serverBiometricVerified });
     } catch (error: any) {
       console.error("[Check-out] Unexpected error:", error?.message || error, error?.stack);
       res.status(500).json({ error: "فشل في تسجيل الانصراف" });
