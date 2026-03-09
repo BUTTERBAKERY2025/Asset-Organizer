@@ -1,0 +1,113 @@
+{
+  "pageTitle": "Cashier Sales Journal",
+  "pageSubtitle": "Track and manage daily sales journals and cash reconciliation",
+  "printList": "Print List",
+  "print": "Print",
+  "newJournal": "New Journal",
+  "new": "New",
+  "stats": {
+    "totalSales": "Total Sales",
+    "totalShortage": "Total Shortage",
+    "totalSurplus": "Total Surplus",
+    "avgSalesPerJournal": "Avg Sales/Journal",
+    "case": "case"
+  },
+  "journalList": {
+    "title": "Journals List",
+    "total": "Total: {{count}} journals",
+    "noMatch": "No journals match your search",
+    "noPrintData": "No journals to print"
+  },
+  "filters": {
+    "cashier": "Cashier",
+    "allCashiers": "All Cashiers",
+    "dateFrom": "From Date",
+    "dateTo": "To Date",
+    "branch": "Branch",
+    "allBranches": "All Branches",
+    "status": "Status",
+    "allStatuses": "All Statuses"
+  },
+  "statuses": {
+    "draft": "Draft",
+    "submitted": "Submitted",
+    "submittedShort": "Submitted",
+    "approved": "Approved",
+    "rejected": "Rejected"
+  },
+  "discrepancy": {
+    "balanced": "Balanced",
+    "shortage": "Shortage",
+    "surplus": "Surplus"
+  },
+  "table": {
+    "date": "Date",
+    "cashier": "Cashier",
+    "branch": "Branch",
+    "shift": "Shift",
+    "sales": "Sales",
+    "customers": "Customers",
+    "difference": "Difference",
+    "status": "Status",
+    "actions": "Actions"
+  },
+  "shifts": {
+    "morning": "Morning",
+    "evening": "Evening",
+    "night": "Night"
+  },
+  "export": {
+    "date": "Date",
+    "cashier": "Cashier",
+    "branch": "Branch",
+    "shift": "Shift",
+    "totalSales": "Total Sales",
+    "cash": "Cash",
+    "network": "Network",
+    "delivery": "Delivery",
+    "customers": "Customer Count",
+    "discrepancyStatus": "Discrepancy Status",
+    "discrepancyAmount": "Discrepancy Amount",
+    "status": "Status",
+    "fileName": "cashier-journals",
+    "reportTitle": "Cashier Journals Report",
+    "period": "Period:",
+    "sheetName": "Cashier Journals"
+  },
+  "deleteDialog": {
+    "title": "Confirm Journal Deletion",
+    "description": "Are you sure you want to delete the journal for {{cashier}} dated {{date}}?",
+    "warning": "This action cannot be undone!",
+    "cancel": "Cancel",
+    "confirm": "Delete Journal"
+  },
+  "toasts": {
+    "approved": "Journal approved successfully",
+    "rejected": "Journal rejected",
+    "deleted": "Journal deleted successfully",
+    "error": "Error",
+    "approveFailed": "Failed to approve journal",
+    "rejectFailed": "Failed to reject journal",
+    "deleteFailed": "Failed to delete journal"
+  },
+  "printTemplate": {
+    "title": "Cashier Journals List",
+    "journal": "journal",
+    "totalSales": "Total Sales",
+    "totalShortage": "Total Shortage",
+    "totalSurplus": "Total Surplus",
+    "journalCount": "Journal Count",
+    "date": "Date",
+    "branch": "Branch",
+    "cashier": "Cashier",
+    "shift": "Shift",
+    "sales": "Sales",
+    "cash": "Cash",
+    "network": "Network",
+    "difference": "Difference",
+    "status": "Status",
+    "printDate": "Print Date:",
+    "loading": "Loading report...",
+    "printBtn": "Print"
+  }
+}

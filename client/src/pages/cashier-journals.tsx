@@ -11,6 +11,7 @@ import { useBranches } from "@/hooks/useBranches";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
+import { useTranslation } from "react-i18next";
 import { Plus, Search, Eye, CheckCircle, XCircle, Clock, AlertTriangle, TrendingUp, TrendingDown, Minus, Wallet, Calendar, DollarSign, Users, Printer, Filter, Trash2 } from "lucide-react";
 import {
   AlertDialog,
@@ -32,35 +33,21 @@ import { printHtmlContent } from "@/lib/print-utils";
 import { TablePagination } from "@/components/ui/pagination";
 import { ExportButtons } from "@/components/export-buttons";
 
-const STATUS_LABELS: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
-  draft: { label: "مسودة", variant: "secondary" },
-  submitted: { label: "مُقدم للمراجعة", variant: "default" },
-  approved: { label: "معتمد", variant: "outline" },
-  rejected: { label: "مرفوض", variant: "destructive" },
+const STATUS_ICONS: Record<string, { variant: "default" | "secondary" | "destructive" | "outline" }> = {
+  draft: { variant: "secondary" },
+  submitted: { variant: "default" },
+  approved: { variant: "outline" },
+  rejected: { variant: "destructive" },
 };
 
-const DISCREPANCY_LABELS: Record<string, { label: string; color: string; icon: any }> = {
-  balanced: { label: "متوازن", color: "text-green-600", icon: Minus },
-  shortage: { label: "عجز", color: "text-red-600", icon: TrendingDown },
-  surplus: { label: "زيادة", color: "text-amber-600", icon: TrendingUp },
+const DISCREPANCY_ICONS: Record<string, { color: string; icon: any }> = {
+  balanced: { color: "text-green-600", icon: Minus },
+  shortage: { color: "text-red-600", icon: TrendingDown },
+  surplus: { color: "text-amber-600", icon: TrendingUp },
 };
-
-const exportColumns = [
-  { header: "التاريخ", key: "journalDate", width: 12 },
-  { header: "الكاشير", key: "cashierName", width: 20 },
-  { header: "الفرع", key: "branchId", width: 15 },
-  { header: "الوردية", key: "shiftType", width: 10 },
-  { header: "إجمالي المبيعات", key: "totalSales", width: 15 },
-  { header: "النقدي", key: "cashTotal", width: 12 },
-  { header: "الشبكة", key: "networkTotal", width: 12 },
-  { header: "التوصيل", key: "deliveryTotal", width: 12 },
-  { header: "عدد العملاء", key: "customerCount", width: 12 },
-  { header: "حالة العجز", key: "discrepancyStatus", width: 12 },
-  { header: "قيمة العجز", key: "discrepancyAmount", width: 12 },
-  { header: "الحالة", key: "status", width: 10 },
-];
 
 export default function CashierJournalsPage() {
+  const { t } = useTranslation("cashierJournals");
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user, isAdmin } = useAuth();
@@ -106,7 +93,6 @@ export default function CashierJournalsPage() {
   if (dateTo) statsQueryParams.set("dateTo", dateTo);
   const statsQueryString = statsQueryParams.toString();
   
-  // Wait for branchFilter to be initialized (not empty string)
   const isBranchFilterReady = branchFilter !== "";
   
   const { data: stats, refetch: refetchStats } = useQuery<{
@@ -127,7 +113,6 @@ export default function CashierJournalsPage() {
       if (cashier && cashier !== "all") params.set("cashierId", cashier);
       if (from) params.set("dateFrom", from);
       if (to) params.set("dateTo", to);
-      // Add timestamp to bypass browser cache
       params.set("_t", Date.now().toString());
       const queryString = params.toString();
       const url = `/api/cashier-journals/stats/summary?${queryString}`;
@@ -152,10 +137,10 @@ export default function CashierJournalsPage() {
     mutationFn: async (id: number) => apiRequest(`/api/cashier-journals/${id}/approve`, "POST", {}),
     onSuccess: () => {
       invalidateCashierQueries();
-      toast({ title: "تم اعتماد اليومية بنجاح" });
+      toast({ title: t("toasts.approved") });
     },
     onError: () => {
-      toast({ title: "خطأ", description: "فشل في اعتماد اليومية", variant: "destructive" });
+      toast({ title: t("toasts.error"), description: t("toasts.approveFailed"), variant: "destructive" });
     },
   });
 
@@ -164,10 +149,10 @@ export default function CashierJournalsPage() {
       apiRequest(`/api/cashier-journals/${id}/reject`, "POST", { notes }),
     onSuccess: () => {
       invalidateCashierQueries();
-      toast({ title: "تم رفض اليومية" });
+      toast({ title: t("toasts.rejected") });
     },
     onError: () => {
-      toast({ title: "خطأ", description: "فشل في رفض اليومية", variant: "destructive" });
+      toast({ title: t("toasts.error"), description: t("toasts.rejectFailed"), variant: "destructive" });
     },
   });
 
@@ -175,12 +160,12 @@ export default function CashierJournalsPage() {
     mutationFn: async (id: number) => apiRequest("DELETE", `/api/cashier-journals/${id}`),
     onSuccess: () => {
       invalidateCashierQueries();
-      toast({ title: "تم حذف اليومية بنجاح" });
+      toast({ title: t("toasts.deleted") });
     },
     onError: (error: any) => {
       toast({ 
-        title: "خطأ", 
-        description: error?.message || "فشل في حذف اليومية", 
+        title: t("toasts.error"), 
+        description: error?.message || t("toasts.deleteFailed"), 
         variant: "destructive" 
       });
     },
@@ -194,12 +179,10 @@ export default function CashierJournalsPage() {
 
   const uniqueCashiers = journals ? Array.from(new Set(journals.map(j => j.cashierName))).filter(Boolean).sort() : [];
   
-  // Get current user's display name for dropdown
   const currentUserName = user?.firstName && user?.lastName 
     ? `${user.firstName} ${user.lastName}`.trim() 
     : user?.username || "";
 
-  // For non-managers, ensure their name appears in dropdown even if no journals exist
   const dropdownCashiers = canViewAllCashiers 
     ? uniqueCashiers 
     : (uniqueCashiers.length > 0 ? uniqueCashiers : (currentUserName ? [currentUserName] : []));
@@ -238,9 +221,24 @@ export default function CashierJournalsPage() {
     return format(new Date(dateStr), "dd MMMM yyyy", { locale: ar });
   };
 
+  const exportColumns = [
+    { header: t("export.date"), key: "journalDate", width: 12 },
+    { header: t("export.cashier"), key: "cashierName", width: 20 },
+    { header: t("export.branch"), key: "branchId", width: 15 },
+    { header: t("export.shift"), key: "shiftType", width: 10 },
+    { header: t("export.totalSales"), key: "totalSales", width: 15 },
+    { header: t("export.cash"), key: "cashTotal", width: 12 },
+    { header: t("export.network"), key: "networkTotal", width: 12 },
+    { header: t("export.delivery"), key: "deliveryTotal", width: 12 },
+    { header: t("export.customers"), key: "customerCount", width: 12 },
+    { header: t("export.discrepancyStatus"), key: "discrepancyStatus", width: 12 },
+    { header: t("export.discrepancyAmount"), key: "discrepancyAmount", width: 12 },
+    { header: t("export.status"), key: "status", width: 10 },
+  ];
+
   const handlePrintList = () => {
     if (!filteredJournals || filteredJournals.length === 0) {
-      toast({ title: "لا توجد يوميات للطباعة", variant: "destructive" });
+      toast({ title: t("journalList.noPrintData"), variant: "destructive" });
       return;
     }
 
@@ -253,7 +251,7 @@ export default function CashierJournalsPage() {
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <title>قائمة يوميات الكاشير</title>
+  <title>${t("printTemplate.title")}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
@@ -290,8 +288,8 @@ export default function CashierJournalsPage() {
   </style>
 </head>
 <body>
-  <div class="loading-msg" id="loadingMsg">جاري تحميل التقرير...</div>
-  <button class="print-btn" id="printBtn" style="display:none;" onclick="window.print()">طباعة</button>
+  <div class="loading-msg" id="loadingMsg">${t("printTemplate.loading")}</div>
+  <button class="print-btn" id="printBtn" style="display:none;" onclick="window.print()">${t("printTemplate.printBtn")}</button>
   <script>
     document.fonts.ready.then(function() {
       document.getElementById('loadingMsg').style.display = 'none';
@@ -305,32 +303,32 @@ export default function CashierJournalsPage() {
   
   <div class="header">
     <div>
-      <div class="title">قائمة يوميات الكاشير</div>
-      <div class="info">${branchFilter !== 'all' ? getBranchName(branchFilter) : 'جميع الفروع'} | ${filteredJournals.length} يومية</div>
+      <div class="title">${t("printTemplate.title")}</div>
+      <div class="info">${branchFilter !== 'all' ? getBranchName(branchFilter) : t("filters.allBranches")} | ${filteredJournals.length} ${t("printTemplate.journal")}</div>
     </div>
     <div style="font-size:10px;font-weight:bold;color:#d4a853;">BUTTER BAKERY</div>
   </div>
 
   <div class="summary-row">
-    <div class="summary-card"><div class="value">${formatCurrency(totalSales)}</div><div class="label">إجمالي المبيعات</div></div>
-    <div class="summary-card"><div class="value negative">-${formatCurrency(totalShortage)}</div><div class="label">إجمالي العجز</div></div>
-    <div class="summary-card"><div class="value positive">+${formatCurrency(totalSurplus)}</div><div class="label">إجمالي الفائض</div></div>
-    <div class="summary-card"><div class="value">${filteredJournals.length}</div><div class="label">عدد اليوميات</div></div>
+    <div class="summary-card"><div class="value">${formatCurrency(totalSales)}</div><div class="label">${t("printTemplate.totalSales")}</div></div>
+    <div class="summary-card"><div class="value negative">-${formatCurrency(totalShortage)}</div><div class="label">${t("printTemplate.totalShortage")}</div></div>
+    <div class="summary-card"><div class="value positive">+${formatCurrency(totalSurplus)}</div><div class="label">${t("printTemplate.totalSurplus")}</div></div>
+    <div class="summary-card"><div class="value">${filteredJournals.length}</div><div class="label">${t("printTemplate.journalCount")}</div></div>
   </div>
 
   <table>
     <thead>
       <tr>
         <th>#</th>
-        <th>التاريخ</th>
-        <th>الفرع</th>
-        <th>الكاشير</th>
-        <th>الوردية</th>
-        <th>المبيعات</th>
-        <th>نقدي</th>
-        <th>شبكة</th>
-        <th>الفرق</th>
-        <th>الحالة</th>
+        <th>${t("printTemplate.date")}</th>
+        <th>${t("printTemplate.branch")}</th>
+        <th>${t("printTemplate.cashier")}</th>
+        <th>${t("printTemplate.shift")}</th>
+        <th>${t("printTemplate.sales")}</th>
+        <th>${t("printTemplate.cash")}</th>
+        <th>${t("printTemplate.network")}</th>
+        <th>${t("printTemplate.difference")}</th>
+        <th>${t("printTemplate.status")}</th>
       </tr>
     </thead>
     <tbody>
@@ -340,12 +338,12 @@ export default function CashierJournalsPage() {
           <td>${j.journalDate}</td>
           <td>${getBranchName(j.branchId)}</td>
           <td>${j.cashierName || '-'}</td>
-          <td>${j.shiftType === 'morning' ? 'صباحي' : j.shiftType === 'evening' ? 'مسائي' : j.shiftType === 'night' ? 'ليلي' : '-'}</td>
+          <td>${j.shiftType ? t(`shifts.${j.shiftType}`) : '-'}</td>
           <td>${formatCurrency(j.totalSales || 0)}</td>
           <td>${formatCurrency(j.cashTotal || 0)}</td>
           <td>${formatCurrency(j.networkTotal || 0)}</td>
           <td class="discrepancy ${j.discrepancyStatus || 'balanced'}">${formatCurrency(j.discrepancyAmount || 0)}</td>
-          <td><span class="status status-${j.status}">${STATUS_LABELS[j.status]?.label || j.status}</span></td>
+          <td><span class="status status-${j.status}">${t(`statuses.${j.status}`)}</span></td>
         </tr>
       `).join('')}
     </tbody>
@@ -353,7 +351,7 @@ export default function CashierJournalsPage() {
 
   <div class="footer">
     <span>BUTTER BAKERY SYSTEM - CEO COMMAND</span>
-    <span>تاريخ الطباعة: ${new Date().toLocaleDateString('en-GB')}</span>
+    <span>${t("printTemplate.printDate")} ${new Date().toLocaleDateString('en-GB')}</span>
   </div>
 </body>
 </html>`;
@@ -367,23 +365,23 @@ export default function CashierJournalsPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-primary" data-testid="page-title">
-              يومية مبيعات الكاشير
+              {t("pageTitle")}
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground mt-1 hidden sm:block">
-              متابعة وإدارة يوميات المبيعات والتسويات النقدية
+              {t("pageSubtitle")}
             </p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={handlePrintList} className="gap-2 h-11 sm:h-9 min-h-[44px] sm:min-h-0 text-sm px-3 sm:px-4" data-testid="button-print-list">
               <Printer className="w-4 h-4" />
-              <span className="hidden sm:inline">طباعة القائمة</span>
-              <span className="sm:hidden">طباعة</span>
+              <span className="hidden sm:inline">{t("printList")}</span>
+              <span className="sm:hidden">{t("print")}</span>
             </Button>
             <Link href="/cashier-journals/new">
               <Button className="gap-2 h-11 sm:h-9 min-h-[44px] sm:min-h-0 text-sm px-3 sm:px-4" data-testid="button-new-journal">
                 <Plus className="w-4 h-4" />
-                <span className="hidden sm:inline">يومية جديدة</span>
-                <span className="sm:hidden">جديدة</span>
+                <span className="hidden sm:inline">{t("newJournal")}</span>
+                <span className="sm:hidden">{t("new")}</span>
               </Button>
             </Link>
           </div>
@@ -398,7 +396,7 @@ export default function CashierJournalsPage() {
                     <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs sm:text-sm text-muted-foreground truncate">إجمالي المبيعات</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground truncate">{t("stats.totalSales")}</p>
                     <p className="text-base sm:text-xl font-bold truncate" data-testid="stat-total-sales">{formatCurrency(stats.totalSales)}</p>
                   </div>
                 </div>
@@ -411,9 +409,9 @@ export default function CashierJournalsPage() {
                     <TrendingDown className="w-4 h-4 sm:w-5 sm:h-5 text-red-600" />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs sm:text-sm text-muted-foreground truncate">إجمالي العجز</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground truncate">{t("stats.totalShortage")}</p>
                     <p className="text-base sm:text-xl font-bold text-red-600 truncate" data-testid="stat-shortage">{formatCurrency(stats.shortageAmount)}</p>
-                    <p className="text-[10px] sm:text-xs text-muted-foreground">{stats.totalShortages} حالة</p>
+                    <p className="text-[10px] sm:text-xs text-muted-foreground">{stats.totalShortages} {t("stats.case")}</p>
                   </div>
                 </div>
               </CardContent>
@@ -425,9 +423,9 @@ export default function CashierJournalsPage() {
                     <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600" />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs sm:text-sm text-muted-foreground truncate">إجمالي الزيادة</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground truncate">{t("stats.totalSurplus")}</p>
                     <p className="text-base sm:text-xl font-bold text-amber-600 truncate" data-testid="stat-surplus">{formatCurrency(stats.surplusAmount)}</p>
-                    <p className="text-[10px] sm:text-xs text-muted-foreground">{stats.totalSurpluses} حالة</p>
+                    <p className="text-[10px] sm:text-xs text-muted-foreground">{stats.totalSurpluses} {t("stats.case")}</p>
                   </div>
                 </div>
               </CardContent>
@@ -439,7 +437,7 @@ export default function CashierJournalsPage() {
                     <Users className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs sm:text-sm text-muted-foreground truncate">متوسط المبيعات/يومية</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground truncate">{t("stats.avgSalesPerJournal")}</p>
                     <p className="text-base sm:text-xl font-bold truncate" data-testid="stat-average-ticket">{formatCurrency(stats.averageTicket)}</p>
                   </div>
                 </div>
@@ -453,27 +451,27 @@ export default function CashierJournalsPage() {
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="text-base sm:text-lg">قائمة اليوميات</CardTitle>
+                  <CardTitle className="text-base sm:text-lg">{t("journalList.title")}</CardTitle>
                   <CardDescription className="text-xs sm:text-sm">
-                    إجمالي: {filteredJournals?.length || 0} يومية
+                    {t("journalList.total", { count: filteredJournals?.length || 0 })}
                   </CardDescription>
                 </div>
                 <ExportButtons
                   data={filteredJournals || []}
                   columns={exportColumns}
-                  fileName={`يوميات-الكاشير-${new Date().toISOString().split('T')[0]}`}
-                  title="تقرير يوميات الكاشير"
-                  subtitle={`الفترة: ${branchFilter !== 'all' ? getBranchName(branchFilter) : 'جميع الفروع'}`}
-                  sheetName="يوميات الكاشير"
+                  fileName={`${t("export.fileName")}-${new Date().toISOString().split('T')[0]}`}
+                  title={t("export.reportTitle")}
+                  subtitle={`${t("export.period")} ${branchFilter !== 'all' ? getBranchName(branchFilter) : t("filters.allBranches")}`}
+                  sheetName={t("export.sheetName")}
                 />
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
                 <Select value={cashierFilter} onValueChange={setCashierFilter} disabled={!canViewAllCashiers && dropdownCashiers.length <= 1}>
                   <SelectTrigger className="h-11 sm:h-10 text-sm" data-testid="select-cashier">
-                    <SelectValue placeholder="الكاشير" />
+                    <SelectValue placeholder={t("filters.cashier")} />
                   </SelectTrigger>
                   <SelectContent>
-                    {canViewAllCashiers && <SelectItem value="all">جميع الكاشيرين</SelectItem>}
+                    {canViewAllCashiers && <SelectItem value="all">{t("filters.allCashiers")}</SelectItem>}
                     {dropdownCashiers.map((name) => (
                       <SelectItem key={name} value={name}>
                         {name}
@@ -486,7 +484,7 @@ export default function CashierJournalsPage() {
                   value={dateFrom}
                   onChange={(e) => setDateFrom(e.target.value)}
                   className="h-11 sm:h-10 text-sm"
-                  placeholder="من تاريخ"
+                  placeholder={t("filters.dateFrom")}
                   data-testid="input-date-from"
                 />
                 <Input
@@ -494,15 +492,15 @@ export default function CashierJournalsPage() {
                   value={dateTo}
                   onChange={(e) => setDateTo(e.target.value)}
                   className="h-11 sm:h-10 text-sm"
-                  placeholder="إلى تاريخ"
+                  placeholder={t("filters.dateTo")}
                   data-testid="input-date-to"
                 />
                 <Select value={branchFilter} onValueChange={setBranchFilter} disabled={!canSelectBranch}>
                   <SelectTrigger className="h-11 sm:h-10 text-sm" data-testid="select-branch">
-                    <SelectValue placeholder="الفرع" />
+                    <SelectValue placeholder={t("filters.branch")} />
                   </SelectTrigger>
                   <SelectContent>
-                    {canSelectBranch && <SelectItem value="all">جميع الفروع</SelectItem>}
+                    {canSelectBranch && <SelectItem value="all">{t("filters.allBranches")}</SelectItem>}
                     {branches?.map((branch) => (
                       <SelectItem key={branch.id} value={branch.id}>
                         {branch.name}
@@ -512,14 +510,14 @@ export default function CashierJournalsPage() {
                 </Select>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
                   <SelectTrigger className="h-11 sm:h-10 text-sm" data-testid="select-status">
-                    <SelectValue placeholder="الحالة" />
+                    <SelectValue placeholder={t("filters.status")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">جميع الحالات</SelectItem>
-                    <SelectItem value="draft">مسودة</SelectItem>
-                    <SelectItem value="submitted">مُقدم</SelectItem>
-                    <SelectItem value="approved">معتمد</SelectItem>
-                    <SelectItem value="rejected">مرفوض</SelectItem>
+                    <SelectItem value="all">{t("filters.allStatuses")}</SelectItem>
+                    <SelectItem value="draft">{t("statuses.draft")}</SelectItem>
+                    <SelectItem value="submitted">{t("statuses.submittedShort")}</SelectItem>
+                    <SelectItem value="approved">{t("statuses.approved")}</SelectItem>
+                    <SelectItem value="rejected">{t("statuses.rejected")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -535,7 +533,7 @@ export default function CashierJournalsPage() {
             ) : filteredJournals?.length === 0 ? (
               <div className="text-center py-8 sm:py-12 text-muted-foreground">
                 <Wallet className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 sm:mb-4 opacity-50" />
-                <p className="text-sm sm:text-base">لا توجد يوميات مطابقة للبحث</p>
+                <p className="text-sm sm:text-base">{t("journalList.noMatch")}</p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -543,21 +541,21 @@ export default function CashierJournalsPage() {
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-muted/50">
-                        <TableHead className="text-right w-24 sm:w-28 text-xs sm:text-sm">التاريخ</TableHead>
-                        <TableHead className="text-right text-xs sm:text-sm">الكاشير</TableHead>
-                        <TableHead className="text-right text-xs sm:text-sm hidden md:table-cell">الفرع</TableHead>
-                        <TableHead className="text-center w-16 sm:w-20 text-xs sm:text-sm hidden lg:table-cell">الوردية</TableHead>
-                        <TableHead className="text-left w-24 sm:w-28 text-xs sm:text-sm">المبيعات</TableHead>
-                        <TableHead className="text-left w-20 sm:w-24 text-xs sm:text-sm hidden xl:table-cell">العملاء</TableHead>
-                        <TableHead className="text-center w-24 sm:w-28 text-xs sm:text-sm hidden sm:table-cell">الفرق</TableHead>
-                        <TableHead className="text-center w-20 sm:w-24 text-xs sm:text-sm">الحالة</TableHead>
-                        <TableHead className="text-center w-20 sm:w-24 text-xs sm:text-sm">الإجراءات</TableHead>
+                        <TableHead className="text-right w-24 sm:w-28 text-xs sm:text-sm">{t("table.date")}</TableHead>
+                        <TableHead className="text-right text-xs sm:text-sm">{t("table.cashier")}</TableHead>
+                        <TableHead className="text-right text-xs sm:text-sm hidden md:table-cell">{t("table.branch")}</TableHead>
+                        <TableHead className="text-center w-16 sm:w-20 text-xs sm:text-sm hidden lg:table-cell">{t("table.shift")}</TableHead>
+                        <TableHead className="text-left w-24 sm:w-28 text-xs sm:text-sm">{t("table.sales")}</TableHead>
+                        <TableHead className="text-left w-20 sm:w-24 text-xs sm:text-sm hidden xl:table-cell">{t("table.customers")}</TableHead>
+                        <TableHead className="text-center w-24 sm:w-28 text-xs sm:text-sm hidden sm:table-cell">{t("table.difference")}</TableHead>
+                        <TableHead className="text-center w-20 sm:w-24 text-xs sm:text-sm">{t("table.status")}</TableHead>
+                        <TableHead className="text-center w-20 sm:w-24 text-xs sm:text-sm">{t("table.actions")}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredJournals?.slice((currentPage - 1) * 20, currentPage * 20).map((journal) => {
-                        const discrepancy = DISCREPANCY_LABELS[journal.discrepancyStatus];
-                        const status = STATUS_LABELS[journal.status];
+                        const discrepancy = DISCREPANCY_ICONS[journal.discrepancyStatus];
+                        const status = STATUS_ICONS[journal.status];
                         const DiscrepancyIcon = discrepancy?.icon || Minus;
 
                         return (
@@ -576,7 +574,7 @@ export default function CashierJournalsPage() {
                               {getBranchName(journal.branchId)}
                             </TableCell>
                             <TableCell className="text-center text-xs sm:text-sm hidden lg:table-cell py-2 sm:py-3">
-                              {journal.shiftType === "morning" ? "صباحي" : journal.shiftType === "evening" ? "مسائي" : "ليلي"}
+                              {journal.shiftType ? t(`shifts.${journal.shiftType}`) : '-'}
                             </TableCell>
                             <TableCell className="text-left font-medium text-xs sm:text-sm py-2 sm:py-3">
                               {formatCurrency(journal.totalSales)}
@@ -592,7 +590,7 @@ export default function CashierJournalsPage() {
                             </TableCell>
                             <TableCell className="text-center py-2 sm:py-3">
                               <Badge variant={status?.variant || "secondary"} className="text-[10px] sm:text-xs px-1.5 sm:px-2">
-                                {status?.label}
+                                {t(`statuses.${journal.status}`)}
                               </Badge>
                             </TableCell>
                             <TableCell className="py-2 sm:py-3">
@@ -638,20 +636,20 @@ export default function CashierJournalsPage() {
                                     </AlertDialogTrigger>
                                     <AlertDialogContent className="max-w-md" dir="rtl">
                                       <AlertDialogHeader>
-                                        <AlertDialogTitle>تأكيد حذف اليومية</AlertDialogTitle>
+                                        <AlertDialogTitle>{t("deleteDialog.title")}</AlertDialogTitle>
                                         <AlertDialogDescription>
-                                          هل أنت متأكد من حذف يومية <strong>{journal.cashierName}</strong> بتاريخ <strong>{journal.journalDate}</strong>؟
+                                          {t("deleteDialog.description", { cashier: journal.cashierName, date: journal.journalDate })}
                                           <br />
-                                          <span className="text-red-500 font-medium">هذا الإجراء لا يمكن التراجع عنه!</span>
+                                          <span className="text-red-500 font-medium">{t("deleteDialog.warning")}</span>
                                         </AlertDialogDescription>
                                       </AlertDialogHeader>
                                       <AlertDialogFooter className="flex-row-reverse gap-2">
-                                        <AlertDialogCancel>إلغاء</AlertDialogCancel>
+                                        <AlertDialogCancel>{t("deleteDialog.cancel")}</AlertDialogCancel>
                                         <AlertDialogAction
                                           className="bg-red-600 hover:bg-red-700"
                                           onClick={() => deleteMutation.mutate(journal.id)}
                                         >
-                                          حذف اليومية
+                                          {t("deleteDialog.confirm")}
                                         </AlertDialogAction>
                                       </AlertDialogFooter>
                                     </AlertDialogContent>

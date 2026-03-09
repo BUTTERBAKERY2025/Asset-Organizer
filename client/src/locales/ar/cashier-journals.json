@@ -1,0 +1,113 @@
+{
+  "pageTitle": "يومية مبيعات الكاشير",
+  "pageSubtitle": "متابعة وإدارة يوميات المبيعات والتسويات النقدية",
+  "printList": "طباعة القائمة",
+  "print": "طباعة",
+  "newJournal": "يومية جديدة",
+  "new": "جديدة",
+  "stats": {
+    "totalSales": "إجمالي المبيعات",
+    "totalShortage": "إجمالي العجز",
+    "totalSurplus": "إجمالي الزيادة",
+    "avgSalesPerJournal": "متوسط المبيعات/يومية",
+    "case": "حالة"
+  },
+  "journalList": {
+    "title": "قائمة اليوميات",
+    "total": "إجمالي: {{count}} يومية",
+    "noMatch": "لا توجد يوميات مطابقة للبحث",
+    "noPrintData": "لا توجد يوميات للطباعة"
+  },
+  "filters": {
+    "cashier": "الكاشير",
+    "allCashiers": "جميع الكاشيرين",
+    "dateFrom": "من تاريخ",
+    "dateTo": "إلى تاريخ",
+    "branch": "الفرع",
+    "allBranches": "جميع الفروع",
+    "status": "الحالة",
+    "allStatuses": "جميع الحالات"
+  },
+  "statuses": {
+    "draft": "مسودة",
+    "submitted": "مُقدم للمراجعة",
+    "submittedShort": "مُقدم",
+    "approved": "معتمد",
+    "rejected": "مرفوض"
+  },
+  "discrepancy": {
+    "balanced": "متوازن",
+    "shortage": "عجز",
+    "surplus": "زيادة"
+  },
+  "table": {
+    "date": "التاريخ",
+    "cashier": "الكاشير",
+    "branch": "الفرع",
+    "shift": "الوردية",
+    "sales": "المبيعات",
+    "customers": "العملاء",
+    "difference": "الفرق",
+    "status": "الحالة",
+    "actions": "الإجراءات"
+  },
+  "shifts": {
+    "morning": "صباحي",
+    "evening": "مسائي",
+    "night": "ليلي"
+  },
+  "export": {
+    "date": "التاريخ",
+    "cashier": "الكاشير",
+    "branch": "الفرع",
+    "shift": "الوردية",
+    "totalSales": "إجمالي المبيعات",
+    "cash": "النقدي",
+    "network": "الشبكة",
+    "delivery": "التوصيل",
+    "customers": "عدد العملاء",
+    "discrepancyStatus": "حالة العجز",
+    "discrepancyAmount": "قيمة العجز",
+    "status": "الحالة",
+    "fileName": "يوميات-الكاشير",
+    "reportTitle": "تقرير يوميات الكاشير",
+    "period": "الفترة:",
+    "sheetName": "يوميات الكاشير"
+  },
+  "deleteDialog": {
+    "title": "تأكيد حذف اليومية",
+    "description": "هل أنت متأكد من حذف يومية {{cashier}} بتاريخ {{date}}؟",
+    "warning": "هذا الإجراء لا يمكن التراجع عنه!",
+    "cancel": "إلغاء",
+    "confirm": "حذف اليومية"
+  },
+  "toasts": {
+    "approved": "تم اعتماد اليومية بنجاح",
+    "rejected": "تم رفض اليومية",
+    "deleted": "تم حذف اليومية بنجاح",
+    "error": "خطأ",
+    "approveFailed": "فشل في اعتماد اليومية",
+    "rejectFailed": "فشل في رفض اليومية",
+    "deleteFailed": "فشل في حذف اليومية"
+  },
+  "printTemplate": {
+    "title": "قائمة يوميات الكاشير",
+    "journal": "يومية",
+    "totalSales": "إجمالي المبيعات",
+    "totalShortage": "إجمالي العجز",
+    "totalSurplus": "إجمالي الفائض",
+    "journalCount": "عدد اليوميات",
+    "date": "التاريخ",
+    "branch": "الفرع",
+    "cashier": "الكاشير",
+    "shift": "الوردية",
+    "sales": "المبيعات",
+    "cash": "نقدي",
+    "network": "شبكة",
+    "difference": "الفرق",
+    "status": "الحالة",
+    "printDate": "تاريخ الطباعة:",
+    "loading": "جاري تحميل التقرير...",
+    "printBtn": "طباعة"
+  }
+}
