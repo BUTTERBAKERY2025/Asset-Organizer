@@ -27,70 +27,31 @@ import {
 } from "recharts";
 import type { Branch, CashierSalesJournal, JournalAttachment } from "@shared/schema";
 import { printHtmlContent } from "@/lib/print-utils";
+import { useTranslation } from "react-i18next";
 
-const PAYMENT_METHOD_LABELS: Record<string, string> = {
-  cash: "نقداً",
-  card: "بطاقة ائتمان",
-  mada: "مدى",
-  apple_pay: "Apple Pay",
-  stc_pay: "STC Pay",
-  hunger_station: "هنقرستيشن",
-  toyou: "ToYou",
-  jahez: "جاهز",
-  marsool: "مرسول",
-  keeta: "كيتا",
-  the_chefs: "ذا شيفز",
-  other: "أخرى",
+const DELIVERY_APP_COLORS: Record<string, string> = {
+  hunger_station: "#FF5A00",
+  toyou: "#00B4D8",
+  jahez: "#6366F1",
+  marsool: "#10B981",
+  keeta: "#F59E0B",
+  the_chefs: "#EC4899",
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  draft: "مسودة",
-  submitted: "مقدمة",
-  posted: "مرحّلة",
-  approved: "معتمدة",
-  rejected: "مرفوضة",
-  pending: "قيد الانتظار",
-  in_progress: "قيد التنفيذ",
-  completed: "مكتملة",
-  cancelled: "ملغاة",
-  passed: "ناجح",
-  failed: "فاشل",
-  needs_improvement: "يحتاج تحسين",
+const DELIVERY_APP_KEYS = ["hunger_station", "toyou", "jahez", "marsool", "keeta", "the_chefs"];
+
+const REPORT_TYPE_ICONS: Record<string, React.ElementType> = {
+  all: BarChart3,
+  cashier: Wallet,
+  sales: DollarSign,
+  apps: Truck,
+  shifts: Clock,
+  production: Factory,
+  quality: CheckCircle,
+  "event-pos": Zap,
 };
 
-const DISCREPANCY_STATUS_LABELS: Record<string, string> = {
-  balanced: "متوازن",
-  shortage: "عجز",
-  surplus: "فائض",
-};
-
-const SHIFT_LABELS: Record<string, string> = {
-  morning: "الصباحية",
-  evening: "المسائية",
-  night: "الليلية",
-  full_day: "يوم كامل",
-  split: "مقسمة",
-};
-
-const REPORT_TYPES = [
-  { value: "all", label: "جميع التقارير", icon: BarChart3 },
-  { value: "cashier", label: "تقارير الكاشير", icon: Wallet },
-  { value: "sales", label: "تقارير المبيعات", icon: DollarSign },
-  { value: "apps", label: "مبيعات التطبيقات", icon: Truck },
-  { value: "shifts", label: "تقارير الورديات", icon: Clock },
-  { value: "production", label: "تقارير الإنتاج", icon: Factory },
-  { value: "quality", label: "تقارير الجودة", icon: CheckCircle },
-  { value: "event-pos", label: "إيفنت موسمي", icon: Zap },
-];
-
-const DELIVERY_APPS = [
-  { key: "hunger_station", label: "هنقرستيشن", color: "#FF5A00" },
-  { key: "toyou", label: "ToYou", color: "#00B4D8" },
-  { key: "jahez", label: "جاهز", color: "#6366F1" },
-  { key: "marsool", label: "مرسول", color: "#10B981" },
-  { key: "keeta", label: "كيتا", color: "#F59E0B" },
-  { key: "the_chefs", label: "ذا شيفز", color: "#EC4899" },
-];
+const REPORT_TYPE_KEYS = ["all", "cashier", "sales", "apps", "shifts", "production", "quality", "event-pos"];
 
 const COLORS = ["#10B981", "#3B82F6", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899", "#06B6D4", "#84CC16"];
 
@@ -242,6 +203,7 @@ function AlertBanner({ alerts }: { alerts: { type: 'warning' | 'danger' | 'info'
 }
 
 function QuickStatsRow({ report, cashierJournals, hasActiveFilters }: { report: OperationsReport; cashierJournals: CashierSalesJournal[]; hasActiveFilters: boolean }) {
+  const { t } = useTranslation('operations');
   const shortageCount = cashierJournals.filter(j => j.discrepancyStatus === 'shortage').length;
   const pendingApproval = cashierJournals.filter(j => j.status === 'submitted').length;
   
@@ -258,35 +220,36 @@ function QuickStatsRow({ report, cashierJournals, hasActiveFilters }: { report: 
     <div className="grid grid-cols-2 md:grid-cols-6 gap-3 p-4 rounded-xl bg-gradient-to-r from-slate-900 to-slate-800 text-white">
       <div className="text-center">
         <p className="text-2xl font-bold text-green-400">{formatCurrency(filteredTotalSales)}</p>
-        <p className="text-xs text-slate-400">إجمالي المبيعات</p>
+        <p className="text-xs text-slate-400">{t('quickStats.totalSales')}</p>
       </div>
       <div className="text-center">
         <p className="text-2xl font-bold text-blue-400">{filteredTransactions}</p>
-        <p className="text-xs text-slate-400">العمليات</p>
+        <p className="text-xs text-slate-400">{t('quickStats.transactions')}</p>
       </div>
       <div className="text-center">
         <p className="text-2xl font-bold text-purple-400">
           {report.productionReport.actualProduction?.totalBatches || report.productionReport.totalOrders}
         </p>
-        <p className="text-xs text-slate-400">دفعات الإنتاج</p>
+        <p className="text-xs text-slate-400">{t('quickStats.productionBatches')}</p>
       </div>
       <div className="text-center">
         <p className={`text-2xl font-bold ${shortageCount > 0 ? 'text-red-400' : 'text-green-400'}`}>{shortageCount}</p>
-        <p className="text-xs text-slate-400">حالات عجز</p>
+        <p className="text-xs text-slate-400">{t('quickStats.shortageCases')}</p>
       </div>
       <div className="text-center">
         <p className={`text-2xl font-bold ${pendingApproval > 0 ? 'text-amber-400' : 'text-green-400'}`}>{pendingApproval}</p>
-        <p className="text-xs text-slate-400">بانتظار الموافقة</p>
+        <p className="text-xs text-slate-400">{t('quickStats.pendingApproval')}</p>
       </div>
       <div className="text-center">
         <p className="text-2xl font-bold text-purple-400">{cashierJournals.length}</p>
-        <p className="text-xs text-slate-400">يوميات الكاشير</p>
+        <p className="text-xs text-slate-400">{t('quickStats.cashierJournals')}</p>
       </div>
     </div>
   );
 }
 
 function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJournal; branches?: Branch[] }) {
+  const { t } = useTranslation('operations');
   const branchName = branches?.find(b => b.id === journal.branchId)?.name || journal.branchId;
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -315,12 +278,6 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
       return date.toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     };
 
-    const SHIFT_LABELS: Record<string, string> = {
-      morning: "صباحي",
-      evening: "مسائي", 
-      night: "ليلي",
-    };
-
     const cashierSig = journalDetails?.signatures?.find(s => s.signatureType === 'cashier');
     const supervisorSig = journalDetails?.signatures?.find(s => s.signatureType === 'supervisor' || s.signatureType === 'manager');
 
@@ -329,7 +286,7 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <title>ملخص اليومية - ${journal.journalDate}</title>
+  <title>${t('pdf.journalSummary')} - ${journal.journalDate}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
@@ -378,8 +335,8 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
   </style>
 </head>
 <body>
-  <div class="loading-msg" id="loadingMsg">جاري تحميل التقرير...</div>
-  <button class="print-btn" id="printBtn" style="display:none;" onclick="window.print()">طباعة</button>
+  <div class="loading-msg" id="loadingMsg">${t('pdf.loading')}</div>
+  <button class="print-btn" id="printBtn" style="display:none;" onclick="window.print()">${t('pdf.print')}</button>
   <script>
     document.fonts.ready.then(function() {
       document.getElementById('loadingMsg').style.display = 'none';
@@ -394,11 +351,11 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
   <div class="container">
     <div class="header">
       <div>
-        <div class="title">ملخص يومية الكاشير</div>
-        <div class="info">${branchName} | ${SHIFT_LABELS[journal.shiftType || ''] || journal.shiftType} | ${formatDate(journal.journalDate)}</div>
+        <div class="title">${t('pdf.journalSummary')}</div>
+        <div class="info">${branchName} | ${t(`shiftsShort.${journal.shiftType || 'unspecified'}`)} | ${formatDate(journal.journalDate)}</div>
       </div>
       <div style="text-align:left;">
-        <div style="font-size:10px;color:#666;">رقم اليومية</div>
+        <div style="font-size:10px;color:#666;">${t('pdf.journalNumber')}</div>
         <div style="font-size:14px;font-weight:bold;">#${journal.id}</div>
       </div>
     </div>
@@ -406,71 +363,71 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
     <div class="main-grid">
       <div>
         <div class="section">
-          <div class="section-title">ملخص المبيعات</div>
-          <div class="row"><span class="label">إجمالي المبيعات</span><span class="value big">${(journal.totalSales || 0).toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
-          <div class="row"><span class="label">عدد الفواتير</span><span class="value">${journal.transactionCount || 0}</span></div>
-          <div class="row"><span class="label">عدد العملاء</span><span class="value">${journal.customerCount || 0}</span></div>
-          <div class="row"><span class="label">متوسط الفاتورة</span><span class="value">${(journal.averageTicket || 0).toFixed(2)} ر.س</span></div>
+          <div class="section-title">${t('pdf.salesSummary')}</div>
+          <div class="row"><span class="label">${t('pdf.totalSales')}</span><span class="value big">${(journal.totalSales || 0).toLocaleString('en', {minimumFractionDigits: 2})} ${t('common.sar')}</span></div>
+          <div class="row"><span class="label">${t('pdf.invoiceCount')}</span><span class="value">${journal.transactionCount || 0}</span></div>
+          <div class="row"><span class="label">${t('pdf.customerCount')}</span><span class="value">${journal.customerCount || 0}</span></div>
+          <div class="row"><span class="label">${t('pdf.avgTicket')}</span><span class="value">${(journal.averageTicket || 0).toFixed(2)} ${t('common.sar')}</span></div>
         </div>
         
         <div class="section">
-          <div class="section-title">تسوية النقدي</div>
+          <div class="section-title">${t('pdf.cashReconciliation')}</div>
           <div class="recon-box">
-            <div class="recon-row"><span>رصيد الافتتاح</span><span>${(journal.openingBalance || 0).toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
-            <div class="recon-row"><span>المبيعات النقدية</span><span>${(journal.cashTotal || 0).toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
-            <div class="recon-row"><span>المتوقع في الصندوق</span><span>${(journal.expectedCash || 0).toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
-            <div class="recon-row"><span>الفعلي في الصندوق</span><span>${(journal.actualCashDrawer || 0).toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
+            <div class="recon-row"><span>${t('pdf.openingBalance')}</span><span>${(journal.openingBalance || 0).toLocaleString('en', {minimumFractionDigits: 2})} ${t('common.sar')}</span></div>
+            <div class="recon-row"><span>${t('pdf.cashSales')}</span><span>${(journal.cashTotal || 0).toLocaleString('en', {minimumFractionDigits: 2})} ${t('common.sar')}</span></div>
+            <div class="recon-row"><span>${t('pdf.expectedInDrawer')}</span><span>${(journal.expectedCash || 0).toLocaleString('en', {minimumFractionDigits: 2})} ${t('common.sar')}</span></div>
+            <div class="recon-row"><span>${t('pdf.actualInDrawer')}</span><span>${(journal.actualCashDrawer || 0).toLocaleString('en', {minimumFractionDigits: 2})} ${t('common.sar')}</span></div>
           </div>
           <div class="diff-display ${(journal.discrepancyAmount || 0) === 0 ? 'balanced' : (journal.discrepancyAmount || 0) < 0 ? 'shortage' : 'surplus'}">
-            <div class="amount ${(journal.discrepancyAmount || 0) < 0 ? 'negative' : (journal.discrepancyAmount || 0) > 0 ? 'positive' : ''}">${(journal.discrepancyAmount || 0).toLocaleString('en', {minimumFractionDigits: 2})} ر.س</div>
-            <div class="status">${(journal.discrepancyAmount || 0) === 0 ? 'مطابق ✓' : (journal.discrepancyAmount || 0) < 0 ? 'عجز مُسجّل على الكاشير' : 'فائض مُسجّل'}</div>
+            <div class="amount ${(journal.discrepancyAmount || 0) < 0 ? 'negative' : (journal.discrepancyAmount || 0) > 0 ? 'positive' : ''}">${(journal.discrepancyAmount || 0).toLocaleString('en', {minimumFractionDigits: 2})} ${t('common.sar')}</div>
+            <div class="status">${(journal.discrepancyAmount || 0) === 0 ? t('pdf.matched') : (journal.discrepancyAmount || 0) < 0 ? t('pdf.shortageOnCashier') : t('pdf.surplusRecorded')}</div>
           </div>
         </div>
       </div>
       
       <div>
         <div class="section">
-          <div class="section-title">تصنيف المبيعات</div>
+          <div class="section-title">${t('pdf.salesClassification')}</div>
           
-          <div class="category-header cash"><span>💵 نقدي</span><span>${(journal.cashTotal || 0).toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
+          <div class="category-header cash"><span>${t('pdf.cashCategory')}</span><span>${(journal.cashTotal || 0).toLocaleString('en', {minimumFractionDigits: 2})} ${t('common.sar')}</span></div>
           
-          <div class="category-header cards"><span>💳 بطاقات وشبكة</span><span>${(journal.networkTotal || 0).toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
+          <div class="category-header cards"><span>${t('pdf.cardsCategory')}</span><span>${(journal.networkTotal || 0).toLocaleString('en', {minimumFractionDigits: 2})} ${t('common.sar')}</span></div>
           ${paymentBreakdowns ? paymentBreakdowns.filter(p => p.amount > 0 && ['card', 'mada', 'apple_pay', 'stc_pay'].includes(p.paymentMethod)).map(p => `
-          <div class="sub-row"><span>• ${PAYMENT_METHOD_LABELS[p.paymentMethod] || p.paymentMethod}</span><span>${(p.amount || 0).toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
+          <div class="sub-row"><span>• ${t(`paymentMethods.${p.paymentMethod}`)}</span><span>${(p.amount || 0).toLocaleString('en', {minimumFractionDigits: 2})} ${t('common.sar')}</span></div>
           `).join('') : ''}
           
-          <div class="category-header apps"><span>🚗 تطبيقات التوصيل</span><span>${(journal.deliveryTotal || 0).toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
+          <div class="category-header apps"><span>${t('pdf.deliveryAppsCategory')}</span><span>${(journal.deliveryTotal || 0).toLocaleString('en', {minimumFractionDigits: 2})} ${t('common.sar')}</span></div>
           ${paymentBreakdowns ? paymentBreakdowns.filter(p => p.amount > 0 && ['hunger_station', 'toyou', 'jahez', 'marsool', 'keeta', 'the_chefs'].includes(p.paymentMethod)).map(p => `
-          <div class="sub-row"><span>• ${PAYMENT_METHOD_LABELS[p.paymentMethod] || p.paymentMethod}</span><span>${(p.amount || 0).toLocaleString('en', {minimumFractionDigits: 2})} ر.س</span></div>
+          <div class="sub-row"><span>• ${t(`paymentMethods.${p.paymentMethod}`)}</span><span>${(p.amount || 0).toLocaleString('en', {minimumFractionDigits: 2})} ${t('common.sar')}</span></div>
           `).join('') : ''}
         </div>
         
-        ${journal.notes ? `<div class="section"><div class="section-title">ملاحظات</div><div style="font-size:10px;color:#666;padding:5px;background:#fffbeb;border-radius:4px;">${journal.notes}</div></div>` : ''}
+        ${journal.notes ? `<div class="section"><div class="section-title">${t('pdf.notesSection')}</div><div style="font-size:10px;color:#666;padding:5px;background:#fffbeb;border-radius:4px;">${journal.notes}</div></div>` : ''}
       </div>
     </div>
     
     <div class="signature-section">
-      <div style="font-size:11px;font-weight:bold;margin-bottom:8px;text-align:center;">التوقيعات والاعتماد</div>
+      <div style="font-size:11px;font-weight:bold;margin-bottom:8px;text-align:center;">${t('pdf.signaturesSection')}</div>
       <div class="sig-grid">
         <div class="sig-box">
-          <div class="role">توقيع الكاشير</div>
-          ${cashierSig?.signatureData ? `<img class="sig-img" src="${cashierSig.signatureData}" />` : '<div class="placeholder">لم يوقع بعد</div>'}
+          <div class="role">${t('pdf.cashierSignature')}</div>
+          ${cashierSig?.signatureData ? `<img class="sig-img" src="${cashierSig.signatureData}" />` : `<div class="placeholder">${t('pdf.notSignedYet')}</div>`}
           <div class="name">${journal.cashierName}</div>
         </div>
         <div class="sig-box">
-          <div class="role">توقيع المشرف</div>
-          ${supervisorSig?.signatureData ? `<img class="sig-img" src="${supervisorSig.signatureData}" /><div class="name">${supervisorSig.signerName}</div>` : '<div class="placeholder">لم يوقع بعد</div><div class="name">________________</div>'}
+          <div class="role">${t('pdf.supervisorSignature')}</div>
+          ${supervisorSig?.signatureData ? `<img class="sig-img" src="${supervisorSig.signatureData}" /><div class="name">${supervisorSig.signerName}</div>` : `<div class="placeholder">${t('pdf.notSignedYet')}</div><div class="name">________________</div>`}
         </div>
         <div class="sig-box">
-          <div class="role">اعتماد المدير</div>
-          ${journal.approvedBy ? `<div class="name" style="margin-top:15px;">${journal.approvedBy}</div>` : '<div class="placeholder">لم يُعتمد بعد</div><div class="name">________________</div>'}
+          <div class="role">${t('pdf.managerApproval')}</div>
+          ${journal.approvedBy ? `<div class="name" style="margin-top:15px;">${journal.approvedBy}</div>` : `<div class="placeholder">${t('pdf.notApprovedYet')}</div><div class="name">________________</div>`}
         </div>
       </div>
     </div>
     
     <div class="footer">
       <span>BUTTER BAKERY SYSTEM - CEO COMMAND</span>
-      <span>تم الإنشاء: ${new Date().toLocaleDateString('en-GB')}</span>
+      <span>${t('pdf.created')} ${new Date().toLocaleDateString('en-GB')}</span>
     </div>
   </div>
 </body>
@@ -485,7 +442,7 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
         <DialogTrigger asChild>
           <Button variant="ghost" size="sm" className="gap-1" data-testid={`view-journal-${journal.id}`}>
             <Eye className="w-4 h-4" />
-            عرض
+            {t('journalDialog.view')}
           </Button>
         </DialogTrigger>
         <DialogContent className="max-w-4xl max-h-[90vh]">
@@ -493,11 +450,11 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
             <div className="flex items-center justify-between">
               <DialogTitle className="flex items-center gap-2">
                 <Receipt className="w-5 h-5 text-amber-600" />
-                تفاصيل يومية الكاشير - {journal.journalDate}
+                {t('journalDialog.title')} - {journal.journalDate}
               </DialogTitle>
               <Button onClick={handleExportJournalPDF} className="gap-2 bg-amber-600 hover:bg-amber-700" data-testid={`export-journal-pdf-${journal.id}`}>
                 <FileDown className="w-4 h-4" />
-                تصدير PDF
+                {t('journalDialog.exportPDF')}
               </Button>
             </div>
           </DialogHeader>
@@ -505,21 +462,21 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
             <div className="space-y-6 p-2">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="p-3 bg-gradient-to-br from-amber-50 to-amber-100 rounded-lg border border-amber-200">
-                  <p className="text-xs text-muted-foreground">الفرع</p>
+                  <p className="text-xs text-muted-foreground">{t('journalDialog.branch')}</p>
                   <p className="font-semibold">{branchName}</p>
                 </div>
                 <div className="p-3 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg border border-blue-200">
-                  <p className="text-xs text-muted-foreground">اسم الكاشير</p>
+                  <p className="text-xs text-muted-foreground">{t('journalDialog.cashierName')}</p>
                   <p className="font-semibold">{journal.cashierName}</p>
                 </div>
                 <div className="p-3 bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg border border-purple-200">
-                  <p className="text-xs text-muted-foreground">الوردية</p>
+                  <p className="text-xs text-muted-foreground">{t('journalDialog.shift')}</p>
                   <p className="font-semibold">{journal.shiftType || "-"}</p>
                 </div>
                 <div className="p-3 bg-gradient-to-br from-green-50 to-green-100 rounded-lg border border-green-200">
-                  <p className="text-xs text-muted-foreground">الحالة</p>
+                  <p className="text-xs text-muted-foreground">{t('journalDialog.status')}</p>
                   <Badge variant={journal.status === "approved" ? "default" : journal.status === "rejected" ? "destructive" : "secondary"}>
-                    {STATUS_LABELS[journal.status] || journal.status}
+                    {t(`statuses.${journal.status}`)}
                   </Badge>
                 </div>
               </div>
@@ -528,34 +485,34 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
                 <CardHeader className="pb-2 bg-gradient-to-r from-green-50 to-white">
                   <CardTitle className="text-base flex items-center gap-2">
                     <DollarSign className="w-4 h-4 text-green-600" />
-                    ملخص المبيعات
+                    {t('journalDialog.salesSummary')}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
-                      <span className="text-muted-foreground">إجمالي المبيعات</span>
-                      <span className="font-bold text-green-600 text-lg">{journal.totalSales?.toLocaleString('en')} ر.س</span>
+                      <span className="text-muted-foreground">{t('journalDialog.totalSales')}</span>
+                      <span className="font-bold text-green-600 text-lg">{journal.totalSales?.toLocaleString('en')} {t('common.sar')}</span>
                     </div>
                     <div className="flex justify-between items-center p-2 border-b">
-                      <span className="text-muted-foreground">المبيعات النقدية</span>
-                      <span className="font-semibold">{journal.cashTotal?.toLocaleString('en')} ر.س</span>
+                      <span className="text-muted-foreground">{t('journalDialog.cashSales')}</span>
+                      <span className="font-semibold">{journal.cashTotal?.toLocaleString('en')} {t('common.sar')}</span>
                     </div>
                     <div className="flex justify-between items-center p-2 border-b">
-                      <span className="text-muted-foreground">مبيعات الشبكة</span>
-                      <span className="font-semibold">{journal.networkTotal?.toLocaleString('en')} ر.س</span>
+                      <span className="text-muted-foreground">{t('journalDialog.networkSales')}</span>
+                      <span className="font-semibold">{journal.networkTotal?.toLocaleString('en')} {t('common.sar')}</span>
                     </div>
                     <div className="flex justify-between items-center p-2 border-b">
-                      <span className="text-muted-foreground">مبيعات التوصيل</span>
-                      <span className="font-semibold">{journal.deliveryTotal?.toLocaleString('en')} ر.س</span>
+                      <span className="text-muted-foreground">{t('journalDialog.deliverySales')}</span>
+                      <span className="font-semibold">{journal.deliveryTotal?.toLocaleString('en')} {t('common.sar')}</span>
                     </div>
                     <div className="flex justify-between items-center p-2 border-b">
-                      <span className="text-muted-foreground">عدد العمليات</span>
+                      <span className="text-muted-foreground">{t('journalDialog.transactionCount')}</span>
                       <span className="font-semibold">{journal.transactionCount}</span>
                     </div>
                     <div className="flex justify-between items-center p-2 border-b">
-                      <span className="text-muted-foreground">متوسط الفاتورة</span>
-                      <span className="font-semibold">{journal.averageTicket?.toFixed(2)} ر.س</span>
+                      <span className="text-muted-foreground">{t('journalDialog.avgTicket')}</span>
+                      <span className="font-semibold">{journal.averageTicket?.toFixed(2)} {t('common.sar')}</span>
                     </div>
                   </div>
                 </CardContent>
@@ -565,30 +522,30 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
                 <CardHeader className="pb-2 bg-gradient-to-r from-blue-50 to-white">
                   <CardTitle className="text-base flex items-center gap-2">
                     <Wallet className="w-4 h-4 text-blue-600" />
-                    مطابقة الصندوق
+                    {t('journalDialog.cashReconciliation')}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="flex flex-col p-3 bg-gray-50 rounded-lg">
-                      <span className="text-xs text-muted-foreground">رصيد الافتتاح</span>
-                      <span className="font-semibold">{journal.openingBalance?.toLocaleString('en')} ر.س</span>
+                      <span className="text-xs text-muted-foreground">{t('journalDialog.openingBalance')}</span>
+                      <span className="font-semibold">{journal.openingBalance?.toLocaleString('en')} {t('common.sar')}</span>
                     </div>
                     <div className="flex flex-col p-3 bg-gray-50 rounded-lg">
-                      <span className="text-xs text-muted-foreground">المتوقع في الصندوق</span>
-                      <span className="font-semibold">{journal.expectedCash?.toLocaleString('en')} ر.س</span>
+                      <span className="text-xs text-muted-foreground">{t('journalDialog.expectedCash')}</span>
+                      <span className="font-semibold">{journal.expectedCash?.toLocaleString('en')} {t('common.sar')}</span>
                     </div>
                     <div className="flex flex-col p-3 bg-gray-50 rounded-lg">
-                      <span className="text-xs text-muted-foreground">الفعلي في الصندوق</span>
-                      <span className="font-semibold">{journal.actualCashDrawer?.toLocaleString('en')} ر.س</span>
+                      <span className="text-xs text-muted-foreground">{t('journalDialog.actualCash')}</span>
+                      <span className="font-semibold">{journal.actualCashDrawer?.toLocaleString('en')} {t('common.sar')}</span>
                     </div>
                     <div className={`flex flex-col p-3 rounded-lg ${journal.discrepancyStatus === 'balanced' ? 'bg-green-50 border border-green-200' : journal.discrepancyStatus === 'shortage' ? 'bg-red-50 border border-red-200' : 'bg-blue-50 border border-blue-200'}`}>
-                      <span className="text-xs text-muted-foreground">الفرق</span>
+                      <span className="text-xs text-muted-foreground">{t('journalDialog.difference')}</span>
                       <span className={`font-bold ${journal.discrepancyAmount && journal.discrepancyAmount < 0 ? 'text-red-600' : journal.discrepancyAmount && journal.discrepancyAmount > 0 ? 'text-green-600' : ''}`}>
-                        {journal.discrepancyAmount?.toLocaleString('en')} ر.س
+                        {journal.discrepancyAmount?.toLocaleString('en')} {t('common.sar')}
                       </span>
                       <Badge variant={journal.discrepancyStatus === 'balanced' ? 'default' : journal.discrepancyStatus === 'shortage' ? 'destructive' : 'secondary'} className="mt-1 w-fit">
-                        {DISCREPANCY_STATUS_LABELS[journal.discrepancyStatus || 'balanced']}
+                        {t(`discrepancyStatuses.${journal.discrepancyStatus || 'balanced'}`)}
                       </Badge>
                     </div>
                   </div>
@@ -600,7 +557,7 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
                   <CardHeader className="pb-2 bg-gradient-to-r from-purple-50 to-white">
                     <CardTitle className="text-base flex items-center gap-2">
                       <Image className="w-4 h-4 text-purple-600" />
-                      المرفقات والصور ({attachments.length})
+                      {t('journalDialog.attachments')} ({attachments.length})
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -641,7 +598,7 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
                   <CardHeader className="pb-2 bg-gradient-to-r from-amber-50 to-white">
                     <CardTitle className="text-base flex items-center gap-2">
                       <FileText className="w-4 h-4 text-amber-600" />
-                      ملاحظات
+                      {t('journalDialog.notes')}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -660,28 +617,28 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Image className="w-5 h-5" />
-                عرض الصورة
+                {t('journalDialog.viewImage')}
               </DialogTitle>
             </DialogHeader>
             <div className="flex items-center justify-center bg-black/5 rounded-lg p-2">
               <img 
                 src={selectedImage} 
-                alt="صورة مكبرة"
+                alt={t('journalDialog.enlargedImage')}
                 className="max-w-full max-h-[80vh] object-contain rounded-lg"
               />
             </div>
             <div className="flex justify-center gap-2 mt-2">
               <Button variant="outline" onClick={() => setSelectedImage(null)}>
-                إغلاق
+                {t('journalDialog.close')}
               </Button>
               <Button onClick={() => {
                 const link = document.createElement('a');
                 link.href = selectedImage;
-                link.download = `مرفق_${journal.journalDate}.png`;
+                link.download = `attachment_${journal.journalDate}.png`;
                 link.click();
               }} className="gap-2">
                 <Download className="w-4 h-4" />
-                تحميل الصورة
+                {t('journalDialog.downloadImage')}
               </Button>
             </div>
           </DialogContent>
@@ -739,6 +696,11 @@ export default function OperationsReportsDashboardPage() {
       endDate: formatLocalDate(end),
     });
   };
+
+  const { t } = useTranslation('operations');
+
+  const REPORT_TYPES = useMemo(() => REPORT_TYPE_KEYS.map(key => ({ value: key, label: t(`reportTypes.${key}`), icon: REPORT_TYPE_ICONS[key] })), [t]);
+  const DELIVERY_APPS = useMemo(() => DELIVERY_APP_KEYS.map(key => ({ key, label: t(`deliveryApps.${key}`), color: DELIVERY_APP_COLORS[key] })), [t]);
 
   const [activeTab, setActiveTab] = useState("overview");
   const [cashierPage, setCashierPage] = useState(1);
@@ -1033,65 +995,65 @@ export default function OperationsReportsDashboardPage() {
     const wb = XLSX.utils.book_new();
 
     const salesData = [
-      ["تقرير المبيعات - " + filters.startDate + " إلى " + filters.endDate],
+      [t('excel.salesReport') + " - " + filters.startDate + " " + t('pdf.to') + " " + filters.endDate],
       [],
-      ["البند", "القيمة"],
-      ["إجمالي المبيعات", report.salesReport.totalSales],
-      ["المبيعات النقدية", report.salesReport.cashSales],
-      ["مبيعات الشبكة", report.salesReport.networkSales],
-      ["مبيعات التوصيل", report.salesReport.deliverySales],
-      ["إجمالي العمليات", report.salesReport.totalTransactions],
-      ["متوسط قيمة الفاتورة", report.salesReport.averageTicket],
-      ["عدد حالات العجز", report.salesReport.totalShortages],
-      ["إجمالي العجز", report.salesReport.shortageAmount],
-      ["عدد حالات الفائض", report.salesReport.totalSurpluses],
-      ["إجمالي الفائض", report.salesReport.surplusAmount],
+      [t('excel.item'), t('excel.value')],
+      [t('excel.totalSales'), report.salesReport.totalSales],
+      [t('excel.cashSales'), report.salesReport.cashSales],
+      [t('excel.networkSales'), report.salesReport.networkSales],
+      [t('excel.deliverySales'), report.salesReport.deliverySales],
+      [t('excel.totalTransactions'), report.salesReport.totalTransactions],
+      [t('excel.avgTicket'), report.salesReport.averageTicket],
+      [t('excel.shortageCases'), report.salesReport.totalShortages],
+      [t('excel.totalShortage'), report.salesReport.shortageAmount],
+      [t('excel.surplusCases'), report.salesReport.totalSurpluses],
+      [t('excel.totalSurplus'), report.salesReport.surplusAmount],
     ];
     const salesSheet = XLSX.utils.aoa_to_sheet(salesData);
-    XLSX.utils.book_append_sheet(wb, salesSheet, "المبيعات");
+    XLSX.utils.book_append_sheet(wb, salesSheet, t('excel.salesSheet'));
 
     const productionData = [
-      ["تقرير الإنتاج - " + filters.startDate + " إلى " + filters.endDate],
+      [t('excel.productionReport') + " - " + filters.startDate + " " + t('pdf.to') + " " + filters.endDate],
       [],
-      ["الإنتاج الفعلي اليومي", ""],
-      ["البند", "القيمة"],
-      ["إجمالي الدفعات", report.productionReport.actualProduction?.totalBatches || 0],
-      ["دفعات مكتملة", report.productionReport.actualProduction?.finishedBatches || 0],
-      ["قيد التنفيذ", report.productionReport.actualProduction?.inProgressBatches || 0],
-      ["الكمية المنتجة الفعلية", report.productionReport.actualProduction?.totalQuantity || 0],
+      [t('excel.actualDailyProduction'), ""],
+      [t('excel.item'), t('excel.value')],
+      [t('excel.totalBatches'), report.productionReport.actualProduction?.totalBatches || 0],
+      [t('excel.completedBatches'), report.productionReport.actualProduction?.finishedBatches || 0],
+      [t('excel.inProgress'), report.productionReport.actualProduction?.inProgressBatches || 0],
+      [t('excel.actualProducedQuantity'), report.productionReport.actualProduction?.totalQuantity || 0],
       [],
       ...(report.productionReport.actualProduction?.byProduct?.length ? [
-        ["الإنتاج حسب المنتج", "", ""],
-        ["المنتج", "الكمية", "عدد الدفعات"],
+        [t('excel.productionByProduct'), "", ""],
+        [t('excel.product'), t('excel.quantity'), t('excel.batchCount')],
         ...report.productionReport.actualProduction.byProduct.map(p => [p.productName, p.quantity, p.batchCount]),
         [],
       ] : []),
       ...(report.productionReport.totalOrders > 0 ? [
-        ["أوامر الإنتاج المخططة", ""],
-        ["إجمالي الأوامر", report.productionReport.totalOrders],
-        ["مكتملة", report.productionReport.completedOrders],
-        ["الكمية المنتجة", report.productionReport.totalQuantityProduced],
-        ["نسبة النجاح في الجودة", `${report.productionReport.qualityPassRate.toFixed(1)}%`],
+        [t('excel.plannedOrders'), ""],
+        [t('excel.totalOrders'), report.productionReport.totalOrders],
+        [t('excel.completed'), report.productionReport.completedOrders],
+        [t('excel.producedQuantity'), report.productionReport.totalQuantityProduced],
+        [t('excel.qualityRate'), `${report.productionReport.qualityPassRate.toFixed(1)}%`],
       ] : []),
     ];
     const productionSheet = XLSX.utils.aoa_to_sheet(productionData);
-    XLSX.utils.book_append_sheet(wb, productionSheet, "الإنتاج");
+    XLSX.utils.book_append_sheet(wb, productionSheet, t('excel.productionSheet'));
 
     const shiftsData = [
-      ["تقرير الورديات - " + filters.startDate + " إلى " + filters.endDate],
+      [t('excel.shiftsReport') + " - " + filters.startDate + " " + t('pdf.to') + " " + filters.endDate],
       [],
-      ["البند", "القيمة"],
-      ["إجمالي الورديات", report.shiftsReport.totalShifts],
-      ["الورديات مع موظفين", report.shiftsReport.shiftsWithEmployees],
-      ["إجمالي التكليفات", report.shiftsReport.totalEmployeeAssignments],
+      [t('excel.item'), t('excel.value')],
+      [t('excel.totalShifts'), report.shiftsReport.totalShifts],
+      [t('excel.shiftsWithEmployees'), report.shiftsReport.shiftsWithEmployees],
+      [t('excel.totalAssignments'), report.shiftsReport.totalEmployeeAssignments],
     ];
     const shiftsSheet = XLSX.utils.aoa_to_sheet(shiftsData);
-    XLSX.utils.book_append_sheet(wb, shiftsSheet, "الورديات");
+    XLSX.utils.book_append_sheet(wb, shiftsSheet, t('excel.shiftsSheet'));
 
     const branchData = [
-      ["مقارنة الفروع - " + filters.startDate + " إلى " + filters.endDate],
+      [t('excel.branchComparison') + " - " + filters.startDate + " " + t('pdf.to') + " " + filters.endDate],
       [],
-      ["الفرع", "المبيعات", "الأوامر", "نسبة الجودة", "متوسط الفاتورة"],
+      [t('excel.branch'), t('excel.sales'), t('excel.orders'), t('excel.qualityCol'), t('excel.avgTicketCol')],
       ...report.branchComparison.map(b => [
         b.branchName,
         b.totalSales,
@@ -1101,13 +1063,13 @@ export default function OperationsReportsDashboardPage() {
       ]),
     ];
     const branchSheet = XLSX.utils.aoa_to_sheet(branchData);
-    XLSX.utils.book_append_sheet(wb, branchSheet, "مقارنة الفروع");
+    XLSX.utils.book_append_sheet(wb, branchSheet, t('excel.branchSheet'));
 
     if (cashierJournals && cashierJournals.length > 0) {
       const journalData = [
-        ["يوميات الكاشير - " + filters.startDate + " إلى " + filters.endDate],
+        [t('excel.cashierJournals') + " - " + filters.startDate + " " + t('pdf.to') + " " + filters.endDate],
         [],
-        ["التاريخ", "الفرع", "الكاشير", "الوردية", "إجمالي المبيعات", "نقداً", "شبكة", "توصيل", "العجز/الفائض", "الحالة"],
+        [t('excel.date'), t('excel.branch'), t('excel.cashier'), t('excel.shift'), t('excel.totalSales'), t('excel.cash'), t('excel.network'), t('excel.delivery'), t('excel.discrepancy'), t('excel.status')],
         ...cashierJournals.map(j => [
           j.journalDate,
           branches?.find(b => b.id === j.branchId)?.name || j.branchId,
@@ -1118,27 +1080,27 @@ export default function OperationsReportsDashboardPage() {
           j.networkTotal,
           j.deliveryTotal,
           j.discrepancyAmount,
-          STATUS_LABELS[j.status] || j.status,
+          t(`statuses.${j.status}`) || j.status,
         ]),
       ];
       const journalSheet = XLSX.utils.aoa_to_sheet(journalData);
-      XLSX.utils.book_append_sheet(wb, journalSheet, "يوميات الكاشير");
+      XLSX.utils.book_append_sheet(wb, journalSheet, t('excel.journalsSheet'));
     }
 
-    XLSX.writeFile(wb, `تقارير_التشغيل_${filters.startDate}_${filters.endDate}.xlsx`);
+    XLSX.writeFile(wb, `${t('excel.fileName')}_${filters.startDate}_${filters.endDate}.xlsx`);
   };
 
   const handleExportPDF = () => {
     if (!report) return;
 
-    const selectedBranch = filters.branchId ? branches?.find(b => b.id === filters.branchId)?.name : 'جميع الفروع';
+    const selectedBranch = filters.branchId ? branches?.find(b => b.id === filters.branchId)?.name : t('common.allBranches');
 
     const htmlContent = `
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <title>تقرير التشغيل - ${filters.startDate}</title>
+  <title>${t('pdf.operationsReport')} - ${filters.startDate}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
@@ -1174,8 +1136,8 @@ export default function OperationsReportsDashboardPage() {
   </style>
 </head>
 <body>
-  <div class="loading-msg" id="loadingMsg">جاري تحميل التقرير...</div>
-  <button class="print-btn" id="printBtn" style="display:none;" onclick="window.print()">طباعة</button>
+  <div class="loading-msg" id="loadingMsg">${t('pdf.loading')}</div>
+  <button class="print-btn" id="printBtn" style="display:none;" onclick="window.print()">${t('pdf.print')}</button>
   <script>
     document.fonts.ready.then(function() {
       document.getElementById('loadingMsg').style.display = 'none';
@@ -1189,69 +1151,69 @@ export default function OperationsReportsDashboardPage() {
   
   <div class="header">
     <div>
-      <div class="title">تقرير التشغيل الشامل</div>
-      <div class="info">${selectedBranch} | ${filters.startDate} إلى ${filters.endDate}</div>
+      <div class="title">${t('pdf.operationsReport')}</div>
+      <div class="info">${selectedBranch} | ${filters.startDate} ${t('pdf.to')} ${filters.endDate}</div>
     </div>
     <div style="font-size:10px;font-weight:bold;color:#d4a853;">BUTTER BAKERY</div>
   </div>
 
   <div class="summary-row">
-    <div class="summary-card"><div class="value">${formatCurrency(report.salesReport.totalSales)}</div><div class="label">إجمالي المبيعات</div></div>
-    <div class="summary-card"><div class="value">${formatNumber(report.salesReport.totalTransactions)}</div><div class="label">العمليات</div></div>
-    <div class="summary-card"><div class="value">${formatNumber(report.productionReport.actualProduction?.totalBatches || report.productionReport.totalOrders)}</div><div class="label">دفعات الإنتاج</div></div>
-    <div class="summary-card"><div class="value">${formatNumber(report.productionReport.actualProduction?.totalQuantity || report.productionReport.totalQuantityProduced)}</div><div class="label">الكمية المنتجة</div></div>
+    <div class="summary-card"><div class="value">${formatCurrency(report.salesReport.totalSales)}</div><div class="label">${t('pdf.totalSales')}</div></div>
+    <div class="summary-card"><div class="value">${formatNumber(report.salesReport.totalTransactions)}</div><div class="label">${t('quickStats.transactions')}</div></div>
+    <div class="summary-card"><div class="value">${formatNumber(report.productionReport.actualProduction?.totalBatches || report.productionReport.totalOrders)}</div><div class="label">${t('quickStats.productionBatches')}</div></div>
+    <div class="summary-card"><div class="value">${formatNumber(report.productionReport.actualProduction?.totalQuantity || report.productionReport.totalQuantityProduced)}</div><div class="label">${t('overview.producedQuantity')}</div></div>
   </div>
 
   <div class="main-grid">
     <div>
       <div class="section">
-        <div class="section-title">المبيعات</div>
+        <div class="section-title">${t('pdf.salesSection')}</div>
         <div class="kpi-row">
-          <div class="kpi-item"><div class="value">${formatCurrency(report.salesReport.cashSales)}</div><div class="label">نقدي</div></div>
-          <div class="kpi-item"><div class="value">${formatCurrency(report.salesReport.networkSales)}</div><div class="label">شبكة</div></div>
-          <div class="kpi-item"><div class="value">${formatCurrency(report.salesReport.deliverySales)}</div><div class="label">توصيل</div></div>
+          <div class="kpi-item"><div class="value">${formatCurrency(report.salesReport.cashSales)}</div><div class="label">${t('pdf.cashLabel')}</div></div>
+          <div class="kpi-item"><div class="value">${formatCurrency(report.salesReport.networkSales)}</div><div class="label">${t('pdf.networkLabel')}</div></div>
+          <div class="kpi-item"><div class="value">${formatCurrency(report.salesReport.deliverySales)}</div><div class="label">${t('pdf.deliveryLabel')}</div></div>
         </div>
         <table>
-          <tr><td>متوسط الفاتورة</td><td>${formatCurrency(report.salesReport.averageTicket)}</td></tr>
-          <tr><td>العجز (${report.salesReport.totalShortages})</td><td style="color:#dc3545;">${formatCurrency(report.salesReport.shortageAmount)}</td></tr>
-          <tr><td>الفائض (${report.salesReport.totalSurpluses})</td><td style="color:#28a745;">${formatCurrency(report.salesReport.surplusAmount)}</td></tr>
+          <tr><td>${t('overview.avgTicket')}</td><td>${formatCurrency(report.salesReport.averageTicket)}</td></tr>
+          <tr><td>${t('pdf.shortageLabel')} (${report.salesReport.totalShortages})</td><td style="color:#dc3545;">${formatCurrency(report.salesReport.shortageAmount)}</td></tr>
+          <tr><td>${t('pdf.surplusLabel')} (${report.salesReport.totalSurpluses})</td><td style="color:#28a745;">${formatCurrency(report.salesReport.surplusAmount)}</td></tr>
         </table>
       </div>
       
       <div class="section">
-        <div class="section-title">الإنتاج الفعلي</div>
+        <div class="section-title">${t('pdf.actualProduction')}</div>
         <div class="kpi-row">
-          <div class="kpi-item"><div class="value">${formatNumber(report.productionReport.actualProduction?.totalBatches || 0)}</div><div class="label">الدفعات</div></div>
-          <div class="kpi-item"><div class="value">${formatNumber(report.productionReport.actualProduction?.finishedBatches || 0)}</div><div class="label">مكتملة</div></div>
-          <div class="kpi-item"><div class="value">${formatNumber(report.productionReport.actualProduction?.inProgressBatches || 0)}</div><div class="label">قيد التنفيذ</div></div>
-          <div class="kpi-item"><div class="value">${formatNumber(report.productionReport.actualProduction?.totalQuantity || 0)}</div><div class="label">الكمية</div></div>
+          <div class="kpi-item"><div class="value">${formatNumber(report.productionReport.actualProduction?.totalBatches || 0)}</div><div class="label">${t('pdf.batches')}</div></div>
+          <div class="kpi-item"><div class="value">${formatNumber(report.productionReport.actualProduction?.finishedBatches || 0)}</div><div class="label">${t('pdf.completed')}</div></div>
+          <div class="kpi-item"><div class="value">${formatNumber(report.productionReport.actualProduction?.inProgressBatches || 0)}</div><div class="label">${t('pdf.inProgress')}</div></div>
+          <div class="kpi-item"><div class="value">${formatNumber(report.productionReport.actualProduction?.totalQuantity || 0)}</div><div class="label">${t('pdf.quantity')}</div></div>
         </div>
       </div>
 
       <div class="section">
-        <div class="section-title">الورديات</div>
+        <div class="section-title">${t('pdf.shiftsSection')}</div>
         <div class="kpi-row">
-          <div class="kpi-item"><div class="value">${formatNumber(report.shiftsReport.totalShifts)}</div><div class="label">الورديات</div></div>
-          <div class="kpi-item"><div class="value">${formatNumber(report.shiftsReport.totalEmployeeAssignments)}</div><div class="label">التكليفات</div></div>
-          <div class="kpi-item"><div class="value">${report.shiftsReport.totalShifts > 0 ? formatPercent((report.shiftsReport.shiftsWithEmployees / report.shiftsReport.totalShifts) * 100) : '100%'}</div><div class="label">التغطية</div></div>
+          <div class="kpi-item"><div class="value">${formatNumber(report.shiftsReport.totalShifts)}</div><div class="label">${t('pdf.shiftsSection')}</div></div>
+          <div class="kpi-item"><div class="value">${formatNumber(report.shiftsReport.totalEmployeeAssignments)}</div><div class="label">${t('pdf.assignments')}</div></div>
+          <div class="kpi-item"><div class="value">${report.shiftsReport.totalShifts > 0 ? formatPercent((report.shiftsReport.shiftsWithEmployees / report.shiftsReport.totalShifts) * 100) : '100%'}</div><div class="label">${t('pdf.coverageLabel')}</div></div>
         </div>
       </div>
     </div>
     
     <div>
       <div class="section">
-        <div class="section-title">مقارنة الفروع</div>
+        <div class="section-title">${t('pdf.branchComparison')}</div>
         <table>
-          <tr><th>الفرع</th><th>المبيعات</th><th>متوسط</th></tr>
+          <tr><th>${t('pdf.branchCol')}</th><th>${t('pdf.salesCol')}</th><th>${t('pdf.averageCol')}</th></tr>
           ${report.branchComparison.map(b => `<tr><td>${b.branchName}</td><td>${formatCurrency(b.totalSales)}</td><td>${formatCurrency(b.averageTicket)}</td></tr>`).join('')}
         </table>
       </div>
 
       ${cashierJournals && cashierJournals.length > 0 ? `
       <div class="section">
-        <div class="section-title">يوميات الكاشير (${cashierJournals.length})</div>
+        <div class="section-title">${t('pdf.cashierJournals')} (${cashierJournals.length})</div>
         <table>
-          <tr><th>التاريخ</th><th>الفرع</th><th>الكاشير</th><th>المبيعات</th><th>الفرق</th><th>الحالة</th></tr>
+          <tr><th>${t('pdf.dateCol')}</th><th>${t('pdf.branchCol')}</th><th>${t('pdf.cashierCol')}</th><th>${t('pdf.salesCol')}</th><th>${t('pdf.differenceCol')}</th><th>${t('pdf.statusCol')}</th></tr>
           ${cashierJournals.slice(0, 8).map(j => `
             <tr>
               <td>${j.journalDate}</td>
@@ -1259,7 +1221,7 @@ export default function OperationsReportsDashboardPage() {
               <td>${j.cashierName?.substring(0,10) || '-'}</td>
               <td>${formatCurrency(j.totalSales || 0)}</td>
               <td style="color:${(j.discrepancyAmount || 0) < 0 ? '#dc3545' : '#28a745'};">${formatCurrency(j.discrepancyAmount || 0)}</td>
-              <td><span class="status-badge status-${j.status === 'approved' ? 'approved' : j.status === 'rejected' ? 'rejected' : 'pending'}">${STATUS_LABELS[j.status]?.substring(0,6) || j.status}</span></td>
+              <td><span class="status-badge status-${j.status === 'approved' ? 'approved' : j.status === 'rejected' ? 'rejected' : 'pending'}">${t(`statuses.${j.status}`)?.substring(0,6) || j.status}</span></td>
             </tr>
           `).join('')}
         </table>
@@ -1287,10 +1249,10 @@ export default function OperationsReportsDashboardPage() {
       : null;
     const cashierName = selectedCashier 
       ? `${selectedCashier.firstName || selectedCashier.username} ${selectedCashier.lastName || ''}`.trim()
-      : 'جميع الكاشير';
+      : t('common.allCashiers');
     const selectedBranch = filters.branchId 
       ? branches?.find(b => b.id === filters.branchId)?.name 
-      : 'جميع الفروع';
+      : t('common.allBranches');
 
     // Calculate totals for cashier report
     const totalSales = filteredCashierJournals.reduce((sum, j) => sum + (j.totalSales || 0), 0);
@@ -1310,7 +1272,7 @@ export default function OperationsReportsDashboardPage() {
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <title>كشف حساب الكاشير - ${cashierName}</title>
+  <title>${t('pdf.cashierAccountStatement')} - ${cashierName}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
@@ -1360,8 +1322,8 @@ export default function OperationsReportsDashboardPage() {
   </style>
 </head>
 <body>
-  <div class="loading-msg" id="loadingMsg">جاري تحميل التقرير...</div>
-  <button class="print-btn" id="printBtn" style="display:none;" onclick="window.print()">طباعة كشف الحساب</button>
+  <div class="loading-msg" id="loadingMsg">${t('pdf.loading')}</div>
+  <button class="print-btn" id="printBtn" style="display:none;" onclick="window.print()">${t('pdf.printStatement')}</button>
   <script>
     document.fonts.ready.then(function() {
       document.getElementById('loadingMsg').style.display = 'none';
@@ -1375,7 +1337,7 @@ export default function OperationsReportsDashboardPage() {
   
   <div class="header">
     <div>
-      <div class="title">كشف حساب الكاشير</div>
+      <div class="title">${t('pdf.cashierAccountStatement')}</div>
       <div class="subtitle">${cashierName}</div>
     </div>
     <div class="logo">BUTTER BAKERY</div>
@@ -1383,19 +1345,19 @@ export default function OperationsReportsDashboardPage() {
 
   <div class="info-bar">
     <div class="info-item">
-      <div class="label">الفرع</div>
+      <div class="label">${t('pdf.branchCol')}</div>
       <div class="value">${selectedBranch}</div>
     </div>
     <div class="info-item">
-      <div class="label">الفترة</div>
-      <div class="value">${filters.startDate} إلى ${filters.endDate}</div>
+      <div class="label">${t('pdf.period')}</div>
+      <div class="value">${filters.startDate} ${t('pdf.to')} ${filters.endDate}</div>
     </div>
     <div class="info-item">
-      <div class="label">عدد اليوميات</div>
+      <div class="label">${t('pdf.journalCount')}</div>
       <div class="value">${filteredCashierJournals.length}</div>
     </div>
     <div class="info-item">
-      <div class="label">تاريخ الطباعة</div>
+      <div class="label">${t('pdf.printDate')}</div>
       <div class="value">${new Date().toLocaleDateString('en-GB')}</div>
     </div>
   </div>
@@ -1403,73 +1365,73 @@ export default function OperationsReportsDashboardPage() {
   <div class="summary-grid">
     <div class="summary-card">
       <div class="value">${formatCurrency(totalSales)}</div>
-      <div class="label">إجمالي المبيعات</div>
+      <div class="label">${t('pdf.totalSales')}</div>
     </div>
     <div class="summary-card">
       <div class="value">${formatNumber(totalTransactions)}</div>
-      <div class="label">عدد الفواتير</div>
+      <div class="label">${t('pdf.invoiceCount')}</div>
     </div>
     <div class="summary-card">
       <div class="value">${formatCurrency(avgTicket)}</div>
-      <div class="label">متوسط الفاتورة</div>
+      <div class="label">${t('pdf.avgTicket')}</div>
     </div>
     <div class="summary-card ${netDiscrepancy < 0 ? 'negative' : netDiscrepancy > 0 ? 'positive' : ''}">
       <div class="value">${formatCurrency(netDiscrepancy)}</div>
-      <div class="label">صافي الفرق</div>
+      <div class="label">${t('pdf.netDifference')}</div>
     </div>
   </div>
 
   <div class="section">
-    <div class="section-title">تفاصيل طرق الدفع</div>
+    <div class="section-title">${t('pdf.paymentDetails')}</div>
     <div class="breakdown-grid">
       <div class="breakdown-item">
         <div class="value">${formatCurrency(totalCash)}</div>
-        <div class="label">نقداً</div>
+        <div class="label">${t('pdf.cash')}</div>
       </div>
       <div class="breakdown-item">
         <div class="value">${formatCurrency(totalNetwork)}</div>
-        <div class="label">شبكة وبطاقات</div>
+        <div class="label">${t('pdf.networkAndCards')}</div>
       </div>
       <div class="breakdown-item">
         <div class="value">${formatCurrency(totalDelivery)}</div>
-        <div class="label">تطبيقات التوصيل</div>
+        <div class="label">${t('pdf.deliveryAppsCategory')}</div>
       </div>
     </div>
   </div>
 
   <div class="section">
-    <div class="section-title">ملخص العجز والفائض</div>
+    <div class="section-title">${t('pdf.shortageAndSurplus')}</div>
     <div class="breakdown-grid">
       <div class="breakdown-item">
-        <div class="value" style="color:#dc3545;">${shortages.length} حالة</div>
-        <div class="label">عدد حالات العجز</div>
+        <div class="value" style="color:#dc3545;">${shortages.length} ${t('pdf.case')}</div>
+        <div class="label">${t('pdf.shortageCasesCount')}</div>
       </div>
       <div class="breakdown-item">
         <div class="value" style="color:#dc3545;">${formatCurrency(totalShortageAmount)}</div>
-        <div class="label">إجمالي العجز</div>
+        <div class="label">${t('pdf.totalShortage')}</div>
       </div>
       <div class="breakdown-item">
         <div class="value" style="color:#28a745;">${formatCurrency(totalSurplusAmount)}</div>
-        <div class="label">إجمالي الفائض (${surpluses.length})</div>
+        <div class="label">${t('pdf.totalSurplusCount', { count: surpluses.length })}</div>
       </div>
     </div>
   </div>
 
   <div class="section">
-    <div class="section-title">تفاصيل اليوميات (${filteredCashierJournals.length})</div>
+    <div class="section-title">${t('pdf.journalDetails', { count: filteredCashierJournals.length })}</div>
     <table>
       <thead>
         <tr>
           <th>#</th>
-          <th>التاريخ</th>
-          <th>الوردية</th>
-          <th>المبيعات</th>
-          <th>نقداً</th>
-          <th>شبكة</th>
-          <th>توصيل</th>
-          <th>الفواتير</th>
-          <th>الفرق</th>
-          <th>الحالة</th>
+          <th>${t('pdf.dateCol')}</th>
+          <th>${t('pdf.shiftCol')}</th>
+          <th>${t('pdf.salesCol')}</th>
+          <th>${t('pdf.cashCol')}</th>
+          <th>${t('pdf.networkCol')}</th>
+          <th>${t('pdf.deliveryCol')}</th>
+          <th>${t('pdf.invoicesCol')}</th>
+          <th>${t('pdf.diffCol')}</th>
+          <th>${t('pdf.statusCol')}</th>
         </tr>
       </thead>
       <tbody>
@@ -1477,20 +1439,20 @@ export default function OperationsReportsDashboardPage() {
           <tr>
             <td>${idx + 1}</td>
             <td>${j.journalDate}</td>
-            <td>${j.shiftType === 'morning' ? 'صباحي' : j.shiftType === 'evening' ? 'مسائي' : j.shiftType === 'night' ? 'ليلي' : j.shiftType || '-'}</td>
+            <td>${t(`shiftsShort.${j.shiftType || 'unspecified'}`)}</td>
             <td>${formatCurrency(j.totalSales || 0)}</td>
             <td>${formatCurrency(j.cashTotal || 0)}</td>
             <td>${formatCurrency(j.networkTotal || 0)}</td>
             <td>${formatCurrency(j.deliveryTotal || 0)}</td>
             <td>${j.transactionCount || 0}</td>
             <td class="${(j.discrepancyAmount || 0) < 0 ? 'discrepancy-shortage' : (j.discrepancyAmount || 0) > 0 ? 'discrepancy-surplus' : 'discrepancy-balanced'}">${formatCurrency(j.discrepancyAmount || 0)}</td>
-            <td><span class="status-badge status-${j.status === 'approved' || j.status === 'posted' ? 'approved' : j.status === 'rejected' ? 'rejected' : 'pending'}">${STATUS_LABELS[j.status] || j.status}</span></td>
+            <td><span class="status-badge status-${j.status === 'approved' || j.status === 'posted' ? 'approved' : j.status === 'rejected' ? 'rejected' : 'pending'}">${t(`statuses.${j.status}`) || j.status}</span></td>
           </tr>
         `).join('')}
       </tbody>
       <tfoot>
         <tr style="background:#f0f0f0;font-weight:bold;">
-          <td colspan="3">الإجمالي</td>
+          <td colspan="3">${t('pdf.grandTotal')}</td>
           <td>${formatCurrency(totalSales)}</td>
           <td>${formatCurrency(totalCash)}</td>
           <td>${formatCurrency(totalNetwork)}</td>
@@ -1504,13 +1466,13 @@ export default function OperationsReportsDashboardPage() {
   </div>
 
   <div class="signature-area">
-    <div class="signature-box">توقيع الكاشير</div>
-    <div class="signature-box">توقيع المدير</div>
+    <div class="signature-box">${t('pdf.cashierSignatureLabel')}</div>
+    <div class="signature-box">${t('pdf.managerSignatureLabel')}</div>
   </div>
 
   <div class="footer">
     <span>BUTTER BAKERY SYSTEM - CEO COMMAND</span>
-    <span>تم الإنشاء: ${new Date().toLocaleString('en-GB')}</span>
+    <span>${t('pdf.created')} ${new Date().toLocaleString('en-GB')}</span>
   </div>
 </body>
 </html>`;
@@ -1580,7 +1542,7 @@ export default function OperationsReportsDashboardPage() {
   // OPTIMIZED: Calculate shift performance comparison with useMemo
   const shiftPerformance = useMemo(() => {
     const shiftData = filteredCashierJournals.reduce((acc, j) => {
-      const shift = j.shiftType || 'غير محدد';
+      const shift = j.shiftType || 'unspecified';
       if (!acc[shift]) acc[shift] = { shift, sales: 0, count: 0, avgTicket: 0, shortages: 0 };
       acc[shift].sales += (j.totalSales || 0);
       acc[shift].count += 1;
@@ -1591,7 +1553,7 @@ export default function OperationsReportsDashboardPage() {
     return Object.values(shiftData).map(s => ({
       ...s,
       avgTicket: s.count > 0 ? s.sales / s.count : 0,
-      shiftLabel: s.shift === 'morning' ? 'صباحي' : s.shift === 'evening' ? 'مسائي' : s.shift === 'night' ? 'ليلي' : s.shift,
+      shiftLabel: t(`shiftsShort.${s.shift}`, { defaultValue: s.shift }),
     }));
   }, [filteredCashierJournals]);
 
@@ -1694,33 +1656,33 @@ export default function OperationsReportsDashboardPage() {
             <div>
               <h1 className="text-lg sm:text-xl md:text-2xl font-bold flex items-center gap-2" data-testid="page-title">
                 <BarChart3 className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 text-amber-600" />
-                لوحة تقارير التشغيل الشاملة
+                {t('page.title')}
               </h1>
-              <p className="text-xs sm:text-sm text-muted-foreground">تقارير تفصيلية لجميع عمليات التشغيل والإنتاج والمبيعات ويوميات الكاشير</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">{t('page.subtitle')}</p>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <Link href="/targets-dashboard">
               <Button variant="outline" className="h-11 sm:h-9 gap-2" data-testid="button-targets-dashboard">
                 <Trophy className="w-4 h-4 text-amber-600" />
-                لوحة الأهداف
+                {t('page.targetsDashboard')}
               </Button>
             </Link>
             <Link href="/targets-planning">
               <Button variant="outline" className="h-11 sm:h-9 gap-2" data-testid="button-targets-planning">
                 <Target className="w-4 h-4 text-amber-600" />
-                تخطيط الأهداف
+                {t('page.targetsPlanning')}
               </Button>
             </Link>
             <Link href="/incentives-management">
               <Button variant="outline" className="h-11 sm:h-9 gap-2" data-testid="button-incentives">
                 <Gift className="w-4 h-4 text-amber-600" />
-                الحوافز
+                {t('page.incentives')}
               </Button>
             </Link>
             <Button variant="outline" className="h-11 sm:h-9 gap-2" onClick={() => refetch()} data-testid="button-refresh">
               <RefreshCw className="w-4 h-4" />
-              تحديث
+              {t('page.refresh')}
             </Button>
             <Button variant="outline" className="h-11 sm:h-9 gap-2" onClick={handleExportExcel} disabled={!report} data-testid="button-export-excel">
               <Download className="w-4 h-4" />
@@ -1740,14 +1702,14 @@ export default function OperationsReportsDashboardPage() {
                 <div>
                   <CardTitle className="text-lg flex items-center gap-2">
                     <Filter className="w-5 h-5 text-amber-600" />
-                    فلاتر التقارير المتقدمة
+                    {t('filters.title')}
                   </CardTitle>
-                  <CardDescription>فلاتر ديناميكية شاملة للتحكم في البيانات المعروضة</CardDescription>
+                  <CardDescription>{t('filters.description')}</CardDescription>
                 </div>
                 <CollapsibleTrigger asChild>
                   <Button variant="ghost" size="sm" className="gap-1" data-testid="toggle-filters">
                     <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${filtersOpen ? 'rotate-180' : ''}`} />
-                    {filtersOpen ? 'إخفاء' : 'إظهار'}
+                    {filtersOpen ? t('filters.hide') : t('filters.show')}
                   </Button>
                 </CollapsibleTrigger>
               </div>
@@ -1756,7 +1718,7 @@ export default function OperationsReportsDashboardPage() {
               <CardContent className="space-y-4 pt-0">
             {/* Quick Period Selection */}
             <div className="flex flex-wrap gap-2 pb-3 border-b">
-              <span className="text-sm text-muted-foreground ml-2">الفترة السريعة:</span>
+              <span className="text-sm text-muted-foreground ml-2">{t('filters.quickPeriod')}</span>
               <Button
                 variant={filters.periodType === "daily" ? "default" : "outline"}
                 size="sm"
@@ -1765,7 +1727,7 @@ export default function OperationsReportsDashboardPage() {
                 data-testid="period-daily"
               >
                 <Calendar className="w-3 h-3" />
-                اليوم
+                {t('filters.today')}
               </Button>
               <Button
                 variant={filters.periodType === "weekly" ? "default" : "outline"}
@@ -1775,7 +1737,7 @@ export default function OperationsReportsDashboardPage() {
                 data-testid="period-weekly"
               >
                 <Calendar className="w-3 h-3" />
-                هذا الأسبوع
+                {t('filters.thisWeek')}
               </Button>
               <Button
                 variant={filters.periodType === "monthly" ? "default" : "outline"}
@@ -1785,7 +1747,7 @@ export default function OperationsReportsDashboardPage() {
                 data-testid="period-monthly"
               >
                 <Calendar className="w-3 h-3" />
-                هذا الشهر
+                {t('filters.thisMonth')}
               </Button>
               <Button
                 variant={filters.periodType === "custom" ? "default" : "outline"}
@@ -1795,7 +1757,7 @@ export default function OperationsReportsDashboardPage() {
                 data-testid="period-custom"
               >
                 <Calendar className="w-3 h-3" />
-                مخصص
+                {t('filters.custom')}
               </Button>
             </div>
 
@@ -1804,7 +1766,7 @@ export default function OperationsReportsDashboardPage() {
               <div className="space-y-2">
                 <Label className="flex items-center gap-1">
                   <ClipboardList className="w-4 h-4" />
-                  نوع التقرير
+                  {t('filters.reportType')}
                 </Label>
                 <Select value={filters.reportType} onValueChange={(v) => {
                   setFilters({ ...filters, reportType: v });
@@ -1815,7 +1777,7 @@ export default function OperationsReportsDashboardPage() {
                   }
                 }}>
                   <SelectTrigger className="h-11 sm:h-10" data-testid="select-report-type">
-                    <SelectValue placeholder="اختر نوع التقرير" />
+                    <SelectValue placeholder={t('filters.selectReportType')} />
                   </SelectTrigger>
                   <SelectContent>
                     {REPORT_TYPES.map((type) => (
@@ -1832,14 +1794,14 @@ export default function OperationsReportsDashboardPage() {
               <div className="space-y-2">
                 <Label className="flex items-center gap-1">
                   <Building2 className="w-4 h-4" />
-                  الفرع
+                  {t('filters.branch')}
                 </Label>
                 <Select value={filters.branchId || "all"} onValueChange={(v) => setFilters({ ...filters, branchId: v === "all" ? "" : v })} disabled={!canSelectBranch}>
                   <SelectTrigger className="h-11 sm:h-10" data-testid="select-branch">
-                    <SelectValue placeholder="جميع الفروع" />
+                    <SelectValue placeholder={t('filters.allBranches')} />
                   </SelectTrigger>
                   <SelectContent>
-                    {canSelectBranch && <SelectItem value="all">جميع الفروع</SelectItem>}
+                    {canSelectBranch && <SelectItem value="all">{t('filters.allBranches')}</SelectItem>}
                     {branches?.map((branch) => (
                       <SelectItem key={branch.id} value={branch.id}>
                         {branch.name}
@@ -1851,7 +1813,7 @@ export default function OperationsReportsDashboardPage() {
               <div className="space-y-2">
                 <Label className="flex items-center gap-1">
                   <Calendar className="w-4 h-4" />
-                  من تاريخ
+                  {t('filters.startDate')}
                 </Label>
                 <Input
                   className="h-11 sm:h-10"
@@ -1864,7 +1826,7 @@ export default function OperationsReportsDashboardPage() {
               <div className="space-y-2">
                 <Label className="flex items-center gap-1">
                   <Calendar className="w-4 h-4" />
-                  إلى تاريخ
+                  {t('filters.endDate')}
                 </Label>
                 <Input
                   className="h-11 sm:h-10"
@@ -1877,17 +1839,17 @@ export default function OperationsReportsDashboardPage() {
               <div className="space-y-2">
                 <Label className="flex items-center gap-1">
                   <Clock className="w-4 h-4" />
-                  الوردية
+                  {t('filters.shift')}
                 </Label>
                 <Select value={filters.shiftType} onValueChange={(v: any) => setFilters({ ...filters, shiftType: v })}>
                   <SelectTrigger className="h-11 sm:h-10" data-testid="select-shift-type">
-                    <SelectValue placeholder="جميع الورديات" />
+                    <SelectValue placeholder={t('filters.allShifts')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">جميع الورديات</SelectItem>
-                    <SelectItem value="morning">صباحي</SelectItem>
-                    <SelectItem value="evening">مسائي</SelectItem>
-                    <SelectItem value="night">ليلي</SelectItem>
+                    <SelectItem value="all">{t('filters.allShifts')}</SelectItem>
+                    <SelectItem value="morning">{t('shiftsShort.morning')}</SelectItem>
+                    <SelectItem value="evening">{t('shiftsShort.evening')}</SelectItem>
+                    <SelectItem value="night">{t('shiftsShort.night')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1898,14 +1860,14 @@ export default function OperationsReportsDashboardPage() {
               <div className="space-y-2">
                 <Label className="flex items-center gap-1">
                   <User className="w-4 h-4" />
-                  الكاشير
+                  {t('filters.cashier')}
                 </Label>
                 <Select value={filters.cashierId || "all"} onValueChange={(v) => setFilters({ ...filters, cashierId: v === "all" ? "" : v })}>
                   <SelectTrigger className="h-11 sm:h-10" data-testid="select-cashier">
-                    <SelectValue placeholder="جميع الكاشير" />
+                    <SelectValue placeholder={t('filters.allCashiers')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">جميع الكاشير</SelectItem>
+                    <SelectItem value="all">{t('filters.allCashiers')}</SelectItem>
                     {users?.map((user) => (
                       <SelectItem key={user.id} value={user.id}>
                         {user.firstName || user.username} {user.lastName || ""}
@@ -1917,53 +1879,53 @@ export default function OperationsReportsDashboardPage() {
               <div className="space-y-2">
                 <Label className="flex items-center gap-1">
                   <Receipt className="w-4 h-4" />
-                  حالة اليومية
+                  {t('filters.journalStatus')}
                 </Label>
                 <Select value={filters.journalStatus} onValueChange={(v: any) => setFilters({ ...filters, journalStatus: v })}>
                   <SelectTrigger className="h-11 sm:h-10" data-testid="select-journal-status">
-                    <SelectValue placeholder="جميع الحالات" />
+                    <SelectValue placeholder={t('filters.allStatuses')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">جميع الحالات</SelectItem>
-                    <SelectItem value="draft">مسودة</SelectItem>
-                    <SelectItem value="submitted">مقدمة للمراجعة</SelectItem>
-                    <SelectItem value="approved">معتمدة</SelectItem>
-                    <SelectItem value="posted">مرحّلة</SelectItem>
-                    <SelectItem value="rejected">مرفوضة</SelectItem>
+                    <SelectItem value="all">{t('filters.allStatuses')}</SelectItem>
+                    <SelectItem value="draft">{t('statuses.draft')}</SelectItem>
+                    <SelectItem value="submitted">{t('filters.submittedForReview')}</SelectItem>
+                    <SelectItem value="approved">{t('statuses.approved')}</SelectItem>
+                    <SelectItem value="posted">{t('statuses.posted')}</SelectItem>
+                    <SelectItem value="rejected">{t('statuses.rejected')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
                 <Label className="flex items-center gap-1">
                   <AlertTriangle className="w-4 h-4" />
-                  حالة المطابقة
+                  {t('filters.reconciliationStatus')}
                 </Label>
                 <Select value={filters.discrepancyFilter} onValueChange={(v: any) => setFilters({ ...filters, discrepancyFilter: v })}>
                   <SelectTrigger className="h-11 sm:h-10" data-testid="select-discrepancy">
-                    <SelectValue placeholder="الكل" />
+                    <SelectValue placeholder={t('filters.all')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">الكل</SelectItem>
-                    <SelectItem value="balanced">متوازن (بدون عجز)</SelectItem>
-                    <SelectItem value="shortage">عجز</SelectItem>
-                    <SelectItem value="surplus">فائض</SelectItem>
+                    <SelectItem value="all">{t('filters.all')}</SelectItem>
+                    <SelectItem value="balanced">{t('filters.balancedNoShortage')}</SelectItem>
+                    <SelectItem value="shortage">{t('discrepancyStatuses.shortage')}</SelectItem>
+                    <SelectItem value="surplus">{t('discrepancyStatuses.surplus')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
                 <Label className="flex items-center gap-1">
                   <CreditCard className="w-4 h-4" />
-                  فئة الدفع
+                  {t('filters.paymentCategory')}
                 </Label>
                 <Select value={filters.paymentCategory} onValueChange={(v: any) => setFilters({ ...filters, paymentCategory: v })}>
                   <SelectTrigger className="h-11 sm:h-10" data-testid="select-payment-category">
-                    <SelectValue placeholder="جميع الفئات" />
+                    <SelectValue placeholder={t('filters.allPaymentCategories')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">جميع فئات الدفع</SelectItem>
-                    <SelectItem value="cash">نقدي فقط</SelectItem>
-                    <SelectItem value="cards">شبكة وبطاقات</SelectItem>
-                    <SelectItem value="delivery">تطبيقات التوصيل</SelectItem>
+                    <SelectItem value="all">{t('filters.allPaymentCategories')}</SelectItem>
+                    <SelectItem value="cash">{t('filters.cashOnly')}</SelectItem>
+                    <SelectItem value="cards">{t('filters.cardsAndNetwork')}</SelectItem>
+                    <SelectItem value="delivery">{t('filters.deliveryApps')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1985,7 +1947,7 @@ export default function OperationsReportsDashboardPage() {
                   className="w-full"
                   data-testid="button-reset-filters"
                 >
-                  إعادة تعيين الكل
+                  {t('filters.resetAll')}
                 </Button>
               </div>
             </div>
@@ -1993,34 +1955,34 @@ export default function OperationsReportsDashboardPage() {
             {/* Active Filters Summary */}
             {(filters.cashierId || filters.journalStatus !== "all" || filters.discrepancyFilter !== "all" || filters.shiftType !== "all" || filters.paymentCategory !== "all") && (
               <div className="flex flex-wrap gap-2 pt-2 border-t">
-                <span className="text-xs text-muted-foreground">الفلاتر النشطة:</span>
+                <span className="text-xs text-muted-foreground">{t('filters.activeFilters')}</span>
                 {filters.cashierId && (
                   <Badge variant="default" className="text-xs bg-amber-600">
-                    الكاشير: {users?.find(u => u.id === filters.cashierId)?.firstName || users?.find(u => u.id === filters.cashierId)?.username || filters.cashierId}
+                    {t('filters.cashierLabel')} {users?.find(u => u.id === filters.cashierId)?.firstName || users?.find(u => u.id === filters.cashierId)?.username || filters.cashierId}
                   </Badge>
                 )}
                 {filters.journalStatus !== "all" && (
                   <Badge variant="secondary" className="text-xs">
-                    الحالة: {filters.journalStatus === "draft" ? "مسودة" : filters.journalStatus === "submitted" ? "مقدمة" : filters.journalStatus === "approved" ? "معتمدة" : filters.journalStatus === "posted" ? "مرحّلة" : "مرفوضة"}
+                    {t('filters.statusLabel')} {t(`statuses.${filters.journalStatus}`)}
                   </Badge>
                 )}
                 {filters.discrepancyFilter !== "all" && (
                   <Badge variant="secondary" className="text-xs">
-                    المطابقة: {filters.discrepancyFilter === "balanced" ? "متوازن" : filters.discrepancyFilter === "shortage" ? "عجز" : "فائض"}
+                    {t('filters.reconciliationLabel')} {t(`discrepancyStatuses.${filters.discrepancyFilter}`)}
                   </Badge>
                 )}
                 {filters.shiftType !== "all" && (
                   <Badge variant="secondary" className="text-xs">
-                    الوردية: {filters.shiftType === "morning" ? "صباحي" : filters.shiftType === "evening" ? "مسائي" : "ليلي"}
+                    {t('filters.shiftLabel')} {t(`shiftsShort.${filters.shiftType}`)}
                   </Badge>
                 )}
                 {filters.paymentCategory !== "all" && (
                   <Badge variant="secondary" className="text-xs">
-                    الدفع: {filters.paymentCategory === "cash" ? "نقدي" : filters.paymentCategory === "cards" ? "شبكة" : "توصيل"}
+                    {t('filters.paymentLabel')} {filters.paymentCategory === "cash" ? t('filters.cashLabel') : filters.paymentCategory === "cards" ? t('filters.networkLabel') : t('filters.deliveryLabel')}
                   </Badge>
                 )}
                 <span className="text-xs text-muted-foreground mr-2">
-                  ({filteredCashierJournals.length} يومية)
+                  ({t('filters.journalCount', { count: filteredCashierJournals.length })})
                 </span>
               </div>
             )}
@@ -2036,18 +1998,18 @@ export default function OperationsReportsDashboardPage() {
             ))}
           </div>
         ) : report ? (
-          <>{isFetching && <div className="fixed top-2 left-1/2 -translate-x-1/2 z-50 bg-amber-100 text-amber-800 px-4 py-1.5 rounded-full text-sm font-medium shadow-lg animate-pulse">جاري تحديث البيانات...</div>}
+          <>{isFetching && <div className="fixed top-2 left-1/2 -translate-x-1/2 z-50 bg-amber-100 text-amber-800 px-4 py-1.5 rounded-full text-sm font-medium shadow-lg animate-pulse">{t('page.updatingData')}</div>}
             <QuickStatsRow report={report} cashierJournals={filteredCashierJournals} hasActiveFilters={hasActiveLocalFilters} />
             
             <AlertBanner alerts={[
               ...(filteredCashierJournals.filter(j => j.discrepancyStatus === 'shortage').length > 0 
-                ? [{ type: 'danger' as const, message: 'يوميات بها حالات عجز تحتاج مراجعة', count: filteredCashierJournals.filter(j => j.discrepancyStatus === 'shortage').length }] 
+                ? [{ type: 'danger' as const, message: t('alerts.shortageReview'), count: filteredCashierJournals.filter(j => j.discrepancyStatus === 'shortage').length }] 
                 : []),
               ...(filteredCashierJournals.filter(j => j.status === 'submitted').length > 0 
-                ? [{ type: 'warning' as const, message: 'يوميات بانتظار الموافقة', count: filteredCashierJournals.filter(j => j.status === 'submitted').length }] 
+                ? [{ type: 'warning' as const, message: t('alerts.pendingApproval'), count: filteredCashierJournals.filter(j => j.status === 'submitted').length }] 
                 : []),
               ...(report.productionReport.qualityPassRate < 90 
-                ? [{ type: 'warning' as const, message: `نسبة الجودة ${report.productionReport.qualityPassRate.toFixed(0)}% أقل من المستهدف 90%` }] 
+                ? [{ type: 'warning' as const, message: t('alerts.qualityBelow', { rate: report.productionReport.qualityPassRate.toFixed(0) }) }] 
                 : []),
             ]} />
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
@@ -2057,38 +2019,38 @@ export default function OperationsReportsDashboardPage() {
                 {visibleTabs.includes("overview") && (
                   <TabsTrigger value="overview" data-testid="tab-overview" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-amber-100 data-[state=active]:text-amber-800">
                     <PieChartIcon className="w-4 h-4" />
-                    <span className="hidden sm:inline">نظرة عامة</span>
-                    <span className="sm:hidden">عام</span>
+                    <span className="hidden sm:inline">{t('tabs.overview')}</span>
+                    <span className="sm:hidden">{t('tabs.overviewShort')}</span>
                   </TabsTrigger>
                 )}
                 {visibleTabs.includes("sales") && (
                   <TabsTrigger value="sales" data-testid="tab-sales" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-green-100 data-[state=active]:text-green-800">
                     <DollarSign className="w-4 h-4" />
-                    المبيعات
+                    {t('tabs.sales')}
                   </TabsTrigger>
                 )}
                 {visibleTabs.includes("targets") && (
                   <TabsTrigger value="targets" data-testid="tab-targets" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-blue-100 data-[state=active]:text-blue-800">
                     <Target className="w-4 h-4" />
-                    الأهداف
+                    {t('tabs.targets')}
                   </TabsTrigger>
                 )}
                 {visibleTabs.includes("production") && (
                   <TabsTrigger value="production" data-testid="tab-production" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-purple-100 data-[state=active]:text-purple-800">
                     <Factory className="w-4 h-4" />
-                    الإنتاج
+                    {t('tabs.production')}
                   </TabsTrigger>
                 )}
                 {visibleTabs.includes("shifts") && (
                   <TabsTrigger value="shifts" data-testid="tab-shifts" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-orange-100 data-[state=active]:text-orange-800">
                     <Clock className="w-4 h-4" />
-                    الورديات
+                    {t('tabs.shifts')}
                   </TabsTrigger>
                 )}
                 {visibleTabs.includes("cashier") && (
                   <TabsTrigger value="cashier" data-testid="tab-cashier" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-teal-100 data-[state=active]:text-teal-800">
                     <Wallet className="w-4 h-4" />
-                    الكاشير
+                    {t('tabs.cashier')}
                   </TabsTrigger>
                 )}
               </TabsList>
@@ -2099,47 +2061,47 @@ export default function OperationsReportsDashboardPage() {
                   {visibleTabs.includes("apps") && (
                     <TabsTrigger value="apps" data-testid="tab-apps" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-indigo-100 data-[state=active]:text-indigo-800">
                       <Truck className="w-4 h-4" />
-                      <span className="hidden sm:inline">التطبيقات</span>
-                      <span className="sm:hidden">توصيل</span>
+                      <span className="hidden sm:inline">{t('tabs.apps')}</span>
+                      <span className="sm:hidden">{t('tabs.appsShort')}</span>
                     </TabsTrigger>
                   )}
                   {visibleTabs.includes("returns") && (
                     <TabsTrigger value="returns" data-testid="tab-returns" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-red-100 data-[state=active]:text-red-800">
                       <Receipt className="w-4 h-4" />
-                      المرتجعات
+                      {t('tabs.returns')}
                     </TabsTrigger>
                   )}
                   {visibleTabs.includes("discrepancies") && (
                     <TabsTrigger value="discrepancies" data-testid="tab-discrepancies" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-yellow-100 data-[state=active]:text-yellow-800">
                       <AlertTriangle className="w-4 h-4" />
-                      الفروقات
+                      {t('tabs.discrepancies')}
                     </TabsTrigger>
                   )}
                   {visibleTabs.includes("payment-mismatch") && (
                     <TabsTrigger value="payment-mismatch" data-testid="tab-payment-mismatch" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-pink-100 data-[state=active]:text-pink-800">
                       <CreditCard className="w-4 h-4" />
-                      <span className="hidden sm:inline">مطابقة الدفع</span>
-                      <span className="sm:hidden">مطابقة</span>
+                      <span className="hidden sm:inline">{t('tabs.paymentMismatch')}</span>
+                      <span className="sm:hidden">{t('tabs.paymentMismatchShort')}</span>
                     </TabsTrigger>
                   )}
                   {visibleTabs.includes("branches") && (
                     <TabsTrigger value="branches" data-testid="tab-branches" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-cyan-100 data-[state=active]:text-cyan-800">
                       <Building2 className="w-4 h-4" />
-                      الفروع
+                      {t('tabs.branches')}
                     </TabsTrigger>
                   )}
                   {visibleTabs.includes("event-pos") && (
                     <TabsTrigger value="event-pos" data-testid="tab-event-pos" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-orange-100 data-[state=active]:text-orange-800">
                       <Zap className="w-4 h-4" />
-                      <span className="hidden sm:inline">إيفنت موسمي</span>
-                      <span className="sm:hidden">إيفنت</span>
+                      <span className="hidden sm:inline">{t('tabs.eventPos')}</span>
+                      <span className="sm:hidden">{t('tabs.eventPosShort')}</span>
                     </TabsTrigger>
                   )}
                   {visibleTabs.includes("executive") && (
                     <TabsTrigger value="executive" data-testid="tab-executive" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-slate-700 data-[state=active]:text-white">
                       <FileText className="w-4 h-4" />
-                      <span className="hidden sm:inline">تقرير تنفيذي</span>
-                      <span className="sm:hidden">تنفيذي</span>
+                      <span className="hidden sm:inline">{t('tabs.executive')}</span>
+                      <span className="sm:hidden">{t('tabs.executiveShort')}</span>
                     </TabsTrigger>
                   )}
                 </TabsList>
@@ -2149,7 +2111,7 @@ export default function OperationsReportsDashboardPage() {
             <TabsContent value="overview" className="space-y-6">
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
                 <KPICard
-                  title="إجمالي المبيعات"
+                  title={t('overview.totalSales')}
                   value={formatCurrency(report.salesReport.totalSales)}
                   icon={DollarSign}
                   color="text-green-600"
@@ -2157,14 +2119,14 @@ export default function OperationsReportsDashboardPage() {
                   onClick={() => setActiveTab("sales")}
                 />
                 <KPICard
-                  title="عمليات اليوم"
+                  title={t('overview.totalTransactions')}
                   value={formatNumber(report.salesReport.totalTransactions)}
                   icon={ShoppingCart}
                   color="text-blue-600"
                   bgColor="bg-blue-100"
                 />
                 <KPICard
-                  title="دفعات الإنتاج"
+                  title={t('overview.productionBatches')}
                   value={formatNumber(report.productionReport.actualProduction?.totalBatches || report.productionReport.totalOrders)}
                   icon={Package}
                   color="text-purple-600"
@@ -2172,14 +2134,14 @@ export default function OperationsReportsDashboardPage() {
                   onClick={() => setActiveTab("production")}
                 />
                 <KPICard
-                  title="الكمية المنتجة"
+                  title={t('overview.producedQuantity')}
                   value={formatNumber(report.productionReport.actualProduction?.totalQuantity || report.productionReport.totalQuantityProduced)}
                   icon={Factory}
                   color="text-emerald-600"
                   bgColor="bg-emerald-100"
                 />
                 <KPICard
-                  title="الورديات"
+                  title={t('overview.totalShifts')}
                   value={formatNumber(report.shiftsReport.totalShifts)}
                   icon={Clock}
                   color="text-orange-600"
@@ -2187,7 +2149,7 @@ export default function OperationsReportsDashboardPage() {
                   onClick={() => setActiveTab("shifts")}
                 />
                 <KPICard
-                  title="يوميات الكاشير"
+                  title={t('overview.cashierJournals')}
                   value={formatNumber(filteredCashierJournals.length)}
                   icon={Wallet}
                   color="text-amber-600"
@@ -2201,7 +2163,7 @@ export default function OperationsReportsDashboardPage() {
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
                       <TrendingUp className="w-5 h-5 text-green-600" />
-                      المبيعات اليومية
+                      {t('overview.salesTrend')}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -2218,7 +2180,7 @@ export default function OperationsReportsDashboardPage() {
                           <XAxis dataKey="date" fontSize={10} />
                           <YAxis fontSize={10} />
                           <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                          <Area type="monotone" dataKey="sales" name="المبيعات" stroke="#10B981" fillOpacity={1} fill="url(#colorSales)" />
+                          <Area type="monotone" dataKey="sales" name={t('overview.salesName')} stroke="#10B981" fillOpacity={1} fill="url(#colorSales)" />
                         </AreaChart>
                       </ResponsiveContainer>
                     </div>
@@ -2229,7 +2191,7 @@ export default function OperationsReportsDashboardPage() {
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
                       <PieChartIcon className="w-5 h-5 text-blue-600" />
-                      توزيع طرق الدفع
+                      {t('overview.paymentDistribution')}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -2253,14 +2215,14 @@ export default function OperationsReportsDashboardPage() {
                             ))}
                           </Pie>
                           <Tooltip 
-                            formatter={(value: number, name: string) => [formatCurrency(value), PAYMENT_METHOD_LABELS[name] || name]} 
+                            formatter={(value: number, name: string) => [formatCurrency(value), t(`paymentMethods.${name}`, { defaultValue: name })]} 
                             contentStyle={{ textAlign: 'right', direction: 'rtl' }}
                           />
                           <Legend 
                             layout="horizontal" 
                             align="center" 
                             verticalAlign="bottom"
-                            formatter={(value: string) => PAYMENT_METHOD_LABELS[value] || value}
+                            formatter={(value: string) => t(`paymentMethods.${value}`, { defaultValue: value })}
                             wrapperStyle={{ paddingTop: '15px' }}
                           />
                         </PieChart>
@@ -2274,7 +2236,7 @@ export default function OperationsReportsDashboardPage() {
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center gap-2">
                     <Building2 className="w-5 h-5 text-amber-600" />
-                    أداء الفروع
+                    {t('overview.branchPerformance')}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -2286,7 +2248,7 @@ export default function OperationsReportsDashboardPage() {
                         <YAxis fontSize={11} />
                         <Tooltip formatter={(value: number) => formatCurrency(value)} />
                         <Legend />
-                        <Bar dataKey="totalSales" name="المبيعات" fill="#10B981" />
+                        <Bar dataKey="totalSales" name={t('overview.salesName')} fill="#10B981" />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -2296,19 +2258,19 @@ export default function OperationsReportsDashboardPage() {
 
             <TabsContent value="sales" className="space-y-6">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <KPICard title="إجمالي المبيعات" value={formatCurrency(report.salesReport.totalSales)} icon={DollarSign} color="text-green-600" bgColor="bg-green-100" />
-                <KPICard title="المبيعات النقدية" value={formatCurrency(report.salesReport.cashSales)} icon={Wallet} color="text-emerald-600" bgColor="bg-emerald-100" />
-                <KPICard title="مبيعات الشبكة" value={formatCurrency(report.salesReport.networkSales)} icon={CreditCard} color="text-blue-600" bgColor="bg-blue-100" />
-                <KPICard title="مبيعات التوصيل" value={formatCurrency(report.salesReport.deliverySales)} icon={Truck} color="text-purple-600" bgColor="bg-purple-100" />
-                <KPICard title="إجمالي العمليات" value={formatNumber(report.salesReport.totalTransactions)} icon={ShoppingCart} color="text-indigo-600" bgColor="bg-indigo-100" />
-                <KPICard title="متوسط قيمة الفاتورة" value={formatCurrency(report.salesReport.averageTicket)} icon={Target} color="text-cyan-600" bgColor="bg-cyan-100" />
-                <KPICard title="إجمالي العجز" value={formatCurrency(report.salesReport.shortageAmount)} icon={TrendingDown} color="text-red-600" bgColor="bg-red-100" trendLabel={`${report.salesReport.totalShortages} حالة`} />
-                <KPICard title="إجمالي الفائض" value={formatCurrency(report.salesReport.surplusAmount)} icon={TrendingUp} color="text-amber-600" bgColor="bg-amber-100" trendLabel={`${report.salesReport.totalSurpluses} حالة`} />
+                <KPICard title={t('sales.totalSales')} value={formatCurrency(report.salesReport.totalSales)} icon={DollarSign} color="text-green-600" bgColor="bg-green-100" />
+                <KPICard title={t('sales.cashSales')} value={formatCurrency(report.salesReport.cashSales)} icon={Wallet} color="text-emerald-600" bgColor="bg-emerald-100" />
+                <KPICard title={t('sales.networkSales')} value={formatCurrency(report.salesReport.networkSales)} icon={CreditCard} color="text-blue-600" bgColor="bg-blue-100" />
+                <KPICard title={t('sales.deliverySales')} value={formatCurrency(report.salesReport.deliverySales)} icon={Truck} color="text-purple-600" bgColor="bg-purple-100" />
+                <KPICard title={t('sales.totalTransactions')} value={formatNumber(report.salesReport.totalTransactions)} icon={ShoppingCart} color="text-indigo-600" bgColor="bg-indigo-100" />
+                <KPICard title={t('sales.avgTicket')} value={formatCurrency(report.salesReport.averageTicket)} icon={Target} color="text-cyan-600" bgColor="bg-cyan-100" />
+                <KPICard title={t('sales.totalShortage')} value={formatCurrency(report.salesReport.shortageAmount)} icon={TrendingDown} color="text-red-600" bgColor="bg-red-100" trendLabel={t('sales.caseCount', { count: report.salesReport.totalShortages })} />
+                <KPICard title={t('sales.totalSurplus')} value={formatCurrency(report.salesReport.surplusAmount)} icon={TrendingUp} color="text-amber-600" bgColor="bg-amber-100" trendLabel={t('sales.caseCount', { count: report.salesReport.totalSurpluses })} />
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
-                  <CardHeader><CardTitle className="text-lg">المبيعات اليومية</CardTitle></CardHeader>
+                  <CardHeader><CardTitle className="text-lg">{t('sales.dailySales')}</CardTitle></CardHeader>
                   <CardContent>
                     <div className="h-[300px]">
                       <ResponsiveContainer width="100%" height="100%">
@@ -2316,9 +2278,9 @@ export default function OperationsReportsDashboardPage() {
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis dataKey="date" fontSize={12} />
                           <YAxis fontSize={12} />
-                          <Tooltip formatter={(value: number) => formatCurrency(value)} labelFormatter={(label) => `التاريخ: ${label}`} />
+                          <Tooltip formatter={(value: number) => formatCurrency(value)} labelFormatter={(label) => `${t('sales.dateLabel')} ${label}`} />
                           <Legend />
-                          <Line type="monotone" dataKey="sales" name="المبيعات" stroke="#10B981" strokeWidth={2} />
+                          <Line type="monotone" dataKey="sales" name={t('overview.salesName')} stroke="#10B981" strokeWidth={2} />
                         </LineChart>
                       </ResponsiveContainer>
                     </div>
@@ -2326,7 +2288,7 @@ export default function OperationsReportsDashboardPage() {
                 </Card>
 
                 <Card>
-                  <CardHeader><CardTitle className="text-lg">توزيع طرق الدفع</CardTitle></CardHeader>
+                  <CardHeader><CardTitle className="text-lg">{t('sales.paymentDistribution')}</CardTitle></CardHeader>
                   <CardContent>
                     <div className="h-[350px]">
                       <ResponsiveContainer width="100%" height="100%">
@@ -2348,14 +2310,14 @@ export default function OperationsReportsDashboardPage() {
                             ))}
                           </Pie>
                           <Tooltip 
-                            formatter={(value: number, name: string) => [formatCurrency(value), PAYMENT_METHOD_LABELS[name] || name]}
+                            formatter={(value: number, name: string) => [formatCurrency(value), t(`paymentMethods.${name}`, { defaultValue: name })]}
                             contentStyle={{ textAlign: 'right', direction: 'rtl' }}
                           />
                           <Legend 
                             layout="horizontal" 
                             align="center" 
                             verticalAlign="bottom"
-                            formatter={(value: string) => PAYMENT_METHOD_LABELS[value] || value}
+                            formatter={(value: string) => t(`paymentMethods.${value}`, { defaultValue: value })}
                             wrapperStyle={{ paddingTop: '15px' }}
                           />
                         </PieChart>
@@ -2366,16 +2328,16 @@ export default function OperationsReportsDashboardPage() {
               </div>
 
               <Card>
-                <CardHeader><CardTitle className="text-lg">حالة اليوميات</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-lg">{t('sales.journalStatus')}</CardTitle></CardHeader>
                 <CardContent>
                   <div className="h-[250px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={report.salesReport.journalsByStatus}>
                         <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="status" fontSize={12} tickFormatter={(value) => STATUS_LABELS[value] || value} />
+                        <XAxis dataKey="status" fontSize={12} tickFormatter={(value) => t(`statuses.${value}`, { defaultValue: value })} />
                         <YAxis fontSize={12} />
-                        <Tooltip labelFormatter={(label) => STATUS_LABELS[label] || label} />
-                        <Bar dataKey="count" name="العدد" fill="#3B82F6" />
+                        <Tooltip labelFormatter={(label) => t(`statuses.${label}`, { defaultValue: label })} />
+                        <Bar dataKey="count" name={t('sales.countName')} fill="#3B82F6" />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -2389,27 +2351,27 @@ export default function OperationsReportsDashboardPage() {
                 const hasActualData = actual && actual.totalBatches > 0;
                 const hasPlannedData = report.productionReport.totalOrders > 0;
                 const DEST_LABELS: Record<string, string> = {
-                  display_bar: 'بار العرض',
-                  branch: 'الفرع',
-                  warehouse: 'المستودع',
-                  catering: 'التموين',
-                  other: 'أخرى',
+                  display_bar: t('destinations.display_bar'),
+                  branch: t('destinations.branch'),
+                  warehouse: t('destinations.warehouse'),
+                  catering: t('destinations.catering'),
+                  other: t('destinations.other'),
                 };
                 const CAT_COLORS = ['#10B981', '#3B82F6', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316'];
                 return (
                   <>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <KPICard title="إجمالي الدفعات" value={formatNumber(actual?.totalBatches || 0)} icon={Package} color="text-blue-600" bgColor="bg-blue-100" />
-                      <KPICard title="مكتملة" value={formatNumber(actual?.finishedBatches || 0)} icon={CheckCircle} color="text-green-600" bgColor="bg-green-100" />
-                      <KPICard title="قيد التنفيذ" value={formatNumber(actual?.inProgressBatches || 0)} icon={Activity} color="text-orange-600" bgColor="bg-orange-100" />
-                      <KPICard title="الكمية المنتجة" value={formatNumber(actual?.totalQuantity || 0)} icon={Factory} color="text-indigo-600" bgColor="bg-indigo-100" />
+                      <KPICard title={t('production.totalBatches')} value={formatNumber(actual?.totalBatches || 0)} icon={Package} color="text-blue-600" bgColor="bg-blue-100" />
+                      <KPICard title={t('production.completed')} value={formatNumber(actual?.finishedBatches || 0)} icon={CheckCircle} color="text-green-600" bgColor="bg-green-100" />
+                      <KPICard title={t('production.inProgress')} value={formatNumber(actual?.inProgressBatches || 0)} icon={Activity} color="text-orange-600" bgColor="bg-orange-100" />
+                      <KPICard title={t('production.producedQuantity')} value={formatNumber(actual?.totalQuantity || 0)} icon={Factory} color="text-indigo-600" bgColor="bg-indigo-100" />
                     </div>
 
                     {hasActualData && actual ? (
                       <>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                           <Card>
-                            <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Factory className="w-5 h-5 text-purple-600" />الإنتاج اليومي الفعلي</CardTitle></CardHeader>
+                            <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Factory className="w-5 h-5 text-purple-600" />{t('production.dailyActualProduction')}</CardTitle></CardHeader>
                             <CardContent>
                               <div className="h-[300px]">
                                 <ResponsiveContainer width="100%" height="100%">
@@ -2419,8 +2381,8 @@ export default function OperationsReportsDashboardPage() {
                                     <YAxis fontSize={12} />
                                     <Tooltip formatter={(value: number, name: string) => [formatNumber(value), name]} />
                                     <Legend />
-                                    <Bar dataKey="quantity" name="الكمية" fill="#10B981" radius={[4, 4, 0, 0]} />
-                                    <Bar dataKey="batches" name="الدفعات" fill="#8B5CF6" radius={[4, 4, 0, 0]} />
+                                    <Bar dataKey="quantity" name={t('production.quantityName')} fill="#10B981" radius={[4, 4, 0, 0]} />
+                                    <Bar dataKey="batches" name={t('production.batchesName')} fill="#8B5CF6" radius={[4, 4, 0, 0]} />
                                   </BarChart>
                                 </ResponsiveContainer>
                               </div>
@@ -2428,7 +2390,7 @@ export default function OperationsReportsDashboardPage() {
                           </Card>
 
                           <Card>
-                            <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Package className="w-5 h-5 text-emerald-600" />التوزيع حسب الوجهة</CardTitle></CardHeader>
+                            <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Package className="w-5 h-5 text-emerald-600" />{t('production.distributionByDestination')}</CardTitle></CardHeader>
                             <CardContent>
                               <div className="h-[300px]">
                                 <ResponsiveContainer width="100%" height="100%">
@@ -2449,7 +2411,7 @@ export default function OperationsReportsDashboardPage() {
 
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                           <Card>
-                            <CardHeader><CardTitle className="text-lg">الإنتاج حسب المنتج (فعلي)</CardTitle></CardHeader>
+                            <CardHeader><CardTitle className="text-lg">{t('production.productionByProduct')}</CardTitle></CardHeader>
                             <CardContent>
                               <div className="h-[300px]">
                                 <ResponsiveContainer width="100%" height="100%">
@@ -2459,8 +2421,8 @@ export default function OperationsReportsDashboardPage() {
                                     <YAxis type="category" dataKey="productName" fontSize={11} width={120} />
                                     <Tooltip formatter={(value: number) => formatNumber(value)} />
                                     <Legend />
-                                    <Bar dataKey="quantity" name="الكمية" fill="#10B981" radius={[0, 4, 4, 0]} />
-                                    <Bar dataKey="batchCount" name="الدفعات" fill="#8B5CF6" radius={[0, 4, 4, 0]} />
+                                    <Bar dataKey="quantity" name={t('production.quantityName')} fill="#10B981" radius={[0, 4, 4, 0]} />
+                                    <Bar dataKey="batchCount" name={t('production.batchesName')} fill="#8B5CF6" radius={[0, 4, 4, 0]} />
                                   </BarChart>
                                 </ResponsiveContainer>
                               </div>
@@ -2468,7 +2430,7 @@ export default function OperationsReportsDashboardPage() {
                           </Card>
 
                           <Card>
-                            <CardHeader><CardTitle className="text-lg">الإنتاج حسب التصنيف</CardTitle></CardHeader>
+                            <CardHeader><CardTitle className="text-lg">{t('production.productionByCategory')}</CardTitle></CardHeader>
                             <CardContent>
                               <div className="h-[300px]">
                                 <ResponsiveContainer width="100%" height="100%">
@@ -2489,16 +2451,16 @@ export default function OperationsReportsDashboardPage() {
 
                         {actual.byChef.length > 0 && (
                           <Card>
-                            <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Users className="w-5 h-5 text-blue-600" />إنتاج الطهاة</CardTitle></CardHeader>
+                            <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Users className="w-5 h-5 text-blue-600" />{t('production.chefProduction')}</CardTitle></CardHeader>
                             <CardContent>
                               <div className="overflow-x-auto">
                                 <table className="w-full text-sm" data-testid="table-chef-production">
                                   <thead>
                                     <tr className="border-b bg-muted/50">
                                       <th className="text-right p-3 font-medium">#</th>
-                                      <th className="text-right p-3 font-medium">الطاهي</th>
-                                      <th className="text-center p-3 font-medium">عدد الدفعات</th>
-                                      <th className="text-center p-3 font-medium">إجمالي الكمية</th>
+                                      <th className="text-right p-3 font-medium">{t('production.chef')}</th>
+                                      <th className="text-center p-3 font-medium">{t('production.batchCount')}</th>
+                                      <th className="text-center p-3 font-medium">{t('production.totalQuantity')}</th>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -2521,8 +2483,8 @@ export default function OperationsReportsDashboardPage() {
                       <Card>
                         <CardContent className="py-12 text-center">
                           <Factory className="w-12 h-12 mx-auto text-muted-foreground/30 mb-4" />
-                          <p className="text-muted-foreground text-lg">لا يوجد بيانات إنتاج للفترة المحددة</p>
-                          <p className="text-muted-foreground text-sm mt-2">قم بتسجيل الإنتاج اليومي من صفحة الإنتاج الفعلي</p>
+                          <p className="text-muted-foreground text-lg">{t('production.noProductionData')}</p>
+                          <p className="text-muted-foreground text-sm mt-2">{t('production.registerProduction')}</p>
                         </CardContent>
                       </Card>
                     ) : null}
@@ -2530,21 +2492,21 @@ export default function OperationsReportsDashboardPage() {
                     {hasPlannedData && (
                       <>
                         <div className="flex items-center gap-2 mt-6">
-                          <h3 className="text-lg font-semibold text-muted-foreground">أوامر الإنتاج المخططة</h3>
-                          <Badge variant="outline" className="text-xs">مخطط</Badge>
+                          <h3 className="text-lg font-semibold text-muted-foreground">{t('production.plannedOrders')}</h3>
+                          <Badge variant="outline" className="text-xs">{t('production.planned')}</Badge>
                         </div>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                          <KPICard title="إجمالي الأوامر" value={formatNumber(report.productionReport.totalOrders)} icon={Package} color="text-blue-600" bgColor="bg-blue-100" />
-                          <KPICard title="قيد الانتظار" value={formatNumber(report.productionReport.pendingOrders)} icon={Clock} color="text-yellow-600" bgColor="bg-yellow-100" />
-                          <KPICard title="مكتملة" value={formatNumber(report.productionReport.completedOrders)} icon={CheckCircle} color="text-green-600" bgColor="bg-green-100" />
-                          <KPICard title="نسبة نجاح الجودة" value={formatPercent(report.productionReport.qualityPassRate)}
+                          <KPICard title={t('production.totalOrders')} value={formatNumber(report.productionReport.totalOrders)} icon={Package} color="text-blue-600" bgColor="bg-blue-100" />
+                          <KPICard title={t('production.pending')} value={formatNumber(report.productionReport.pendingOrders)} icon={Clock} color="text-yellow-600" bgColor="bg-yellow-100" />
+                          <KPICard title={t('production.completed')} value={formatNumber(report.productionReport.completedOrders)} icon={CheckCircle} color="text-green-600" bgColor="bg-green-100" />
+                          <KPICard title={t('production.qualityPassRate')} value={formatPercent(report.productionReport.qualityPassRate)}
                             icon={report.productionReport.qualityPassRate >= 90 ? CheckCircle : AlertTriangle}
                             color={report.productionReport.qualityPassRate >= 90 ? "text-green-600" : "text-yellow-600"}
                             bgColor={report.productionReport.qualityPassRate >= 90 ? "bg-green-100" : "bg-yellow-100"} />
                         </div>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                           <Card>
-                            <CardHeader><CardTitle className="text-lg">الإنتاج اليومي (مخطط)</CardTitle></CardHeader>
+                            <CardHeader><CardTitle className="text-lg">{t('production.dailyPlanned')}</CardTitle></CardHeader>
                             <CardContent>
                               <div className="h-[300px]">
                                 <ResponsiveContainer width="100%" height="100%">
@@ -2554,8 +2516,8 @@ export default function OperationsReportsDashboardPage() {
                                     <YAxis fontSize={12} />
                                     <Tooltip />
                                     <Legend />
-                                    <Bar dataKey="quantity" name="الكمية" fill="#10B981" />
-                                    <Bar dataKey="orders" name="الأوامر" fill="#3B82F6" />
+                                    <Bar dataKey="quantity" name={t('production.quantityName')} fill="#10B981" />
+                                    <Bar dataKey="orders" name={t('production.ordersName')} fill="#3B82F6" />
                                   </BarChart>
                                 </ResponsiveContainer>
                               </div>
@@ -2563,13 +2525,13 @@ export default function OperationsReportsDashboardPage() {
                           </Card>
                           {report.productionReport.qualityChecks.length > 0 && (
                             <Card>
-                              <CardHeader><CardTitle className="text-lg">نتائج فحوصات الجودة</CardTitle></CardHeader>
+                              <CardHeader><CardTitle className="text-lg">{t('production.qualityResults')}</CardTitle></CardHeader>
                               <CardContent>
                                 <div className="h-[300px]">
                                   <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
                                       <Pie data={report.productionReport.qualityChecks} dataKey="count" nameKey="status" cx="50%" cy="50%" outerRadius={100}
-                                        label={({ status, percent }) => `${STATUS_LABELS[status] || status}: ${(percent * 100).toFixed(0)}%`}>
+                                        label={({ status, percent }) => `${t(`statuses.${status}`, { defaultValue: status })}: ${(percent * 100).toFixed(0)}%`}>
                                         {report.productionReport.qualityChecks.map((entry, index) => (
                                           <Cell key={`cell-${index}`} fill={entry.status === 'passed' ? '#10B981' : entry.status === 'failed' ? '#EF4444' : '#F59E0B'} />
                                         ))}
@@ -2591,17 +2553,17 @@ export default function OperationsReportsDashboardPage() {
 
             <TabsContent value="shifts" className="space-y-6">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <KPICard title="إجمالي الورديات" value={formatNumber(report.shiftsReport.totalShifts)} icon={Clock} color="text-blue-600" bgColor="bg-blue-100" />
-                <KPICard title="الورديات مع موظفين" value={formatNumber(report.shiftsReport.shiftsWithEmployees)} icon={Users} color="text-green-600" bgColor="bg-green-100" />
-                <KPICard title="إجمالي التكليفات" value={formatNumber(report.shiftsReport.totalEmployeeAssignments)} icon={Users} color="text-indigo-600" bgColor="bg-indigo-100" />
-                <KPICard title="نسبة التغطية"
+                <KPICard title={t('shiftsTab.totalShifts')} value={formatNumber(report.shiftsReport.totalShifts)} icon={Clock} color="text-blue-600" bgColor="bg-blue-100" />
+                <KPICard title={t('shiftsTab.shiftsWithEmployees')} value={formatNumber(report.shiftsReport.shiftsWithEmployees)} icon={Users} color="text-green-600" bgColor="bg-green-100" />
+                <KPICard title={t('shiftsTab.totalAssignments')} value={formatNumber(report.shiftsReport.totalEmployeeAssignments)} icon={Users} color="text-indigo-600" bgColor="bg-indigo-100" />
+                <KPICard title={t('shiftsTab.coverageRate')}
                   value={report.shiftsReport.totalShifts > 0 ? formatPercent((report.shiftsReport.shiftsWithEmployees / report.shiftsReport.totalShifts) * 100) : "100%"}
                   icon={Target} color="text-purple-600" bgColor="bg-purple-100" />
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
-                  <CardHeader><CardTitle className="text-lg">الورديات حسب النوع</CardTitle></CardHeader>
+                  <CardHeader><CardTitle className="text-lg">{t('shiftsTab.shiftDistribution')}</CardTitle></CardHeader>
                   <CardContent>
                     <div className="h-[300px]">
                       <ResponsiveContainer width="100%" height="100%">
@@ -2620,7 +2582,7 @@ export default function OperationsReportsDashboardPage() {
                 </Card>
 
                 <Card>
-                  <CardHeader><CardTitle className="text-lg">الموظفين حسب الدور</CardTitle></CardHeader>
+                  <CardHeader><CardTitle className="text-lg">{t('shiftsTab.employeeDistribution')}</CardTitle></CardHeader>
                   <CardContent>
                     <div className="h-[300px]">
                       <ResponsiveContainer width="100%" height="100%">
@@ -2629,7 +2591,7 @@ export default function OperationsReportsDashboardPage() {
                           <XAxis dataKey="role" fontSize={12} />
                           <YAxis fontSize={12} />
                           <Tooltip />
-                          <Bar dataKey="count" name="العدد" fill="#8B5CF6" />
+                          <Bar dataKey="count" name={t('shiftsTab.countName')} fill="#8B5CF6" />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
@@ -2642,7 +2604,7 @@ export default function OperationsReportsDashboardPage() {
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <h2 className="text-lg font-semibold flex items-center gap-2">
                   <Wallet className="w-5 h-5 text-amber-600" />
-                  يوميات الكاشير والصندوق
+                  {t('cashierTab.journals')}
                   {filters.cashierId && (
                     <Badge variant="default" className="bg-amber-600 text-sm">
                       {users?.find(u => u.id === filters.cashierId)?.firstName || users?.find(u => u.id === filters.cashierId)?.username}
@@ -2658,39 +2620,39 @@ export default function OperationsReportsDashboardPage() {
                     data-testid="button-export-cashier-pdf"
                   >
                     <FileDown className="w-4 h-4" />
-                    كشف حساب PDF
+                    {t('cashierTab.exportCashierStatement')}
                   </Button>
                   <Button variant="outline" onClick={() => setLocation("/cashier-journals")} className="gap-2" data-testid="link-cashier-journals">
                     <ExternalLink className="w-4 h-4" />
-                    عرض الكل
+                    {t('cashierTab.viewAll')}
                   </Button>
                   <Button onClick={() => setLocation("/cashier-journals/new")} className="gap-2 bg-amber-600 hover:bg-amber-700" data-testid="link-new-journal">
                     <Receipt className="w-4 h-4" />
-                    يومية جديدة
+                    {t('cashierTab.newJournal')}
                   </Button>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <KPICard title="إجمالي اليوميات" value={formatNumber(filteredCashierJournals.length)} icon={Receipt} color="text-blue-600" bgColor="bg-blue-100" />
-                <KPICard title="إجمالي المبيعات" value={formatCurrency(filteredCashierJournals.reduce((sum, j) => sum + (j.totalSales || 0), 0))}
+                <KPICard title={t('cashierTab.journals')} value={formatNumber(filteredCashierJournals.length)} icon={Receipt} color="text-blue-600" bgColor="bg-blue-100" />
+                <KPICard title={t('cashierTab.totalSales')} value={formatCurrency(filteredCashierJournals.reduce((sum, j) => sum + (j.totalSales || 0), 0))}
                   icon={DollarSign} color="text-green-600" bgColor="bg-green-100" />
-                <KPICard title="النقدي" value={formatCurrency(filteredCashierJournals.reduce((sum, j) => sum + (j.cashTotal || 0), 0))}
+                <KPICard title={t('cashierTab.cashSales')} value={formatCurrency(filteredCashierJournals.reduce((sum, j) => sum + (j.cashTotal || 0), 0))}
                   icon={Wallet} color="text-emerald-600" bgColor="bg-emerald-100" />
-                <KPICard title="الشبكة" value={formatCurrency(filteredCashierJournals.reduce((sum, j) => sum + (j.networkTotal || 0), 0))}
+                <KPICard title={t('cashierTab.networkSales')} value={formatCurrency(filteredCashierJournals.reduce((sum, j) => sum + (j.networkTotal || 0), 0))}
                   icon={CreditCard} color="text-indigo-600" bgColor="bg-indigo-100" />
-                <KPICard title="حالات العجز"
+                <KPICard title={t('cashierTab.shortages')}
                   value={formatNumber(filteredCashierJournals.filter(j => j.discrepancyStatus === 'shortage').length)}
                   icon={TrendingDown} color="text-red-600" bgColor="bg-red-100" 
                   subtitle={formatCurrency(filteredCashierJournals.filter(j => j.discrepancyStatus === 'shortage').reduce((sum, j) => sum + Math.abs(j.discrepancyAmount || 0), 0))} />
-                <KPICard title="حالات الفائض"
+                <KPICard title={t('cashierTab.surpluses')}
                   value={formatNumber(filteredCashierJournals.filter(j => j.discrepancyStatus === 'surplus').length)}
                   icon={TrendingUp} color="text-amber-600" bgColor="bg-amber-100"
                   subtitle={formatCurrency(filteredCashierJournals.filter(j => j.discrepancyStatus === 'surplus').reduce((sum, j) => sum + (j.discrepancyAmount || 0), 0))} />
-                <KPICard title="بانتظار الموافقة"
+                <KPICard title={t('quickStats.pendingApproval')}
                   value={formatNumber(filteredCashierJournals.filter(j => j.status === 'submitted').length)}
                   icon={Clock} color="text-yellow-600" bgColor="bg-yellow-100" />
-                <KPICard title="معتمدة"
+                <KPICard title={t('statuses.approved')}
                   value={formatNumber(filteredCashierJournals.filter(j => j.status === 'approved').length)}
                   icon={CheckCircle} color="text-green-600" bgColor="bg-green-100"
                   progress={filteredCashierJournals.length > 0 ? (filteredCashierJournals.filter(j => j.status === 'approved').length / filteredCashierJournals.length) * 100 : 0} />
@@ -2701,14 +2663,14 @@ export default function OperationsReportsDashboardPage() {
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base flex items-center gap-2">
                       <Users className="w-4 h-4 text-green-600" />
-                      أفضل الكاشيرين (حسب المبيعات)
+                      {t('cashierTab.topCashiers')}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-2">
                       {(() => {
                         const cashierStats = filteredCashierJournals.reduce((acc, j) => {
-                          const name = j.cashierName || 'غير معروف';
+                          const name = j.cashierName || t('common.unknown');
                           if (!acc[name]) acc[name] = { name, sales: 0, count: 0 };
                           acc[name].sales += (j.totalSales || 0);
                           acc[name].count += 1;
@@ -2722,13 +2684,13 @@ export default function OperationsReportsDashboardPage() {
                               <div className="flex items-center gap-2">
                                 <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${i === 0 ? 'bg-amber-400 text-white' : 'bg-gray-200 text-gray-600'}`}>{i + 1}</span>
                                 <span className="font-medium text-sm">{c.name}</span>
-                                <Badge variant="secondary" className="text-xs">{c.count} يومية</Badge>
+                                <Badge variant="secondary" className="text-xs">{t('cashierTab.journalCountBadge', {count: c.count})}</Badge>
                               </div>
                               <span className="text-sm font-bold text-green-600">{formatCurrency(c.sales)}</span>
                             </div>
                           ));
                       })()}
-                      {filteredCashierJournals.length === 0 && <p className="text-center text-muted-foreground py-4">لا توجد بيانات</p>}
+                      {filteredCashierJournals.length === 0 && <p className="text-center text-muted-foreground py-4">{t('cashierTab.noData')}</p>}
                     </div>
                   </CardContent>
                 </Card>
@@ -2736,16 +2698,15 @@ export default function OperationsReportsDashboardPage() {
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-purple-600" />
-                      أداء الورديات
+                      <Clock className="w-4 h-4 text-purple-600" />{t('cashierTab.shiftPerformance')}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-2">
                       {(() => {
                         const shiftStats = filteredCashierJournals.reduce((acc, j) => {
-                          const shift = j.shiftType || 'غير محدد';
-                          const label = shift === 'morning' ? 'صباحي' : shift === 'evening' ? 'مسائي' : shift === 'night' ? 'ليلي' : shift;
+                          const shift = j.shiftType || 'unspecified';
+                          const label = t(`shiftsShort.${shift}`);
                           if (!acc[shift]) acc[shift] = { label, sales: 0, count: 0 };
                           acc[shift].sales += (j.totalSales || 0);
                           acc[shift].count += 1;
@@ -2758,13 +2719,13 @@ export default function OperationsReportsDashboardPage() {
                               <div className="flex items-center gap-2">
                                 <Clock className="w-4 h-4 text-purple-500" />
                                 <span className="font-medium text-sm">{s.label}</span>
-                                <Badge variant="secondary" className="text-xs">{s.count} يومية</Badge>
+                                <Badge variant="secondary" className="text-xs">{s.count} {t('common.journal')}</Badge>
                               </div>
                               <span className="text-sm font-bold text-purple-600">{formatCurrency(s.sales)}</span>
                             </div>
                           ));
                       })()}
-                      {filteredCashierJournals.length === 0 && <p className="text-center text-muted-foreground py-4">لا توجد بيانات</p>}
+                      {filteredCashierJournals.length === 0 && <p className="text-center text-muted-foreground py-4">{t('cashierTab.noData')}</p>}
                     </div>
                   </CardContent>
                 </Card>
@@ -2772,15 +2733,14 @@ export default function OperationsReportsDashboardPage() {
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base flex items-center gap-2">
-                      <AlertTriangle className="w-4 h-4 text-red-600" />
-                      كاشيرين يحتاجون مراجعة
+                      <AlertTriangle className="w-4 h-4 text-red-600" />{t('cashierTab.cashiersNeedReview')}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-2">
                       {(() => {
                         const cashierIssues = filteredCashierJournals.reduce((acc, j) => {
-                          const name = j.cashierName || 'غير معروف';
+                          const name = j.cashierName || t('common.unknown');
                           if (!acc[name]) acc[name] = { name, shortages: 0, shortageAmount: 0 };
                           if (j.discrepancyStatus === 'shortage') {
                             acc[name].shortages += 1;
@@ -2797,7 +2757,7 @@ export default function OperationsReportsDashboardPage() {
                               <div className="flex items-center gap-2">
                                 <AlertTriangle className="w-4 h-4 text-red-500" />
                                 <span className="font-medium text-sm">{c.name}</span>
-                                <Badge variant="destructive" className="text-xs">{c.shortages} عجز</Badge>
+                                <Badge variant="destructive" className="text-xs">{c.shortages} {t('common.shortage')}</Badge>
                               </div>
                               <span className="text-sm font-bold text-red-600">-{formatCurrency(c.shortageAmount)}</span>
                             </div>
@@ -2806,7 +2766,7 @@ export default function OperationsReportsDashboardPage() {
                       {filteredCashierJournals.filter(j => j.discrepancyStatus === 'shortage').length === 0 && 
                         <div className="text-center py-4">
                           <CheckCircle className="w-8 h-8 text-green-500 mx-auto mb-2" />
-                          <p className="text-sm text-muted-foreground">لا يوجد عجز في الفترة المحددة</p>
+                          <p className="text-sm text-muted-foreground">{t('cashierTab.noShortageInPeriod')}</p>
                         </div>
                       }
                     </div>
@@ -2820,10 +2780,9 @@ export default function OperationsReportsDashboardPage() {
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base flex items-center gap-2">
-                      <TrendingUp className="w-4 h-4 text-blue-600" />
-                      تحليل المبيعات الأسبوعي
+                      <TrendingUp className="w-4 h-4 text-blue-600" />{t('cashierTab.weeklyAnalysis')}
                     </CardTitle>
-                    <CardDescription>مقارنة المبيعات على مدار الأسابيع</CardDescription>
+                    <CardDescription>{t('cashierTab.weeklyComparisonDesc')}</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="h-[250px]">
@@ -2834,11 +2793,11 @@ export default function OperationsReportsDashboardPage() {
                           <YAxis fontSize={10} />
                           <Tooltip formatter={(value: number, name: string) => [
                             name === 'sales' ? formatCurrency(value) : value,
-                            name === 'sales' ? 'المبيعات' : name === 'transactions' ? 'العمليات' : 'اليوميات'
+                            name === 'sales' ? t('apps.salesName') : name === 'transactions' ? t('cashierTab.journalCountName') : t('cashierTab.journalCountName')
                           ]} />
                           <Legend />
-                          <Bar dataKey="sales" name="المبيعات" fill="#10B981" />
-                          <Bar dataKey="journals" name="اليوميات" fill="#3B82F6" />
+                          <Bar dataKey="sales" name={t('apps.salesName')} fill="#10B981" />
+                          <Bar dataKey="journals" name={t('cashierTab.journalCountName')} fill="#3B82F6" />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
@@ -2849,10 +2808,9 @@ export default function OperationsReportsDashboardPage() {
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base flex items-center gap-2">
-                      <CreditCard className="w-4 h-4 text-indigo-600" />
-                      توزيع طرق الدفع
+                      <CreditCard className="w-4 h-4 text-indigo-600" />{t('cashierTab.paymentDistribution')}
                     </CardTitle>
-                    <CardDescription>تحليل المبيعات حسب فئة الدفع</CardDescription>
+                    <CardDescription>{t('cashierTab.paymentAnalysisDesc')}</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="h-[250px]">
@@ -2860,9 +2818,9 @@ export default function OperationsReportsDashboardPage() {
                         <PieChart>
                           <Pie
                             data={[
-                              { name: 'نقدي', value: paymentCategoryStats.cash, color: '#10B981' },
-                              { name: 'شبكة وبطاقات', value: paymentCategoryStats.cards, color: '#3B82F6' },
-                              { name: 'تطبيقات التوصيل', value: paymentCategoryStats.delivery, color: '#F59E0B' },
+                              { name: t('cashierTab.cashCategory'), value: paymentCategoryStats.cash, color: '#10B981' },
+                              { name: t('cashierTab.cardsCategory'), value: paymentCategoryStats.cards, color: '#3B82F6' },
+                              { name: t('cashierTab.deliveryAppsCategory'), value: paymentCategoryStats.delivery, color: '#F59E0B' },
                             ].filter(d => d.value > 0)}
                             dataKey="value"
                             nameKey="name"
@@ -2872,9 +2830,9 @@ export default function OperationsReportsDashboardPage() {
                             label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                           >
                             {[
-                              { name: 'نقدي', value: paymentCategoryStats.cash, color: '#10B981' },
-                              { name: 'شبكة وبطاقات', value: paymentCategoryStats.cards, color: '#3B82F6' },
-                              { name: 'تطبيقات التوصيل', value: paymentCategoryStats.delivery, color: '#F59E0B' },
+                              { name: t('cashierTab.cashCategory'), value: paymentCategoryStats.cash, color: '#10B981' },
+                              { name: t('cashierTab.cardsCategory'), value: paymentCategoryStats.cards, color: '#3B82F6' },
+                              { name: t('cashierTab.deliveryAppsCategory'), value: paymentCategoryStats.delivery, color: '#F59E0B' },
                             ].filter(d => d.value > 0).map((entry, index) => (
                               <Cell key={`cell-${index}`} fill={entry.color} />
                             ))}
@@ -2886,17 +2844,17 @@ export default function OperationsReportsDashboardPage() {
                     <div className="flex justify-around mt-2 text-sm">
                       <div className="text-center">
                         <span className="inline-block w-3 h-3 rounded-full bg-emerald-500 ml-1"></span>
-                        <span className="text-muted-foreground">نقدي: </span>
+                        <span className="text-muted-foreground">{t('cashierTab.cashCategory')}: </span>
                         <span className="font-semibold">{formatCurrency(paymentCategoryStats.cash)}</span>
                       </div>
                       <div className="text-center">
                         <span className="inline-block w-3 h-3 rounded-full bg-blue-500 ml-1"></span>
-                        <span className="text-muted-foreground">شبكة: </span>
+                        <span className="text-muted-foreground">{t('cashierTab.networkShort')}: </span>
                         <span className="font-semibold">{formatCurrency(paymentCategoryStats.cards)}</span>
                       </div>
                       <div className="text-center">
                         <span className="inline-block w-3 h-3 rounded-full bg-amber-500 ml-1"></span>
-                        <span className="text-muted-foreground">توصيل: </span>
+                        <span className="text-muted-foreground">{t('cashierTab.deliveryShort')}: </span>
                         <span className="font-semibold">{formatCurrency(paymentCategoryStats.delivery)}</span>
                       </div>
                     </div>
@@ -2908,10 +2866,9 @@ export default function OperationsReportsDashboardPage() {
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-purple-600" />
-                    مقارنة أداء الورديات
+                    <Clock className="w-4 h-4 text-purple-600" />{t('cashierTab.shiftCompareTitle')}
                   </CardTitle>
-                  <CardDescription>تحليل شامل للمبيعات والعجز حسب الوردية</CardDescription>
+                  <CardDescription>{t('cashierTab.shiftCompareDesc')}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="h-[200px]">
@@ -2921,13 +2878,13 @@ export default function OperationsReportsDashboardPage() {
                         <XAxis type="number" fontSize={10} />
                         <YAxis type="category" dataKey="shiftLabel" fontSize={12} width={60} />
                         <Tooltip formatter={(value: number, name: string) => [
-                          name === 'المبيعات' ? formatCurrency(value) : value,
+                          name === t('apps.salesName') ? formatCurrency(value) : value,
                           name
                         ]} />
                         <Legend />
-                        <Bar dataKey="sales" name="المبيعات" fill="#10B981" />
-                        <Bar dataKey="count" name="عدد اليوميات" fill="#3B82F6" />
-                        <Bar dataKey="shortages" name="حالات العجز" fill="#EF4444" />
+                        <Bar dataKey="sales" name={t('apps.salesName')} fill="#10B981" />
+                        <Bar dataKey="count" name={t('cashierTab.journals')} fill="#3B82F6" />
+                        <Bar dataKey="shortages" name={t('cashierTab.shortages')} fill="#EF4444" />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -2941,13 +2898,11 @@ export default function OperationsReportsDashboardPage() {
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <div>
                         <CardTitle className="text-lg flex items-center gap-2">
-                          <Truck className="w-5 h-5 text-orange-600" />
-                          تقرير مبيعات تطبيقات التوصيل
+                          <Truck className="w-5 h-5 text-orange-600" />{t('apps.title')}
                         </CardTitle>
-                        <CardDescription>تحليل شامل لمبيعات هنقرستيشن وتويو وكيتا وجميع التطبيقات</CardDescription>
+                        <CardDescription>{t('apps.description')}</CardDescription>
                       </div>
-                      <Badge variant="secondary" className="bg-orange-100 text-orange-700 text-sm">
-                        إجمالي: {formatCurrency(deliveryAppsStats.totalDelivery)}
+                      <Badge variant="secondary" className="bg-orange-100 text-orange-700 text-sm">{t('apps.totalLabel')}: {formatCurrency(deliveryAppsStats.totalDelivery)}
                       </Badge>
                     </div>
                   </CardHeader>
@@ -2955,14 +2910,14 @@ export default function OperationsReportsDashboardPage() {
                     {/* KPI Cards for Apps */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                       <KPICard 
-                        title="إجمالي مبيعات التطبيقات" 
+                        title={t('apps.totalAppSales')} 
                         value={formatCurrency(deliveryAppsStats.totalDelivery)} 
                         icon={Truck} 
                         color="text-orange-600" 
                         bgColor="bg-orange-100" 
                       />
                       <KPICard 
-                        title="التطبيق الأعلى مبيعاً" 
+                        title={t('apps.topApp')} 
                         value={deliveryAppsStats.topApp?.label || "-"} 
                         icon={Trophy}
                         subtitle={deliveryAppsStats.topApp ? formatCurrency(deliveryAppsStats.topApp.totalSales) : ""}
@@ -2970,14 +2925,14 @@ export default function OperationsReportsDashboardPage() {
                         bgColor="bg-amber-100" 
                       />
                       <KPICard 
-                        title="عدد التطبيقات النشطة" 
+                        title={t('apps.activeApps')} 
                         value={deliveryAppsStats.apps.filter(a => a.totalSales > 0).length} 
                         icon={Activity}
                         color="text-blue-600" 
                         bgColor="bg-blue-100" 
                       />
                       <KPICard 
-                        title="الفرع الأعلى توصيل" 
+                        title={t('apps.topBranch')} 
                         value={deliveryAppsStats.topBranch?.branchName || "-"} 
                         icon={Building2}
                         subtitle={deliveryAppsStats.topBranch ? formatCurrency(deliveryAppsStats.topBranch.totalDelivery) : ""}
@@ -2990,7 +2945,7 @@ export default function OperationsReportsDashboardPage() {
                       {/* Apps Pie Chart */}
                       <Card>
                         <CardHeader className="pb-2">
-                          <CardTitle className="text-base">توزيع مبيعات التطبيقات</CardTitle>
+                          <CardTitle className="text-base">{t('apps.salesDistribution')}</CardTitle>
                         </CardHeader>
                         <CardContent>
                           <div className="h-[280px]">
@@ -3019,7 +2974,7 @@ export default function OperationsReportsDashboardPage() {
                       {/* Apps Bar Chart */}
                       <Card>
                         <CardHeader className="pb-2">
-                          <CardTitle className="text-base">مقارنة مبيعات التطبيقات</CardTitle>
+                          <CardTitle className="text-base">{t('apps.salesComparison')}</CardTitle>
                         </CardHeader>
                         <CardContent>
                           <div className="h-[280px]">
@@ -3029,7 +2984,7 @@ export default function OperationsReportsDashboardPage() {
                                 <XAxis type="number" fontSize={10} tickFormatter={(v) => formatCurrency(v)} />
                                 <YAxis type="category" dataKey="label" fontSize={11} width={80} />
                                 <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                                <Bar dataKey="totalSales" name="المبيعات">
+                                <Bar dataKey="totalSales" name={t('apps.salesName')}>
                                   {deliveryAppsStats.apps.filter(a => a.totalSales > 0).map((app, index) => (
                                     <Cell key={`bar-${index}`} fill={app.color} />
                                   ))}
@@ -3044,17 +2999,17 @@ export default function OperationsReportsDashboardPage() {
                     {/* Apps Details Table */}
                     <Card>
                       <CardHeader className="pb-2">
-                        <CardTitle className="text-base">تفاصيل مبيعات كل تطبيق</CardTitle>
+                        <CardTitle className="text-base">{t('apps.appDetails')}</CardTitle>
                       </CardHeader>
                       <CardContent>
                         <div className="overflow-x-auto">
                           <table className="w-full text-sm">
                             <thead>
                               <tr className="border-b bg-muted/50">
-                                <th className="text-right py-3 px-4">التطبيق</th>
-                                <th className="text-right py-3 px-4">إجمالي المبيعات</th>
-                                <th className="text-right py-3 px-4">النسبة</th>
-                                <th className="text-right py-3 px-4">الترتيب</th>
+                                <th className="text-right py-3 px-4">{t('apps.appCol')}</th>
+                                <th className="text-right py-3 px-4">{t('apps.totalSalesCol')}</th>
+                                <th className="text-right py-3 px-4">{t('apps.percentCol')}</th>
+                                <th className="text-right py-3 px-4">{t('apps.rankCol')}</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -3100,15 +3055,15 @@ export default function OperationsReportsDashboardPage() {
                     {deliveryAppsStats.branches.length > 0 && (
                       <Card>
                         <CardHeader className="pb-2">
-                          <CardTitle className="text-base">مبيعات التطبيقات حسب الفرع</CardTitle>
+                          <CardTitle className="text-base">{t('apps.salesByBranch')}</CardTitle>
                         </CardHeader>
                         <CardContent>
                           <div className="overflow-x-auto">
                             <table className="w-full text-sm">
                               <thead>
                                 <tr className="border-b bg-muted/50">
-                                  <th className="text-right py-3 px-4">الفرع</th>
-                                  <th className="text-right py-3 px-4">إجمالي التوصيل</th>
+                                  <th className="text-right py-3 px-4">{t('apps.branchCol')}</th>
+                                  <th className="text-right py-3 px-4">{t('apps.totalDeliveryCol')}</th>
                                   {DELIVERY_APPS.slice(0, 5).map(app => (
                                     <th key={app.key} className="text-right py-3 px-4">
                                       <span style={{ color: app.color }}>{app.label}</span>
@@ -3123,7 +3078,7 @@ export default function OperationsReportsDashboardPage() {
                                       <div className="flex items-center gap-2">
                                         <Building2 className="w-4 h-4 text-muted-foreground" />
                                         <span className="font-medium">{branch.branchName}</span>
-                                        {index === 0 && <Badge className="text-xs bg-amber-500">الأعلى</Badge>}
+                                        {index === 0 && <Badge className="text-xs bg-amber-500">{t('apps.highest')}</Badge>}
                                       </div>
                                     </td>
                                     <td className="py-3 px-4 font-semibold text-orange-600">
@@ -3150,11 +3105,11 @@ export default function OperationsReportsDashboardPage() {
                 <CardHeader>
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <div>
-                      <CardTitle className="text-lg">قائمة يوميات الكاشير</CardTitle>
-                      <CardDescription>عرض وإدارة يوميات الكاشير مع إمكانية الاطلاع على التفاصيل والمرفقات</CardDescription>
+                      <CardTitle className="text-lg">{t('cashierTab.journalList')}</CardTitle>
+                      <CardDescription>{t('cashierTab.journalListDesc')}</CardDescription>
                     </div>
                     <Badge variant="secondary" className="text-sm">
-                      {filteredCashierJournals.length} يومية
+                      {filteredCashierJournals.length} {t('common.journal')}
                     </Badge>
                   </div>
                 </CardHeader>
@@ -3163,14 +3118,14 @@ export default function OperationsReportsDashboardPage() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b bg-muted/50">
-                          <th className="text-right py-3 px-4">التاريخ</th>
-                          <th className="text-right py-3 px-4">الفرع</th>
-                          <th className="text-right py-3 px-4">الكاشير</th>
-                          <th className="text-right py-3 px-4">الوردية</th>
-                          <th className="text-right py-3 px-4">إجمالي المبيعات</th>
-                          <th className="text-right py-3 px-4">العجز/الفائض</th>
-                          <th className="text-right py-3 px-4">الحالة</th>
-                          <th className="text-right py-3 px-4">الإجراءات</th>
+                          <th className="text-right py-3 px-4">{t('cashierTab.dateCol')}</th>
+                          <th className="text-right py-3 px-4">{t('apps.branchCol')}</th>
+                          <th className="text-right py-3 px-4">{t('cashierTab.cashierCol')}</th>
+                          <th className="text-right py-3 px-4">{t('cashierTab.shiftCol')}</th>
+                          <th className="text-right py-3 px-4">{t('apps.totalSalesCol')}</th>
+                          <th className="text-right py-3 px-4">{t('cashierTab.discrepancyCol')}</th>
+                          <th className="text-right py-3 px-4">{t('cashierTab.statusCol')}</th>
+                          <th className="text-right py-3 px-4">{t('cashierTab.actionsCol')}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -3194,12 +3149,12 @@ export default function OperationsReportsDashboardPage() {
                                   {formatCurrency(journal.discrepancyAmount || 0)}
                                 </span>
                                 <Badge variant={journal.discrepancyStatus === 'balanced' ? 'default' : journal.discrepancyStatus === 'shortage' ? 'destructive' : 'secondary'} className="mr-2 text-xs">
-                                  {DISCREPANCY_STATUS_LABELS[journal.discrepancyStatus || 'balanced']}
+                                  {t(`discrepancyStatuses.${journal.discrepancyStatus || 'balanced'}`)}
                                 </Badge>
                               </td>
                               <td className="py-3 px-4">
                                 <Badge variant={journal.status === 'approved' ? 'default' : journal.status === 'rejected' ? 'destructive' : 'secondary'}>
-                                  {STATUS_LABELS[journal.status] || journal.status}
+                                  {t(`statuses.${journal.status}`) || journal.status}
                                 </Badge>
                               </td>
                               <td className="py-3 px-4">
@@ -3209,8 +3164,7 @@ export default function OperationsReportsDashboardPage() {
                           ))
                         ) : (
                           <tr>
-                            <td colSpan={8} className="py-8 text-center text-muted-foreground">
-                              لا توجد يوميات كاشير في الفترة المحددة
+                            <td colSpan={8} className="py-8 text-center text-muted-foreground">{t('cashierTab.noJournalsInPeriod')}
                             </td>
                           </tr>
                         )}
@@ -3221,7 +3175,7 @@ export default function OperationsReportsDashboardPage() {
                   {filteredCashierJournals.length > cashierPageSize && (
                     <div className="flex items-center justify-between mt-4 pt-4 border-t">
                       <div className="text-sm text-muted-foreground">
-                        عرض {((cashierPage - 1) * cashierPageSize) + 1} - {Math.min(cashierPage * cashierPageSize, filteredCashierJournals.length)} من {filteredCashierJournals.length}
+                        {t('pagination.showing')} {((cashierPage - 1) * cashierPageSize) + 1} - {Math.min(cashierPage * cashierPageSize, filteredCashierJournals.length)} {t('pagination.of')} {filteredCashierJournals.length}
                       </div>
                       <div className="flex items-center gap-2">
                         <Button
@@ -3230,8 +3184,7 @@ export default function OperationsReportsDashboardPage() {
                           onClick={() => setCashierPage(1)}
                           disabled={cashierPage === 1}
                           data-testid="cashier-page-first"
-                        >
-                          الأولى
+                        >{t('pagination.first')}
                         </Button>
                         <Button
                           variant="outline"
@@ -3239,8 +3192,7 @@ export default function OperationsReportsDashboardPage() {
                           onClick={() => setCashierPage(p => Math.max(1, p - 1))}
                           disabled={cashierPage === 1}
                           data-testid="cashier-page-prev"
-                        >
-                          السابق
+                        >{t('pagination.previous')}
                         </Button>
                         <span className="px-3 py-1 bg-muted rounded-md text-sm font-medium">
                           {cashierPage} / {Math.ceil(filteredCashierJournals.length / cashierPageSize)}
@@ -3251,8 +3203,7 @@ export default function OperationsReportsDashboardPage() {
                           onClick={() => setCashierPage(p => Math.min(Math.ceil(filteredCashierJournals.length / cashierPageSize), p + 1))}
                           disabled={cashierPage >= Math.ceil(filteredCashierJournals.length / cashierPageSize)}
                           data-testid="cashier-page-next"
-                        >
-                          التالي
+                        >{t('pagination.next')}
                         </Button>
                         <Button
                           variant="outline"
@@ -3260,8 +3211,7 @@ export default function OperationsReportsDashboardPage() {
                           onClick={() => setCashierPage(Math.ceil(filteredCashierJournals.length / cashierPageSize))}
                           disabled={cashierPage >= Math.ceil(filteredCashierJournals.length / cashierPageSize)}
                           data-testid="cashier-page-last"
-                        >
-                          الأخيرة
+                        >{t('pagination.last')}
                         </Button>
                       </div>
                     </div>
@@ -3273,20 +3223,17 @@ export default function OperationsReportsDashboardPage() {
             <TabsContent value="targets" className="space-y-6">
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <h2 className="text-lg font-semibold flex items-center gap-2">
-                  <Target className="w-5 h-5 text-amber-600" />
-                  تقرير المبيعات مقابل الأهداف - {currentYearMonth}
+                  <Target className="w-5 h-5 text-amber-600" />{t('targets.title')} - {currentYearMonth}
                 </h2>
                 <div className="flex gap-2">
                   <Link href="/targets-dashboard">
                     <Button variant="outline" className="gap-2" data-testid="link-targets-full">
-                      <ExternalLink className="w-4 h-4" />
-                      لوحة الأهداف الكاملة
+                      <ExternalLink className="w-4 h-4" />{t('targets.fullDashboard')}
                     </Button>
                   </Link>
                   <Link href="/targets-planning">
                     <Button className="gap-2 bg-amber-600 hover:bg-amber-700" data-testid="link-targets-planning">
-                      <Target className="w-4 h-4" />
-                      تخطيط الأهداف
+                      <Target className="w-4 h-4" />{t('targets.planning')}
                     </Button>
                   </Link>
                 </div>
@@ -3307,16 +3254,16 @@ export default function OperationsReportsDashboardPage() {
                 
                 return (
                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
-                    <KPICard title="الهدف الإجمالي" value={formatCurrency(totalTarget)} icon={Target} color="text-blue-600" bgColor="bg-blue-100" />
-                    <KPICard title="المتحقق" value={formatCurrency(totalAchieved)} icon={DollarSign} color="text-green-600" bgColor="bg-green-100" />
-                    <KPICard title="نسبة التحقيق" value={formatPercent(overallPercent)} icon={TrendingUp} 
+                    <KPICard title={t('targets.totalTarget')} value={formatCurrency(totalTarget)} icon={Target} color="text-blue-600" bgColor="bg-blue-100" />
+                    <KPICard title={t('targets.achieved')} value={formatCurrency(totalAchieved)} icon={DollarSign} color="text-green-600" bgColor="bg-green-100" />
+                    <KPICard title={t('targets.achievementRate')} value={formatPercent(overallPercent)} icon={TrendingUp} 
                       color={overallPercent >= 100 ? "text-green-600" : overallPercent >= 80 ? "text-amber-600" : "text-red-600"} 
                       bgColor={overallPercent >= 100 ? "bg-green-100" : overallPercent >= 80 ? "bg-amber-100" : "bg-red-100"} />
-                    <KPICard title="المتبقي" value={formatCurrency(Math.max(0, totalRemaining))} icon={Target} color="text-orange-600" bgColor="bg-orange-100" />
-                    <KPICard title="الأيام المتبقية" value={formatNumber(daysRemaining)} icon={Clock} color="text-purple-600" bgColor="bg-purple-100" />
-                    <KPICard title="المطلوب يومياً" value={formatCurrency(Math.max(0, requiredDaily))} icon={TrendingUp} color="text-indigo-600" bgColor="bg-indigo-100" />
-                    <KPICard title="فروع فوق الهدف" value={formatNumber(branchesAboveTarget)} icon={Trophy} color="text-green-600" bgColor="bg-green-100" />
-                    <KPICard title="فروع تحت 80%" value={formatNumber(branchesBelowTarget)} icon={AlertTriangle} color="text-red-600" bgColor="bg-red-100" />
+                    <KPICard title={t('targets.remaining')} value={formatCurrency(Math.max(0, totalRemaining))} icon={Target} color="text-orange-600" bgColor="bg-orange-100" />
+                    <KPICard title={t('targets.daysRemaining')} value={formatNumber(daysRemaining)} icon={Clock} color="text-purple-600" bgColor="bg-purple-100" />
+                    <KPICard title={t('targets.requiredDaily')} value={formatCurrency(Math.max(0, requiredDaily))} icon={TrendingUp} color="text-indigo-600" bgColor="bg-indigo-100" />
+                    <KPICard title={t('targets.branchesAboveTarget')} value={formatNumber(branchesAboveTarget)} icon={Trophy} color="text-green-600" bgColor="bg-green-100" />
+                    <KPICard title={t('targets.branchesBelow80')} value={formatNumber(branchesBelowTarget)} icon={AlertTriangle} color="text-red-600" bgColor="bg-red-100" />
                   </div>
                 );
               })()}
@@ -3326,8 +3273,7 @@ export default function OperationsReportsDashboardPage() {
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base flex items-center gap-2">
-                      <Building2 className="w-4 h-4 text-blue-600" />
-                      أداء الفروع مقابل الأهداف
+                      <Building2 className="w-4 h-4 text-blue-600" />{t('targets.branchVsTarget')}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -3344,8 +3290,8 @@ export default function OperationsReportsDashboardPage() {
                           <YAxis type="category" dataKey="name" fontSize={10} width={80} />
                           <Tooltip formatter={(value: number) => formatCurrency(value)} />
                           <Legend />
-                          <Bar dataKey="target" name="الهدف" fill="#94A3B8" />
-                          <Bar dataKey="achieved" name="المتحقق" fill="#10B981" />
+                          <Bar dataKey="target" name={t('targets.targetCol')} fill="#94A3B8" />
+                          <Bar dataKey="achieved" name={t('targets.achievedCol')} fill="#10B981" />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
@@ -3356,8 +3302,7 @@ export default function OperationsReportsDashboardPage() {
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base flex items-center gap-2">
-                      <TrendingUp className="w-4 h-4 text-green-600" />
-                      نسبة تحقيق الأهداف
+                      <TrendingUp className="w-4 h-4 text-green-600" />{t('targets.achievementRate')}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -3372,7 +3317,7 @@ export default function OperationsReportsDashboardPage() {
                           <XAxis dataKey="name" fontSize={10} />
                           <YAxis fontSize={10} domain={[0, 120]} tickFormatter={(v) => `${v}%`} />
                           <Tooltip formatter={(value: number) => `${value.toFixed(1)}%`} />
-                          <Bar dataKey="percent" name="نسبة التحقيق">
+                          <Bar dataKey="percent" name={t('targets.achievementRate')}>
                             {targetsProgress?.map((entry, index) => (
                               <Cell key={`cell-${index}`} fill={entry.achievementPercent >= 100 ? '#10B981' : entry.achievementPercent >= 80 ? '#F59E0B' : '#EF4444'} />
                             ))}
@@ -3389,8 +3334,7 @@ export default function OperationsReportsDashboardPage() {
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base flex items-center gap-2">
-                      <Trophy className="w-4 h-4 text-amber-500" />
-                      ترتيب الفروع
+                      <Trophy className="w-4 h-4 text-amber-500" />{t('targets.branchRanking')}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -3405,7 +3349,7 @@ export default function OperationsReportsDashboardPage() {
                             </span>
                             <div>
                               <p className="font-medium text-sm">{branch.branchName}</p>
-                              <p className="text-xs text-muted-foreground">الهدف: {formatCurrency(branch.target)}</p>
+                              <p className="text-xs text-muted-foreground">{t('targets.targetCol')}: {formatCurrency(branch.target)}</p>
                             </div>
                           </div>
                           <div className="text-left">
@@ -3417,7 +3361,7 @@ export default function OperationsReportsDashboardPage() {
                         </div>
                       ))}
                       {(!targetsLeaderboard?.branches || targetsLeaderboard.branches.length === 0) && (
-                        <p className="text-center text-muted-foreground py-4">لا توجد بيانات أهداف للشهر الحالي</p>
+                        <p className="text-center text-muted-foreground py-4">{t('targets.noTargetsData')}</p>
                       )}
                     </div>
                   </CardContent>
@@ -3427,8 +3371,7 @@ export default function OperationsReportsDashboardPage() {
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base flex items-center gap-2">
-                      <Activity className="w-4 h-4 text-purple-600" />
-                      التوقعات لنهاية الشهر
+                      <Activity className="w-4 h-4 text-purple-600" />{t('targets.endOfMonthForecast')}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -3455,13 +3398,13 @@ export default function OperationsReportsDashboardPage() {
                             />
                           </div>
                           <div className="flex justify-between mt-1 text-xs text-muted-foreground">
-                            <span>المتحقق: {formatCurrency(branch.achievedAmount)}</span>
-                            <span>المتوقع: {formatCurrency(branch.projectedTotal)}</span>
+                            <span>{t('targets.achievedLabel')} {formatCurrency(branch.achievedAmount)}</span>
+                            <span>{t('targets.projectedLabel')} {formatCurrency(branch.projectedTotal)}</span>
                           </div>
                         </div>
                       ))}
                       {(!targetsProgress || targetsProgress.length === 0) && (
-                        <p className="text-center text-muted-foreground py-4">لا توجد بيانات أهداف</p>
+                        <p className="text-center text-muted-foreground py-4">{t('targets.noTargetsShort')}</p>
                       )}
                     </div>
                   </CardContent>
@@ -3471,21 +3414,21 @@ export default function OperationsReportsDashboardPage() {
               {/* Details Table */}
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-base">تفاصيل أداء الفروع</CardTitle>
+                  <CardTitle className="text-base">{t('targets.branchDetails')}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b bg-muted/50">
-                          <th className="text-right py-3 px-4">الفرع</th>
-                          <th className="text-right py-3 px-4">الهدف</th>
-                          <th className="text-right py-3 px-4">المتحقق</th>
-                          <th className="text-right py-3 px-4">النسبة</th>
-                          <th className="text-right py-3 px-4">المتبقي</th>
-                          <th className="text-right py-3 px-4">متوسط يومي</th>
-                          <th className="text-right py-3 px-4">المتوقع</th>
-                          <th className="text-right py-3 px-4">الاتجاه</th>
+                          <th className="text-right py-3 px-4">{t('apps.branchCol')}</th>
+                          <th className="text-right py-3 px-4">{t('targets.targetCol')}</th>
+                          <th className="text-right py-3 px-4">{t('targets.achievedCol')}</th>
+                          <th className="text-right py-3 px-4">{t('apps.percentCol')}</th>
+                          <th className="text-right py-3 px-4">{t('targets.remainingCol')}</th>
+                          <th className="text-right py-3 px-4">{t('targets.dailyAvgCol')}</th>
+                          <th className="text-right py-3 px-4">{t('targets.projectedCol')}</th>
+                          <th className="text-right py-3 px-4">{t('targets.trendCol')}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -3510,22 +3453,21 @@ export default function OperationsReportsDashboardPage() {
                             <td className="py-3 px-4">
                               {branch.trend === 'up' ? (
                                 <Badge variant="default" className="bg-green-100 text-green-700">
-                                  <TrendingUp className="w-3 h-3 ml-1" /> صاعد
+                                  <TrendingUp className="w-3 h-3 ml-1" /> {t('targets.trendUp')}
                                 </Badge>
                               ) : branch.trend === 'down' ? (
                                 <Badge variant="destructive" className="bg-red-100 text-red-700">
-                                  <TrendingDown className="w-3 h-3 ml-1" /> هابط
+                                  <TrendingDown className="w-3 h-3 ml-1" /> {t('targets.trendDown')}
                                 </Badge>
                               ) : (
-                                <Badge variant="secondary">مستقر</Badge>
+                                <Badge variant="secondary">{t('targets.trendStable')}</Badge>
                               )}
                             </td>
                           </tr>
                         ))}
                         {(!targetsProgress || targetsProgress.length === 0) && (
                           <tr>
-                            <td colSpan={8} className="py-8 text-center text-muted-foreground">
-                              لا توجد أهداف محددة للشهر الحالي
+                            <td colSpan={8} className="py-8 text-center text-muted-foreground">{t('targets.noTargetsData')}
                             </td>
                           </tr>
                         )}
@@ -3538,7 +3480,7 @@ export default function OperationsReportsDashboardPage() {
 
             <TabsContent value="branches" className="space-y-6">
               <Card>
-                <CardHeader><CardTitle className="text-lg">مقارنة المبيعات بين الفروع</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-lg">{t('branches.salesComparison')}</CardTitle></CardHeader>
                 <CardContent>
                   <div className="h-[300px]">
                     <ResponsiveContainer width="100%" height="100%">
@@ -3548,7 +3490,7 @@ export default function OperationsReportsDashboardPage() {
                         <YAxis fontSize={12} />
                         <Tooltip formatter={(value: number) => formatCurrency(value)} />
                         <Legend />
-                        <Bar dataKey="totalSales" name="المبيعات" fill="#10B981" />
+                        <Bar dataKey="totalSales" name={t('branches.salesName')} fill="#10B981" />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -3556,17 +3498,17 @@ export default function OperationsReportsDashboardPage() {
               </Card>
 
               <Card>
-                <CardHeader><CardTitle className="text-lg">تفاصيل أداء الفروع</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-lg">{t('branches.branchDetails')}</CardTitle></CardHeader>
                 <CardContent>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b bg-muted/50">
-                          <th className="text-right py-3 px-4">الفرع</th>
-                          <th className="text-right py-3 px-4">المبيعات</th>
-                          <th className="text-right py-3 px-4">الأوامر</th>
-                          <th className="text-right py-3 px-4">نسبة الجودة</th>
-                          <th className="text-right py-3 px-4">متوسط الفاتورة</th>
+                          <th className="text-right py-3 px-4">{t('apps.branchCol')}</th>
+                          <th className="text-right py-3 px-4">{t('branches.salesCol')}</th>
+                          <th className="text-right py-3 px-4">{t('branches.ordersCol')}</th>
+                          <th className="text-right py-3 px-4">{t('branches.qualityCol')}</th>
+                          <th className="text-right py-3 px-4">{t('branches.avgTicketCol')}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -3598,8 +3540,7 @@ export default function OperationsReportsDashboardPage() {
             <TabsContent value="branch-overview" className="space-y-6">
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <h2 className="text-lg font-semibold flex items-center gap-2">
-                  <Package className="w-5 h-5 text-blue-600" />
-                  تقرير نظرة عامة على الفروع
+                  <Package className="w-5 h-5 text-blue-600" />{t('branchOverview.title')}
                 </h2>
               </div>
 
@@ -3607,7 +3548,7 @@ export default function OperationsReportsDashboardPage() {
                 <Card>
                   <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
                     <RefreshCw className="w-8 h-8 text-blue-600 animate-spin" />
-                    <p className="text-muted-foreground">جاري تحميل بيانات الفروع...</p>
+                    <p className="text-muted-foreground">{t('branchOverview.loading')}</p>
                   </CardContent>
                 </Card>
               )}
@@ -3615,12 +3556,12 @@ export default function OperationsReportsDashboardPage() {
               {!branchOverviewLoading && branchOverview?.summary && (
                 <>
                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                    <KPICard title="إجمالي الفروع" value={formatNumber(branchOverview.summary.totalBranches || 0)} icon={Building2} color="text-blue-600" bgColor="bg-blue-100" />
-                    <KPICard title="إجمالي الأصول" value={formatNumber(branchOverview.summary.totalAssets || 0)} icon={Package} color="text-purple-600" bgColor="bg-purple-100" />
-                    <KPICard title="أصول جاهزة" value={formatNumber(branchOverview.summary.totalGoodAssets || 0)} icon={CheckCircle} color="text-green-600" bgColor="bg-green-100" />
-                    <KPICard title="تحتاج صيانة" value={formatNumber(branchOverview.summary.totalMaintenanceNeeded || 0)} icon={AlertTriangle} color="text-orange-600" bgColor="bg-orange-100" />
-                    <KPICard title="فحص متأخر" value={formatNumber(branchOverview.summary.totalOverdueInspection || 0)} icon={Clock} color="text-red-600" bgColor="bg-red-100" />
-                    <KPICard title="نسبة الجاهزية" value={formatPercent(branchOverview.summary.overallReadinessPercent || 0)} icon={Target} 
+                    <KPICard title={t('branchOverview.totalBranches')} value={formatNumber(branchOverview.summary.totalBranches || 0)} icon={Building2} color="text-blue-600" bgColor="bg-blue-100" />
+                    <KPICard title={t('branchOverview.totalAssets')} value={formatNumber(branchOverview.summary.totalAssets || 0)} icon={Package} color="text-purple-600" bgColor="bg-purple-100" />
+                    <KPICard title={t('branchOverview.goodAssets')} value={formatNumber(branchOverview.summary.totalGoodAssets || 0)} icon={CheckCircle} color="text-green-600" bgColor="bg-green-100" />
+                    <KPICard title={t('branchOverview.maintenanceNeeded')} value={formatNumber(branchOverview.summary.totalMaintenanceNeeded || 0)} icon={AlertTriangle} color="text-orange-600" bgColor="bg-orange-100" />
+                    <KPICard title={t('branchOverview.overdueInspection')} value={formatNumber(branchOverview.summary.totalOverdueInspection || 0)} icon={Clock} color="text-red-600" bgColor="bg-red-100" />
+                    <KPICard title={t('branchOverview.readinessRate')} value={formatPercent(branchOverview.summary.overallReadinessPercent || 0)} icon={Target} 
                       color={branchOverview.summary.overallReadinessPercent >= 90 ? "text-green-600" : branchOverview.summary.overallReadinessPercent >= 75 ? "text-amber-600" : "text-red-600"} 
                       bgColor={branchOverview.summary.overallReadinessPercent >= 90 ? "bg-green-100" : branchOverview.summary.overallReadinessPercent >= 75 ? "bg-amber-100" : "bg-red-100"} />
                   </div>
@@ -3629,8 +3570,7 @@ export default function OperationsReportsDashboardPage() {
                     <Card>
                       <CardHeader className="pb-2">
                         <CardTitle className="text-base flex items-center gap-2">
-                          <PieChartIcon className="w-4 h-4 text-blue-600" />
-                          حالة التشغيل بالفروع
+                          <PieChartIcon className="w-4 h-4 text-blue-600" />{t('branchOverview.operationalStatusTitle')}
                         </CardTitle>
                       </CardHeader>
                       <CardContent>
@@ -3639,10 +3579,10 @@ export default function OperationsReportsDashboardPage() {
                             <PieChart>
                               <Pie
                                 data={[
-                                  { name: 'ممتاز', value: branchOverview.summary.branchesExcellent || 0, fill: '#10B981' },
-                                  { name: 'جيد', value: branchOverview.summary.branchesGood || 0, fill: '#3B82F6' },
-                                  { name: 'يحتاج اهتمام', value: branchOverview.summary.branchesNeedAttention || 0, fill: '#F59E0B' },
-                                  { name: 'حرج', value: branchOverview.summary.branchesCritical || 0, fill: '#EF4444' },
+                                  { name: t('branchOverview.excellent'), value: branchOverview.summary.branchesExcellent || 0, fill: '#10B981' },
+                                  { name: t('branchOverview.good'), value: branchOverview.summary.branchesGood || 0, fill: '#3B82F6' },
+                                  { name: t('branchOverview.needsAttention'), value: branchOverview.summary.branchesNeedAttention || 0, fill: '#F59E0B' },
+                                  { name: t('branchOverview.critical'), value: branchOverview.summary.branchesCritical || 0, fill: '#EF4444' },
                                 ]}
                                 cx="50%"
                                 cy="50%"
@@ -3664,8 +3604,7 @@ export default function OperationsReportsDashboardPage() {
                     <Card>
                       <CardHeader className="pb-2">
                         <CardTitle className="text-base flex items-center gap-2">
-                          <BarChart3 className="w-4 h-4 text-green-600" />
-                          جاهزية الأصول بالفروع
+                          <BarChart3 className="w-4 h-4 text-green-600" />{t('branchOverview.assetReadinessTitle')}
                         </CardTitle>
                       </CardHeader>
                       <CardContent>
@@ -3673,18 +3612,18 @@ export default function OperationsReportsDashboardPage() {
                           <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={branchOverview.branches?.map(b => ({
                               name: b.branchName,
-                              جاهز: b.assetReadiness.good,
-                              صيانة: b.assetReadiness.maintenance,
-                              تالف: b.assetReadiness.damaged,
+                              [t('branchOverview.ready')]: b.assetReadiness.good,
+                              [t('branchOverview.maintenance')]: b.assetReadiness.maintenance,
+                              [t('branchOverview.damaged')]: b.assetReadiness.damaged,
                             })) || []} layout="vertical">
                               <CartesianGrid strokeDasharray="3 3" />
                               <XAxis type="number" fontSize={10} />
                               <YAxis type="category" dataKey="name" fontSize={10} width={80} />
                               <Tooltip />
                               <Legend />
-                              <Bar dataKey="جاهز" stackId="a" fill="#10B981" />
-                              <Bar dataKey="صيانة" stackId="a" fill="#F59E0B" />
-                              <Bar dataKey="تالف" stackId="a" fill="#EF4444" />
+                              <Bar dataKey={t('branchOverview.ready')} stackId="a" fill="#10B981" />
+                              <Bar dataKey={t('branchOverview.maintenance')} stackId="a" fill="#F59E0B" />
+                              <Bar dataKey={t('branchOverview.damaged')} stackId="a" fill="#EF4444" />
                             </BarChart>
                           </ResponsiveContainer>
                         </div>
@@ -3694,21 +3633,21 @@ export default function OperationsReportsDashboardPage() {
 
                   <Card>
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-base">تفاصيل حالة الفروع</CardTitle>
+                      <CardTitle className="text-base">{t('branchOverview.branchDetailsTitle')}</CardTitle>
                     </CardHeader>
                     <CardContent>
                       <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                           <thead>
                             <tr className="border-b bg-muted/50">
-                              <th className="text-right py-3 px-4">الفرع</th>
-                              <th className="text-right py-3 px-4">الحالة</th>
-                              <th className="text-right py-3 px-4">الأصول</th>
-                              <th className="text-right py-3 px-4">جاهز</th>
-                              <th className="text-right py-3 px-4">صيانة</th>
-                              <th className="text-right py-3 px-4">نسبة الجاهزية</th>
-                              <th className="text-right py-3 px-4">فحص متأخر</th>
-                              <th className="text-right py-3 px-4">قيمة المخزون</th>
+                              <th className="text-right py-3 px-4">{t('apps.branchCol')}</th>
+                              <th className="text-right py-3 px-4">{t('cashierTab.statusCol')}</th>
+                              <th className="text-right py-3 px-4">{t('branchOverview.assetsCol')}</th>
+                              <th className="text-right py-3 px-4">{t('branchOverview.readyCol')}</th>
+                              <th className="text-right py-3 px-4">{t('branchOverview.maintenanceCol')}</th>
+                              <th className="text-right py-3 px-4">{t('branchOverview.readinessCol')}</th>
+                              <th className="text-right py-3 px-4">{t('branchOverview.overdueCol')}</th>
+                              <th className="text-right py-3 px-4">{t('branchOverview.inventoryValueCol')}</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -3730,9 +3669,7 @@ export default function OperationsReportsDashboardPage() {
                                     branch.operationalStatus === 'good' ? 'bg-blue-100 text-blue-700' :
                                     branch.operationalStatus === 'needs_attention' ? 'bg-amber-100 text-amber-700' : ''
                                   }>
-                                    {branch.operationalStatus === 'excellent' ? 'ممتاز' :
-                                     branch.operationalStatus === 'good' ? 'جيد' :
-                                     branch.operationalStatus === 'needs_attention' ? 'يحتاج اهتمام' : 'حرج'}
+                                    {branch.operationalStatus === 'excellent' ? t('branchOverview.excellent') : branch.operationalStatus === 'good' ? t('branchOverview.good') : branch.operationalStatus === 'needs_attention' ? t('branchOverview.needsAttention') : t('branchOverview.critical')}
                                   </Badge>
                                 </td>
                                 <td className="py-3 px-4">{formatNumber(branch.assetReadiness.total)}</td>
@@ -3755,8 +3692,7 @@ export default function OperationsReportsDashboardPage() {
                             ))}
                             {(!branchOverview.branches || branchOverview.branches.length === 0) && (
                               <tr>
-                                <td colSpan={8} className="py-8 text-center text-muted-foreground">
-                                  لا توجد بيانات فروع
+                                <td colSpan={8} className="py-8 text-center text-muted-foreground">{t('branchOverview.noData')}
                                 </td>
                               </tr>
                             )}
@@ -3788,7 +3724,7 @@ export default function OperationsReportsDashboardPage() {
                 
                 // Group by shift
                 const returnsByShift = journalsWithReturns.reduce((acc, j) => {
-                  const shift = j.shiftType || 'غير محدد';
+                  const shift = j.shiftType || 'unspecified';
                   if (!acc[shift]) acc[shift] = { count: 0, amount: 0 };
                   acc[shift].count++;
                   acc[shift].amount += j.returnAmount || 0;
@@ -3797,7 +3733,7 @@ export default function OperationsReportsDashboardPage() {
                 
                 // Group by payment method
                 const returnsByPaymentMethod = journalsWithReturns.reduce((acc, j) => {
-                  const method = j.returnPaymentMethod || 'غير محدد';
+                  const method = j.returnPaymentMethod || 'unspecified';
                   if (!acc[method]) acc[method] = { count: 0, amount: 0 };
                   acc[method].count++;
                   acc[method].amount += j.returnAmount || 0;
@@ -3806,20 +3742,12 @@ export default function OperationsReportsDashboardPage() {
                 
                 // Group by reason
                 const returnsByReason = journalsWithReturns.reduce((acc, j) => {
-                  const reason = j.returnReason || 'غير محدد';
+                  const reason = j.returnReason || 'unspecified';
                   if (!acc[reason]) acc[reason] = { count: 0, amount: 0 };
                   acc[reason].count++;
                   acc[reason].amount += j.returnAmount || 0;
                   return acc;
                 }, {} as Record<string, { count: number; amount: number }>);
-                
-                const SHIFT_LABELS: Record<string, string> = {
-                  morning: "صباحي",
-                  evening: "مسائي",
-                  night: "ليلي",
-                  "غير محدد": "غير محدد"
-                };
-
                 // Excel export for returns
                 const handleExportReturnsExcel = async () => {
                   const XLSX = await import("xlsx");
@@ -3827,81 +3755,81 @@ export default function OperationsReportsDashboardPage() {
                   
                   // Summary sheet
                   const summaryData = [
-                    ["تقرير المرتجعات التحليلي - BUTTER BAKERY"],
-                    ["الفترة:", `${filters.startDate} إلى ${filters.endDate}`],
+                    [`${t('returns.excelTitle')} - BUTTER BAKERY`],
+                    [t('returns.periodLabel'), `${filters.startDate} - ${filters.endDate}`],
                     [],
-                    ["الملخص"],
-                    ["عدد عمليات المرتجع", returnsCount],
-                    ["إجمالي المرتجعات", totalReturnAmount],
-                    ["الفروع المتأثرة", Object.keys(returnsByBranch).length],
-                    ["متوسط المرتجع", returnsCount > 0 ? totalReturnAmount / returnsCount : 0],
+                    [t('returns.summary')],
+                    [t('returns.returnCount'), returnsCount],
+                    [t('returns.totalReturns'), totalReturnAmount],
+                    [t('returns.affectedBranches'), Object.keys(returnsByBranch).length],
+                    [t('returns.avgReturn'), returnsCount > 0 ? totalReturnAmount / returnsCount : 0],
                   ];
                   const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
-                  XLSX.utils.book_append_sheet(wb, summarySheet, "الملخص");
+                  XLSX.utils.book_append_sheet(wb, summarySheet, t('returns.summarySheet'));
                   
                   // By Branch sheet
                   const branchData = [
-                    ["المرتجعات حسب الفرع"],
-                    ["الفرع", "العدد", "المبلغ", "النسبة"],
+                    [t('returns.returnsByBranch')],
+                    [t('returns.branchCol'), t('returns.countCol'), t('returns.amountCol'), t('returns.percentCol')],
                     ...Object.entries(returnsByBranch).map(([branch, data]) => [
                       branch, data.count, data.amount, totalReturnAmount > 0 ? `${((data.amount / totalReturnAmount) * 100).toFixed(1)}%` : "0%"
                     ])
                   ];
                   const branchSheet = XLSX.utils.aoa_to_sheet(branchData);
-                  XLSX.utils.book_append_sheet(wb, branchSheet, "حسب الفرع");
+                  XLSX.utils.book_append_sheet(wb, branchSheet, t('returns.byBranchSheet'));
                   
                   // By Shift sheet
                   const shiftData = [
-                    ["المرتجعات حسب الوردية"],
-                    ["الوردية", "العدد", "المبلغ"],
+                    [t('returns.returnsByShift')],
+                    [t('returns.shiftCol'), t('returns.countCol'), t('returns.amountCol')],
                     ...Object.entries(returnsByShift).map(([shift, data]) => [
-                      SHIFT_LABELS[shift] || shift, data.count, data.amount
+                      t(`shiftsShort.${shift}`) || shift, data.count, data.amount
                     ])
                   ];
                   const shiftSheet = XLSX.utils.aoa_to_sheet(shiftData);
-                  XLSX.utils.book_append_sheet(wb, shiftSheet, "حسب الوردية");
+                  XLSX.utils.book_append_sheet(wb, shiftSheet, t('returns.byShiftSheet'));
                   
                   // By Payment Method sheet
                   const paymentData = [
-                    ["المرتجعات حسب طريقة الدفع"],
-                    ["طريقة الدفع", "العدد", "المبلغ"],
+                    [t('returns.returnsByPayment')],
+                    [t('returns.paymentCol'), t('returns.countCol'), t('returns.amountCol')],
                     ...Object.entries(returnsByPaymentMethod).map(([method, data]) => [
-                      PAYMENT_METHOD_LABELS[method] || method, data.count, data.amount
+                      t(`paymentMethods.${method}`) || method, data.count, data.amount
                     ])
                   ];
                   const paymentSheet = XLSX.utils.aoa_to_sheet(paymentData);
-                  XLSX.utils.book_append_sheet(wb, paymentSheet, "حسب طريقة الدفع");
+                  XLSX.utils.book_append_sheet(wb, paymentSheet, t('returns.byPaymentSheet'));
                   
                   // By Reason sheet
                   const reasonData = [
-                    ["المرتجعات حسب السبب"],
-                    ["السبب", "العدد", "المبلغ"],
+                    [t('returns.returnsByReason')],
+                    [t('returns.reasonCol'), t('returns.countCol'), t('returns.amountCol')],
                     ...Object.entries(returnsByReason).map(([reason, data]) => [
                       reason, data.count, data.amount
                     ])
                   ];
                   const reasonSheet = XLSX.utils.aoa_to_sheet(reasonData);
-                  XLSX.utils.book_append_sheet(wb, reasonSheet, "حسب السبب");
+                  XLSX.utils.book_append_sheet(wb, reasonSheet, t('returns.byReasonSheet'));
                   
                   // Details sheet
                   const detailsData = [
-                    ["تفاصيل المرتجعات"],
-                    ["التاريخ", "الفرع", "الكاشير", "الوردية", "مبلغ المرتجع", "طريقة الدفع", "السبب", "رقم الفاتورة"],
+                    [t('returns.detailsTitle')],
+                    [t('returns.dateCol'), t('returns.branchCol'), t('returns.cashierCol'), t('returns.shiftCol'), t('returns.returnAmountCol'), t('returns.paymentCol'), t('returns.reasonCol'), t('returns.invoiceCol')],
                     ...journalsWithReturns.map(j => [
                       j.journalDate,
                       branches?.find(b => b.id === j.branchId)?.name || j.branchId,
                       j.cashierName || '-',
-                      SHIFT_LABELS[j.shiftType || ''] || j.shiftType || '-',
+                      t(`shiftsShort.${j.shiftType || ''}`) || j.shiftType || '-',
                       j.returnAmount || 0,
-                      PAYMENT_METHOD_LABELS[j.returnPaymentMethod || ''] || j.returnPaymentMethod || '-',
+                      t(`paymentMethods.${j.returnPaymentMethod || ''}`) || j.returnPaymentMethod || '-',
                       j.returnReason || '-',
                       j.returnReference || '-'
                     ])
                   ];
                   const detailsSheet = XLSX.utils.aoa_to_sheet(detailsData);
-                  XLSX.utils.book_append_sheet(wb, detailsSheet, "التفاصيل");
+                  XLSX.utils.book_append_sheet(wb, detailsSheet, t('returns.detailsSheet'));
                   
-                  XLSX.writeFile(wb, `تقرير_المرتجعات_${filters.startDate}_${filters.endDate}.xlsx`);
+                  XLSX.writeFile(wb, `returns_report_${filters.startDate}_${filters.endDate}.xlsx`);
                 };
 
                 return (
@@ -3909,7 +3837,7 @@ export default function OperationsReportsDashboardPage() {
                     <div className="flex items-center justify-between">
                       <h2 className="text-lg font-semibold flex items-center gap-2">
                         <Truck className="w-5 h-5 text-orange-600" />
-                        تقرير المرتجعات التحليلي
+                        {t('returns.title')}
                       </h2>
                       <div className="flex gap-2">
                         <Button 
@@ -3919,7 +3847,7 @@ export default function OperationsReportsDashboardPage() {
                           onClick={handleExportReturnsExcel}
                         >
                           <Download className="w-4 h-4" />
-                          تصدير Excel
+                          {t('returns.exportExcel')}
                         </Button>
                         <Button 
                           className="gap-2 bg-orange-600 hover:bg-orange-700" 
@@ -3930,13 +3858,13 @@ export default function OperationsReportsDashboardPage() {
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <title>تقرير المرتجعات</title>
+  <title>${t('returns.title')}</title>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
     @page { size: A4; margin: 10mm 10mm 20mm 10mm; }
     @media print {
       @page { margin-top: 10mm; margin-bottom: 20mm; }
-      body::after { content: "تقرير المرتجعات التحليلي - BUTTER BAKERY | ${new Date().toLocaleDateString('en-GB')}"; position: fixed; bottom: 5mm; left: 0; right: 0; text-align: center; font-size: 8px; color: #666; }
+      body::after { content: "${t('returns.pdfReportTitle')} | ${new Date().toLocaleDateString('en-GB')}"; position: fixed; bottom: 5mm; left: 0; right: 0; text-align: center; font-size: 8px; color: #666; }
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Cairo', Arial, sans-serif; direction: rtl; padding: 15px; background: white; color: #333; font-size: 10px; }
@@ -3964,23 +3892,23 @@ export default function OperationsReportsDashboardPage() {
   </style>
 </head>
 <body>
-  <button class="print-btn" onclick="window.print()">طباعة</button>
+  <button class="print-btn" onclick="window.print()">${t('pdf.print')}</button>
   <div class="header">
     <div class="header-logo">
       <div class="logo-circle"><span class="logo-text">B</span></div>
       <div>
         <div class="brand">BUTTER BAKERY</div>
-        <div class="title">تقرير المرتجعات التحليلي</div>
+        <div class="title">${t('returns.title')}</div>
       </div>
     </div>
     <div style="text-align: left; font-size: 11px;">
       <div style="color: #8B6914; font-weight: bold;">CEO COMMAND CENTER</div>
       <div style="background: #dbeafe; padding: 4px 8px; border-radius: 4px; margin-top: 4px; border: 1px solid #3b82f6;">
-        <strong style="color: #1e40af;">🏢 الفرع:</strong> <span style="color: #1e40af; font-weight: bold;">${filters.branchId ? (branches?.find(b => b.id === filters.branchId)?.name || filters.branchId) : 'جميع الفروع'}</span>
+        <strong style="color: #1e40af;">🏢 ${t('common.branch')}</strong> <span style="color: #1e40af; font-weight: bold;">${filters.branchId ? (branches?.find(b => b.id === filters.branchId)?.name || filters.branchId) : t('common.allBranches')}</span>
       </div>
       <div style="background: #fff7ed; padding: 4px 8px; border-radius: 4px; margin-top: 4px;">
-        <strong>الفترة:</strong> ${filters.startDate} إلى ${filters.endDate}
-        <br/><span style="font-size: 9px; color: #9a3412;">${Math.ceil((new Date(filters.endDate).getTime() - new Date(filters.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1} يوم</span>
+        <strong>${t('common.period')}</strong> ${filters.startDate} ${t('common.to')} ${filters.endDate}
+        <br/><span style="font-size: 9px; color: #9a3412;">${Math.ceil((new Date(filters.endDate).getTime() - new Date(filters.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1} ${t('common.day')}</span>
       </div>
     </div>
   </div>
@@ -3988,24 +3916,24 @@ export default function OperationsReportsDashboardPage() {
   <!-- ملخص تحليلي للمرتجعات -->
   <div style="background: linear-gradient(135deg, #9a3412 0%, #7c2d12 100%); color: white; padding: 15px; border-radius: 10px; margin-bottom: 15px;">
     <div style="text-align: center; margin-bottom: 10px;">
-      <span style="font-size: 14px; font-weight: bold;">📊 الملخص التحليلي للمرتجعات</span>
+      <span style="font-size: 14px; font-weight: bold;">📊 ${t('returns.analyticalSummary')}</span>
     </div>
     <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; text-align: center;">
       <div>
         <div style="font-size: 22px; font-weight: bold; color: #fbbf24;">${returnsCount}</div>
-        <div style="font-size: 9px; opacity: 0.8;">عدد عمليات المرتجع</div>
+        <div style="font-size: 9px; opacity: 0.8;">${t('returns.returnOps')}</div>
       </div>
       <div>
         <div style="font-size: 22px; font-weight: bold; color: #f87171;">${formatCurrency(totalReturnAmount)}</div>
-        <div style="font-size: 9px; opacity: 0.8;">إجمالي المرتجعات</div>
+        <div style="font-size: 9px; opacity: 0.8;">${t('returns.totalReturns')}</div>
       </div>
       <div>
         <div style="font-size: 22px; font-weight: bold; color: #a5b4fc;">${Object.keys(returnsByBranch).length}</div>
-        <div style="font-size: 9px; opacity: 0.8;">الفروع المتأثرة</div>
+        <div style="font-size: 9px; opacity: 0.8;">${t('returns.affectedBranches')}</div>
       </div>
       <div>
         <div style="font-size: 22px; font-weight: bold; color: #fcd34d;">${returnsCount > 0 ? formatCurrency(totalReturnAmount / returnsCount) : formatCurrency(0)}</div>
-        <div style="font-size: 9px; opacity: 0.8;">متوسط المرتجع</div>
+        <div style="font-size: 9px; opacity: 0.8;">${t('returns.avgReturn')}</div>
       </div>
     </div>
   </div>
@@ -4013,63 +3941,63 @@ export default function OperationsReportsDashboardPage() {
   <!-- مؤشرات الأداء -->
   <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 15px;">
     <div style="background: #fef2f2; border: 2px solid #dc2626; border-radius: 8px; padding: 12px; text-align: center;">
-      <div style="font-size: 10px; color: #991b1b;">📉 متوسط المرتجع اليومي</div>
+      <div style="font-size: 10px; color: #991b1b;">📉 ${t('returns.dailyAvgReturn')}</div>
       <div style="font-size: 16px; font-weight: bold; color: #dc2626;">${formatCurrency(totalReturnAmount / Math.max(1, Math.ceil((new Date(filters.endDate).getTime() - new Date(filters.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1))}</div>
     </div>
     <div style="background: #fff7ed; border: 2px solid #ea580c; border-radius: 8px; padding: 12px; text-align: center;">
-      <div style="font-size: 10px; color: #9a3412;">📊 عدد المرتجعات/يوم</div>
+      <div style="font-size: 10px; color: #9a3412;">📊 ${t('returns.dailyReturnCount')}</div>
       <div style="font-size: 16px; font-weight: bold; color: #ea580c;">${(returnsCount / Math.max(1, Math.ceil((new Date(filters.endDate).getTime() - new Date(filters.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1)).toFixed(1)}</div>
     </div>
     <div style="background: #fef3c7; border: 2px solid #d97706; border-radius: 8px; padding: 12px; text-align: center;">
-      <div style="font-size: 10px; color: #92400e;">🏢 أكثر فرع مرتجعات</div>
+      <div style="font-size: 10px; color: #92400e;">🏢 ${t('returns.topReturnBranch')}</div>
       <div style="font-size: 14px; font-weight: bold; color: #d97706;">${Object.entries(returnsByBranch).sort((a, b) => b[1].amount - a[1].amount)[0]?.[0] || '-'}</div>
     </div>
   </div>
 
   <div class="summary-grid">
-    <div class="summary-card"><div class="value">${returnsCount}</div><div class="label">عدد عمليات المرتجع</div></div>
-    <div class="summary-card"><div class="value amount-red">${formatCurrency(totalReturnAmount)}</div><div class="label">إجمالي المرتجعات</div></div>
-    <div class="summary-card"><div class="value">${Object.keys(returnsByBranch).length}</div><div class="label">الفروع المتأثرة</div></div>
-    <div class="summary-card"><div class="value">${returnsCount > 0 ? formatCurrency(totalReturnAmount / returnsCount) : formatCurrency(0)}</div><div class="label">متوسط المرتجع</div></div>
+    <div class="summary-card"><div class="value">${returnsCount}</div><div class="label">${t('returns.returnOps')}</div></div>
+    <div class="summary-card"><div class="value amount-red">${formatCurrency(totalReturnAmount)}</div><div class="label">${t('returns.totalReturns')}</div></div>
+    <div class="summary-card"><div class="value">${Object.keys(returnsByBranch).length}</div><div class="label">${t('returns.affectedBranches')}</div></div>
+    <div class="summary-card"><div class="value">${returnsCount > 0 ? formatCurrency(totalReturnAmount / returnsCount) : formatCurrency(0)}</div><div class="label">${t('returns.avgReturn')}</div></div>
   </div>
   <div class="section">
-    <div class="section-title">المرتجعات حسب الفرع</div>
-    <table><thead><tr><th>الفرع</th><th>العدد</th><th>المبلغ</th><th>النسبة</th></tr></thead><tbody>
+    <div class="section-title">${t('returns.byBranch')}</div>
+    <table><thead><tr><th>${t('returns.branchCol')}</th><th>${t('returns.countCol')}</th><th>${t('returns.amountCol')}</th><th>${t('returns.percentCol')}</th></tr></thead><tbody>
     ${Object.entries(returnsByBranch).map(([branch, data]) => `<tr><td>${branch}</td><td>${data.count}</td><td class="amount-red">${formatCurrency(data.amount)}</td><td>${totalReturnAmount > 0 ? ((data.amount / totalReturnAmount) * 100).toFixed(1) : 0}%</td></tr>`).join('')}
     </tbody></table>
   </div>
   <div class="section">
-    <div class="section-title">المرتجعات حسب الوردية</div>
-    <table><thead><tr><th>الوردية</th><th>العدد</th><th>المبلغ</th></tr></thead><tbody>
-    ${Object.entries(returnsByShift).map(([shift, data]) => `<tr><td>${SHIFT_LABELS[shift] || shift}</td><td>${data.count}</td><td class="amount-red">${formatCurrency(data.amount)}</td></tr>`).join('')}
+    <div class="section-title">${t('returns.byShift')}</div>
+    <table><thead><tr><th>${t('returns.shiftCol')}</th><th>${t('returns.countCol')}</th><th>${t('returns.amountCol')}</th></tr></thead><tbody>
+    ${Object.entries(returnsByShift).map(([shift, data]) => `<tr><td>${t(`shiftsShort.${shift}`) || shift}</td><td>${data.count}</td><td class="amount-red">${formatCurrency(data.amount)}</td></tr>`).join('')}
     </tbody></table>
   </div>
   <div class="section">
-    <div class="section-title">المرتجعات حسب طريقة الدفع</div>
-    <table><thead><tr><th>طريقة الدفع</th><th>العدد</th><th>المبلغ</th></tr></thead><tbody>
-    ${Object.entries(returnsByPaymentMethod).map(([method, data]) => `<tr><td>${PAYMENT_METHOD_LABELS[method] || method}</td><td>${data.count}</td><td class="amount-red">${formatCurrency(data.amount)}</td></tr>`).join('')}
+    <div class="section-title">${t('returns.byPayment')}</div>
+    <table><thead><tr><th>${t('returns.paymentMethodCol')}</th><th>${t('returns.countCol')}</th><th>${t('returns.amountCol')}</th></tr></thead><tbody>
+    ${Object.entries(returnsByPaymentMethod).map(([method, data]) => `<tr><td>${t(`paymentMethods.${method}`) || method}</td><td>${data.count}</td><td class="amount-red">${formatCurrency(data.amount)}</td></tr>`).join('')}
     </tbody></table>
   </div>
   <div class="section">
-    <div class="section-title">أسباب المرتجعات</div>
-    <table><thead><tr><th>السبب</th><th>العدد</th><th>المبلغ</th></tr></thead><tbody>
+    <div class="section-title">${t('returns.byReason')}</div>
+    <table><thead><tr><th>${t('returns.reasonCol')}</th><th>${t('returns.countCol')}</th><th>${t('returns.amountCol')}</th></tr></thead><tbody>
     ${Object.entries(returnsByReason).map(([reason, data]) => `<tr><td>${reason}</td><td>${data.count}</td><td class="amount-red">${formatCurrency(data.amount)}</td></tr>`).join('')}
     </tbody></table>
   </div>
   <div class="section">
-    <div class="section-title">تفاصيل المرتجعات (${returnsCount})</div>
-    <table><thead><tr><th>التاريخ</th><th>الفرع</th><th>الكاشير</th><th>الوردية</th><th>المبلغ</th><th>طريقة الدفع</th><th>السبب</th></tr></thead><tbody>
-    ${journalsWithReturns.map(j => `<tr><td>${j.journalDate}</td><td>${branches?.find(b => b.id === j.branchId)?.name || j.branchId}</td><td>${j.cashierName || '-'}</td><td>${SHIFT_LABELS[j.shiftType || ''] || j.shiftType || '-'}</td><td class="amount-red">${formatCurrency(j.returnAmount || 0)}</td><td>${PAYMENT_METHOD_LABELS[j.returnPaymentMethod || ''] || j.returnPaymentMethod || '-'}</td><td>${j.returnReason || '-'}</td></tr>`).join('')}
+    <div class="section-title">${t('returns.detailsTitle', { count: returnsCount })}</div>
+    <table><thead><tr><th>${t('returns.dateCol')}</th><th>${t('returns.branchCol')}</th><th>${t('returns.cashierCol')}</th><th>${t('returns.shiftCol')}</th><th>${t('returns.amountCol')}</th><th>${t('returns.paymentMethodCol')}</th><th>${t('returns.reasonCol')}</th></tr></thead><tbody>
+    ${journalsWithReturns.map(j => `<tr><td>${j.journalDate}</td><td>${branches?.find(b => b.id === j.branchId)?.name || j.branchId}</td><td>${j.cashierName || '-'}</td><td>${t(`shiftsShort.${j.shiftType || ''}`) || j.shiftType || '-'}</td><td class="amount-red">${formatCurrency(j.returnAmount || 0)}</td><td>${t(`paymentMethods.${j.returnPaymentMethod || ''}`) || j.returnPaymentMethod || '-'}</td><td>${j.returnReason || '-'}</td></tr>`).join('')}
     </tbody></table>
   </div>
-  <div class="footer"><span class="brand">BUTTER BAKERY SYSTEM - CEO COMMAND</span><span>تاريخ الطباعة: ${new Date().toLocaleDateString('en-GB')}</span></div>
+  <div class="footer"><span class="brand">BUTTER BAKERY SYSTEM - CEO COMMAND</span><span>${t('returns.printDate')} ${new Date().toLocaleDateString('en-GB')}</span></div>
 </body>
 </html>`;
                             printHtmlContent(htmlContent);
                           }}
                         >
                           <FileDown className="w-4 h-4" />
-                          تصدير PDF
+                          {t('returns.exportPDF')}
                         </Button>
                       </div>
                     </div>
@@ -4083,7 +4011,7 @@ export default function OperationsReportsDashboardPage() {
                               <Truck className="w-5 h-5 text-white" />
                             </div>
                             <div>
-                              <p className="text-xs text-orange-700">عدد عمليات المرتجع</p>
+                              <p className="text-xs text-orange-700">{t('returns.returnOps')}</p>
                               <p className="text-xl font-bold text-orange-800">{returnsCount}</p>
                             </div>
                           </div>
@@ -4096,7 +4024,7 @@ export default function OperationsReportsDashboardPage() {
                               <DollarSign className="w-5 h-5 text-white" />
                             </div>
                             <div>
-                              <p className="text-xs text-red-700">إجمالي المرتجعات</p>
+                              <p className="text-xs text-red-700">{t('returns.totalReturns')}</p>
                               <p className="text-xl font-bold text-red-800">{formatCurrency(totalReturnAmount)}</p>
                             </div>
                           </div>
@@ -4109,7 +4037,7 @@ export default function OperationsReportsDashboardPage() {
                               <Building2 className="w-5 h-5 text-white" />
                             </div>
                             <div>
-                              <p className="text-xs text-amber-700">الفروع المتأثرة</p>
+                              <p className="text-xs text-amber-700">{t('returns.affectedBranches')}</p>
                               <p className="text-xl font-bold text-amber-800">{Object.keys(returnsByBranch).length}</p>
                             </div>
                           </div>
@@ -4122,7 +4050,7 @@ export default function OperationsReportsDashboardPage() {
                               <TrendingDown className="w-5 h-5 text-white" />
                             </div>
                             <div>
-                              <p className="text-xs text-purple-700">متوسط المرتجع</p>
+                              <p className="text-xs text-purple-700">{t('returns.avgReturn')}</p>
                               <p className="text-xl font-bold text-purple-800">{returnsCount > 0 ? formatCurrency(totalReturnAmount / returnsCount) : formatCurrency(0)}</p>
                             </div>
                           </div>
@@ -4137,7 +4065,7 @@ export default function OperationsReportsDashboardPage() {
                           <CardHeader>
                             <CardTitle className="text-base flex items-center gap-2">
                               <Building2 className="w-5 h-5 text-orange-600" />
-                              المرتجعات حسب الفرع
+                              {t('returns.returnsByBranch')}
                             </CardTitle>
                           </CardHeader>
                           <CardContent>
@@ -4148,7 +4076,7 @@ export default function OperationsReportsDashboardPage() {
                                   <XAxis dataKey="branch" fontSize={10} angle={-45} textAnchor="end" height={60} />
                                   <YAxis fontSize={10} />
                                   <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                                  <Bar dataKey="amount" name="المبلغ" fill="#ea580c" radius={[4, 4, 0, 0]} />
+                                  <Bar dataKey="amount" name={t('returns.amount')} fill="#ea580c" radius={[4, 4, 0, 0]} />
                                 </BarChart>
                               </ResponsiveContainer>
                             </div>
@@ -4160,7 +4088,7 @@ export default function OperationsReportsDashboardPage() {
                           <CardHeader>
                             <CardTitle className="text-base flex items-center gap-2">
                               <Clock className="w-5 h-5 text-blue-600" />
-                              المرتجعات حسب الوردية
+                              {t('returns.returnsByShift')}
                             </CardTitle>
                           </CardHeader>
                           <CardContent>
@@ -4169,7 +4097,7 @@ export default function OperationsReportsDashboardPage() {
                                 <PieChart>
                                   <Pie
                                     data={Object.entries(returnsByShift).map(([shift, data]) => ({ 
-                                      name: SHIFT_LABELS[shift] || shift, 
+                                      name: t(`shiftsShort.${shift}`) || shift, 
                                       value: data.amount 
                                     }))}
                                     dataKey="value"
@@ -4196,7 +4124,7 @@ export default function OperationsReportsDashboardPage() {
                           <CardHeader>
                             <CardTitle className="text-base flex items-center gap-2">
                               <CreditCard className="w-5 h-5 text-green-600" />
-                              المرتجعات حسب طريقة الدفع
+                              {t('returns.returnsByPayment')}
                             </CardTitle>
                           </CardHeader>
                           <CardContent>
@@ -4204,8 +4132,8 @@ export default function OperationsReportsDashboardPage() {
                               {Object.entries(returnsByPaymentMethod).map(([method, data]) => (
                                 <div key={method} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                                   <div className="flex items-center gap-2">
-                                    <Badge variant="outline">{PAYMENT_METHOD_LABELS[method] || method}</Badge>
-                                    <span className="text-sm text-muted-foreground">({data.count} عملية)</span>
+                                    <Badge variant="outline">{t(`paymentMethods.${method}`) || method}</Badge>
+                                    <span className="text-sm text-muted-foreground">({data.count} {t('returns.operation')})</span>
                                   </div>
                                   <span className="font-semibold text-red-600">{formatCurrency(data.amount)}</span>
                                 </div>
@@ -4219,7 +4147,7 @@ export default function OperationsReportsDashboardPage() {
                           <CardHeader>
                             <CardTitle className="text-base flex items-center gap-2">
                               <ClipboardList className="w-5 h-5 text-purple-600" />
-                              أسباب المرتجعات
+                              {t('returns.returnReasons')}
                             </CardTitle>
                           </CardHeader>
                           <CardContent>
@@ -4242,7 +4170,7 @@ export default function OperationsReportsDashboardPage() {
                       <Card>
                         <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
                           <Truck className="w-12 h-12 text-muted-foreground" />
-                          <p className="text-muted-foreground">لا توجد مرتجعات في الفترة المحددة</p>
+                          <p className="text-muted-foreground">{t('returns.noReturns')}</p>
                         </CardContent>
                       </Card>
                     )}
@@ -4253,7 +4181,7 @@ export default function OperationsReportsDashboardPage() {
                         <CardHeader>
                           <CardTitle className="text-base flex items-center gap-2">
                             <FileText className="w-5 h-5 text-orange-600" />
-                            تفاصيل المرتجعات ({returnsCount})
+                            {t('returns.detailsTitle', { count: returnsCount })}
                           </CardTitle>
                         </CardHeader>
                         <CardContent>
@@ -4261,13 +4189,13 @@ export default function OperationsReportsDashboardPage() {
                             <table className="w-full text-sm">
                               <thead>
                                 <tr className="border-b bg-muted/50">
-                                  <th className="text-right py-3 px-4">التاريخ</th>
-                                  <th className="text-right py-3 px-4">الفرع</th>
-                                  <th className="text-right py-3 px-4">الكاشير</th>
-                                  <th className="text-right py-3 px-4">الوردية</th>
-                                  <th className="text-right py-3 px-4">مبلغ المرتجع</th>
-                                  <th className="text-right py-3 px-4">طريقة الدفع</th>
-                                  <th className="text-right py-3 px-4">السبب</th>
+                                  <th className="text-right py-3 px-4">{t('returns.dateCol')}</th>
+                                  <th className="text-right py-3 px-4">{t('returns.branchCol')}</th>
+                                  <th className="text-right py-3 px-4">{t('returns.cashierCol')}</th>
+                                  <th className="text-right py-3 px-4">{t('returns.shiftCol')}</th>
+                                  <th className="text-right py-3 px-4">{t('returns.returnAmountCol')}</th>
+                                  <th className="text-right py-3 px-4">{t('returns.paymentMethodCol')}</th>
+                                  <th className="text-right py-3 px-4">{t('returns.reasonCol')}</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -4277,10 +4205,10 @@ export default function OperationsReportsDashboardPage() {
                                     <td className="py-3 px-4">{branches?.find(b => b.id === journal.branchId)?.name || journal.branchId}</td>
                                     <td className="py-3 px-4">{journal.cashierName || '-'}</td>
                                     <td className="py-3 px-4">
-                                      <Badge variant="outline">{SHIFT_LABELS[journal.shiftType || ''] || journal.shiftType || '-'}</Badge>
+                                      <Badge variant="outline">{t(`shiftsShort.${journal.shiftType || ''}`) || journal.shiftType || '-'}</Badge>
                                     </td>
                                     <td className="py-3 px-4 font-semibold text-red-600">{formatCurrency(journal.returnAmount || 0)}</td>
-                                    <td className="py-3 px-4">{PAYMENT_METHOD_LABELS[journal.returnPaymentMethod || ''] || journal.returnPaymentMethod || '-'}</td>
+                                    <td className="py-3 px-4">{t(`paymentMethods.${journal.returnPaymentMethod || ''}`) || journal.returnPaymentMethod || '-'}</td>
                                     <td className="py-3 px-4 text-muted-foreground">{journal.returnReason || '-'}</td>
                                   </tr>
                                 ))}
@@ -4311,7 +4239,7 @@ export default function OperationsReportsDashboardPage() {
                 
                 // Group by Cashier
                 const discrepanciesByCashier = journalsWithDiscrepancies.reduce((acc, j) => {
-                  const cashierName = j.cashierName || 'غير محدد';
+                  const cashierName = j.cashierName || 'unspecified';
                   if (!acc[cashierName]) acc[cashierName] = { shortage: 0, surplus: 0, count: 0, journals: [] };
                   acc[cashierName].count++;
                   if ((j.discrepancyAmount || 0) < 0) {
@@ -4338,7 +4266,7 @@ export default function OperationsReportsDashboardPage() {
                 
                 // Group by Shift
                 const discrepanciesByShift = journalsWithDiscrepancies.reduce((acc, j) => {
-                  const shift = j.shiftType || 'غير محدد';
+                  const shift = j.shiftType || 'unspecified';
                   if (!acc[shift]) acc[shift] = { shortage: 0, surplus: 0, count: 0 };
                   acc[shift].count++;
                   if ((j.discrepancyAmount || 0) < 0) {
@@ -4348,14 +4276,6 @@ export default function OperationsReportsDashboardPage() {
                   }
                   return acc;
                 }, {} as Record<string, { shortage: number; surplus: number; count: number }>);
-                
-                const SHIFT_LABELS: Record<string, string> = {
-                  morning: "صباحي",
-                  evening: "مسائي",
-                  night: "ليلي",
-                  "غير محدد": "غير محدد"
-                };
-
                 // Excel export for discrepancies
                 const handleExportDiscrepanciesExcel = async () => {
                   const XLSX = await import("xlsx");
@@ -4363,71 +4283,71 @@ export default function OperationsReportsDashboardPage() {
                   
                   // Summary sheet
                   const summaryData = [
-                    ["تقرير فروقات المدفوعات التحليلي - BUTTER BAKERY"],
-                    ["الفترة:", `${filters.startDate} إلى ${filters.endDate}`],
+                    [t('discrepancies.reportTitle') + ' - BUTTER BAKERY'],
+                    [t('returns.periodLabel'), `${filters.startDate} - ${filters.endDate}`],
                     [],
-                    ["الملخص"],
-                    ["حالات العجز", shortages.length],
-                    ["إجمالي العجز", totalShortageAmount],
-                    ["حالات الفائض", surpluses.length],
-                    ["إجمالي الفائض", totalSurplusAmount],
-                    ["صافي الفروقات", netDiscrepancy],
+                    [t('returns.summary')],
+                    [t('discrepancies.shortageCases'), shortages.length],
+                    [t('discrepancies.totalShortage'), totalShortageAmount],
+                    [t('discrepancies.surplusCases'), surpluses.length],
+                    [t('discrepancies.totalSurplus'), totalSurplusAmount],
+                    [t('discrepancies.netDiscrepancies'), netDiscrepancy],
                   ];
                   const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
-                  XLSX.utils.book_append_sheet(wb, summarySheet, "الملخص");
+                  XLSX.utils.book_append_sheet(wb, summarySheet, t('returns.summarySheet'));
                   
                   // By Cashier sheet
                   const cashierData = [
-                    ["الفروقات حسب الكاشير"],
-                    ["الكاشير", "عدد الحالات", "إجمالي العجز", "إجمالي الفائض", "الصافي"],
+                    [t('discrepancies.byCashierTitle')],
+                    [t('discrepancies.cashierCol'), t('discrepancies.casesCountCol'), t('discrepancies.totalShortageCol'), t('discrepancies.totalSurplusCol'), t('discrepancies.netCol')],
                     ...Object.entries(discrepanciesByCashier).map(([cashier, data]) => [
                       cashier, data.count, data.shortage, data.surplus, data.surplus - data.shortage
                     ])
                   ];
                   const cashierSheet = XLSX.utils.aoa_to_sheet(cashierData);
-                  XLSX.utils.book_append_sheet(wb, cashierSheet, "حسب الكاشير");
+                  XLSX.utils.book_append_sheet(wb, cashierSheet, t('discrepancies.byCashierSheetName'));
                   
                   // By Branch sheet
                   const branchData = [
-                    ["الفروقات حسب الفرع"],
-                    ["الفرع", "عدد الحالات", "إجمالي العجز", "إجمالي الفائض", "الصافي"],
+                    [t('discrepancies.byBranchTitle')],
+                    [t('discrepancies.branchCol'), t('discrepancies.casesCountCol'), t('discrepancies.totalShortageCol'), t('discrepancies.totalSurplusCol'), t('discrepancies.netCol')],
                     ...Object.entries(discrepanciesByBranch).map(([branch, data]) => [
                       branch, data.count, data.shortage, data.surplus, data.surplus - data.shortage
                     ])
                   ];
                   const branchSheet = XLSX.utils.aoa_to_sheet(branchData);
-                  XLSX.utils.book_append_sheet(wb, branchSheet, "حسب الفرع");
+                  XLSX.utils.book_append_sheet(wb, branchSheet, t('returns.byBranchSheet'));
                   
                   // By Shift sheet
                   const shiftData = [
-                    ["الفروقات حسب الوردية"],
-                    ["الوردية", "عدد الحالات", "إجمالي العجز", "إجمالي الفائض", "الصافي"],
+                    [t('discrepancies.byShiftTitle')],
+                    [t('discrepancies.shiftCol'), t('discrepancies.casesCountCol'), t('discrepancies.totalShortageCol'), t('discrepancies.totalSurplusCol'), t('discrepancies.netCol')],
                     ...Object.entries(discrepanciesByShift).map(([shift, data]) => [
-                      SHIFT_LABELS[shift] || shift, data.count, data.shortage, data.surplus, data.surplus - data.shortage
+                      t(`shiftsShort.${shift}`) || shift, data.count, data.shortage, data.surplus, data.surplus - data.shortage
                     ])
                   ];
                   const shiftSheet = XLSX.utils.aoa_to_sheet(shiftData);
-                  XLSX.utils.book_append_sheet(wb, shiftSheet, "حسب الوردية");
+                  XLSX.utils.book_append_sheet(wb, shiftSheet, t('returns.byShiftSheet'));
                   
                   // Details sheet
                   const detailsData = [
-                    ["تفاصيل الفروقات"],
-                    ["التاريخ", "الفرع", "الكاشير", "الوردية", "إجمالي المبيعات", "مبلغ الفرق", "الحالة", "ملاحظات"],
+                    [t('discrepancies.detailsExcelTitle')],
+                    [t('discrepancies.dateCol'), t('discrepancies.branchCol'), t('discrepancies.cashierCol'), t('discrepancies.shiftCol'), t('discrepancies.totalSalesCol'), t('discrepancies.discrepancyAmount'), t('discrepancies.statusCol'), t('discrepancies.notesCol')],
                     ...journalsWithDiscrepancies.map(j => [
                       j.journalDate,
                       branches?.find(b => b.id === j.branchId)?.name || j.branchId,
                       j.cashierName || '-',
-                      SHIFT_LABELS[j.shiftType || ''] || j.shiftType || '-',
+                      t(`shiftsShort.${j.shiftType || ''}`) || j.shiftType || '-',
                       j.totalSales || 0,
                       j.discrepancyAmount || 0,
-                      j.discrepancyStatus === 'shortage' ? 'عجز' : j.discrepancyStatus === 'surplus' ? 'فائض' : 'متوازن',
+                      t(`discrepancyStatuses.${j.discrepancyStatus || 'balanced'}`),
                       j.notes || '-'
                     ])
                   ];
                   const detailsSheet = XLSX.utils.aoa_to_sheet(detailsData);
-                  XLSX.utils.book_append_sheet(wb, detailsSheet, "التفاصيل");
+                  XLSX.utils.book_append_sheet(wb, detailsSheet, t('returns.detailsSheet'));
                   
-                  XLSX.writeFile(wb, `تقرير_الفروقات_${filters.startDate}_${filters.endDate}.xlsx`);
+                  XLSX.writeFile(wb, `${t('discrepancies.excelFileName')}_${filters.startDate}_${filters.endDate}.xlsx`);
                 };
 
                 return (
@@ -4435,7 +4355,7 @@ export default function OperationsReportsDashboardPage() {
                     <div className="flex items-center justify-between">
                       <h2 className="text-lg font-semibold flex items-center gap-2">
                         <AlertTriangle className="w-5 h-5 text-red-600" />
-                        تقرير فروقات المدفوعات التحليلي
+                        {t('discrepancies.reportTitle')}
                       </h2>
                       <div className="flex gap-2">
                         <Button 
@@ -4445,7 +4365,7 @@ export default function OperationsReportsDashboardPage() {
                           onClick={handleExportDiscrepanciesExcel}
                         >
                           <Download className="w-4 h-4" />
-                          تصدير Excel
+                          {t('discrepancies.exportExcel')}
                         </Button>
                         <Button 
                           className="gap-2 bg-red-600 hover:bg-red-700" 
@@ -4456,13 +4376,13 @@ export default function OperationsReportsDashboardPage() {
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <title>تقرير فروقات المدفوعات</title>
+  <title>${t('discrepancies.reportTitle')}</title>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
     @page { size: A4; margin: 10mm 10mm 20mm 10mm; }
     @media print {
       @page { margin-top: 10mm; margin-bottom: 20mm; }
-      body::after { content: "تقرير فروقات المدفوعات - BUTTER BAKERY | ${new Date().toLocaleDateString('en-GB')}"; position: fixed; bottom: 5mm; left: 0; right: 0; text-align: center; font-size: 8px; color: #666; }
+      body::after { content: "${t('discrepancies.pdfFooterText')} - BUTTER BAKERY | ${new Date().toLocaleDateString('en-GB')}"; position: fixed; bottom: 5mm; left: 0; right: 0; text-align: center; font-size: 8px; color: #666; }
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Cairo', Arial, sans-serif; direction: rtl; padding: 15px; background: white; color: #333; font-size: 10px; }
@@ -4498,23 +4418,23 @@ export default function OperationsReportsDashboardPage() {
   </style>
 </head>
 <body>
-  <button class="print-btn" onclick="window.print()">طباعة</button>
+  <button class="print-btn" onclick="window.print()">${t('pdf.print')}</button>
   <div class="header">
     <div class="header-logo">
       <div class="logo-circle"><span class="logo-text">B</span></div>
       <div>
         <div class="brand">BUTTER BAKERY</div>
-        <div class="title">تقرير فروقات المدفوعات التحليلي</div>
+        <div class="title">${t('discrepancies.reportTitle')}</div>
       </div>
     </div>
     <div style="text-align: left; font-size: 11px;">
       <div style="color: #8B6914; font-weight: bold;">CEO COMMAND CENTER</div>
       <div style="background: #dbeafe; padding: 4px 8px; border-radius: 4px; margin-top: 4px; border: 1px solid #3b82f6;">
-        <strong style="color: #1e40af;">🏢 الفرع:</strong> <span style="color: #1e40af; font-weight: bold;">${filters.branchId ? (branches?.find(b => b.id === filters.branchId)?.name || filters.branchId) : 'جميع الفروع'}</span>
+        <strong style="color: #1e40af;">🏢 ${t('common.branch')}</strong> <span style="color: #1e40af; font-weight: bold;">${filters.branchId ? (branches?.find(b => b.id === filters.branchId)?.name || filters.branchId) : t('common.allBranches')}</span>
       </div>
       <div style="background: #fef3c7; padding: 4px 8px; border-radius: 4px; margin-top: 4px;">
-        <strong>الفترة:</strong> ${filters.startDate} إلى ${filters.endDate}
-        <br/><span style="font-size: 9px; color: #92400e;">${Math.ceil((new Date(filters.endDate).getTime() - new Date(filters.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1} يوم</span>
+        <strong>${t('common.period')}</strong> ${filters.startDate} ${t('common.to')} ${filters.endDate}
+        <br/><span style="font-size: 9px; color: #92400e;">${Math.ceil((new Date(filters.endDate).getTime() - new Date(filters.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1} ${t('common.day')}</span>
       </div>
     </div>
   </div>
@@ -4522,24 +4442,24 @@ export default function OperationsReportsDashboardPage() {
   <!-- ملخص تحليلي شامل -->
   <div style="background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%); color: white; padding: 15px; border-radius: 10px; margin-bottom: 15px;">
     <div style="text-align: center; margin-bottom: 10px;">
-      <span style="font-size: 14px; font-weight: bold;">📊 الملخص التحليلي الشامل</span>
+      <span style="font-size: 14px; font-weight: bold;">📊 ${t('discrepancies.comprehensiveSummary')}</span>
     </div>
     <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; text-align: center;">
       <div>
         <div style="font-size: 22px; font-weight: bold; color: #fbbf24;">${journalsWithDiscrepancies.length}</div>
-        <div style="font-size: 9px; opacity: 0.8;">إجمالي حالات الفروقات</div>
+        <div style="font-size: 9px; opacity: 0.8;">${t('discrepancies.totalDiscrepancyCases')}</div>
       </div>
       <div>
         <div style="font-size: 22px; font-weight: bold; color: #f87171;">${formatCurrency(totalShortageAmount)}</div>
-        <div style="font-size: 9px; opacity: 0.8;">إجمالي العجز</div>
+        <div style="font-size: 9px; opacity: 0.8;">${t('discrepancies.totalShortage')}</div>
       </div>
       <div>
         <div style="font-size: 22px; font-weight: bold; color: #4ade80;">${formatCurrency(totalSurplusAmount)}</div>
-        <div style="font-size: 9px; opacity: 0.8;">إجمالي الفائض</div>
+        <div style="font-size: 9px; opacity: 0.8;">${t('discrepancies.totalSurplus')}</div>
       </div>
       <div>
         <div style="font-size: 22px; font-weight: bold; color: ${netDiscrepancy < 0 ? '#f87171' : '#4ade80'};">${formatCurrency(netDiscrepancy)}</div>
-        <div style="font-size: 9px; opacity: 0.8;">صافي الفروقات</div>
+        <div style="font-size: 9px; opacity: 0.8;">${t('discrepancies.netDiscrepancies')}</div>
       </div>
     </div>
   </div>
@@ -4547,34 +4467,34 @@ export default function OperationsReportsDashboardPage() {
   <!-- مؤشرات الأداء الرئيسية -->
   <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 15px;">
     <div style="background: #fef2f2; border: 2px solid #dc2626; border-radius: 8px; padding: 12px; text-align: center;">
-      <div style="font-size: 10px; color: #991b1b;">📉 متوسط العجز اليومي</div>
+      <div style="font-size: 10px; color: #991b1b;">📉 ${t('discrepancies.dailyAvgShortage')}</div>
       <div style="font-size: 16px; font-weight: bold; color: #dc2626;">${formatCurrency(totalShortageAmount / Math.max(1, Math.ceil((new Date(filters.endDate).getTime() - new Date(filters.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1))}</div>
     </div>
     <div style="background: #dcfce7; border: 2px solid #166534; border-radius: 8px; padding: 12px; text-align: center;">
-      <div style="font-size: 10px; color: #166534;">📈 متوسط الفائض اليومي</div>
+      <div style="font-size: 10px; color: #166534;">📈 ${t('discrepancies.dailyAvgSurplus')}</div>
       <div style="font-size: 16px; font-weight: bold; color: #166534;">${formatCurrency(totalSurplusAmount / Math.max(1, Math.ceil((new Date(filters.endDate).getTime() - new Date(filters.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1))}</div>
     </div>
     <div style="background: #fef3c7; border: 2px solid #d97706; border-radius: 8px; padding: 12px; text-align: center;">
-      <div style="font-size: 10px; color: #92400e;">⚖️ نسبة العجز للفائض</div>
+      <div style="font-size: 10px; color: #92400e;">⚖️ ${t('discrepancies.shortageToSurplusRatio')}</div>
       <div style="font-size: 16px; font-weight: bold; color: #d97706;">${totalSurplusAmount > 0 ? (totalShortageAmount / totalSurplusAmount * 100).toFixed(0) : 0}%</div>
     </div>
   </div>
 
   <div class="summary-grid">
-    <div class="summary-card shortage"><div class="value shortage">${shortages.length}</div><div class="label">حالات العجز</div></div>
-    <div class="summary-card shortage"><div class="value shortage">${formatCurrency(totalShortageAmount)}</div><div class="label">إجمالي العجز</div></div>
-    <div class="summary-card surplus"><div class="value surplus">${surpluses.length}</div><div class="label">حالات الفائض</div></div>
-    <div class="summary-card surplus"><div class="value surplus">${formatCurrency(totalSurplusAmount)}</div><div class="label">إجمالي الفائض</div></div>
-    <div class="summary-card ${netDiscrepancy < 0 ? 'shortage' : 'surplus'}"><div class="value ${netDiscrepancy < 0 ? 'shortage' : 'surplus'}">${formatCurrency(netDiscrepancy)}</div><div class="label">صافي الفروقات</div></div>
+    <div class="summary-card shortage"><div class="value shortage">${shortages.length}</div><div class="label">${t('discrepancies.shortageCases')}</div></div>
+    <div class="summary-card shortage"><div class="value shortage">${formatCurrency(totalShortageAmount)}</div><div class="label">${t('discrepancies.totalShortage')}</div></div>
+    <div class="summary-card surplus"><div class="value surplus">${surpluses.length}</div><div class="label">${t('discrepancies.surplusCases')}</div></div>
+    <div class="summary-card surplus"><div class="value surplus">${formatCurrency(totalSurplusAmount)}</div><div class="label">${t('discrepancies.totalSurplus')}</div></div>
+    <div class="summary-card ${netDiscrepancy < 0 ? 'shortage' : 'surplus'}"><div class="value ${netDiscrepancy < 0 ? 'shortage' : 'surplus'}">${formatCurrency(netDiscrepancy)}</div><div class="label">${t('discrepancies.netDiscrepancies')}</div></div>
   </div>
 
   <!-- أكبر الفروقات -->
   ${journalsWithDiscrepancies.length > 0 ? `
   <div style="background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 10px; margin-bottom: 15px;">
-    <div style="font-size: 11px; font-weight: bold; color: #991b1b; margin-bottom: 8px;">⚠️ أكبر 3 فروقات في الفترة:</div>
+    <div style="font-size: 11px; font-weight: bold; color: #991b1b; margin-bottom: 8px;">⚠️ ${t('discrepancies.topDiscrepancies')}</div>
     ${[...journalsWithDiscrepancies].sort((a, b) => Math.abs(b.discrepancyAmount || 0) - Math.abs(a.discrepancyAmount || 0)).slice(0, 3).map((j, i) => `
       <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dashed #fca5a5; font-size: 9px;">
-        <span>#${i + 1} ${j.journalDate} - ${j.cashierName || 'غير محدد'} (${branches?.find(b => b.id === j.branchId)?.name || j.branchId})</span>
+        <span>#${i + 1} ${j.journalDate} - ${j.cashierName || 'unspecified'} (${branches?.find(b => b.id === j.branchId)?.name || j.branchId})</span>
         <span style="font-weight: bold; color: ${(j.discrepancyAmount || 0) < 0 ? '#dc2626' : '#166534'};">${formatCurrency(j.discrepancyAmount || 0)}</span>
       </div>
     `).join('')}
@@ -4582,37 +4502,37 @@ export default function OperationsReportsDashboardPage() {
   ` : ''}
 
   <div class="section">
-    <div class="section-title">الفروقات حسب الكاشير</div>
-    <table><thead><tr><th>الكاشير</th><th>عدد الحالات</th><th>إجمالي العجز</th><th>إجمالي الفائض</th><th>الصافي</th></tr></thead><tbody>
+    <div class="section-title">${t('discrepancies.byCashierTitle')}</div>
+    <table><thead><tr><th>${t('discrepancies.cashierCol')}</th><th>${t('discrepancies.casesCountCol')}</th><th>${t('discrepancies.totalShortageCol')}</th><th>${t('discrepancies.totalSurplusCol')}</th><th>${t('discrepancies.netCol')}</th></tr></thead><tbody>
     ${Object.entries(discrepanciesByCashier).map(([cashier, data]) => `<tr><td>${cashier}</td><td>${data.count}</td><td class="shortage">${formatCurrency(data.shortage)}</td><td class="surplus">${formatCurrency(data.surplus)}</td><td class="${data.surplus - data.shortage < 0 ? 'shortage' : 'surplus'}">${formatCurrency(data.surplus - data.shortage)}</td></tr>`).join('')}
     </tbody></table>
   </div>
   <div class="section">
-    <div class="section-title">الفروقات حسب الفرع</div>
-    <table><thead><tr><th>الفرع</th><th>عدد الحالات</th><th>إجمالي العجز</th><th>إجمالي الفائض</th><th>الصافي</th></tr></thead><tbody>
+    <div class="section-title">${t('discrepancies.byBranchTitle')}</div>
+    <table><thead><tr><th>${t('discrepancies.branchCol')}</th><th>${t('discrepancies.casesCountCol')}</th><th>${t('discrepancies.totalShortageCol')}</th><th>${t('discrepancies.totalSurplusCol')}</th><th>${t('discrepancies.netCol')}</th></tr></thead><tbody>
     ${Object.entries(discrepanciesByBranch).map(([branch, data]) => `<tr><td>${branch}</td><td>${data.count}</td><td class="shortage">${formatCurrency(data.shortage)}</td><td class="surplus">${formatCurrency(data.surplus)}</td><td class="${data.surplus - data.shortage < 0 ? 'shortage' : 'surplus'}">${formatCurrency(data.surplus - data.shortage)}</td></tr>`).join('')}
     </tbody></table>
   </div>
   <div class="section">
-    <div class="section-title">الفروقات حسب الوردية</div>
-    <table><thead><tr><th>الوردية</th><th>عدد الحالات</th><th>إجمالي العجز</th><th>إجمالي الفائض</th><th>الصافي</th></tr></thead><tbody>
-    ${Object.entries(discrepanciesByShift).map(([shift, data]) => `<tr><td>${SHIFT_LABELS[shift] || shift}</td><td>${data.count}</td><td class="shortage">${formatCurrency(data.shortage)}</td><td class="surplus">${formatCurrency(data.surplus)}</td><td class="${data.surplus - data.shortage < 0 ? 'shortage' : 'surplus'}">${formatCurrency(data.surplus - data.shortage)}</td></tr>`).join('')}
+    <div class="section-title">${t('discrepancies.byShiftTitle')}</div>
+    <table><thead><tr><th>${t('discrepancies.shiftCol')}</th><th>${t('discrepancies.casesCountCol')}</th><th>${t('discrepancies.totalShortageCol')}</th><th>${t('discrepancies.totalSurplusCol')}</th><th>${t('discrepancies.netCol')}</th></tr></thead><tbody>
+    ${Object.entries(discrepanciesByShift).map(([shift, data]) => `<tr><td>${t(`shiftsShort.${shift}`) || shift}</td><td>${data.count}</td><td class="shortage">${formatCurrency(data.shortage)}</td><td class="surplus">${formatCurrency(data.surplus)}</td><td class="${data.surplus - data.shortage < 0 ? 'shortage' : 'surplus'}">${formatCurrency(data.surplus - data.shortage)}</td></tr>`).join('')}
     </tbody></table>
   </div>
   <div class="section">
-    <div class="section-title">تفاصيل الفروقات (${journalsWithDiscrepancies.length})</div>
-    <table><thead><tr><th>التاريخ</th><th>الفرع</th><th>الكاشير</th><th>الوردية</th><th>المبيعات</th><th>مبلغ الفرق</th><th>الحالة</th></tr></thead><tbody>
-    ${journalsWithDiscrepancies.map(j => `<tr><td>${j.journalDate}</td><td>${branches?.find(b => b.id === j.branchId)?.name || j.branchId}</td><td>${j.cashierName || '-'}</td><td>${SHIFT_LABELS[j.shiftType || ''] || j.shiftType || '-'}</td><td>${formatCurrency(j.totalSales || 0)}</td><td class="${(j.discrepancyAmount || 0) < 0 ? 'shortage' : 'surplus'}">${formatCurrency(j.discrepancyAmount || 0)}</td><td>${j.discrepancyStatus === 'shortage' ? 'عجز' : j.discrepancyStatus === 'surplus' ? 'فائض' : 'متوازن'}</td></tr>`).join('')}
+    <div class="section-title">${t('discrepancies.detailsTitle', { count: journalsWithDiscrepancies.length })}</div>
+    <table><thead><tr><th>${t('discrepancies.dateCol')}</th><th>${t('discrepancies.branchCol')}</th><th>${t('discrepancies.cashierCol')}</th><th>${t('discrepancies.shiftCol')}</th><th>${t('discrepancies.salesCol')}</th><th>${t('discrepancies.discrepancyAmount')}</th><th>${t('discrepancies.statusCol')}</th></tr></thead><tbody>
+    ${journalsWithDiscrepancies.map(j => `<tr><td>${j.journalDate}</td><td>${branches?.find(b => b.id === j.branchId)?.name || j.branchId}</td><td>${j.cashierName || '-'}</td><td>${t(`shiftsShort.${j.shiftType || ''}`) || j.shiftType || '-'}</td><td>${formatCurrency(j.totalSales || 0)}</td><td class="${(j.discrepancyAmount || 0) < 0 ? 'shortage' : 'surplus'}">${formatCurrency(j.discrepancyAmount || 0)}</td><td>${t(`discrepancyStatuses.${j.discrepancyStatus || 'balanced'}`)}</td></tr>`).join('')}
     </tbody></table>
   </div>
-  <div class="footer"><span class="brand">BUTTER BAKERY SYSTEM - CEO COMMAND</span><span>تاريخ الطباعة: ${new Date().toLocaleDateString('en-GB')}</span></div>
+  <div class="footer"><span class="brand">BUTTER BAKERY SYSTEM - CEO COMMAND</span><span>${t('returns.printDate')} ${new Date().toLocaleDateString('en-GB')}</span></div>
 </body>
 </html>`;
                             printHtmlContent(htmlContent);
                           }}
                         >
                           <FileDown className="w-4 h-4" />
-                          تصدير PDF
+                          {t('discrepancies.exportPDF')}
                         </Button>
                       </div>
                     </div>
@@ -4626,7 +4546,7 @@ export default function OperationsReportsDashboardPage() {
                               <TrendingDown className="w-5 h-5 text-white" />
                             </div>
                             <div>
-                              <p className="text-xs text-red-700">حالات العجز</p>
+                              <p className="text-xs text-red-700">{t('discrepancies.shortageCases')}</p>
                               <p className="text-xl font-bold text-red-800">{shortages.length}</p>
                             </div>
                           </div>
@@ -4639,7 +4559,7 @@ export default function OperationsReportsDashboardPage() {
                               <DollarSign className="w-5 h-5 text-white" />
                             </div>
                             <div>
-                              <p className="text-xs text-red-700">إجمالي العجز</p>
+                              <p className="text-xs text-red-700">{t('discrepancies.totalShortage')}</p>
                               <p className="text-xl font-bold text-red-800">{formatCurrency(totalShortageAmount)}</p>
                             </div>
                           </div>
@@ -4652,7 +4572,7 @@ export default function OperationsReportsDashboardPage() {
                               <TrendingUp className="w-5 h-5 text-white" />
                             </div>
                             <div>
-                              <p className="text-xs text-green-700">حالات الفائض</p>
+                              <p className="text-xs text-green-700">{t('discrepancies.surplusCases')}</p>
                               <p className="text-xl font-bold text-green-800">{surpluses.length}</p>
                             </div>
                           </div>
@@ -4665,7 +4585,7 @@ export default function OperationsReportsDashboardPage() {
                               <DollarSign className="w-5 h-5 text-white" />
                             </div>
                             <div>
-                              <p className="text-xs text-green-700">إجمالي الفائض</p>
+                              <p className="text-xs text-green-700">{t('discrepancies.totalSurplus')}</p>
                               <p className="text-xl font-bold text-green-800">{formatCurrency(totalSurplusAmount)}</p>
                             </div>
                           </div>
@@ -4680,8 +4600,8 @@ export default function OperationsReportsDashboardPage() {
                           <div className="flex items-center gap-3">
                             <AlertTriangle className={`w-6 h-6 ${netDiscrepancy < 0 ? 'text-red-600' : netDiscrepancy > 0 ? 'text-green-600' : 'text-gray-600'}`} />
                             <div>
-                              <p className="text-sm font-medium">صافي الفروقات</p>
-                              <p className="text-xs text-muted-foreground">الفائض - العجز = الصافي</p>
+                              <p className="text-sm font-medium">{t('discrepancies.netDiscrepancies')}</p>
+                              <p className="text-xs text-muted-foreground">{t('discrepancies.netFormula')}</p>
                             </div>
                           </div>
                           <div className={`text-2xl font-bold ${netDiscrepancy < 0 ? 'text-red-600' : netDiscrepancy > 0 ? 'text-green-600' : 'text-gray-600'}`}>
@@ -4698,9 +4618,9 @@ export default function OperationsReportsDashboardPage() {
                           <CardHeader>
                             <CardTitle className="text-base flex items-center gap-2">
                               <User className="w-5 h-5 text-blue-600" />
-                              الفروقات حسب الكاشير
+                              {t('discrepancies.byCashier')}
                             </CardTitle>
-                            <CardDescription>تحليل أداء كل كاشير من حيث العجز والفائض</CardDescription>
+                            <CardDescription>{t('discrepancies.byCashierDesc')}</CardDescription>
                           </CardHeader>
                           <CardContent>
                             <div className="space-y-3">
@@ -4713,15 +4633,15 @@ export default function OperationsReportsDashboardPage() {
                                       <div className="flex items-center gap-2">
                                         <User className="w-4 h-4 text-gray-500" />
                                         <span className="font-medium">{cashier}</span>
-                                        <Badge variant="outline" className="text-xs">{data.count} حالة</Badge>
+                                        <Badge variant="outline" className="text-xs">{t('discrepancies.caseCount', { count: data.count })}</Badge>
                                       </div>
                                       <span className={`font-bold ${data.surplus - data.shortage < 0 ? 'text-red-600' : 'text-green-600'}`}>
                                         {formatCurrency(data.surplus - data.shortage)}
                                       </span>
                                     </div>
                                     <div className="flex gap-4 text-xs">
-                                      <span className="text-red-600">عجز: {formatCurrency(data.shortage)}</span>
-                                      <span className="text-green-600">فائض: {formatCurrency(data.surplus)}</span>
+                                      <span className="text-red-600">{t('discrepancies.shortage')}: {formatCurrency(data.shortage)}</span>
+                                      <span className="text-green-600">{t('discrepancies.surplus')}: {formatCurrency(data.surplus)}</span>
                                     </div>
                                   </div>
                                 ))}
@@ -4734,7 +4654,7 @@ export default function OperationsReportsDashboardPage() {
                           <CardHeader>
                             <CardTitle className="text-base flex items-center gap-2">
                               <Building2 className="w-5 h-5 text-amber-600" />
-                              الفروقات حسب الفرع
+                              {t('discrepancies.byBranch')}
                             </CardTitle>
                           </CardHeader>
                           <CardContent>
@@ -4753,8 +4673,8 @@ export default function OperationsReportsDashboardPage() {
                                   <YAxis dataKey="branch" type="category" fontSize={10} width={80} />
                                   <Tooltip formatter={(value: number) => formatCurrency(value)} />
                                   <Legend />
-                                  <Bar dataKey="shortage" name="عجز" fill="#dc2626" stackId="a" />
-                                  <Bar dataKey="surplus" name="فائض" fill="#16a34a" stackId="b" />
+                                  <Bar dataKey="shortage" name={t('discrepancies.shortage')} fill="#dc2626" stackId="a" />
+                                  <Bar dataKey="surplus" name={t('discrepancies.surplus')} fill="#16a34a" stackId="b" />
                                 </BarChart>
                               </ResponsiveContainer>
                             </div>
@@ -4766,14 +4686,14 @@ export default function OperationsReportsDashboardPage() {
                           <CardHeader>
                             <CardTitle className="text-base flex items-center gap-2">
                               <Clock className="w-5 h-5 text-purple-600" />
-                              الفروقات حسب الوردية
+                              {t('discrepancies.byShift')}
                             </CardTitle>
                           </CardHeader>
                           <CardContent>
                             <div className="h-[250px]">
                               <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={Object.entries(discrepanciesByShift).map(([shift, data]) => ({ 
-                                  shift: SHIFT_LABELS[shift] || shift, 
+                                  shift: t(`shiftsShort.${shift}`) || shift, 
                                   shortage: data.shortage,
                                   surplus: data.surplus,
                                   net: data.surplus - data.shortage
@@ -4783,8 +4703,8 @@ export default function OperationsReportsDashboardPage() {
                                   <YAxis fontSize={10} />
                                   <Tooltip formatter={(value: number) => formatCurrency(value)} />
                                   <Legend />
-                                  <Bar dataKey="shortage" name="عجز" fill="#dc2626" />
-                                  <Bar dataKey="surplus" name="فائض" fill="#16a34a" />
+                                  <Bar dataKey="shortage" name={t('discrepancies.shortage')} fill="#dc2626" />
+                                  <Bar dataKey="surplus" name={t('discrepancies.surplus')} fill="#16a34a" />
                                 </BarChart>
                               </ResponsiveContainer>
                             </div>
@@ -4796,9 +4716,9 @@ export default function OperationsReportsDashboardPage() {
                           <CardHeader>
                             <CardTitle className="text-base flex items-center gap-2">
                               <AlertTriangle className="w-5 h-5 text-red-600" />
-                              أكبر حالات الفروقات
+                              {t('discrepancies.topCases')}
                             </CardTitle>
-                            <CardDescription>الحالات التي تحتاج متابعة فورية</CardDescription>
+                            <CardDescription>{t('discrepancies.topCasesDesc')}</CardDescription>
                           </CardHeader>
                           <CardContent>
                             <div className="space-y-2">
@@ -4809,7 +4729,7 @@ export default function OperationsReportsDashboardPage() {
                                   <div key={journal.id} className="flex items-center justify-between p-2 bg-gray-50 rounded border">
                                     <div className="flex items-center gap-2">
                                       <Badge variant={journal.discrepancyStatus === 'shortage' ? 'destructive' : 'default'} className="text-xs">
-                                        {DISCREPANCY_STATUS_LABELS[journal.discrepancyStatus || 'balanced']}
+                                        {t(`discrepancyStatuses.${journal.discrepancyStatus || 'balanced'}`)}
                                       </Badge>
                                       <span className="text-sm">{journal.cashierName}</span>
                                       <span className="text-xs text-muted-foreground">{journal.journalDate}</span>
@@ -4827,7 +4747,7 @@ export default function OperationsReportsDashboardPage() {
                       <Card>
                         <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
                           <CheckCircle className="w-12 h-12 text-green-600" />
-                          <p className="text-green-700 font-medium">لا توجد فروقات في الفترة المحددة - أداء ممتاز!</p>
+                          <p className="text-green-700 font-medium">{t('discrepancies.noDiscrepancies')}</p>
                         </CardContent>
                       </Card>
                     )}
@@ -4838,7 +4758,7 @@ export default function OperationsReportsDashboardPage() {
                         <CardHeader>
                           <CardTitle className="text-base flex items-center gap-2">
                             <FileText className="w-5 h-5 text-red-600" />
-                            تفاصيل الفروقات ({journalsWithDiscrepancies.length})
+                            {t('discrepancies.detailsTitle', { count: journalsWithDiscrepancies.length })}
                           </CardTitle>
                         </CardHeader>
                         <CardContent>
@@ -4846,13 +4766,13 @@ export default function OperationsReportsDashboardPage() {
                             <table className="w-full text-sm">
                               <thead>
                                 <tr className="border-b bg-muted/50">
-                                  <th className="text-right py-3 px-4">التاريخ</th>
-                                  <th className="text-right py-3 px-4">الفرع</th>
-                                  <th className="text-right py-3 px-4">الكاشير</th>
-                                  <th className="text-right py-3 px-4">الوردية</th>
-                                  <th className="text-right py-3 px-4">المبيعات</th>
-                                  <th className="text-right py-3 px-4">مبلغ الفرق</th>
-                                  <th className="text-right py-3 px-4">الحالة</th>
+                                  <th className="text-right py-3 px-4">{t('discrepancies.dateCol')}</th>
+                                  <th className="text-right py-3 px-4">{t('discrepancies.branchCol')}</th>
+                                  <th className="text-right py-3 px-4">{t('discrepancies.cashierCol')}</th>
+                                  <th className="text-right py-3 px-4">{t('discrepancies.shiftCol')}</th>
+                                  <th className="text-right py-3 px-4">{t('discrepancies.salesCol')}</th>
+                                  <th className="text-right py-3 px-4">{t('discrepancies.discrepancyAmount')}</th>
+                                  <th className="text-right py-3 px-4">{t('discrepancies.statusCol')}</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -4862,7 +4782,7 @@ export default function OperationsReportsDashboardPage() {
                                     <td className="py-3 px-4">{branches?.find(b => b.id === journal.branchId)?.name || journal.branchId}</td>
                                     <td className="py-3 px-4 font-medium">{journal.cashierName || '-'}</td>
                                     <td className="py-3 px-4">
-                                      <Badge variant="outline">{SHIFT_LABELS[journal.shiftType || ''] || journal.shiftType || '-'}</Badge>
+                                      <Badge variant="outline">{t(`shiftsShort.${journal.shiftType || ''}`) || journal.shiftType || '-'}</Badge>
                                     </td>
                                     <td className="py-3 px-4">{formatCurrency(journal.totalSales || 0)}</td>
                                     <td className={`py-3 px-4 font-bold ${journal.discrepancyStatus === 'shortage' ? 'text-red-600' : journal.discrepancyStatus === 'surplus' ? 'text-green-600' : 'text-gray-600'}`}>
@@ -4870,7 +4790,7 @@ export default function OperationsReportsDashboardPage() {
                                     </td>
                                     <td className="py-3 px-4">
                                       <Badge variant={journal.discrepancyStatus === 'shortage' ? 'destructive' : journal.discrepancyStatus === 'surplus' ? 'default' : 'secondary'}>
-                                        {DISCREPANCY_STATUS_LABELS[journal.discrepancyStatus || 'balanced']}
+                                        {t(`discrepancyStatuses.${journal.discrepancyStatus || 'balanced'}`)}
                                       </Badge>
                                     </td>
                                   </tr>
@@ -4899,7 +4819,7 @@ export default function OperationsReportsDashboardPage() {
                   <div className="flex items-center justify-between">
                     <h2 className="text-lg font-semibold flex items-center gap-2">
                       <CreditCard className="w-5 h-5 text-indigo-600" />
-                      تحليل مطابقة طرق الدفع (POS vs Terminal)
+                      {t('paymentMismatch.title')}
                     </h2>
                     <div className="flex gap-2">
                       <Button 
@@ -4913,7 +4833,7 @@ export default function OperationsReportsDashboardPage() {
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <title>تقرير مطابقة طرق الدفع</title>
+  <title>${t('paymentMismatch.title')}</title>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
     @page { size: A4 portrait; margin: 10mm 10mm 20mm 10mm; }
@@ -4923,12 +4843,12 @@ export default function OperationsReportsDashboardPage() {
     .page-footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; font-size: 8px; color: #666; padding: 5px; border-top: 1px solid #eee; background: white; }
     @media print { 
       .print-btn { display: none !important; }
-      body::after { content: "تقرير مطابقة طرق الدفع - BUTTER BAKERY | ${new Date().toLocaleDateString('en-GB')}"; position: fixed; bottom: 5mm; left: 0; right: 0; text-align: center; font-size: 8px; color: #666; }
+      body::after { content: "${t('paymentMismatch.title')} - BUTTER BAKERY | ${new Date().toLocaleDateString('en-GB')}"; position: fixed; bottom: 5mm; left: 0; right: 0; text-align: center; font-size: 8px; color: #666; }
     }
   </style>
 </head>
 <body>
-  <button class="print-btn" onclick="window.print()">طباعة</button>
+  <button class="print-btn" onclick="window.print()">${t('pdf.print')}</button>
   <div style="padding: 5px;">
                               <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #6366f1; padding-bottom: 15px; margin-bottom: 15px;">
                                 <div style="display: flex; align-items: center; gap: 12px;">
@@ -4937,47 +4857,47 @@ export default function OperationsReportsDashboardPage() {
                                   </div>
                                   <div>
                                     <div style="font-size: 12px; font-weight: bold; color: #8B6914;">BUTTER BAKERY</div>
-                                    <h1 style="color: #6366f1; font-size: 16px; font-weight: bold; margin: 0;">تقرير مطابقة طرق الدفع (POS vs Terminal)</h1>
+                                    <h1 style="color: #6366f1; font-size: 16px; font-weight: bold; margin: 0;">${t('paymentMismatch.title')}</h1>
                                   </div>
                                 </div>
                                 <div style="text-align: left; font-size: 10px;">
                                   <div style="color: #8B6914; font-weight: bold;">CEO COMMAND CENTER</div>
                                   <div style="background: #dbeafe; padding: 3px 6px; border-radius: 4px; margin-top: 3px; border: 1px solid #3b82f6;">
-                                    <strong style="color: #1e40af;">🏢 الفرع:</strong> <span style="color: #1e40af; font-weight: bold;">${filters.branchId ? (branches?.find(b => b.id === filters.branchId)?.name || filters.branchId) : 'جميع الفروع'}</span>
+                                    <strong style="color: #1e40af;">🏢 ${t('common.branch')}</strong> <span style="color: #1e40af; font-weight: bold;">${filters.branchId ? (branches?.find(b => b.id === filters.branchId)?.name || filters.branchId) : t('common.allBranches')}</span>
                                   </div>
                                   <div style="background: #e0e7ff; padding: 3px 6px; border-radius: 4px; margin-top: 3px;">
-                                    <strong>الفترة:</strong> ${filters.startDate} إلى ${filters.endDate}
-                                    <br/><span style="font-size: 8px; color: #4338ca;">${Math.ceil((new Date(filters.endDate).getTime() - new Date(filters.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1} يوم</span>
+                                    <strong>${t('common.period')}</strong> ${filters.startDate} ${t('common.to')} ${filters.endDate}
+                                    <br/><span style="font-size: 8px; color: #4338ca;">${Math.ceil((new Date(filters.endDate).getTime() - new Date(filters.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1} ${t('common.day')}</span>
                                   </div>
-                                  <div style="color: #888; font-size: 9px; margin-top: 3px;">⚙️ حد الفرق: 0.50 ريال</div>
+                                  <div style="color: #888; font-size: 9px; margin-top: 3px;">⚙️ ${t('paymentMismatch.acceptableThreshold')} ${t('paymentMismatch.thresholdAmount')}</div>
                                 </div>
                               </div>
 
                               <!-- الملخص التحليلي الشامل -->
                               <div style="background: linear-gradient(135deg, #312e81 0%, #1e1b4b 100%); color: white; padding: 15px; border-radius: 10px; margin-bottom: 15px;">
                                 <div style="text-align: center; margin-bottom: 10px;">
-                                  <span style="font-size: 14px; font-weight: bold;">📊 الملخص التحليلي الشامل لمطابقة طرق الدفع</span>
+                                  <span style="font-size: 14px; font-weight: bold;">📊 ${t('paymentMismatch.summaryAnalysis')}</span>
                                 </div>
                                 <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; text-align: center;">
                                   <div>
                                     <div style="font-size: 20px; font-weight: bold; color: #a5b4fc;">${paymentMismatchData.summary.totalJournals}</div>
-                                    <div style="font-size: 8px; opacity: 0.8;">إجمالي اليوميات</div>
+                                    <div style="font-size: 8px; opacity: 0.8;">${t('paymentMismatch.totalJournals')}</div>
                                   </div>
                                   <div>
                                     <div style="font-size: 20px; font-weight: bold; color: #fbbf24;">${paymentMismatchData.summary.journalsWithMismatch}</div>
-                                    <div style="font-size: 8px; opacity: 0.8;">يوميات بها فروقات</div>
+                                    <div style="font-size: 8px; opacity: 0.8;">${t('paymentMismatch.journalsWithMismatch')}</div>
                                   </div>
                                   <div>
                                     <div style="font-size: 20px; font-weight: bold; color: #f87171;">${paymentMismatchData.summary.mismatchRate.toFixed(1)}%</div>
-                                    <div style="font-size: 8px; opacity: 0.8;">نسبة الخطأ</div>
+                                    <div style="font-size: 8px; opacity: 0.8;">${t('paymentMismatch.errorRate')}</div>
                                   </div>
                                   <div>
                                     <div style="font-size: 20px; font-weight: bold; color: #c084fc;">${formatCurrencyLocal(paymentMismatchData.summary.totalMismatchAmount)}</div>
-                                    <div style="font-size: 8px; opacity: 0.8;">إجمالي الفروقات</div>
+                                    <div style="font-size: 8px; opacity: 0.8;">${t('paymentMismatch.totalMismatches')}</div>
                                   </div>
                                   <div>
                                     <div style="font-size: 20px; font-weight: bold; color: ${paymentMismatchData.summary.journalsWithMismatch > 0 ? '#f87171' : '#4ade80'};">${paymentMismatchData.summary.journalsWithMismatch > 0 ? '⚠️' : '✅'}</div>
-                                    <div style="font-size: 8px; opacity: 0.8;">الحالة</div>
+                                    <div style="font-size: 8px; opacity: 0.8;">${t('paymentMismatch.statusLabel')}</div>
                                   </div>
                                 </div>
                               </div>
@@ -4985,19 +4905,19 @@ export default function OperationsReportsDashboardPage() {
                               <!-- مؤشرات الأداء -->
                               <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 15px;">
                                 <div style="background: #eff6ff; border: 2px solid #2563eb; border-radius: 8px; padding: 10px; text-align: center;">
-                                  <div style="font-size: 9px; color: #1e40af;">💰 إجمالي POS</div>
+                                  <div style="font-size: 9px; color: #1e40af;">💰 ${t('paymentMismatch.posLabel')}</div>
                                   <div style="font-size: 14px; font-weight: bold; color: #1e40af;">${formatCurrencyLocal(paymentMismatchData.summary.totalPosAmount)}</div>
                                 </div>
                                 <div style="background: #dcfce7; border: 2px solid #166534; border-radius: 8px; padding: 10px; text-align: center;">
-                                  <div style="font-size: 9px; color: #166534;">🏦 إجمالي Terminal</div>
+                                  <div style="font-size: 9px; color: #166534;">🏦 ${t('paymentMismatch.terminalLabel')}</div>
                                   <div style="font-size: 14px; font-weight: bold; color: #166534;">${formatCurrencyLocal(paymentMismatchData.summary.totalTerminalAmount)}</div>
                                 </div>
                                 <div style="background: #fef2f2; border: 2px solid #dc2626; border-radius: 8px; padding: 10px; text-align: center;">
-                                  <div style="font-size: 9px; color: #991b1b;">📉 الفرق الكلي</div>
+                                  <div style="font-size: 9px; color: #991b1b;">📉 ${t('paymentMismatch.differenceLabel')}</div>
                                   <div style="font-size: 14px; font-weight: bold; color: #dc2626;">${formatCurrencyLocal(Math.abs(paymentMismatchData.summary.totalPosAmount - paymentMismatchData.summary.totalTerminalAmount))}</div>
                                 </div>
                                 <div style="background: #fef3c7; border: 2px solid #d97706; border-radius: 8px; padding: 10px; text-align: center;">
-                                  <div style="font-size: 9px; color: #92400e;">📊 متوسط الخطأ/يومية</div>
+                                  <div style="font-size: 9px; color: #92400e;">📊 ${t('paymentMismatch.avgErrorPerJournal')}</div>
                                   <div style="font-size: 14px; font-weight: bold; color: #d97706;">${paymentMismatchData.summary.journalsWithMismatch > 0 ? formatCurrencyLocal(paymentMismatchData.summary.totalMismatchAmount / paymentMismatchData.summary.journalsWithMismatch) : '0'}</div>
                                 </div>
                               </div>
@@ -5005,16 +4925,16 @@ export default function OperationsReportsDashboardPage() {
                               <!-- مقارنة POS vs Terminal -->
                               <div style="background: linear-gradient(90deg, #eff6ff 0%, #dcfce7 100%); padding: 12px; border-radius: 8px; margin-bottom: 15px; display: flex; justify-content: space-around; align-items: center; border: 1px solid #94a3b8;">
                                 <div style="text-align: center; flex: 1;">
-                                  <div style="font-size: 10px; color: #1e40af; font-weight: bold;">💳 نظام نقاط البيع (POS)</div>
+                                  <div style="font-size: 10px; color: #1e40af; font-weight: bold;">💳 ${t('paymentMismatch.posSystem')}</div>
                                   <div style="font-size: 22px; font-weight: bold; color: #1e40af;">${formatCurrencyLocal(paymentMismatchData.summary.totalPosAmount)}</div>
                                 </div>
                                 <div style="text-align: center; padding: 0 20px;">
                                   <div style="font-size: 28px; color: #dc2626;">⚡</div>
-                                  <div style="font-size: 10px; color: #dc2626; font-weight: bold;">الفرق</div>
+                                  <div style="font-size: 10px; color: #dc2626; font-weight: bold;">${t('paymentMismatch.difference')}</div>
                                   <div style="font-size: 14px; font-weight: bold; color: #dc2626;">${formatCurrencyLocal(Math.abs(paymentMismatchData.summary.totalPosAmount - paymentMismatchData.summary.totalTerminalAmount))}</div>
                                 </div>
                                 <div style="text-align: center; flex: 1;">
-                                  <div style="font-size: 10px; color: #166534; font-weight: bold;">🏦 جهاز الدفع (Terminal)</div>
+                                  <div style="font-size: 10px; color: #166534; font-weight: bold;">🏦 ${t('paymentMismatch.terminalSystem')}</div>
                                   <div style="font-size: 22px; font-weight: bold; color: #166534;">${formatCurrencyLocal(paymentMismatchData.summary.totalTerminalAmount)}</div>
                                 </div>
                               </div>
@@ -5022,22 +4942,22 @@ export default function OperationsReportsDashboardPage() {
                               ${paymentMismatchData.byCashier.length > 0 ? `
                               <!-- أكثر الكاشيرين أخطاء -->
                               <div style="background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 10px; margin-bottom: 15px;">
-                                <div style="font-size: 11px; font-weight: bold; color: #991b1b; margin-bottom: 8px;">⚠️ أعلى 3 كاشيرين في أخطاء الإدخال:</div>
+                                <div style="font-size: 11px; font-weight: bold; color: #991b1b; margin-bottom: 8px;">⚠️ ${t('paymentMismatch.topCashierErrors')}</div>
                                 ${paymentMismatchData.byCashier.slice(0, 3).map((c, i) => `
                                   <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dashed #fca5a5; font-size: 9px;">
-                                    <span>#${i + 1} ${c.cashierName} (${c.mismatchCount} خطأ)</span>
-                                    <span style="font-weight: bold; color: #dc2626;">${formatCurrencyLocal(c.totalMismatchAmount)} | نسبة الخطأ: ${c.errorRate.toFixed(1)}%</span>
+                                    <span>#${i + 1} ${c.cashierName} (${c.mismatchCount} ${t('paymentMismatch.errorLabel')})</span>
+                                    <span style="font-weight: bold; color: #dc2626;">${formatCurrencyLocal(c.totalMismatchAmount)} | ${t('paymentMismatch.errorRateLabel', { rate: c.errorRate.toFixed(1) })}</span>
                                   </div>
                                 `).join('')}
                               </div>
-                              <h3 style="color: #1e3a5f; margin: 15px 0 10px; font-size: 12px; background: #f1f5f9; padding: 6px 10px; border-radius: 4px;">📋 جدول الكاشيرين الأكثر فروقات</h3>
+                              <h3 style="color: #1e3a5f; margin: 15px 0 10px; font-size: 12px; background: #f1f5f9; padding: 6px 10px; border-radius: 4px;">📋 ${t('paymentMismatch.cashierMismatchTable')}</h3>
                               <table style="width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 20px;">
                                 <thead>
                                   <tr style="background: #f1f5f9;">
-                                    <th style="padding: 8px; border: 1px solid #e2e8f0; text-align: right;">الكاشير</th>
-                                    <th style="padding: 8px; border: 1px solid #e2e8f0; text-align: right;">عدد الفروقات</th>
-                                    <th style="padding: 8px; border: 1px solid #e2e8f0; text-align: right;">إجمالي الفروقات</th>
-                                    <th style="padding: 8px; border: 1px solid #e2e8f0; text-align: right;">نسبة الخطأ</th>
+                                    <th style="padding: 8px; border: 1px solid #e2e8f0; text-align: right;">${t('paymentMismatch.cashierCol')}</th>
+                                    <th style="padding: 8px; border: 1px solid #e2e8f0; text-align: right;">${t('paymentMismatch.mismatchCountCol')}</th>
+                                    <th style="padding: 8px; border: 1px solid #e2e8f0; text-align: right;">${t('paymentMismatch.totalMismatchCol')}</th>
+                                    <th style="padding: 8px; border: 1px solid #e2e8f0; text-align: right;">${t('paymentMismatch.errorRateCol')}</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -5053,20 +4973,20 @@ export default function OperationsReportsDashboardPage() {
                               </table>
                               ` : ''}
                               ${paymentMismatchData.byPaymentMethod.filter(m => m.discrepancy > 0).length > 0 ? `
-                              <h3 style="color: #1e3a5f; margin: 20px 0 10px;">فروقات طرق الدفع</h3>
+                              <h3 style="color: #1e3a5f; margin: 20px 0 10px;">${t('paymentMismatch.paymentMethodDiscrepancies')}</h3>
                               <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
                                 <thead>
                                   <tr style="background: #f1f5f9;">
-                                    <th style="padding: 8px; border: 1px solid #e2e8f0; text-align: right;">طريقة الدفع</th>
+                                    <th style="padding: 8px; border: 1px solid #e2e8f0; text-align: right;">${t('paymentMismatch.paymentMethodCol')}</th>
                                     <th style="padding: 8px; border: 1px solid #e2e8f0; text-align: right;">POS</th>
                                     <th style="padding: 8px; border: 1px solid #e2e8f0; text-align: right;">Terminal</th>
-                                    <th style="padding: 8px; border: 1px solid #e2e8f0; text-align: right;">الفرق</th>
+                                    <th style="padding: 8px; border: 1px solid #e2e8f0; text-align: right;">${t('paymentMismatch.differenceCol')}</th>
                                   </tr>
                                 </thead>
                                 <tbody>
                                   ${paymentMismatchData.byPaymentMethod.filter(m => m.discrepancy > 0).map(m => `
                                     <tr>
-                                      <td style="padding: 8px; border: 1px solid #e2e8f0;">${PAYMENT_METHOD_LABELS[m.paymentMethod] || m.paymentMethod}</td>
+                                      <td style="padding: 8px; border: 1px solid #e2e8f0;">${t(`paymentMethods.${m.paymentMethod}`) || m.paymentMethod}</td>
                                       <td style="padding: 8px; border: 1px solid #e2e8f0; color: #1e40af;">${formatCurrencyLocal(m.posTotal)}</td>
                                       <td style="padding: 8px; border: 1px solid #e2e8f0; color: #166534;">${formatCurrencyLocal(m.terminalTotal)}</td>
                                       <td style="padding: 8px; border: 1px solid #e2e8f0; color: #dc2626; font-weight: bold;">${formatCurrencyLocal(m.discrepancy)}</td>
@@ -5077,12 +4997,12 @@ export default function OperationsReportsDashboardPage() {
                               ` : ''}
                               <div style="margin-top: 30px; padding-top: 15px; border-top: 2px solid #D4A574; display: flex; justify-content: space-between; align-items: center; font-size: 10px;">
                                 <span style="color: #8B6914; font-weight: bold;">BUTTER BAKERY SYSTEM - CEO COMMAND</span>
-                                <span style="color: #666;">تم إنشاء التقرير: ${new Date().toLocaleString('en-GB')}</span>
+                                <span style="color: #666;">${t('paymentMismatch.reportCreated')} ${new Date().toLocaleString('en-GB')}</span>
                               </div>
                               <div style="text-align: center; margin-top: 10px; font-size: 10px; color: #666;">
-                                <span style="color: #b91c1c;">● أحمر = فروقات/أخطاء</span> | 
-                                <span style="color: #1e40af;">● أزرق = POS</span> | 
-                                <span style="color: #166534;">● أخضر = Terminal</span>
+                                <span style="color: #b91c1c;">● ${t('paymentMismatch.colorLegendRed')}</span> | 
+                                <span style="color: #1e40af;">● ${t('paymentMismatch.colorLegendBlue')}</span> | 
+                                <span style="color: #166534;">● ${t('paymentMismatch.colorLegendGreen')}</span>
                               </div>
                             </div>
   </div>
@@ -5093,7 +5013,7 @@ export default function OperationsReportsDashboardPage() {
                         }}
                       >
                         <Printer className="w-4 h-4" />
-                        طباعة PDF
+                        {t('paymentMismatch.printPDF')}
                       </Button>
                       <Button 
                         variant="outline"
@@ -5104,36 +5024,36 @@ export default function OperationsReportsDashboardPage() {
                           const wb = XLSX.utils.book_new();
                           
                           const summaryData = [
-                            ["تقرير مطابقة طرق الدفع - BUTTER BAKERY"],
-                            ["الفترة:", `${filters.startDate} إلى ${filters.endDate}`],
-                            ["حد الفرق المقبول:", "0.50 ريال"],
+                            [t('paymentMismatch.excelReportTitle')],
+                            [t('returns.periodLabel'), `${filters.startDate} - ${filters.endDate}`],
+                            [t('paymentMismatch.acceptableThreshold'), t('paymentMismatch.thresholdAmount')],
                             [],
-                            ["الملخص"],
-                            ["إجمالي اليوميات", paymentMismatchData.summary.totalJournals],
-                            ["يوميات بها فروقات", paymentMismatchData.summary.journalsWithMismatch],
-                            ["نسبة الخطأ", `${paymentMismatchData.summary.mismatchRate.toFixed(1)}%`],
-                            ["إجمالي الفروقات", paymentMismatchData.summary.totalMismatchAmount],
-                            ["إجمالي POS", paymentMismatchData.summary.totalPosAmount],
-                            ["إجمالي Terminal", paymentMismatchData.summary.totalTerminalAmount],
+                            [t('paymentMismatch.summaryTitle')],
+                            [t('paymentMismatch.totalJournals'), paymentMismatchData.summary.totalJournals],
+                            [t('paymentMismatch.journalsWithMismatch'), paymentMismatchData.summary.journalsWithMismatch],
+                            [t('paymentMismatch.errorRate'), `${paymentMismatchData.summary.mismatchRate.toFixed(1)}%`],
+                            [t('paymentMismatch.totalMismatches'), paymentMismatchData.summary.totalMismatchAmount],
+                            [t('paymentMismatch.posLabel'), paymentMismatchData.summary.totalPosAmount],
+                            [t('paymentMismatch.terminalLabel'), paymentMismatchData.summary.totalTerminalAmount],
                           ];
                           const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
-                          XLSX.utils.book_append_sheet(wb, summarySheet, "الملخص");
+                          XLSX.utils.book_append_sheet(wb, summarySheet, t('returns.summarySheet'));
                           
                           const cashierData = [
-                            ["فروقات الكاشيرين"],
-                            ["الكاشير", "عدد الفروقات", "إجمالي الفروقات", "إجمالي العمليات", "نسبة الخطأ"],
+                            [t('paymentMismatch.cashierDiscrepancies')],
+                            [t('paymentMismatch.cashierCol'), t('paymentMismatch.mismatchCountCol'), t('paymentMismatch.totalMismatchCol'), t('paymentMismatch.totalTransactionsCol'), t('paymentMismatch.errorRateCol')],
                             ...paymentMismatchData.byCashier.map(c => [
                               c.cashierName, c.mismatchCount, c.totalMismatchAmount, c.totalTransactions, `${c.errorRate.toFixed(1)}%`
                             ])
                           ];
                           const cashierSheet = XLSX.utils.aoa_to_sheet(cashierData);
-                          XLSX.utils.book_append_sheet(wb, cashierSheet, "حسب الكاشير");
+                          XLSX.utils.book_append_sheet(wb, cashierSheet, t('paymentMismatch.cashierCol'));
                           
                           const methodData = [
-                            ["فروقات طرق الدفع"],
-                            ["طريقة الدفع", "إجمالي POS", "إجمالي Terminal", "الفرق", "عدد الفروقات", "نسبة الفرق"],
+                            [t('paymentMismatch.byPaymentMethodTitle')],
+                            [t('paymentMismatch.paymentMethodCol'), t('paymentMismatch.posLabel'), t('paymentMismatch.terminalLabel'), t('paymentMismatch.differenceCol'), t('paymentMismatch.discrepancyCountCol'), t('paymentMismatch.discrepancyPercentCol')],
                             ...paymentMismatchData.byPaymentMethod.map(m => [
-                              PAYMENT_METHOD_LABELS[m.paymentMethod] || m.paymentMethod,
+                              t(`paymentMethods.${m.paymentMethod}`) || m.paymentMethod,
                               m.posTotal,
                               m.terminalTotal,
                               m.discrepancy,
@@ -5142,29 +5062,29 @@ export default function OperationsReportsDashboardPage() {
                             ])
                           ];
                           const methodSheet = XLSX.utils.aoa_to_sheet(methodData);
-                          XLSX.utils.book_append_sheet(wb, methodSheet, "حسب طريقة الدفع");
+                          XLSX.utils.book_append_sheet(wb, methodSheet, t('paymentMismatch.paymentMethodCol'));
                           
                           const detailsData = [
-                            ["تفاصيل الفروقات"],
-                            ["التاريخ", "الفرع", "الكاشير", "الوردية", "المبيعات", "إجمالي الفروقات", "التفاصيل"],
+                            [t('paymentMismatch.detailsExcelTitle')],
+                            [t('paymentMismatch.dateCol'), t('paymentMismatch.branchCol'), t('paymentMismatch.cashierCol'), t('paymentMismatch.shiftCol'), t('paymentMismatch.salesCol'), t('paymentMismatch.totalMismatchCol'), t('paymentMismatch.detailsText')],
                             ...paymentMismatchData.detailedMismatches.map(d => [
                               d.journalDate,
                               d.branchName,
                               d.cashierName,
-                              SHIFT_LABELS[d.shiftType] || d.shiftType,
+                              t(`shiftsShort.${d.shiftType}`) || d.shiftType,
                               d.totalSales,
                               d.totalMismatchAmount,
-                              d.methodMismatches.map(m => `${PAYMENT_METHOD_LABELS[m.paymentMethod] || m.paymentMethod}: POS ${m.posAmount} vs Terminal ${m.terminalAmount}`).join('; ')
+                              d.methodMismatches.map(m => `${t(`paymentMethods.${m.paymentMethod}`) || m.paymentMethod}: POS ${m.posAmount} vs Terminal ${m.terminalAmount}`).join('; ')
                             ])
                           ];
                           const detailsSheet = XLSX.utils.aoa_to_sheet(detailsData);
-                          XLSX.utils.book_append_sheet(wb, detailsSheet, "التفاصيل");
+                          XLSX.utils.book_append_sheet(wb, detailsSheet, t('returns.detailsSheet'));
                           
-                          XLSX.writeFile(wb, `تقرير_مطابقة_الدفع_${filters.startDate}_${filters.endDate}.xlsx`);
+                          XLSX.writeFile(wb, `payment_mismatch_report_${filters.startDate}_${filters.endDate}.xlsx`);
                         }}
                       >
                         <Download className="w-4 h-4" />
-                        تصدير Excel
+                        {t('common.exportExcel')}
                       </Button>
                     </div>
                   </div>
@@ -5172,7 +5092,7 @@ export default function OperationsReportsDashboardPage() {
                   {/* Threshold Note */}
                   <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-center gap-2 text-sm text-amber-800">
                     <AlertTriangle className="w-4 h-4" />
-                    <span>حد الفرق المقبول: <strong>0.50 ريال</strong> - يتم احتساب الفروقات الأكبر من هذا الحد فقط لتجنب مشاكل التقريب</span>
+                    <span>{t('paymentMismatch.thresholdNote')} <strong>{t('paymentMismatch.thresholdAmount')}</strong> - {t('paymentMismatch.thresholdDesc')}</span>
                   </div>
 
                   {/* Summary Cards */}
@@ -5184,7 +5104,7 @@ export default function OperationsReportsDashboardPage() {
                             <FileText className="w-5 h-5 text-white" />
                           </div>
                           <div>
-                            <p className="text-xs text-indigo-700">إجمالي اليوميات</p>
+                            <p className="text-xs text-indigo-700">{t('paymentMismatch.totalJournals')}</p>
                             <p className="text-xl font-bold text-indigo-800" data-testid="text-total-journals">{paymentMismatchData.summary.totalJournals}</p>
                           </div>
                         </div>
@@ -5197,7 +5117,7 @@ export default function OperationsReportsDashboardPage() {
                             <AlertTriangle className="w-5 h-5 text-white" />
                           </div>
                           <div>
-                            <p className="text-xs text-orange-700">يوميات بها فروقات</p>
+                            <p className="text-xs text-orange-700">{t('paymentMismatch.journalsWithMismatch')}</p>
                             <p className="text-xl font-bold text-orange-800" data-testid="text-journals-with-mismatch">{paymentMismatchData.summary.journalsWithMismatch}</p>
                           </div>
                         </div>
@@ -5210,7 +5130,7 @@ export default function OperationsReportsDashboardPage() {
                             <TrendingDown className="w-5 h-5 text-white" />
                           </div>
                           <div>
-                            <p className="text-xs text-red-700">نسبة الخطأ</p>
+                            <p className="text-xs text-red-700">{t('paymentMismatch.errorRate')}</p>
                             <p className="text-xl font-bold text-red-800" data-testid="text-error-rate">{paymentMismatchData.summary.mismatchRate.toFixed(1)}%</p>
                           </div>
                         </div>
@@ -5223,7 +5143,7 @@ export default function OperationsReportsDashboardPage() {
                             <DollarSign className="w-5 h-5 text-white" />
                           </div>
                           <div>
-                            <p className="text-xs text-purple-700">إجمالي الفروقات</p>
+                            <p className="text-xs text-purple-700">{t('paymentMismatch.totalMismatches')}</p>
                             <p className="text-xl font-bold text-purple-800">{formatCurrency(paymentMismatchData.summary.totalMismatchAmount)}</p>
                           </div>
                         </div>
@@ -5237,17 +5157,17 @@ export default function OperationsReportsDashboardPage() {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-6">
                           <div className="text-center">
-                            <p className="text-sm text-muted-foreground">إجمالي POS</p>
+                            <p className="text-sm text-muted-foreground">{t('paymentMismatch.posLabel')}</p>
                             <p className="text-2xl font-bold text-blue-600">{formatCurrency(paymentMismatchData.summary.totalPosAmount)}</p>
                           </div>
                           <div className="text-3xl text-gray-400">↔</div>
                           <div className="text-center">
-                            <p className="text-sm text-muted-foreground">إجمالي Terminal</p>
+                            <p className="text-sm text-muted-foreground">{t('paymentMismatch.terminalLabel')}</p>
                             <p className="text-2xl font-bold text-green-600">{formatCurrency(paymentMismatchData.summary.totalTerminalAmount)}</p>
                           </div>
                         </div>
                         <div className="text-center">
-                          <p className="text-sm text-muted-foreground">الفرق الكلي</p>
+                          <p className="text-sm text-muted-foreground">{t('paymentMismatch.differenceLabel')}</p>
                           <p className={`text-2xl font-bold ${Math.abs(paymentMismatchData.summary.totalPosAmount - paymentMismatchData.summary.totalTerminalAmount) > 0.5 ? 'text-red-600' : 'text-green-600'}`}>
                             {formatCurrency(Math.abs(paymentMismatchData.summary.totalPosAmount - paymentMismatchData.summary.totalTerminalAmount))}
                           </p>
@@ -5263,9 +5183,9 @@ export default function OperationsReportsDashboardPage() {
                         <CardHeader>
                           <CardTitle className="text-base flex items-center gap-2">
                             <User className="w-5 h-5 text-red-600" />
-                            الكاشيرين الأكثر أخطاءً في الإدخال
+                            {t('paymentMismatch.cashiersWithErrors')}
                           </CardTitle>
-                          <CardDescription>فروقات بين POS والتيرمنال حسب الكاشير</CardDescription>
+                          <CardDescription>{t('paymentMismatch.cashiersWithErrorsDesc')}</CardDescription>
                         </CardHeader>
                         <CardContent>
                           <div className="space-y-3">
@@ -5279,15 +5199,15 @@ export default function OperationsReportsDashboardPage() {
                                   <span className="font-bold text-red-600">{formatCurrency(cashier.totalMismatchAmount)}</span>
                                 </div>
                                 <div className="flex gap-4 text-xs text-muted-foreground">
-                                  <span>{cashier.mismatchCount} حالة خطأ</span>
-                                  <span>من {cashier.totalTransactions} عملية</span>
-                                  <span className="text-red-600">نسبة الخطأ: {cashier.errorRate.toFixed(1)}%</span>
+                                  <span>{t('paymentMismatch.errorCases', { count: cashier.mismatchCount })}</span>
+                                  <span>{t('paymentMismatch.outOf', { count: cashier.totalTransactions })}</span>
+                                  <span className="text-red-600">{t('paymentMismatch.errorRateLabel', { rate: cashier.errorRate.toFixed(1) })}</span>
                                 </div>
                                 {Object.keys(cashier.methodErrors).length > 0 && (
                                   <div className="mt-2 flex flex-wrap gap-1">
                                     {Object.entries(cashier.methodErrors).map(([method, count]) => (
                                       <Badge key={method} variant="secondary" className="text-xs">
-                                        {PAYMENT_METHOD_LABELS[method] || method}: {count}
+                                        {t(`paymentMethods.${method}`) || method}: {count}
                                       </Badge>
                                     ))}
                                   </div>
@@ -5303,16 +5223,16 @@ export default function OperationsReportsDashboardPage() {
                         <CardHeader>
                           <CardTitle className="text-base flex items-center gap-2">
                             <CreditCard className="w-5 h-5 text-indigo-600" />
-                            فروقات طرق الدفع
+                            {t('paymentMismatch.paymentMethodBreakdown')}
                           </CardTitle>
-                          <CardDescription>مقارنة POS vs Terminal لكل طريقة دفع</CardDescription>
+                          <CardDescription>{t('paymentMismatch.paymentMethodBreakdownDesc')}</CardDescription>
                         </CardHeader>
                         <CardContent>
                           <div className="space-y-3">
                             {paymentMismatchData.byPaymentMethod.filter(m => m.discrepancy > 0).map((method) => (
                               <div key={method.paymentMethod} className="p-3 bg-gray-50 rounded-lg border">
                                 <div className="flex items-center justify-between mb-2">
-                                  <span className="font-medium">{PAYMENT_METHOD_LABELS[method.paymentMethod] || method.paymentMethod}</span>
+                                  <span className="font-medium">{t(`paymentMethods.${method.paymentMethod}`) || method.paymentMethod}</span>
                                   <span className="font-bold text-red-600">{formatCurrency(method.discrepancy)}</span>
                                 </div>
                                 <div className="grid grid-cols-3 gap-2 text-xs">
@@ -5325,7 +5245,7 @@ export default function OperationsReportsDashboardPage() {
                                     <p className="font-medium text-green-600">{formatCurrency(method.terminalTotal)}</p>
                                   </div>
                                   <div className="text-center p-2 bg-red-50 rounded">
-                                    <p className="text-muted-foreground">الفرق</p>
+                                    <p className="text-muted-foreground">{t('paymentMismatch.difference')}</p>
                                     <p className="font-medium text-red-600">{method.discrepancyPercent.toFixed(1)}%</p>
                                   </div>
                                 </div>
@@ -5334,7 +5254,7 @@ export default function OperationsReportsDashboardPage() {
                             {paymentMismatchData.byPaymentMethod.filter(m => m.discrepancy > 0).length === 0 && (
                               <div className="text-center py-8 text-muted-foreground">
                                 <CheckCircle className="w-12 h-12 mx-auto mb-2 text-green-500" />
-                                <p>لا توجد فروقات في طرق الدفع</p>
+                                <p>{t('paymentMismatch.noPaymentMismatches')}</p>
                               </div>
                             )}
                           </div>
@@ -5346,7 +5266,7 @@ export default function OperationsReportsDashboardPage() {
                         <CardHeader>
                           <CardTitle className="text-base flex items-center gap-2">
                             <Building2 className="w-5 h-5 text-amber-600" />
-                            الفروقات حسب الفرع
+                            {t('paymentMismatch.branchBreakdown')}
                           </CardTitle>
                         </CardHeader>
                         <CardContent>
@@ -5357,7 +5277,7 @@ export default function OperationsReportsDashboardPage() {
                                 <XAxis type="number" fontSize={10} />
                                 <YAxis dataKey="branchName" type="category" fontSize={10} width={80} />
                                 <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                                <Bar dataKey="totalMismatchAmount" name="إجمالي الفروقات" fill="#ef4444" radius={[0, 4, 4, 0]} />
+                                <Bar dataKey="totalMismatchAmount" name={t('paymentMismatch.totalMismatches')} fill="#ef4444" radius={[0, 4, 4, 0]} />
                               </BarChart>
                             </ResponsiveContainer>
                           </div>
@@ -5369,7 +5289,7 @@ export default function OperationsReportsDashboardPage() {
                         <CardHeader>
                           <CardTitle className="text-base flex items-center gap-2">
                             <PieChartIcon className="w-5 h-5 text-purple-600" />
-                            توزيع الفروقات حسب طريقة الدفع
+                            {t('paymentMismatch.mismatchDistribution')}
                           </CardTitle>
                         </CardHeader>
                         <CardContent>
@@ -5378,7 +5298,7 @@ export default function OperationsReportsDashboardPage() {
                               <PieChart>
                                 <Pie
                                   data={paymentMismatchData.byPaymentMethod.filter(m => m.discrepancy > 0).map(m => ({
-                                    name: PAYMENT_METHOD_LABELS[m.paymentMethod] || m.paymentMethod,
+                                    name: t(`paymentMethods.${m.paymentMethod}`) || m.paymentMethod,
                                     value: m.discrepancy
                                   }))}
                                   dataKey="value"
@@ -5403,7 +5323,7 @@ export default function OperationsReportsDashboardPage() {
                     <Card>
                       <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
                         <CheckCircle className="w-12 h-12 text-green-600" />
-                        <p className="text-green-700 font-medium">لا توجد فروقات في طرق الدفع - تطابق ممتاز بين POS والتيرمنال!</p>
+                        <p className="text-green-700 font-medium">{t('paymentMismatch.noMismatchPerfect')}</p>
                       </CardContent>
                     </Card>
                   )}
@@ -5414,10 +5334,10 @@ export default function OperationsReportsDashboardPage() {
                       <CardHeader className="flex flex-row items-center justify-between">
                         <CardTitle className="text-base flex items-center gap-2">
                           <FileText className="w-5 h-5 text-red-600" />
-                          تفاصيل الفروقات ({paymentMismatchData.detailedMismatches.length})
+                          {t('paymentMismatch.detailsTitle', { count: paymentMismatchData.detailedMismatches.length })}
                         </CardTitle>
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <span>عرض {mismatchPageSize} سطر لكل صفحة</span>
+                          <span>{t('paymentMismatch.showPerPage', { count: mismatchPageSize })}</span>
                         </div>
                       </CardHeader>
                       <CardContent>
@@ -5425,12 +5345,12 @@ export default function OperationsReportsDashboardPage() {
                           <table className="w-full text-sm">
                             <thead>
                               <tr className="border-b bg-muted/50">
-                                <th className="text-right py-3 px-4">التاريخ</th>
-                                <th className="text-right py-3 px-4">الفرع</th>
-                                <th className="text-right py-3 px-4">الكاشير</th>
-                                <th className="text-right py-3 px-4">الوردية</th>
-                                <th className="text-right py-3 px-4">إجمالي الفرق</th>
-                                <th className="text-right py-3 px-4">تفاصيل الفروقات</th>
+                                <th className="text-right py-3 px-4">{t('cashierTab.dateCol')}</th>
+                                <th className="text-right py-3 px-4">{t('apps.branchCol')}</th>
+                                <th className="text-right py-3 px-4">{t('cashierTab.cashierCol')}</th>
+                                <th className="text-right py-3 px-4">{t('cashierTab.shiftCol')}</th>
+                                <th className="text-right py-3 px-4">{t('paymentMismatch.totalDiffCol')}</th>
+                                <th className="text-right py-3 px-4">{t('paymentMismatch.detailsCol')}</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -5442,14 +5362,14 @@ export default function OperationsReportsDashboardPage() {
                                   <td className="py-3 px-4">{mismatch.branchName}</td>
                                   <td className="py-3 px-4 font-medium">{mismatch.cashierName}</td>
                                   <td className="py-3 px-4">
-                                    <Badge variant="outline">{SHIFT_LABELS[mismatch.shiftType] || mismatch.shiftType || '-'}</Badge>
+                                    <Badge variant="outline">{t(`shiftsShort.${mismatch.shiftType}`) || mismatch.shiftType || '-'}</Badge>
                                   </td>
                                   <td className="py-3 px-4 font-bold text-red-600">{formatCurrency(mismatch.totalMismatchAmount)}</td>
                                   <td className="py-3 px-4">
                                     <div className="flex flex-wrap gap-1">
                                       {mismatch.methodMismatches.map((mm, idx) => (
                                         <Badge key={idx} variant="secondary" className="text-xs">
-                                          {PAYMENT_METHOD_LABELS[mm.paymentMethod] || mm.paymentMethod}: 
+                                          {t(`paymentMethods.${mm.paymentMethod}`) || mm.paymentMethod}: 
                                           <span className="text-blue-600 mx-1">POS {formatCurrency(mm.posAmount)}</span>
                                           vs
                                           <span className="text-green-600 mx-1">Terminal {formatCurrency(mm.terminalAmount)}</span>
@@ -5467,7 +5387,7 @@ export default function OperationsReportsDashboardPage() {
                         {paymentMismatchData.detailedMismatches.length > mismatchPageSize && (
                           <div className="flex items-center justify-between mt-4 pt-4 border-t">
                             <div className="text-sm text-muted-foreground">
-                              عرض {((mismatchPage - 1) * mismatchPageSize) + 1} - {Math.min(mismatchPage * mismatchPageSize, paymentMismatchData.detailedMismatches.length)} من {paymentMismatchData.detailedMismatches.length}
+                              {t('pagination.showing', { from: ((mismatchPage - 1) * mismatchPageSize) + 1, to: Math.min(mismatchPage * mismatchPageSize, paymentMismatchData.detailedMismatches.length), total: paymentMismatchData.detailedMismatches.length })}
                             </div>
                             <div className="flex items-center gap-1">
                               <Button
@@ -5477,7 +5397,7 @@ export default function OperationsReportsDashboardPage() {
                                 disabled={mismatchPage === 1}
                                 className="h-8 px-2"
                               >
-                                الأولى
+                                {t('pagination.first')}
                               </Button>
                               <Button
                                 variant="outline"
@@ -5486,7 +5406,7 @@ export default function OperationsReportsDashboardPage() {
                                 disabled={mismatchPage === 1}
                                 className="h-8 px-3"
                               >
-                                السابق
+                                {t('pagination.previous')}
                               </Button>
                               <div className="flex items-center gap-1 mx-2">
                                 {Array.from({ length: Math.min(5, Math.ceil(paymentMismatchData.detailedMismatches.length / mismatchPageSize)) }, (_, i) => {
@@ -5521,7 +5441,7 @@ export default function OperationsReportsDashboardPage() {
                                 disabled={mismatchPage >= Math.ceil(paymentMismatchData.detailedMismatches.length / mismatchPageSize)}
                                 className="h-8 px-3"
                               >
-                                التالي
+                                {t('pagination.next')}
                               </Button>
                               <Button
                                 variant="outline"
@@ -5530,7 +5450,7 @@ export default function OperationsReportsDashboardPage() {
                                 disabled={mismatchPage >= Math.ceil(paymentMismatchData.detailedMismatches.length / mismatchPageSize)}
                                 className="h-8 px-2"
                               >
-                                الأخيرة
+                                {t('pagination.last')}
                               </Button>
                             </div>
                           </div>
@@ -5543,7 +5463,7 @@ export default function OperationsReportsDashboardPage() {
                 <Card>
                   <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
                     <CreditCard className="w-12 h-12 text-muted-foreground" />
-                    <p className="text-muted-foreground">لا توجد بيانات متاحة</p>
+                    <p className="text-muted-foreground">{t('common.noDataAvailable')}</p>
                   </CardContent>
                 </Card>
               )}
@@ -5554,7 +5474,7 @@ export default function OperationsReportsDashboardPage() {
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <h2 className="text-lg font-semibold flex items-center gap-2">
                   <Truck className="w-5 h-5 text-orange-600" />
-                  تقرير مبيعات تطبيقات التوصيل
+                  {t('apps.title')}
                 </h2>
                 <div className="flex items-center gap-2">
                   <Button 
@@ -5563,8 +5483,8 @@ export default function OperationsReportsDashboardPage() {
                     data-testid="button-export-apps-pdf"
                     onClick={() => {
                       const branchName = filters.branchId 
-                        ? branches?.find(b => b.id === filters.branchId)?.name || 'جميع الفروع'
-                        : 'جميع الفروع';
+                        ? branches?.find(b => b.id === filters.branchId)?.name || t('filters.allBranches')
+                        : t('filters.allBranches');
                       const printWindow = window.open('', '_blank');
                       if (!printWindow) return;
                       
@@ -5579,7 +5499,7 @@ export default function OperationsReportsDashboardPage() {
                         <html dir="rtl" lang="ar">
                         <head>
                           <meta charset="UTF-8">
-                          <title>تقرير مبيعات تطبيقات التوصيل</title>
+                          <title>${t('apps.title')}</title>
                           <style>
                             @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
                             @page { 
@@ -5751,14 +5671,14 @@ export default function OperationsReportsDashboardPage() {
                             <div class="header">
                               <div class="header-right">
                                 <img src="${window.location.origin}/logo-butter-bakery.png" alt="Butter Bakery" style="height: 50px; margin-bottom: 5px;" onerror="this.style.display='none'" />
-                                <div class="report-date">شركة الزبد الأفضل التجارية</div>
+                                <div class="report-date">${t('pdf.companyName')}</div>
                               </div>
                               <div class="header-center">
-                                <h1>تقرير مبيعات تطبيقات التوصيل</h1>
-                                <div class="subtitle">Delivery Apps Sales Report</div>
+                                <h1>${t('apps.title')}</h1>
+                                <div class="subtitle">${t('pdf.deliveryAppsSalesReportEn')}</div>
                               </div>
                               <div class="header-left">
-                                <div class="report-date">تاريخ الطباعة</div>
+                                <div class="report-date">${t('pdf.printDate')}</div>
                                 <div style="font-weight: bold; color: #D97706;">${new Date().toLocaleDateString('en-GB')}</div>
                                 <div style="font-size: 9px; color: #888;">${new Date().toLocaleTimeString('en-GB')}</div>
                               </div>
@@ -5766,65 +5686,65 @@ export default function OperationsReportsDashboardPage() {
                             
                             <div class="meta-info">
                               <div class="meta-item">
-                                <div class="meta-label">الفرع</div>
+                                <div class="meta-label">${t('pdf.branchCol')}</div>
                                 <div class="meta-value">${branchName}</div>
                               </div>
                               <div class="meta-item">
-                                <div class="meta-label">من تاريخ</div>
+                                <div class="meta-label">${t('pdf.fromDate')}</div>
                                 <div class="meta-value">${filters.startDate}</div>
                               </div>
                               <div class="meta-item">
-                                <div class="meta-label">إلى تاريخ</div>
+                                <div class="meta-label">${t('pdf.toDate')}</div>
                                 <div class="meta-value">${filters.endDate}</div>
                               </div>
                               <div class="meta-item">
-                                <div class="meta-label">عدد الأيام</div>
-                                <div class="meta-value">${daysDiff} يوم</div>
+                                <div class="meta-label">${t('pdf.daysCount')}</div>
+                                <div class="meta-value">${daysDiff} ${t('pdf.day')}</div>
                               </div>
                               <div class="meta-item">
-                                <div class="meta-label">إجمالي المبيعات</div>
+                                <div class="meta-label">${t('pdf.totalSales')}</div>
                                 <div class="meta-value">${formatCurrency(deliveryAppsStats.totalDelivery)}</div>
                               </div>
                               <div class="meta-item">
-                                <div class="meta-label">المعدل اليومي</div>
+                                <div class="meta-label">${t('pdf.dailyAverage')}</div>
                                 <div class="meta-value">${formatCurrency(avgDaily)}</div>
                               </div>
                             </div>
                             
                             <div class="two-columns">
                               <div>
-                                <h3 class="section-title">📊 ملخص الأداء</h3>
+                                <h3 class="section-title">${t('pdf.performanceSummary')}</h3>
                                 <div class="kpi-grid">
                                   <div class="kpi-card">
                                     <div class="kpi-value">${formatCurrency(deliveryAppsStats.totalDelivery)}</div>
-                                    <div class="kpi-label">إجمالي مبيعات التطبيقات</div>
+                                    <div class="kpi-label">${t('apps.totalAppSales')}</div>
                                   </div>
                                   <div class="kpi-card">
                                     <div class="kpi-value">${deliveryAppsStats.topApp?.label || '-'}</div>
-                                    <div class="kpi-label">التطبيق الأعلى مبيعاً</div>
+                                    <div class="kpi-label">${t('apps.topSellingApp')}</div>
                                     <div class="kpi-subtitle">${deliveryAppsStats.topApp ? formatCurrency(deliveryAppsStats.topApp.totalSales) : ''}</div>
                                   </div>
                                   <div class="kpi-card">
                                     <div class="kpi-value">${deliveryAppsStats.apps.filter(a => a.totalSales > 0).length} / ${DELIVERY_APPS.length}</div>
-                                    <div class="kpi-label">التطبيقات النشطة</div>
+                                    <div class="kpi-label">${t('pdf.activeApps')}</div>
                                   </div>
                                   <div class="kpi-card">
                                     <div class="kpi-value">${deliveryAppsStats.topBranch?.branchName || '-'}</div>
-                                    <div class="kpi-label">الفرع الأعلى توصيل</div>
+                                    <div class="kpi-label">${t('apps.topDeliveryBranch')}</div>
                                     <div class="kpi-subtitle">${deliveryAppsStats.topBranch ? formatCurrency(deliveryAppsStats.topBranch.totalDelivery) : ''}</div>
                                   </div>
                                 </div>
                               </div>
                               
                               <div>
-                                <h3 class="section-title">📱 تفاصيل مبيعات التطبيقات</h3>
+                                <h3 class="section-title">${t('pdf.appSalesDetails')}</h3>
                                 <table>
                                   <thead>
                                     <tr>
-                                      <th style="width: 25%;">التطبيق</th>
-                                      <th style="width: 25%;">إجمالي المبيعات</th>
-                                      <th style="width: 35%;">النسبة</th>
-                                      <th style="width: 15%;">الترتيب</th>
+                                      <th style="width: 25%;">${t('apps.app')}</th>
+                                      <th style="width: 25%;">${t('apps.appTotalSales')}</th>
+                                      <th style="width: 35%;">${t('apps.percentage')}</th>
+                                      <th style="width: 15%;">${t('apps.rank')}</th>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -5850,13 +5770,13 @@ export default function OperationsReportsDashboardPage() {
                             </div>
                           
                           ${deliveryAppsStats.branches.length > 0 ? `
-                            <h3 class="section-title">🏢 مبيعات التطبيقات حسب الفرع</h3>
+                            <h3 class="section-title">${t('pdf.appSalesByBranch')}</h3>
                             <table>
                               <thead>
                                 <tr>
-                                  <th>الفرع</th>
-                                  <th>إجمالي التوصيل</th>
-                                  <th>النسبة من الإجمالي</th>
+                                  <th>${t('pdf.branchCol')}</th>
+                                  <th>${t('apps.totalDelivery')}</th>
+                                  <th>${t('pdf.percentageOfTotal')}</th>
                                   ${DELIVERY_APPS.map(app => `<th><span class="app-color" style="background: ${app.color}"></span>${app.label}</th>`).join('')}
                                 </tr>
                               </thead>
@@ -5864,7 +5784,7 @@ export default function OperationsReportsDashboardPage() {
                                 ${deliveryAppsStats.branches.map((branch, index) => `
                                   <tr>
                                     <td>
-                                      ${index === 0 ? '<span class="badge">الأعلى</span>' : ''}
+                                      ${index === 0 ? '<span class="badge">' + t('apps.highest') + '</span>' : ''}
                                       ${branch.branchName}
                                     </td>
                                     <td style="color: #EA580C; font-weight: bold;">${formatCurrency(branch.totalDelivery)}</td>
@@ -5892,10 +5812,10 @@ export default function OperationsReportsDashboardPage() {
                     }}
                   >
                     <FileText className="w-4 h-4" />
-                    تصدير PDF
+                    {t('apps.exportPDF')}
                   </Button>
                   <Badge variant="secondary" className="bg-orange-100 text-orange-700 text-sm">
-                    إجمالي: {formatCurrency(deliveryAppsStats.totalDelivery)}
+                    {t('apps.total')} {formatCurrency(deliveryAppsStats.totalDelivery)}
                   </Badge>
                 </div>
               </div>
@@ -5905,14 +5825,14 @@ export default function OperationsReportsDashboardPage() {
                   {/* KPI Cards for Apps */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <KPICard 
-                      title="إجمالي مبيعات التطبيقات" 
+                      title={t('apps.totalAppSales')} 
                       value={formatCurrency(deliveryAppsStats.totalDelivery)} 
                       icon={Truck} 
                       color="text-orange-600" 
                       bgColor="bg-orange-100" 
                     />
                     <KPICard 
-                      title="التطبيق الأعلى مبيعاً" 
+                      title={t('apps.topApp')} 
                       value={deliveryAppsStats.topApp?.label || "-"} 
                       icon={Trophy}
                       subtitle={deliveryAppsStats.topApp ? formatCurrency(deliveryAppsStats.topApp.totalSales) : ""}
@@ -5920,14 +5840,14 @@ export default function OperationsReportsDashboardPage() {
                       bgColor="bg-amber-100" 
                     />
                     <KPICard 
-                      title="عدد التطبيقات النشطة" 
+                      title={t('apps.activeApps')} 
                       value={deliveryAppsStats.apps.filter(a => a.totalSales > 0).length} 
                       icon={Activity}
                       color="text-blue-600" 
                       bgColor="bg-blue-100" 
                     />
                     <KPICard 
-                      title="الفرع الأعلى توصيل" 
+                      title={t('apps.topBranch')} 
                       value={deliveryAppsStats.topBranch?.branchName || "-"} 
                       icon={Building2}
                       subtitle={deliveryAppsStats.topBranch ? formatCurrency(deliveryAppsStats.topBranch.totalDelivery) : ""}
@@ -5940,7 +5860,7 @@ export default function OperationsReportsDashboardPage() {
                     {/* Apps Pie Chart */}
                     <Card>
                       <CardHeader className="pb-2">
-                        <CardTitle className="text-base">توزيع مبيعات التطبيقات</CardTitle>
+                        <CardTitle className="text-base">{t('apps.salesDistribution')}</CardTitle>
                       </CardHeader>
                       <CardContent>
                         <div className="h-[280px]">
@@ -5966,7 +5886,7 @@ export default function OperationsReportsDashboardPage() {
                           ) : (
                             <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
                               <Truck className="w-12 h-12 mb-2" />
-                              <p>لا توجد مبيعات تطبيقات في الفترة المحددة</p>
+                              <p>{t('apps.noAppSales')}</p>
                             </div>
                           )}
                         </div>
@@ -5976,7 +5896,7 @@ export default function OperationsReportsDashboardPage() {
                     {/* Apps Bar Chart */}
                     <Card>
                       <CardHeader className="pb-2">
-                        <CardTitle className="text-base">مقارنة مبيعات التطبيقات</CardTitle>
+                        <CardTitle className="text-base">{t('apps.salesComparison')}</CardTitle>
                       </CardHeader>
                       <CardContent>
                         <div className="h-[280px]">
@@ -5987,7 +5907,7 @@ export default function OperationsReportsDashboardPage() {
                                 <XAxis type="number" fontSize={10} tickFormatter={(v) => formatCurrency(v)} />
                                 <YAxis type="category" dataKey="label" fontSize={11} width={80} />
                                 <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                                <Bar dataKey="totalSales" name="المبيعات">
+                                <Bar dataKey="totalSales" name={t('apps.salesName')}>
                                   {deliveryAppsStats.apps.filter(a => a.totalSales > 0).map((app, index) => (
                                     <Cell key={`bar-${index}`} fill={app.color} />
                                   ))}
@@ -5997,7 +5917,7 @@ export default function OperationsReportsDashboardPage() {
                           ) : (
                             <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
                               <BarChart3 className="w-12 h-12 mb-2" />
-                              <p>لا توجد بيانات للعرض</p>
+                              <p>{t('apps.noDataToShow')}</p>
                             </div>
                           )}
                         </div>
@@ -6008,17 +5928,17 @@ export default function OperationsReportsDashboardPage() {
                   {/* Apps Details Table */}
                   <Card>
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-base">تفاصيل مبيعات كل تطبيق</CardTitle>
+                      <CardTitle className="text-base">{t('apps.appDetails')}</CardTitle>
                     </CardHeader>
                     <CardContent>
                       <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                           <thead>
                             <tr className="border-b bg-muted/50">
-                              <th className="text-right py-3 px-4">التطبيق</th>
-                              <th className="text-right py-3 px-4">إجمالي المبيعات</th>
-                              <th className="text-right py-3 px-4">النسبة</th>
-                              <th className="text-right py-3 px-4">الترتيب</th>
+                              <th className="text-right py-3 px-4">{t('apps.appCol')}</th>
+                              <th className="text-right py-3 px-4">{t('apps.totalSalesCol')}</th>
+                              <th className="text-right py-3 px-4">{t('apps.percentCol')}</th>
+                              <th className="text-right py-3 px-4">{t('apps.rankCol')}</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -6064,15 +5984,15 @@ export default function OperationsReportsDashboardPage() {
                   {deliveryAppsStats.branches.length > 0 && (
                     <Card>
                       <CardHeader className="pb-2">
-                        <CardTitle className="text-base">مبيعات التطبيقات حسب الفرع</CardTitle>
+                        <CardTitle className="text-base">{t('apps.salesByBranch')}</CardTitle>
                       </CardHeader>
                       <CardContent>
                         <div className="overflow-x-auto">
                           <table className="w-full text-sm">
                             <thead>
                               <tr className="border-b bg-muted/50">
-                                <th className="text-right py-3 px-4">الفرع</th>
-                                <th className="text-right py-3 px-4">إجمالي التوصيل</th>
+                                <th className="text-right py-3 px-4">{t('apps.branchCol')}</th>
+                                <th className="text-right py-3 px-4">{t('apps.totalDeliveryCol')}</th>
                                 {DELIVERY_APPS.slice(0, 5).map(app => (
                                   <th key={app.key} className="text-right py-3 px-4">
                                     <span style={{ color: app.color }}>{app.label}</span>
@@ -6087,7 +6007,7 @@ export default function OperationsReportsDashboardPage() {
                                     <div className="flex items-center gap-2">
                                       <Building2 className="w-4 h-4 text-muted-foreground" />
                                       <span className="font-medium">{branch.branchName}</span>
-                                      {index === 0 && <Badge className="text-xs bg-amber-500">الأعلى</Badge>}
+                                      {index === 0 && <Badge className="text-xs bg-amber-500">{t('apps.highest')}</Badge>}
                                     </div>
                                   </td>
                                   <td className="py-3 px-4 font-semibold text-orange-600">
@@ -6111,8 +6031,8 @@ export default function OperationsReportsDashboardPage() {
                 <Card>
                   <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
                     <Truck className="w-12 h-12 text-muted-foreground" />
-                    <p className="text-muted-foreground">لا توجد يوميات كاشير في الفترة المحددة</p>
-                    <p className="text-sm text-muted-foreground">يرجى تغيير الفترة الزمنية أو الفرع للاطلاع على بيانات مبيعات التطبيقات</p>
+                    <p className="text-muted-foreground">{t('apps.noCashierJournals')}</p>
+                    <p className="text-sm text-muted-foreground">{t('apps.changeFilters')}</p>
                   </CardContent>
                 </Card>
               )}
@@ -6122,7 +6042,7 @@ export default function OperationsReportsDashboardPage() {
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <h2 className="text-lg font-semibold flex items-center gap-2">
                   <FileText className="w-5 h-5 text-purple-600" />
-                  التقرير التنفيذي الشامل
+                  {t('executive.title')}
                 </h2>
                 <div className="flex gap-2">
                   <Button variant="outline" className="gap-2" data-testid="button-export-executive-excel" onClick={async () => {
@@ -6131,58 +6051,58 @@ export default function OperationsReportsDashboardPage() {
                     const wb = XLSX.utils.book_new();
                     
                     const summaryData = [
-                      ['التقرير التنفيذي الشامل'],
-                      ['تاريخ التقرير:', new Date(executiveSummary.reportDate).toLocaleDateString('en-GB')],
-                      ['الفترة:', `${executiveSummary.period.startDate} إلى ${executiveSummary.period.endDate}`],
+                      [t('executive.title')],
+                      [t('executive.reportDate'), new Date(executiveSummary.reportDate).toLocaleDateString('en-GB')],
+                      [t('common.period'), `${executiveSummary.period.startDate} ${t('common.to')} ${executiveSummary.period.endDate}`],
                       [],
-                      ['ملخص المبيعات'],
-                      ['إجمالي المبيعات', executiveSummary.salesOverview.totalSales],
-                      ['المبيعات النقدية', executiveSummary.salesOverview.cashSales],
-                      ['مبيعات الشبكة', executiveSummary.salesOverview.networkSales],
-                      ['مبيعات التوصيل', executiveSummary.salesOverview.deliverySales],
-                      ['عدد العمليات', executiveSummary.salesOverview.totalTransactions],
-                      ['متوسط الفاتورة', executiveSummary.salesOverview.averageTicket],
+                      [t('executive.salesSummary')],
+                      [t('executive.totalSales'), executiveSummary.salesOverview.totalSales],
+                      [t('executive.cashSales'), executiveSummary.salesOverview.cashSales],
+                      [t('executive.networkSales'), executiveSummary.salesOverview.networkSales],
+                      [t('executive.deliverySales'), executiveSummary.salesOverview.deliverySales],
+                      [t('executive.totalTransactions'), executiveSummary.salesOverview.totalTransactions],
+                      [t('executive.avgTicket'), executiveSummary.salesOverview.averageTicket],
                       [],
-                      ['ملخص الإنتاج'],
-                      ['إجمالي الأوامر', executiveSummary.productionOverview.totalOrders],
-                      ['أوامر مكتملة', executiveSummary.productionOverview.completedOrders],
-                      ['نسبة الجودة', executiveSummary.productionOverview.qualityPassRate],
+                      [t('executive.productionSummary')],
+                      [t('executive.totalOrders'), executiveSummary.productionOverview.totalOrders],
+                      [t('executive.completedOrders'), executiveSummary.productionOverview.completedOrders],
+                      [t('executive.qualityRateLabel'), executiveSummary.productionOverview.qualityPassRate],
                       [],
-                      ['ملخص الأصول'],
-                      ['إجمالي الأصول', executiveSummary.assetsOverview.totalAssets],
-                      ['أصول جاهزة', executiveSummary.assetsOverview.goodAssets],
-                      ['تحتاج صيانة', executiveSummary.assetsOverview.maintenanceNeeded],
-                      ['نسبة الجاهزية', executiveSummary.assetsOverview.assetReadinessPercent],
-                      ['قيمة المخزون', executiveSummary.assetsOverview.totalInventoryValue],
+                      [t('executive.assetsSummary')],
+                      [t('executive.totalAssets'), executiveSummary.assetsOverview.totalAssets],
+                      [t('executive.goodAssets'), executiveSummary.assetsOverview.goodAssets],
+                      [t('executive.maintenanceNeeded'), executiveSummary.assetsOverview.maintenanceNeeded],
+                      [t('executive.readinessRate'), executiveSummary.assetsOverview.assetReadinessPercent],
+                      [t('executive.inventoryValue'), executiveSummary.assetsOverview.totalInventoryValue],
                       [],
-                      ['ملخص الأهداف'],
-                      ['الهدف الإجمالي', executiveSummary.targetsOverview.totalTarget],
-                      ['المتحقق', executiveSummary.targetsOverview.totalAchieved],
-                      ['نسبة التحقيق', executiveSummary.targetsOverview.achievementPercent],
+                      [t('executive.targetsSummary')],
+                      [t('executive.totalTarget'), executiveSummary.targetsOverview.totalTarget],
+                      [t('executive.achieved'), executiveSummary.targetsOverview.totalAchieved],
+                      [t('executive.achievementRateLabel'), executiveSummary.targetsOverview.achievementPercent],
                     ];
                     
                     const ws = XLSX.utils.aoa_to_sheet(summaryData);
-                    XLSX.utils.book_append_sheet(wb, ws, 'ملخص تنفيذي');
+                    XLSX.utils.book_append_sheet(wb, ws, t('executive.executiveSummarySheet'));
                     
                     const branchData = [
-                      ['أداء الفروع'],
-                      ['الفرع', 'المبيعات', 'الأوامر', 'نسبة الجودة', 'متوسط الفاتورة'],
+                      [t('executive.branchPerformance')],
+                      [t('executive.branchCol'), t('executive.salesCol'), t('executive.ordersCol'), t('executive.qualityCol'), t('executive.avgTicketCol')],
                       ...executiveSummary.branchPerformance.map(b => [b.branchName, b.totalSales, b.totalOrders, b.qualityPassRate, b.averageTicket])
                     ];
                     const ws2 = XLSX.utils.aoa_to_sheet(branchData);
-                    XLSX.utils.book_append_sheet(wb, ws2, 'أداء الفروع');
+                    XLSX.utils.book_append_sheet(wb, ws2, t('executive.branchPerformanceSheet'));
                     
-                    XLSX.writeFile(wb, `التقرير_التنفيذي_${filters.startDate}_${filters.endDate}.xlsx`);
+                    XLSX.writeFile(wb, `executive_report_${filters.startDate}_${filters.endDate}.xlsx`);
                   }}>
                     <Download className="w-4 h-4" />
-                    تصدير Excel
+                    {t('executive.exportExcel')}
                   </Button>
                   <Button className="gap-2 bg-red-600 hover:bg-red-700" data-testid="button-export-executive-pdf" onClick={() => {
                     if (!executiveSummary) return;
                     const htmlContent = `
                       <html dir="rtl">
                       <head>
-                        <title>التقرير التنفيذي الشامل</title>
+                        <title>${t('executive.title')}</title>
                         <style>
                           body { font-family: 'Cairo', Arial, sans-serif; padding: 20px; }
                           h1 { color: #b45309; border-bottom: 2px solid #b45309; padding-bottom: 10px; }
@@ -6198,51 +6118,51 @@ export default function OperationsReportsDashboardPage() {
                         </style>
                       </head>
                       <body>
-                        <h1>التقرير التنفيذي الشامل - BUTTER BAKERY</h1>
-                        <p>تاريخ التقرير: ${new Date(executiveSummary.reportDate).toLocaleDateString('en-GB')}</p>
-                        <p>الفترة: ${executiveSummary.period.startDate} إلى ${executiveSummary.period.endDate}</p>
+                        <h1>${t('executive.title')} - BUTTER BAKERY</h1>
+                        <p>${t('executive.reportDate')} ${new Date(executiveSummary.reportDate).toLocaleDateString('en-GB')}</p>
+                        <p>${t('common.period')} ${executiveSummary.period.startDate} ${t('common.to')} ${executiveSummary.period.endDate}</p>
                         
                         <div class="section">
-                          <h2>ملخص المبيعات</h2>
+                          <h2>${t('executive.salesSummary')}</h2>
                           <div class="grid">
-                            <div class="metric"><div class="metric-title">إجمالي المبيعات</div><div class="metric-value">${formatCurrency(executiveSummary.salesOverview.totalSales)}</div></div>
-                            <div class="metric"><div class="metric-title">عدد العمليات</div><div class="metric-value">${formatNumber(executiveSummary.salesOverview.totalTransactions)}</div></div>
-                            <div class="metric"><div class="metric-title">متوسط الفاتورة</div><div class="metric-value">${formatCurrency(executiveSummary.salesOverview.averageTicket)}</div></div>
+                            <div class="metric"><div class="metric-title">${t('executive.totalSales')}</div><div class="metric-value">${formatCurrency(executiveSummary.salesOverview.totalSales)}</div></div>
+                            <div class="metric"><div class="metric-title">${t('executive.totalTransactions')}</div><div class="metric-value">${formatNumber(executiveSummary.salesOverview.totalTransactions)}</div></div>
+                            <div class="metric"><div class="metric-title">${t('executive.avgTicket')}</div><div class="metric-value">${formatCurrency(executiveSummary.salesOverview.averageTicket)}</div></div>
                           </div>
                         </div>
                         
                         <div class="section">
-                          <h2>ملخص الإنتاج</h2>
+                          <h2>${t('executive.productionSummary')}</h2>
                           <div class="grid">
-                            <div class="metric"><div class="metric-title">إجمالي الأوامر</div><div class="metric-value">${formatNumber(executiveSummary.productionOverview.totalOrders)}</div></div>
-                            <div class="metric"><div class="metric-title">أوامر مكتملة</div><div class="metric-value">${formatNumber(executiveSummary.productionOverview.completedOrders)}</div></div>
-                            <div class="metric"><div class="metric-title">نسبة الجودة</div><div class="metric-value">${formatPercent(executiveSummary.productionOverview.qualityPassRate)}</div></div>
+                            <div class="metric"><div class="metric-title">${t('executive.totalOrders')}</div><div class="metric-value">${formatNumber(executiveSummary.productionOverview.totalOrders)}</div></div>
+                            <div class="metric"><div class="metric-title">${t('executive.completedOrders')}</div><div class="metric-value">${formatNumber(executiveSummary.productionOverview.completedOrders)}</div></div>
+                            <div class="metric"><div class="metric-title">${t('executive.qualityRateLabel')}</div><div class="metric-value">${formatPercent(executiveSummary.productionOverview.qualityPassRate)}</div></div>
                           </div>
                         </div>
                         
                         <div class="section">
-                          <h2>ملخص الأصول والمخزون</h2>
+                          <h2>${t('executive.assetsSummary')}</h2>
                           <div class="grid">
-                            <div class="metric"><div class="metric-title">إجمالي الأصول</div><div class="metric-value">${formatNumber(executiveSummary.assetsOverview.totalAssets)}</div></div>
-                            <div class="metric"><div class="metric-title">نسبة الجاهزية</div><div class="metric-value">${formatPercent(executiveSummary.assetsOverview.assetReadinessPercent)}</div></div>
-                            <div class="metric"><div class="metric-title">قيمة المخزون</div><div class="metric-value">${formatCurrency(executiveSummary.assetsOverview.totalInventoryValue)}</div></div>
+                            <div class="metric"><div class="metric-title">${t('executive.totalAssets')}</div><div class="metric-value">${formatNumber(executiveSummary.assetsOverview.totalAssets)}</div></div>
+                            <div class="metric"><div class="metric-title">${t('executive.readinessRate')}</div><div class="metric-value">${formatPercent(executiveSummary.assetsOverview.assetReadinessPercent)}</div></div>
+                            <div class="metric"><div class="metric-title">${t('executive.inventoryValue')}</div><div class="metric-value">${formatCurrency(executiveSummary.assetsOverview.totalInventoryValue)}</div></div>
                           </div>
                         </div>
                         
                         <div class="section">
-                          <h2>تحقيق الأهداف</h2>
+                          <h2>${t('executive.targetsSummary')}</h2>
                           <div class="grid">
-                            <div class="metric"><div class="metric-title">الهدف الإجمالي</div><div class="metric-value">${formatCurrency(executiveSummary.targetsOverview.totalTarget)}</div></div>
-                            <div class="metric"><div class="metric-title">المتحقق</div><div class="metric-value">${formatCurrency(executiveSummary.targetsOverview.totalAchieved)}</div></div>
-                            <div class="metric"><div class="metric-title">نسبة التحقيق</div><div class="metric-value">${formatPercent(executiveSummary.targetsOverview.achievementPercent)}</div></div>
+                            <div class="metric"><div class="metric-title">${t('executive.totalTarget')}</div><div class="metric-value">${formatCurrency(executiveSummary.targetsOverview.totalTarget)}</div></div>
+                            <div class="metric"><div class="metric-title">${t('executive.achieved')}</div><div class="metric-value">${formatCurrency(executiveSummary.targetsOverview.totalAchieved)}</div></div>
+                            <div class="metric"><div class="metric-title">${t('executive.achievementRateLabel')}</div><div class="metric-value">${formatPercent(executiveSummary.targetsOverview.achievementPercent)}</div></div>
                           </div>
                         </div>
                         
                         <div class="section">
-                          <h2>أداء الفروع</h2>
+                          <h2>${t('executive.branchPerformance')}</h2>
                           <table>
                             <thead>
-                              <tr><th>الفرع</th><th>المبيعات</th><th>الأوامر</th><th>نسبة الجودة</th><th>متوسط الفاتورة</th></tr>
+                              <tr><th>${t('executive.branchCol')}</th><th>${t('executive.salesCol')}</th><th>${t('executive.ordersCol')}</th><th>${t('executive.qualityCol')}</th><th>${t('executive.avgTicketCol')}</th></tr>
                             </thead>
                             <tbody>
                               ${executiveSummary.branchPerformance.map(b => `<tr><td>${b.branchName}</td><td>${formatCurrency(b.totalSales)}</td><td>${formatNumber(b.totalOrders)}</td><td>${formatPercent(b.qualityPassRate)}</td><td>${formatCurrency(b.averageTicket)}</td></tr>`).join('')}
@@ -6255,7 +6175,7 @@ export default function OperationsReportsDashboardPage() {
                     printHtmlContent(htmlContent);
                   }}>
                     <FileDown className="w-4 h-4" />
-                    تصدير PDF
+                    {t('executive.exportPDF')}
                   </Button>
                 </div>
               </div>
@@ -6264,7 +6184,7 @@ export default function OperationsReportsDashboardPage() {
                 <Card>
                   <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
                     <RefreshCw className="w-8 h-8 text-purple-600 animate-spin" />
-                    <p className="text-muted-foreground">جاري تحميل التقرير التنفيذي...</p>
+                    <p className="text-muted-foreground">{t('executive.loading')}</p>
                   </CardContent>
                 </Card>
               )}
@@ -6279,7 +6199,7 @@ export default function OperationsReportsDashboardPage() {
                             <DollarSign className="w-5 h-5 text-white" />
                           </div>
                           <div>
-                            <p className="text-xs text-green-700">إجمالي المبيعات</p>
+                            <p className="text-xs text-green-700">{t('executive.totalSales')}</p>
                             <p className="text-xl font-bold text-green-800">{formatCurrency(executiveSummary.salesOverview.totalSales)}</p>
                           </div>
                         </div>
@@ -6292,7 +6212,7 @@ export default function OperationsReportsDashboardPage() {
                             <Factory className="w-5 h-5 text-white" />
                           </div>
                           <div>
-                            <p className="text-xs text-blue-700">أوامر الإنتاج</p>
+                            <p className="text-xs text-blue-700">{t('executive.productionOrders')}</p>
                             <p className="text-xl font-bold text-blue-800">{formatNumber(executiveSummary.productionOverview.totalOrders)}</p>
                           </div>
                         </div>
@@ -6305,7 +6225,7 @@ export default function OperationsReportsDashboardPage() {
                             <Package className="w-5 h-5 text-white" />
                           </div>
                           <div>
-                            <p className="text-xs text-purple-700">قيمة المخزون</p>
+                            <p className="text-xs text-purple-700">{t('executive.inventoryValue')}</p>
                             <p className="text-xl font-bold text-purple-800">{formatCurrency(executiveSummary.assetsOverview.totalInventoryValue)}</p>
                           </div>
                         </div>
@@ -6318,7 +6238,7 @@ export default function OperationsReportsDashboardPage() {
                             <Target className="w-5 h-5 text-white" />
                           </div>
                           <div>
-                            <p className="text-xs text-amber-700">تحقيق الأهداف</p>
+                            <p className="text-xs text-amber-700">{t('executive.targetAchievement')}</p>
                             <p className="text-xl font-bold text-amber-800">{formatPercent(executiveSummary.targetsOverview.achievementPercent)}</p>
                           </div>
                         </div>
@@ -6329,7 +6249,7 @@ export default function OperationsReportsDashboardPage() {
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <Card>
                       <CardHeader className="pb-2">
-                        <CardTitle className="text-base">توزيع المبيعات</CardTitle>
+                        <CardTitle className="text-base">{t('executive.salesDistribution')}</CardTitle>
                       </CardHeader>
                       <CardContent>
                         <div className="h-[200px]">
@@ -6337,9 +6257,9 @@ export default function OperationsReportsDashboardPage() {
                             <PieChart>
                               <Pie
                                 data={[
-                                  { name: 'نقداً', value: executiveSummary.salesOverview.cashSales },
-                                  { name: 'شبكة', value: executiveSummary.salesOverview.networkSales },
-                                  { name: 'توصيل', value: executiveSummary.salesOverview.deliverySales },
+                                  { name: t('executive.cashLabel'), value: executiveSummary.salesOverview.cashSales },
+                                  { name: t('executive.networkLabel'), value: executiveSummary.salesOverview.networkSales },
+                                  { name: t('executive.deliveryLabel'), value: executiveSummary.salesOverview.deliverySales },
                                 ]}
                                 cx="50%"
                                 cy="50%"
@@ -6362,12 +6282,12 @@ export default function OperationsReportsDashboardPage() {
 
                     <Card>
                       <CardHeader className="pb-2">
-                        <CardTitle className="text-base">ملخص الأداء</CardTitle>
+                        <CardTitle className="text-base">{t('executive.performanceSummary')}</CardTitle>
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-4">
                           <div className="flex justify-between items-center">
-                            <span className="text-sm text-muted-foreground">نسبة الجودة</span>
+                            <span className="text-sm text-muted-foreground">{t('executive.qualityRate')}</span>
                             <div className="flex items-center gap-2">
                               <div className="w-24 bg-gray-200 rounded-full h-2">
                                 <div className="bg-green-500 h-2 rounded-full" style={{ width: `${Math.min(100, executiveSummary.productionOverview.qualityPassRate)}%` }} />
@@ -6376,7 +6296,7 @@ export default function OperationsReportsDashboardPage() {
                             </div>
                           </div>
                           <div className="flex justify-between items-center">
-                            <span className="text-sm text-muted-foreground">جاهزية الأصول</span>
+                            <span className="text-sm text-muted-foreground">{t('executive.assetReadiness')}</span>
                             <div className="flex items-center gap-2">
                               <div className="w-24 bg-gray-200 rounded-full h-2">
                                 <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${Math.min(100, executiveSummary.assetsOverview.assetReadinessPercent)}%` }} />
@@ -6385,7 +6305,7 @@ export default function OperationsReportsDashboardPage() {
                             </div>
                           </div>
                           <div className="flex justify-between items-center">
-                            <span className="text-sm text-muted-foreground">تحقيق الأهداف</span>
+                            <span className="text-sm text-muted-foreground">{t('executive.targetAchievementLabel')}</span>
                             <div className="flex items-center gap-2">
                               <div className="w-24 bg-gray-200 rounded-full h-2">
                                 <div className="bg-amber-500 h-2 rounded-full" style={{ width: `${Math.min(100, executiveSummary.targetsOverview.achievementPercent)}%` }} />
@@ -6400,18 +6320,18 @@ export default function OperationsReportsDashboardPage() {
 
                   <Card>
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-base">أداء الفروع</CardTitle>
+                      <CardTitle className="text-base">{t('executive.branchPerformance')}</CardTitle>
                     </CardHeader>
                     <CardContent>
                       <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                           <thead>
                             <tr className="border-b bg-muted/50">
-                              <th className="text-right py-3 px-4">الفرع</th>
-                              <th className="text-right py-3 px-4">المبيعات</th>
-                              <th className="text-right py-3 px-4">الأوامر</th>
-                              <th className="text-right py-3 px-4">نسبة الجودة</th>
-                              <th className="text-right py-3 px-4">متوسط الفاتورة</th>
+                              <th className="text-right py-3 px-4">{t('apps.branchCol')}</th>
+                              <th className="text-right py-3 px-4">{t('branches.salesCol')}</th>
+                              <th className="text-right py-3 px-4">{t('branches.ordersCol')}</th>
+                              <th className="text-right py-3 px-4">{t('branches.qualityCol')}</th>
+                              <th className="text-right py-3 px-4">{t('branches.avgTicketCol')}</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -6444,11 +6364,11 @@ export default function OperationsReportsDashboardPage() {
                       <div className="flex items-center gap-3">
                         <Trophy className="w-6 h-6 text-amber-600" />
                         <div>
-                          <p className="font-semibold text-amber-800">مؤشرات رئيسية</p>
+                          <p className="font-semibold text-amber-800">{t('executive.keyIndicators')}</p>
                           <p className="text-sm text-amber-700">
-                            عدد الفروع النشطة: {executiveSummary.keyMetrics.totalBranches} | 
-                            الكاشيرين النشطين: {executiveSummary.keyMetrics.activeCashiers} | 
-                            متوسط المبيعات اليومية: {formatCurrency(executiveSummary.keyMetrics.averageDailySales)}
+                            {t('executive.activeBranches')} {executiveSummary.keyMetrics.totalBranches} | 
+                            {t('executive.activeCashiers')} {executiveSummary.keyMetrics.activeCashiers} | 
+                            {t('executive.avgDailySales')} {formatCurrency(executiveSummary.keyMetrics.averageDailySales)}
                           </p>
                         </div>
                       </div>
@@ -6461,7 +6381,7 @@ export default function OperationsReportsDashboardPage() {
                 <Card>
                   <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
                     <FileText className="w-12 h-12 text-muted-foreground" />
-                    <p className="text-muted-foreground">لا توجد بيانات تنفيذية متاحة</p>
+                    <p className="text-muted-foreground">{t('executive.noExecutiveData')}</p>
                   </CardContent>
                 </Card>
               )}
@@ -6476,43 +6396,43 @@ export default function OperationsReportsDashboardPage() {
                 <>
                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
                     <KPICard
-                      title="إجمالي المبيعات"
-                      value={`${eventPosReport.totalSales.toFixed(2)} ر.س`}
+                      title={t('eventPos.totalSales')}
+                      value={`${eventPosReport.totalSales.toFixed(2)} ${t('common.sar')}`}
                       icon={DollarSign}
                       color="text-green-600"
                       bgColor="bg-green-100"
                     />
                     <KPICard
-                      title="عدد الفواتير"
+                      title={t('eventPos.invoiceCount')}
                       value={eventPosReport.totalTransactions}
                       icon={Receipt}
                       color="text-blue-600"
                       bgColor="bg-blue-100"
                     />
                     <KPICard
-                      title="مبيعات نقدية"
-                      value={`${eventPosReport.cashTotal.toFixed(2)} ر.س`}
+                      title={t('eventPos.cashSales')}
+                      value={`${eventPosReport.cashTotal.toFixed(2)} ${t('common.sar')}`}
                       icon={Wallet}
                       color="text-emerald-600"
                       bgColor="bg-emerald-100"
                     />
                     <KPICard
-                      title="مبيعات شبكة"
-                      value={`${eventPosReport.networkTotal.toFixed(2)} ر.س`}
+                      title={t('eventPos.networkSales')}
+                      value={`${eventPosReport.networkTotal.toFixed(2)} ${t('common.sar')}`}
                       icon={CreditCard}
                       color="text-blue-600"
                       bgColor="bg-blue-100"
                     />
                     <KPICard
-                      title="متوسط الفاتورة"
-                      value={`${eventPosReport.totalTransactions > 0 ? (eventPosReport.totalSales / eventPosReport.totalTransactions).toFixed(2) : '0.00'} ر.س`}
+                      title={t('eventPos.avgTicket')}
+                      value={`${eventPosReport.totalTransactions > 0 ? (eventPosReport.totalSales / eventPosReport.totalTransactions).toFixed(2) : '0.00'} ${t('common.sar')}`}
                       icon={TrendingUp}
                       color="text-amber-600"
                       bgColor="bg-amber-100"
                     />
                     <KPICard
-                      title="ضريبة القيمة المضافة"
-                      value={`${eventPosReport.vatTotal.toFixed(2)} ر.س`}
+                      title={t('eventPos.vat')}
+                      value={`${eventPosReport.vatTotal.toFixed(2)} ${t('common.sar')}`}
                       icon={FileText}
                       color="text-purple-600"
                       bgColor="bg-purple-100"
@@ -6522,16 +6442,16 @@ export default function OperationsReportsDashboardPage() {
                   {(eventPosReport.voidedCount > 0 || eventPosReport.refundedCount > 0 || eventPosReport.discountTotal > 0) && (
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       {eventPosReport.discountTotal > 0 && (
-                        <KPICard title="إجمالي الخصومات" value={`${eventPosReport.discountTotal.toFixed(2)} ر.س`} icon={Gift} color="text-red-600" bgColor="bg-red-100" />
+                        <KPICard title={t('eventPos.totalDiscounts')} value={`${eventPosReport.discountTotal.toFixed(2)} ${t('common.sar')}`} icon={Gift} color="text-red-600" bgColor="bg-red-100" />
                       )}
                       {eventPosReport.voidedCount > 0 && (
-                        <KPICard title="فواتير ملغاة" value={`${eventPosReport.voidedCount} (${eventPosReport.voidedAmount.toFixed(2)} ر.س)`} icon={XCircle} color="text-red-600" bgColor="bg-red-100" />
+                        <KPICard title={t('eventPos.voidedInvoices')} value={`${eventPosReport.voidedCount} (${eventPosReport.voidedAmount.toFixed(2)} ${t('common.sar')})`} icon={XCircle} color="text-red-600" bgColor="bg-red-100" />
                       )}
                       {eventPosReport.refundedCount > 0 && (
-                        <KPICard title="فواتير مسترجعة" value={`${eventPosReport.refundedCount} (${eventPosReport.refundedAmount.toFixed(2)} ر.س)`} icon={Receipt} color="text-amber-600" bgColor="bg-amber-100" />
+                        <KPICard title={t('eventPos.refundedInvoices')} value={`${eventPosReport.refundedCount} (${eventPosReport.refundedAmount.toFixed(2)} ${t('common.sar')})`} icon={Receipt} color="text-amber-600" bgColor="bg-amber-100" />
                       )}
                       {eventPosReport.splitTotal > 0 && (
-                        <KPICard title="دفع مقسم" value={`${eventPosReport.splitTotal.toFixed(2)} ر.س`} icon={Activity} color="text-purple-600" bgColor="bg-purple-100" />
+                        <KPICard title={t('eventPos.splitPayment')} value={`${eventPosReport.splitTotal.toFixed(2)} ${t('common.sar')}`} icon={Activity} color="text-purple-600" bgColor="bg-purple-100" />
                       )}
                     </div>
                   )}
@@ -6542,7 +6462,7 @@ export default function OperationsReportsDashboardPage() {
                         <CardHeader className="pb-2">
                           <CardTitle className="text-sm font-bold flex items-center gap-2">
                             <BarChart3 className="w-4 h-4 text-orange-500" />
-                            المبيعات اليومية
+                            {t('eventPos.dailySales')}
                           </CardTitle>
                         </CardHeader>
                         <CardContent>
@@ -6551,8 +6471,8 @@ export default function OperationsReportsDashboardPage() {
                               <CartesianGrid strokeDasharray="3 3" vertical={false} />
                               <XAxis dataKey="date" tick={{ fontSize: 10 }} />
                               <YAxis tick={{ fontSize: 10 }} />
-                              <Tooltip formatter={(v: any) => `${Number(v).toFixed(2)} ر.س`} />
-                              <Bar dataKey="sales" fill="#f97316" radius={[4, 4, 0, 0]} name="المبيعات" />
+                              <Tooltip formatter={(v: any) => `${Number(v).toFixed(2)} ${t('common.sar')}`} />
+                              <Bar dataKey="sales" fill="#f97316" radius={[4, 4, 0, 0]} name={t('eventPos.salesChartName')} />
                             </BarChart>
                           </ResponsiveContainer>
                         </CardContent>
@@ -6564,7 +6484,7 @@ export default function OperationsReportsDashboardPage() {
                         <CardHeader className="pb-2">
                           <CardTitle className="text-sm font-bold flex items-center gap-2">
                             <PieChartIcon className="w-4 h-4 text-orange-500" />
-                            توزيع طرق الدفع
+                            {t('eventPos.paymentDistribution')}
                           </CardTitle>
                         </CardHeader>
                         <CardContent>
@@ -6573,7 +6493,7 @@ export default function OperationsReportsDashboardPage() {
                               <Pie
                                 data={eventPosReport.paymentBreakdown.map(p => ({
                                   ...p,
-                                  name: p.method === 'cash' ? 'نقد' : p.method === 'network' ? 'شبكة' : 'مقسم'
+                                  name: p.method === 'cash' ? t('eventPos.cash') : p.method === 'network' ? t('eventPos.network') : t('eventPos.split')
                                 }))}
                                 dataKey="amount"
                                 nameKey="name"
@@ -6586,7 +6506,7 @@ export default function OperationsReportsDashboardPage() {
                                   <Cell key={`cell-${index}`} fill={["#10B981", "#3B82F6", "#8B5CF6"][index % 3]} />
                                 ))}
                               </Pie>
-                              <Tooltip formatter={(v: any) => `${Number(v).toFixed(2)} ر.س`} />
+                              <Tooltip formatter={(v: any) => `${Number(v).toFixed(2)} ${t('common.sar')}`} />
                               <Legend />
                             </PieChart>
                           </ResponsiveContainer>
@@ -6603,9 +6523,9 @@ export default function OperationsReportsDashboardPage() {
                             <div>
                               <CardTitle className="text-sm font-bold flex items-center gap-2">
                                 <Package className="w-4 h-4 text-orange-500" />
-                                المبيعات حسب المنتجات
+                                {t('eventPos.salesByProduct')}
                               </CardTitle>
-                              <CardDescription>تفاصيل المنتجات المباعة في إيفنت موسمي</CardDescription>
+                              <CardDescription>{t('eventPos.salesByProductDesc')}</CardDescription>
                             </div>
                             <Button
                               size="sm"
@@ -6615,20 +6535,20 @@ export default function OperationsReportsDashboardPage() {
                               onClick={async () => {
                                 try {
                                   const res = await fetch(`/api/pos/report/EVENT-BB/product-details?startDate=${filters.startDate || ''}&endDate=${filters.endDate || ''}`);
-                                  if (!res.ok) throw new Error('فشل جلب البيانات');
+                                  if (!res.ok) throw new Error(t('eventPos.failedFetch'));
                                   const details = await res.json();
                                   const XLSX = await import("xlsx");
-                                  const paymentLabels: Record<string, string> = { cash: 'نقد', network: 'شبكة', split: 'مقسم' };
+                                  const paymentLabels: Record<string, string> = { cash: t('eventPos.cash'), network: t('eventPos.network'), split: t('eventPos.split') };
                                   const excelData = details.map((item: any, idx: number) => ({
                                     '#': idx + 1,
-                                    'المنتج': item.productName,
-                                    'الكمية': item.quantity,
-                                    'سعر الوحدة': item.unitPrice,
-                                    'الإجمالي': item.totalPrice,
-                                    'الضريبة': item.vatAmount,
-                                    'التاريخ': item.saleDate,
-                                    'طريقة الدفع': paymentLabels[item.paymentMethod] || item.paymentMethod,
-                                    'رقم الفاتورة': item.invoiceNumber,
+                                    [t('eventPos.product')]: item.productName,
+                                    [t('eventPos.quantity')]: item.quantity,
+                                    [t('eventPos.unitPrice')]: item.unitPrice,
+                                    [t('eventPos.totalPrice')]: item.totalPrice,
+                                    [t('eventPos.vatAmount')]: item.vatAmount,
+                                    [t('eventPos.saleDate')]: item.saleDate,
+                                    [t('eventPos.paymentMethod')]: paymentLabels[item.paymentMethod] || item.paymentMethod,
+                                    [t('eventPos.invoiceNumber')]: item.invoiceNumber,
                                   }));
                                   const ws = XLSX.utils.json_to_sheet(excelData);
                                   ws['!cols'] = [
@@ -6636,15 +6556,15 @@ export default function OperationsReportsDashboardPage() {
                                     { wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 18 }
                                   ];
                                   const wb = XLSX.utils.book_new();
-                                  XLSX.utils.book_append_sheet(wb, ws, "المبيعات حسب المنتجات");
-                                  XLSX.writeFile(wb, `مبيعات_إيفنت_${filters.startDate || 'all'}_${filters.endDate || 'all'}.xlsx`);
+                                  XLSX.utils.book_append_sheet(wb, ws, t('eventPos.productSheetName'));
+                                  XLSX.writeFile(wb, `event_sales_${filters.startDate || 'all'}_${filters.endDate || 'all'}.xlsx`);
                                 } catch (e) {
                                   console.error('Export error:', e);
                                 }
                               }}
                             >
                               <FileDown className="w-4 h-4" />
-                              تصدير Excel
+                              {t('common.exportExcel')}
                             </Button>
                           </div>
                         </CardHeader>
@@ -6654,12 +6574,12 @@ export default function OperationsReportsDashboardPage() {
                               <thead>
                                 <tr className="border-b border-gray-200">
                                   <th className="text-right py-3 px-3 font-bold text-gray-600">#</th>
-                                  <th className="text-right py-3 px-3 font-bold text-gray-600">المنتج</th>
-                                  <th className="text-center py-3 px-3 font-bold text-gray-600">الكمية المباعة</th>
-                                  <th className="text-center py-3 px-3 font-bold text-gray-600">عدد الفواتير</th>
-                                  <th className="text-center py-3 px-3 font-bold text-gray-600">متوسط السعر</th>
-                                  <th className="text-center py-3 px-3 font-bold text-gray-600">الضريبة</th>
-                                  <th className="text-left py-3 px-3 font-bold text-gray-600">إجمالي المبيعات</th>
+                                  <th className="text-right py-3 px-3 font-bold text-gray-600">{t('eventPos.product')}</th>
+                                  <th className="text-center py-3 px-3 font-bold text-gray-600">{t('eventPos.quantitySold')}</th>
+                                  <th className="text-center py-3 px-3 font-bold text-gray-600">{t('eventPos.invoices')}</th>
+                                  <th className="text-center py-3 px-3 font-bold text-gray-600">{t('eventPos.avgPriceCol')}</th>
+                                  <th className="text-center py-3 px-3 font-bold text-gray-600">{t('eventPos.vatAmount')}</th>
+                                  <th className="text-left py-3 px-3 font-bold text-gray-600">{t('eventPos.totalSales')}</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -6676,14 +6596,14 @@ export default function OperationsReportsDashboardPage() {
                                         <Badge variant="secondary" className="bg-blue-100 text-blue-700 font-bold">{p.totalQuantity}</Badge>
                                       </td>
                                       <td className="py-2.5 px-3 text-center text-gray-600">{p.invoiceCount}</td>
-                                      <td className="py-2.5 px-3 text-center text-gray-600">{p.avgPrice.toFixed(2)} ر.س</td>
+                                      <td className="py-2.5 px-3 text-center text-gray-600">{p.avgPrice.toFixed(2)} ${t('common.sar')}</td>
                                       <td className="py-2.5 px-3 text-center text-gray-500">{p.totalVat.toFixed(2)}</td>
                                       <td className="py-2.5 px-3 text-left">
                                         <div className="flex items-center gap-2">
                                           <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
                                             <div className="h-full bg-gradient-to-l from-orange-500 to-amber-400 rounded-full" style={{ width: `${barWidth}%` }} />
                                           </div>
-                                          <span className="font-black text-orange-600 whitespace-nowrap">{p.totalRevenue.toFixed(2)} ر.س</span>
+                                          <span className="font-black text-orange-600 whitespace-nowrap">{p.totalRevenue.toFixed(2)} {t('common.sar')}</span>
                                         </div>
                                       </td>
                                     </tr>
@@ -6692,7 +6612,7 @@ export default function OperationsReportsDashboardPage() {
                               </tbody>
                               <tfoot>
                                 <tr className="border-t-2 border-gray-300 bg-gray-50">
-                                  <td colSpan={2} className="py-3 px-3 font-black text-gray-700">الإجمالي</td>
+                                  <td colSpan={2} className="py-3 px-3 font-black text-gray-700">{t('eventPos.totalRow')}</td>
                                   <td className="py-3 px-3 text-center font-black text-blue-700">
                                     {eventPosReport.productSales.reduce((s, p) => s + p.totalQuantity, 0)}
                                   </td>
@@ -6704,7 +6624,7 @@ export default function OperationsReportsDashboardPage() {
                                     {eventPosReport.productSales.reduce((s, p) => s + p.totalVat, 0).toFixed(2)}
                                   </td>
                                   <td className="py-3 px-3 text-left font-black text-orange-600">
-                                    {eventPosReport.productSales.reduce((s, p) => s + p.totalRevenue, 0).toFixed(2)} ر.س
+                                    {eventPosReport.productSales.reduce((s, p) => s + p.totalRevenue, 0).toFixed(2)} ${t('common.sar')}
                                   </td>
                                 </tr>
                               </tfoot>
@@ -6718,7 +6638,7 @@ export default function OperationsReportsDashboardPage() {
                           <CardHeader className="pb-2">
                             <CardTitle className="text-sm font-bold flex items-center gap-2">
                               <BarChart3 className="w-4 h-4 text-orange-500" />
-                              أعلى المنتجات مبيعاً (حسب الإيرادات)
+                              {t('eventPos.topProductsByRevenue')}
                             </CardTitle>
                           </CardHeader>
                           <CardContent>
@@ -6727,8 +6647,8 @@ export default function OperationsReportsDashboardPage() {
                                 <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                                 <XAxis type="number" tick={{ fontSize: 10 }} />
                                 <YAxis dataKey="productName" type="category" width={100} tick={{ fontSize: 10 }} />
-                                <Tooltip formatter={(v: any) => `${Number(v).toFixed(2)} ر.س`} />
-                                <Bar dataKey="totalRevenue" fill="#f97316" radius={[0, 4, 4, 0]} name="الإيرادات" />
+                                <Tooltip formatter={(v: any) => `${Number(v).toFixed(2)} ${t('common.sar')}`} />
+                                <Bar dataKey="totalRevenue" fill="#f97316" radius={[0, 4, 4, 0]} name={t('eventPos.revenue')} />
                               </BarChart>
                             </ResponsiveContainer>
                           </CardContent>
@@ -6738,7 +6658,7 @@ export default function OperationsReportsDashboardPage() {
                           <CardHeader className="pb-2">
                             <CardTitle className="text-sm font-bold flex items-center gap-2">
                               <PieChartIcon className="w-4 h-4 text-orange-500" />
-                              توزيع المبيعات حسب المنتج
+                              {t('eventPos.productDistribution')}
                             </CardTitle>
                           </CardHeader>
                           <CardContent>
@@ -6757,7 +6677,7 @@ export default function OperationsReportsDashboardPage() {
                                     <Cell key={`cell-prod-${index}`} fill={COLORS[index % COLORS.length]} />
                                   ))}
                                 </Pie>
-                                <Tooltip formatter={(v: any) => `${Number(v).toFixed(2)} ر.س`} />
+                                <Tooltip formatter={(v: any) => `${Number(v).toFixed(2)} ${t('common.sar')}`} />
                                 <Legend />
                               </PieChart>
                             </ResponsiveContainer>
@@ -6771,8 +6691,8 @@ export default function OperationsReportsDashboardPage() {
                 <Card className="p-12">
                   <div className="text-center text-muted-foreground">
                     <Zap className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                    <p className="font-bold">لا توجد بيانات مبيعات إيفنت موسمي</p>
-                    <p className="text-sm mt-1">اختر نطاق تاريخ مناسب لعرض التقرير</p>
+                    <p className="font-bold">{t('eventPos.noEventData')}</p>
+                    <p className="text-sm mt-1">{t('eventPos.selectDateRange')}</p>
                   </div>
                 </Card>
               )}
@@ -6783,8 +6703,8 @@ export default function OperationsReportsDashboardPage() {
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
               <BarChart3 className="w-12 h-12 text-muted-foreground" />
-              <p className="text-muted-foreground">لا توجد بيانات متاحة</p>
-              <p className="text-sm text-muted-foreground">قم بتسجيل الدخول وتأكد من وجود بيانات في النظام</p>
+              <p className="text-muted-foreground">{t('common.noDataAvailable')}</p>
+              <p className="text-sm text-muted-foreground">{t('common.loginAndCheckData')}</p>
             </CardContent>
           </Card>
         )}
