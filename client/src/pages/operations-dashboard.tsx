@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
+import { useTranslation } from 'react-i18next';
 import { 
   Factory, Users, Clock, CheckCircle, AlertTriangle, TrendingUp, Calendar, 
   ClipboardCheck, Plus, Wallet, Package, BarChart3, Target, Gift, 
@@ -24,6 +25,7 @@ interface OperationsStats {
 }
 
 export default function OperationsDashboardPage() {
+  const { t } = useTranslation('operations');
   const { data: stats, isLoading, refetch } = useQuery<OperationsStats>({
     queryKey: ["/api/operations/stats"],
   });
@@ -33,31 +35,31 @@ export default function OperationsDashboardPage() {
     : 0;
 
   const operationsLinks = [
-    { title: "فتح وإغلاق الفروع", description: "قوائم التحقق اليومية مع التوثيق", href: "/branch-shifts", icon: DoorOpen, highlight: true },
-    { title: "المنتجات", description: "إدارة كتالوج المنتجات", href: "/products", icon: Package, count: stats?.productsCount || 0, countLabel: "منتج" },
-    { title: "إدارة موظفي الفروع", description: "إدارة شاملة للموظفين والورديات والحضور", href: "/attendance-dashboard", icon: Clock, count: stats?.todayShifts || 0, countLabel: "وردية" },
-    { title: "أوامر الإنتاج", description: "متابعة أوامر الإنتاج", href: "/production-dashboard", icon: ClipboardCheck, count: stats?.todayOrders || 0, countLabel: "أمر" },
-    { title: "مراقبة الجودة", description: "فحوصات الجودة", href: "/quality-control", icon: CheckCircle, count: stats?.qualityChecks || 0, countLabel: "فحص" },
-    { title: "بار العرض والهالك", description: "استلام الإنتاج ومتابعة الهالك", href: "/display-bar-waste", icon: AlertTriangle },
-    { title: "موظفي التشغيل", description: "إدارة فريق العمل", href: "/operations-employees", icon: Users },
+    { title: t('dashboard.opLinks.branchShifts'), description: t('dashboard.opLinks.branchShiftsDesc'), href: "/branch-shifts", icon: DoorOpen, highlight: true },
+    { title: t('dashboard.opLinks.products'), description: t('dashboard.opLinks.productsDesc'), href: "/products", icon: Package, count: stats?.productsCount || 0, countLabel: t('dashboard.opLinks.productLabel') },
+    { title: t('dashboard.opLinks.branchEmployees'), description: t('dashboard.opLinks.branchEmployeesDesc'), href: "/attendance-dashboard", icon: Clock, count: stats?.todayShifts || 0, countLabel: t('dashboard.opLinks.shiftLabel') },
+    { title: t('dashboard.opLinks.productionOrders'), description: t('dashboard.opLinks.productionOrdersDesc'), href: "/production-dashboard", icon: ClipboardCheck, count: stats?.todayOrders || 0, countLabel: t('dashboard.opLinks.orderLabel') },
+    { title: t('dashboard.opLinks.qualityControl'), description: t('dashboard.opLinks.qualityControlDesc'), href: "/quality-control", icon: CheckCircle, count: stats?.qualityChecks || 0, countLabel: t('dashboard.opLinks.checkLabel') },
+    { title: t('dashboard.opLinks.displayBarWaste'), description: t('dashboard.opLinks.displayBarWasteDesc'), href: "/display-bar-waste", icon: AlertTriangle },
+    { title: t('dashboard.opLinks.opsEmployees'), description: t('dashboard.opLinks.opsEmployeesDesc'), href: "/operations-employees", icon: Users },
   ];
 
   const salesLinks = [
-    { title: "يومية الكاشير", description: "تسجيل المبيعات اليومية", href: "/cashier-journals", icon: Wallet },
-    { title: "تحليلات المبيعات", description: "تحليل أداء المبيعات", href: "/sales-analytics", icon: BarChart3 },
-    { title: "الأرباح والخسائر", description: "تحليل مالي شامل للإيرادات والمصروفات", href: "/pnl-dashboard", icon: TrendingUp },
-    { title: "تخطيط الأهداف", description: "تحديد الأهداف الشهرية", href: "/targets-planning", icon: Target },
-    { title: "لوحة الأهداف", description: "متابعة تحقيق الأهداف", href: "/targets-dashboard", icon: Activity },
-    { title: "إدارة الحوافز", description: "نظام الحوافز والمكافآت", href: "/incentives-management", icon: Gift },
-    { title: "تقارير التشغيل", description: "تقارير شاملة", href: "/operations-reports", icon: FileText },
+    { title: t('dashboard.salesLinks.cashierJournal'), description: t('dashboard.salesLinks.cashierJournalDesc'), href: "/cashier-journals", icon: Wallet },
+    { title: t('dashboard.salesLinks.salesAnalytics'), description: t('dashboard.salesLinks.salesAnalyticsDesc'), href: "/sales-analytics", icon: BarChart3 },
+    { title: t('dashboard.salesLinks.pnl'), description: t('dashboard.salesLinks.pnlDesc'), href: "/pnl-dashboard", icon: TrendingUp },
+    { title: t('dashboard.salesLinks.targetPlanning'), description: t('dashboard.salesLinks.targetPlanningDesc'), href: "/targets-planning", icon: Target },
+    { title: t('dashboard.salesLinks.targetDashboard'), description: t('dashboard.salesLinks.targetDashboardDesc'), href: "/targets-dashboard", icon: Activity },
+    { title: t('dashboard.salesLinks.incentives'), description: t('dashboard.salesLinks.incentivesDesc'), href: "/incentives-management", icon: Gift },
+    { title: t('dashboard.salesLinks.opsReports'), description: t('dashboard.salesLinks.opsReportsDesc'), href: "/operations-reports", icon: FileText },
   ];
 
   const quickActions = [
-    { label: "فتح/إغلاق فرع", href: "/branch-shifts", icon: DoorOpen },
-    { label: "يومية جديدة", href: "/cashier-journals", icon: Wallet },
-    { label: "موظفي الفروع", href: "/attendance-dashboard", icon: Clock },
-    { label: "أمر إنتاج", href: "/production-dashboard", icon: ClipboardCheck },
-    { label: "فحص جودة", href: "/quality-control", icon: CheckCircle },
+    { label: t('dashboard.quickActions.branchShift'), href: "/branch-shifts", icon: DoorOpen },
+    { label: t('dashboard.quickActions.newJournal'), href: "/cashier-journals", icon: Wallet },
+    { label: t('dashboard.quickActions.branchEmployees'), href: "/attendance-dashboard", icon: Clock },
+    { label: t('dashboard.quickActions.productionOrder'), href: "/production-dashboard", icon: ClipboardCheck },
+    { label: t('dashboard.quickActions.qualityCheck'), href: "/quality-control", icon: CheckCircle },
   ];
 
   return (
@@ -66,12 +68,12 @@ export default function OperationsDashboardPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div className="flex-1">
             <div className="flex items-center gap-2 sm:gap-3 mb-1">
-              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-foreground">لوحة تحكم التشغيل</h1>
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-foreground">{t('dashboard.title')}</h1>
               <Button variant="ghost" size="sm" onClick={() => refetch()} className="h-11 w-11 sm:h-8 sm:w-8 p-0">
                 <RefreshCw className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
               </Button>
             </div>
-            <p className="text-xs sm:text-sm text-muted-foreground">نظرة عامة على عمليات الإنتاج والتشغيل اليومية</p>
+            <p className="text-xs sm:text-sm text-muted-foreground">{t('dashboard.subtitle')}</p>
           </div>
           
           <div className="flex flex-wrap items-center gap-2">
@@ -97,7 +99,7 @@ export default function OperationsDashboardPage() {
                   </div>
                   <div>
                     <div className="text-lg sm:text-xl font-bold text-blue-700">{stats?.totalProduced || 0}</div>
-                    <div className="text-[10px] sm:text-[11px] text-blue-600/70">إنتاج اليوم</div>
+                    <div className="text-[10px] sm:text-[11px] text-blue-600/70">{t('dashboard.todayProduction')}</div>
                   </div>
                 </div>
               )}
@@ -113,7 +115,7 @@ export default function OperationsDashboardPage() {
                   </div>
                   <div>
                     <div className="text-lg sm:text-xl font-bold text-green-700">{completionRate}%</div>
-                    <div className="text-[10px] sm:text-[11px] text-green-600/70">نسبة الإنجاز</div>
+                    <div className="text-[10px] sm:text-[11px] text-green-600/70">{t('dashboard.completionRate')}</div>
                   </div>
                 </div>
               )}
@@ -130,7 +132,7 @@ export default function OperationsDashboardPage() {
                     </div>
                     <div>
                       <div className={`text-lg sm:text-xl font-bold ${parseFloat(stats?.wastePercentage || "0") > 5 ? 'text-red-700' : 'text-emerald-700'}`}>{stats?.wastePercentage || 0}%</div>
-                      <div className={`text-[10px] sm:text-[11px] ${parseFloat(stats?.wastePercentage || "0") > 5 ? 'text-red-600/70' : 'text-emerald-600/70'}`}>نسبة الهالك</div>
+                      <div className={`text-[10px] sm:text-[11px] ${parseFloat(stats?.wastePercentage || "0") > 5 ? 'text-red-600/70' : 'text-emerald-600/70'}`}>{t('dashboard.wasteRate')}</div>
                     </div>
                   </div>
                 )}
@@ -147,7 +149,7 @@ export default function OperationsDashboardPage() {
                   </div>
                   <div>
                     <div className="text-lg sm:text-xl font-bold text-amber-700">{stats?.todayShifts || 0}</div>
-                    <div className="text-[10px] sm:text-[11px] text-amber-600/70">ورديات اليوم</div>
+                    <div className="text-[10px] sm:text-[11px] text-amber-600/70">{t('dashboard.todayShifts')}</div>
                   </div>
                 </div>
               )}
@@ -163,7 +165,7 @@ export default function OperationsDashboardPage() {
                   </div>
                   <div>
                     <div className="text-lg sm:text-xl font-bold text-purple-700">{stats?.qualityPassRate || 100}%</div>
-                    <div className="text-[10px] sm:text-[11px] text-purple-600/70">معدل الجودة</div>
+                    <div className="text-[10px] sm:text-[11px] text-purple-600/70">{t('dashboard.qualityRate')}</div>
                   </div>
                 </div>
               )}
@@ -176,7 +178,7 @@ export default function OperationsDashboardPage() {
             <CardHeader className="pb-2 pt-2 sm:pt-3 px-3 sm:px-4">
               <div className="flex items-center gap-2">
                 <Factory className="w-4 h-4 text-primary" />
-                <CardTitle className="text-xs sm:text-sm font-semibold">التشغيل والإنتاج</CardTitle>
+                <CardTitle className="text-xs sm:text-sm font-semibold">{t('dashboard.operationsAndProduction')}</CardTitle>
               </div>
             </CardHeader>
             <CardContent className="p-2">
@@ -208,7 +210,7 @@ export default function OperationsDashboardPage() {
             <CardHeader className="pb-2 pt-2 sm:pt-3 px-3 sm:px-4">
               <div className="flex items-center gap-2">
                 <Target className="w-4 h-4 text-primary" />
-                <CardTitle className="text-xs sm:text-sm font-semibold">المبيعات والأهداف</CardTitle>
+                <CardTitle className="text-xs sm:text-sm font-semibold">{t('dashboard.salesAndTargets')}</CardTitle>
               </div>
             </CardHeader>
             <CardContent className="p-2">
@@ -240,8 +242,8 @@ export default function OperationsDashboardPage() {
                 {new Date().toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
               </div>
               <div className="flex items-center gap-4 text-xs">
-                <span className="text-muted-foreground">أوامر مكتملة: <span className="font-medium text-foreground">{stats?.completedOrders || 0}/{stats?.todayOrders || 0}</span></span>
-                <span className="text-muted-foreground">فحوصات: <span className="font-medium text-foreground">{stats?.qualityChecks || 0}</span></span>
+                <span className="text-muted-foreground">{t('dashboard.completedOrders')} <span className="font-medium text-foreground">{stats?.completedOrders || 0}/{stats?.todayOrders || 0}</span></span>
+                <span className="text-muted-foreground">{t('dashboard.qualityChecks')} <span className="font-medium text-foreground">{stats?.qualityChecks || 0}</span></span>
               </div>
             </div>
           </CardContent>

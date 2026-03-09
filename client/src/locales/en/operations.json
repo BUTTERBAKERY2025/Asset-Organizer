@@ -919,5 +919,61 @@
     "qualityCol": "Quality Rate",
     "avgTicketCol": "Average Ticket",
     "salesName": "Sales"
+  },
+  "dashboard": {
+    "title": "Operations Dashboard",
+    "subtitle": "Overview of daily production and operations",
+    "todayProduction": "Today's Production",
+    "completionRate": "Completion Rate",
+    "wasteRate": "Waste Rate",
+    "todayShifts": "Today's Shifts",
+    "qualityRate": "Quality Rate",
+    "operationsAndProduction": "Operations & Production",
+    "salesAndTargets": "Sales & Targets",
+    "completedOrders": "Completed Orders:",
+    "qualityChecks": "Quality Checks:",
+    "opLinks": {
+      "branchShifts": "Branch Open/Close",
+      "branchShiftsDesc": "Daily checklists with documentation",
+      "products": "Products",
+      "productsDesc": "Product catalog management",
+      "productLabel": "product",
+      "branchEmployees": "Branch Employees",
+      "branchEmployeesDesc": "Comprehensive employee, shift & attendance management",
+      "shiftLabel": "shift",
+      "productionOrders": "Production Orders",
+      "productionOrdersDesc": "Track production orders",
+      "orderLabel": "order",
+      "qualityControl": "Quality Control",
+      "qualityControlDesc": "Quality inspections",
+      "checkLabel": "check",
+      "displayBarWaste": "Display Bar & Waste",
+      "displayBarWasteDesc": "Production receipt & waste tracking",
+      "opsEmployees": "Operations Staff",
+      "opsEmployeesDesc": "Team management"
+    },
+    "salesLinks": {
+      "cashierJournal": "Cashier Journal",
+      "cashierJournalDesc": "Record daily sales",
+      "salesAnalytics": "Sales Analytics",
+      "salesAnalyticsDesc": "Sales performance analysis",
+      "pnl": "Profit & Loss",
+      "pnlDesc": "Comprehensive revenue & expense analysis",
+      "targetPlanning": "Target Planning",
+      "targetPlanningDesc": "Set monthly targets",
+      "targetDashboard": "Target Dashboard",
+      "targetDashboardDesc": "Track target achievement",
+      "incentives": "Incentive Management",
+      "incentivesDesc": "Incentive & rewards system",
+      "opsReports": "Operations Reports",
+      "opsReportsDesc": "Comprehensive reports"
+    },
+    "quickActions": {
+      "branchShift": "Open/Close Branch",
+      "newJournal": "New Journal",
+      "branchEmployees": "Branch Staff",
+      "productionOrder": "Production Order",
+      "qualityCheck": "Quality Check"
+    }
   }
 }

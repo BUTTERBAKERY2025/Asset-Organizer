@@ -919,5 +919,61 @@
     "qualityCol": "نسبة الجودة",
     "avgTicketCol": "متوسط الفاتورة",
     "salesName": "المبيعات"
+  },
+  "dashboard": {
+    "title": "لوحة تحكم التشغيل",
+    "subtitle": "نظرة عامة على عمليات الإنتاج والتشغيل اليومية",
+    "todayProduction": "إنتاج اليوم",
+    "completionRate": "نسبة الإنجاز",
+    "wasteRate": "نسبة الهالك",
+    "todayShifts": "ورديات اليوم",
+    "qualityRate": "معدل الجودة",
+    "operationsAndProduction": "التشغيل والإنتاج",
+    "salesAndTargets": "المبيعات والأهداف",
+    "completedOrders": "أوامر مكتملة:",
+    "qualityChecks": "فحوصات:",
+    "opLinks": {
+      "branchShifts": "فتح وإغلاق الفروع",
+      "branchShiftsDesc": "قوائم التحقق اليومية مع التوثيق",
+      "products": "المنتجات",
+      "productsDesc": "إدارة كتالوج المنتجات",
+      "productLabel": "منتج",
+      "branchEmployees": "إدارة موظفي الفروع",
+      "branchEmployeesDesc": "إدارة شاملة للموظفين والورديات والحضور",
+      "shiftLabel": "وردية",
+      "productionOrders": "أوامر الإنتاج",
+      "productionOrdersDesc": "متابعة أوامر الإنتاج",
+      "orderLabel": "أمر",
+      "qualityControl": "مراقبة الجودة",
+      "qualityControlDesc": "فحوصات الجودة",
+      "checkLabel": "فحص",
+      "displayBarWaste": "بار العرض والهالك",
+      "displayBarWasteDesc": "استلام الإنتاج ومتابعة الهالك",
+      "opsEmployees": "موظفي التشغيل",
+      "opsEmployeesDesc": "إدارة فريق العمل"
+    },
+    "salesLinks": {
+      "cashierJournal": "يومية الكاشير",
+      "cashierJournalDesc": "تسجيل المبيعات اليومية",
+      "salesAnalytics": "تحليلات المبيعات",
+      "salesAnalyticsDesc": "تحليل أداء المبيعات",
+      "pnl": "الأرباح والخسائر",
+      "pnlDesc": "تحليل مالي شامل للإيرادات والمصروفات",
+      "targetPlanning": "تخطيط الأهداف",
+      "targetPlanningDesc": "تحديد الأهداف الشهرية",
+      "targetDashboard": "لوحة الأهداف",
+      "targetDashboardDesc": "متابعة تحقيق الأهداف",
+      "incentives": "إدارة الحوافز",
+      "incentivesDesc": "نظام الحوافز والمكافآت",
+      "opsReports": "تقارير التشغيل",
+      "opsReportsDesc": "تقارير شاملة"
+    },
+    "quickActions": {
+      "branchShift": "فتح/إغلاق فرع",
+      "newJournal": "يومية جديدة",
+      "branchEmployees": "موظفي الفروع",
+      "productionOrder": "أمر إنتاج",
+      "qualityCheck": "فحص جودة"
+    }
   }
 }
