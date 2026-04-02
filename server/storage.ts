@@ -8056,12 +8056,16 @@ export class DatabaseStorage implements IStorage {
       ))
       .orderBy(employeeSchedules.employeeId, employeeSchedules.scheduleDate);
     
-    const activeBranchEmps = await db.select().from(branchEmployees)
-      .where(and(
-        eq(branchEmployees.branchId, branchId),
-        eq(branchEmployees.status, "active")
-      ));
-    const activeBranchEmpIds = new Set(activeBranchEmps.map(e => e.id));
+    const allBranchEmps = await db.select().from(branchEmployees)
+      .where(eq(branchEmployees.branchId, branchId));
+    const activeBranchEmpIds = new Set(
+      allBranchEmps.filter(e => e.status === "active").map(e => e.id)
+    );
+    // Map from linkedUserId → branchEmployee for terminated-employee detection
+    const linkedUserToEmp = new Map<string, typeof allBranchEmps[0]>();
+    for (const emp of allBranchEmps) {
+      if (emp.linkedUserId) linkedUserToEmp.set(emp.linkedUserId, emp);
+    }
     
     const branchUsers = await db.select().from(users).where(eq(users.branchId, branchId));
     const activeUserIds = new Set(branchUsers.map(u => u.id));
@@ -8074,6 +8078,9 @@ export class DatabaseStorage implements IStorage {
         const empId = parseInt(schedule.employeeId.replace("branch_emp_", ""), 10);
         return !isNaN(empId) && activeBranchEmpIds.has(empId);
       }
+      // For user-UUID schedules, reject if the user is linked to a terminated branch employee
+      const linkedEmp = linkedUserToEmp.get(schedule.employeeId);
+      if (linkedEmp && linkedEmp.status !== 'active') return false;
       return activeUserIds.has(schedule.employeeId);
     });
     
@@ -8091,6 +8098,9 @@ export class DatabaseStorage implements IStorage {
       for (const schedule of userSchedules) {
         if (!allSchedules.some(s => s.id === schedule.id)) {
           if (!schedule.branchId || schedule.branchId === branchId) {
+            // Skip if the user is linked to a terminated branch employee
+            const linkedEmp = linkedUserToEmp.get(schedule.employeeId);
+            if (linkedEmp && linkedEmp.status !== 'active') continue;
             allSchedules.push(schedule);
           }
         }
@@ -8692,6 +8702,13 @@ export class DatabaseStorage implements IStorage {
           }
         }
       }
+      // Also check branchEmployeeId for employees stored with user-UUID format (linkedUserId)
+      if (!_isTransferred && schedule.branchEmployeeId) {
+        const branchEmp = branchEmpLookup.get(schedule.branchEmployeeId);
+        if (branchEmp && (branchEmp.branchId !== branchId || branchEmp.status !== 'active')) {
+          _isTransferred = true;
+        }
+      }
 
       return {
         ...schedule,
@@ -8835,6 +8852,11 @@ export class DatabaseStorage implements IStorage {
             const id = parseInt(s.employeeId.replace('branch_emp_', ''), 10);
             if (todayOffBranchEmpIds.has(id)) return false;
             const emp = recentBranchEmpLookup.get(id);
+            if (emp && (emp.branchId !== branchId || emp.status !== 'active')) return false;
+          }
+          // Also filter employees stored with user-UUID format that have a linked branchEmployeeId
+          if (s.branchEmployeeId) {
+            const emp = recentBranchEmpLookup.get(s.branchEmployeeId);
             if (emp && (emp.branchId !== branchId || emp.status !== 'active')) return false;
           }
           return true;
