@@ -23,6 +23,22 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    const msg = error?.message || '';
+    const isChunkError =
+      error?.name === 'ChunkLoadError' ||
+      msg.includes('dynamically imported module') ||
+      msg.includes('Loading chunk') ||
+      msg.includes('error loading dynamically imported');
+
+    if (isChunkError) {
+      const alreadyReloaded = sessionStorage.getItem('__chunk_reload');
+      if (!alreadyReloaded) {
+        sessionStorage.setItem('__chunk_reload', '1');
+        window.location.reload();
+        return;
+      }
+    }
+
     console.error('Application error:', error);
     console.error('Error stack:', error.stack);
     console.error('Component stack:', errorInfo.componentStack);

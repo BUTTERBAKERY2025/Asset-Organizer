@@ -1,7 +1,7 @@
-const CACHE_NAME = 'butter-v5';
-const STATIC_CACHE = 'butter-static-v5';
+const CACHE_NAME = 'butter-v6';
+const STATIC_CACHE = 'butter-static-v6';
 const FONT_CACHE = 'butter-fonts-v4';
-const API_CACHE = 'butter-api-v4';
+const API_CACHE = 'butter-api-v5';
 
 const STATIC_ASSETS = [
   '/',
@@ -48,7 +48,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (url.pathname.endsWith('.js') || url.pathname.endsWith('.css')) {
-    event.respondWith(cacheFirst(event.request, STATIC_CACHE));
+    event.respondWith(networkFirstJs(event.request));
     return;
   }
 
@@ -88,6 +88,21 @@ self.addEventListener('fetch', (event) => {
 
   event.respondWith(staleWhileRevalidate(event.request));
 });
+
+async function networkFirstJs(request) {
+  try {
+    const response = await fetch(request);
+    if (response.ok) {
+      const cache = await caches.open(STATIC_CACHE);
+      cache.put(request, response.clone());
+    }
+    return response;
+  } catch (e) {
+    const cached = await caches.match(request);
+    if (cached) return cached;
+    return new Response('', { status: 503 });
+  }
+}
 
 async function cacheFirst(request, cacheName) {
   const cached = await caches.match(request);

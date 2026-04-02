@@ -329,6 +329,18 @@ export function preloadRoute(href: string) {
 
 const resolvedModules = new Map<string, any>();
 
+function isChunkLoadError(err: any): boolean {
+  if (!err) return false;
+  const msg = err?.message || '';
+  return (
+    err?.name === 'ChunkLoadError' ||
+    msg.includes('dynamically imported module') ||
+    msg.includes('Loading chunk') ||
+    msg.includes('Failed to fetch') ||
+    msg.includes('error loading dynamically imported')
+  );
+}
+
 export function preloadAndCache(key: string): Promise<any> {
   const existing = resolvedModules.get(key);
   if (existing) return Promise.resolve(existing);
@@ -337,6 +349,16 @@ export function preloadAndCache(key: string): Promise<any> {
   return loader().then(mod => {
     resolvedModules.set(key, mod);
     return mod;
+  }).catch(err => {
+    if (isChunkLoadError(err)) {
+      const alreadyReloaded = sessionStorage.getItem('__chunk_reload');
+      if (!alreadyReloaded) {
+        sessionStorage.setItem('__chunk_reload', '1');
+        window.location.reload();
+        return new Promise(() => {});
+      }
+    }
+    throw err;
   });
 }
 
