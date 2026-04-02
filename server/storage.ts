@@ -8554,7 +8554,8 @@ export class DatabaseStorage implements IStorage {
   async getScheduledEmployeesForAttendance(branchId: string, shiftType: string, date: string): Promise<any[]> {
     console.log(`[ATTENDANCE-DEBUG] Query params: branchId=${branchId}, shiftType=${shiftType}, date=${date}`);
 
-    const schedules = await db.select({
+    // Fetch all schedules for today (both isOff=true and isOff=false) to detect conflicts
+    const allTodaySchedules = await db.select({
       id: employeeSchedules.id,
       employeeId: employeeSchedules.employeeId,
       employeeName: employeeSchedules.employeeName,
@@ -8563,14 +8564,47 @@ export class DatabaseStorage implements IStorage {
       endTime: employeeSchedules.endTime,
       shiftType: employeeSchedules.shiftType,
       scheduleDate: employeeSchedules.scheduleDate,
+      isOff: employeeSchedules.isOff,
     })
     .from(employeeSchedules)
     .where(and(
       eq(employeeSchedules.branchId, branchId),
       eq(employeeSchedules.scheduleDate, date),
-      eq(employeeSchedules.isOff, false),
       eq(employeeSchedules.status, 'scheduled')
     ));
+
+    // Build a set of employees on leave today (isOff=true), keyed by employeeId and branchEmployeeId
+    // Use highest ID to resolve conflicts (most recent record wins)
+    const leaveByEmployee = new Map<string, number>(); // key -> highest ID with isOff=true
+    const workByEmployee = new Map<string, number>();  // key -> highest ID with isOff=false
+    for (const s of allTodaySchedules) {
+      const keys: string[] = [s.employeeId];
+      if (s.branchEmployeeId) {
+        keys.push(`be_${s.branchEmployeeId}`);
+        keys.push(`branch_emp_${s.branchEmployeeId}`);
+      }
+      for (const key of keys) {
+        if (s.isOff) {
+          if (!leaveByEmployee.has(key) || s.id > leaveByEmployee.get(key)!) leaveByEmployee.set(key, s.id);
+        } else {
+          if (!workByEmployee.has(key) || s.id > workByEmployee.get(key)!) workByEmployee.set(key, s.id);
+        }
+      }
+    }
+    // An employee is on leave if their most recent record for today is isOff=true
+    const onLeaveToday = new Set<string>();
+    for (const [key, leaveId] of leaveByEmployee.entries()) {
+      const workId = workByEmployee.get(key);
+      if (!workId || leaveId > workId) {
+        onLeaveToday.add(key);
+      }
+    }
+
+    const schedules = allTodaySchedules.filter(s =>
+      !s.isOff &&
+      !onLeaveToday.has(s.employeeId) &&
+      !(s.branchEmployeeId && onLeaveToday.has(`be_${s.branchEmployeeId}`))
+    );
 
     console.log(`[ATTENDANCE-DEBUG] Main query returned ${schedules.length} schedules for date=${date}`);
     if (schedules.length > 0) {
