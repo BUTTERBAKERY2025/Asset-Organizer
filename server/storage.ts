@@ -8107,14 +8107,35 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
+    // Build a map from employeeId/branch_emp_* → branchEmployee numeric ID for cross-key deduplication
+    const empIdToNumericId = new Map<string, number>();
+    for (const emp of allBranchEmps) {
+      empIdToNumericId.set(`branch_emp_${emp.id}`, emp.id);
+      if (emp.linkedUserId) empIdToNumericId.set(emp.linkedUserId, emp.id);
+    }
+
+    // Unified deduplication: normalize all records to a common key so that
+    // records with branchEmployeeId=123 and records with employeeId="branch_emp_123"
+    // are recognized as the same employee and only the highest-ID record survives.
     const deduped = new Map<string, EmployeeSchedule>();
     for (const schedule of allSchedules) {
-      const key = schedule.branchEmployeeId
-        ? `be_${schedule.branchEmployeeId}_${schedule.scheduleDate}`
-        : `ei_${schedule.employeeId}_${schedule.scheduleDate}`;
-      const existing = deduped.get(key);
+      let normalizedKey: string;
+      if (schedule.branchEmployeeId) {
+        normalizedKey = `be_${schedule.branchEmployeeId}_${schedule.scheduleDate}`;
+      } else if (schedule.employeeId.startsWith('branch_emp_')) {
+        const numId = parseInt(schedule.employeeId.replace('branch_emp_', ''), 10);
+        normalizedKey = !isNaN(numId)
+          ? `be_${numId}_${schedule.scheduleDate}`
+          : `ei_${schedule.employeeId}_${schedule.scheduleDate}`;
+      } else {
+        const numericId = empIdToNumericId.get(schedule.employeeId);
+        normalizedKey = numericId !== undefined
+          ? `be_${numericId}_${schedule.scheduleDate}`
+          : `ei_${schedule.employeeId}_${schedule.scheduleDate}`;
+      }
+      const existing = deduped.get(normalizedKey);
       if (!existing || schedule.id > existing.id) {
-        deduped.set(key, schedule);
+        deduped.set(normalizedKey, schedule);
       }
     }
     const dedupedSchedules = Array.from(deduped.values());

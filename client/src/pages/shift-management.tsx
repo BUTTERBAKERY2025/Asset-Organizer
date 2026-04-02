@@ -440,13 +440,18 @@ export default function ShiftManagementPage() {
       return { ...result, skippedCount };
     },
     onSuccess: async (data: any) => {
+      const hasPartialErrors = data?.errors && data.errors.length > 0;
+      // Clear unsaved flag BEFORE refetch so the useEffect doesn't ignore the fresh data
+      if (!hasPartialErrors) {
+        setHasUnsavedChanges(false);
+      }
       await queryClient.refetchQueries({ queryKey: ["/api/shift-management/bundle", selectedBranch, startDateStr, endDateStr] });
       queryClient.invalidateQueries({ queryKey: ["/api/employee-schedules"] });
       const warnings: string[] = [];
       if (data?.skippedCount > 0) {
         warnings.push(`تم تخطي ${data.skippedCount} موظف غير نشط`);
       }
-      if (data?.errors && data.errors.length > 0) {
+      if (hasPartialErrors) {
         warnings.push(data.errors[0]);
         setHasUnsavedChanges(true);
         toast({ 
@@ -455,7 +460,6 @@ export default function ShiftManagementPage() {
           variant: "destructive",
         });
       } else {
-        setHasUnsavedChanges(false);
         if (warnings.length > 0) {
           toast({ 
             title: `تم حفظ ${data.saved || 0} من ${data.total || 0} جدول`,
