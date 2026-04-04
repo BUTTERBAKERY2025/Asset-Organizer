@@ -441,10 +441,10 @@ export default function ShiftManagementPage() {
     },
     onSuccess: async (data: any) => {
       const hasPartialErrors = data?.errors && data.errors.length > 0;
-      // Clear unsaved flag BEFORE refetch so the useEffect doesn't ignore the fresh data
-      if (!hasPartialErrors) {
-        setHasUnsavedChanges(false);
-      }
+      // Refetch FIRST while hasUnsavedChanges=true so the useEffect doesn't wipe
+      // the user's current view with old data mid-refetch.
+      // After fresh data arrives, set hasUnsavedChanges=false → useEffect then
+      // loads the freshly confirmed server data into scheduleData.
       await queryClient.refetchQueries({ queryKey: ["/api/shift-management/bundle", selectedBranch, startDateStr, endDateStr] });
       queryClient.invalidateQueries({ queryKey: ["/api/employee-schedules"] });
       const warnings: string[] = [];
@@ -460,6 +460,7 @@ export default function ShiftManagementPage() {
           variant: "destructive",
         });
       } else {
+        setHasUnsavedChanges(false);
         if (warnings.length > 0) {
           toast({ 
             title: `تم حفظ ${data.saved || 0} من ${data.total || 0} جدول`,

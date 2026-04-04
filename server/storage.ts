@@ -8244,6 +8244,40 @@ export class DatabaseStorage implements IStorage {
       const withBranchEmpId = deduplicatedSchedules.filter(s => s.branchEmployeeId != null);
       const withoutBranchEmpId = deduplicatedSchedules.filter(s => s.branchEmployeeId == null);
 
+      // CRITICAL FIX: Before upserting records with branchEmployeeId, delete any old
+      // "legacy" records for the same employees that have branch_employee_id IS NULL.
+      // These old records were created before branchEmployeeId was tracked and cause
+      // the schedule to appear to revert on reload.
+      if (withBranchEmpId.length > 0) {
+        const oldEmpIds: string[] = [];
+        const branchIds = new Set<string>();
+        const scheduleDates = new Set<string>();
+        for (const s of withBranchEmpId) {
+          if (s.branchId) branchIds.add(s.branchId);
+          scheduleDates.add(s.scheduleDate);
+          // Possible old-style employee_id values for this employee
+          oldEmpIds.push(`branch_emp_${s.branchEmployeeId}`);
+          if (s.employeeId && !s.employeeId.startsWith('branch_emp_')) {
+            oldEmpIds.push(s.employeeId);
+          }
+        }
+        if (oldEmpIds.length > 0 && branchIds.size > 0 && scheduleDates.size > 0) {
+          const branchIdList = Array.from(branchIds);
+          const dateList = Array.from(scheduleDates);
+          const cleanupSql = `
+            DELETE FROM employee_schedules
+            WHERE branch_employee_id IS NULL
+              AND employee_id = ANY($1::text[])
+              AND branch_id = ANY($2::text[])
+              AND schedule_date = ANY($3::text[])
+          `;
+          const deleted = await client.query(cleanupSql, [oldEmpIds, branchIdList, dateList]);
+          if (deleted.rowCount && deleted.rowCount > 0) {
+            console.log(`[BULK SCHEDULE] Cleaned up ${deleted.rowCount} legacy records before upsert`);
+          }
+        }
+      }
+
       if (withBranchEmpId.length > 0) {
         const { values, placeholders } = this.buildScheduleParams(withBranchEmpId);
         const sql = `

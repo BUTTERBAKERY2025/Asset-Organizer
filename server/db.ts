@@ -183,6 +183,29 @@ export async function runStartupMigrations() {
     }
 
     try {
+      // STEP 1: Remove cross-group duplicates — old records with branch_employee_id IS NULL
+      // that have a newer record with branch_employee_id IS NOT NULL for the same employee/date/branch.
+      const crossDupResult = await pool.query(`
+        DELETE FROM employee_schedules old_rec
+        WHERE old_rec.branch_employee_id IS NULL
+          AND old_rec.branch_id IS NOT NULL
+          AND EXISTS (
+            SELECT 1 FROM employee_schedules new_rec
+            WHERE new_rec.branch_employee_id IS NOT NULL
+              AND new_rec.branch_id = old_rec.branch_id
+              AND new_rec.schedule_date = old_rec.schedule_date
+              AND new_rec.id > old_rec.id
+              AND (
+                new_rec.employee_id = old_rec.employee_id
+                OR old_rec.employee_id = 'branch_emp_' || new_rec.branch_employee_id::text
+              )
+          )
+      `);
+      if (crossDupResult.rowCount && crossDupResult.rowCount > 0) {
+        console.log(`[SCHEDULE CLEANUP] Removed ${crossDupResult.rowCount} legacy cross-group duplicate records`);
+      }
+
+      // STEP 2: Remove within-group duplicates for branch_employee_id IS NOT NULL
       const dupCheck = await pool.query(`
         SELECT COUNT(*) as cnt FROM (
           SELECT branch_employee_id, schedule_date, branch_id, COUNT(*) as c
