@@ -9,6 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -32,7 +34,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, Search, Loader2, Building2, Calendar, DollarSign, Eye } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Loader2, Building2, Calendar, DollarSign, Eye, Check, ChevronDown } from "lucide-react";
 import { Link } from "wouter";
 import type { ConstructionProject } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
@@ -152,6 +154,26 @@ export default function ConstructionProjectsPage() {
     },
   });
 
+  // Lightweight mutation for inline status quick-edit from the project card/badge
+  const updateStatusMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: number; status: string }) => {
+      const res = await fetch(`/api/construction/projects/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) throw new Error("Failed to update status");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/construction/projects"] });
+      toast({ title: "تم تحديث الحالة" });
+    },
+    onError: () => {
+      toast({ title: "حدث خطأ", description: "فشل تحديث الحالة", variant: "destructive" });
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
       const res = await fetch(`/api/construction/projects/${id}`, { method: "DELETE" });
@@ -186,6 +208,50 @@ export default function ConstructionProjectsPage() {
       <Badge className={`${statusInfo?.color || "bg-gray-500"} text-white text-[10px] sm:text-xs`}>
         {statusInfo?.label || status}
       </Badge>
+    );
+  };
+
+  // Inline quick-edit status badge: click to change status from the project card.
+  // Falls back to the read-only badge when the user lacks edit permission.
+  const renderQuickStatusBadge = (project: ConstructionProject) => {
+    if (!canEditProject) return getStatusBadge(project.status);
+    const statusInfo = PROJECT_STATUSES.find((s) => s.value === project.status);
+    const isPending = updateStatusMutation.isPending && updateStatusMutation.variables?.id === project.id;
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild disabled={isPending}>
+          <button
+            type="button"
+            className={`${statusInfo?.color || "bg-gray-500"} text-white text-[10px] sm:text-xs inline-flex items-center gap-1 rounded-md px-2 py-1 hover:opacity-90 transition-opacity min-h-[28px] ${isPending ? "opacity-60 cursor-wait" : "cursor-pointer"}`}
+            data-testid={`quick-status-${project.id}`}
+            aria-label="تغيير الحالة"
+          >
+            {isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+            <span>{statusInfo?.label || project.status}</span>
+            <ChevronDown className="w-3 h-3 opacity-80" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-[160px]">
+          <DropdownMenuLabel className="text-xs">تغيير الحالة</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {PROJECT_STATUSES.map((s) => (
+            <DropdownMenuItem
+              key={s.value}
+              onSelect={() => {
+                if (s.value !== project.status) {
+                  updateStatusMutation.mutate({ id: project.id, status: s.value });
+                }
+              }}
+              className="cursor-pointer min-h-[40px] gap-2"
+              data-testid={`quick-status-option-${project.id}-${s.value}`}
+            >
+              <span className={`w-2 h-2 rounded-full ${s.color}`} />
+              <span className="flex-1">{s.label}</span>
+              {s.value === project.status && <Check className="w-4 h-4 text-primary" />}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
     );
   };
 
@@ -286,7 +352,7 @@ export default function ConstructionProjectsPage() {
                 <CardHeader className="p-3 sm:p-4 md:p-6 pb-2">
                   <div className="flex items-start justify-between">
                     <CardTitle className="text-lg">{project.title}</CardTitle>
-                    {getStatusBadge(project.status)}
+                    {renderQuickStatusBadge(project)}
                   </div>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Building2 className="w-4 h-4" />

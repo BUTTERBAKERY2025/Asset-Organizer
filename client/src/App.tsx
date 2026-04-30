@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { PWAInstallPrompt } from "@/components/pwa-install-prompt";
 import { OfflineIndicator } from "@/components/offline-indicator";
+import { SlowConnectionBanner } from "@/components/slow-connection-banner";
 import { InactivityLogout } from "@/components/inactivity-logout";
 import { ProductionProvider } from "@/contexts/ProductionContext";
 import { ProtectedRoute, PublicOnlyRoute, ModuleProtectedRoute } from "@/components/protected-route";
@@ -412,6 +413,7 @@ function App() {
               <Router />
               <PWAInstallPrompt />
               <OfflineIndicator />
+              <SlowConnectionBanner />
             </TooltipProvider>
           </ProductionProvider>
         </AuthGate>

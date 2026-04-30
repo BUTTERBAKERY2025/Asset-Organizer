@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -56,7 +57,10 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { ChevronDown } from "lucide-react";
 import { generatePaymentRequestsPDF } from "@/lib/pdf-generator";
 
 const paymentRequestFormSchema = z.object({
@@ -346,6 +350,76 @@ export default function PaymentRequestsPage() {
     return REQUEST_STATUSES.find((s) => s.value === status) || REQUEST_STATUSES[0];
   };
 
+  // Inline quick-edit status badge — single click to approve / reject / mark paid
+  // without opening the full row actions. Permissions enforced; falls back to
+  // a plain Badge when the user has no payment-approval permission or the
+  // status is terminal (rejected / paid).
+  const renderStatusActionBadge = (request: PaymentRequest) => {
+    const statusInfo = getStatusInfo(request.status);
+    const canChange =
+      canApprovePayment &&
+      (request.status === "pending" || request.status === "approved");
+    if (!canChange) {
+      return (
+        <Badge className={`${statusInfo.color} text-white`}>
+          {statusInfo.label}
+        </Badge>
+      );
+    }
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className={`${statusInfo.color} text-white text-xs inline-flex items-center gap-1 rounded-md px-2 py-1 hover:opacity-90 transition-opacity`}
+            data-testid={`quick-status-payment-${request.id}`}
+            aria-label="تغيير حالة الطلب"
+          >
+            <span>{statusInfo.label}</span>
+            <ChevronDown className="w-3 h-3 opacity-80" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-[170px]">
+          <DropdownMenuLabel className="text-xs">إجراء سريع</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {request.status === "pending" && (
+            <>
+              <DropdownMenuItem
+                className="cursor-pointer min-h-[40px] gap-2"
+                onSelect={() => approveMutation.mutate(request.id)}
+                data-testid={`quick-approve-${request.id}`}
+              >
+                <CheckCircle className="w-4 h-4 text-green-600" />
+                <span>اعتماد الطلب</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="cursor-pointer min-h-[40px] gap-2"
+                onSelect={() => {
+                  setSelectedRequest(request);
+                  setIsRejectOpen(true);
+                }}
+                data-testid={`quick-reject-${request.id}`}
+              >
+                <XCircle className="w-4 h-4 text-red-600" />
+                <span>رفض الطلب</span>
+              </DropdownMenuItem>
+            </>
+          )}
+          {request.status === "approved" && (
+            <DropdownMenuItem
+              className="cursor-pointer min-h-[40px] gap-2"
+              onSelect={() => markPaidMutation.mutate(request.id)}
+              data-testid={`quick-mark-paid-${request.id}`}
+            >
+              <DollarSign className="w-4 h-4 text-green-600" />
+              <span>تأكيد الدفع</span>
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  };
+
   const getTypeInfo = (type: string) => {
     return REQUEST_TYPES.find((t) => t.value === type) || REQUEST_TYPES[0];
   };
@@ -420,8 +494,17 @@ export default function PaymentRequestsPage() {
         <>
           <div className="space-y-2">
             <Label className="text-sm">المقاول *</Label>
-            <Select
+            <SearchableSelect
               value={form.watch("contractorId")?.toString() || ""}
+              placeholder="اختر المقاول"
+              searchPlaceholder="ابحث باسم المقاول أو التخصص..."
+              emptyText={contractors.length === 0 ? "لا يوجد مقاولون مسجلون" : "لا توجد نتائج"}
+              dataTestid={`select-contractor${testIdSuffix}`}
+              options={contractors.map((contractor) => ({
+                value: contractor.id.toString(),
+                label: contractor.name,
+                sublabel: contractor.specialization || undefined,
+              }))}
               onValueChange={(val) => {
                 const contractorId = parseInt(val, 10);
                 form.setValue("contractorId", contractorId);
@@ -440,29 +523,7 @@ export default function PaymentRequestsPage() {
                   if (contractor) form.setValue("beneficiaryName", contractor.name);
                 }
               }}
-            >
-              <SelectTrigger data-testid={`select-contractor${testIdSuffix}`}>
-                <SelectValue placeholder="اختر المقاول" />
-              </SelectTrigger>
-              <SelectContent className="max-h-60 overflow-y-auto">
-                {contractors.length === 0 ? (
-                  <div className="p-2 text-sm text-gray-500 text-center">
-                    لا يوجد مقاولون مسجلون
-                  </div>
-                ) : (
-                  contractors.map((contractor) => (
-                    <SelectItem key={contractor.id} value={contractor.id.toString()}>
-                      {contractor.name}
-                      {contractor.specialization && (
-                        <span className="text-xs text-gray-500 mr-2">
-                          ({contractor.specialization})
-                        </span>
-                      )}
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
+            />
           </div>
 
           {watchContractorId && (
@@ -471,47 +532,33 @@ export default function PaymentRequestsPage() {
                 <FileText className="h-4 w-4 text-gray-600" />
                 ربط بعقد محدد (اختياري)
               </Label>
-              <Select
+              <SearchableSelect
                 value={form.watch("contractId")?.toString() || "none"}
+                placeholder="بدون عقد محدد (دفعة مباشرة)"
+                searchPlaceholder="ابحث باسم العقد أو رقمه..."
+                emptyText={
+                  filteredContractsForForm.length === 0
+                    ? `لا توجد عقود لهذا المقاول${watchProjectId ? " في هذا المشروع" : ""}`
+                    : "لا توجد نتائج"
+                }
+                dataTestid={`select-contract${testIdSuffix}`}
+                options={[
+                  { value: "none", label: "بدون عقد محدد (دفعة مباشرة)" },
+                  ...filteredContractsForForm.map((contract) => {
+                    const remaining = (contract.totalAmount || 0) - (contract.paidAmount || 0);
+                    return {
+                      value: contract.id.toString(),
+                      label: contract.title,
+                      sublabel: contract.contractNumber
+                        ? `(${contract.contractNumber}) — متبقي ${remaining.toLocaleString()} ر.س`
+                        : `متبقي ${remaining.toLocaleString()} ر.س`,
+                    };
+                  }),
+                ]}
                 onValueChange={(val) =>
                   form.setValue("contractId", val === "none" ? null : parseInt(val, 10))
                 }
-              >
-                <SelectTrigger data-testid={`select-contract${testIdSuffix}`}>
-                  <SelectValue placeholder="بدون عقد محدد" />
-                </SelectTrigger>
-                <SelectContent className="max-h-60 overflow-y-auto">
-                  <SelectItem value="none">بدون عقد محدد (دفعة مباشرة)</SelectItem>
-                  {filteredContractsForForm.length === 0 ? (
-                    <div className="p-2 text-xs text-gray-500 text-center">
-                      لا توجد عقود لهذا المقاول
-                      {watchProjectId ? " في هذا المشروع" : ""}
-                    </div>
-                  ) : (
-                    filteredContractsForForm.map((contract) => {
-                      const remaining = (contract.totalAmount || 0) - (contract.paidAmount || 0);
-                      return (
-                        <SelectItem key={contract.id} value={contract.id.toString()}>
-                          <div className="flex flex-col items-start text-right w-full">
-                            <span className="font-medium">
-                              {contract.title}
-                              {contract.contractNumber && (
-                                <span className="text-xs text-gray-500 mr-2">
-                                  ({contract.contractNumber})
-                                </span>
-                              )}
-                            </span>
-                            <span className="text-xs text-gray-600">
-                              المتبقي: {remaining.toLocaleString()} ر.س من{" "}
-                              {(contract.totalAmount || 0).toLocaleString()} ر.س
-                            </span>
-                          </div>
-                        </SelectItem>
-                      );
-                    })
-                  )}
-                </SelectContent>
-              </Select>
+              />
               <p className="text-xs text-amber-800 bg-amber-100/50 p-2 rounded">
                 💡 سيظهر هذا الطلب تلقائياً في كشف حساب المقاول بعد اعتماده ودفعه
               </p>
@@ -1123,9 +1170,7 @@ export default function PaymentRequestsPage() {
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            <Badge className={`${statusInfo.color} text-white`}>
-                              {statusInfo.label}
-                            </Badge>
+                            {renderStatusActionBadge(request)}
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1">
@@ -1225,21 +1270,18 @@ export default function PaymentRequestsPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>المشروع *</Label>
-                <Select
+                <SearchableSelect
                   value={form.watch("projectId")?.toString() || ""}
                   onValueChange={handleProjectChange}
-                >
-                  <SelectTrigger data-testid="select-project">
-                    <SelectValue placeholder="اختر المشروع" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-60 overflow-y-auto">
-                    {projects.map((project) => (
-                      <SelectItem key={project.id} value={project.id.toString()}>
-                        {project.title}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  placeholder="اختر المشروع"
+                  searchPlaceholder="ابحث باسم المشروع..."
+                  emptyText="لا توجد مشاريع"
+                  dataTestid="select-project"
+                  options={projects.map((project) => ({
+                    value: project.id.toString(),
+                    label: project.title,
+                  }))}
+                />
                 {form.formState.errors.projectId && (
                   <p className="text-sm text-red-500">{form.formState.errors.projectId.message}</p>
                 )}
@@ -1408,21 +1450,18 @@ export default function PaymentRequestsPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>المشروع *</Label>
-                <Select
+                <SearchableSelect
                   value={form.watch("projectId")?.toString() || ""}
                   onValueChange={handleProjectChange}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="اختر المشروع" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-60 overflow-y-auto">
-                    {projects.map((project) => (
-                      <SelectItem key={project.id} value={project.id.toString()}>
-                        {project.title}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  placeholder="اختر المشروع"
+                  searchPlaceholder="ابحث باسم المشروع..."
+                  emptyText="لا توجد مشاريع"
+                  dataTestid="select-project-edit"
+                  options={projects.map((project) => ({
+                    value: project.id.toString(),
+                    label: project.title,
+                  }))}
+                />
               </div>
 
               <div className="space-y-2">

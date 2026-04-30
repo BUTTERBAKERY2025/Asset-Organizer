@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -983,16 +984,21 @@ export default function ConstructionProjectDetailPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>المقاول</Label>
-                  <Select value={form.watch("contractorId")?.toString() || ""} onValueChange={(v) => form.setValue("contractorId", v ? parseInt(v) : null)}>
-                    <SelectTrigger data-testid="select-work-item-contractor">
-                      <SelectValue placeholder="اختر المقاول" />
-                    </SelectTrigger>
-                    <SelectContent className="max-h-60 overflow-y-auto">
-                      {contractors.map((con) => (
-                        <SelectItem key={con.id} value={con.id.toString()}>{con.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    value={form.watch("contractorId")?.toString() || ""}
+                    onValueChange={(v) => form.setValue("contractorId", v ? parseInt(v) : null)}
+                    placeholder="اختر المقاول"
+                    searchPlaceholder="ابحث باسم المقاول أو التخصص..."
+                    emptyText="لا يوجد مقاولون"
+                    dataTestid="select-work-item-contractor"
+                    clearable
+                    onClear={() => form.setValue("contractorId", null)}
+                    options={contractors.map((con) => ({
+                      value: con.id.toString(),
+                      label: con.name,
+                      sublabel: con.specialization || undefined,
+                    }))}
+                  />
                 </div>
               </div>
 

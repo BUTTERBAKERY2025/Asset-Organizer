@@ -213,6 +213,11 @@ export default function DailyWorkLogPage() {
     }
   }, [workers, form]);
 
+  // Refs used by the auto-save / unsaved-changes logic. Defined here so the
+  // saveMutation onSuccess callback below can update `hasFinalSubmittedRef`.
+  const lastAutoSaveAttemptRef = useRef<number>(0);
+  const hasFinalSubmittedRef = useRef<boolean>(false);
+
   const saveMutation = useMutation({
     mutationFn: async (data: FormData & { status?: string }) => {
       const payload = {
@@ -230,7 +235,18 @@ export default function DailyWorkLogPage() {
     },
     onSuccess: (created, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/construction/daily-logs"] });
+      // Refetch the detail query so `isSubmitted` flips immediately after a
+      // successful final submit. Without this, the next auto-save tick could
+      // PATCH status back to "draft" because `existingLog.status` is stale.
+      if (isEdit && logId) {
+        queryClient.invalidateQueries({ queryKey: [`/api/construction/daily-logs/${logId}`] });
+      }
       const wasSubmit = (variables as any)?.status === "submitted";
+      if (wasSubmit) {
+        // Lock auto-save and clear the unsaved-changes guard only AFTER the
+        // server confirms the submission.
+        hasFinalSubmittedRef.current = true;
+      }
       toast({
         title: wasSubmit
           ? "تم اعتماد اليومية بنجاح"
@@ -375,16 +391,71 @@ export default function DailyWorkLogPage() {
     setWorkers((prev) => prev.filter((_, i) => i !== idx));
   };
 
+  const [lastAutoSave, setLastAutoSave] = useState<Date | null>(null);
+
   const onSaveDraft = () => {
     form.handleSubmit((data) => saveMutation.mutate({ ...data, status: "draft" }))();
   };
 
   const onSubmitFinal = () => {
+    // NOTE: don't set hasFinalSubmittedRef here — only flip it in the
+    // saveMutation onSuccess after the server confirms, otherwise a failed
+    // submit silently disables the unsaved-changes guard.
     form.handleSubmit((data) => saveMutation.mutate({ ...data, status: "submitted" }))();
   };
 
   const photosCount = (existingLog?.photos?.length || 0) + pendingPhotos.length;
-  const isSubmitted = (existingLog as any)?.status === "submitted";
+  const isSubmitted =
+    hasFinalSubmittedRef.current || (existingLog as any)?.status === "submitted";
+
+  // Auto-save draft every 30s when the form is dirty and not yet submitted.
+  // Skips the auto-save when a save is already in flight or one ran in the
+  // last 25s, to avoid stomping a manual save click on slow connections.
+  // Guards on hasFinalSubmittedRef so a finalized log is never downgraded.
+  useEffect(() => {
+    if (isSubmitted) return;
+    const interval = setInterval(() => {
+      if (hasFinalSubmittedRef.current) return;
+      const now = Date.now();
+      if (saveMutation.isPending) return;
+      if (!form.formState.isDirty && pendingPhotos.length === 0) return;
+      if (now - lastAutoSaveAttemptRef.current < 25_000) return;
+      lastAutoSaveAttemptRef.current = now;
+      form.handleSubmit(
+        (data) => {
+          saveMutation.mutate(
+            { ...data, status: "draft" },
+            {
+              onSuccess: () => {
+                setLastAutoSave(new Date());
+                form.reset(data, { keepValues: true });
+              },
+            },
+          );
+        },
+        // Silently ignore validation errors during auto-save — the user will
+        // see them when they click "حفظ مسودة" or "اعتماد".
+        () => {},
+      )();
+    }, 30_000);
+    return () => clearInterval(interval);
+  }, [form, saveMutation, isSubmitted, pendingPhotos.length]);
+
+  // beforeunload guard: warn the user if they try to close / refresh the
+  // tab with unsaved changes. Browsers ignore the custom message and show
+  // their own generic prompt — that's fine.
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (hasFinalSubmittedRef.current) return;
+      if (isSubmitted) return;
+      if (!form.formState.isDirty && pendingPhotos.length === 0) return;
+      e.preventDefault();
+      e.returnValue = "لديك تغييرات غير محفوظة. هل تريد المغادرة فعلاً؟";
+      return e.returnValue;
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [form.formState.isDirty, isSubmitted, pendingPhotos.length]);
 
   return (
     <Layout>
@@ -406,6 +477,18 @@ export default function DailyWorkLogPage() {
                   ? `${isSubmitted ? "معتمدة" : "مسودة"} • ${existingLog?.logDate || ""}`
                   : "تسجيل ديناميكي للأعمال المنفذة في الموقع"}
               </p>
+              {lastAutoSave && !isSubmitted && (
+                <p
+                  className="text-xs text-green-600 mt-0.5"
+                  data-testid="text-last-autosave"
+                >
+                  آخر حفظ تلقائي:{" "}
+                  {lastAutoSave.toLocaleTimeString("ar-SA", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </p>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">

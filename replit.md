@@ -41,6 +41,11 @@ The system uses a modern web architecture with a React-based frontend and a Node
 - **Touch targets**: Min height `h-11` (44px Apple HIG) on critical inputs. Star rating buttons in contractors form expanded to 44×44 hit area with larger 28px stars.
 - **Dialog sizing**: Construction project / contractor dialogs widened to `sm:max-w-2xl max-h-[90vh] overflow-y-auto` to reduce scrolling pain on iPad portrait.
 - **Parallel photo upload**: Daily work log photos upload with concurrency=3 (instead of sequential), ~3× faster on slow site networks while avoiding socket exhaustion.
+- **Searchable comboboxes**: Reusable `SearchableSelect` (Popover + Command) replaces large `<Select>` dropdowns (>15 items) for projects, contractors, and contracts in payment requests and work-item dialogs. RTL keyboard search, optional sublabel/badge/clearable, 44px touch targets.
+- **Inline status quick-edit**: Status badges in `construction-projects` (cards) and `payment-requests` (table) act as `DropdownMenu` triggers. One-click status change without opening the edit modal — gated by existing edit/approve permissions.
+- **Slow-connection banner**: `SlowConnectionBanner` pings `/api/health` every 25s and shows an amber banner when latency exceeds 2.5s. Complements the existing offline indicator (which only handles full disconnect). New `/api/health` endpoint added to `server/routes.ts` with `Cache-Control: no-store`.
+- **Auto-save daily work log**: Drafts auto-save every 30s when the form is dirty (skipped if a save is in flight or a save ran in the last 25s). Header shows `آخر حفظ تلقائي: HH:MM`. `beforeunload` guard warns the user before leaving with unsaved changes. After a successful final submit the detail query is invalidated and `hasFinalSubmittedRef` flips synchronously so the next auto-save tick is a no-op. Backend PATCH `/api/construction/daily-logs/:id` returns 409 if a stale request tries to downgrade `submitted` → `draft` (defense-in-depth against slow-network race).
+- **RTL polish**: Replaced LTR `→` with `←` between start/end times in daily-log printable. Contractor-statement-detail description column widened from `max-w-[300px]` to `max-w-[500px]` (full text remains in `title` tooltip).
 
 ### Performance Optimization
 - **Caching**: Server-side in-memory cache, tiered caching strategy, client persistent cache, report-specific TTLs.

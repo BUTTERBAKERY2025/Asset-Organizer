@@ -141,6 +141,13 @@ export async function registerRoutes(
     res.json({ version: "2026-02-23-v3", build: Date.now(), status: "ok" });
   });
 
+  // Lightweight health-check endpoint used by the frontend connection-status
+  // indicator to measure latency. Bypasses auth + cache for accurate measurement.
+  app.get("/api/health", (_req, res) => {
+    res.set("Cache-Control", "no-store, no-cache, must-revalidate");
+    res.json({ ok: true, ts: Date.now() });
+  });
+
   app.get("/api/attendance-debug", isAuthenticated, requirePermission("branch_employees", "view"), async (_req, res) => {
     try {
       const branchId = (_req.query.branchId as string) || "tabuk";
@@ -2669,6 +2676,15 @@ export async function registerRoutes(
       // Normalize status to whitelist
       if (validated.status !== undefined && !["draft", "submitted"].includes(validated.status as string)) {
         validated.status = "draft";
+      }
+      // Defense-in-depth: once a log is finalized (submitted), don't allow a
+      // PATCH to silently downgrade it back to draft (e.g. a stale auto-save
+      // tick on a slow connection). Only an explicit re-submission is allowed.
+      if (
+        (existing as any).status === "submitted" &&
+        validated.status === "draft"
+      ) {
+        return res.status(409).json({ error: "لا يمكن إرجاع يومية معتمدة إلى مسودة" });
       }
       const updated = await storage.updateDailyLog(id, validated);
       res.json(updated);

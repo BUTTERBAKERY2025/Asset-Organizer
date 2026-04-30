@@ -401,7 +401,7 @@ export default function ContractorStatementDetailPage() {
                               <div className="text-xs text-muted-foreground">{t.contractTitle}</div>
                             )}
                           </TableCell>
-                          <TableCell className="max-w-[300px] truncate" title={t.description}>
+                          <TableCell className="max-w-[500px] truncate" title={t.description}>
                             {t.description}
                           </TableCell>
                           <TableCell className="font-bold text-blue-600">

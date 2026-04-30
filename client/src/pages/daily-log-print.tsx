@@ -134,7 +134,7 @@ export default function DailyLogPrintPage() {
                 <td className="border p-2">{(log as any).workLocation || "-"}</td>
                 <td className="border p-2 font-bold">ساعات العمل</td>
                 <td className="border p-2 font-mono">
-                  {(log as any).startTime || "--:--"} → {(log as any).endTime || "--:--"}
+                  {(log as any).startTime || "--:--"} ← {(log as any).endTime || "--:--"}
                   {(log as any).temperature && ` • ${(log as any).temperature}`}
                 </td>
               </tr>
