@@ -393,15 +393,43 @@ export default function DailyWorkLogPage() {
 
   const [lastAutoSave, setLastAutoSave] = useState<Date | null>(null);
 
+  // When react-hook-form validation fails, surface the first error as a toast
+  // and jump back to the "basics" tab — otherwise the user clicks "حفظ مسودة"
+  // from the photos tab and nothing happens because the required fields
+  // (project / date / supervisor / description) are silently invalid.
+  const handleValidationErrors = (errors: Record<string, any>) => {
+    const requiredFieldTabs: Record<string, string> = {
+      projectId: "basics",
+      logDate: "basics",
+      supervisorName: "basics",
+      workDescription: "basics",
+    };
+    const firstField = Object.keys(errors)[0];
+    const firstMsg = errors[firstField]?.message || "تأكد من تعبئة الحقول المطلوبة";
+    const targetTab = requiredFieldTabs[firstField] || "basics";
+    setActiveTab(targetTab);
+    toast({
+      title: "بيانات ناقصة",
+      description: String(firstMsg),
+      variant: "destructive",
+    });
+  };
+
   const onSaveDraft = () => {
-    form.handleSubmit((data) => saveMutation.mutate({ ...data, status: "draft" }))();
+    form.handleSubmit(
+      (data) => saveMutation.mutate({ ...data, status: "draft" }),
+      handleValidationErrors,
+    )();
   };
 
   const onSubmitFinal = () => {
     // NOTE: don't set hasFinalSubmittedRef here — only flip it in the
     // saveMutation onSuccess after the server confirms, otherwise a failed
     // submit silently disables the unsaved-changes guard.
-    form.handleSubmit((data) => saveMutation.mutate({ ...data, status: "submitted" }))();
+    form.handleSubmit(
+      (data) => saveMutation.mutate({ ...data, status: "submitted" }),
+      handleValidationErrors,
+    )();
   };
 
   const photosCount = (existingLog?.photos?.length || 0) + pendingPhotos.length;

@@ -446,7 +446,17 @@ export default function PaymentRequestsPage() {
 
   const watchProjectId = form.watch("projectId");
   const watchContractorId = form.watch("contractorId");
-  const isLinkedToContractor = !!watchContractorId;
+  // Independent toggle state — derived state from contractorId alone meant the
+  // Switch never visually flipped on (because checked stayed false until the
+  // user actually selected a contractor, but the contractor select only shows
+  // when the toggle is on → deadlock). We track an explicit boolean and keep
+  // it in sync with the form value when the user opens an existing request.
+  const [isLinkedToContractor, setIsLinkedToContractor] = useState<boolean>(false);
+  useEffect(() => {
+    // Reset/sync the toggle whenever the form value changes from outside
+    // (Add reset, Edit dialog open with existing contractor, etc.).
+    setIsLinkedToContractor(!!watchContractorId);
+  }, [watchContractorId]);
 
   const filteredContractsForForm = contracts.filter((c) => {
     if (watchContractorId && c.contractorId !== watchContractorId) return false;
@@ -479,11 +489,10 @@ export default function PaymentRequestsPage() {
         <Switch
           checked={isLinkedToContractor}
           onCheckedChange={(checked) => {
+            setIsLinkedToContractor(checked);
             if (!checked) {
               form.setValue("contractorId", null);
               form.setValue("contractId", null);
-            } else if (contractors.length > 0) {
-              // اختيار افتراضي: لا شيء، فقط نُظهر الحقول
             }
           }}
           data-testid={`switch-link-contractor${testIdSuffix}`}
