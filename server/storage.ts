@@ -2547,7 +2547,14 @@ export class DatabaseStorage implements IStorage {
     // branchIds: null = admin (no filter); array = restrict to those branches; empty array = no access
     if (Array.isArray(opts?.branchIds)) {
       if (opts!.branchIds!.length === 0) return [];
+      // Defense in depth: filter by stored branch_id AND verify project's actual branch matches
       conds.push(inArray(projectDailyLogs.branchId, opts!.branchIds!));
+      conds.push(inArray(
+        projectDailyLogs.projectId,
+        db.select({ id: constructionProjects.id })
+          .from(constructionProjects)
+          .where(inArray(constructionProjects.branchId, opts!.branchIds!))
+      ));
     }
     let q: any = db.select().from(projectDailyLogs);
     if (conds.length > 0) q = q.where(and(...conds));

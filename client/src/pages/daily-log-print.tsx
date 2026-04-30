@@ -128,6 +128,17 @@ export default function DailyLogPrintPage() {
               <td className="border p-2 font-bold">نسبة الإنجاز اليومي</td>
               <td className="border p-2">{log.progressToday ? `${log.progressToday}%` : "-"}</td>
             </tr>
+            {((log as any).workLocation || (log as any).startTime || (log as any).endTime || (log as any).temperature) && (
+              <tr className="bg-gray-100">
+                <td className="border p-2 font-bold">موقع التنفيذ</td>
+                <td className="border p-2">{(log as any).workLocation || "-"}</td>
+                <td className="border p-2 font-bold">ساعات العمل</td>
+                <td className="border p-2 font-mono">
+                  {(log as any).startTime || "--:--"} → {(log as any).endTime || "--:--"}
+                  {(log as any).temperature && ` • ${(log as any).temperature}`}
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
 
@@ -136,19 +147,93 @@ export default function DailyLogPrintPage() {
           <h2 className="text-lg font-bold bg-gray-200 p-2 border border-gray-300">
             الأعمال المنفذة
           </h2>
-          <div className="border border-t-0 border-gray-300 p-3 whitespace-pre-wrap min-h-[80px]">
+          <div className="border border-t-0 border-gray-300 p-3 whitespace-pre-wrap min-h-[60px]">
             {log.workDescription}
           </div>
         </div>
+
+        {/* Work items table */}
+        {Array.isArray((log as any).workItems) && (log as any).workItems.length > 0 && (
+          <div className="mb-4">
+            <h2 className="text-lg font-bold bg-gray-200 p-2 border border-gray-300">
+              بنود الأعمال التفصيلية
+            </h2>
+            <table className="w-full text-sm border border-t-0 border-gray-300">
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className="border p-2 w-10">#</th>
+                  <th className="border p-2">نوع العمل</th>
+                  <th className="border p-2">الوصف</th>
+                  <th className="border p-2 w-20">الكمية</th>
+                  <th className="border p-2 w-16">الوحدة</th>
+                </tr>
+              </thead>
+              <tbody>
+                {((log as any).workItems as any[]).map((item, i) => (
+                  <tr key={i}>
+                    <td className="border p-2 text-center">{i + 1}</td>
+                    <td className="border p-2">{item.type || "-"}</td>
+                    <td className="border p-2">{item.description || "-"}</td>
+                    <td className="border p-2 text-center">{item.quantity ?? "-"}</td>
+                    <td className="border p-2 text-center">{item.unit || "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Worker breakdown */}
+        {Array.isArray((log as any).workerBreakdown) && (log as any).workerBreakdown.length > 0 && (
+          <div className="mb-4">
+            <h2 className="text-lg font-bold bg-gray-200 p-2 border border-gray-300">
+              توزيع العمالة بالتخصص
+            </h2>
+            <table className="w-full text-sm border border-t-0 border-gray-300">
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className="border p-2">التخصص</th>
+                  <th className="border p-2 w-24">العدد</th>
+                </tr>
+              </thead>
+              <tbody>
+                {((log as any).workerBreakdown as any[]).map((w, i) => (
+                  <tr key={i}>
+                    <td className="border p-2">{w.role || "-"}</td>
+                    <td className="border p-2 text-center">{w.count || 0}</td>
+                  </tr>
+                ))}
+                <tr className="bg-gray-100 font-bold">
+                  <td className="border p-2">الإجمالي</td>
+                  <td className="border p-2 text-center">
+                    {((log as any).workerBreakdown as any[]).reduce((s, w) => s + (Number(w.count) || 0), 0)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {/* Equipment used */}
         {log.equipmentUsed && (
           <div className="mb-4">
             <h2 className="text-lg font-bold bg-gray-200 p-2 border border-gray-300">
-              المعدات المستخدمة
+              المعدات والآليات المستخدمة
             </h2>
             <div className="border border-t-0 border-gray-300 p-3 whitespace-pre-wrap">
               {log.equipmentUsed}
+            </div>
+          </div>
+        )}
+
+        {/* Safety incidents */}
+        {(log as any).safetyIncidents && (
+          <div className="mb-4">
+            <h2 className="text-lg font-bold bg-amber-100 p-2 border border-amber-300">
+              ⚠ حوادث السلامة
+            </h2>
+            <div className="border border-t-0 border-amber-300 p-3 whitespace-pre-wrap bg-amber-50">
+              {(log as any).safetyIncidents}
             </div>
           </div>
         )}
@@ -161,6 +246,18 @@ export default function DailyLogPrintPage() {
             </h2>
             <div className="border border-t-0 border-gray-300 p-3 whitespace-pre-wrap">
               {log.issues}
+            </div>
+          </div>
+        )}
+
+        {/* Next day plan */}
+        {(log as any).nextDayPlan && (
+          <div className="mb-4">
+            <h2 className="text-lg font-bold bg-gray-200 p-2 border border-gray-300">
+              خطة عمل اليوم التالي
+            </h2>
+            <div className="border border-t-0 border-gray-300 p-3 whitespace-pre-wrap">
+              {(log as any).nextDayPlan}
             </div>
           </div>
         )}

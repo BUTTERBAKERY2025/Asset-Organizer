@@ -554,12 +554,21 @@ export const projectDailyLogs = pgTable("project_daily_logs", {
   supervisorName: text("supervisor_name").notNull(), // اسم المشرف/المهندس (نص حر)
   supervisorRole: text("supervisor_role"), // مهندس، مشرف موقع، مدير، إلخ
   workDescription: text("work_description").notNull(), // الأعمال المنفذة اليوم
+  workLocation: text("work_location"), // موقع التنفيذ في الموقع (مثال: الطابق الأول، الواجهة، المدخل)
+  startTime: text("start_time"), // ساعة بداية العمل HH:mm
+  endTime: text("end_time"), // ساعة نهاية العمل HH:mm
+  workItems: jsonb("work_items"), // بنود الأعمال المنفذة [{type, description, quantity, unit}]
+  workerBreakdown: jsonb("worker_breakdown"), // توزيع العمالة [{role, count}]
   progressToday: integer("progress_today").default(0), // نسبة الإنجاز اليومي %
-  workersCount: integer("workers_count").default(0), // عدد العمالة الحاضرة
+  workersCount: integer("workers_count").default(0), // عدد العمالة الحاضرة (إجمالي)
   equipmentUsed: text("equipment_used"), // المعدات المستخدمة
   weather: text("weather"), // مشمس، ممطر، حار، إلخ
+  temperature: text("temperature"), // درجة الحرارة (اختياري)
+  safetyIncidents: text("safety_incidents"), // حوادث السلامة إن وجدت
   issues: text("issues"), // المشاكل والمعوقات
+  nextDayPlan: text("next_day_plan"), // خطة عمل اليوم التالي
   notes: text("notes"), // ملاحظات إضافية
+  status: text("status").default("draft"), // draft, submitted
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

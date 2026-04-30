@@ -225,6 +225,16 @@ export async function runStartupMigrations() {
       `CREATE INDEX IF NOT EXISTS idx_project_daily_logs_date ON project_daily_logs(log_date)`,
       `CREATE INDEX IF NOT EXISTS idx_project_daily_logs_project_date ON project_daily_logs(project_id, log_date)`,
       `CREATE INDEX IF NOT EXISTS idx_project_daily_logs_contractor ON project_daily_logs(contractor_id)`,
+      // Daily logs v2: site-aware fields, multi-item, worker breakdown, draft status
+      `ALTER TABLE project_daily_logs ADD COLUMN IF NOT EXISTS work_location text`,
+      `ALTER TABLE project_daily_logs ADD COLUMN IF NOT EXISTS start_time text`,
+      `ALTER TABLE project_daily_logs ADD COLUMN IF NOT EXISTS end_time text`,
+      `ALTER TABLE project_daily_logs ADD COLUMN IF NOT EXISTS work_items jsonb`,
+      `ALTER TABLE project_daily_logs ADD COLUMN IF NOT EXISTS worker_breakdown jsonb`,
+      `ALTER TABLE project_daily_logs ADD COLUMN IF NOT EXISTS temperature text`,
+      `ALTER TABLE project_daily_logs ADD COLUMN IF NOT EXISTS safety_incidents text`,
+      `ALTER TABLE project_daily_logs ADD COLUMN IF NOT EXISTS next_day_plan text`,
+      `ALTER TABLE project_daily_logs ADD COLUMN IF NOT EXISTS status text DEFAULT 'draft'`,
       `CREATE TABLE IF NOT EXISTS project_daily_log_photos (
         id SERIAL PRIMARY KEY,
         daily_log_id integer NOT NULL REFERENCES project_daily_logs(id) ON DELETE CASCADE,

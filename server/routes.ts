@@ -2630,15 +2630,19 @@ export async function registerRoutes(
 
   app.post("/api/construction/daily-logs", isAuthenticated, requirePermission("project_daily_logs", "create"), async (req, res) => {
     try {
+      // Strip client-supplied branchId/createdBy to prevent spoofing; both come from server-side access check
+      const { branchId: _ignored, createdBy: _alsoIgnored, ...clientPayload } = req.body || {};
       const validated = insertProjectDailyLogSchema.parse({
-        ...req.body,
+        ...clientPayload,
         createdBy: req.currentUser?.id,
       });
       const access = await checkProjectBranchAccess(req, validated.projectId);
       if (!access.allowed) return res.status(403).json({ error: "غير مصرح بإضافة يومية لهذا المشروع" });
-      // Auto-fill branchId from project if missing
-      if (!validated.branchId && access.branchId) {
-        validated.branchId = access.branchId;
+      // Force branchId from project's actual branch (defense against spoofing)
+      validated.branchId = access.branchId ?? null;
+      // Normalize status to whitelist
+      if (validated.status && !["draft", "submitted"].includes(validated.status)) {
+        validated.status = "draft";
       }
       const created = await storage.createDailyLog(validated);
       res.status(201).json(created);
@@ -2662,6 +2666,10 @@ export async function registerRoutes(
       // Strip immutable fields to prevent project/branch hijack
       const { projectId: _p, branchId: _b, createdBy: _c, id: _i, createdAt: _ca, updatedAt: _ua, ...editable } = req.body || {};
       const validated = insertProjectDailyLogSchema.partial().parse(editable);
+      // Normalize status to whitelist
+      if (validated.status !== undefined && !["draft", "submitted"].includes(validated.status as string)) {
+        validated.status = "draft";
+      }
       const updated = await storage.updateDailyLog(id, validated);
       res.json(updated);
     } catch (error) {
