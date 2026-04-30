@@ -329,6 +329,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { href: "/contractors", label: t("sidebar.contractors"), icon: HardHat, module: "contractors", indent: true },
           { href: "/contracts", label: t("sidebar.contracts"), icon: FileSignature, module: "contracts", indent: true },
           { href: "/payment-requests", label: t("sidebar.paymentRequests"), icon: Wallet, module: "payment_requests", indent: true },
+          { href: "/contractor-statements", label: "كشوف حساب المقاولين", icon: Receipt, module: "contractor_statements", indent: true },
+          { href: "/construction/daily-logs", label: "يوميات الأعمال", icon: ClipboardList, module: "project_daily_logs", indent: true },
           { href: "/budget-planning", label: t("sidebar.budgetPlanning"), icon: Calculator, module: "budget_planning", indent: true },
           { href: "/construction-reports", label: t("sidebar.constructionReports"), icon: FileBarChart, module: "reports", indent: true },
         ],

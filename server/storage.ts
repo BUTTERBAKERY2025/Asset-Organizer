@@ -78,6 +78,12 @@ import {
   type InsertPaymentRequest,
   type ContractPayment,
   type InsertContractPayment,
+  type ProjectExpense,
+  type InsertProjectExpense,
+  type ProjectDailyLog,
+  type InsertProjectDailyLog,
+  type ProjectDailyLogPhoto,
+  type InsertProjectDailyLogPhoto,
   type UserPermission,
   type InsertUserPermission,
   type PermissionAuditLog,
@@ -214,6 +220,9 @@ import {
   contractItems,
   paymentRequests,
   contractPayments,
+  projectExpenses,
+  projectDailyLogs,
+  projectDailyLogPhotos,
   userPermissions,
   permissionAuditLogs,
   assetTransfers,
@@ -636,7 +645,65 @@ export interface IStorage {
   // Contract Payments
   getContractPayments(contractId: number): Promise<ContractPayment[]>;
   createContractPayment(payment: InsertContractPayment): Promise<ContractPayment>;
-  
+
+  // Project Expenses
+  getAllProjectExpenses(branchIds?: string[] | null): Promise<ProjectExpense[]>;
+  getProjectExpensesByProject(projectId: number): Promise<ProjectExpense[]>;
+  getProjectExpensesByContractor(contractorId: number, branchIds?: string[] | null): Promise<ProjectExpense[]>;
+  getProjectExpense(id: number): Promise<ProjectExpense | undefined>;
+  createProjectExpense(expense: InsertProjectExpense): Promise<ProjectExpense>;
+  updateProjectExpense(id: number, expense: Partial<InsertProjectExpense>): Promise<ProjectExpense | undefined>;
+  deleteProjectExpense(id: number): Promise<boolean>;
+
+  // Contractor Statements (aggregated)
+  getContractorStatement(contractorId: number, opts?: { from?: string; to?: string; projectId?: number; branchIds?: string[] | null }): Promise<{
+    contractor: Contractor | undefined;
+    totals: {
+      contractsTotal: number;
+      contractPaymentsTotal: number;
+      paymentRequestsPaidTotal: number;
+      paymentRequestsPendingTotal: number;
+      directExpensesTotal: number;
+      totalPaid: number;
+      balance: number;
+    };
+    contracts: ConstructionContract[];
+    transactions: Array<{
+      id: string;
+      date: string;
+      type: string; // contract_payment | payment_request | expense
+      projectId: number | null;
+      projectTitle?: string | null;
+      contractId?: number | null;
+      contractTitle?: string | null;
+      description: string;
+      amount: number;
+      status?: string;
+      reference?: string | null;
+    }>;
+  }>;
+  getContractorsStatementsSummary(branchIds?: string[] | null): Promise<Array<{
+    contractor: Contractor;
+    contractsCount: number;
+    contractsTotal: number;
+    totalPaid: number;
+    balance: number;
+  }>>;
+
+  // Project Daily Logs
+  getDailyLogsByProject(projectId: number, opts?: { from?: string; to?: string }): Promise<ProjectDailyLog[]>;
+  getAllDailyLogs(opts?: { from?: string; to?: string; branchIds?: string[] | null; contractorId?: number }): Promise<ProjectDailyLog[]>;
+  getDailyLog(id: number): Promise<ProjectDailyLog | undefined>;
+  createDailyLog(log: InsertProjectDailyLog): Promise<ProjectDailyLog>;
+  updateDailyLog(id: number, log: Partial<InsertProjectDailyLog>): Promise<ProjectDailyLog | undefined>;
+  deleteDailyLog(id: number): Promise<boolean>;
+
+  // Daily Log Photos
+  getDailyLogPhotos(dailyLogId: number): Promise<ProjectDailyLogPhoto[]>;
+  getDailyLogPhoto(id: number): Promise<ProjectDailyLogPhoto | undefined>;
+  createDailyLogPhoto(photo: InsertProjectDailyLogPhoto): Promise<ProjectDailyLogPhoto>;
+  deleteDailyLogPhoto(id: number): Promise<boolean>;
+
   // User Permissions
   getUserPermissions(userId: string): Promise<UserPermission[]>;
   getUserPermissionsWithSources(userId: string): Promise<PermissionWithSource[]>;
@@ -2009,6 +2076,508 @@ export class DatabaseStorage implements IStorage {
     await this.updateContract(payment.contractId, { paidAmount: totalPaid });
     
     return newPayment;
+  }
+
+  // ========== Project Expenses ==========
+  async getAllProjectExpenses(branchIds?: string[] | null): Promise<ProjectExpense[]> {
+    if (branchIds === null || branchIds === undefined) {
+      return await db.select().from(projectExpenses).orderBy(desc(projectExpenses.expenseDate), desc(projectExpenses.id));
+    }
+    if (branchIds.length === 0) return [];
+    const rows = await db
+      .select({ exp: projectExpenses })
+      .from(projectExpenses)
+      .innerJoin(constructionProjects, eq(projectExpenses.projectId, constructionProjects.id))
+      .where(inArray(constructionProjects.branchId, branchIds))
+      .orderBy(desc(projectExpenses.expenseDate), desc(projectExpenses.id));
+    return rows.map((r) => r.exp);
+  }
+
+  async getProjectExpensesByProject(projectId: number): Promise<ProjectExpense[]> {
+    return await db
+      .select()
+      .from(projectExpenses)
+      .where(eq(projectExpenses.projectId, projectId))
+      .orderBy(desc(projectExpenses.expenseDate), desc(projectExpenses.id));
+  }
+
+  async getProjectExpensesByContractor(contractorId: number, branchIds?: string[] | null): Promise<ProjectExpense[]> {
+    if (branchIds === null || branchIds === undefined) {
+      return await db
+        .select()
+        .from(projectExpenses)
+        .where(eq(projectExpenses.contractorId, contractorId))
+        .orderBy(desc(projectExpenses.expenseDate), desc(projectExpenses.id));
+    }
+    if (branchIds.length === 0) return [];
+    const rows = await db
+      .select({ exp: projectExpenses })
+      .from(projectExpenses)
+      .innerJoin(constructionProjects, eq(projectExpenses.projectId, constructionProjects.id))
+      .where(and(
+        eq(projectExpenses.contractorId, contractorId),
+        inArray(constructionProjects.branchId, branchIds),
+      ))
+      .orderBy(desc(projectExpenses.expenseDate), desc(projectExpenses.id));
+    return rows.map((r) => r.exp);
+  }
+
+  async getProjectExpense(id: number): Promise<ProjectExpense | undefined> {
+    const [exp] = await db.select().from(projectExpenses).where(eq(projectExpenses.id, id));
+    return exp || undefined;
+  }
+
+  async createProjectExpense(expense: InsertProjectExpense): Promise<ProjectExpense> {
+    const [created] = await db.insert(projectExpenses).values(expense).returning();
+    return created;
+  }
+
+  async updateProjectExpense(id: number, expense: Partial<InsertProjectExpense>): Promise<ProjectExpense | undefined> {
+    const [updated] = await db
+      .update(projectExpenses)
+      .set({ ...expense, updatedAt: new Date() })
+      .where(eq(projectExpenses.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteProjectExpense(id: number): Promise<boolean> {
+    const result = await db.delete(projectExpenses).where(eq(projectExpenses.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // ========== Contractor Statements (Aggregated) ==========
+  async getContractorStatement(contractorId: number, opts?: { from?: string; to?: string; projectId?: number; branchIds?: string[] | null }) {
+    const contractor = await this.getContractor(contractorId);
+
+    // Build optional date filter for transactions (string YYYY-MM-DD comparable)
+    const fromStr = opts?.from || null;
+    const toStr = opts?.to || null;
+    const projectFilter = opts?.projectId || null;
+    const branchIds = opts?.branchIds === undefined ? null : opts.branchIds;
+
+    // If branchIds is empty array, no access — return empty statement
+    if (Array.isArray(branchIds) && branchIds.length === 0) {
+      return {
+        contractor,
+        totals: {
+          contractsTotal: 0,
+          contractPaymentsTotal: 0,
+          paymentRequestsPaidTotal: 0,
+          paymentRequestsPendingTotal: 0,
+          directExpensesTotal: 0,
+          totalPaid: 0,
+          balance: 0,
+        },
+        contracts: [],
+        transactions: [],
+      };
+    }
+
+    // 1) Contracts for contractor (optionally restricted by allowed branches via project)
+    let contractsAll: ConstructionContract[];
+    if (Array.isArray(branchIds)) {
+      const rows = await db
+        .select({ c: constructionContracts })
+        .from(constructionContracts)
+        .innerJoin(constructionProjects, eq(constructionContracts.projectId, constructionProjects.id))
+        .where(and(
+          eq(constructionContracts.contractorId, contractorId),
+          inArray(constructionProjects.branchId, branchIds),
+        ));
+      contractsAll = rows.map((r) => r.c);
+    } else {
+      contractsAll = await db
+        .select()
+        .from(constructionContracts)
+        .where(eq(constructionContracts.contractorId, contractorId));
+    }
+    const contracts = projectFilter
+      ? contractsAll.filter((c: ConstructionContract) => c.projectId === projectFilter)
+      : contractsAll;
+    const contractIds = contracts.map((c: ConstructionContract) => c.id);
+
+    // 2) Contract payments via these contracts
+    let cpRows: ContractPayment[] = [];
+    if (contractIds.length > 0) {
+      cpRows = await db
+        .select()
+        .from(contractPayments)
+        .where(inArray(contractPayments.contractId, contractIds));
+    }
+    const filteredCpRows = cpRows.filter((p) => {
+      if (fromStr && p.paymentDate < fromStr) return false;
+      if (toStr && p.paymentDate > toStr) return false;
+      return true;
+    });
+    // Build set of payment_request IDs already linked to a contract payment to avoid double-counting
+    const linkedPrIds = new Set<number>();
+    cpRows.forEach((p) => {
+      if (p.paymentRequestId != null) linkedPrIds.add(p.paymentRequestId);
+    });
+
+    // 3) Payment requests directly linked to contractor (or via contract), restricted by allowed branches
+    let prDirect: PaymentRequest[];
+    if (Array.isArray(branchIds)) {
+      const rows = await db
+        .select({ p: paymentRequests })
+        .from(paymentRequests)
+        .innerJoin(constructionProjects, eq(paymentRequests.projectId, constructionProjects.id))
+        .where(and(
+          eq(paymentRequests.contractorId, contractorId),
+          inArray(constructionProjects.branchId, branchIds),
+        ));
+      prDirect = rows.map((r) => r.p);
+    } else {
+      prDirect = await db
+        .select()
+        .from(paymentRequests)
+        .where(eq(paymentRequests.contractorId, contractorId));
+    }
+    let prViaContract: PaymentRequest[] = [];
+    if (contractIds.length > 0) {
+      // contractIds already restricted to allowed branches above
+      prViaContract = await db
+        .select()
+        .from(paymentRequests)
+        .where(inArray(paymentRequests.contractId, contractIds));
+    }
+    // Merge unique
+    const prMap = new Map<number, PaymentRequest>();
+    [...prDirect, ...prViaContract].forEach((p) => prMap.set(p.id, p));
+    let prRows = Array.from(prMap.values());
+    if (projectFilter) {
+      prRows = prRows.filter((p) => p.projectId === projectFilter);
+    }
+    prRows = prRows.filter((p) => {
+      const d = p.requestDate || (p.createdAt ? p.createdAt.toString().substring(0, 10) : "");
+      if (fromStr && d && d < fromStr) return false;
+      if (toStr && d && d > toStr) return false;
+      return true;
+    });
+
+    // 4) Direct project expenses linked to contractor (restricted by allowed branches)
+    let expenseRows = await this.getProjectExpensesByContractor(contractorId, branchIds);
+    if (projectFilter) {
+      expenseRows = expenseRows.filter((e) => e.projectId === projectFilter);
+    }
+    expenseRows = expenseRows.filter((e) => {
+      if (fromStr && e.expenseDate < fromStr) return false;
+      if (toStr && e.expenseDate > toStr) return false;
+      return true;
+    });
+
+    // 5) Project titles map
+    const allProjectIds = new Set<number>();
+    contracts.forEach((c) => allProjectIds.add(c.projectId));
+    prRows.forEach((p) => allProjectIds.add(p.projectId));
+    expenseRows.forEach((e) => allProjectIds.add(e.projectId));
+    let projectMap = new Map<number, string>();
+    if (allProjectIds.size > 0) {
+      const projs = await db
+        .select()
+        .from(constructionProjects)
+        .where(inArray(constructionProjects.id, Array.from(allProjectIds)));
+      projs.forEach((p) => projectMap.set(p.id, p.title));
+    }
+    const contractTitleMap = new Map<number, string>();
+    contracts.forEach((c) => contractTitleMap.set(c.id, c.title || c.contractNumber || `عقد #${c.id}`));
+
+    // Totals — avoid double counting: paid payment_requests linked to a contract_payment
+    // are already represented in contractPaymentsTotal.
+    const contractsTotal = contracts.reduce((s, c) => s + (Number(c.totalAmount) || 0), 0);
+    const contractPaymentsTotal = filteredCpRows.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+    const paymentRequestsPaidTotal = prRows
+      .filter((p) => p.status === "paid" && !linkedPrIds.has(p.id))
+      .reduce((s, p) => s + (Number(p.amount) || 0), 0);
+    const paymentRequestsPendingTotal = prRows
+      .filter((p) => p.status === "pending" || p.status === "approved")
+      .reduce((s, p) => s + (Number(p.amount) || 0), 0);
+    const directExpensesTotal = expenseRows.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+    // Total paid = contract payments + (paid payment requests not already linked) + direct expenses
+    const totalPaid = contractPaymentsTotal + paymentRequestsPaidTotal + directExpensesTotal;
+    const balance = contractsTotal - totalPaid;
+
+    // Build unified transactions list
+    const transactions: Array<any> = [];
+    filteredCpRows.forEach((p) => {
+      const contract = contracts.find((c) => c.id === p.contractId);
+      transactions.push({
+        id: `cp-${p.id}`,
+        date: p.paymentDate,
+        type: "contract_payment",
+        projectId: contract?.projectId || null,
+        projectTitle: contract ? projectMap.get(contract.projectId) || null : null,
+        contractId: p.contractId,
+        contractTitle: contractTitleMap.get(p.contractId) || null,
+        description: p.notes || `دفعة عقد - ${contractTitleMap.get(p.contractId) || ""}`,
+        amount: Number(p.amount),
+        status: "paid",
+        reference: p.referenceNumber || null,
+      });
+    });
+    prRows.forEach((p) => {
+      const isLinked = linkedPrIds.has(p.id);
+      transactions.push({
+        id: `pr-${p.id}`,
+        date: p.requestDate || (p.createdAt ? p.createdAt.toString().substring(0, 10) : ""),
+        type: "payment_request",
+        projectId: p.projectId,
+        projectTitle: projectMap.get(p.projectId) || null,
+        contractId: p.contractId || null,
+        contractTitle: p.contractId ? contractTitleMap.get(p.contractId) || null : null,
+        description: p.description + (isLinked ? " (مرتبط بدفعة عقد)" : ""),
+        amount: Number(p.amount),
+        status: p.status,
+        reference: p.requestNumber || p.invoiceNumber || null,
+        linkedToContractPayment: isLinked,
+      });
+    });
+    expenseRows.forEach((e) => {
+      transactions.push({
+        id: `ex-${e.id}`,
+        date: e.expenseDate,
+        type: "expense",
+        projectId: e.projectId,
+        projectTitle: projectMap.get(e.projectId) || null,
+        contractId: null,
+        contractTitle: null,
+        description: e.description,
+        amount: Number(e.amount),
+        status: "paid",
+        reference: e.referenceNumber || e.invoiceNumber || null,
+      });
+    });
+    transactions.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+
+    return {
+      contractor,
+      totals: {
+        contractsTotal,
+        contractPaymentsTotal,
+        paymentRequestsPaidTotal,
+        paymentRequestsPendingTotal,
+        directExpensesTotal,
+        totalPaid,
+        balance,
+      },
+      contracts,
+      transactions,
+    };
+  }
+
+  async getContractorsStatementsSummary(branchIds?: string[] | null) {
+    const contractors = await this.getAllContractors();
+    if (contractors.length === 0) return [];
+    // No access
+    if (Array.isArray(branchIds) && branchIds.length === 0) return [];
+
+    const useBranchFilter = Array.isArray(branchIds);
+
+    // 1) Aggregate contracts per contractor (count + total), restricted by allowed branches
+    const contractsAggQuery = useBranchFilter
+      ? db
+          .select({
+            contractorId: constructionContracts.contractorId,
+            cnt: sql<number>`count(*)::int`,
+            total: sql<number>`coalesce(sum(${constructionContracts.totalAmount}), 0)::float`,
+          })
+          .from(constructionContracts)
+          .innerJoin(constructionProjects, eq(constructionContracts.projectId, constructionProjects.id))
+          .where(inArray(constructionProjects.branchId, branchIds!))
+          .groupBy(constructionContracts.contractorId)
+      : db
+          .select({
+            contractorId: constructionContracts.contractorId,
+            cnt: sql<number>`count(*)::int`,
+            total: sql<number>`coalesce(sum(${constructionContracts.totalAmount}), 0)::float`,
+          })
+          .from(constructionContracts)
+          .groupBy(constructionContracts.contractorId);
+    const contractsAgg = await contractsAggQuery;
+    const contractsMap = new Map<number, { cnt: number; total: number }>();
+    contractsAgg.forEach((r) => {
+      if (r.contractorId != null) {
+        contractsMap.set(r.contractorId, { cnt: r.cnt, total: Number(r.total) || 0 });
+      }
+    });
+
+    // 2) Sum contract_payments by contractor (via contracts), restricted by allowed branches
+    const cpAggQuery = useBranchFilter
+      ? db
+          .select({
+            contractorId: constructionContracts.contractorId,
+            total: sql<number>`coalesce(sum(${contractPayments.amount}), 0)::float`,
+          })
+          .from(contractPayments)
+          .innerJoin(constructionContracts, eq(contractPayments.contractId, constructionContracts.id))
+          .innerJoin(constructionProjects, eq(constructionContracts.projectId, constructionProjects.id))
+          .where(inArray(constructionProjects.branchId, branchIds!))
+          .groupBy(constructionContracts.contractorId)
+      : db
+          .select({
+            contractorId: constructionContracts.contractorId,
+            total: sql<number>`coalesce(sum(${contractPayments.amount}), 0)::float`,
+          })
+          .from(contractPayments)
+          .innerJoin(constructionContracts, eq(contractPayments.contractId, constructionContracts.id))
+          .groupBy(constructionContracts.contractorId);
+    const cpAgg = await cpAggQuery;
+    const cpMap = new Map<number, number>();
+    cpAgg.forEach((r) => {
+      if (r.contractorId != null) cpMap.set(r.contractorId, Number(r.total) || 0);
+    });
+
+    // 3) Sum paid payment_requests by contractor, EXCLUDING those already linked to a contract_payment
+    //    (avoid double counting). Restricted by allowed branches via project.
+    const linkedSubquery = sql`SELECT payment_request_id FROM contract_payments WHERE payment_request_id IS NOT NULL`;
+    const prConds: any[] = [
+      eq(paymentRequests.status, "paid"),
+      sql`${paymentRequests.id} NOT IN (${linkedSubquery})`,
+    ];
+    const prAggQuery = useBranchFilter
+      ? db
+          .select({
+            contractorId: paymentRequests.contractorId,
+            total: sql<number>`coalesce(sum(${paymentRequests.amount}), 0)::float`,
+          })
+          .from(paymentRequests)
+          .innerJoin(constructionProjects, eq(paymentRequests.projectId, constructionProjects.id))
+          .where(and(...prConds, inArray(constructionProjects.branchId, branchIds!)))
+          .groupBy(paymentRequests.contractorId)
+      : db
+          .select({
+            contractorId: paymentRequests.contractorId,
+            total: sql<number>`coalesce(sum(${paymentRequests.amount}), 0)::float`,
+          })
+          .from(paymentRequests)
+          .where(and(...prConds))
+          .groupBy(paymentRequests.contractorId);
+    const prAgg = await prAggQuery;
+    const prMap = new Map<number, number>();
+    prAgg.forEach((r) => {
+      if (r.contractorId != null) prMap.set(r.contractorId, Number(r.total) || 0);
+    });
+
+    // 4) Sum direct project expenses by contractor, restricted by allowed branches
+    const expAggQuery = useBranchFilter
+      ? db
+          .select({
+            contractorId: projectExpenses.contractorId,
+            total: sql<number>`coalesce(sum(${projectExpenses.amount}), 0)::float`,
+          })
+          .from(projectExpenses)
+          .innerJoin(constructionProjects, eq(projectExpenses.projectId, constructionProjects.id))
+          .where(inArray(constructionProjects.branchId, branchIds!))
+          .groupBy(projectExpenses.contractorId)
+      : db
+          .select({
+            contractorId: projectExpenses.contractorId,
+            total: sql<number>`coalesce(sum(${projectExpenses.amount}), 0)::float`,
+          })
+          .from(projectExpenses)
+          .groupBy(projectExpenses.contractorId);
+    const expAgg = await expAggQuery;
+    const expMap = new Map<number, number>();
+    expAgg.forEach((r) => {
+      if (r.contractorId != null) expMap.set(r.contractorId, Number(r.total) || 0);
+    });
+
+    // Only include contractors who have any activity within the allowed scope
+    return contractors
+      .map((c) => {
+        const cInfo = contractsMap.get(c.id) || { cnt: 0, total: 0 };
+        const cpPaid = cpMap.get(c.id) || 0;
+        const prPaid = prMap.get(c.id) || 0;
+        const expPaid = expMap.get(c.id) || 0;
+        const totalPaid = cpPaid + prPaid + expPaid;
+        const balance = cInfo.total - totalPaid;
+        return {
+          contractor: c,
+          contractsCount: cInfo.cnt,
+          contractsTotal: cInfo.total,
+          totalPaid,
+          balance,
+          _hasActivity: cInfo.cnt > 0 || cpPaid > 0 || prPaid > 0 || expPaid > 0,
+        };
+      })
+      .filter((x) => (useBranchFilter ? x._hasActivity : true))
+      .map(({ _hasActivity, ...rest }) => rest);
+  }
+
+  // ========== Project Daily Logs ==========
+  async getDailyLogsByProject(projectId: number, opts?: { from?: string; to?: string }): Promise<ProjectDailyLog[]> {
+    const conds: any[] = [eq(projectDailyLogs.projectId, projectId)];
+    if (opts?.from) conds.push(gte(projectDailyLogs.logDate, opts.from));
+    if (opts?.to) conds.push(lte(projectDailyLogs.logDate, opts.to));
+    return await db
+      .select()
+      .from(projectDailyLogs)
+      .where(and(...conds))
+      .orderBy(desc(projectDailyLogs.logDate), desc(projectDailyLogs.id));
+  }
+
+  async getAllDailyLogs(opts?: { from?: string; to?: string; branchIds?: string[] | null; contractorId?: number }): Promise<ProjectDailyLog[]> {
+    const conds: any[] = [];
+    if (opts?.from) conds.push(gte(projectDailyLogs.logDate, opts.from));
+    if (opts?.to) conds.push(lte(projectDailyLogs.logDate, opts.to));
+    if (opts?.contractorId) conds.push(eq(projectDailyLogs.contractorId, opts.contractorId));
+    // branchIds: null = admin (no filter); array = restrict to those branches; empty array = no access
+    if (Array.isArray(opts?.branchIds)) {
+      if (opts!.branchIds!.length === 0) return [];
+      conds.push(inArray(projectDailyLogs.branchId, opts!.branchIds!));
+    }
+    let q: any = db.select().from(projectDailyLogs);
+    if (conds.length > 0) q = q.where(and(...conds));
+    return await q.orderBy(desc(projectDailyLogs.logDate), desc(projectDailyLogs.id));
+  }
+
+  async getDailyLog(id: number): Promise<ProjectDailyLog | undefined> {
+    const [log] = await db.select().from(projectDailyLogs).where(eq(projectDailyLogs.id, id));
+    return log || undefined;
+  }
+
+  async createDailyLog(log: InsertProjectDailyLog): Promise<ProjectDailyLog> {
+    const [created] = await db.insert(projectDailyLogs).values(log).returning();
+    return created;
+  }
+
+  async updateDailyLog(id: number, log: Partial<InsertProjectDailyLog>): Promise<ProjectDailyLog | undefined> {
+    const [updated] = await db
+      .update(projectDailyLogs)
+      .set({ ...log, updatedAt: new Date() })
+      .where(eq(projectDailyLogs.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteDailyLog(id: number): Promise<boolean> {
+    const result = await db.delete(projectDailyLogs).where(eq(projectDailyLogs.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // ========== Daily Log Photos ==========
+  async getDailyLogPhotos(dailyLogId: number): Promise<ProjectDailyLogPhoto[]> {
+    return await db
+      .select()
+      .from(projectDailyLogPhotos)
+      .where(eq(projectDailyLogPhotos.dailyLogId, dailyLogId))
+      .orderBy(projectDailyLogPhotos.id);
+  }
+
+  async getDailyLogPhoto(id: number): Promise<ProjectDailyLogPhoto | undefined> {
+    const [photo] = await db.select().from(projectDailyLogPhotos).where(eq(projectDailyLogPhotos.id, id));
+    return photo || undefined;
+  }
+
+  async createDailyLogPhoto(photo: InsertProjectDailyLogPhoto): Promise<ProjectDailyLogPhoto> {
+    const [created] = await db.insert(projectDailyLogPhotos).values(photo).returning();
+    return created;
+  }
+
+  async deleteDailyLogPhoto(id: number): Promise<boolean> {
+    const result = await db.delete(projectDailyLogPhotos).where(eq(projectDailyLogPhotos.id, id)).returning();
+    return result.length > 0;
   }
 
   // User Permissions - with caching

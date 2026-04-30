@@ -95,7 +95,7 @@ import {
   generateEmployeeAttendanceReportPdf, type EmployeeAttendanceReportPdfData,
   generateAttendanceLogPdf, type AttendanceLogPdfData
 } from "./pdf-generator";
-import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertInfluencerContractSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema, isMadeToOrderCategory, suggestCategoryFromProductName, userBranchAccess } from "@shared/schema";
+import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertProjectExpenseSchema, insertProjectDailyLogSchema, insertProjectDailyLogPhotoSchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertInfluencerContractSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema, isMadeToOrderCategory, suggestCategoryFromProductName, userBranchAccess } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, isUserAdmin, getAllowedBranchIds, getEffectiveBranchFilter, invalidateAuthCache } from "./auth";
 import { authRateLimiter, biometricRateLimiter, uploadRateLimiter, apiRateLimiter, validateFileUpload, sanitizeFilename, trackLoginAttempt } from "./security";
@@ -2441,6 +2441,294 @@ export async function registerRoutes(
       }
       console.error("Error creating contract payment:", error);
       res.status(500).json({ error: "Failed to create contract payment" });
+    }
+  });
+
+  // ===== Project Expenses Routes - مصروفات المشروع =====
+  app.get("/api/construction/expenses", isAuthenticated, requirePermission("project_expenses", "view"), async (req, res) => {
+    try {
+      const { projectId, contractorId, branchId } = req.query;
+      const branchFilter = getEffectiveBranchFilter(req, branchId as string | undefined);
+      if (!branchFilter.hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول" });
+      let expenses;
+      if (projectId) {
+        const pid = parseInt(projectId as string, 10);
+        if (isNaN(pid)) return res.status(400).json({ error: "Invalid project ID" });
+        const access = await checkProjectBranchAccess(req, pid);
+        if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+        expenses = await storage.getProjectExpensesByProject(pid);
+      } else if (contractorId) {
+        const cid = parseInt(contractorId as string, 10);
+        if (isNaN(cid)) return res.status(400).json({ error: "Invalid contractor ID" });
+        expenses = await storage.getProjectExpensesByContractor(cid, branchFilter.branchIds);
+      } else {
+        expenses = await storage.getAllProjectExpenses(branchFilter.branchIds);
+      }
+      res.json(expenses);
+    } catch (error) {
+      console.error("Error fetching project expenses:", error);
+      res.status(500).json({ error: "فشل في جلب المصروفات" });
+    }
+  });
+
+  app.get("/api/construction/expenses/:id", isAuthenticated, requirePermission("project_expenses", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const expense = await storage.getProjectExpense(id);
+      if (!expense) return res.status(404).json({ error: "Not found" });
+      const access = await checkProjectBranchAccess(req, expense.projectId);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+      res.json(expense);
+    } catch (error) {
+      console.error("Error fetching expense:", error);
+      res.status(500).json({ error: "فشل في جلب المصروف" });
+    }
+  });
+
+  app.post("/api/construction/expenses", isAuthenticated, requirePermission("project_expenses", "create"), async (req, res) => {
+    try {
+      const validated = insertProjectExpenseSchema.parse({
+        ...req.body,
+        createdBy: req.currentUser?.id,
+      });
+      const access = await checkProjectBranchAccess(req, validated.projectId);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح بإضافة مصروف لهذا المشروع" });
+      const created = await storage.createProjectExpense(validated);
+      res.status(201).json(created);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      console.error("Error creating expense:", error);
+      res.status(500).json({ error: "فشل في إنشاء المصروف" });
+    }
+  });
+
+  app.patch("/api/construction/expenses/:id", isAuthenticated, requirePermission("project_expenses", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const existing = await storage.getProjectExpense(id);
+      if (!existing) return res.status(404).json({ error: "Not found" });
+      const access = await checkProjectBranchAccess(req, existing.projectId);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+      // Strip immutable fields to prevent project hijack/createdBy spoofing
+      const { projectId: _p, createdBy: _c, id: _i, createdAt: _ca, updatedAt: _ua, ...editable } = req.body || {};
+      const validated = insertProjectExpenseSchema.partial().parse(editable);
+      const updated = await storage.updateProjectExpense(id, validated);
+      res.json(updated);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      console.error("Error updating expense:", error);
+      res.status(500).json({ error: "فشل في تعديل المصروف" });
+    }
+  });
+
+  app.delete("/api/construction/expenses/:id", isAuthenticated, requirePermission("project_expenses", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const existing = await storage.getProjectExpense(id);
+      if (!existing) return res.status(404).json({ error: "Not found" });
+      const access = await checkProjectBranchAccess(req, existing.projectId);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+      const deleted = await storage.deleteProjectExpense(id);
+      res.json({ success: deleted });
+    } catch (error) {
+      console.error("Error deleting expense:", error);
+      res.status(500).json({ error: "فشل في حذف المصروف" });
+    }
+  });
+
+  // ===== Contractor Statements Routes - كشوف حساب المقاولين =====
+  app.get("/api/construction/contractors-statements/summary", isAuthenticated, requirePermission("contractor_statements", "view"), async (req, res) => {
+    try {
+      const branchFilter = getEffectiveBranchFilter(req, req.query.branchId as string | undefined);
+      if (!branchFilter.hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول" });
+      const summary = await storage.getContractorsStatementsSummary(branchFilter.branchIds);
+      res.json(summary);
+    } catch (error) {
+      console.error("Error fetching contractors statements summary:", error);
+      res.status(500).json({ error: "فشل في جلب ملخص كشوف الحسابات" });
+    }
+  });
+
+  app.get("/api/construction/contractors/:id/statement", isAuthenticated, requirePermission("contractor_statements", "view"), async (req, res) => {
+    try {
+      const contractorId = parseInt(req.params.id, 10);
+      if (isNaN(contractorId)) return res.status(400).json({ error: "Invalid contractor ID" });
+      const { from, to, projectId, branchId } = req.query;
+      const branchFilter = getEffectiveBranchFilter(req, branchId as string | undefined);
+      if (!branchFilter.hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول" });
+      const opts: any = { branchIds: branchFilter.branchIds };
+      if (from) opts.from = String(from);
+      if (to) opts.to = String(to);
+      if (projectId) {
+        const pid = parseInt(projectId as string, 10);
+        if (isNaN(pid)) return res.status(400).json({ error: "Invalid project ID" });
+        // Verify project belongs to allowed branch
+        const access = await checkProjectBranchAccess(req, pid);
+        if (!access.allowed) return res.status(403).json({ error: "غير مصرح بالوصول لهذا المشروع" });
+        opts.projectId = pid;
+      }
+      const statement = await storage.getContractorStatement(contractorId, opts);
+      if (!statement.contractor) return res.status(404).json({ error: "المقاول غير موجود" });
+      res.json(statement);
+    } catch (error) {
+      console.error("Error fetching contractor statement:", error);
+      res.status(500).json({ error: "فشل في جلب كشف الحساب" });
+    }
+  });
+
+  // ===== Project Daily Logs Routes - يوميات أعمال المشاريع =====
+  app.get("/api/construction/daily-logs", isAuthenticated, requirePermission("project_daily_logs", "view"), async (req, res) => {
+    try {
+      const { projectId, from, to, branchId, contractorId } = req.query;
+      const branchFilter = getEffectiveBranchFilter(req, branchId as string | undefined);
+      if (!branchFilter.hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول" });
+      if (projectId) {
+        const pid = parseInt(projectId as string, 10);
+        if (isNaN(pid)) return res.status(400).json({ error: "Invalid project ID" });
+        const access = await checkProjectBranchAccess(req, pid);
+        if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+        const opts: any = {};
+        if (from) opts.from = String(from);
+        if (to) opts.to = String(to);
+        const logs = await storage.getDailyLogsByProject(pid, opts);
+        return res.json(logs);
+      }
+      const opts: any = { branchIds: branchFilter.branchIds };
+      if (from) opts.from = String(from);
+      if (to) opts.to = String(to);
+      if (contractorId) opts.contractorId = parseInt(contractorId as string, 10);
+      const logs = await storage.getAllDailyLogs(opts);
+      res.json(logs);
+    } catch (error) {
+      console.error("Error fetching daily logs:", error);
+      res.status(500).json({ error: "فشل في جلب اليوميات" });
+    }
+  });
+
+  app.get("/api/construction/daily-logs/:id", isAuthenticated, requirePermission("project_daily_logs", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const log = await storage.getDailyLog(id);
+      if (!log) return res.status(404).json({ error: "اليومية غير موجودة" });
+      const access = await checkProjectBranchAccess(req, log.projectId);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+      const photos = await storage.getDailyLogPhotos(id);
+      res.json({ ...log, photos });
+    } catch (error) {
+      console.error("Error fetching daily log:", error);
+      res.status(500).json({ error: "فشل في جلب اليومية" });
+    }
+  });
+
+  app.post("/api/construction/daily-logs", isAuthenticated, requirePermission("project_daily_logs", "create"), async (req, res) => {
+    try {
+      const validated = insertProjectDailyLogSchema.parse({
+        ...req.body,
+        createdBy: req.currentUser?.id,
+      });
+      const access = await checkProjectBranchAccess(req, validated.projectId);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح بإضافة يومية لهذا المشروع" });
+      // Auto-fill branchId from project if missing
+      if (!validated.branchId && access.branchId) {
+        validated.branchId = access.branchId;
+      }
+      const created = await storage.createDailyLog(validated);
+      res.status(201).json(created);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      console.error("Error creating daily log:", error);
+      res.status(500).json({ error: "فشل في إنشاء اليومية" });
+    }
+  });
+
+  app.patch("/api/construction/daily-logs/:id", isAuthenticated, requirePermission("project_daily_logs", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const existing = await storage.getDailyLog(id);
+      if (!existing) return res.status(404).json({ error: "اليومية غير موجودة" });
+      const access = await checkProjectBranchAccess(req, existing.projectId);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+      // Strip immutable fields to prevent project/branch hijack
+      const { projectId: _p, branchId: _b, createdBy: _c, id: _i, createdAt: _ca, updatedAt: _ua, ...editable } = req.body || {};
+      const validated = insertProjectDailyLogSchema.partial().parse(editable);
+      const updated = await storage.updateDailyLog(id, validated);
+      res.json(updated);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      console.error("Error updating daily log:", error);
+      res.status(500).json({ error: "فشل في تعديل اليومية" });
+    }
+  });
+
+  app.delete("/api/construction/daily-logs/:id", isAuthenticated, requirePermission("project_daily_logs", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const existing = await storage.getDailyLog(id);
+      if (!existing) return res.status(404).json({ error: "اليومية غير موجودة" });
+      const access = await checkProjectBranchAccess(req, existing.projectId);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+      const deleted = await storage.deleteDailyLog(id);
+      res.json({ success: deleted });
+    } catch (error) {
+      console.error("Error deleting daily log:", error);
+      res.status(500).json({ error: "فشل في حذف اليومية" });
+    }
+  });
+
+  // ===== Daily Log Photos =====
+  app.post("/api/construction/daily-logs/:id/photos", isAuthenticated, requirePermission("project_daily_logs", "edit"), async (req, res) => {
+    try {
+      const dailyLogId = parseInt(req.params.id, 10);
+      if (isNaN(dailyLogId)) return res.status(400).json({ error: "Invalid ID" });
+      const log = await storage.getDailyLog(dailyLogId);
+      if (!log) return res.status(404).json({ error: "اليومية غير موجودة" });
+      const access = await checkProjectBranchAccess(req, log.projectId);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+      const validated = insertProjectDailyLogPhotoSchema.parse({
+        ...req.body,
+        dailyLogId,
+        uploadedBy: req.currentUser?.id,
+      });
+      const created = await storage.createDailyLogPhoto(validated);
+      res.status(201).json(created);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      console.error("Error adding photo:", error);
+      res.status(500).json({ error: "فشل في إضافة الصورة" });
+    }
+  });
+
+  app.delete("/api/construction/daily-logs/photos/:photoId", isAuthenticated, requirePermission("project_daily_logs", "edit"), async (req, res) => {
+    try {
+      const photoId = parseInt(req.params.photoId, 10);
+      if (isNaN(photoId)) return res.status(400).json({ error: "Invalid ID" });
+      const photo = await storage.getDailyLogPhoto(photoId);
+      if (!photo) return res.status(404).json({ error: "الصورة غير موجودة" });
+      const parentLog = await storage.getDailyLog(photo.dailyLogId);
+      if (!parentLog) return res.status(404).json({ error: "اليومية غير موجودة" });
+      const access = await checkProjectBranchAccess(req, parentLog.projectId);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+      const deleted = await storage.deleteDailyLogPhoto(photoId);
+      res.json({ success: deleted });
+    } catch (error) {
+      console.error("Error deleting photo:", error);
+      res.status(500).json({ error: "فشل في حذف الصورة" });
     }
   });
 

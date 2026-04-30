@@ -34,6 +34,11 @@ const ConstructionDashboardPage = makeLazy("construction-dashboard");
 const ConstructionReportsPage = makeLazy("construction-reports");
 const ContractsPage = makeLazy("contracts");
 const PaymentRequestsPage = makeLazy("payment-requests");
+const ContractorStatementsPage = makeLazy("contractor-statements");
+const ContractorStatementDetailPage = makeLazy("contractor-statement-detail");
+const DailyLogsListPage = makeLazy("daily-logs-list");
+const DailyWorkLogPage = makeLazy("daily-work-log");
+const DailyLogPrintPage = makeLazy("daily-log-print");
 const BudgetPlanningPage = makeLazy("budget-planning");
 const AssetTransfersPage = makeLazy("asset-transfers");
 const AuditLogsPage = makeLazy("audit-logs");
@@ -308,6 +313,13 @@ const Router = React.memo(function Router() {
       <Route path="/payment-requests">{() => <ModulePage component={PaymentRequestsPage} module="payment_requests" />}</Route>
       <Route path="/budget-planning">{() => <ModulePage component={BudgetPlanningPage} module="budget_planning" />}</Route>
       <Route path="/construction-reports">{() => <ModulePage component={ConstructionReportsPage} module="reports" />}</Route>
+      <Route path="/contractor-statements">{() => <ModulePage component={ContractorStatementsPage} module="contractor_statements" />}</Route>
+      <Route path="/contractors/:id/statement">{() => <ModulePage component={ContractorStatementDetailPage} module="contractor_statements" />}</Route>
+      <Route path="/construction/daily-logs">{() => <ModulePage component={DailyLogsListPage} module="project_daily_logs" />}</Route>
+      <Route path="/construction/daily-logs/new">{() => <ModulePage component={DailyWorkLogPage} module="project_daily_logs" />}</Route>
+      <Route path="/construction/daily-logs/:id/print">{() => <ModulePage component={DailyLogPrintPage} module="project_daily_logs" />}</Route>
+      <Route path="/construction/daily-logs/:id/edit">{() => <ModulePage component={DailyWorkLogPage} module="project_daily_logs" />}</Route>
+      <Route path="/construction/daily-logs/:id">{() => <ModulePage component={DailyWorkLogPage} module="project_daily_logs" />}</Route>
       
       {/* Marketing - التسويق */}
       <Route path="/marketing">{() => <ModulePage component={MarketingDashboardPage} module="marketing" />}</Route>

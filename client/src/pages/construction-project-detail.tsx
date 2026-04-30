@@ -622,11 +622,25 @@ export default function ConstructionProjectDetailPage() {
               <p className="text-muted-foreground mt-2">{project.description}</p>
             )}
           </div>
-          {canEdit && (
-            <Button className="h-11 sm:h-9" onClick={() => { setNewProgress(project.progressPercent || 0); setIsUpdateProgressOpen(true); }} data-testid="button-update-progress">
-              تحديث نسبة التقدم
-            </Button>
-          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Link href={`/construction/daily-logs?projectId=${projectId}`}>
+              <Button variant="outline" className="h-11 sm:h-9" data-testid="button-view-daily-logs">
+                <Calendar className="w-4 h-4 ml-1" />
+                يوميات الأعمال
+              </Button>
+            </Link>
+            <Link href={`/construction/daily-logs/new`}>
+              <Button variant="outline" className="h-11 sm:h-9" data-testid="button-add-daily-log">
+                <Plus className="w-4 h-4 ml-1" />
+                يومية جديدة
+              </Button>
+            </Link>
+            {canEdit && (
+              <Button className="h-11 sm:h-9" onClick={() => { setNewProgress(project.progressPercent || 0); setIsUpdateProgressOpen(true); }} data-testid="button-update-progress">
+                تحديث نسبة التقدم
+              </Button>
+            )}
+          </div>
         </div>
 
         <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-5">

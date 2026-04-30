@@ -439,6 +439,7 @@ export const paymentRequests = pgTable("payment_requests", {
     .notNull()
     .references(() => constructionProjects.id, { onDelete: "cascade" }),
   contractId: integer("contract_id").references(() => constructionContracts.id),
+  contractorId: integer("contractor_id").references(() => contractors.id),
   requestNumber: text("request_number"),
   requestType: text("request_type").notNull(), // transfer (حوالة), expense (مصروف), advance (سلفة)
   amount: real("amount").notNull(),
@@ -505,6 +506,101 @@ export const insertContractPaymentSchema = createInsertSchema(
 
 export type ContractPayment = typeof contractPayments.$inferSelect;
 export type InsertContractPayment = z.infer<typeof insertContractPaymentSchema>;
+
+// Project Expenses table - مصروفات المشروع المباشرة (غير مرتبطة بعقد)
+export const projectExpenses = pgTable("project_expenses", {
+  id: serial("id").primaryKey(),
+  projectId: integer("project_id")
+    .notNull()
+    .references(() => constructionProjects.id, { onDelete: "cascade" }),
+  contractorId: integer("contractor_id").references(() => contractors.id),
+  categoryId: integer("category_id").references(() => constructionCategories.id),
+  expenseDate: text("expense_date").notNull(),
+  amount: real("amount").notNull(),
+  description: text("description").notNull(),
+  beneficiaryName: text("beneficiary_name"),
+  paymentMethod: text("payment_method"), // cash, bank_transfer, check
+  referenceNumber: text("reference_number"),
+  invoiceNumber: text("invoice_number"),
+  attachmentUrl: text("attachment_url"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_project_expenses_project").on(table.projectId),
+  index("idx_project_expenses_contractor").on(table.contractorId),
+  index("idx_project_expenses_date").on(table.expenseDate),
+]);
+
+export const insertProjectExpenseSchema = createInsertSchema(projectExpenses).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ProjectExpense = typeof projectExpenses.$inferSelect;
+export type InsertProjectExpense = z.infer<typeof insertProjectExpenseSchema>;
+
+// Project Daily Work Logs - يوميات أعمال المشروع
+export const projectDailyLogs = pgTable("project_daily_logs", {
+  id: serial("id").primaryKey(),
+  projectId: integer("project_id")
+    .notNull()
+    .references(() => constructionProjects.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").references(() => branches.id),
+  contractorId: integer("contractor_id").references(() => contractors.id),
+  logDate: text("log_date").notNull(), // YYYY-MM-DD
+  supervisorName: text("supervisor_name").notNull(), // اسم المشرف/المهندس (نص حر)
+  supervisorRole: text("supervisor_role"), // مهندس، مشرف موقع، مدير، إلخ
+  workDescription: text("work_description").notNull(), // الأعمال المنفذة اليوم
+  progressToday: integer("progress_today").default(0), // نسبة الإنجاز اليومي %
+  workersCount: integer("workers_count").default(0), // عدد العمالة الحاضرة
+  equipmentUsed: text("equipment_used"), // المعدات المستخدمة
+  weather: text("weather"), // مشمس، ممطر، حار، إلخ
+  issues: text("issues"), // المشاكل والمعوقات
+  notes: text("notes"), // ملاحظات إضافية
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_project_daily_logs_project").on(table.projectId),
+  index("idx_project_daily_logs_date").on(table.logDate),
+  index("idx_project_daily_logs_project_date").on(table.projectId, table.logDate),
+  index("idx_project_daily_logs_contractor").on(table.contractorId),
+]);
+
+export const insertProjectDailyLogSchema = createInsertSchema(projectDailyLogs).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ProjectDailyLog = typeof projectDailyLogs.$inferSelect;
+export type InsertProjectDailyLog = z.infer<typeof insertProjectDailyLogSchema>;
+
+// Project Daily Log Photos - صور اليومية
+export const projectDailyLogPhotos = pgTable("project_daily_log_photos", {
+  id: serial("id").primaryKey(),
+  dailyLogId: integer("daily_log_id")
+    .notNull()
+    .references(() => projectDailyLogs.id, { onDelete: "cascade" }),
+  photoUrl: text("photo_url").notNull(),
+  caption: text("caption"),
+  photoType: text("photo_type").default("during"), // before, during, after
+  uploadedBy: varchar("uploaded_by").references(() => users.id),
+  uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_project_daily_log_photos_log").on(table.dailyLogId),
+]);
+
+export const insertProjectDailyLogPhotoSchema = createInsertSchema(projectDailyLogPhotos).omit({
+  id: true,
+  uploadedAt: true,
+});
+
+export type ProjectDailyLogPhoto = typeof projectDailyLogPhotos.$inferSelect;
+export type InsertProjectDailyLogPhoto = z.infer<typeof insertProjectDailyLogPhotoSchema>;
 
 // System Modules for permissions - جميع وحدات النظام
 export const SYSTEM_MODULES = [
@@ -579,6 +675,9 @@ export const SYSTEM_MODULES = [
   "contracts",
   "budget_planning",
   "payment_requests",
+  "project_expenses",
+  "contractor_statements",
+  "project_daily_logs",
   
   // التسويق
   "marketing",
@@ -762,6 +861,9 @@ export const MODULE_LABELS: Record<SystemModule, string> = {
   contracts: "العقود",
   budget_planning: "تخطيط الميزانية",
   payment_requests: "طلبات الصرف",
+  project_expenses: "مصروفات المشروع",
+  contractor_statements: "كشوف حساب المقاولين",
+  project_daily_logs: "يوميات أعمال المشاريع",
   
   // التسويق
   marketing: "التسويق",
@@ -919,6 +1021,9 @@ export const MODULE_GROUPS: { label: string; modules: SystemModule[] }[] = [
       "contracts",
       "budget_planning",
       "payment_requests",
+      "project_expenses",
+      "contractor_statements",
+      "project_daily_logs",
     ],
   },
   {
@@ -1022,6 +1127,18 @@ export const ROLE_PERMISSION_TEMPLATES: Record<
     },
     {
       module: "payment_requests",
+      actions: ["view", "create", "edit", "export"],
+    },
+    {
+      module: "project_expenses",
+      actions: ["view", "create", "edit", "export"],
+    },
+    {
+      module: "contractor_statements",
+      actions: ["view", "export"],
+    },
+    {
+      module: "project_daily_logs",
       actions: ["view", "create", "edit", "export"],
     },
     { module: "reports", actions: ["view", "export"] },
