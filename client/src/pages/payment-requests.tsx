@@ -45,7 +45,9 @@ import {
   Search, Eye, Calendar, Building2, Filter, X, ArrowRight
 } from "lucide-react";
 import { Link } from "wouter";
-import type { PaymentRequest, ConstructionProject, ConstructionContract, ConstructionCategory } from "@shared/schema";
+import type { PaymentRequest, ConstructionProject, ConstructionContract, ConstructionCategory, Contractor } from "@shared/schema";
+import { Switch } from "@/components/ui/switch";
+import { HardHat, FileText, ExternalLink } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -59,6 +61,7 @@ import { generatePaymentRequestsPDF } from "@/lib/pdf-generator";
 
 const paymentRequestFormSchema = z.object({
   projectId: z.coerce.number().min(1, "اختر المشروع"),
+  contractorId: z.coerce.number().optional().nullable(),
   contractId: z.coerce.number().optional().nullable(),
   requestType: z.string().min(1, "اختر نوع الطلب"),
   amount: z.coerce.number().min(1, "المبلغ مطلوب"),
@@ -158,12 +161,22 @@ export default function PaymentRequestsPage() {
     },
   });
 
+  const { data: contractors = [] } = useQuery<Contractor[]>({
+    queryKey: ["/api/construction/contractors"],
+    queryFn: async () => {
+      const res = await fetch("/api/construction/contractors");
+      if (!res.ok) throw new Error("Failed to fetch contractors");
+      return res.json();
+    },
+  });
+
   const { branches } = useBranches();
 
   const form = useForm<PaymentRequestFormData>({
     resolver: zodResolver(paymentRequestFormSchema),
     defaultValues: {
       projectId: 0,
+      contractorId: null,
       contractId: null,
       requestType: "expense",
       amount: 0,
@@ -308,6 +321,7 @@ export default function PaymentRequestsPage() {
     setSelectedRequest(request);
     form.reset({
       projectId: request.projectId,
+      contractorId: request.contractorId || null,
       contractId: request.contractId || null,
       requestType: request.requestType,
       amount: request.amount,
@@ -344,6 +358,169 @@ export default function PaymentRequestsPage() {
     if (!categoryId) return "-";
     return categories.find((c) => c.id === categoryId)?.name || "-";
   };
+
+  const getContractorName = (contractorId: number | null | undefined) => {
+    if (!contractorId) return null;
+    return contractors.find((c) => c.id === contractorId)?.name || null;
+  };
+
+  const getContractTitle = (contractId: number | null | undefined) => {
+    if (!contractId) return null;
+    const c = contracts.find((c) => c.id === contractId);
+    return c ? (c.title || `عقد رقم ${c.id}`) : null;
+  };
+
+  const watchProjectId = form.watch("projectId");
+  const watchContractorId = form.watch("contractorId");
+  const isLinkedToContractor = !!watchContractorId;
+
+  const filteredContractsForForm = contracts.filter((c) => {
+    if (watchContractorId && c.contractorId !== watchContractorId) return false;
+    if (watchProjectId && c.projectId !== watchProjectId) return false;
+    return true;
+  });
+
+  // عند تغيير المشروع: امسح contractId إذا كان لا يخص المشروع الجديد
+  const handleProjectChange = (val: string) => {
+    const newProjectId = parseInt(val, 10);
+    form.setValue("projectId", newProjectId);
+    const currentContractId = form.getValues("contractId");
+    if (currentContractId) {
+      const currentContract = contracts.find((c) => c.id === currentContractId);
+      if (currentContract && currentContract.projectId !== newProjectId) {
+        form.setValue("contractId", null);
+      }
+    }
+  };
+
+  const renderContractorFields = (testIdSuffix: string = "") => (
+    <div className="border-2 border-dashed border-amber-300 bg-amber-50/40 rounded-lg p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <HardHat className="h-5 w-5 text-amber-700" />
+          <Label className="text-base font-semibold text-amber-900">
+            مرتبط بمقاول؟
+          </Label>
+        </div>
+        <Switch
+          checked={isLinkedToContractor}
+          onCheckedChange={(checked) => {
+            if (!checked) {
+              form.setValue("contractorId", null);
+              form.setValue("contractId", null);
+            } else if (contractors.length > 0) {
+              // اختيار افتراضي: لا شيء، فقط نُظهر الحقول
+            }
+          }}
+          data-testid={`switch-link-contractor${testIdSuffix}`}
+        />
+      </div>
+
+      {isLinkedToContractor && (
+        <>
+          <div className="space-y-2">
+            <Label className="text-sm">المقاول *</Label>
+            <Select
+              value={form.watch("contractorId")?.toString() || ""}
+              onValueChange={(val) => {
+                const contractorId = parseInt(val, 10);
+                form.setValue("contractorId", contractorId);
+                // إذا كان العقد المختار لا يخص هذا المقاول → أزِله
+                const currentContractId = form.getValues("contractId");
+                if (currentContractId) {
+                  const currentContract = contracts.find((c) => c.id === currentContractId);
+                  if (currentContract && currentContract.contractorId !== contractorId) {
+                    form.setValue("contractId", null);
+                  }
+                }
+                // تعبئة تلقائية لاسم المستفيد إذا كان فارغاً
+                const currentBeneficiary = form.getValues("beneficiaryName");
+                if (!currentBeneficiary) {
+                  const contractor = contractors.find((c) => c.id === contractorId);
+                  if (contractor) form.setValue("beneficiaryName", contractor.name);
+                }
+              }}
+            >
+              <SelectTrigger data-testid={`select-contractor${testIdSuffix}`}>
+                <SelectValue placeholder="اختر المقاول" />
+              </SelectTrigger>
+              <SelectContent className="max-h-60 overflow-y-auto">
+                {contractors.length === 0 ? (
+                  <div className="p-2 text-sm text-gray-500 text-center">
+                    لا يوجد مقاولون مسجلون
+                  </div>
+                ) : (
+                  contractors.map((contractor) => (
+                    <SelectItem key={contractor.id} value={contractor.id.toString()}>
+                      {contractor.name}
+                      {contractor.specialization && (
+                        <span className="text-xs text-gray-500 mr-2">
+                          ({contractor.specialization})
+                        </span>
+                      )}
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {watchContractorId && (
+            <div className="space-y-2">
+              <Label className="text-sm flex items-center gap-2">
+                <FileText className="h-4 w-4 text-gray-600" />
+                ربط بعقد محدد (اختياري)
+              </Label>
+              <Select
+                value={form.watch("contractId")?.toString() || "none"}
+                onValueChange={(val) =>
+                  form.setValue("contractId", val === "none" ? null : parseInt(val, 10))
+                }
+              >
+                <SelectTrigger data-testid={`select-contract${testIdSuffix}`}>
+                  <SelectValue placeholder="بدون عقد محدد" />
+                </SelectTrigger>
+                <SelectContent className="max-h-60 overflow-y-auto">
+                  <SelectItem value="none">بدون عقد محدد (دفعة مباشرة)</SelectItem>
+                  {filteredContractsForForm.length === 0 ? (
+                    <div className="p-2 text-xs text-gray-500 text-center">
+                      لا توجد عقود لهذا المقاول
+                      {watchProjectId ? " في هذا المشروع" : ""}
+                    </div>
+                  ) : (
+                    filteredContractsForForm.map((contract) => {
+                      const remaining = (contract.totalAmount || 0) - (contract.paidAmount || 0);
+                      return (
+                        <SelectItem key={contract.id} value={contract.id.toString()}>
+                          <div className="flex flex-col items-start text-right w-full">
+                            <span className="font-medium">
+                              {contract.title}
+                              {contract.contractNumber && (
+                                <span className="text-xs text-gray-500 mr-2">
+                                  ({contract.contractNumber})
+                                </span>
+                              )}
+                            </span>
+                            <span className="text-xs text-gray-600">
+                              المتبقي: {remaining.toLocaleString()} ر.س من{" "}
+                              {(contract.totalAmount || 0).toLocaleString()} ر.س
+                            </span>
+                          </div>
+                        </SelectItem>
+                      );
+                    })
+                  )}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-amber-800 bg-amber-100/50 p-2 rounded">
+                💡 سيظهر هذا الطلب تلقائياً في كشف حساب المقاول بعد اعتماده ودفعه
+              </p>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
 
   const filteredRequests = requests.filter((req) => {
     // تبويب التقرير يعرض المعتمد والمدفوع فقط
@@ -810,6 +987,12 @@ export default function PaymentRequestsPage() {
                         </Badge>
                       </div>
                       <p className="text-sm text-gray-700 line-clamp-2 mb-2">{request.description}</p>
+                      {request.contractorId && (
+                        <Badge className="bg-amber-100 text-amber-900 mb-2 gap-1 text-[10px]">
+                          <HardHat className="h-3 w-3" />
+                          {getContractorName(request.contractorId) || `مقاول #${request.contractorId}`}
+                        </Badge>
+                      )}
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-gray-500">{getProjectName(request.projectId)}</span>
                         <span className="font-bold text-sm text-butter-gold">{request.amount.toLocaleString()} ر.س</span>
@@ -869,7 +1052,7 @@ export default function PaymentRequestsPage() {
                     <TableHead className="text-right">المشروع</TableHead>
                     <TableHead className="text-right">الوصف</TableHead>
                     <TableHead className="text-right">المبلغ</TableHead>
-                    <TableHead className="text-right">المستفيد</TableHead>
+                    <TableHead className="text-right">المستفيد / المقاول</TableHead>
                     <TableHead className="text-right">الأولوية</TableHead>
                     <TableHead className="text-right">الحالة</TableHead>
                     <TableHead className="text-right">الإجراءات</TableHead>
@@ -916,7 +1099,24 @@ export default function PaymentRequestsPage() {
                           <TableCell className="font-medium">
                             {request.amount.toLocaleString()} ر.س
                           </TableCell>
-                          <TableCell>{request.beneficiaryName || "-"}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-1">
+                              <span className="text-sm">
+                                {request.beneficiaryName || "-"}
+                              </span>
+                              {request.contractorId && (
+                                <Link href={`/contractors/${request.contractorId}/statement`}>
+                                  <Badge
+                                    className="bg-amber-100 text-amber-900 hover:bg-amber-200 cursor-pointer w-fit gap-1"
+                                    data-testid={`badge-contractor-${request.id}`}
+                                  >
+                                    <HardHat className="h-3 w-3" />
+                                    {getContractorName(request.contractorId) || `مقاول #${request.contractorId}`}
+                                  </Badge>
+                                </Link>
+                              )}
+                            </div>
+                          </TableCell>
                           <TableCell>
                             <Badge className={`${priorityInfo.color} text-white`}>
                               {priorityInfo.label}
@@ -1027,7 +1227,7 @@ export default function PaymentRequestsPage() {
                 <Label>المشروع *</Label>
                 <Select
                   value={form.watch("projectId")?.toString() || ""}
-                  onValueChange={(val) => form.setValue("projectId", parseInt(val, 10))}
+                  onValueChange={handleProjectChange}
                 >
                   <SelectTrigger data-testid="select-project">
                     <SelectValue placeholder="اختر المشروع" />
@@ -1064,6 +1264,8 @@ export default function PaymentRequestsPage() {
                 </Select>
               </div>
             </div>
+
+            {renderContractorFields("-add")}
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -1206,7 +1408,7 @@ export default function PaymentRequestsPage() {
                 <Label>المشروع *</Label>
                 <Select
                   value={form.watch("projectId")?.toString() || ""}
-                  onValueChange={(val) => form.setValue("projectId", parseInt(val, 10))}
+                  onValueChange={handleProjectChange}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="اختر المشروع" />
@@ -1240,6 +1442,8 @@ export default function PaymentRequestsPage() {
                 </Select>
               </div>
             </div>
+
+            {renderContractorFields("-edit")}
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -1425,6 +1629,47 @@ export default function PaymentRequestsPage() {
                 <p className="text-sm text-gray-500">المشروع</p>
                 <p className="font-medium">{getProjectName(detailsRequest.projectId)}</p>
               </div>
+
+              {detailsRequest.contractorId && (
+                <div className="border-2 border-amber-200 bg-amber-50 rounded-lg p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <HardHat className="h-5 w-5 text-amber-700" />
+                      <p className="text-sm font-semibold text-amber-900">المقاول</p>
+                    </div>
+                    <Link href={`/contractors/${detailsRequest.contractorId}/statement`}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-2 bg-white"
+                        data-testid={`button-view-contractor-statement-${detailsRequest.id}`}
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                        عرض كشف الحساب
+                      </Button>
+                    </Link>
+                  </div>
+                  <p className="font-bold text-lg text-amber-900">
+                    {getContractorName(detailsRequest.contractorId) || `مقاول #${detailsRequest.contractorId}`}
+                  </p>
+                  {detailsRequest.contractId && (
+                    <div className="flex items-center gap-2 text-sm text-amber-800 bg-white/50 p-2 rounded">
+                      <FileText className="h-4 w-4" />
+                      <span>مرتبط بعقد: <strong>{getContractTitle(detailsRequest.contractId) || `#${detailsRequest.contractId}`}</strong></span>
+                    </div>
+                  )}
+                  {detailsRequest.status === "paid" && (
+                    <p className="text-xs text-green-700 bg-green-50 p-2 rounded border border-green-200">
+                      ✓ هذا المبلغ مُدرج في كشف حساب المقاول كدفعة مسددة
+                    </p>
+                  )}
+                  {detailsRequest.status !== "paid" && detailsRequest.status !== "rejected" && (
+                    <p className="text-xs text-blue-700 bg-blue-50 p-2 rounded border border-blue-200">
+                      ⏳ سيظهر في كشف الحساب كمستحق حالياً، وسيُحول لمسدد عند تأشيره مدفوع
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div className="space-y-1">
                 <p className="text-sm text-gray-500">الوصف</p>

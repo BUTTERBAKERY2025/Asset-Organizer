@@ -25,67 +25,33 @@ The system uses a modern web architecture with a React-based frontend and a Node
 - **Database**: PostgreSQL managed with Drizzle ORM, schema defined in `shared/schema.ts`.
 
 ### Feature Specifications
-- **Branch-Based Organization**: Inventory and operations structured by branch.
-- **Status Tracking**: Comprehensive status management for assets and production items.
-- **Financials**: Built-in 15% Saudi VAT calculation.
-- **Construction Project Management**: Module for tracking projects, work items, and contractors.
-- **Operations and Production Module**: Manages products, shifts, production orders, and quality control.
-- **Cashier Sales Journal Module**: Facilitates daily sales recording, payment breakdowns, and reconciliation.
-- **Pagination System**: Implemented across data-heavy pages.
-- **Sales Analytics**: Advanced filters, export options, and auto-refresh for sales reports.
-- **Unified Command Center**: Dashboard aggregating KPIs from various modules.
-- **RBAC System**: Comprehensive role-based access control with granular permissions, 2FA, IP whitelisting, and audit trails. Multi-branch access: users can be assigned to specific multiple branches (not just one or all) via checkbox selection in user management; backed by `user_branch_access` table with server-side validation.
-- **P&L Dashboard Enhancements**: Includes advanced financial KPIs.
-- **Marketing Influencers Enhancement**: Management of influencer data.
-- **Branch Employee Integration**: Features for linking employees to user accounts, tracking attendance, schedules, and timesheets.
-- **Influencer Contracts Management**: Contract generation with PDF export, tracking, and approval workflow.
-- **Finished Goods Inventory**: Automatic transfer of production batches with audit trail and atomic transactions.
-- **Warehouse & Materials Management**: System for material requests and transfers between branches and warehouse.
-- **Document Management & Archiving**: System for storing, organizing, and sharing company documents with version control and access logging.
-- **Executive Secretariat System**: CEO command center with modules for meetings, tasks, correspondence, and unified reports.
-- **Social Responsibility Module**: Management system for social initiatives and community engagement.
-- **Weekly Schedule Lock System**: Protection mechanism for weekly shift schedules with audit trails.
-- **Advanced Attendance Reports**: Comprehensive reporting tab in shift management with 5 detailed reports, export, and secure branch data isolation.
-- **Smart Incentives & Points System**: Comprehensive cashier incentive management with point settings, daily challenges, product commissions, branch bonuses, cashier wallet, awards history, and incentive statements, with granular RBAC permissions and security hardening.
-- **Display Bar & Daily Waste System**: Manages display bar operations with production receipts, daily waste tracking, and approval workflows.
-- **System Notifications & Broadcast Messages**: Interactive notification system for targeted messages with various types, display styles, targeting, scheduling, and read/dismiss tracking.
-- **Accounting Software Integration**: Comprehensive system for automatic journal entries from sales and waste, financial reconciliation, a hierarchical Saudi Chart of Accounts, and export capabilities to Qoyod, Zoho Books, and general CSV.
-- **Event POS (Point of Sale)**: Module for seasonal events with simplified tax invoicing per ZATCA standards, branch-specific product catalog management, multiple payment methods (cash/network), daily sales summary, print-ready receipts, and RBAC-secured endpoints with branch isolation.
-- **Organizational Structure**: Interactive org chart page at `/executive/org-structure` displaying company hierarchy (Governance, Departments, Branches, Support), segregation of duties, and reporting paths.
-- **Contractor Account Statements**: Unified page at `/contractor-statements` listing all contractors with summary KPIs (contracts count, total value, paid, balance), with detailed statement at `/contractors/:id/statement` aggregating contract payments, paid/pending payment requests, and direct project expenses, with date range filter, Excel export, and print-friendly view. Branch isolation enforced on all queries (including defense-in-depth join on `payment_requests`→`construction_projects.branchId` for both contract-linked and direct PRs); the NOT-IN exclusion that prevents double-counting between `contract_payments` and paid `payment_requests` is itself branch-scoped so a paid PR isn't dropped from one branch's aggregate due to a cross-branch reference.
-- **Project Daily Work Logs**: Daily work logs per project at `/construction/daily-logs` (list with project/date filters) and `/construction/daily-logs/new|/:id/edit` (iPad-friendly tabbed form with photo uploads via Supabase Storage). Multi-tab UI (basics/work/workforce/photos) with touch-friendly h-12 controls, dynamic work items (type/description/quantity/unit) stored as jsonb `work_items`, worker breakdown by role (auto-summing total) stored as jsonb `worker_breakdown`, work location field (`work_location`), start/end times (`start_time`/`end_time`), temperature, safety incidents (`safety_incidents`), next-day plan (`next_day_plan`), and draft/submitted status. Photos: multi-file upload + camera capture (`capture="environment"`) with pending staging area (per-photo type & caption) and bulk upload. Multiple supervisors can log the same day. Photos categorized as before/during/after. Printable A4 report at `/construction/daily-logs/:id/print` includes work items table, worker breakdown table, location/time row, safety incidents (highlighted), next-day plan, and signature blocks. Three permission modules: `project_expenses`, `contractor_statements`, `project_daily_logs`.
-
-> **Lazy-loading note**: All new pages must be registered in `client/src/lib/pagePreloader.ts` (the `pageImports` map) in addition to `client/src/App.tsx`. Pages registered only in `App.tsx` will throw `Unknown page: <key>` at runtime because `makeLazy(key)` looks up the import in `pageImports`.
+- **Core Modules**: Branch-based inventory and operations, asset status tracking, 15% Saudi VAT calculation, construction project management, operations and production management, cashier sales journal.
+- **Advanced Features**: Unified command center, comprehensive role-based access control (RBAC) with multi-branch support, P&L dashboard, marketing influencer management, employee integration (attendance, schedules, timesheets), influencer contract management (with PDF export), finished goods inventory with atomic transfers, warehouse and materials management, document management with version control, executive secretariat system, social responsibility module, weekly schedule lock system, advanced attendance reports.
+- **Smart Incentives & Points System**: Comprehensive cashier incentive management.
+- **Display Bar & Daily Waste System**: Manages display bar operations and waste tracking.
+- **System Notifications & Broadcast Messages**: Interactive notification system.
+- **Accounting Software Integration**: Automatic journal entries, financial reconciliation, hierarchical Saudi Chart of Accounts, export to Qoyod, Zoho Books, and CSV.
+- **Event POS**: Module for seasonal events with ZATCA-compliant invoicing, product catalog management, multiple payment methods, and print-ready receipts.
+- **Organizational Structure**: Interactive org chart displaying company hierarchy.
+- **Contractor Account Statements**: Unified page for contractor KPIs, detailed statements, and payment request linking.
+- **Project Daily Work Logs**: iPad-friendly tabbed form for daily work logs with photo uploads, worker breakdown, safety incidents, and printable reports.
 
 ### Performance Optimization
-- **API Response Cache**: Server-side in-memory cache for all GET /api/* responses with per-user+branch isolation and auto-invalidation.
-- **Tiered Caching Strategy**: Five-tier cache system based on data volatility.
-- **Server-side Caching**: Memoized data fetchers and auth cache.
-- **Batch API**: POST /api/batch for combining multiple GET requests.
-- **Consolidated Reports Bundle**: GET /api/operations/reports-bundle combines 4+ data queries (operations report, cashier journals, cashiers, payment breakdowns) into single parallel request with selectable sections parameter.
-- **Gzip Compression**: All responses >128 bytes are compressed (level 4).
-- **Prefetch on Hover**: Navigation links prefetch API data (heavy report endpoints excluded via SKIP_PREFETCH_ENDPOINTS).
-- **Database Indexes**: 90+ indexes including composite indexes for common query patterns; 45 new branch_id indexes added for all tables.
-- **N+1 Query Elimination**: Batch queries replace per-item loops. Leaderboard uses SQL GROUP BY instead of per-branch queries.
-- **SQL Aggregation**: getCashierJournalStats, getCommandCenterData, waste stats all use SQL COUNT/SUM/AVG FILTER instead of fetching all rows to memory.
-- **Filtered Queries**: All cashier journal endpoints use getCashierJournalsFiltered() with SQL WHERE instead of getAllCashierJournals() + JS filter.
-- **Slow Request Logging**: Logs requests >500ms.
-- **Report Cache TTLs**: Report endpoints cached at 60s server-side; static data (branches, cashiers) cached at 120s.
-- **Client Persistent Cache**: localStorage-based cache (CACHE_VERSION=2) with debounced persist, hydrated on startup for instant rendering.
-- **AuthGate Instant Render**: Shows app immediately from cached session while auth/init validates in background.
-- **Deduplicated Init Fetch**: main.tsx fetch shares result with useAppInit via queryClient.setQueryData, preventing duplicate /api/auth/init requests.
-- **Mobile-Aware Preloading**: Detects low-end devices and slow connections; Wave 3 pages desktop-only; adaptive delays.
+- **Caching**: Server-side in-memory cache, tiered caching strategy, client persistent cache, report-specific TTLs.
+- **Database Optimization**: Database indexes, N+1 query elimination, SQL aggregation, filtered queries.
+- **API Optimization**: Batch API, consolidated reports bundle, gzip compression, prefetch on hover.
+- **Frontend Performance**: AuthGate instant render, deduplicated init fetch, mobile-aware preloading.
 
 ### Data Integrity
-- **Employee Schedule Deduplication**: UNIQUE indexes on `employee_schedules(branch_employee_id, schedule_date, branch_id)` and `(employee_id, schedule_date, branch_id)` prevent duplicate schedule entries at database level. Startup migration auto-cleans any existing duplicates before creating constraints.
-- **Transactional Bulk Save**: `createBulkEmployeeSchedules` uses `db.transaction()` for atomic all-or-nothing operations. On failure, all changes are rolled back.
-- **Upsert Pattern**: Both single and bulk schedule saves check for existing records by `branchEmployeeId` first, then `employeeId` fallback, before deciding insert vs update.
+- **Employee Schedule Deduplication**: UNIQUE indexes and startup migration for data consistency.
+- **Transactional Bulk Save**: Atomic operations for employee schedules.
+- **Upsert Pattern**: Handles existing records for single and bulk schedule saves.
 
 ### System Design Choices
-- **Shared Schema**: `shared/` directory for database schema.
-- **Modular Design**: Distinct modules for construction, operations, and cashier functions.
+- **Shared Schema**: Centralized database schema definition.
+- **Modular Design**: Distinct modules for various business functions.
 - **Scalability**: Designed for multi-branch operations and large datasets.
-- **Branch-Level Security**: Strict data isolation enforced via backend filters and frontend logic.
+- **Branch-Level Security**: Strict data isolation via backend and frontend controls.
 
 ## External Dependencies
 
@@ -105,19 +71,9 @@ The system uses a modern web architecture with a React-based frontend and a Node
 - **Google Fonts**: Cairo (Arabic) and Plus Jakarta Sans (Latin).
 
 ### File Storage
-- **Unified Supabase Storage**: All file uploads are handled by Supabase Storage via `POST /api/uploads?folder=<folder>`.
-- **Download Flow**: Authenticated `GET /api/uploads/file/<path>` or `GET /api/documents/file/<filename>` serves files.
-
-### Security Hardening (Completed)
-- **Authentication enforcement**: All debug endpoints require `isAuthenticated` + `requirePermission`.
-- **Error message sanitization**: All 500 error responses return generic Arabic messages instead of `error.message` to prevent internal info leaks.
-- **SQL injection protection**: Backup/restore table names validated against `BACKUP_TABLES` whitelist + regex; dynamic column names use allowlist.
-- **CSRF protection**: `csrfProtection` middleware applied globally via `server/index.ts`; session cookies use `httpOnly`, `sameSite: strict`, `secure` in production.
-- **Rate limiting**: Applied to login, biometric, upload, and general API endpoints.
-- **Session security**: Fingerprint validation, 12h absolute lifetime, inactivity timeout, single-session enforcement.
-- **Security headers**: X-Frame-Options, HSTS, X-Content-Type-Options, Permissions-Policy, Referrer-Policy.
+- **Unified Supabase Storage**: For all file uploads.
 
 ### External System Integrations
-- **Accounting Integration**: API endpoints for exporting financial reports.
-- **SMS/WhatsApp Notifications**: Notification queue system ready for Twilio integration.
-- **Data Import**: Excel import functionality via API endpoint (`/api/import-jobs`).
+- **Accounting Integration**: API endpoints for financial report exports.
+- **SMS/WhatsApp Notifications**: Notification queue system (ready for Twilio).
+- **Data Import**: Excel import functionality via API.

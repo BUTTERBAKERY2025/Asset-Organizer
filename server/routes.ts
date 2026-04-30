@@ -2818,6 +2818,44 @@ export async function registerRoutes(
     }
   });
 
+  // Helper: validate contractor/contract integrity for payment requests.
+  // Ensures contractId (if provided) belongs to the same project AND matches contractorId (if provided).
+  // Returns a derivedContractorId so the caller can backfill payload.contractorId from the contract
+  // when the client provides a contractId without an explicit contractorId — this closes the
+  // attack vector where a contract from a different contractor could be linked silently.
+  async function validatePaymentRequestContractorContract(
+    projectId: number,
+    contractorId?: number | null,
+    contractId?: number | null,
+  ): Promise<{ ok: true; derivedContractorId: number | null } | { ok: false; error: string }> {
+    let derivedContractorId: number | null = contractorId ?? null;
+
+    if (contractorId) {
+      const contractor = await storage.getContractor(contractorId);
+      if (!contractor) {
+        return { ok: false, error: "المقاول المحدد غير موجود" };
+      }
+    }
+    if (contractId) {
+      const contract = await storage.getContract(contractId);
+      if (!contract) {
+        return { ok: false, error: "العقد المحدد غير موجود" };
+      }
+      if (contract.projectId !== projectId) {
+        return { ok: false, error: "العقد المحدد لا ينتمي إلى هذا المشروع" };
+      }
+      if (contractorId) {
+        if (contract.contractorId !== contractorId) {
+          return { ok: false, error: "العقد المحدد لا يخص هذا المقاول" };
+        }
+      } else {
+        // No explicit contractorId — derive it from the contract to enforce consistency.
+        derivedContractorId = contract.contractorId;
+      }
+    }
+    return { ok: true, derivedContractorId };
+  }
+
   app.post("/api/payment-requests", isAuthenticated, requirePermission("payment_requests", "create"), async (req, res) => {
     try {
       // SECURITY: Verify project branch access for non-admins
@@ -2825,9 +2863,22 @@ export async function registerRoutes(
       if (!access.allowed) {
         return res.status(403).json({ error: "غير مصرح بإنشاء طلب دفع لهذا المشروع" });
       }
+
+      // SECURITY: Validate contractor/contract integrity (prevents cross-project tampering)
+      const integrity = await validatePaymentRequestContractorContract(
+        parseInt(req.body.projectId, 10),
+        req.body.contractorId ? parseInt(req.body.contractorId, 10) : null,
+        req.body.contractId ? parseInt(req.body.contractId, 10) : null,
+      );
+      if (!integrity.ok) {
+        return res.status(400).json({ error: integrity.error });
+      }
+
       const today = new Date().toISOString().split('T')[0];
       const validatedData = insertPaymentRequestSchema.parse({
         ...req.body,
+        // Backfill contractorId from the linked contract when only contractId was provided.
+        contractorId: integrity.derivedContractorId,
         requestedBy: req.currentUser?.id,
         requestDate: req.body.requestDate || today
       });
@@ -2856,7 +2907,43 @@ export async function registerRoutes(
           return res.status(403).json({ error: "غير مصرح بتعديل هذا الطلب" });
         }
       }
-      const partialData = insertPaymentRequestSchema.partial().parse(req.body);
+
+      // SECURITY: If updating contractor/contract or project, re-validate the resulting tuple's integrity.
+      // Use incoming values if present, else fall back to existing record values.
+      const effectiveProjectId = req.body.projectId !== undefined
+        ? parseInt(req.body.projectId, 10)
+        : existingRequest?.projectId;
+      const effectiveContractorId = req.body.contractorId !== undefined
+        ? (req.body.contractorId === null ? null : parseInt(req.body.contractorId, 10))
+        : existingRequest?.contractorId;
+      const effectiveContractId = req.body.contractId !== undefined
+        ? (req.body.contractId === null ? null : parseInt(req.body.contractId, 10))
+        : existingRequest?.contractId;
+
+      let bodyForUpdate = { ...req.body };
+      if (effectiveProjectId) {
+        const integrity = await validatePaymentRequestContractorContract(
+          effectiveProjectId,
+          effectiveContractorId,
+          effectiveContractId,
+        );
+        if (!integrity.ok) {
+          return res.status(400).json({ error: integrity.error });
+        }
+        // If client sent a contractId without contractorId, backfill it from the contract
+        // so the persisted record stays internally consistent.
+        if (
+          req.body.contractId !== undefined &&
+          req.body.contractId !== null &&
+          req.body.contractorId === undefined &&
+          integrity.derivedContractorId !== null &&
+          integrity.derivedContractorId !== existingRequest?.contractorId
+        ) {
+          bodyForUpdate.contractorId = integrity.derivedContractorId;
+        }
+      }
+
+      const partialData = insertPaymentRequestSchema.partial().parse(bodyForUpdate);
       const request = await storage.updatePaymentRequest(id, partialData);
       if (!request) {
         return res.status(404).json({ error: "Payment request not found" });
