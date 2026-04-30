@@ -36,6 +36,12 @@ The system uses a modern web architecture with a React-based frontend and a Node
 - **Contractor Account Statements**: Unified page for contractor KPIs, detailed statements, and payment request linking.
 - **Project Daily Work Logs**: iPad-friendly tabbed form for daily work logs with photo uploads, worker breakdown, safety incidents, and printable reports.
 
+### iPad / Tablet Field Usability (Construction Module)
+- **Numeric keypad**: All currency inputs use `inputMode="decimal"` (project budget, work item costs, payment request amount, category budget allocations) so iPad shows the numeric keypad instead of full keyboard.
+- **Touch targets**: Min height `h-11` (44px Apple HIG) on critical inputs. Star rating buttons in contractors form expanded to 44×44 hit area with larger 28px stars.
+- **Dialog sizing**: Construction project / contractor dialogs widened to `sm:max-w-2xl max-h-[90vh] overflow-y-auto` to reduce scrolling pain on iPad portrait.
+- **Parallel photo upload**: Daily work log photos upload with concurrency=3 (instead of sequential), ~3× faster on slow site networks while avoiding socket exhaustion.
+
 ### Performance Optimization
 - **Caching**: Server-side in-memory cache, tiered caching strategy, client persistent cache, report-specific TTLs.
 - **Database Optimization**: Database indexes, N+1 query elimination, SQL aggregation, filtered queries.

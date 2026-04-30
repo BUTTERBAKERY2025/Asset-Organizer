@@ -320,7 +320,7 @@ export default function ContractorsPage() {
             form.reset();
           }
         }}>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-lg sm:max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{selectedContractor ? "تعديل المقاول" : "إضافة مقاول جديد"}</DialogTitle>
               <DialogDescription>
@@ -357,17 +357,18 @@ export default function ContractorsPage() {
 
               <div className="space-y-2">
                 <Label>التقييم (1-5)</Label>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
                   {[1, 2, 3, 4, 5].map((star) => (
                     <button
                       key={star}
                       type="button"
                       onClick={() => form.setValue("rating", star)}
-                      className="focus:outline-none"
+                      className="h-11 w-11 flex items-center justify-center rounded-md hover:bg-muted focus:outline-none focus:ring-2 focus:ring-primary"
+                      aria-label={`تقييم ${star} من 5`}
                       data-testid={`button-rating-${star}`}
                     >
                       <Star
-                        className={`w-6 h-6 cursor-pointer transition-colors ${
+                        className={`w-7 h-7 cursor-pointer transition-colors ${
                           star <= (form.watch("rating") || 0) ? "text-yellow-500 fill-yellow-500" : "text-gray-300 hover:text-yellow-400"
                         }`}
                       />

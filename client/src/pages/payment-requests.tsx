@@ -1273,6 +1273,8 @@ export default function PaymentRequestsPage() {
                 <Input
                   type="number"
                   step="0.01"
+                  inputMode="decimal"
+                  className="h-11"
                   {...form.register("amount")}
                   placeholder="0.00"
                   data-testid="input-amount"
@@ -1448,7 +1450,14 @@ export default function PaymentRequestsPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>المبلغ (ر.س) *</Label>
-                <Input type="number" step="0.01" {...form.register("amount")} />
+                <Input
+                  type="number"
+                  step="0.01"
+                  inputMode="decimal"
+                  className="h-11"
+                  {...form.register("amount")}
+                  data-testid="input-amount-edit"
+                />
               </div>
               <div className="space-y-2">
                 <Label>الأولوية</Label>

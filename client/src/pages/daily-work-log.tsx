@@ -304,8 +304,11 @@ export default function DailyWorkLogPage() {
 
     let successCount = 0;
     let failCount = 0;
-    for (const photo of pendingPhotos) {
-      updatePendingPhoto(photo.id, { uploading: true, error: false });
+
+    // Mark all as uploading up front so the user sees progress on every tile
+    pendingPhotos.forEach((p) => updatePendingPhoto(p.id, { uploading: true, error: false }));
+
+    const uploadOne = async (photo: typeof pendingPhotos[number]) => {
       try {
         const fd = new FormData();
         fd.append("file", photo.file);
@@ -327,7 +330,19 @@ export default function DailyWorkLogPage() {
         updatePendingPhoto(photo.id, { uploading: false, error: true });
         failCount++;
       }
-    }
+    };
+
+    // Parallel uploads with a concurrency cap (3) — better for slow site networks
+    // than full parallel (avoids socket exhaustion) but ~3x faster than sequential.
+    const CONCURRENCY = 3;
+    const queue = [...pendingPhotos];
+    const workers = Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
+      while (queue.length > 0) {
+        const next = queue.shift();
+        if (next) await uploadOne(next);
+      }
+    });
+    await Promise.all(workers);
     // Remove successful uploads
     setPendingPhotos((prev) => prev.filter((p) => p.error));
     toast({

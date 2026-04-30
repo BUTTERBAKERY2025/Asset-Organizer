@@ -355,7 +355,7 @@ export default function ConstructionProjectsPage() {
             form.reset();
           }
         }}>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-lg sm:max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{selectedProject ? "تعديل المشروع" : "إضافة مشروع جديد"}</DialogTitle>
               <DialogDescription>
@@ -409,7 +409,15 @@ export default function ConstructionProjectsPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>الميزانية (ريال)</Label>
-                  <Input type="number" {...form.register("budget")} placeholder="0" data-testid="input-project-budget" />
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.01"
+                    className="h-11"
+                    {...form.register("budget")}
+                    placeholder="0"
+                    data-testid="input-project-budget"
+                  />
                 </div>
               </div>
 

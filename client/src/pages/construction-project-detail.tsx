@@ -1017,13 +1017,29 @@ export default function ConstructionProjectDetailPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>التكلفة المقدرة (ريال)</Label>
-                  <Input type="number" {...form.register("costEstimate")} placeholder="0" data-testid="input-work-item-cost-estimate" />
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.01"
+                    className="h-11"
+                    {...form.register("costEstimate")}
+                    placeholder="0"
+                    data-testid="input-work-item-cost-estimate"
+                  />
                 </div>
               </div>
 
               <div className="space-y-2">
                 <Label>التكلفة الفعلية (ريال)</Label>
-                <Input type="number" {...form.register("actualCost")} placeholder="0" data-testid="input-work-item-actual-cost" />
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  className="h-11"
+                  {...form.register("actualCost")}
+                  placeholder="0"
+                  data-testid="input-work-item-actual-cost"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -1130,13 +1146,15 @@ export default function ConstructionProjectDetailPage() {
                       <TableCell>
                         <Input
                           type="number"
+                          inputMode="decimal"
+                          step="0.01"
                           value={budgetInputs[cat.id] || ""}
                           onChange={(e) => setBudgetInputs(prev => ({
                             ...prev,
                             [cat.id]: parseFloat(e.target.value) || 0
                           }))}
                           placeholder="0"
-                          className="text-left"
+                          className="text-left h-11"
                           data-testid={`input-budget-${cat.id}`}
                         />
                       </TableCell>
