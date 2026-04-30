@@ -2236,11 +2236,25 @@ export class DatabaseStorage implements IStorage {
     }
     let prViaContract: PaymentRequest[] = [];
     if (contractIds.length > 0) {
-      // contractIds already restricted to allowed branches above
-      prViaContract = await db
-        .select()
-        .from(paymentRequests)
-        .where(inArray(paymentRequests.contractId, contractIds));
+      // contractIds already restricted to allowed branches above; defense-in-depth:
+      // also enforce branch on payment_requests via project join in case a PR's projectId
+      // diverges from its contract's project/branch.
+      if (Array.isArray(branchIds)) {
+        const rows = await db
+          .select({ p: paymentRequests })
+          .from(paymentRequests)
+          .innerJoin(constructionProjects, eq(paymentRequests.projectId, constructionProjects.id))
+          .where(and(
+            inArray(paymentRequests.contractId, contractIds),
+            inArray(constructionProjects.branchId, branchIds),
+          ));
+        prViaContract = rows.map((r) => r.p);
+      } else {
+        prViaContract = await db
+          .select()
+          .from(paymentRequests)
+          .where(inArray(paymentRequests.contractId, contractIds));
+      }
     }
     // Merge unique
     const prMap = new Map<number, PaymentRequest>();
@@ -2430,7 +2444,15 @@ export class DatabaseStorage implements IStorage {
 
     // 3) Sum paid payment_requests by contractor, EXCLUDING those already linked to a contract_payment
     //    (avoid double counting). Restricted by allowed branches via project.
-    const linkedSubquery = sql`SELECT payment_request_id FROM contract_payments WHERE payment_request_id IS NOT NULL`;
+    //    The NOT IN exclusion is itself branch-scoped so a paid PR isn't dropped from this branch's
+    //    aggregate just because some unrelated cross-branch contract_payment references the same PR id.
+    const linkedSubquery = useBranchFilter
+      ? sql`SELECT cp.payment_request_id FROM contract_payments cp
+            INNER JOIN construction_contracts cc ON cc.id = cp.contract_id
+            INNER JOIN construction_projects cpr ON cpr.id = cc.project_id
+            WHERE cp.payment_request_id IS NOT NULL
+              AND cpr.branch_id IN (${sql.join(branchIds!.map((b) => sql`${b}`), sql`, `)})`
+      : sql`SELECT payment_request_id FROM contract_payments WHERE payment_request_id IS NOT NULL`;
     const prConds: any[] = [
       eq(paymentRequests.status, "paid"),
       sql`${paymentRequests.id} NOT IN (${linkedSubquery})`,
