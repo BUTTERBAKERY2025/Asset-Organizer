@@ -993,8 +993,18 @@ export default function EmployeeReportsDashboardPage() {
       // خصم الغياب: قيمة اليوم = الراتب الإجمالي (شامل البدلات) ÷ 30 (نظام العمل السعودي)
       // ثم خصم الغياب = عدد أيام الغياب × قيمة اليوم
       const dailyRate = grossSalary / 30;
-      const absenceDeduction = Math.round(absentDays * dailyRate * 100) / 100;
-      const netSalary = Math.round((grossSalary - socialInsurance - absenceDeduction) * 100) / 100;
+
+      // ⚠️ قاعدة مهمة: إذا الموظف ما داوم ولا يوم في الشهر (صفر حضور + صفر جدول + صفر تايم شيت موقّع)
+      // فهذا يعني إما أنه لم يلتحق بالعمل، أو منقطع، أو في إجازة بدون راتب → الراتب = 0
+      // ونحسب الشهر كله غياب (30 يوم) لتظهر المعادلة شفافة في التقرير.
+      const noWorkAtAll = presentDays === 0 && scheduledWorkDays === 0 && offDays === 0 && empAttendance.length === 0;
+      const effectiveAbsentDays = noWorkAtAll ? 30 : absentDays;
+      const absenceDeduction = noWorkAtAll
+        ? Math.round((grossSalary - socialInsurance) * 100) / 100  // كامل الراتب يُخصم بعد التأمينات
+        : Math.round(absentDays * dailyRate * 100) / 100;
+      const netSalary = noWorkAtAll
+        ? 0
+        : Math.round((grossSalary - socialInsurance - absenceDeduction) * 100) / 100;
 
       return {
         id: emp.id,
@@ -1003,7 +1013,7 @@ export default function EmployeeReportsDashboardPage() {
         jobTitle: emp.jobTitle,
         nationality: emp.nationality,
         presentDays,
-        absentDays,
+        absentDays: effectiveAbsentDays,
         offDays,
         scheduledWorkDays,
         scheduledHours: Math.round(scheduledHoursTotal * 10) / 10,
@@ -1018,6 +1028,7 @@ export default function EmployeeReportsDashboardPage() {
         netSalary,
         dataSource,
         signedReportInfo,
+        noWorkAtAll,
         presentDates,
         absentDatesExplicit,
         absentDatesMissing,
@@ -1026,7 +1037,7 @@ export default function EmployeeReportsDashboardPage() {
     });
     
     return { salaryClosingData: data, salaryClosingUnlinkedCount: unlinkedList.length, salaryClosingUnlinkedRecords: unlinkedList, salaryClosingUnlinkedSummary: unlinkedSummary };
-  }, [salaryClosingBranch, salaryClosingMonth, salaryClosingEmployees, salaryClosingAttendance, salaryClosingSchedules]);
+  }, [salaryClosingBranch, salaryClosingMonth, salaryClosingEmployees, salaryClosingAttendance, salaryClosingSchedules, salaryClosingSignedTimesheets]);
 
   const exportUnlinkedRecordsToExcel = async () => {
     const XLSX = await import("xlsx");
@@ -6909,11 +6920,11 @@ export default function EmployeeReportsDashboardPage() {
                         </TableHeader>
                         <TableBody>
                           {salaryClosingData.map((emp, index) => (
-                            <TableRow key={emp.id} className={emp.dataSource === "signed_timesheet" ? "bg-emerald-50/30" : ""}>
+                            <TableRow key={emp.id} className={emp.noWorkAtAll ? "bg-red-50/60" : (emp.dataSource === "signed_timesheet" ? "bg-emerald-50/30" : "")}>
                               <TableCell>{index + 1}</TableCell>
                               <TableCell className="font-mono">{emp.employeeNumber}</TableCell>
                               <TableCell className="font-medium">
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 flex-wrap">
                                   <span>{emp.employeeName}</span>
                                   {emp.dataSource === "signed_timesheet" && (
                                     <Badge
@@ -6933,13 +6944,22 @@ export default function EmployeeReportsDashboardPage() {
                                       جدول
                                     </Badge>
                                   )}
-                                  {emp.dataSource === "attendance_only" && (
+                                  {emp.dataSource === "attendance_only" && !emp.noWorkAtAll && (
                                     <Badge
                                       className="bg-orange-100 text-orange-800 border-orange-300 text-[10px] px-1.5 py-0"
                                       title="محسوب من البصمة فقط (لا يوجد جدول ولا تايم شيت موقّع)"
                                       data-testid={`badge-attendance-only-${emp.id}`}
                                     >
                                       بصمة فقط
+                                    </Badge>
+                                  )}
+                                  {emp.noWorkAtAll && (
+                                    <Badge
+                                      className="bg-red-100 text-red-800 border-red-400 text-[10px] px-1.5 py-0"
+                                      title="لا يوجد أي حضور أو جدول أو تايم شيت موقّع لهذا الموظف خلال الشهر — يُحتسب غياب كامل والراتب يصير صفر"
+                                      data-testid={`badge-no-work-${emp.id}`}
+                                    >
+                                      ⚠️ غائب الشهر كامل
                                     </Badge>
                                   )}
                                 </div>
