@@ -291,7 +291,37 @@
       "sigManager": "مدير",
       "filtersTitle": "الفلاتر",
       "monthlyOverview": "نظرة شهرية"
-    }
+    },
+    "exceptions": {
+      "title": "لوحة الاستثناءات",
+      "empty": "لا توجد استثناءات — سجل حضور مثالي",
+      "lateCount": "أيام التأخير",
+      "absentCount": "أيام الغياب",
+      "overtimeMinutes": "دقائق إضافية",
+      "totalLate": "إجمالي دقائق التأخير",
+      "showAll": "عرض جميع الاستثناءات",
+      "hideAll": "إخفاء التفاصيل",
+      "typeLate": "تأخير",
+      "typeAbsent": "غياب",
+      "typeOvertime": "وقت إضافي",
+      "lateDetail": "تأخير {{minutes}} دقيقة",
+      "absentDetail": "غياب بدون عذر",
+      "overtimeDetail": "{{minutes}} دقيقة عمل إضافي"
+    },
+    "ackTemplates": {
+      "employeeClean": "أقر بصحة بيانات الحضور والانصراف المذكورة أعلاه، وأن سجلي خلال هذه الفترة كامل دون أي تأخير أو غياب.",
+      "employeeWithIssues": "أقر بصحة بيانات الحضور والانصراف المذكورة أعلاه، وأقر باطلاعي على {{lateDays}} أيام تأخير و{{absentDays}} أيام غياب، وأتحمّل المسؤولية عن أي خصومات قانونية مرتبطة بها.",
+      "managerClean": "أصادق على صحة بيانات حضور وانصراف الموظف خلال الفترة المذكورة. سجل الموظف كامل ومنتظم.",
+      "managerWithIssues": "أصادق على صحة بيانات حضور وانصراف الموظف، وأنه قد تم إخطاره بـ{{lateDays}} أيام تأخير و{{absentDays}} أيام غياب وفقاً للوائح المعتمدة.",
+      "useTemplate": "استخدام قالب جاهز",
+      "templateApplied": "تم تطبيق القالب — يمكنك التعديل قبل التوقيع",
+      "acknowledgmentText": "نص الإقرار",
+      "acknowledgmentPlaceholder": "اكتب نص الإقرار الذي ستوقّع عليه..."
+    },
+    "downloadPdf": "تنزيل PDF",
+    "downloadingPdf": "جاري التنزيل...",
+    "pdfSuccess": "تم تنزيل التقرير بنجاح",
+    "pdfError": "فشل تنزيل التقرير"
   },
   "branchEmployees": {
     "pageTitle": "موظفو الفروع",

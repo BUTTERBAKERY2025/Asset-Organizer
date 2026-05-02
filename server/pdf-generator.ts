@@ -3507,3 +3507,294 @@ export async function generateBranchTimesheetPdf(data: BranchTimesheetPdfData): 
 
   return await generatePdfFromHtml(html, { landscape: true });
 }
+
+// ============================================================================
+// Single Employee Timesheet PDF (Phase 2 - rich single report)
+// ============================================================================
+
+export interface SingleTimesheetEntry {
+  date: string;
+  dayName: string;
+  scheduledStart: string;
+  scheduledEnd: string;
+  actualCheckIn: string;
+  actualCheckOut: string;
+  workHours: string;
+  status: string;
+  isOff: boolean;
+  lateMinutes: number;
+  overtimeMinutes: number;
+  checkInSignature?: string | null;
+}
+
+export interface SingleTimesheetException {
+  date: string;
+  dayName: string;
+  type: "late" | "absent" | "overtime";
+  detail: string;
+}
+
+export interface SingleTimesheetPdfData {
+  branchName: string;
+  periodStart: string;
+  periodEnd: string;
+  monthLabel: string;
+  employeeName: string;
+  jobTitle: string;
+  employeeNumber?: string;
+  scheduledDays: number;
+  presentDays: number;
+  absentDays: number;
+  lateDays: number;
+  offDays: number;
+  totalScheduledHours: number;
+  totalActualHours: number;
+  totalLateMinutes: number;
+  totalOvertimeMinutes: number;
+  entries: SingleTimesheetEntry[];
+  exceptions: SingleTimesheetException[];
+  employeeSignature?: string | null;
+  employeeSignedAt?: string | null;
+  employeeAcknowledgment?: string | null;
+  managerSignature?: string | null;
+  managerSignedAt?: string | null;
+  managerAcknowledgment?: string | null;
+  status: string;
+}
+
+export async function generateSingleTimesheetPdf(data: SingleTimesheetPdfData): Promise<Buffer> {
+  const escapeHtml = (s: string | null | undefined) => String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+  const statusColors: Record<string, { bg: string; text: string }> = {
+    'حاضر': { bg: '#dcfce7', text: '#166534' },
+    'متأخر': { bg: '#fef3c7', text: '#92400e' },
+    'غائب': { bg: '#fee2e2', text: '#991b1b' },
+    'إجازة': { bg: '#dbeafe', text: '#1e40af' },
+    'معلق': { bg: '#f3f4f6', text: '#374151' },
+  };
+
+  const reportStatusLabel = (() => {
+    switch (data.status) {
+      case 'finalized': return { label: 'مكتمل وموقّع', color: '#16a34a' };
+      case 'pending_manager_signature': return { label: 'بانتظار توقيع المدير', color: '#2563eb' };
+      case 'pending_employee_signature': return { label: 'بانتظار توقيع الموظف', color: '#d97706' };
+      default: return { label: 'قيد الإنشاء', color: '#6b7280' };
+    }
+  })();
+
+  const renderEntries = data.entries.map((e, i) => {
+    const colors = statusColors[e.status] || statusColors['معلق'];
+    let sigHtml = '<span style="color:#d1d5db;">—</span>';
+    if (e.checkInSignature && e.checkInSignature.startsWith('data:image')) {
+      sigHtml = `<img src="${e.checkInSignature}" style="max-width:55px;max-height:22px;" />`;
+    }
+    const dash = '<span style="color:#d1d5db;">—</span>';
+    const checkInDisplay = (e.actualCheckIn && e.actualCheckIn !== 'غ' && e.actualCheckIn !== '-') ? escapeHtml(e.actualCheckIn) : dash;
+    const checkOutDisplay = (e.actualCheckOut && e.actualCheckOut !== 'غ' && e.actualCheckOut !== '-') ? escapeHtml(e.actualCheckOut) : dash;
+    const hoursDisplay = (e.workHours && e.workHours !== '-') ? escapeHtml(e.workHours) : dash;
+    const startDisplay = (e.scheduledStart && e.scheduledStart !== '-') ? escapeHtml(e.scheduledStart) : dash;
+    const endDisplay = (e.scheduledEnd && e.scheduledEnd !== '-') ? escapeHtml(e.scheduledEnd) : dash;
+    const lateDisplay = e.lateMinutes > 0 ? `<span style="color:#92400e;font-weight:600;">${e.lateMinutes}</span>` : dash;
+    return `<tr class="${i % 2 === 0 ? 'row-even' : 'row-odd'}${e.isOff ? ' row-off' : ''}">
+        <td class="c">${i + 1}</td>
+        <td class="c b">${escapeHtml(e.date)}</td>
+        <td class="c">${escapeHtml(e.dayName)}</td>
+        <td class="c">${startDisplay}</td>
+        <td class="c">${endDisplay}</td>
+        <td class="c ci">${checkInDisplay}</td>
+        <td class="c co">${checkOutDisplay}</td>
+        <td class="c">${hoursDisplay}</td>
+        <td class="c">${lateDisplay}</td>
+        <td class="c"><span class="badge" style="background:${colors.bg};color:${colors.text};">${escapeHtml(e.status)}</span></td>
+        <td class="c">${sigHtml}</td>
+      </tr>`;
+  }).join('');
+
+  // Exceptions panel
+  const exceptionsHtml = data.exceptions.length === 0
+    ? `<div class="exc-empty">✓ لا توجد استثناءات — سجل حضور مثالي للفترة المحددة</div>`
+    : `<table class="exc-table">
+        <thead>
+          <tr>
+            <th style="width:22px;">#</th>
+            <th style="width:75px;">التاريخ</th>
+            <th style="width:60px;">اليوم</th>
+            <th style="width:80px;">النوع</th>
+            <th>التفاصيل</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.exceptions.map((ex, i) => {
+            const typeStyle = ex.type === 'absent'
+              ? { bg: '#fee2e2', color: '#991b1b', label: 'غياب' }
+              : ex.type === 'late'
+                ? { bg: '#fef3c7', color: '#92400e', label: 'تأخير' }
+                : { bg: '#ede9fe', color: '#5b21b6', label: 'إضافي' };
+            return `<tr>
+              <td class="c">${i + 1}</td>
+              <td class="c b">${escapeHtml(ex.date)}</td>
+              <td class="c">${escapeHtml(ex.dayName)}</td>
+              <td class="c"><span class="exc-badge" style="background:${typeStyle.bg};color:${typeStyle.color};">${typeStyle.label}</span></td>
+              <td>${escapeHtml(ex.detail)}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>`;
+
+  // Signature blocks (final acknowledgments — embedded if signed)
+  const renderSignature = (
+    title: string,
+    signature: string | null | undefined,
+    signedAt: string | null | undefined,
+    acknowledgment: string | null | undefined,
+    fallbackText: string,
+  ) => {
+    const ackText = acknowledgment || fallbackText;
+    if (signature && signature.startsWith('data:image')) {
+      const dateStr = signedAt ? new Date(signedAt).toLocaleDateString('en-GB') : '';
+      return `<div class="sig-box signed">
+        <div class="sig-title">${escapeHtml(title)}</div>
+        <div class="sig-text">${escapeHtml(ackText)}</div>
+        <img src="${signature}" class="sig-img" alt="signature" />
+        <div class="sig-label">تاريخ التوقيع: ${escapeHtml(dateStr)}</div>
+      </div>`;
+    }
+    return `<div class="sig-box">
+      <div class="sig-title">${escapeHtml(title)}</div>
+      <div class="sig-text">${escapeHtml(ackText)}</div>
+      <div class="sig-line"></div>
+      <div class="sig-label">التوقيع / التاريخ</div>
+    </div>`;
+  };
+
+  const html = `<!DOCTYPE html>
+  <html dir="rtl" lang="ar">
+  <head>
+    <meta charset="UTF-8">
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      @page { size: A4 landscape; margin: 6mm 8mm; }
+      html, body { font-family: 'Cairo', Arial, sans-serif; direction: rtl; color: #1f2937; }
+      body { font-size: 9px; }
+
+      .page-header { text-align: center; margin-bottom: 5px; padding-bottom: 4px; border-bottom: 2px solid #D4AF37; }
+      .page-header .brand { font-size: 14px; font-weight: 700; color: #D4AF37; letter-spacing: 2px; }
+      .page-header h1 { font-size: 12px; color: #1a1a1a; margin: 1px 0; }
+      .page-header .period { font-size: 9px; color: #6b7280; }
+      .status-pill { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: 8.5px; font-weight: 600; color: white; margin-top: 2px; }
+
+      .employee-info { background: #fef3c7; border: 1px solid #fcd34d; border-radius: 5px; padding: 5px 10px; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center; }
+      .employee-name { font-size: 13px; font-weight: 700; color: #92400e; }
+      .employee-meta { font-size: 9px; color: #78350f; margin-top: 1px; }
+
+      .summary { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; margin-bottom: 5px; }
+      .summary-item { text-align: center; padding: 4px 2px; background: #f9fafb; border-radius: 4px; border: 1px solid #e5e7eb; }
+      .summary-item.ok { background: #f0fdf4; border-color: #bbf7d0; }
+      .summary-item.bad { background: #fef2f2; border-color: #fecaca; }
+      .summary-item.warn { background: #fffbeb; border-color: #fde68a; }
+      .summary-item.off { background: #eff6ff; border-color: #bfdbfe; }
+      .summary-item.info { background: #f5f3ff; border-color: #ddd6fe; }
+      .summary-value { font-size: 13px; font-weight: 700; color: #1f2937; line-height: 1; }
+      .summary-label { font-size: 8px; color: #6b7280; margin-top: 2px; }
+
+      .section-title { font-size: 10px; font-weight: 700; color: #92400e; padding: 3px 8px; background: #fef3c7; border-right: 3px solid #D4AF37; margin: 6px 0 3px; }
+
+      .exc-empty { padding: 6px 10px; background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; border-radius: 4px; font-size: 9px; font-weight: 600; }
+      .exc-table { width: 100%; border-collapse: collapse; font-size: 8.5px; margin-bottom: 4px; }
+      .exc-table th { background: #f3f4f6; color: #374151; padding: 3px 4px; font-weight: 600; border: 1px solid #e5e7eb; }
+      .exc-table td { padding: 2px 4px; border: 1px solid #e5e7eb; }
+      .exc-table td.c { text-align: center; }
+      .exc-table td.b { font-weight: 500; }
+      .exc-badge { padding: 1px 6px; border-radius: 3px; font-size: 8px; font-weight: 600; display: inline-block; }
+
+      .entries-table { width: 100%; border-collapse: collapse; font-size: 8px; margin-bottom: 5px; table-layout: fixed; }
+      .entries-table th { background: #D4AF37; color: white; padding: 3px 2px; font-weight: 600; border: 1px solid #b8941f; font-size: 8.5px; }
+      .entries-table td { padding: 1.5px 2px; border: 1px solid #e5e7eb; line-height: 1.1; }
+      .entries-table td.c { text-align: center; }
+      .entries-table td.b { font-weight: 500; }
+      .entries-table td.ci { color: #166534; font-weight: 500; }
+      .entries-table td.co { color: #2563eb; font-weight: 500; }
+      .entries-table .badge { padding: 1px 5px; border-radius: 3px; font-size: 8px; font-weight: 600; display: inline-block; }
+      .entries-table tr.row-even td { background: #fff; }
+      .entries-table tr.row-odd td { background: #f9fafb; }
+      .entries-table tr.row-off td { background: #eff6ff !important; }
+      .entries-table tfoot .totals-row td { background: #fffbeb; font-weight: 700; padding: 4px 2px; border-top: 2px solid #D4AF37; font-size: 9px; }
+
+      .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 5px; }
+      .sig-box { border: 1px dashed #9ca3af; border-radius: 4px; padding: 5px 9px; min-height: 65px; }
+      .sig-box.signed { border-style: solid; border-color: #16a34a; background: #f0fdf4; }
+      .sig-title { font-size: 10px; font-weight: 700; color: #1f2937; margin-bottom: 2px; }
+      .sig-text { font-size: 8px; color: #4b5563; margin-bottom: 8px; line-height: 1.3; }
+      .sig-line { border-bottom: 1px solid #1f2937; margin-bottom: 2px; }
+      .sig-label { font-size: 7.5px; color: #6b7280; }
+      .sig-img { max-height: 40px; max-width: 180px; display: block; margin: 0 auto 2px; }
+    </style>
+  </head>
+  <body>
+    <div class="page-header">
+      <div class="brand">BUTTER BAKERY</div>
+      <h1>تقرير التايم شيت الشهري</h1>
+      <div class="period">${escapeHtml(data.branchName)} — ${escapeHtml(data.monthLabel)} (${escapeHtml(data.periodStart)} → ${escapeHtml(data.periodEnd)})</div>
+      <div class="status-pill" style="background:${reportStatusLabel.color};">${reportStatusLabel.label}</div>
+    </div>
+    <div class="employee-info">
+      <div>
+        <div class="employee-name">${escapeHtml(data.employeeName)}</div>
+        <div class="employee-meta">${escapeHtml(data.jobTitle || '-')}${data.employeeNumber ? ' • ' + escapeHtml(data.employeeNumber) : ''}</div>
+      </div>
+    </div>
+    <div class="summary">
+      <div class="summary-item"><div class="summary-value">${data.scheduledDays}</div><div class="summary-label">أيام العمل</div></div>
+      <div class="summary-item ok"><div class="summary-value">${data.presentDays}</div><div class="summary-label">الحضور</div></div>
+      <div class="summary-item bad"><div class="summary-value">${data.absentDays}</div><div class="summary-label">الغياب</div></div>
+      <div class="summary-item warn"><div class="summary-value">${data.lateDays}</div><div class="summary-label">التأخير</div></div>
+      <div class="summary-item off"><div class="summary-value">${data.offDays}</div><div class="summary-label">الإجازات</div></div>
+      <div class="summary-item info"><div class="summary-value">${data.totalActualHours.toFixed(1)}</div><div class="summary-label">ساعات العمل</div></div>
+    </div>
+
+    <div class="section-title">لوحة الاستثناءات (${data.exceptions.length})</div>
+    ${exceptionsHtml}
+
+    <div class="section-title">التفاصيل اليومية</div>
+    <table class="entries-table">
+      <thead>
+        <tr>
+          <th style="width:20px;">#</th>
+          <th style="width:62px;">التاريخ</th>
+          <th style="width:50px;">اليوم</th>
+          <th style="width:50px;">بداية الدوام</th>
+          <th style="width:50px;">نهاية الدوام</th>
+          <th style="width:50px;">الحضور</th>
+          <th style="width:50px;">الانصراف</th>
+          <th style="width:42px;">الساعات</th>
+          <th style="width:42px;">تأخير (د)</th>
+          <th style="width:55px;">الحالة</th>
+          <th>توقيع الموظف</th>
+        </tr>
+      </thead>
+      <tbody>${renderEntries}</tbody>
+      <tfoot>
+        <tr class="totals-row">
+          <td colspan="7" style="text-align:left;padding-left:8px;">الإجمالي</td>
+          <td class="c b">${data.totalActualHours.toFixed(1)}</td>
+          <td class="c b">${data.totalLateMinutes}</td>
+          <td class="c" colspan="2">إضافي: ${data.totalOvertimeMinutes} د</td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <div class="signatures">
+      ${renderSignature('إقرار الموظف', data.employeeSignature, data.employeeSignedAt, data.employeeAcknowledgment, 'أقر بصحة بيانات الحضور والانصراف المذكورة أعلاه.')}
+      ${renderSignature('اعتماد المدير المباشر', data.managerSignature, data.managerSignedAt, data.managerAcknowledgment, 'أصادق على صحة بيانات حضور وانصراف الموظف.')}
+    </div>
+  </body>
+  </html>`;
+
+  return await generatePdfFromHtml(html, { landscape: true });
+}

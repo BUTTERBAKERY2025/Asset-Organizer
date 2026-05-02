@@ -10,14 +10,15 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "react-i18next";
 import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
 import {
-  Calendar, FileText, Pen, Printer, Download, Loader2, CheckCircle, Clock,
+  Calendar, FileText, Pen, Download, Loader2, CheckCircle, Clock,
   AlertCircle, User, Check, XCircle, ArrowRight, LayoutDashboard, Users,
-  Sparkles, Eye, FilePlus2,
+  Sparkles, Eye, FilePlus2, AlertTriangle, FileDown, Wand2,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import SignatureCanvas from "react-signature-canvas";
@@ -136,6 +137,9 @@ export default function TimesheetPage() {
   const [generatingFor, setGeneratingFor] = useState<string | null>(null);
   const [isBulkGenerating, setIsBulkGenerating] = useState(false);
   const [isDownloadingBranchPdf, setIsDownloadingBranchPdf] = useState(false);
+  const [downloadingPdfFor, setDownloadingPdfFor] = useState<number | null>(null);
+  const [acknowledgmentText, setAcknowledgmentText] = useState("");
+  const [showAllExceptions, setShowAllExceptions] = useState(false);
 
   const signatureRef = useRef<SignatureCanvas>(null);
 
@@ -246,6 +250,30 @@ export default function TimesheetPage() {
         return a.name.localeCompare(b.name, isRTL ? 'ar' : 'en');
       });
   }, [filteredEmployees, reports, selectedBranch, monthBounds, isRTL]);
+
+  // ====== Exceptions computed from reportEntries (Phase 2) ======
+  const exceptions = useMemo(() => {
+    if (!selectedReport) return { items: [], lateCount: 0, absentCount: 0, totalLate: 0, totalOvertime: 0 };
+    const items: Array<{ date: string; dayOfWeek: string; type: "late" | "absent" | "overtime"; detail: string; minutes: number }> = [];
+    let lateCount = 0, absentCount = 0, totalLate = 0, totalOvertime = 0;
+    for (const e of reportEntries) {
+      if (e.status === "absent" && !e.isOff) {
+        absentCount++;
+        items.push({ date: e.date, dayOfWeek: e.dayOfWeek, type: "absent", detail: t("timesheet.exceptions.absentDetail"), minutes: 0 });
+      }
+      if ((e.lateMinutes || 0) > 0) {
+        lateCount++;
+        totalLate += e.lateMinutes!;
+        items.push({ date: e.date, dayOfWeek: e.dayOfWeek, type: "late", detail: t("timesheet.exceptions.lateDetail", { minutes: e.lateMinutes }), minutes: e.lateMinutes! });
+      }
+      if ((e.overtimeMinutes || 0) > 0) {
+        totalOvertime += e.overtimeMinutes!;
+        items.push({ date: e.date, dayOfWeek: e.dayOfWeek, type: "overtime", detail: t("timesheet.exceptions.overtimeDetail", { minutes: e.overtimeMinutes }), minutes: e.overtimeMinutes! });
+      }
+    }
+    items.sort((a, b) => a.date.localeCompare(b.date));
+    return { items, lateCount, absentCount, totalLate, totalOvertime };
+  }, [reportEntries, selectedReport, t]);
 
   // ====== KPIs ======
   const kpis = useMemo(() => {
@@ -410,10 +438,32 @@ export default function TimesheetPage() {
     }
   };
 
+  // ====== Acknowledgment template generator (Phase 2) ======
+  const buildAcknowledgmentTemplate = useCallback((type: "employee" | "manager", report: TimesheetReport) => {
+    const lateDays = report.totalLateDays || 0;
+    const absentDays = report.totalAbsentDays || 0;
+    const hasIssues = lateDays > 0 || absentDays > 0;
+    if (type === "employee") {
+      return hasIssues
+        ? t("timesheet.ackTemplates.employeeWithIssues", { lateDays, absentDays })
+        : t("timesheet.ackTemplates.employeeClean");
+    }
+    return hasIssues
+      ? t("timesheet.ackTemplates.managerWithIssues", { lateDays, absentDays })
+      : t("timesheet.ackTemplates.managerClean");
+  }, [t]);
+
   const handleOpenSignature = (type: "employee" | "manager", report: TimesheetReport) => {
     setSignatureType(type);
     setSelectedReport(report);
+    setAcknowledgmentText(buildAcknowledgmentTemplate(type, report));
     setShowSignatureDialog(true);
+  };
+
+  const handleApplyAckTemplate = () => {
+    if (!selectedReport) return;
+    setAcknowledgmentText(buildAcknowledgmentTemplate(signatureType, selectedReport));
+    toast({ title: t("timesheet.ackTemplates.templateApplied") });
   };
 
   const handleSubmitSignature = () => {
@@ -423,9 +473,9 @@ export default function TimesheetPage() {
     }
     if (!selectedReport) return;
     const signature = signatureRef.current.toDataURL();
-    const acknowledgment = signatureType === "employee"
+    const acknowledgment = acknowledgmentText.trim() || (signatureType === "employee"
       ? t("timesheet.employeeAcknowledgment")
-      : t("timesheet.managerAcknowledgment");
+      : t("timesheet.managerAcknowledgment"));
     signMutation.mutate({ id: selectedReport.id, signatureType, signature, acknowledgment });
   };
 
@@ -444,13 +494,64 @@ export default function TimesheetPage() {
     return `${employee.firstName || ""} ${employee.lastName || ""}`.trim() || employee.username || t("timesheet.unknownEmployee");
   }, [allUsers, branchEmployees, t]);
 
+  // ====== Single Report PDF download (Phase 2) ======
+  const handleDownloadSinglePdf = useCallback(async (report: TimesheetReport) => {
+    setDownloadingPdfFor(report.id);
+    try {
+      const res = await fetch(`/api/timesheet-reports/${report.id}/generate-pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: t("timesheet.pdfError") }));
+        throw new Error(err.error || t("timesheet.pdfError"));
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const empName = getEmployeeName(report.employeeId).replace(/\s+/g, "_");
+      a.download = `timesheet_${empName}_${report.startDate}_${report.endDate}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast({ title: t("timesheet.pdfSuccess") });
+    } catch (e: any) {
+      toast({ title: t("common.alert"), description: e.message || t("timesheet.pdfError"), variant: "destructive" });
+    } finally {
+      setDownloadingPdfFor(null);
+    }
+  }, [t, toast, getEmployeeName]);
+
   const exportToExcel = async () => {
     const XLSX = await import("xlsx");
     if (!selectedReport || reportEntries.length === 0) {
       toast({ title: t("common.alert"), description: t("timesheet.noDataToExport"), variant: "destructive" });
       return;
     }
-    const data = reportEntries.map(entry => ({
+    const employeeName = getEmployeeName(selectedReport.employeeId);
+    const branchName = branches.find(b => b.id === selectedReport.branchId)?.name || "-";
+
+    // Sheet 1: Summary
+    const summaryRows = [
+      [t("timesheet.employeeName"), employeeName],
+      [t("timesheet.branch"), branchName],
+      [t("timesheet.period"), `${selectedReport.startDate} → ${selectedReport.endDate}`],
+      [t("timesheet.reportStatus"), TIMESHEET_STATUS_LABELS[selectedReport.status]?.label || selectedReport.status],
+      [],
+      [t("timesheet.scheduledDays"), selectedReport.totalScheduledDays],
+      [t("timesheet.presentDays"), selectedReport.totalPresentDays],
+      [t("timesheet.absentDays"), selectedReport.totalAbsentDays],
+      [t("timesheet.lateDays"), selectedReport.totalLateDays],
+      [t("timesheet.totalWorkHours"), selectedReport.totalActualHours?.toFixed(2) || 0],
+      [t("timesheet.lateMinutes"), selectedReport.totalLateMinutes],
+      [t("timesheet.overtimeMinutes"), selectedReport.totalOvertimeMinutes],
+    ];
+    const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
+
+    // Sheet 2: Daily entries
+    const dailyData = reportEntries.map(entry => ({
       [t("timesheet.date")]: entry.date,
       [t("timesheet.day")]: DAY_LABELS[entry.dayOfWeek] || entry.dayOfWeek,
       [t("timesheet.status")]: STATUS_LABELS[entry.status]?.label || entry.status,
@@ -458,19 +559,38 @@ export default function TimesheetPage() {
       [t("timesheet.scheduledEnd")]: entry.scheduledEndTime ?? "--",
       [t("timesheet.actualStart")]: entry.actualStartTime ?? "--",
       [t("timesheet.actualEnd")]: entry.actualEndTime ?? "--",
-      [t("timesheet.scheduledDays")]: entry.scheduledHours ?? "--",
       [t("timesheet.workHours")]: entry.actualHours ?? "--",
       [t("timesheet.lateMinutes")]: entry.lateMinutes ?? "--",
       [t("timesheet.overtimeMinutes")]: entry.overtimeMinutes ?? "--",
       [t("timesheet.signature")]: entry.checkInSignature ? t("timesheet.signed") : "--",
     }));
-    const ws = XLSX.utils.json_to_sheet(data);
+    const wsDaily = XLSX.utils.json_to_sheet(dailyData);
+
+    // Sheet 3: Exceptions
+    const excTypeMap: Record<string, string> = {
+      late: t("timesheet.exceptions.typeLate"),
+      absent: t("timesheet.exceptions.typeAbsent"),
+      overtime: t("timesheet.exceptions.typeOvertime"),
+    };
+    const excData = exceptions.items.length === 0
+      ? [{ [t("common.message")]: t("timesheet.exceptions.empty") }]
+      : exceptions.items.map(ex => ({
+          [t("timesheet.date")]: ex.date,
+          [t("timesheet.day")]: DAY_LABELS[ex.dayOfWeek] || ex.dayOfWeek,
+          [t("common.type")]: excTypeMap[ex.type] || ex.type,
+          [t("timesheet.lateMinutes")]: ex.minutes,
+          [t("common.notes")]: ex.detail,
+        }));
+    const wsExc = XLSX.utils.json_to_sheet(excData);
+
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, t("timesheet.pageTitle"));
-    const employeeName = getEmployeeName(selectedReport.employeeId);
+    XLSX.utils.book_append_sheet(wb, wsSummary, t("timesheet.reportDetails"));
+    XLSX.utils.book_append_sheet(wb, wsDaily, t("timesheet.dailyDetails"));
+    XLSX.utils.book_append_sheet(wb, wsExc, t("timesheet.exceptions.title"));
     XLSX.writeFile(wb, `timesheet_${employeeName}_${selectedReport.startDate}_${selectedReport.endDate}.xlsx`);
   };
 
+  // Legacy printReport kept as fallback (replaced by handleDownloadSinglePdf in Phase 2 — server-rendered Puppeteer PDF)
   const printReport = () => {
     if (!selectedReport) return;
     const employeeName = getEmployeeName(selectedReport.employeeId);
@@ -834,6 +954,20 @@ export default function TimesheetPage() {
                                           <Eye className="w-3 h-3" />
                                           {t("timesheet.dashboard.actionView")}
                                         </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={() => handleDownloadSinglePdf(r!)}
+                                          disabled={downloadingPdfFor === r!.id}
+                                          className="h-8 gap-1"
+                                          data-testid={`btn-pdf-${row.id}`}
+                                          title={t("timesheet.downloadPdf")}
+                                        >
+                                          {downloadingPdfFor === r!.id
+                                            ? <Loader2 className="w-3 h-3 animate-spin" />
+                                            : <FileDown className="w-3 h-3" />}
+                                          {t("timesheet.dashboard.actionPdf")}
+                                        </Button>
                                         {(r!.status === "pending" || r!.status === "pending_employee_signature") && (
                                           <Button
                                             size="sm"
@@ -916,14 +1050,102 @@ export default function TimesheetPage() {
                     </div>
                   </div>
 
+                  {/* ====== Exceptions Panel (Phase 2) ====== */}
+                  <Card className={`mb-6 ${exceptions.items.length === 0 ? 'border-emerald-200 bg-emerald-50/40' : 'border-amber-200 bg-amber-50/40'}`}>
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
+                          {exceptions.items.length === 0
+                            ? <CheckCircle className="w-5 h-5 text-emerald-600" />
+                            : <AlertTriangle className="w-5 h-5 text-amber-600" />}
+                          <CardTitle className="text-base">{t("timesheet.exceptions.title")}</CardTitle>
+                          <Badge variant="outline" className={exceptions.items.length === 0 ? 'border-emerald-300 text-emerald-700' : 'border-amber-300 text-amber-700'}>
+                            {exceptions.items.length}
+                          </Badge>
+                        </div>
+                        {exceptions.items.length > 0 && (
+                          <Button variant="ghost" size="sm" className="h-8" onClick={() => setShowAllExceptions(v => !v)} data-testid="btn-toggle-exceptions">
+                            {showAllExceptions ? t("timesheet.exceptions.hideAll") : t("timesheet.exceptions.showAll")}
+                          </Button>
+                        )}
+                      </div>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      {exceptions.items.length === 0 ? (
+                        <p className="text-sm text-emerald-700" data-testid="text-no-exceptions">{t("timesheet.exceptions.empty")}</p>
+                      ) : (
+                        <>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+                            <div className="bg-white rounded border border-amber-200 p-2 text-center">
+                              <div className="text-xl font-bold text-amber-700">{exceptions.lateCount}</div>
+                              <div className="text-xs text-muted-foreground">{t("timesheet.exceptions.lateCount")}</div>
+                            </div>
+                            <div className="bg-white rounded border border-rose-200 p-2 text-center">
+                              <div className="text-xl font-bold text-rose-700">{exceptions.absentCount}</div>
+                              <div className="text-xs text-muted-foreground">{t("timesheet.exceptions.absentCount")}</div>
+                            </div>
+                            <div className="bg-white rounded border border-amber-200 p-2 text-center">
+                              <div className="text-xl font-bold text-amber-700">{exceptions.totalLate}</div>
+                              <div className="text-xs text-muted-foreground">{t("timesheet.exceptions.totalLate")}</div>
+                            </div>
+                            <div className="bg-white rounded border border-violet-200 p-2 text-center">
+                              <div className="text-xl font-bold text-violet-700">{exceptions.totalOvertime}</div>
+                              <div className="text-xs text-muted-foreground">{t("timesheet.exceptions.overtimeMinutes")}</div>
+                            </div>
+                          </div>
+                          {showAllExceptions && (
+                            <div className="rounded border bg-white overflow-x-auto">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead className={isRTL ? "text-right" : "text-left"}>{t("timesheet.date")}</TableHead>
+                                    <TableHead className="text-center">{t("timesheet.day")}</TableHead>
+                                    <TableHead className="text-center">{t("common.type")}</TableHead>
+                                    <TableHead className="text-center">{t("common.notes")}</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {exceptions.items.map((ex, idx) => {
+                                    const typeColor = ex.type === 'absent' ? 'bg-rose-100 text-rose-700'
+                                      : ex.type === 'late' ? 'bg-amber-100 text-amber-700'
+                                      : 'bg-violet-100 text-violet-700';
+                                    const typeLabel = ex.type === 'absent' ? t("timesheet.exceptions.typeAbsent")
+                                      : ex.type === 'late' ? t("timesheet.exceptions.typeLate")
+                                      : t("timesheet.exceptions.typeOvertime");
+                                    return (
+                                      <TableRow key={`${ex.date}-${ex.type}-${idx}`} data-testid={`row-exception-${idx}`}>
+                                        <TableCell className="font-medium">{ex.date}</TableCell>
+                                        <TableCell className="text-center">{DAY_LABELS[ex.dayOfWeek] || ex.dayOfWeek}</TableCell>
+                                        <TableCell className="text-center">
+                                          <Badge className={typeColor}>{typeLabel}</Badge>
+                                        </TableCell>
+                                        <TableCell className="text-center text-sm">{ex.detail}</TableCell>
+                                      </TableRow>
+                                    );
+                                  })}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </CardContent>
+                  </Card>
+
                   <div className="flex gap-2 mb-6 flex-wrap">
                     <Button variant="outline" onClick={exportToExcel} className="gap-2 h-11 sm:h-9" data-testid="btn-export-excel">
                       <Download className="w-4 h-4" />
                       {t("timesheet.exportToExcel")}
                     </Button>
-                    <Button variant="outline" onClick={printReport} className="gap-2 h-11 sm:h-9" data-testid="btn-print">
-                      <Printer className="w-4 h-4" />
-                      {t("timesheet.printReport")}
+                    <Button
+                      variant="outline"
+                      onClick={() => handleDownloadSinglePdf(selectedReport)}
+                      disabled={downloadingPdfFor === selectedReport.id}
+                      className="gap-2 h-11 sm:h-9"
+                      data-testid="btn-download-pdf"
+                    >
+                      {downloadingPdfFor === selectedReport.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
+                      {downloadingPdfFor === selectedReport.id ? t("timesheet.downloadingPdf") : t("timesheet.downloadPdf")}
                     </Button>
                     {(selectedReport.status === "pending" || selectedReport.status === "pending_employee_signature") && (
                       <Button onClick={() => handleOpenSignature("employee", selectedReport)} className="gap-2 h-11 sm:h-9" data-testid="btn-sign-employee">
@@ -1117,31 +1339,66 @@ export default function TimesheetPage() {
           </TabsContent>
         </Tabs>
 
-        {/* Signature Dialog */}
+        {/* Signature Dialog (Phase 2 - with editable acknowledgment + smart template) */}
         <Dialog open={showSignatureDialog} onOpenChange={setShowSignatureDialog}>
-          <DialogContent className="sm:max-w-lg">
+          <DialogContent className="sm:max-w-2xl max-h-[92vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
                 {signatureType === "employee" ? t("timesheet.employeeSignature") : t("timesheet.managerSignature")}
               </DialogTitle>
               <DialogDescription>
-                {signatureType === "employee"
-                  ? t("timesheet.employeeAcknowledgment")
-                  : t("timesheet.managerAcknowledgment")}
+                {t("timesheet.signatureDialogDesc")}
               </DialogDescription>
             </DialogHeader>
 
-            <div className="border rounded-lg p-2 bg-white">
-              <SignatureCanvas
-                ref={signatureRef}
-                penColor="black"
-                canvasProps={{
-                  width: 400,
-                  height: 200,
-                  className: "signature-canvas",
-                  style: { width: "100%", height: "200px" }
-                }}
+            {/* Acknowledgment text - editable with template helper */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <Label className="text-sm font-semibold">{t("timesheet.ackTemplates.acknowledgmentText")}</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleApplyAckTemplate}
+                  className="h-8 gap-1 border-amber-300 text-amber-800 hover:bg-amber-50"
+                  data-testid="btn-use-ack-template"
+                >
+                  <Wand2 className="w-3 h-3" />
+                  {t("timesheet.ackTemplates.useTemplate")}
+                </Button>
+              </div>
+              <Textarea
+                value={acknowledgmentText}
+                onChange={(e) => setAcknowledgmentText(e.target.value)}
+                placeholder={t("timesheet.ackTemplates.acknowledgmentPlaceholder")}
+                rows={4}
+                className="text-sm resize-none"
+                data-testid="textarea-acknowledgment"
               />
+              {selectedReport && (selectedReport.totalLateDays > 0 || selectedReport.totalAbsentDays > 0) && (
+                <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                  <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+                  <span>
+                    {t("timesheet.exceptions.lateCount")}: <strong>{selectedReport.totalLateDays}</strong> · {t("timesheet.exceptions.absentCount")}: <strong>{selectedReport.totalAbsentDays}</strong>
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-sm font-semibold">{t("timesheet.signature")}</Label>
+              <div className="border rounded-lg p-2 bg-white">
+                <SignatureCanvas
+                  ref={signatureRef}
+                  penColor="black"
+                  canvasProps={{
+                    width: 400,
+                    height: 200,
+                    className: "signature-canvas",
+                    style: { width: "100%", height: "200px" }
+                  }}
+                />
+              </div>
             </div>
 
             <DialogFooter className="gap-2">

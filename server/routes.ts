@@ -94,6 +94,7 @@ import {
   generateTodayAttendancePdf, type TodayAttendancePdfData,
   generateEmployeeAttendanceReportPdf, type EmployeeAttendanceReportPdfData,
   generateBranchTimesheetPdf, type BranchTimesheetPdfData,
+  generateSingleTimesheetPdf,
   generateAttendanceLogPdf, type AttendanceLogPdfData
 } from "./pdf-generator";
 import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertProjectExpenseSchema, insertProjectDailyLogSchema, insertProjectDailyLogPhotoSchema, insertDailyLogActivitySchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertInfluencerContractSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema, isMadeToOrderCategory, suggestCategoryFromProductName, userBranchAccess } from "@shared/schema";
@@ -24480,6 +24481,128 @@ export async function registerRoutes(
   });
 
   // Sign timesheet report (employee or manager)
+  // Generate single-employee timesheet PDF (Phase 2 - rich PDF with exceptions panel + embedded signatures)
+  app.post("/api/timesheet-reports/:id/generate-pdf", isAuthenticated, requirePermission("timesheet", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+
+      const report = await storage.getTimesheetReport(id);
+      if (!report) return res.status(404).json({ error: "التقرير غير موجود" });
+
+      // SECURITY: branch access check
+      if (!isUserAdmin(req) && report.branchId) {
+        const hasAccess = await canAccessBranch(req, report.branchId);
+        if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا التقرير" });
+      }
+
+      const [entries, branch, allUsers, branchEmps] = await Promise.all([
+        storage.getTimesheetReportEntries(id),
+        storage.getBranch(report.branchId),
+        storage.getAllUsers(),
+        storage.getBranchEmployeesByBranch(report.branchId),
+      ]);
+      if (!branch) return res.status(404).json({ error: "الفرع غير موجود" });
+
+      // Resolve employee display info
+      let employeeName = "موظف", jobTitle = "-", employeeNumber: string | undefined;
+      if (report.employeeId.startsWith("branch_emp_")) {
+        const beId = parseInt(report.employeeId.replace("branch_emp_", ""));
+        const be = branchEmps.find((x: any) => x.id === beId);
+        if (be) { employeeName = be.employeeName; jobTitle = be.jobTitle || "-"; employeeNumber = be.employeeNumber || undefined; }
+      } else {
+        const u = allUsers.find((x: any) => x.id === report.employeeId);
+        if (u) {
+          employeeName = `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.username || "موظف";
+          jobTitle = u.jobTitle || "-";
+        }
+        if (report.branchEmployeeId) {
+          const linkedBe = branchEmps.find((x: any) => x.id === report.branchEmployeeId);
+          if (linkedBe?.employeeNumber) employeeNumber = linkedBe.employeeNumber;
+        }
+      }
+
+      const arDayMap: Record<string, string> = { sat: "السبت", sun: "الأحد", mon: "الاثنين", tue: "الثلاثاء", wed: "الأربعاء", thu: "الخميس", fri: "الجمعة" };
+      const arStatusMap: Record<string, string> = { present: "حاضر", late: "متأخر", absent: "غائب", day_off: "إجازة", pending: "معلق" };
+
+      const monthLabel = (() => {
+        try {
+          const d = new Date(report.startDate);
+          const months = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
+          return `${months[d.getMonth()]} ${d.getFullYear()}`;
+        } catch { return ""; }
+      })();
+
+      // Build entries + exceptions in one pass (sorted by date)
+      const sortedEntries = [...entries].sort((a, b) => a.date.localeCompare(b.date));
+      const pdfEntries = sortedEntries.map(e => ({
+        date: e.date,
+        dayName: arDayMap[e.dayOfWeek] || e.dayOfWeek,
+        scheduledStart: e.scheduledStartTime || (e.isOff ? "-" : "08:00"),
+        scheduledEnd: e.scheduledEndTime || (e.isOff ? "-" : "16:00"),
+        actualCheckIn: e.actualStartTime || (e.isOff ? "-" : "غ"),
+        actualCheckOut: e.actualEndTime || (e.isOff ? "-" : "غ"),
+        workHours: (e.actualHours && e.actualHours > 0) ? e.actualHours.toFixed(1) : "-",
+        status: arStatusMap[e.status || "pending"] || (e.status || "pending"),
+        isOff: !!e.isOff,
+        lateMinutes: e.lateMinutes || 0,
+        overtimeMinutes: e.overtimeMinutes || 0,
+        checkInSignature: e.checkInSignature || null,
+      }));
+
+      const exceptions: Array<{ date: string; dayName: string; type: "late" | "absent" | "overtime"; detail: string }> = [];
+      for (const e of sortedEntries) {
+        const dayName = arDayMap[e.dayOfWeek] || e.dayOfWeek;
+        if (e.status === "absent" && !e.isOff) {
+          exceptions.push({ date: e.date, dayName, type: "absent", detail: "غياب بدون عذر" });
+        }
+        if ((e.lateMinutes || 0) > 0) {
+          exceptions.push({ date: e.date, dayName, type: "late", detail: `تأخير ${e.lateMinutes} دقيقة` });
+        }
+        if ((e.overtimeMinutes || 0) > 0) {
+          exceptions.push({ date: e.date, dayName, type: "overtime", detail: `${e.overtimeMinutes} دقيقة عمل إضافي` });
+        }
+      }
+
+      const pdfBuffer = await generateSingleTimesheetPdf({
+        branchName: branch.name,
+        periodStart: report.startDate,
+        periodEnd: report.endDate,
+        monthLabel,
+        employeeName, jobTitle, employeeNumber,
+        scheduledDays: report.totalScheduledDays || 0,
+        presentDays: report.totalPresentDays || 0,
+        absentDays: report.totalAbsentDays || 0,
+        lateDays: report.totalLateDays || 0,
+        offDays: Math.max(0, sortedEntries.filter(e => e.isOff).length),
+        totalScheduledHours: report.totalScheduledHours || 0,
+        totalActualHours: report.totalActualHours || 0,
+        totalLateMinutes: report.totalLateMinutes || 0,
+        totalOvertimeMinutes: report.totalOvertimeMinutes || 0,
+        entries: pdfEntries,
+        exceptions,
+        employeeSignature: report.employeeSignature,
+        employeeSignedAt: report.employeeSignedAt ? report.employeeSignedAt.toISOString() : null,
+        employeeAcknowledgment: report.employeeAcknowledgment,
+        managerSignature: report.managerSignature,
+        managerSignedAt: report.managerSignedAt ? report.managerSignedAt.toISOString() : null,
+        managerAcknowledgment: report.managerAcknowledgment,
+        status: report.status,
+      });
+
+      const safeName = employeeName.replace(/[^\w\u0600-\u06FF\s-]/g, "").replace(/\s+/g, "_");
+      const safeAscii = `timesheet_${report.id}_${report.startDate}_${report.endDate}.pdf`;
+      const utf8Filename = `timesheet_${safeName}_${report.startDate}_${report.endDate}.pdf`;
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${safeAscii}"; filename*=UTF-8''${encodeURIComponent(utf8Filename)}`);
+      res.setHeader("Content-Length", String(pdfBuffer.length));
+      res.send(pdfBuffer);
+    } catch (error: any) {
+      console.error("Error generating single timesheet PDF:", error);
+      res.status(500).json({ error: error.message || "فشل في توليد التقرير" });
+    }
+  });
+
   app.post("/api/timesheet-reports/:id/sign", isAuthenticated, requirePermission("attendance", "edit"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);

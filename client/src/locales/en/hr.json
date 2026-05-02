@@ -291,7 +291,37 @@
       "sigManager": "Manager",
       "filtersTitle": "Filters",
       "monthlyOverview": "Monthly Overview"
-    }
+    },
+    "exceptions": {
+      "title": "Exceptions Panel",
+      "empty": "No exceptions — perfect attendance record",
+      "lateCount": "Late Days",
+      "absentCount": "Absent Days",
+      "overtimeMinutes": "Overtime Minutes",
+      "totalLate": "Total Late Minutes",
+      "showAll": "Show all exceptions",
+      "hideAll": "Hide details",
+      "typeLate": "Late",
+      "typeAbsent": "Absent",
+      "typeOvertime": "Overtime",
+      "lateDetail": "Late by {{minutes}} min",
+      "absentDetail": "Absence without notice",
+      "overtimeDetail": "{{minutes}} min overtime"
+    },
+    "ackTemplates": {
+      "employeeClean": "I confirm the accuracy of the attendance data shown above and acknowledge that my record for this period is complete with no late arrivals or absences.",
+      "employeeWithIssues": "I confirm the accuracy of the attendance data shown above and acknowledge {{lateDays}} late days and {{absentDays}} absent days; I accept responsibility for any associated legal deductions.",
+      "managerClean": "I certify the accuracy of the employee's attendance data for the stated period. The record is complete and orderly.",
+      "managerWithIssues": "I certify the accuracy of the employee's attendance data and confirm the employee has been notified of {{lateDays}} late days and {{absentDays}} absent days per applicable policy.",
+      "useTemplate": "Use template",
+      "templateApplied": "Template applied — you can edit before signing",
+      "acknowledgmentText": "Acknowledgment text",
+      "acknowledgmentPlaceholder": "Write the acknowledgment statement you will sign..."
+    },
+    "downloadPdf": "Download PDF",
+    "downloadingPdf": "Downloading...",
+    "pdfSuccess": "Report downloaded successfully",
+    "pdfError": "Failed to download report"
   },
   "branchEmployees": {
     "pageTitle": "Branch Employees",
