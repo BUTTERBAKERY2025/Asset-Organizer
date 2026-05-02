@@ -3370,6 +3370,43 @@ export default function ShiftManagementPage() {
                                   const totalDays = employeeReportData.length;
                                   const completeDays = employeeReportData.filter(r => r.actualCheckIn && r.actualCheckOut).length;
                                   const signedDays = employeeReportData.filter(r => r.checkInSignature || r.checkOutSignature).length;
+
+                                  // Compute leave (off) days for the selected employee within the period
+                                  // from the schedule data (isOff = true) — match by branchEmployeeId or employeeId
+                                  const periodStartDate = parseISO(reportStartDate);
+                                  const periodEndDate = parseISO(reportEndDate);
+                                  const leaveDaysList = (reportSchedules || [])
+                                    .filter((s) => {
+                                      if (!s.isOff || !s.scheduleDate) return false;
+                                      // Match this schedule row to the selected employee
+                                      const matchesEmp =
+                                        (s.branchEmployeeId != null && String(s.branchEmployeeId) === signatureReportEmployee) ||
+                                        s.employeeId === `branch_emp_${selectedEmp.id}` ||
+                                        (selectedEmp.linkedUserId && s.employeeId === selectedEmp.linkedUserId) ||
+                                        s.employeeId === signatureReportEmployee ||
+                                        (s.employeeName?.trim().toLowerCase() === selectedEmp.employeeName?.trim().toLowerCase()
+                                          && s.branchId === selectedEmp.branchId);
+                                      if (!matchesEmp) return false;
+                                      // Within the selected period
+                                      const d = parseISO(s.scheduleDate);
+                                      return d >= periodStartDate && d <= periodEndDate;
+                                    })
+                                    // Deduplicate by date (keep first occurrence — schedule data may have duplicates)
+                                    .reduce<Array<{ date: string; dayName: string; notes?: string }>>((acc, s) => {
+                                      if (acc.some((x) => x.date === s.scheduleDate)) return acc;
+                                      acc.push({
+                                        date: format(parseISO(s.scheduleDate), "dd/MM/yyyy"),
+                                        dayName: format(parseISO(s.scheduleDate), "EEEE", { locale: ar }),
+                                        notes: s.notes || undefined,
+                                      });
+                                      return acc;
+                                    }, [])
+                                    // Sort ascending by original date
+                                    .sort((a, b) => {
+                                      const [da, ma, ya] = a.date.split('/').map(Number);
+                                      const [db, mb, yb] = b.date.split('/').map(Number);
+                                      return new Date(ya, ma - 1, da).getTime() - new Date(yb, mb - 1, db).getTime();
+                                    });
                                   
                                   let totalWorkMinutes = 0;
                                   employeeReportData.forEach(record => {
@@ -3422,9 +3459,11 @@ export default function ShiftManagementPage() {
                                       totalDays,
                                       completeDays,
                                       signedDays,
-                                      totalWorkHours: `${totalHours}س ${totalMins}د`
+                                      totalWorkHours: `${totalHours}س ${totalMins}د`,
+                                      leaveDays: leaveDaysList.length
                                     },
-                                    records
+                                    records,
+                                    leaveDays: leaveDaysList
                                   });
                                   
                                   const blob = await res.blob();

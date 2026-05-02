@@ -27,6 +27,7 @@ The system uses a modern web architecture with a React-based frontend and a Node
 ### Feature Specifications
 - **Core Modules**: Branch-based inventory and operations, asset status tracking, 15% Saudi VAT calculation, construction project management, operations and production management, cashier sales journal.
 - **Advanced Features**: Unified command center, comprehensive role-based access control (RBAC) with multi-branch support, P&L dashboard, marketing influencer management, employee integration (attendance, schedules, timesheets), influencer contract management (with PDF export), finished goods inventory with atomic transfers, warehouse and materials management, document management with version control, executive secretariat system, social responsibility module, weekly schedule lock system, advanced attendance reports.
+- **Detailed Employee Attendance PDF**: The "تقرير حضور الموظف التفصيلي" PDF (with signature) includes a dedicated "أيام الإجازة خلال الفترة" section listing all off-days (`isOff=true` in `employee_schedules`) for the selected employee within the date range — date, day name (Arabic), and notes. A 5th amber summary card shows the leave count when > 0.
 - **Smart Incentives & Points System**: Comprehensive cashier incentive management.
 - **Display Bar & Daily Waste System**: Manages display bar operations and waste tracking.
 - **System Notifications & Broadcast Messages**: Interactive notification system.

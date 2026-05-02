@@ -2586,6 +2586,12 @@ export interface EmployeeAttendanceReportRecord {
   checkOutSignature?: string | null;
 }
 
+export interface EmployeeAttendanceLeaveDay {
+  date: string;
+  dayName: string;
+  notes?: string;
+}
+
 export interface EmployeeAttendanceReportPdfData {
   employeeName: string;
   branchName: string;
@@ -2596,8 +2602,10 @@ export interface EmployeeAttendanceReportPdfData {
     completeDays: number;
     signedDays: number;
     totalWorkHours: string;
+    leaveDays?: number;
   };
   records: EmployeeAttendanceReportRecord[];
+  leaveDays?: EmployeeAttendanceLeaveDay[];
 }
 
 export async function generateEmployeeAttendanceReportPdf(data: EmployeeAttendanceReportPdfData): Promise<Buffer> {
@@ -2771,6 +2779,12 @@ export async function generateEmployeeAttendanceReportPdf(data: EmployeeAttendan
           <div class="summary-value">${data.summary.signedDays}</div>
           <div class="summary-label">أيام موقعة</div>
         </div>
+        ${(data.summary.leaveDays !== undefined && data.summary.leaveDays > 0) ? `
+        <div class="summary-item" style="background: #fef3c7; border-color: #fcd34d;">
+          <div class="summary-value" style="color: #92400e;">${data.summary.leaveDays}</div>
+          <div class="summary-label">أيام إجازة</div>
+        </div>
+        ` : ''}
       </div>
 
       <table>
@@ -2792,6 +2806,47 @@ export async function generateEmployeeAttendanceReportPdf(data: EmployeeAttendan
           ${recordRows}
         </tbody>
       </table>
+
+      ${(data.leaveDays && data.leaveDays.length > 0) ? `
+        <div style="margin-top: 25px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; background: #fef3c7; border-right: 4px solid #f59e0b; padding: 10px 15px; border-radius: 6px; margin-bottom: 10px;">
+            <div style="font-size: 14px; font-weight: 700; color: #92400e;">
+              أيام الإجازة خلال الفترة
+            </div>
+            <div style="background: #f59e0b; color: white; padding: 3px 12px; border-radius: 20px; font-size: 11px; font-weight: 600;">
+              ${data.leaveDays.length} يوم
+            </div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 30px; background: #f59e0b;">#</th>
+                <th style="background: #f59e0b;">التاريخ</th>
+                <th style="background: #f59e0b;">اليوم</th>
+                <th style="background: #f59e0b;">ملاحظات</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.leaveDays.map((leave, index) => {
+                const escapeHtml = (s: string) => String(s)
+                  .replace(/&/g, '&amp;')
+                  .replace(/</g, '&lt;')
+                  .replace(/>/g, '&gt;')
+                  .replace(/"/g, '&quot;')
+                  .replace(/'/g, '&#39;');
+                return `
+                <tr style="background: ${index % 2 === 0 ? '#ffffff' : '#fffbeb'};">
+                  <td style="text-align: center; padding: 8px; border-bottom: 1px solid #fde68a;">${index + 1}</td>
+                  <td style="text-align: center; padding: 8px; border-bottom: 1px solid #fde68a; font-weight: 500;">${escapeHtml(leave.date)}</td>
+                  <td style="text-align: center; padding: 8px; border-bottom: 1px solid #fde68a;">${escapeHtml(leave.dayName)}</td>
+                  <td style="text-align: center; padding: 8px; border-bottom: 1px solid #fde68a; color: #6b7280; font-size: 11px;">${leave.notes ? escapeHtml(leave.notes) : '-'}</td>
+                </tr>
+              `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      ` : ''}
 
       <div class="footer">
         تم إنشاء هذا التقرير بتاريخ ${formatPrintDate()} - نظام باتر لإدارة الموارد البشرية
