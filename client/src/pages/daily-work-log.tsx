@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { Layout } from "@/components/layout";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useLocation, Link } from "wouter";
@@ -21,27 +21,23 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription,
+} from "@/components/ui/dialog";
+import { SearchableSelect, SearchableSelectOption } from "@/components/ui/searchable-select";
+import {
   ArrowRight, Loader2, Save, Upload, X, Camera, Eye, Plus, Trash2,
-  CheckCircle2, MapPin, Clock, Users, HardHat, AlertTriangle, FileText,
-  Sun, Cloud, CloudRain, Wind, Thermometer, Image as ImageIcon, ListTodo,
+  CheckCircle2, MapPin, Clock, Users, AlertTriangle, FileText,
+  Image as ImageIcon, Briefcase, Wallet, Info,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
-import type { ConstructionProject, Contractor, ProjectDailyLog, ProjectDailyLogPhoto } from "@shared/schema";
+import type {
+  ConstructionProject, Contractor, ProjectDailyLog, ProjectDailyLogPhoto,
+  DailyLogActivity, ProjectExpense, ConstructionContract, ContractItem,
+} from "@shared/schema";
 
-interface WorkItem {
-  type: string;
-  description: string;
-  quantity?: number;
-  unit?: string;
-}
-
-interface WorkerRole {
-  role: string;
-  count: number;
-}
-
+// ===== Constants =====
 const formSchema = z.object({
   projectId: z.coerce.number().min(1, "المشروع مطلوب"),
   contractorId: z.coerce.number().optional().nullable(),
@@ -51,12 +47,10 @@ const formSchema = z.object({
   workLocation: z.string().optional().nullable(),
   startTime: z.string().optional().nullable(),
   endTime: z.string().optional().nullable(),
+  mainTrade: z.string().optional().nullable(),
   workDescription: z.string().min(1, "وصف الأعمال مطلوب"),
-  progressToday: z.coerce.number().min(0).max(100).optional().nullable(),
   workersCount: z.coerce.number().min(0).optional().nullable(),
   equipmentUsed: z.string().optional().nullable(),
-  weather: z.string().optional().nullable(),
-  temperature: z.string().optional().nullable(),
   safetyIncidents: z.string().optional().nullable(),
   issues: z.string().optional().nullable(),
   nextDayPlan: z.string().optional().nullable(),
@@ -73,41 +67,57 @@ const SUPERVISOR_ROLES = [
   { value: "owner_rep", label: "ممثل المالك" },
 ];
 
-const WEATHER_OPTIONS = [
-  { value: "sunny", label: "مشمس", icon: Sun },
-  { value: "cloudy", label: "غائم", icon: Cloud },
-  { value: "rainy", label: "ممطر", icon: CloudRain },
-  { value: "hot", label: "حار جداً", icon: Thermometer },
-  { value: "windy", label: "رياح شديدة", icon: Wind },
-  { value: "dusty", label: "أتربة", icon: Wind },
-];
-
 const PHOTO_TYPES = [
   { value: "before", label: "قبل العمل", color: "bg-blue-100 text-blue-700" },
   { value: "during", label: "أثناء العمل", color: "bg-amber-100 text-amber-700" },
   { value: "after", label: "بعد العمل", color: "bg-green-100 text-green-700" },
 ];
 
-const COMMON_WORK_TYPES = [
-  "أعمال خرسانية", "أعمال حدادة", "أعمال نجارة", "أعمال بناء",
-  "أعمال كهرباء", "أعمال سباكة", "أعمال تشطيبات", "أعمال دهانات",
-  "أعمال أرضيات", "أعمال عزل", "أعمال تكييف", "أعمال حفر وردم",
+// أنواع التشطيبات للأعمال التجارية (كافيهات / مطاعم / محلات) — لا يوجد بناء سكني
+const FINISHING_TRADES: Array<{ value: string; label: string }> = [
+  { value: "paint", label: "دهانات" },
+  { value: "tiling", label: "سيراميك وأرضيات" },
+  { value: "hvac", label: "تكييف" },
+  { value: "plumbing", label: "سباكة" },
+  { value: "electrical", label: "كهرباء وإضاءة" },
+  { value: "gypsum", label: "جبس وديكورات" },
+  { value: "kitchen_steel", label: "مطبخ ستيل تجاري" },
+  { value: "glass", label: "زجاج وواجهات" },
+  { value: "mdf", label: "MDF ونجارة ديكور" },
+  { value: "signage", label: "لافتات وعلامات" },
+  { value: "other", label: "أخرى" },
 ];
+const TRADE_LABEL: Record<string, string> = Object.fromEntries(
+  FINISHING_TRADES.map((t) => [t.value, t.label]),
+);
 
-const COMMON_UNITS = ["م²", "م³", "م.ط", "عدد", "طن", "كجم", "لتر", "ساعة"];
+const COMMON_UNITS = ["م²", "م.ط", "م³", "عدد", "ساعة", "يوم", "كرتون", "كجم"];
 
 const COMMON_LOCATIONS = [
-  "الطابق الأرضي", "الطابق الأول", "الطابق الثاني", "الطابق الثالث",
-  "السقف", "القبو", "الواجهة", "المدخل الرئيسي", "محيط المبنى", "الفناء الخارجي",
+  "صالة العملاء", "المطبخ", "الكاونتر", "الواجهة الخارجية", "الحمامات",
+  "المخزن", "الباحة الخلفية", "السقف",
 ];
 
-const WORKER_ROLES = [
-  "مهندس", "مشرف", "نجار", "حداد", "بنّاء", "عامل بناء",
-  "كهربائي", "سباك", "دهان", "ميكانيكي", "سائق", "مساعد عام",
+const EXPENSE_TYPES: Array<{ value: string; label: string; categoryHint?: string }> = [
+  { value: "materials", label: "مواد ومستلزمات" },
+  { value: "labor", label: "أجور يومية" },
+  { value: "transport", label: "نقل ومواصلات" },
+  { value: "tools", label: "أدوات ومعدات" },
+  { value: "food", label: "ضيافة وطعام عمالة" },
+  { value: "misc", label: "أخرى" },
 ];
 
-interface DailyLogWithPhotos extends ProjectDailyLog {
+const PAYMENT_METHODS = [
+  { value: "cash", label: "نقدي" },
+  { value: "bank_transfer", label: "تحويل بنكي" },
+  { value: "check", label: "شيك" },
+];
+
+// ===== Types =====
+interface DailyLogDetail extends ProjectDailyLog {
   photos?: ProjectDailyLogPhoto[];
+  activities?: DailyLogActivity[];
+  expenses?: ProjectExpense[];
 }
 
 interface PendingPhoto {
@@ -120,6 +130,7 @@ interface PendingPhoto {
   error?: boolean;
 }
 
+// ===== Component =====
 export default function DailyWorkLogPage() {
   const params = useParams<{ id?: string }>();
   const [, setLocation] = useLocation();
@@ -130,15 +141,15 @@ export default function DailyWorkLogPage() {
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const [activeTab, setActiveTab] = useState("basics");
-  const [workItems, setWorkItems] = useState<WorkItem[]>([]);
-  const [workers, setWorkers] = useState<WorkerRole[]>([]);
   const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>([]);
   const [defaultPhotoType, setDefaultPhotoType] = useState<string>("during");
+  const [activityDialogOpen, setActivityDialogOpen] = useState(false);
+  const [expenseDialogOpen, setExpenseDialogOpen] = useState(false);
 
   const isEdit = !!params.id;
   const logId = params.id ? parseInt(params.id, 10) : null;
 
-  const { data: existingLog } = useQuery<DailyLogWithPhotos>({
+  const { data: existingLog } = useQuery<DailyLogDetail>({
     queryKey: [`/api/construction/daily-logs/${logId}`],
     enabled: !!logId,
   });
@@ -157,17 +168,17 @@ export default function DailyWorkLogPage() {
       projectId: 0,
       contractorId: null,
       logDate: new Date().toISOString().slice(0, 10),
-      supervisorName: user ? [user.firstName, user.lastName].filter(Boolean).join(" ") || user.username || "" : "",
+      supervisorName: user
+        ? [user.firstName, user.lastName].filter(Boolean).join(" ") || user.username || ""
+        : "",
       supervisorRole: "",
       workLocation: "",
       startTime: "",
       endTime: "",
+      mainTrade: "",
       workDescription: "",
-      progressToday: 0,
       workersCount: 0,
       equipmentUsed: "",
-      weather: "",
-      temperature: "",
       safetyIncidents: "",
       issues: "",
       nextDayPlan: "",
@@ -187,44 +198,27 @@ export default function DailyWorkLogPage() {
         workLocation: (existingLog as any).workLocation ?? "",
         startTime: (existingLog as any).startTime ?? "",
         endTime: (existingLog as any).endTime ?? "",
+        mainTrade: (existingLog as any).mainTrade ?? "",
         workDescription: existingLog.workDescription,
-        progressToday: existingLog.progressToday ?? 0,
         workersCount: existingLog.workersCount ?? 0,
         equipmentUsed: existingLog.equipmentUsed ?? "",
-        weather: existingLog.weather ?? "",
-        temperature: (existingLog as any).temperature ?? "",
         safetyIncidents: (existingLog as any).safetyIncidents ?? "",
         issues: existingLog.issues ?? "",
         nextDayPlan: (existingLog as any).nextDayPlan ?? "",
         notes: existingLog.notes ?? "",
       });
-      const wi = (existingLog as any).workItems;
-      if (Array.isArray(wi)) setWorkItems(wi);
-      const wb = (existingLog as any).workerBreakdown;
-      if (Array.isArray(wb)) setWorkers(wb);
     }
   }, [existingLog, isEdit, form]);
 
-  // Auto-sum workers count when breakdown changes
-  useEffect(() => {
-    if (workers.length > 0) {
-      const total = workers.reduce((s, w) => s + (Number(w.count) || 0), 0);
-      form.setValue("workersCount", total);
-    }
-  }, [workers, form]);
-
-  // Refs used by the auto-save / unsaved-changes logic. Defined here so the
-  // saveMutation onSuccess callback below can update `hasFinalSubmittedRef`.
+  // Refs for auto-save / unsaved-changes logic
   const lastAutoSaveAttemptRef = useRef<number>(0);
   const hasFinalSubmittedRef = useRef<boolean>(false);
 
   const saveMutation = useMutation({
     mutationFn: async (data: FormData & { status?: string }) => {
-      const payload = {
+      const payload: any = {
         ...data,
         contractorId: data.contractorId || null,
-        workItems: workItems.length > 0 ? workItems : null,
-        workerBreakdown: workers.length > 0 ? workers : null,
       };
       if (isEdit && logId) {
         const res = await apiRequest("PATCH", `/api/construction/daily-logs/${logId}`, payload);
@@ -235,18 +229,11 @@ export default function DailyWorkLogPage() {
     },
     onSuccess: (created, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/construction/daily-logs"] });
-      // Refetch the detail query so `isSubmitted` flips immediately after a
-      // successful final submit. Without this, the next auto-save tick could
-      // PATCH status back to "draft" because `existingLog.status` is stale.
       if (isEdit && logId) {
         queryClient.invalidateQueries({ queryKey: [`/api/construction/daily-logs/${logId}`] });
       }
       const wasSubmit = (variables as any)?.status === "submitted";
-      if (wasSubmit) {
-        // Lock auto-save and clear the unsaved-changes guard only AFTER the
-        // server confirms the submission.
-        hasFinalSubmittedRef.current = true;
-      }
+      if (wasSubmit) hasFinalSubmittedRef.current = true;
       toast({
         title: wasSubmit
           ? "تم اعتماد اليومية بنجاح"
@@ -283,7 +270,7 @@ export default function DailyWorkLogPage() {
     },
   });
 
-  // Multi-file selection (gallery / camera)
+  // ===== Photos =====
   const handleFilesSelected = useCallback((files: FileList | null) => {
     if (!files || files.length === 0) return;
     const newPhotos: PendingPhoto[] = Array.from(files).map((file) => ({
@@ -320,8 +307,6 @@ export default function DailyWorkLogPage() {
 
     let successCount = 0;
     let failCount = 0;
-
-    // Mark all as uploading up front so the user sees progress on every tile
     pendingPhotos.forEach((p) => updatePendingPhoto(p.id, { uploading: true, error: false }));
 
     const uploadOne = async (photo: typeof pendingPhotos[number]) => {
@@ -348,8 +333,6 @@ export default function DailyWorkLogPage() {
       }
     };
 
-    // Parallel uploads with a concurrency cap (3) — better for slow site networks
-    // than full parallel (avoids socket exhaustion) but ~3x faster than sequential.
     const CONCURRENCY = 3;
     const queue = [...pendingPhotos];
     const workers = Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
@@ -359,7 +342,6 @@ export default function DailyWorkLogPage() {
       }
     });
     await Promise.all(workers);
-    // Remove successful uploads
     setPendingPhotos((prev) => prev.filter((p) => p.error));
     toast({
       title: failCount === 0
@@ -369,34 +351,9 @@ export default function DailyWorkLogPage() {
     });
   };
 
-  // Work items helpers
-  const addWorkItem = () => {
-    setWorkItems((prev) => [...prev, { type: "", description: "", quantity: undefined, unit: "" }]);
-  };
-  const updateWorkItem = (idx: number, updates: Partial<WorkItem>) => {
-    setWorkItems((prev) => prev.map((it, i) => (i === idx ? { ...it, ...updates } : it)));
-  };
-  const removeWorkItem = (idx: number) => {
-    setWorkItems((prev) => prev.filter((_, i) => i !== idx));
-  };
-
-  // Worker breakdown helpers
-  const addWorker = () => {
-    setWorkers((prev) => [...prev, { role: "", count: 1 }]);
-  };
-  const updateWorker = (idx: number, updates: Partial<WorkerRole>) => {
-    setWorkers((prev) => prev.map((w, i) => (i === idx ? { ...w, ...updates } : w)));
-  };
-  const removeWorker = (idx: number) => {
-    setWorkers((prev) => prev.filter((_, i) => i !== idx));
-  };
-
+  // ===== Auto-save =====
   const [lastAutoSave, setLastAutoSave] = useState<Date | null>(null);
 
-  // When react-hook-form validation fails, surface the first error as a toast
-  // and jump back to the "basics" tab — otherwise the user clicks "حفظ مسودة"
-  // from the photos tab and nothing happens because the required fields
-  // (project / date / supervisor / description) are silently invalid.
   const handleValidationErrors = (errors: Record<string, any>) => {
     const requiredFieldTabs: Record<string, string> = {
       projectId: "basics",
@@ -423,9 +380,6 @@ export default function DailyWorkLogPage() {
   };
 
   const onSubmitFinal = () => {
-    // NOTE: don't set hasFinalSubmittedRef here — only flip it in the
-    // saveMutation onSuccess after the server confirms, otherwise a failed
-    // submit silently disables the unsaved-changes guard.
     form.handleSubmit(
       (data) => saveMutation.mutate({ ...data, status: "submitted" }),
       handleValidationErrors,
@@ -433,13 +387,15 @@ export default function DailyWorkLogPage() {
   };
 
   const photosCount = (existingLog?.photos?.length || 0) + pendingPhotos.length;
+  const activitiesCount = existingLog?.activities?.length || 0;
+  const expensesCount = existingLog?.expenses?.length || 0;
+  const expensesTotal = (existingLog?.expenses || []).reduce(
+    (s, e) => s + Number(e.amount || 0),
+    0,
+  );
   const isSubmitted =
     hasFinalSubmittedRef.current || (existingLog as any)?.status === "submitted";
 
-  // Auto-save draft every 30s when the form is dirty and not yet submitted.
-  // Skips the auto-save when a save is already in flight or one ran in the
-  // last 25s, to avoid stomping a manual save click on slow connections.
-  // Guards on hasFinalSubmittedRef so a finalized log is never downgraded.
   useEffect(() => {
     if (isSubmitted) return;
     const interval = setInterval(() => {
@@ -461,17 +417,12 @@ export default function DailyWorkLogPage() {
             },
           );
         },
-        // Silently ignore validation errors during auto-save — the user will
-        // see them when they click "حفظ مسودة" or "اعتماد".
         () => {},
       )();
     }, 30_000);
     return () => clearInterval(interval);
   }, [form, saveMutation, isSubmitted, pendingPhotos.length]);
 
-  // beforeunload guard: warn the user if they try to close / refresh the
-  // tab with unsaved changes. Browsers ignore the custom message and show
-  // their own generic prompt — that's fine.
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
       if (hasFinalSubmittedRef.current) return;
@@ -484,6 +435,32 @@ export default function DailyWorkLogPage() {
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, [form.formState.isDirty, isSubmitted, pendingPhotos.length]);
+
+  // ===== Picker options =====
+  const projectOptions: SearchableSelectOption[] = useMemo(
+    () => projects.map((p) => ({ value: String(p.id), label: p.title })),
+    [projects],
+  );
+  const contractorOptions: SearchableSelectOption[] = useMemo(
+    () => contractors.map((c) => ({ value: String(c.id), label: c.name })),
+    [contractors],
+  );
+
+  const watchedProjectId = form.watch("projectId");
+  const watchedContractorId = form.watch("contractorId");
+  const watchedMainTrade = form.watch("mainTrade");
+
+  const hasLegacyWorkItems =
+    Array.isArray((existingLog as any)?.workItems) &&
+    (existingLog as any).workItems.length > 0 &&
+    activitiesCount === 0;
+
+  // Maps for displaying contractor / contract item names in the activity table
+  const contractorMap = useMemo(() => {
+    const m = new Map<number, Contractor>();
+    contractors.forEach((c) => m.set(c.id, c));
+    return m;
+  }, [contractors]);
 
   return (
     <Layout>
@@ -503,18 +480,12 @@ export default function DailyWorkLogPage() {
               <p className="text-sm text-muted-foreground">
                 {isEdit
                   ? `${isSubmitted ? "معتمدة" : "مسودة"} • ${existingLog?.logDate || ""}`
-                  : "تسجيل ديناميكي للأعمال المنفذة في الموقع"}
+                  : "تسجيل أنشطة الموقع وربطها بالمقاولين والعقود والمصروفات"}
               </p>
               {lastAutoSave && !isSubmitted && (
-                <p
-                  className="text-xs text-green-600 mt-0.5"
-                  data-testid="text-last-autosave"
-                >
+                <p className="text-xs text-green-600 mt-0.5" data-testid="text-last-autosave">
                   آخر حفظ تلقائي:{" "}
-                  {lastAutoSave.toLocaleTimeString("ar-SA", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
+                  {lastAutoSave.toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" })}
                 </p>
               )}
             </div>
@@ -554,25 +525,37 @@ export default function DailyWorkLogPage() {
           </div>
         </div>
 
+        {hasLegacyWorkItems && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-900 flex items-start gap-2" data-testid="banner-legacy">
+            <Info className="h-5 w-5 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold">يومية قديمة بصيغة سابقة</p>
+              <p className="text-xs mt-1">
+                البنود المسجلة بالنظام القديم محفوظة وستظهر في النسخة المطبوعة. يمكنك إضافة أنشطة جديدة بصيغة الربط الذكي من تبويب «الأنشطة».
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="w-full h-auto grid grid-cols-2 sm:grid-cols-4 gap-1 p-1">
             <TabsTrigger value="basics" className="h-12 flex-col sm:flex-row gap-1 text-xs sm:text-sm" data-testid="tab-basics">
               <FileText className="h-4 w-4" />
-              <span>البيانات الأساسية</span>
+              <span>البيانات</span>
             </TabsTrigger>
-            <TabsTrigger value="work" className="h-12 flex-col sm:flex-row gap-1 text-xs sm:text-sm" data-testid="tab-work">
-              <ListTodo className="h-4 w-4" />
-              <span>الأعمال المنفذة</span>
-              {workItems.length > 0 && (
-                <Badge variant="secondary" className="ml-1">{workItems.length}</Badge>
+            <TabsTrigger value="activities" className="h-12 flex-col sm:flex-row gap-1 text-xs sm:text-sm" data-testid="tab-activities">
+              <Briefcase className="h-4 w-4" />
+              <span>الأنشطة</span>
+              {activitiesCount > 0 && (
+                <Badge variant="secondary" className="ml-1">{activitiesCount}</Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="workforce" className="h-12 flex-col sm:flex-row gap-1 text-xs sm:text-sm" data-testid="tab-workforce">
-              <Users className="h-4 w-4" />
-              <span>العمالة والمعدات</span>
-              {workers.length > 0 && (
-                <Badge variant="secondary" className="ml-1">{workers.length}</Badge>
+            <TabsTrigger value="expenses" className="h-12 flex-col sm:flex-row gap-1 text-xs sm:text-sm" data-testid="tab-expenses">
+              <Wallet className="h-4 w-4" />
+              <span>المصروفات</span>
+              {expensesCount > 0 && (
+                <Badge variant="secondary" className="ml-1">{expensesCount}</Badge>
               )}
             </TabsTrigger>
             <TabsTrigger value="photos" className="h-12 flex-col sm:flex-row gap-1 text-xs sm:text-sm" data-testid="tab-photos">
@@ -584,7 +567,7 @@ export default function DailyWorkLogPage() {
             </TabsTrigger>
           </TabsList>
 
-          {/* TAB 1: Basics */}
+          {/* ===== TAB 1: Basics ===== */}
           <TabsContent value="basics" className="mt-4 space-y-4">
             <Card>
               <CardHeader>
@@ -596,21 +579,15 @@ export default function DailyWorkLogPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label className="text-base mb-2 block">المشروع *</Label>
-                    <Select
-                      value={form.watch("projectId")?.toString() || ""}
-                      onValueChange={(v) => form.setValue("projectId", parseInt(v, 10))}
-                    >
-                      <SelectTrigger className="h-12 text-base" data-testid="select-project">
-                        <SelectValue placeholder="اختر المشروع" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {projects.map((p) => (
-                          <SelectItem key={p.id} value={p.id.toString()} className="text-base py-3">
-                            {p.title}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <SearchableSelect
+                      value={watchedProjectId ? String(watchedProjectId) : ""}
+                      onValueChange={(v) => form.setValue("projectId", parseInt(v, 10), { shouldDirty: true })}
+                      options={projectOptions}
+                      placeholder="اختر المشروع"
+                      searchPlaceholder="ابحث عن مشروع..."
+                      triggerClassName="h-12 text-base"
+                      dataTestid="select-project"
+                    />
                     {form.formState.errors.projectId && (
                       <p className="text-xs text-destructive mt-1">
                         {form.formState.errors.projectId.message}
@@ -642,7 +619,7 @@ export default function DailyWorkLogPage() {
                     <Label className="text-base mb-2 block">الصفة</Label>
                     <Select
                       value={form.watch("supervisorRole") || ""}
-                      onValueChange={(v) => form.setValue("supervisorRole", v)}
+                      onValueChange={(v) => form.setValue("supervisorRole", v, { shouldDirty: true })}
                     >
                       <SelectTrigger className="h-12 text-base" data-testid="select-supervisor-role">
                         <SelectValue placeholder="اختر الصفة" />
@@ -659,25 +636,48 @@ export default function DailyWorkLogPage() {
                 </div>
 
                 <div>
-                  <Label className="text-base mb-2 block">المقاول المنفذ</Label>
-                  <Select
-                    value={form.watch("contractorId")?.toString() || "none"}
+                  <Label className="text-base mb-2 block">المقاول الافتراضي لليوم (اختياري)</Label>
+                  <SearchableSelect
+                    value={watchedContractorId ? String(watchedContractorId) : ""}
                     onValueChange={(v) =>
-                      form.setValue("contractorId", v === "none" ? null : parseInt(v, 10))
+                      form.setValue("contractorId", v ? parseInt(v, 10) : null, { shouldDirty: true })
                     }
-                  >
-                    <SelectTrigger className="h-12 text-base" data-testid="select-contractor">
-                      <SelectValue placeholder="اختر المقاول" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none" className="text-base py-3">بدون مقاول محدد</SelectItem>
-                      {contractors.map((c) => (
-                        <SelectItem key={c.id} value={c.id.toString()} className="text-base py-3">
-                          {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    options={contractorOptions}
+                    placeholder="اختر المقاول الرئيسي اليوم"
+                    searchPlaceholder="ابحث عن مقاول..."
+                    triggerClassName="h-12 text-base"
+                    clearable
+                    onClear={() => form.setValue("contractorId", null, { shouldDirty: true })}
+                    dataTestid="select-default-contractor"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    سيستخدم تلقائياً عند إضافة نشاط جديد، ويمكن تغييره لكل نشاط.
+                  </p>
+                </div>
+
+                <Separator />
+
+                <div>
+                  <Label className="text-base mb-2 block">نوع التشطيب الرئيسي اليوم</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {FINISHING_TRADES.map((t) => {
+                      const active = watchedMainTrade === t.value;
+                      return (
+                        <Button
+                          key={t.value}
+                          type="button"
+                          variant={active ? "default" : "outline"}
+                          className="h-11"
+                          onClick={() =>
+                            form.setValue("mainTrade", active ? "" : t.value, { shouldDirty: true })
+                          }
+                          data-testid={`chip-trade-${t.value}`}
+                        >
+                          {t.label}
+                        </Button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 <Separator />
@@ -689,24 +689,22 @@ export default function DailyWorkLogPage() {
                   <Input
                     className="h-12 text-base"
                     {...form.register("workLocation")}
-                    placeholder="مثال: الطابق الأول - الجناح الشرقي"
+                    placeholder="مثال: صالة العملاء - جانب المدخل"
                     list="locations-list"
                     data-testid="input-work-location"
                   />
                   <datalist id="locations-list">
-                    {COMMON_LOCATIONS.map((loc) => (
-                      <option key={loc} value={loc} />
-                    ))}
+                    {COMMON_LOCATIONS.map((loc) => <option key={loc} value={loc} />)}
                   </datalist>
                   <div className="flex flex-wrap gap-1.5 mt-2">
-                    {COMMON_LOCATIONS.slice(0, 6).map((loc) => (
+                    {COMMON_LOCATIONS.map((loc) => (
                       <Button
                         key={loc}
                         type="button"
                         variant="outline"
                         size="sm"
                         className="h-8 text-xs"
-                        onClick={() => form.setValue("workLocation", loc)}
+                        onClick={() => form.setValue("workLocation", loc, { shouldDirty: true })}
                         data-testid={`chip-location-${loc}`}
                       >
                         {loc}
@@ -743,62 +741,11 @@ export default function DailyWorkLogPage() {
                 <Separator />
 
                 <div>
-                  <Label className="text-base mb-2 block">حالة الطقس</Label>
-                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                    {WEATHER_OPTIONS.map((w) => {
-                      const Icon = w.icon;
-                      const active = form.watch("weather") === w.value;
-                      return (
-                        <Button
-                          key={w.value}
-                          type="button"
-                          variant={active ? "default" : "outline"}
-                          className="h-16 flex-col gap-1"
-                          onClick={() => form.setValue("weather", active ? "" : w.value)}
-                          data-testid={`chip-weather-${w.value}`}
-                        >
-                          <Icon className="h-5 w-5" />
-                          <span className="text-xs">{w.label}</span>
-                        </Button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div>
-                  <Label className="text-base mb-2 block">درجة الحرارة (اختياري)</Label>
-                  <Input
-                    className="h-12 text-base"
-                    {...form.register("temperature")}
-                    placeholder="مثال: 32°م"
-                    data-testid="input-temperature"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="flex justify-end">
-              <Button className="h-12 text-base" onClick={() => setActiveTab("work")} data-testid="button-next-work">
-                التالي: الأعمال ←
-              </Button>
-            </div>
-          </TabsContent>
-
-          {/* TAB 2: Work executed + items */}
-          <TabsContent value="work" className="mt-4 space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <ListTodo className="h-5 w-5" /> الأعمال المنفذة اليوم
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <Label className="text-base mb-2 block">الوصف العام للأعمال *</Label>
+                  <Label className="text-base mb-2 block">ملخص أعمال اليوم *</Label>
                   <Textarea
                     className="text-base min-h-24"
                     {...form.register("workDescription")}
-                    rows={4}
+                    rows={3}
                     placeholder="ملخص عام للأعمال المنفذة في هذا اليوم..."
                     data-testid="textarea-work-description"
                   />
@@ -809,255 +756,37 @@ export default function DailyWorkLogPage() {
                   )}
                 </div>
 
-                <Separator />
-
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <Label className="text-base">بنود الأعمال التفصيلية</Label>
-                    <Button type="button" variant="outline" size="sm" className="h-9" onClick={addWorkItem} data-testid="button-add-work-item">
-                      <Plus className="h-4 w-4 ml-1" /> إضافة بند
-                    </Button>
-                  </div>
-                  {workItems.length === 0 ? (
-                    <div className="text-center py-6 border-2 border-dashed rounded-lg text-muted-foreground">
-                      <ListTodo className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                      <p className="text-sm">أضف بنود أعمال تفصيلية مع الكميات (اختياري)</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {workItems.map((item, idx) => (
-                        <div key={idx} className="border rounded-lg p-3 space-y-2 bg-muted/20" data-testid={`work-item-${idx}`}>
-                          <div className="flex items-center justify-between">
-                            <Badge variant="outline" className="text-sm">بند {idx + 1}</Badge>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-destructive"
-                              onClick={() => removeWorkItem(idx)}
-                              data-testid={`button-remove-item-${idx}`}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            <div>
-                              <Label className="text-xs">نوع العمل</Label>
-                              <Input
-                                className="h-11"
-                                value={item.type}
-                                onChange={(e) => updateWorkItem(idx, { type: e.target.value })}
-                                placeholder="مثال: أعمال خرسانية"
-                                list="work-types-list"
-                                data-testid={`input-item-type-${idx}`}
-                              />
-                            </div>
-                            <div>
-                              <Label className="text-xs">الوصف التفصيلي</Label>
-                              <Input
-                                className="h-11"
-                                value={item.description}
-                                onChange={(e) => updateWorkItem(idx, { description: e.target.value })}
-                                placeholder="مثال: صب أعمدة الطابق الأول"
-                                data-testid={`input-item-desc-${idx}`}
-                              />
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <Label className="text-xs">الكمية</Label>
-                              <Input
-                                type="number"
-                                step="0.01"
-                                className="h-11"
-                                value={item.quantity ?? ""}
-                                onChange={(e) => updateWorkItem(idx, { quantity: e.target.value ? parseFloat(e.target.value) : undefined })}
-                                data-testid={`input-item-qty-${idx}`}
-                              />
-                            </div>
-                            <div>
-                              <Label className="text-xs">الوحدة</Label>
-                              <Input
-                                className="h-11"
-                                value={item.unit ?? ""}
-                                onChange={(e) => updateWorkItem(idx, { unit: e.target.value })}
-                                placeholder="م²"
-                                list="units-list"
-                                data-testid={`input-item-unit-${idx}`}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <datalist id="work-types-list">
-                    {COMMON_WORK_TYPES.map((t) => <option key={t} value={t} />)}
-                  </datalist>
-                  <datalist id="units-list">
-                    {COMMON_UNITS.map((u) => <option key={u} value={u} />)}
-                  </datalist>
-                  {workItems.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t">
-                      <span className="text-xs text-muted-foreground self-center ml-2">إضافة سريعة:</span>
-                      {COMMON_WORK_TYPES.slice(0, 6).map((t) => (
-                        <Button
-                          key={t}
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="h-8 text-xs"
-                          onClick={() => setWorkItems((prev) => [...prev, { type: t, description: "", quantity: undefined, unit: "" }])}
-                          data-testid={`chip-quick-add-${t}`}
-                        >
-                          + {t}
-                        </Button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <Separator />
-
-                <div>
-                  <Label className="text-base mb-2 block">نسبة الإنجاز اليومي %</Label>
-                  <div className="flex items-center gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-base mb-2 flex items-center gap-1">
+                      <Users className="h-4 w-4" /> عدد العمالة الحاضرة
+                    </Label>
                     <Input
                       type="number"
+                      inputMode="numeric"
                       min={0}
-                      max={100}
                       className="h-12 text-base"
-                      {...form.register("progressToday")}
-                      data-testid="input-progress-today"
+                      {...form.register("workersCount")}
+                      data-testid="input-workers-count"
                     />
-                    <span className="text-2xl">%</span>
+                  </div>
+                  <div>
+                    <Label className="text-base mb-2 block">المعدات المستخدمة</Label>
+                    <Input
+                      className="h-12 text-base"
+                      {...form.register("equipmentUsed")}
+                      placeholder="مثال: سقالة، كومبريسور دهان، منشار خشب"
+                      data-testid="input-equipment"
+                    />
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-
-            <div className="flex justify-between gap-2">
-              <Button variant="outline" className="h-12" onClick={() => setActiveTab("basics")}>
-                → السابق
-              </Button>
-              <Button className="h-12" onClick={() => setActiveTab("workforce")} data-testid="button-next-workforce">
-                التالي: العمالة ←
-              </Button>
-            </div>
-          </TabsContent>
-
-          {/* TAB 3: Workforce + Equipment */}
-          <TabsContent value="workforce" className="mt-4 space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Users className="h-5 w-5" /> توزيع العمالة بالتخصص
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm text-muted-foreground">
-                    إجمالي العمالة: <span className="font-bold text-base text-foreground">{form.watch("workersCount") || 0}</span>
-                  </p>
-                  <Button type="button" variant="outline" size="sm" className="h-9" onClick={addWorker} data-testid="button-add-worker">
-                    <Plus className="h-4 w-4 ml-1" /> إضافة تخصص
-                  </Button>
-                </div>
-
-                {workers.length === 0 ? (
-                  <div className="text-center py-6 border-2 border-dashed rounded-lg text-muted-foreground">
-                    <HardHat className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                    <p className="text-sm">أضف توزيع العمالة بالتخصصات (اختياري)</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {workers.map((w, idx) => (
-                      <div key={idx} className="grid grid-cols-[1fr_auto_auto] gap-2 items-center" data-testid={`worker-row-${idx}`}>
-                        <Input
-                          className="h-11"
-                          value={w.role}
-                          onChange={(e) => updateWorker(idx, { role: e.target.value })}
-                          placeholder="التخصص (نجار، حداد، إلخ)"
-                          list="worker-roles-list"
-                          data-testid={`input-worker-role-${idx}`}
-                        />
-                        <Input
-                          type="number"
-                          min={0}
-                          className="h-11 w-24 text-center"
-                          value={w.count}
-                          onChange={(e) => updateWorker(idx, { count: parseInt(e.target.value) || 0 })}
-                          data-testid={`input-worker-count-${idx}`}
-                        />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-11 w-11 text-destructive"
-                          onClick={() => removeWorker(idx)}
-                          data-testid={`button-remove-worker-${idx}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <datalist id="worker-roles-list">
-                  {WORKER_ROLES.map((r) => <option key={r} value={r} />)}
-                </datalist>
-
-                {workers.length === 0 && (
-                  <div className="flex flex-wrap gap-1.5 pt-2">
-                    <span className="text-xs text-muted-foreground self-center ml-2">إضافة سريعة:</span>
-                    {WORKER_ROLES.slice(0, 8).map((r) => (
-                      <Button
-                        key={r}
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-8 text-xs"
-                        onClick={() => setWorkers((prev) => [...prev, { role: r, count: 1 }])}
-                        data-testid={`chip-quick-worker-${r}`}
-                      >
-                        + {r}
-                      </Button>
-                    ))}
-                  </div>
-                )}
-
-                <div>
-                  <Label className="text-base mb-2 block">إجمالي العمالة (يحسب تلقائياً)</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    className="h-12 text-base"
-                    {...form.register("workersCount")}
-                    data-testid="input-workers-count"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">المعدات والآليات المستخدمة</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Textarea
-                  className="text-base"
-                  {...form.register("equipmentUsed")}
-                  rows={3}
-                  placeholder="مثال: خلاطة خرسانة 1، رافعة برج، مولد كهرباء، ضاغط هواء..."
-                  data-testid="textarea-equipment"
-                />
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5 text-amber-500" /> السلامة والمعوقات
+                  <AlertTriangle className="h-5 w-5 text-amber-500" /> ملاحظات وحوادث
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -1103,17 +832,194 @@ export default function DailyWorkLogPage() {
               </CardContent>
             </Card>
 
+            <div className="flex justify-end">
+              <Button className="h-12" onClick={() => setActiveTab("activities")} data-testid="button-next-activities">
+                التالي: الأنشطة ←
+              </Button>
+            </div>
+          </TabsContent>
+
+          {/* ===== TAB 2: Activities ===== */}
+          <TabsContent value="activities" className="mt-4 space-y-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Briefcase className="h-5 w-5" /> أنشطة اليوم ({activitiesCount})
+                </CardTitle>
+                <Button
+                  type="button"
+                  className="h-11"
+                  onClick={() => {
+                    if (!isEdit || !logId) {
+                      toast({ title: "احفظ المسودة أولاً قبل إضافة الأنشطة", variant: "destructive" });
+                      setActiveTab("basics");
+                      return;
+                    }
+                    if (!watchedProjectId) {
+                      toast({ title: "اختر المشروع أولاً", variant: "destructive" });
+                      setActiveTab("basics");
+                      return;
+                    }
+                    setActivityDialogOpen(true);
+                  }}
+                  data-testid="button-add-activity"
+                >
+                  <Plus className="h-4 w-4 ml-1" />
+                  إضافة نشاط
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {!isEdit ? (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-900">
+                    احفظ المسودة من تبويب «البيانات» أولاً ثم ارجع هنا لإضافة الأنشطة.
+                  </div>
+                ) : activitiesCount === 0 ? (
+                  <div className="text-center py-10 border-2 border-dashed rounded-lg text-muted-foreground">
+                    <Briefcase className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                    <p>لم يتم إضافة أي نشاط بعد</p>
+                    <p className="text-xs mt-1">
+                      كل نشاط يربط بند عقد بكمية اليوم — ويُحدّث نسبة إنجاز البند تلقائياً.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {(existingLog?.activities || []).map((act) => (
+                      <ActivityRow
+                        key={act.id}
+                        activity={act}
+                        contractorName={
+                          act.contractorId ? contractorMap.get(act.contractorId)?.name : undefined
+                        }
+                        onDeleted={() =>
+                          queryClient.invalidateQueries({
+                            queryKey: [`/api/construction/daily-logs/${logId}`],
+                          })
+                        }
+                      />
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
             <div className="flex justify-between gap-2">
-              <Button variant="outline" className="h-12" onClick={() => setActiveTab("work")}>
+              <Button variant="outline" className="h-12" onClick={() => setActiveTab("basics")}>
+                → السابق
+              </Button>
+              <Button className="h-12" onClick={() => setActiveTab("expenses")} data-testid="button-next-expenses">
+                التالي: المصروفات ←
+              </Button>
+            </div>
+
+            {logId && watchedProjectId ? (
+              <ActivityDialog
+                open={activityDialogOpen}
+                onOpenChange={setActivityDialogOpen}
+                dailyLogId={logId}
+                projectId={watchedProjectId}
+                defaultContractorId={watchedContractorId ?? null}
+                defaultTrade={watchedMainTrade || ""}
+                contractorOptions={contractorOptions}
+                onSaved={() =>
+                  queryClient.invalidateQueries({
+                    queryKey: [`/api/construction/daily-logs/${logId}`],
+                  })
+                }
+              />
+            ) : null}
+          </TabsContent>
+
+          {/* ===== TAB 3: Expenses ===== */}
+          <TabsContent value="expenses" className="mt-4 space-y-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Wallet className="h-5 w-5" /> مصروفات اليوم ({expensesCount})
+                </CardTitle>
+                <Button
+                  type="button"
+                  className="h-11"
+                  onClick={() => {
+                    if (!isEdit || !logId) {
+                      toast({ title: "احفظ المسودة أولاً قبل إضافة المصروفات", variant: "destructive" });
+                      setActiveTab("basics");
+                      return;
+                    }
+                    setExpenseDialogOpen(true);
+                  }}
+                  data-testid="button-add-expense"
+                >
+                  <Plus className="h-4 w-4 ml-1" />
+                  إضافة مصروف
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {expensesCount > 0 && (
+                  <div className="mb-3 flex justify-between items-center bg-muted/50 rounded-lg p-3">
+                    <span className="text-sm text-muted-foreground">إجمالي مصروفات اليوم</span>
+                    <span className="text-lg font-bold" data-testid="text-expenses-total">
+                      {expensesTotal.toLocaleString("ar-SA", { maximumFractionDigits: 2 })} ر.س
+                    </span>
+                  </div>
+                )}
+                {!isEdit ? (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-900">
+                    احفظ المسودة من تبويب «البيانات» أولاً ثم ارجع هنا لإضافة المصروفات.
+                  </div>
+                ) : expensesCount === 0 ? (
+                  <div className="text-center py-10 border-2 border-dashed rounded-lg text-muted-foreground">
+                    <Wallet className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                    <p>لا توجد مصروفات مسجلة لهذه اليومية</p>
+                    <p className="text-xs mt-1">
+                      تُرحّل تلقائياً إلى مصروفات المشروع وتظهر في كشف المقاول إذا حُدِّد.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {(existingLog?.expenses || []).map((exp) => (
+                      <ExpenseRow
+                        key={exp.id}
+                        expense={exp}
+                        contractorName={
+                          exp.contractorId ? contractorMap.get(exp.contractorId)?.name : undefined
+                        }
+                        onDeleted={() =>
+                          queryClient.invalidateQueries({
+                            queryKey: [`/api/construction/daily-logs/${logId}`],
+                          })
+                        }
+                      />
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+            <div className="flex justify-between gap-2">
+              <Button variant="outline" className="h-12" onClick={() => setActiveTab("activities")}>
                 → السابق
               </Button>
               <Button className="h-12" onClick={() => setActiveTab("photos")} data-testid="button-next-photos">
                 التالي: الصور ←
               </Button>
             </div>
+
+            {logId ? (
+              <ExpenseDialog
+                open={expenseDialogOpen}
+                onOpenChange={setExpenseDialogOpen}
+                dailyLogId={logId}
+                defaultContractorId={watchedContractorId ?? null}
+                logDate={form.watch("logDate")}
+                contractorOptions={contractorOptions}
+                onSaved={() =>
+                  queryClient.invalidateQueries({
+                    queryKey: [`/api/construction/daily-logs/${logId}`],
+                  })
+                }
+              />
+            ) : null}
           </TabsContent>
 
-          {/* TAB 4: Photos */}
+          {/* ===== TAB 4: Photos ===== */}
           <TabsContent value="photos" className="mt-4 space-y-4">
             <Card>
               <CardHeader>
@@ -1128,7 +1034,6 @@ export default function DailyWorkLogPage() {
                   </div>
                 )}
 
-                {/* Photo type quick selector */}
                 <div>
                   <Label className="text-sm mb-2 block">نوع الصور القادمة:</Label>
                   <div className="grid grid-cols-3 gap-2">
@@ -1150,7 +1055,6 @@ export default function DailyWorkLogPage() {
                   </div>
                 </div>
 
-                {/* Capture buttons */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <input
                     ref={cameraInputRef}
@@ -1193,7 +1097,6 @@ export default function DailyWorkLogPage() {
                   </Button>
                 </div>
 
-                {/* Pending photos with per-photo metadata + bulk upload */}
                 {pendingPhotos.length > 0 && (
                   <div className="border-2 border-dashed border-primary/30 rounded-lg p-3 space-y-3 bg-primary/5">
                     <div className="flex items-center justify-between">
@@ -1266,7 +1169,6 @@ export default function DailyWorkLogPage() {
                   </div>
                 )}
 
-                {/* Already uploaded photos */}
                 {existingLog?.photos && existingLog.photos.length > 0 ? (
                   <div>
                     <h3 className="font-semibold mb-2">الصور المرفوعة ({existingLog.photos.length})</h3>
@@ -1332,7 +1234,7 @@ export default function DailyWorkLogPage() {
             </Card>
 
             <div className="flex justify-between gap-2">
-              <Button variant="outline" className="h-12" onClick={() => setActiveTab("workforce")}>
+              <Button variant="outline" className="h-12" onClick={() => setActiveTab("expenses")}>
                 → السابق
               </Button>
               <Button className="h-12" onClick={onSubmitFinal} disabled={saveMutation.isPending} data-testid="button-final-submit">
@@ -1344,5 +1246,686 @@ export default function DailyWorkLogPage() {
         </Tabs>
       </div>
     </Layout>
+  );
+}
+
+// ============================================================
+// ActivityRow — single activity card with delete
+// ============================================================
+function ActivityRow({
+  activity,
+  contractorName,
+  onDeleted,
+}: {
+  activity: DailyLogActivity;
+  contractorName?: string;
+  onDeleted: () => void;
+}) {
+  const { toast } = useToast();
+  const [deleting, setDeleting] = useState(false);
+
+  const onDelete = async () => {
+    if (!confirm("حذف هذا النشاط؟ سيتم تعديل نسبة إنجاز البند تلقائياً.")) return;
+    setDeleting(true);
+    try {
+      const res = await apiRequest("DELETE", `/api/construction/daily-logs/activities/${activity.id}`);
+      await res.json();
+      toast({ title: "تم حذف النشاط" });
+      onDeleted();
+    } catch {
+      toast({ title: "فشل في حذف النشاط", variant: "destructive" });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div className="border rounded-lg p-3 bg-background" data-testid={`activity-row-${activity.id}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0 space-y-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            {activity.tradeType && (
+              <Badge variant="secondary" className="text-xs">{TRADE_LABEL[activity.tradeType] || activity.tradeType}</Badge>
+            )}
+            {contractorName && (
+              <Badge variant="outline" className="text-xs">{contractorName}</Badge>
+            )}
+            {activity.completionStatus === "completed" && (
+              <Badge className="text-xs bg-green-100 text-green-800 hover:bg-green-100">مكتمل</Badge>
+            )}
+          </div>
+          <p className="font-medium" data-testid={`text-activity-desc-${activity.id}`}>
+            {activity.description}
+          </p>
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            {activity.quantityToday != null && (
+              <span>
+                الكمية اليوم: <span className="font-semibold text-foreground">{activity.quantityToday}</span>
+                {activity.unit ? ` ${activity.unit}` : ""}
+              </span>
+            )}
+            {activity.totalCost != null && Number(activity.totalCost) > 0 && (
+              <span>
+                التكلفة: <span className="font-semibold text-foreground">
+                  {Number(activity.totalCost).toLocaleString("ar-SA")}
+                </span> ر.س
+              </span>
+            )}
+          </div>
+          {activity.notes && (
+            <p className="text-xs text-muted-foreground border-t pt-1 mt-1">{activity.notes}</p>
+          )}
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-9 w-9 text-destructive flex-shrink-0"
+          onClick={onDelete}
+          disabled={deleting}
+          data-testid={`button-delete-activity-${activity.id}`}
+        >
+          {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// ActivityDialog — add new activity (contractor → contract → item)
+// ============================================================
+function ActivityDialog({
+  open,
+  onOpenChange,
+  dailyLogId,
+  projectId,
+  defaultContractorId,
+  defaultTrade,
+  contractorOptions,
+  onSaved,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  dailyLogId: number;
+  projectId: number;
+  defaultContractorId: number | null;
+  defaultTrade: string;
+  contractorOptions: SearchableSelectOption[];
+  onSaved: () => void;
+}) {
+  const { toast } = useToast();
+  const [contractorId, setContractorId] = useState<number | null>(defaultContractorId);
+  const [contractId, setContractId] = useState<number | null>(null);
+  const [contractItemId, setContractItemId] = useState<number | null>(null);
+  const [tradeType, setTradeType] = useState<string>(defaultTrade);
+  const [description, setDescription] = useState("");
+  const [quantityToday, setQuantityToday] = useState<string>("");
+  const [unit, setUnit] = useState("");
+  const [unitCost, setUnitCost] = useState<string>("");
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  // Reset on open
+  useEffect(() => {
+    if (open) {
+      setContractorId(defaultContractorId);
+      setContractId(null);
+      setContractItemId(null);
+      setTradeType(defaultTrade);
+      setDescription("");
+      setQuantityToday("");
+      setUnit("");
+      setUnitCost("");
+      setNotes("");
+    }
+  }, [open, defaultContractorId, defaultTrade]);
+
+  // Load contracts for the selected project (filtered to contractor below in UI)
+  const { data: projectContracts = [] } = useQuery<ConstructionContract[]>({
+    queryKey: [`/api/construction/contracts?projectId=${projectId}`],
+    enabled: open && !!projectId,
+  });
+
+  // Load contract items when a contract is picked
+  const { data: contractItems = [] } = useQuery<ContractItem[]>({
+    queryKey: [`/api/construction/contracts/${contractId}/items`],
+    enabled: open && !!contractId,
+  });
+
+  const filteredContracts = useMemo(() => {
+    if (!contractorId) return projectContracts;
+    return projectContracts.filter((c) => c.contractorId === contractorId);
+  }, [projectContracts, contractorId]);
+
+  const contractOptions: SearchableSelectOption[] = useMemo(
+    () => filteredContracts.map((c) => ({
+      value: String(c.id),
+      label: c.contractNumber || `عقد #${c.id}`,
+      sublabel: c.title || undefined,
+    })),
+    [filteredContracts],
+  );
+
+  const itemOptions: SearchableSelectOption[] = useMemo(
+    () => contractItems.map((it) => {
+      const remaining = Math.max(0, Number(it.quantity || 0) - Number(it.completedQuantity || 0));
+      return {
+        value: String(it.id),
+        label: it.description,
+        sublabel: `إجمالي: ${it.quantity} ${it.unit || ""} • منفذ: ${it.completedQuantity || 0}`,
+        badge: remaining > 0 ? `متبقي ${remaining}` : "مكتمل",
+        badgeVariant: remaining > 0 ? "secondary" : "default",
+      };
+    }),
+    [contractItems],
+  );
+
+  // When picking a contract item, auto-fill description / unit / unit cost
+  const onPickItem = (idStr: string) => {
+    const id = parseInt(idStr, 10);
+    setContractItemId(id);
+    const item = contractItems.find((it) => it.id === id);
+    if (item) {
+      if (!description) setDescription(item.description);
+      if (!unit) setUnit(item.unit || "");
+      if (!unitCost) setUnitCost(String(item.unitPrice || ""));
+    }
+  };
+
+  const computedTotal = useMemo(() => {
+    const q = parseFloat(quantityToday);
+    const c = parseFloat(unitCost);
+    if (!isFinite(q) || !isFinite(c)) return 0;
+    return q * c;
+  }, [quantityToday, unitCost]);
+
+  const onSubmit = async () => {
+    if (!description.trim()) {
+      toast({ title: "وصف النشاط مطلوب", variant: "destructive" });
+      return;
+    }
+    setSaving(true);
+    try {
+      const payload: any = {
+        contractorId: contractorId || null,
+        contractId: contractId || null,
+        contractItemId: contractItemId || null,
+        tradeType: tradeType || null,
+        description: description.trim(),
+        quantityToday: quantityToday ? parseFloat(quantityToday) : 0,
+        unit: unit || null,
+        unitCost: unitCost ? parseFloat(unitCost) : null,
+        totalCost: computedTotal > 0 ? computedTotal : null,
+        notes: notes || null,
+      };
+      const res = await apiRequest("POST", `/api/construction/daily-logs/${dailyLogId}/activities`, payload);
+      await res.json();
+      toast({ title: "تم إضافة النشاط" });
+      onSaved();
+      onOpenChange(false);
+    } catch {
+      toast({ title: "فشل في إضافة النشاط", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent dir="rtl" className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>إضافة نشاط جديد</DialogTitle>
+          <DialogDescription>
+            اربط النشاط بمقاول وبند عقد لتحديث نسبة الإنجاز تلقائياً.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <div>
+            <Label className="text-sm mb-1 block">المقاول</Label>
+            <SearchableSelect
+              value={contractorId ? String(contractorId) : ""}
+              onValueChange={(v) => {
+                setContractorId(v ? parseInt(v, 10) : null);
+                setContractId(null);
+                setContractItemId(null);
+              }}
+              options={contractorOptions}
+              placeholder="اختر المقاول"
+              searchPlaceholder="ابحث..."
+              triggerClassName="h-11"
+              clearable
+              onClear={() => {
+                setContractorId(null);
+                setContractId(null);
+                setContractItemId(null);
+              }}
+              dataTestid="dialog-select-contractor"
+            />
+          </div>
+
+          <div>
+            <Label className="text-sm mb-1 block">العقد</Label>
+            <SearchableSelect
+              value={contractId ? String(contractId) : ""}
+              onValueChange={(v) => {
+                setContractId(v ? parseInt(v, 10) : null);
+                setContractItemId(null);
+              }}
+              options={contractOptions}
+              placeholder={
+                filteredContracts.length === 0
+                  ? "لا يوجد عقود لهذا المقاول في هذا المشروع"
+                  : "اختر العقد"
+              }
+              searchPlaceholder="ابحث في العقود..."
+              triggerClassName="h-11"
+              disabled={contractOptions.length === 0}
+              clearable
+              onClear={() => {
+                setContractId(null);
+                setContractItemId(null);
+              }}
+              dataTestid="dialog-select-contract"
+            />
+          </div>
+
+          <div>
+            <Label className="text-sm mb-1 block">بند العقد</Label>
+            <SearchableSelect
+              value={contractItemId ? String(contractItemId) : ""}
+              onValueChange={onPickItem}
+              options={itemOptions}
+              placeholder={
+                contractId
+                  ? itemOptions.length === 0
+                    ? "لا يوجد بنود لهذا العقد"
+                    : "اختر بند العقد"
+                  : "اختر العقد أولاً"
+              }
+              searchPlaceholder="ابحث في البنود..."
+              triggerClassName="h-11"
+              disabled={!contractId || itemOptions.length === 0}
+              clearable
+              onClear={() => setContractItemId(null)}
+              dataTestid="dialog-select-item"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              اختياري — اتركه فارغاً للأنشطة غير المرتبطة بعقد.
+            </p>
+          </div>
+
+          <div>
+            <Label className="text-sm mb-1 block">نوع التشطيب</Label>
+            <Select value={tradeType} onValueChange={setTradeType}>
+              <SelectTrigger className="h-11" data-testid="dialog-select-trade">
+                <SelectValue placeholder="اختر النوع" />
+              </SelectTrigger>
+              <SelectContent>
+                {FINISHING_TRADES.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label className="text-sm mb-1 block">وصف النشاط *</Label>
+            <Textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={2}
+              placeholder="مثال: دهان وجه أول للجدران الجانبية"
+              data-testid="dialog-input-description"
+            />
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <Label className="text-sm mb-1 block">كمية اليوم</Label>
+              <Input
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                value={quantityToday}
+                onChange={(e) => setQuantityToday(e.target.value)}
+                className="h-11"
+                data-testid="dialog-input-qty"
+              />
+            </div>
+            <div>
+              <Label className="text-sm mb-1 block">الوحدة</Label>
+              <Input
+                value={unit}
+                onChange={(e) => setUnit(e.target.value)}
+                list="dialog-units-list"
+                className="h-11"
+                placeholder="م²"
+                data-testid="dialog-input-unit"
+              />
+              <datalist id="dialog-units-list">
+                {COMMON_UNITS.map((u) => <option key={u} value={u} />)}
+              </datalist>
+            </div>
+            <div>
+              <Label className="text-sm mb-1 block">سعر الوحدة (ر.س)</Label>
+              <Input
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                value={unitCost}
+                onChange={(e) => setUnitCost(e.target.value)}
+                className="h-11"
+                data-testid="dialog-input-unit-cost"
+              />
+            </div>
+          </div>
+
+          {computedTotal > 0 && (
+            <div className="bg-muted rounded p-2 text-sm flex justify-between">
+              <span className="text-muted-foreground">إجمالي تكلفة النشاط</span>
+              <span className="font-bold">{computedTotal.toLocaleString("ar-SA")} ر.س</span>
+            </div>
+          )}
+
+          <div>
+            <Label className="text-sm mb-1 block">ملاحظات</Label>
+            <Textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={2}
+              data-testid="dialog-input-notes"
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="dialog-button-cancel">
+            إلغاء
+          </Button>
+          <Button onClick={onSubmit} disabled={saving} data-testid="dialog-button-save">
+            {saving && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
+            حفظ النشاط
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ============================================================
+// ExpenseRow — single in-site expense card
+// ============================================================
+function ExpenseRow({
+  expense,
+  contractorName,
+  onDeleted,
+}: {
+  expense: ProjectExpense;
+  contractorName?: string;
+  onDeleted: () => void;
+}) {
+  const { toast } = useToast();
+  const [deleting, setDeleting] = useState(false);
+
+  const onDelete = async () => {
+    if (!confirm("حذف هذا المصروف؟")) return;
+    setDeleting(true);
+    try {
+      const res = await apiRequest("DELETE", `/api/construction/daily-logs/expenses/${expense.id}`);
+      await res.json();
+      toast({ title: "تم حذف المصروف" });
+      onDeleted();
+    } catch {
+      toast({ title: "فشل في حذف المصروف", variant: "destructive" });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const paymentLabel = PAYMENT_METHODS.find((p) => p.value === expense.paymentMethod)?.label;
+
+  return (
+    <div className="border rounded-lg p-3 bg-background" data-testid={`expense-row-${expense.id}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0 space-y-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            {contractorName && (
+              <Badge variant="outline" className="text-xs">{contractorName}</Badge>
+            )}
+            {paymentLabel && (
+              <Badge variant="secondary" className="text-xs">{paymentLabel}</Badge>
+            )}
+          </div>
+          <p className="font-medium" data-testid={`text-expense-desc-${expense.id}`}>
+            {expense.description}
+          </p>
+          <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
+            <span>
+              المبلغ: <span className="font-semibold text-foreground">
+                {Number(expense.amount).toLocaleString("ar-SA")}
+              </span> ر.س
+            </span>
+            {expense.beneficiaryName && (
+              <span>المستفيد: {expense.beneficiaryName}</span>
+            )}
+          </div>
+          {expense.notes && (
+            <p className="text-xs text-muted-foreground border-t pt-1 mt-1">{expense.notes}</p>
+          )}
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-9 w-9 text-destructive flex-shrink-0"
+          onClick={onDelete}
+          disabled={deleting}
+          data-testid={`button-delete-expense-${expense.id}`}
+        >
+          {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// ExpenseDialog — add new in-site expense
+// ============================================================
+function ExpenseDialog({
+  open,
+  onOpenChange,
+  dailyLogId,
+  defaultContractorId,
+  logDate,
+  contractorOptions,
+  onSaved,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  dailyLogId: number;
+  defaultContractorId: number | null;
+  logDate?: string;
+  contractorOptions: SearchableSelectOption[];
+  onSaved: () => void;
+}) {
+  const { toast } = useToast();
+  const [expenseType, setExpenseType] = useState<string>("materials");
+  const [contractorId, setContractorId] = useState<number | null>(defaultContractorId);
+  const [amount, setAmount] = useState<string>("");
+  const [description, setDescription] = useState("");
+  const [beneficiary, setBeneficiary] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<string>("cash");
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setExpenseType("materials");
+      setContractorId(defaultContractorId);
+      setAmount("");
+      setDescription("");
+      setBeneficiary("");
+      setPaymentMethod("cash");
+      setNotes("");
+    }
+  }, [open, defaultContractorId]);
+
+  const onSubmit = async () => {
+    const amt = parseFloat(amount);
+    if (!isFinite(amt) || amt <= 0) {
+      toast({ title: "أدخل مبلغاً صحيحاً", variant: "destructive" });
+      return;
+    }
+    if (!description.trim()) {
+      toast({ title: "وصف المصروف مطلوب", variant: "destructive" });
+      return;
+    }
+    setSaving(true);
+    try {
+      const expenseTypeLabel = EXPENSE_TYPES.find((t) => t.value === expenseType)?.label || expenseType;
+      const payload: any = {
+        contractorId: contractorId || null,
+        amount: amt,
+        description: `[${expenseTypeLabel}] ${description.trim()}`,
+        beneficiaryName: beneficiary || null,
+        paymentMethod,
+        notes: notes || null,
+        expenseDate: logDate,
+      };
+      const res = await apiRequest("POST", `/api/construction/daily-logs/${dailyLogId}/expenses`, payload);
+      await res.json();
+      toast({ title: "تم تسجيل المصروف" });
+      onSaved();
+      onOpenChange(false);
+    } catch {
+      toast({ title: "فشل في تسجيل المصروف", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent dir="rtl" className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>تسجيل مصروف موقع</DialogTitle>
+          <DialogDescription>
+            يُرحّل المصروف تلقائياً إلى مصروفات المشروع وكشف المقاول إذا حُدِّد.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <div>
+            <Label className="text-sm mb-2 block">نوع المصروف</Label>
+            <div className="flex flex-wrap gap-2">
+              {EXPENSE_TYPES.map((t) => {
+                const active = expenseType === t.value;
+                return (
+                  <Button
+                    key={t.value}
+                    type="button"
+                    variant={active ? "default" : "outline"}
+                    className="h-10"
+                    onClick={() => setExpenseType(t.value)}
+                    data-testid={`dialog-chip-expense-type-${t.value}`}
+                  >
+                    {t.label}
+                  </Button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-sm mb-1 block">المبلغ (ر.س) *</Label>
+              <Input
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="h-11"
+                data-testid="dialog-input-expense-amount"
+              />
+            </div>
+            <div>
+              <Label className="text-sm mb-1 block">طريقة الدفع</Label>
+              <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                <SelectTrigger className="h-11" data-testid="dialog-select-payment-method">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_METHODS.map((p) => (
+                    <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div>
+            <Label className="text-sm mb-1 block">الوصف *</Label>
+            <Input
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="مثال: 5 جالون دهان أبيض"
+              className="h-11"
+              data-testid="dialog-input-expense-desc"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <Label className="text-sm mb-1 block">المقاول (اختياري)</Label>
+              <SearchableSelect
+                value={contractorId ? String(contractorId) : ""}
+                onValueChange={(v) => setContractorId(v ? parseInt(v, 10) : null)}
+                options={contractorOptions}
+                placeholder="بدون مقاول"
+                searchPlaceholder="ابحث..."
+                triggerClassName="h-11"
+                clearable
+                onClear={() => setContractorId(null)}
+                dataTestid="dialog-select-expense-contractor"
+              />
+            </div>
+            <div>
+              <Label className="text-sm mb-1 block">المستفيد / المورد</Label>
+              <Input
+                value={beneficiary}
+                onChange={(e) => setBeneficiary(e.target.value)}
+                placeholder="اسم المورد أو الموظف"
+                className="h-11"
+                data-testid="dialog-input-beneficiary"
+              />
+            </div>
+          </div>
+
+          <div>
+            <Label className="text-sm mb-1 block">ملاحظات</Label>
+            <Textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={2}
+              data-testid="dialog-input-expense-notes"
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="dialog-button-expense-cancel">
+            إلغاء
+          </Button>
+          <Button onClick={onSubmit} disabled={saving} data-testid="dialog-button-expense-save">
+            {saving && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
+            حفظ المصروف
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

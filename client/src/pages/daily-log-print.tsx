@@ -1,27 +1,22 @@
-import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Loader2, Printer, ArrowRight } from "lucide-react";
-import type { ProjectDailyLog, ProjectDailyLogPhoto, ConstructionProject, Contractor } from "@shared/schema";
+import type {
+  ProjectDailyLog, ProjectDailyLogPhoto, ConstructionProject, Contractor,
+  DailyLogActivity, ProjectExpense,
+} from "@shared/schema";
 
-interface DailyLogWithPhotos extends ProjectDailyLog {
+interface DailyLogDetail extends ProjectDailyLog {
   photos?: ProjectDailyLogPhoto[];
+  activities?: DailyLogActivity[];
+  expenses?: ProjectExpense[];
 }
 
 const PHOTO_TYPE_LABELS: Record<string, string> = {
   before: "قبل العمل",
   during: "أثناء العمل",
   after: "بعد العمل",
-};
-
-const WEATHER_LABELS: Record<string, string> = {
-  sunny: "مشمس",
-  cloudy: "غائم",
-  rainy: "ممطر",
-  hot: "حار جداً",
-  windy: "رياح شديدة",
-  dusty: "أتربة",
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -32,11 +27,31 @@ const ROLE_LABELS: Record<string, string> = {
   owner_rep: "ممثل المالك",
 };
 
+const TRADE_LABELS: Record<string, string> = {
+  paint: "دهانات",
+  tiling: "سيراميك وأرضيات",
+  hvac: "تكييف",
+  plumbing: "سباكة",
+  electrical: "كهرباء وإضاءة",
+  gypsum: "جبس وديكورات",
+  kitchen_steel: "مطبخ ستيل تجاري",
+  glass: "زجاج وواجهات",
+  mdf: "MDF ونجارة ديكور",
+  signage: "لافتات وعلامات",
+  other: "أخرى",
+};
+
+const PAYMENT_LABELS: Record<string, string> = {
+  cash: "نقدي",
+  bank_transfer: "تحويل بنكي",
+  check: "شيك",
+};
+
 export default function DailyLogPrintPage() {
   const params = useParams<{ id: string }>();
   const id = parseInt(params.id || "0", 10);
 
-  const { data: log, isLoading } = useQuery<DailyLogWithPhotos>({
+  const { data: log, isLoading } = useQuery<DailyLogDetail>({
     queryKey: [`/api/construction/daily-logs/${id}`],
     enabled: !!id,
   });
@@ -74,6 +89,18 @@ export default function DailyLogPrintPage() {
     );
   }
 
+  const contractorName = (cid?: number | null) =>
+    cid ? contractors.find((c) => c.id === cid)?.name || "-" : "-";
+
+  const activities = log.activities || [];
+  const expenses = log.expenses || [];
+  const expensesTotal = expenses.reduce((s, e) => s + Number(e.amount || 0), 0);
+  const activitiesTotal = activities.reduce((s, a) => s + Number(a.totalCost || 0), 0);
+
+  // Legacy data (older logs created before the smart-link restructure)
+  const legacyWorkItems = Array.isArray((log as any).workItems) ? (log as any).workItems : [];
+  const legacyWorkers = Array.isArray((log as any).workerBreakdown) ? (log as any).workerBreakdown : [];
+
   return (
     <div className="bg-white min-h-screen" dir="rtl">
       {/* Action bar (hidden on print) */}
@@ -93,8 +120,8 @@ export default function DailyLogPrintPage() {
       <div className="max-w-4xl mx-auto p-8 print:p-4 text-black">
         {/* Header */}
         <div className="text-center mb-6 pb-4 border-b-2 border-gray-800">
-          <h1 className="text-3xl font-bold mb-1">يومية أعمال مشروع</h1>
-          <p className="text-sm text-gray-600">Daily Work Report</p>
+          <h1 className="text-3xl font-bold mb-1">يومية أعمال موقع</h1>
+          <p className="text-sm text-gray-600">Daily Site Work Report</p>
         </div>
 
         {/* Project info table */}
@@ -115,48 +142,141 @@ export default function DailyLogPrintPage() {
               </td>
             </tr>
             <tr className="bg-gray-100">
-              <td className="border p-2 font-bold">المقاول المنفذ</td>
+              <td className="border p-2 font-bold">المقاول الافتراضي</td>
               <td className="border p-2">{contractor?.name || "-"}</td>
-              <td className="border p-2 font-bold">الطقس</td>
+              <td className="border p-2 font-bold">نوع التشطيب الرئيسي</td>
               <td className="border p-2">
-                {log.weather ? WEATHER_LABELS[log.weather] || log.weather : "-"}
+                {(log as any).mainTrade
+                  ? TRADE_LABELS[(log as any).mainTrade] || (log as any).mainTrade
+                  : "-"}
               </td>
             </tr>
             <tr>
               <td className="border p-2 font-bold">عدد العمالة</td>
               <td className="border p-2">{log.workersCount || 0}</td>
-              <td className="border p-2 font-bold">نسبة الإنجاز اليومي</td>
-              <td className="border p-2">{log.progressToday ? `${log.progressToday}%` : "-"}</td>
+              <td className="border p-2 font-bold">موقع التنفيذ</td>
+              <td className="border p-2">{(log as any).workLocation || "-"}</td>
             </tr>
-            {((log as any).workLocation || (log as any).startTime || (log as any).endTime || (log as any).temperature) && (
-              <tr className="bg-gray-100">
-                <td className="border p-2 font-bold">موقع التنفيذ</td>
-                <td className="border p-2">{(log as any).workLocation || "-"}</td>
-                <td className="border p-2 font-bold">ساعات العمل</td>
-                <td className="border p-2 font-mono">
-                  {(log as any).startTime || "--:--"} ← {(log as any).endTime || "--:--"}
-                  {(log as any).temperature && ` • ${(log as any).temperature}`}
-                </td>
-              </tr>
-            )}
+            <tr className="bg-gray-100">
+              <td className="border p-2 font-bold">ساعات العمل</td>
+              <td className="border p-2 font-mono" colSpan={3}>
+                {(log as any).startTime || "--:--"} ← {(log as any).endTime || "--:--"}
+              </td>
+            </tr>
           </tbody>
         </table>
 
         {/* Work description */}
         <div className="mb-4">
           <h2 className="text-lg font-bold bg-gray-200 p-2 border border-gray-300">
-            الأعمال المنفذة
+            ملخص أعمال اليوم
           </h2>
           <div className="border border-t-0 border-gray-300 p-3 whitespace-pre-wrap min-h-[60px]">
             {log.workDescription}
           </div>
         </div>
 
-        {/* Work items table */}
-        {Array.isArray((log as any).workItems) && (log as any).workItems.length > 0 && (
+        {/* Activities table (NEW smart-link structure) */}
+        {activities.length > 0 && (
           <div className="mb-4">
             <h2 className="text-lg font-bold bg-gray-200 p-2 border border-gray-300">
-              بنود الأعمال التفصيلية
+              الأنشطة المنفذة ({activities.length})
+            </h2>
+            <table className="w-full text-sm border border-t-0 border-gray-300">
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className="border p-2 w-8">#</th>
+                  <th className="border p-2">المقاول</th>
+                  <th className="border p-2">التشطيب</th>
+                  <th className="border p-2">الوصف</th>
+                  <th className="border p-2 w-20">الكمية</th>
+                  <th className="border p-2 w-14">الوحدة</th>
+                  <th className="border p-2 w-24">التكلفة (ر.س)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {activities.map((a, i) => (
+                  <tr key={a.id}>
+                    <td className="border p-2 text-center">{i + 1}</td>
+                    <td className="border p-2">{contractorName(a.contractorId)}</td>
+                    <td className="border p-2">
+                      {a.tradeType ? TRADE_LABELS[a.tradeType] || a.tradeType : "-"}
+                    </td>
+                    <td className="border p-2">{a.description}</td>
+                    <td className="border p-2 text-center">{a.quantityToday ?? "-"}</td>
+                    <td className="border p-2 text-center">{a.unit || "-"}</td>
+                    <td className="border p-2 text-end font-mono">
+                      {a.totalCost != null && Number(a.totalCost) > 0
+                        ? Number(a.totalCost).toLocaleString("ar-SA")
+                        : "-"}
+                    </td>
+                  </tr>
+                ))}
+                {activitiesTotal > 0 && (
+                  <tr className="bg-gray-100 font-bold">
+                    <td className="border p-2 text-center" colSpan={6}>
+                      إجمالي تكلفة الأنشطة
+                    </td>
+                    <td className="border p-2 text-end font-mono">
+                      {activitiesTotal.toLocaleString("ar-SA")}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Expenses table (NEW) */}
+        {expenses.length > 0 && (
+          <div className="mb-4">
+            <h2 className="text-lg font-bold bg-gray-200 p-2 border border-gray-300">
+              مصروفات الموقع ({expenses.length})
+            </h2>
+            <table className="w-full text-sm border border-t-0 border-gray-300">
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className="border p-2 w-8">#</th>
+                  <th className="border p-2">الوصف</th>
+                  <th className="border p-2">المستفيد</th>
+                  <th className="border p-2">المقاول</th>
+                  <th className="border p-2 w-24">طريقة الدفع</th>
+                  <th className="border p-2 w-28">المبلغ (ر.س)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {expenses.map((e, i) => (
+                  <tr key={e.id}>
+                    <td className="border p-2 text-center">{i + 1}</td>
+                    <td className="border p-2">{e.description}</td>
+                    <td className="border p-2">{e.beneficiaryName || "-"}</td>
+                    <td className="border p-2">{contractorName(e.contractorId)}</td>
+                    <td className="border p-2 text-center">
+                      {e.paymentMethod ? PAYMENT_LABELS[e.paymentMethod] || e.paymentMethod : "-"}
+                    </td>
+                    <td className="border p-2 text-end font-mono">
+                      {Number(e.amount).toLocaleString("ar-SA")}
+                    </td>
+                  </tr>
+                ))}
+                <tr className="bg-gray-100 font-bold">
+                  <td className="border p-2 text-center" colSpan={5}>
+                    إجمالي مصروفات اليوم
+                  </td>
+                  <td className="border p-2 text-end font-mono">
+                    {expensesTotal.toLocaleString("ar-SA")}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Legacy work items (only render for old logs that have them) */}
+        {legacyWorkItems.length > 0 && (
+          <div className="mb-4">
+            <h2 className="text-lg font-bold bg-gray-200 p-2 border border-gray-300">
+              بنود الأعمال (نظام قديم)
             </h2>
             <table className="w-full text-sm border border-t-0 border-gray-300">
               <thead>
@@ -169,7 +289,7 @@ export default function DailyLogPrintPage() {
                 </tr>
               </thead>
               <tbody>
-                {((log as any).workItems as any[]).map((item, i) => (
+                {legacyWorkItems.map((item: any, i: number) => (
                   <tr key={i}>
                     <td className="border p-2 text-center">{i + 1}</td>
                     <td className="border p-2">{item.type || "-"}</td>
@@ -183,11 +303,11 @@ export default function DailyLogPrintPage() {
           </div>
         )}
 
-        {/* Worker breakdown */}
-        {Array.isArray((log as any).workerBreakdown) && (log as any).workerBreakdown.length > 0 && (
+        {/* Legacy worker breakdown (only render for old logs) */}
+        {legacyWorkers.length > 0 && (
           <div className="mb-4">
             <h2 className="text-lg font-bold bg-gray-200 p-2 border border-gray-300">
-              توزيع العمالة بالتخصص
+              توزيع العمالة (نظام قديم)
             </h2>
             <table className="w-full text-sm border border-t-0 border-gray-300">
               <thead>
@@ -197,7 +317,7 @@ export default function DailyLogPrintPage() {
                 </tr>
               </thead>
               <tbody>
-                {((log as any).workerBreakdown as any[]).map((w, i) => (
+                {legacyWorkers.map((w: any, i: number) => (
                   <tr key={i}>
                     <td className="border p-2">{w.role || "-"}</td>
                     <td className="border p-2 text-center">{w.count || 0}</td>
@@ -206,7 +326,7 @@ export default function DailyLogPrintPage() {
                 <tr className="bg-gray-100 font-bold">
                   <td className="border p-2">الإجمالي</td>
                   <td className="border p-2 text-center">
-                    {((log as any).workerBreakdown as any[]).reduce((s, w) => s + (Number(w.count) || 0), 0)}
+                    {legacyWorkers.reduce((s: number, w: any) => s + (Number(w.count) || 0), 0)}
                   </td>
                 </tr>
               </tbody>
@@ -218,7 +338,7 @@ export default function DailyLogPrintPage() {
         {log.equipmentUsed && (
           <div className="mb-4">
             <h2 className="text-lg font-bold bg-gray-200 p-2 border border-gray-300">
-              المعدات والآليات المستخدمة
+              المعدات المستخدمة
             </h2>
             <div className="border border-t-0 border-gray-300 p-3 whitespace-pre-wrap">
               {log.equipmentUsed}

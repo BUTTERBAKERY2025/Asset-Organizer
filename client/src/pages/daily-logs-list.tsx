@@ -39,6 +39,20 @@ import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import type { ProjectDailyLog, ConstructionProject } from "@shared/schema";
 
+const TRADE_LABELS: Record<string, string> = {
+  paint: "دهانات",
+  tiling: "سيراميك",
+  hvac: "تكييف",
+  plumbing: "سباكة",
+  electrical: "كهرباء",
+  gypsum: "جبس",
+  kitchen_steel: "ستيل مطبخ",
+  glass: "زجاج",
+  mdf: "MDF",
+  signage: "لافتات",
+  other: "أخرى",
+};
+
 export default function DailyLogsListPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -195,7 +209,7 @@ export default function DailyLogsListPage() {
                       <TableHead className="text-right">المشرف</TableHead>
                       <TableHead className="text-right">الأعمال</TableHead>
                       <TableHead className="text-right">العمالة</TableHead>
-                      <TableHead className="text-right">الإنجاز اليومي</TableHead>
+                      <TableHead className="text-right">التشطيب</TableHead>
                       <TableHead className="text-right">الإجراءات</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -219,7 +233,13 @@ export default function DailyLogsListPage() {
                           <Badge variant="secondary">{log.workersCount || 0}</Badge>
                         </TableCell>
                         <TableCell>
-                          {log.progressToday ? `${log.progressToday}%` : "-"}
+                          {(log as any).mainTrade ? (
+                            <Badge variant="outline" data-testid={`badge-trade-${log.id}`}>
+                              {TRADE_LABELS[(log as any).mainTrade] || (log as any).mainTrade}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">

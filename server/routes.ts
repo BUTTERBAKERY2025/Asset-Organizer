@@ -95,7 +95,7 @@ import {
   generateEmployeeAttendanceReportPdf, type EmployeeAttendanceReportPdfData,
   generateAttendanceLogPdf, type AttendanceLogPdfData
 } from "./pdf-generator";
-import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertProjectExpenseSchema, insertProjectDailyLogSchema, insertProjectDailyLogPhotoSchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertInfluencerContractSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema, isMadeToOrderCategory, suggestCategoryFromProductName, userBranchAccess } from "@shared/schema";
+import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertProjectExpenseSchema, insertProjectDailyLogSchema, insertProjectDailyLogPhotoSchema, insertDailyLogActivitySchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertInfluencerContractSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema, isMadeToOrderCategory, suggestCategoryFromProductName, userBranchAccess } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, isUserAdmin, getAllowedBranchIds, getEffectiveBranchFilter, invalidateAuthCache } from "./auth";
 import { authRateLimiter, biometricRateLimiter, uploadRateLimiter, apiRateLimiter, validateFileUpload, sanitizeFilename, trackLoginAttempt } from "./security";
@@ -2627,8 +2627,12 @@ export async function registerRoutes(
       if (!log) return res.status(404).json({ error: "اليومية غير موجودة" });
       const access = await checkProjectBranchAccess(req, log.projectId);
       if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
-      const photos = await storage.getDailyLogPhotos(id);
-      res.json({ ...log, photos });
+      const [photos, activities, expenses] = await Promise.all([
+        storage.getDailyLogPhotos(id),
+        storage.getDailyLogActivities(id),
+        storage.getDailyLogExpenses(id),
+      ]);
+      res.json({ ...log, photos, activities, expenses });
     } catch (error) {
       console.error("Error fetching daily log:", error);
       res.status(500).json({ error: "فشل في جلب اليومية" });
@@ -2753,6 +2757,176 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error deleting photo:", error);
       res.status(500).json({ error: "فشل في حذف الصورة" });
+    }
+  });
+
+  // ===== Daily Log Activities (smart linking to contractor / contract item) =====
+  app.get("/api/construction/daily-logs/:id/activities", isAuthenticated, requirePermission("project_daily_logs", "view"), async (req, res) => {
+    try {
+      const dailyLogId = parseInt(req.params.id, 10);
+      if (isNaN(dailyLogId)) return res.status(400).json({ error: "Invalid ID" });
+      const log = await storage.getDailyLog(dailyLogId);
+      if (!log) return res.status(404).json({ error: "اليومية غير موجودة" });
+      const access = await checkProjectBranchAccess(req, log.projectId);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+      const activities = await storage.getDailyLogActivities(dailyLogId);
+      res.json(activities);
+    } catch (error) {
+      console.error("Error fetching activities:", error);
+      res.status(500).json({ error: "فشل في جلب الأنشطة" });
+    }
+  });
+
+  app.post("/api/construction/daily-logs/:id/activities", isAuthenticated, requirePermission("project_daily_logs", "edit"), async (req, res) => {
+    try {
+      const dailyLogId = parseInt(req.params.id, 10);
+      if (isNaN(dailyLogId)) return res.status(400).json({ error: "Invalid ID" });
+      const log = await storage.getDailyLog(dailyLogId);
+      if (!log) return res.status(404).json({ error: "اليومية غير موجودة" });
+      const access = await checkProjectBranchAccess(req, log.projectId);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+      // Strip client-supplied dailyLogId/createdBy to prevent spoofing
+      const { dailyLogId: _ignored, createdBy: _alsoIgnored, ...clientPayload } = req.body || {};
+      const validated = insertDailyLogActivitySchema.parse({
+        ...clientPayload,
+        dailyLogId,
+        createdBy: req.currentUser?.id,
+      });
+      // Verify contract item belongs to a contract in the same project (defense in depth)
+      if (validated.contractItemId) {
+        const item = await storage.getContractItem(validated.contractItemId);
+        if (!item) return res.status(400).json({ error: "بند العقد غير موجود" });
+        const itemContract = await storage.getContract(item.contractId);
+        if (!itemContract || itemContract.projectId !== log.projectId) {
+          return res.status(400).json({ error: "بند العقد لا يخص هذا المشروع" });
+        }
+      }
+      const created = await storage.createDailyLogActivity(validated);
+      res.status(201).json(created);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      console.error("Error creating activity:", error);
+      res.status(500).json({ error: "فشل في إضافة النشاط" });
+    }
+  });
+
+  app.patch("/api/construction/daily-logs/activities/:activityId", isAuthenticated, requirePermission("project_daily_logs", "edit"), async (req, res) => {
+    try {
+      const activityId = parseInt(req.params.activityId, 10);
+      if (isNaN(activityId)) return res.status(400).json({ error: "Invalid ID" });
+      const existing = await storage.getDailyLogActivity(activityId);
+      if (!existing) return res.status(404).json({ error: "النشاط غير موجود" });
+      const parentLog = await storage.getDailyLog(existing.dailyLogId);
+      if (!parentLog) return res.status(404).json({ error: "اليومية غير موجودة" });
+      const access = await checkProjectBranchAccess(req, parentLog.projectId);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+      // Strip immutable fields
+      const { dailyLogId: _d, createdBy: _c, id: _i, createdAt: _ca, updatedAt: _ua, ...editable } = req.body || {};
+      const validated = insertDailyLogActivitySchema.partial().parse(editable);
+      // Verify new contract item still belongs to the same project
+      if (validated.contractItemId) {
+        const item = await storage.getContractItem(validated.contractItemId);
+        if (!item) return res.status(400).json({ error: "بند العقد غير موجود" });
+        const itemContract = await storage.getContract(item.contractId);
+        if (!itemContract || itemContract.projectId !== parentLog.projectId) {
+          return res.status(400).json({ error: "بند العقد لا يخص هذا المشروع" });
+        }
+      }
+      const updated = await storage.updateDailyLogActivity(activityId, validated);
+      res.json(updated);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      console.error("Error updating activity:", error);
+      res.status(500).json({ error: "فشل في تعديل النشاط" });
+    }
+  });
+
+  app.delete("/api/construction/daily-logs/activities/:activityId", isAuthenticated, requirePermission("project_daily_logs", "edit"), async (req, res) => {
+    try {
+      const activityId = parseInt(req.params.activityId, 10);
+      if (isNaN(activityId)) return res.status(400).json({ error: "Invalid ID" });
+      const existing = await storage.getDailyLogActivity(activityId);
+      if (!existing) return res.status(404).json({ error: "النشاط غير موجود" });
+      const parentLog = await storage.getDailyLog(existing.dailyLogId);
+      if (!parentLog) return res.status(404).json({ error: "اليومية غير موجودة" });
+      const access = await checkProjectBranchAccess(req, parentLog.projectId);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+      const deleted = await storage.deleteDailyLogActivity(activityId);
+      res.json({ success: deleted });
+    } catch (error) {
+      console.error("Error deleting activity:", error);
+      res.status(500).json({ error: "فشل في حذف النشاط" });
+    }
+  });
+
+  // ===== Daily Log Expenses (in-site expenses tied to a daily log) =====
+  app.get("/api/construction/daily-logs/:id/expenses", isAuthenticated, requirePermission("project_daily_logs", "view"), async (req, res) => {
+    try {
+      const dailyLogId = parseInt(req.params.id, 10);
+      if (isNaN(dailyLogId)) return res.status(400).json({ error: "Invalid ID" });
+      const log = await storage.getDailyLog(dailyLogId);
+      if (!log) return res.status(404).json({ error: "اليومية غير موجودة" });
+      const access = await checkProjectBranchAccess(req, log.projectId);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+      const expenses = await storage.getDailyLogExpenses(dailyLogId);
+      res.json(expenses);
+    } catch (error) {
+      console.error("Error fetching daily log expenses:", error);
+      res.status(500).json({ error: "فشل في جلب المصروفات" });
+    }
+  });
+
+  app.post("/api/construction/daily-logs/:id/expenses", isAuthenticated, requirePermission("project_expenses", "create"), async (req, res) => {
+    try {
+      const dailyLogId = parseInt(req.params.id, 10);
+      if (isNaN(dailyLogId)) return res.status(400).json({ error: "Invalid ID" });
+      const log = await storage.getDailyLog(dailyLogId);
+      if (!log) return res.status(404).json({ error: "اليومية غير موجودة" });
+      const access = await checkProjectBranchAccess(req, log.projectId);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+      // Strip client-supplied projectId/dailyLogId/createdBy — server enforces them
+      const { projectId: _p, dailyLogId: _d, createdBy: _c, ...clientPayload } = req.body || {};
+      const validated = insertProjectExpenseSchema.parse({
+        ...clientPayload,
+        projectId: log.projectId,
+        dailyLogId,
+        expenseDate: clientPayload.expenseDate || log.logDate,
+        createdBy: req.currentUser?.id,
+      });
+      const created = await storage.createProjectExpense(validated);
+      res.status(201).json(created);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      console.error("Error creating daily log expense:", error);
+      res.status(500).json({ error: "فشل في إضافة المصروف" });
+    }
+  });
+
+  app.delete("/api/construction/daily-logs/expenses/:expenseId", isAuthenticated, requirePermission("project_expenses", "delete"), async (req, res) => {
+    try {
+      const expenseId = parseInt(req.params.expenseId, 10);
+      if (isNaN(expenseId)) return res.status(400).json({ error: "Invalid ID" });
+      const expense = await storage.getProjectExpense(expenseId);
+      if (!expense) return res.status(404).json({ error: "المصروف غير موجود" });
+      // This route only deletes expenses that originated from a daily log
+      if (!expense.dailyLogId) {
+        return res.status(400).json({ error: "هذا المصروف غير مرتبط بيومية" });
+      }
+      const parentLog = await storage.getDailyLog(expense.dailyLogId);
+      if (!parentLog) return res.status(404).json({ error: "اليومية غير موجودة" });
+      const access = await checkProjectBranchAccess(req, parentLog.projectId);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+      const deleted = await storage.deleteProjectExpense(expenseId);
+      res.json({ success: deleted });
+    } catch (error) {
+      console.error("Error deleting daily log expense:", error);
+      res.status(500).json({ error: "فشل في حذف المصروف" });
     }
   });
 

@@ -84,6 +84,8 @@ import {
   type InsertProjectDailyLog,
   type ProjectDailyLogPhoto,
   type InsertProjectDailyLogPhoto,
+  type DailyLogActivity,
+  type InsertDailyLogActivity,
   type UserPermission,
   type InsertUserPermission,
   type PermissionAuditLog,
@@ -223,6 +225,7 @@ import {
   projectExpenses,
   projectDailyLogs,
   projectDailyLogPhotos,
+  dailyLogActivities,
   userPermissions,
   permissionAuditLogs,
   assetTransfers,
@@ -703,6 +706,14 @@ export interface IStorage {
   getDailyLogPhoto(id: number): Promise<ProjectDailyLogPhoto | undefined>;
   createDailyLogPhoto(photo: InsertProjectDailyLogPhoto): Promise<ProjectDailyLogPhoto>;
   deleteDailyLogPhoto(id: number): Promise<boolean>;
+
+  // Daily Log Activities (smart linking)
+  getDailyLogActivities(dailyLogId: number): Promise<DailyLogActivity[]>;
+  getDailyLogActivity(id: number): Promise<DailyLogActivity | undefined>;
+  createDailyLogActivity(activity: InsertDailyLogActivity): Promise<DailyLogActivity>;
+  updateDailyLogActivity(id: number, activity: Partial<InsertDailyLogActivity>): Promise<DailyLogActivity | undefined>;
+  deleteDailyLogActivity(id: number): Promise<boolean>;
+  getDailyLogExpenses(dailyLogId: number): Promise<ProjectExpense[]>;
 
   // User Permissions
   getUserPermissions(userId: string): Promise<UserPermission[]>;
@@ -2607,6 +2618,129 @@ export class DatabaseStorage implements IStorage {
   async deleteDailyLogPhoto(id: number): Promise<boolean> {
     const result = await db.delete(projectDailyLogPhotos).where(eq(projectDailyLogPhotos.id, id)).returning();
     return result.length > 0;
+  }
+
+  // ========== Daily Log Activities (Smart Linking) ==========
+  // Adjusts contract_items.completed_quantity in step with activity rows so the
+  // contract progress always reflects the on-site reality.
+  private async _applyContractItemDelta(
+    tx: any,
+    contractItemId: number,
+    delta: number,
+  ): Promise<void> {
+    if (!contractItemId || !delta) return;
+    // Atomic increment + status flip in a single SQL statement to avoid the
+    // classic select-then-update race when two activities for the same item are
+    // saved concurrently. The CASE keys off the NEW completed_quantity value.
+    await tx.execute(sql`
+      UPDATE contract_items
+      SET completed_quantity = GREATEST(0, COALESCE(completed_quantity, 0) + ${delta}),
+          status = CASE
+            WHEN COALESCE(quantity, 0) > 0
+              AND GREATEST(0, COALESCE(completed_quantity, 0) + ${delta}) >= COALESCE(quantity, 0)
+              THEN 'completed'
+            WHEN GREATEST(0, COALESCE(completed_quantity, 0) + ${delta}) > 0
+              THEN 'in_progress'
+            ELSE 'pending'
+          END,
+          updated_at = NOW()
+      WHERE id = ${contractItemId}
+    `);
+  }
+
+  async getDailyLogActivities(dailyLogId: number): Promise<DailyLogActivity[]> {
+    return await db
+      .select()
+      .from(dailyLogActivities)
+      .where(eq(dailyLogActivities.dailyLogId, dailyLogId))
+      .orderBy(dailyLogActivities.id);
+  }
+
+  async getDailyLogActivity(id: number): Promise<DailyLogActivity | undefined> {
+    const [row] = await db.select().from(dailyLogActivities).where(eq(dailyLogActivities.id, id));
+    return row || undefined;
+  }
+
+  async createDailyLogActivity(activity: InsertDailyLogActivity): Promise<DailyLogActivity> {
+    return await db.transaction(async (tx) => {
+      const [created] = await tx.insert(dailyLogActivities).values(activity).returning();
+      if (created.contractItemId) {
+        await this._applyContractItemDelta(
+          tx,
+          created.contractItemId,
+          Number(created.quantityToday || 0),
+        );
+      }
+      return created;
+    });
+  }
+
+  async updateDailyLogActivity(
+    id: number,
+    activity: Partial<InsertDailyLogActivity>,
+  ): Promise<DailyLogActivity | undefined> {
+    return await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(dailyLogActivities)
+        .where(eq(dailyLogActivities.id, id));
+      if (!existing) return undefined;
+
+      // Roll back previous contribution to the OLD contract item (if any)
+      if (existing.contractItemId) {
+        await this._applyContractItemDelta(
+          tx,
+          existing.contractItemId,
+          -Number(existing.quantityToday || 0),
+        );
+      }
+
+      const [updated] = await tx
+        .update(dailyLogActivities)
+        .set({ ...activity, updatedAt: new Date() })
+        .where(eq(dailyLogActivities.id, id))
+        .returning();
+
+      // Apply contribution to the NEW contract item (could be the same or different)
+      if (updated.contractItemId) {
+        await this._applyContractItemDelta(
+          tx,
+          updated.contractItemId,
+          Number(updated.quantityToday || 0),
+        );
+      }
+      return updated;
+    });
+  }
+
+  async deleteDailyLogActivity(id: number): Promise<boolean> {
+    return await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(dailyLogActivities)
+        .where(eq(dailyLogActivities.id, id));
+      if (!existing) return false;
+      if (existing.contractItemId) {
+        await this._applyContractItemDelta(
+          tx,
+          existing.contractItemId,
+          -Number(existing.quantityToday || 0),
+        );
+      }
+      const result = await tx
+        .delete(dailyLogActivities)
+        .where(eq(dailyLogActivities.id, id))
+        .returning();
+      return result.length > 0;
+    });
+  }
+
+  async getDailyLogExpenses(dailyLogId: number): Promise<ProjectExpense[]> {
+    return await db
+      .select()
+      .from(projectExpenses)
+      .where(eq(projectExpenses.dailyLogId, dailyLogId))
+      .orderBy(desc(projectExpenses.expenseDate), desc(projectExpenses.id));
   }
 
   // User Permissions - with caching

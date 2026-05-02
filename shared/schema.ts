@@ -524,6 +524,9 @@ export const projectExpenses = pgTable("project_expenses", {
   invoiceNumber: text("invoice_number"),
   attachmentUrl: text("attachment_url"),
   notes: text("notes"),
+  // Optional back-reference to the daily work log that originated this expense
+  // (in-site cash purchases / daily wages logged from the daily work log page)
+  dailyLogId: integer("daily_log_id"),
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -531,6 +534,7 @@ export const projectExpenses = pgTable("project_expenses", {
   index("idx_project_expenses_project").on(table.projectId),
   index("idx_project_expenses_contractor").on(table.contractorId),
   index("idx_project_expenses_date").on(table.expenseDate),
+  index("idx_project_expenses_daily_log").on(table.dailyLogId),
 ]);
 
 export const insertProjectExpenseSchema = createInsertSchema(projectExpenses).omit({
@@ -557,7 +561,9 @@ export const projectDailyLogs = pgTable("project_daily_logs", {
   workLocation: text("work_location"), // موقع التنفيذ في الموقع (مثال: الطابق الأول، الواجهة، المدخل)
   startTime: text("start_time"), // ساعة بداية العمل HH:mm
   endTime: text("end_time"), // ساعة نهاية العمل HH:mm
-  workItems: jsonb("work_items"), // بنود الأعمال المنفذة [{type, description, quantity, unit}]
+  // التخصص الرئيسي اليوم: paint / tiling / hvac / plumbing / electrical / gypsum / kitchen_steel / glass / mdf / signage
+  mainTrade: text("main_trade"),
+  workItems: jsonb("work_items"), // [legacy] بنود الأعمال المنفذة كنص حر — للتوافق مع اليوميات القديمة
   workerBreakdown: jsonb("worker_breakdown"), // توزيع العمالة [{role, count}]
   progressToday: integer("progress_today").default(0), // نسبة الإنجاز اليومي %
   workersCount: integer("workers_count").default(0), // عدد العمالة الحاضرة (إجمالي)
@@ -610,6 +616,44 @@ export const insertProjectDailyLogPhotoSchema = createInsertSchema(projectDailyL
 
 export type ProjectDailyLogPhoto = typeof projectDailyLogPhotos.$inferSelect;
 export type InsertProjectDailyLogPhoto = z.infer<typeof insertProjectDailyLogPhotoSchema>;
+
+// Daily Log Activities — أنشطة اليومية الذكية
+// كل نشاط يربط: يومية + مقاول + (اختياري) عقد + (اختياري) بند عقد + كمية اليوم.
+// عند ربط نشاط ببند عقد، يتم تحديث completed_quantity تلقائياً في contract_items.
+export const dailyLogActivities = pgTable("daily_log_activities", {
+  id: serial("id").primaryKey(),
+  dailyLogId: integer("daily_log_id")
+    .notNull()
+    .references(() => projectDailyLogs.id, { onDelete: "cascade" }),
+  contractorId: integer("contractor_id").references(() => contractors.id),
+  contractId: integer("contract_id").references(() => constructionContracts.id),
+  contractItemId: integer("contract_item_id").references(() => contractItems.id),
+  // نوع التشطيب: paint / tiling / hvac / plumbing / electrical / gypsum / kitchen_steel / glass / mdf / signage / other
+  tradeType: text("trade_type"),
+  description: text("description").notNull(), // وصف النشاط المنفذ اليوم
+  quantityToday: real("quantity_today").default(0), // الكمية المنفذة اليوم
+  unit: text("unit"), // م²، م.ط، عدد، إلخ
+  unitCost: real("unit_cost"), // سعر الوحدة (اختياري — للحساب التلقائي)
+  totalCost: real("total_cost"), // تكلفة النشاط الإجمالية (اختياري)
+  completionStatus: text("completion_status").default("in_progress"), // in_progress / completed
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_daily_log_activities_log").on(table.dailyLogId),
+  index("idx_daily_log_activities_contractor").on(table.contractorId),
+  index("idx_daily_log_activities_contract_item").on(table.contractItemId),
+]);
+
+export const insertDailyLogActivitySchema = createInsertSchema(dailyLogActivities).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type DailyLogActivity = typeof dailyLogActivities.$inferSelect;
+export type InsertDailyLogActivity = z.infer<typeof insertDailyLogActivitySchema>;
 
 // System Modules for permissions - جميع وحدات النظام
 export const SYSTEM_MODULES = [
