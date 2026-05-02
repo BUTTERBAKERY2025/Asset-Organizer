@@ -893,7 +893,11 @@ export default function EmployeeReportsDashboardPage() {
       const socialInsurance = emp.nationality === "سعودي" 
         ? (storedInsurance > 0 ? storedInsurance : Math.round(baseSalary * 0.0975))
         : 0;
-      const netSalary = grossSalary - socialInsurance;
+      // خصم الغياب: قيمة اليوم = الراتب الإجمالي (شامل البدلات) ÷ 30 (نظام العمل السعودي)
+      // ثم خصم الغياب = عدد أيام الغياب × قيمة اليوم
+      const dailyRate = grossSalary / 30;
+      const absenceDeduction = Math.round(absentDays * dailyRate * 100) / 100;
+      const netSalary = Math.round((grossSalary - socialInsurance - absenceDeduction) * 100) / 100;
 
       return {
         id: emp.id,
@@ -911,6 +915,8 @@ export default function EmployeeReportsDashboardPage() {
         baseSalary,
         allowances,
         grossSalary,
+        dailyRate: Math.round(dailyRate * 100) / 100,
+        absenceDeduction,
         socialInsurance,
         netSalary,
       };
@@ -971,7 +977,8 @@ export default function EmployeeReportsDashboardPage() {
       { [isRTL ? "البيان" : "Item"]: isRTL ? "الفرع" : "Branch", [isRTL ? "القيمة" : "Value"]: getBranchName(salaryClosingBranch) },
       { [isRTL ? "البيان" : "Item"]: isRTL ? "الشهر" : "Month", [isRTL ? "القيمة" : "Value"]: salaryClosingMonth },
       { [isRTL ? "البيان" : "Item"]: isRTL ? "عدد الموظفين" : "Employee Count", [isRTL ? "القيمة" : "Value"]: salaryClosingData.length },
-      { [isRTL ? "البيان" : "Item"]: isRTL ? "إجمالي الرواتب" : "Total Salaries", [isRTL ? "القيمة" : "Value"]: salaryClosingData.reduce((sum, e) => sum + e.grossSalary, 0) },
+      { [isRTL ? "البيان" : "Item"]: isRTL ? "إجمالي الرواتب (شامل البدلات)" : "Total Salaries (Incl. Allowances)", [isRTL ? "القيمة" : "Value"]: salaryClosingData.reduce((sum, e) => sum + e.grossSalary, 0) },
+      { [isRTL ? "البيان" : "Item"]: isRTL ? "إجمالي خصم الغياب" : "Total Absence Deduction", [isRTL ? "القيمة" : "Value"]: salaryClosingData.reduce((sum, e) => sum + e.absenceDeduction, 0) },
       { [isRTL ? "البيان" : "Item"]: isRTL ? "إجمالي التأمينات الاجتماعية" : "Total Social Insurance", [isRTL ? "القيمة" : "Value"]: salaryClosingData.reduce((sum, e) => sum + e.socialInsurance, 0) },
       { [isRTL ? "البيان" : "Item"]: isRTL ? "صافي الرواتب المستحقة" : "Net Salaries Due", [isRTL ? "القيمة" : "Value"]: salaryClosingData.reduce((sum, e) => sum + e.netSalary, 0) },
       { [isRTL ? "البيان" : "Item"]: "", [isRTL ? "القيمة" : "Value"]: "" },
@@ -999,6 +1006,8 @@ export default function EmployeeReportsDashboardPage() {
       [isRTL ? "الراتب الأساسي" : "Base Salary"]: emp.baseSalary,
       [isRTL ? "البدلات" : "Allowances"]: emp.allowances,
       [isRTL ? "إجمالي الراتب" : "Gross Salary"]: emp.grossSalary,
+      [isRTL ? "قيمة اليوم" : "Daily Rate"]: emp.dailyRate,
+      [isRTL ? "خصم الغياب" : "Absence Deduction"]: emp.absenceDeduction,
       [isRTL ? "التأمينات الاجتماعية" : "Social Insurance"]: emp.socialInsurance,
       [isRTL ? "صافي الراتب" : "Net Salary"]: emp.netSalary,
     }));
@@ -1046,6 +1055,8 @@ export default function EmployeeReportsDashboardPage() {
           totalHours: emp.totalHours,
           baseSalary: emp.baseSalary,
           allowances: emp.allowances,
+          dailyRate: emp.dailyRate,
+          absenceDeduction: emp.absenceDeduction,
           socialInsurance: emp.socialInsurance,
           netSalary: emp.netSalary,
         })),
@@ -6638,24 +6649,30 @@ export default function EmployeeReportsDashboardPage() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <div className="grid grid-cols-4 gap-4 mb-4">
-                        <div className="text-center p-3 bg-blue-50 rounded-lg">
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
+                        <div className="text-center p-3 bg-blue-50 rounded-lg" data-testid="card-employee-count">
                           <p className="text-2xl font-bold text-blue-600">{salaryClosingData.length}</p>
                           <p className="text-sm text-gray-600">عدد الموظفين</p>
                         </div>
-                        <div className="text-center p-3 bg-green-50 rounded-lg">
+                        <div className="text-center p-3 bg-green-50 rounded-lg" data-testid="card-gross-salary">
                           <p className="text-2xl font-bold text-green-600">
                             {formatCurrency(salaryClosingData.reduce((sum, e) => sum + e.grossSalary, 0))}
                           </p>
                           <p className="text-sm text-gray-600">إجمالي الرواتب</p>
                         </div>
-                        <div className="text-center p-3 bg-red-50 rounded-lg">
+                        <div className="text-center p-3 bg-orange-50 rounded-lg" data-testid="card-absence-deduction" title="إجمالي خصومات الغياب: عدد أيام الغياب × (الراتب الإجمالي ÷ 30)">
+                          <p className="text-2xl font-bold text-orange-600">
+                            {formatCurrency(salaryClosingData.reduce((sum, e) => sum + e.absenceDeduction, 0))}
+                          </p>
+                          <p className="text-sm text-gray-600">خصم الغياب</p>
+                        </div>
+                        <div className="text-center p-3 bg-red-50 rounded-lg" data-testid="card-social-insurance">
                           <p className="text-2xl font-bold text-red-600">
                             {formatCurrency(salaryClosingData.reduce((sum, e) => sum + e.socialInsurance, 0))}
                           </p>
                           <p className="text-sm text-gray-600">التأمينات الاجتماعية</p>
                         </div>
-                        <div className="text-center p-3 bg-amber-50 rounded-lg">
+                        <div className="text-center p-3 bg-amber-50 rounded-lg" data-testid="card-net-salary">
                           <p className="text-2xl font-bold text-amber-600">
                             {formatCurrency(salaryClosingData.reduce((sum, e) => sum + e.netSalary, 0))}
                           </p>
@@ -6721,6 +6738,8 @@ export default function EmployeeReportsDashboardPage() {
                             <TableHead className="text-center">{isRTL ? "الساعات" : "Hours"}</TableHead>
                             <TableHead className="text-center">{isRTL ? "الراتب" : "Salary"}</TableHead>
                             <TableHead className="text-center">{isRTL ? "البدلات" : "Allowances"}</TableHead>
+                            <TableHead className="text-center" title={isRTL ? "قيمة اليوم = الراتب الإجمالي ÷ 30" : "Daily rate = Gross salary / 30"}>{isRTL ? "قيمة اليوم" : "Daily Rate"}</TableHead>
+                            <TableHead className="text-center" title={isRTL ? "خصم الغياب = أيام الغياب × قيمة اليوم" : "Absence deduction = absent days × daily rate"}>{isRTL ? "خصم الغياب" : "Absence Deduction"}</TableHead>
                             <TableHead className="text-center">{isRTL ? "التأمينات" : "Insurance"}</TableHead>
                             <TableHead className="text-center">{isRTL ? "الصافي" : "Net"}</TableHead>
                           </TableRow>
@@ -6747,6 +6766,10 @@ export default function EmployeeReportsDashboardPage() {
                               <TableCell className="text-center">{emp.totalHours}</TableCell>
                               <TableCell className="text-center">{formatCurrency(emp.baseSalary, isRTL)}</TableCell>
                               <TableCell className="text-center">{formatCurrency(emp.allowances, isRTL)}</TableCell>
+                              <TableCell className="text-center text-gray-600 text-xs">{formatCurrency(emp.dailyRate, isRTL)}</TableCell>
+                              <TableCell className="text-center text-red-600">
+                                {emp.absenceDeduction > 0 ? `- ${formatCurrency(emp.absenceDeduction, isRTL)}` : "-"}
+                              </TableCell>
                               <TableCell className="text-center text-red-600">
                                 {emp.socialInsurance > 0 ? `- ${formatCurrency(emp.socialInsurance, isRTL)}` : "-"}
                               </TableCell>
