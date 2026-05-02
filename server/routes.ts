@@ -24092,6 +24092,189 @@ export async function registerRoutes(
     }
   });
 
+  // Bulk generate timesheet reports for many employees in a branch (single month)
+  // Body: { branchId, startDate, endDate, employeeIds: string[] }
+  // Returns: { created, skipped, failed, summary }
+  app.post("/api/timesheet-reports/generate-bulk", isAuthenticated, requirePermission("timesheet", "create"), async (req, res) => {
+    try {
+      const { branchId, startDate, endDate, employeeIds } = req.body;
+
+      if (!branchId || !startDate || !endDate || !Array.isArray(employeeIds) || employeeIds.length === 0) {
+        return res.status(400).json({ error: "يجب تحديد الفرع والفترة وقائمة الموظفين" });
+      }
+
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, branchId);
+        if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      }
+
+      // Pre-fetch schedules, attendance, branch employees, and branch users ONCE for the whole branch+range
+      // (avoid N+1 + build branch-scoped allow-set for security)
+      const [allSchedules, allAttendance, branchEmps, allUsers] = await Promise.all([
+        storage.getEmployeeSchedulesByBranchAndDateRange(branchId, startDate, endDate),
+        storage.getAllAttendanceRecords({ branchId, startDate, endDate }),
+        storage.getBranchEmployeesByBranch(branchId),
+        storage.getAllUsers(),
+      ]);
+
+      // Build branch-scoped allow-set: which employee IDs (in either UUID or branch_emp_X form) belong to this branch?
+      const branchUserIdSet = new Set<string>(allUsers.filter((u: any) => u.branchId === branchId).map((u: any) => u.id));
+      const branchEmpById = new Map<number, any>();
+      const linkedUserToBranchEmpId = new Map<string, number>();
+      for (const be of branchEmps) {
+        branchEmpById.set(be.id, be);
+        if (be.linkedUserId) linkedUserToBranchEmpId.set(be.linkedUserId, be.id);
+      }
+
+      const dayNames = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+
+      const created: Array<{ employeeId: string; reportId?: number; entriesCount: number }> = [];
+      const skipped: Array<{ employeeId: string; reason: string; existingReportId?: number }> = [];
+      const failed: Array<{ employeeId: string; error: string }> = [];
+
+      for (const employeeId of employeeIds) {
+        try {
+          // Resolve employee + branch employee numeric ID + ENFORCE branch membership (security)
+          let branchEmpNumId: number | undefined;
+          if (employeeId.startsWith("branch_emp_")) {
+            const beId = parseInt(employeeId.replace("branch_emp_", ""));
+            const be = branchEmpById.get(beId);
+            if (!be) {
+              failed.push({ employeeId, error: "موظف الفرع غير موجود في هذا الفرع" });
+              continue;
+            }
+            // SECURITY: branch employee must belong to the selected branch
+            if (be.branchId !== branchId) {
+              failed.push({ employeeId, error: "الموظف لا ينتمي إلى الفرع المحدد" });
+              continue;
+            }
+            branchEmpNumId = beId;
+          } else {
+            // SECURITY: user must be either a branch member or linked via branch_employees to this branch
+            const isBranchUser = branchUserIdSet.has(employeeId);
+            const linkedBranchEmpId = linkedUserToBranchEmpId.get(employeeId);
+            if (!isBranchUser && linkedBranchEmpId === undefined) {
+              failed.push({ employeeId, error: "الموظف لا ينتمي إلى الفرع المحدد" });
+              continue;
+            }
+            if (linkedBranchEmpId !== undefined) branchEmpNumId = linkedBranchEmpId;
+          }
+
+          // Skip if already exists (after branch validation so out-of-branch IDs always report as failed, not skipped)
+          const existing = await storage.getTimesheetReportByEmployeeAndDates(employeeId, startDate, endDate);
+          if (existing) {
+            skipped.push({ employeeId, reason: "already_exists", existingReportId: existing.id });
+            continue;
+          }
+
+          // Filter schedules and attendance for this employee
+          const empSchedules = allSchedules.filter((s: any) => {
+            if (s.employeeId === employeeId) return true;
+            if (branchEmpNumId !== undefined && s.branchEmployeeId === branchEmpNumId) return true;
+            return false;
+          });
+          const empAttendance = allAttendance.filter((a: any) => {
+            if (a.employeeId === employeeId) return true;
+            if (branchEmpNumId !== undefined && a.branchEmployeeId === branchEmpNumId) return true;
+            return false;
+          });
+
+          // Create the report shell
+          const report = await storage.createTimesheetReport({
+            employeeId, branchId, startDate, endDate,
+            generatedBy: req.currentUser?.id,
+            status: "pending_employee_signature",
+            totalScheduledDays: 0, totalPresentDays: 0, totalAbsentDays: 0, totalLateDays: 0,
+            totalScheduledHours: 0, totalActualHours: 0, totalOvertimeMinutes: 0, totalLateMinutes: 0,
+          });
+
+          // Compute daily entries + totals (same logic as single endpoint)
+          let totalScheduledDays = 0, totalPresentDays = 0, totalAbsentDays = 0, totalLateDays = 0;
+          let totalScheduledHours = 0, totalActualHours = 0;
+          let totalOvertimeMinutes = 0, totalLateMinutes = 0;
+          const entries: any[] = [];
+
+          const start = new Date(startDate);
+          const end = new Date(endDate);
+          for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            const dateStr = d.toISOString().split('T')[0];
+            const dayOfWeek = dayNames[d.getDay()];
+
+            const schedule = empSchedules.find((s: any) => s.scheduleDate === dateStr);
+            const attendanceRecord = empAttendance.find((a: any) => a.attendanceDate === dateStr);
+
+            const isOff = schedule?.isOff || dayOfWeek === 'fri';
+            const scheduledStartTime = schedule?.startTime || "08:00";
+            const scheduledEndTime = schedule?.endTime || "16:00";
+            const actualStartTime = attendanceRecord?.actualCheckIn || null;
+            const actualEndTime = attendanceRecord?.actualCheckOut || null;
+
+            let scheduledHours = 8;
+            if (schedule?.startTime && schedule?.endTime && !isOff) {
+              const sp = schedule.startTime.split(':').map(Number);
+              const ep = schedule.endTime.split(':').map(Number);
+              scheduledHours = (ep[0] + ep[1]/60) - (sp[0] + sp[1]/60);
+            }
+
+            const actualHours = attendanceRecord?.workingHours || 0;
+            const overtimeMinutes = attendanceRecord?.overtimeMinutes || 0;
+            const lateMinutes = attendanceRecord?.lateMinutes || 0;
+
+            let status = "pending";
+            if (isOff) status = "day_off";
+            else if (attendanceRecord) {
+              if (attendanceRecord.status === "present") status = "present";
+              else if (attendanceRecord.status === "late") status = "late";
+              else if (attendanceRecord.status === "absent") status = "absent";
+              else status = attendanceRecord.status || "pending";
+            } else status = "absent";
+
+            if (!isOff) {
+              totalScheduledDays++;
+              totalScheduledHours += scheduledHours;
+              if (status === "present" || status === "late") {
+                totalPresentDays++;
+                totalActualHours += actualHours;
+                totalOvertimeMinutes += overtimeMinutes;
+              }
+              if (status === "late") { totalLateDays++; totalLateMinutes += lateMinutes; }
+              if (status === "absent") totalAbsentDays++;
+            }
+
+            entries.push({
+              reportId: report.id, date: dateStr, dayOfWeek,
+              scheduledStartTime, scheduledEndTime, actualStartTime, actualEndTime,
+              isOff, status, scheduledHours, actualHours, overtimeMinutes, lateMinutes,
+              checkInSignature: attendanceRecord?.checkInSignature || null,
+              checkOutSignature: attendanceRecord?.checkOutSignature || null,
+            });
+          }
+
+          await storage.createBulkTimesheetReportEntries(entries);
+          const updatedReport = await storage.updateTimesheetReport(report.id, {
+            totalScheduledDays, totalPresentDays, totalAbsentDays, totalLateDays,
+            totalScheduledHours: Math.round(totalScheduledHours * 100) / 100,
+            totalActualHours: Math.round(totalActualHours * 100) / 100,
+            totalOvertimeMinutes, totalLateMinutes,
+          });
+
+          created.push({ employeeId, reportId: updatedReport?.id, entriesCount: entries.length });
+        } catch (e: any) {
+          console.error(`Bulk timesheet generation failed for ${employeeId}:`, e);
+          failed.push({ employeeId, error: e?.message || "خطأ غير معروف" });
+        }
+      }
+
+      res.status(201).json({
+        created, skipped, failed,
+        summary: { created: created.length, skipped: skipped.length, failed: failed.length },
+      });
+    } catch (error) {
+      console.error("Error in bulk timesheet generation:", error);
+      res.status(500).json({ error: "فشل في الإنشاء الجماعي للتقارير" });
+    }
+  });
+
   // Generate branch-wide timesheet PDF (multi-page, one employee per page)
   app.post("/api/timesheet-reports/generate-branch-pdf", isAuthenticated, requirePermission("timesheet", "create"), async (req, res) => {
     try {
