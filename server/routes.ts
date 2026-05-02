@@ -24114,20 +24114,47 @@ export async function registerRoutes(
       const branchEmps = await storage.getBranchEmployeesByBranch(branchId);
       const standaloneEmps = branchEmps.filter((be: any) => !be.linkedUserId && (be.status === 'active' || !be.status));
 
-      type Emp = { id: string; name: string; jobTitle: string; employeeNumber?: string };
+      // Map linkedUserId → branchEmployeeNumericId so we can match records across all storage shapes
+      const linkedUserToBranchEmp = new Map<string, number>();
+      for (const be of branchEmps) {
+        if (be.linkedUserId) linkedUserToBranchEmp.set(be.linkedUserId, be.id);
+      }
+
+      type Emp = {
+        id: string;
+        name: string;
+        jobTitle: string;
+        employeeNumber?: string;
+        userId?: string;
+        branchEmpNumId?: number;
+      };
       const employees: Emp[] = [
         ...branchUsers.map((u: any) => ({
           id: u.id,
           name: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.username || 'موظف',
           jobTitle: u.jobTitle || '-',
+          userId: u.id,
+          branchEmpNumId: linkedUserToBranchEmp.get(u.id),
         })),
         ...standaloneEmps.map((be: any) => ({
           id: `branch_emp_${be.id}`,
           name: be.employeeName,
           jobTitle: be.jobTitle,
           employeeNumber: be.employeeNumber || undefined,
+          branchEmpNumId: be.id,
         })),
       ];
+
+      // Match a schedule/attendance record to an employee using ANY of:
+      // user UUID, branch_emp_<num> string, or numeric branchEmployeeId
+      const matchesEmp = (rec: any, emp: Emp): boolean => {
+        if (emp.userId && rec.employeeId === emp.userId) return true;
+        if (emp.branchEmpNumId !== undefined) {
+          if (rec.branchEmployeeId === emp.branchEmpNumId) return true;
+          if (rec.employeeId === `branch_emp_${emp.branchEmpNumId}`) return true;
+        }
+        return false;
+      };
 
       if (employees.length === 0) {
         return res.status(400).json({ error: "لا يوجد موظفون في هذا الفرع" });
@@ -24153,8 +24180,8 @@ export async function registerRoutes(
       })();
 
       const employeeReports = employees.map(emp => {
-        const empSchedules = allSchedules.filter((s: any) => s.employeeId === emp.id);
-        const empAttendance = allAttendance.filter((a: any) => a.employeeId === emp.id);
+        const empSchedules = allSchedules.filter((s: any) => matchesEmp(s, emp));
+        const empAttendance = allAttendance.filter((a: any) => matchesEmp(a, emp));
 
         let scheduledDays = 0, presentDays = 0, absentDays = 0, lateDays = 0, offDays = 0;
         let totalScheduledHours = 0, totalActualHours = 0, totalLateMinutes = 0, totalOvertimeMinutes = 0;
