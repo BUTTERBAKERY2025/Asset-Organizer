@@ -243,8 +243,26 @@ export default function DailyWorkLogPage() {
         setLocation(`/construction/daily-logs/${created.id}/edit`);
       }
     },
-    onError: () => {
-      toast({ title: "فشل في حفظ اليومية", variant: "destructive" });
+    onError: (err: any) => {
+      let detail = "";
+      const raw = err?.message || String(err || "");
+      try {
+        const idx = raw.indexOf("{");
+        if (idx >= 0) {
+          const parsed = JSON.parse(raw.slice(idx));
+          detail = parsed?.error || parsed?.message || JSON.stringify(parsed.details || parsed);
+        } else {
+          detail = raw;
+        }
+      } catch {
+        detail = raw;
+      }
+      toast({
+        title: "فشل في حفظ اليومية",
+        description: detail.slice(0, 400) || "خطأ غير معروف",
+        variant: "destructive",
+      });
+      console.error("[daily-log save error]", err);
     },
   });
 
