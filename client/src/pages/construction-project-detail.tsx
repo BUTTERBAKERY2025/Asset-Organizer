@@ -42,7 +42,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowRight, Plus, Pencil, Trash2, Loader2, Building2, Calendar, DollarSign, CheckCircle2, Clock, Pause, FileSpreadsheet, Printer, Download, ChevronDown, Calculator } from "lucide-react";
+import { ArrowRight, Plus, Pencil, Trash2, Loader2, Building2, Calendar, DollarSign, CheckCircle2, Clock, Pause, FileSpreadsheet, Printer, Download, ChevronDown, Calculator, Users, AlertTriangle, TrendingUp, Sparkles, Wand2, Activity } from "lucide-react";
 import { useRef, useMemo } from "react";
 import { useReactToPrint } from "react-to-print";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -163,6 +163,61 @@ export default function ConstructionProjectDetailPage() {
     },
     enabled: projectId > 0,
   });
+
+  // Smart dashboard: calculated progress + budget by category + today's snapshot
+  type DashboardBudgetRow = {
+    categoryId: number | null;
+    categoryName: string;
+    planned: number;
+    spentExpenses: number;
+    spentWorkItems: number;
+    spentTotal: number;
+    remaining: number;
+    percentage: number;
+    status: 'ok' | 'warning' | 'critical' | 'over' | 'unplanned';
+  };
+  type ProjectDashboard = {
+    project: { id: number; title: string; branchId: string; status: string; budget: number | null; progressPercent: number };
+    calculatedProgress: number;
+    contractItems: { total: number; completed: number };
+    contracts: { count: number; totalAmount: number; paidAmount: number; remainingAmount: number };
+    budgetByCategory: DashboardBudgetRow[];
+    totalPlanned: number;
+    totalSpent: number;
+    overallBudgetPercentage: number;
+    today: {
+      date: string;
+      latestLog: { id: number; logDate: string; supervisorName: string; mainTrade: string | null; workersCount: number; status: string | null } | null;
+      activitiesCount: number;
+      expensesTotal: number;
+      workersToday: number;
+    };
+  };
+
+  const { data: dashboard } = useQuery<ProjectDashboard>({
+    queryKey: ["/api/construction/projects", projectId, "dashboard"],
+    queryFn: async () => {
+      const res = await fetch(`/api/construction/projects/${projectId}/dashboard`);
+      if (!res.ok) throw new Error("Failed to fetch dashboard");
+      return res.json();
+    },
+    enabled: projectId > 0,
+    refetchInterval: 60_000,
+  });
+
+  const TRADE_LABELS: Record<string, string> = {
+    paint: "دهانات",
+    tiling: "سيراميك وأرضيات",
+    hvac: "تكييف",
+    plumbing: "سباكة",
+    electrical: "كهرباء وإضاءة",
+    gypsum: "جبس وديكورات",
+    kitchen_steel: "مطبخ ستيل تجاري",
+    glass: "زجاج وواجهات",
+    mdf: "MDF ونجارة",
+    signage: "لافتات",
+    other: "أخرى",
+  };
 
   const [isBudgetDialogOpen, setIsBudgetDialogOpen] = useState(false);
   const [isBudgetEstimateDialogOpen, setIsBudgetEstimateDialogOpen] = useState(false);
@@ -289,6 +344,7 @@ export default function ConstructionProjectDetailPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/construction/projects", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/construction/projects", projectId, "dashboard"] });
       setIsUpdateProgressOpen(false);
       toast({ title: "تم تحديث نسبة التقدم بنجاح" });
     },
@@ -296,6 +352,11 @@ export default function ConstructionProjectDetailPage() {
       toast({ title: "حدث خطأ", description: "فشل في تحديث نسبة التقدم", variant: "destructive" });
     },
   });
+
+  const applyCalculatedProgress = () => {
+    if (!dashboard) return;
+    updateProgressMutation.mutate({ id: projectId, progress: dashboard.calculatedProgress });
+  };
 
   const getBranchName = (branchId: string) => {
     const branch = branches.find((b) => b.id === branchId);
@@ -674,12 +735,32 @@ export default function ConstructionProjectDetailPage() {
           </Card>
           <Card>
             <CardHeader className="p-3 sm:p-4 pb-2">
-              <CardTitle className="text-xs sm:text-sm text-muted-foreground">نسبة التقدم</CardTitle>
+              <CardTitle className="text-xs sm:text-sm text-muted-foreground flex items-center gap-1">
+                نسبة التقدم
+                {dashboard && dashboard.calculatedProgress !== (project.progressPercent || 0) && (
+                  <Badge variant="outline" className="text-[9px] sm:text-[10px] px-1 py-0 border-amber-500 text-amber-700">
+                    محسوبة: {dashboard.calculatedProgress}%
+                  </Badge>
+                )}
+              </CardTitle>
             </CardHeader>
             <CardContent className="p-3 sm:p-4 pt-0">
               <div className="space-y-2">
                 <p className="text-lg sm:text-xl md:text-2xl font-bold">{project.progressPercent || 0}%</p>
                 <Progress value={project.progressPercent || 0} className="h-2" />
+                {canEdit && dashboard && dashboard.calculatedProgress !== (project.progressPercent || 0) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-full text-[10px] sm:text-xs gap-1 text-amber-700 hover:text-amber-800 hover:bg-amber-50"
+                    onClick={applyCalculatedProgress}
+                    disabled={updateProgressMutation.isPending}
+                    data-testid="button-apply-calculated-progress"
+                  >
+                    <Wand2 className="w-3 h-3" />
+                    تطبيق المحسوبة
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -689,10 +770,106 @@ export default function ConstructionProjectDetailPage() {
             </CardHeader>
             <CardContent className="p-3 sm:p-4 pt-0">
               <p className="text-lg sm:text-xl md:text-2xl font-bold">{completedItems}/{workItems.length}</p>
-              <p className="text-[10px] sm:text-xs text-muted-foreground">مكتملة</p>
+              <p className="text-[10px] sm:text-xs text-muted-foreground">
+                مكتملة
+                {dashboard && dashboard.contractItems.total > 0 && (
+                  <span className="block">عقود: {dashboard.contractItems.completed}/{dashboard.contractItems.total}</span>
+                )}
+              </p>
             </CardContent>
           </Card>
         </div>
+
+        {/* بطاقة وضع المشروع اليوم */}
+        {dashboard && (
+          <Card className="border-blue-200 bg-gradient-to-l from-blue-50/50 to-transparent">
+            <CardHeader className="pb-3">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Activity className="w-5 h-5 text-blue-600" />
+                  <CardTitle className="text-base sm:text-lg">وضع المشروع اليوم</CardTitle>
+                  <Badge variant="outline" className="text-[10px] border-blue-300 text-blue-700">
+                    {new Date(dashboard.today.date).toLocaleDateString("ar-EG", { weekday: "long", day: "numeric", month: "long" })}
+                  </Badge>
+                </div>
+                <Link href={`/construction/daily-logs?projectId=${projectId}`}>
+                  <Button variant="ghost" size="sm" className="text-blue-700 hover:text-blue-800 h-9" data-testid="button-view-daily-logs-today">
+                    عرض كل اليوميات
+                  </Button>
+                </Link>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="bg-white/70 rounded-lg p-3 border border-blue-100" data-testid="card-today-activities">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    أنشطة اليوم
+                  </div>
+                  <p className="text-2xl font-bold text-foreground">{dashboard.today.activitiesCount}</p>
+                </div>
+                <div className="bg-white/70 rounded-lg p-3 border border-blue-100" data-testid="card-today-workers">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+                    <Users className="w-3.5 h-3.5 text-blue-600" />
+                    عمال اليوم
+                  </div>
+                  <p className="text-2xl font-bold text-foreground">{dashboard.today.workersToday}</p>
+                </div>
+                <div className="bg-white/70 rounded-lg p-3 border border-blue-100" data-testid="card-today-expenses">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+                    <DollarSign className="w-3.5 h-3.5 text-amber-600" />
+                    مصروف اليوم
+                  </div>
+                  <p className="text-lg sm:text-xl font-bold text-foreground">{formatCurrency(dashboard.today.expensesTotal)}</p>
+                </div>
+                <div className="bg-white/70 rounded-lg p-3 border border-blue-100" data-testid="card-today-contracts">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+                    <TrendingUp className="w-3.5 h-3.5 text-purple-600" />
+                    إجمالي العقود
+                  </div>
+                  <p className="text-lg sm:text-xl font-bold text-foreground">{formatCurrency(dashboard.contracts.totalAmount)}</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    مدفوع: {formatCurrency(dashboard.contracts.paidAmount)}
+                  </p>
+                </div>
+              </div>
+
+              {dashboard.today.latestLog ? (
+                <div className="mt-3 bg-white/70 rounded-lg p-3 border border-blue-100" data-testid="card-latest-log">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs text-muted-foreground">آخر يومية:</span>
+                      <span className="font-semibold text-sm">{dashboard.today.latestLog.supervisorName}</span>
+                      <Badge variant="secondary" className="text-[10px]">
+                        {new Date(dashboard.today.latestLog.logDate).toLocaleDateString("ar-EG", { day: "numeric", month: "short" })}
+                      </Badge>
+                      {dashboard.today.latestLog.mainTrade && TRADE_LABELS[dashboard.today.latestLog.mainTrade] && (
+                        <Badge variant="outline" className="text-[10px] border-emerald-300 text-emerald-700">
+                          {TRADE_LABELS[dashboard.today.latestLog.mainTrade]}
+                        </Badge>
+                      )}
+                      {dashboard.today.latestLog.workersCount > 0 && (
+                        <span className="text-[11px] text-muted-foreground">
+                          • {dashboard.today.latestLog.workersCount} عامل
+                        </span>
+                      )}
+                    </div>
+                    <Link href={`/construction/daily-logs/${dashboard.today.latestLog.id}/print`}>
+                      <Button variant="outline" size="sm" className="h-8 text-xs" data-testid="button-view-latest-log">
+                        عرض اليومية
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-3 bg-amber-50 rounded-lg p-3 border border-amber-200 flex items-center gap-2 text-sm text-amber-800" data-testid="alert-no-logs">
+                  <AlertTriangle className="w-4 h-4" />
+                  لا توجد يوميات مسجلة لهذا المشروع بعد
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {canEdit && (
           <Card className="border-amber-200 bg-amber-50/30">
@@ -730,52 +907,118 @@ export default function ConstructionProjectDetailPage() {
                 </Button>
               </div>
             </CardHeader>
-            {budgetComparison.length > 0 && (
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="text-xs">
-                        <TableHead>الفئة</TableHead>
-                        <TableHead className="text-left">الميزانية المخططة</TableHead>
-                        <TableHead className="text-left">التكلفة الفعلية</TableHead>
-                        <TableHead className="text-left">الفرق</TableHead>
-                        <TableHead className="text-left">نسبة الاستخدام</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {budgetComparison.map((item) => {
-                        const usagePercent = item.planned > 0 ? (item.actual / item.planned) * 100 : 0;
-                        return (
-                          <TableRow key={item.categoryId || 'uncategorized'} className="text-sm">
-                            <TableCell className="font-medium">{item.categoryName}</TableCell>
-                            <TableCell className="text-left">{formatCurrency(item.planned)}</TableCell>
-                            <TableCell className="text-left">{formatCurrency(item.actual)}</TableCell>
-                            <TableCell className={`text-left font-semibold ${item.variance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              {formatCurrency(Math.abs(item.variance))} {item.variance >= 0 ? '(وفر)' : '(تجاوز)'}
-                            </TableCell>
-                            <TableCell className="text-left">
-                              <div className="flex items-center gap-2">
-                                <Progress value={Math.min(usagePercent, 100)} className={`h-2 w-20 ${usagePercent > 100 ? '[&>div]:bg-red-500' : ''}`} />
-                                <span className={`text-xs ${usagePercent > 100 ? 'text-red-600 font-bold' : ''}`}>{usagePercent.toFixed(0)}%</span>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                      <TableRow className="bg-muted/50 font-bold">
-                        <TableCell>الإجمالي</TableCell>
-                        <TableCell className="text-left">{formatCurrency(totalPlannedBudget)}</TableCell>
-                        <TableCell className="text-left">{formatCurrency(totalActualCost)}</TableCell>
-                        <TableCell className={`text-left ${(totalPlannedBudget - totalActualCost) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {formatCurrency(Math.abs(totalPlannedBudget - totalActualCost))} {(totalPlannedBudget - totalActualCost) >= 0 ? '(وفر)' : '(تجاوز)'}
-                        </TableCell>
-                        <TableCell className="text-left">
-                          {totalPlannedBudget > 0 ? ((totalActualCost / totalPlannedBudget) * 100).toFixed(0) : 0}%
-                        </TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
+            {(dashboard?.budgetByCategory.length ?? 0) > 0 && (
+              <CardContent className="space-y-3">
+                {dashboard!.budgetByCategory.map((row) => {
+                  const pct = row.percentage;
+                  const cappedPct = Math.min(pct, 100);
+                  const statusColor =
+                    row.status === 'over' ? 'bg-red-500' :
+                    row.status === 'critical' ? 'bg-orange-500' :
+                    row.status === 'warning' ? 'bg-yellow-500' :
+                    row.status === 'unplanned' ? 'bg-rose-400' :
+                    'bg-emerald-500';
+                  const statusBadge =
+                    row.status === 'over' ? { label: 'تجاوز', class: 'bg-red-100 text-red-700 border-red-300' } :
+                    row.status === 'critical' ? { label: 'حرج', class: 'bg-orange-100 text-orange-700 border-orange-300' } :
+                    row.status === 'warning' ? { label: 'تحذير', class: 'bg-yellow-100 text-yellow-700 border-yellow-300' } :
+                    row.status === 'unplanned' ? { label: 'بدون خطة', class: 'bg-rose-100 text-rose-700 border-rose-300' } :
+                    { label: 'سليم', class: 'bg-emerald-100 text-emerald-700 border-emerald-300' };
+                  return (
+                    <div
+                      key={row.categoryId ?? 'uncategorized'}
+                      className="bg-white rounded-lg p-3 border border-amber-100"
+                      data-testid={`budget-row-${row.categoryId ?? 'uncategorized'}`}
+                    >
+                      <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold text-sm">{row.categoryName}</span>
+                          <Badge variant="outline" className={`text-[10px] ${statusBadge.class}`}>
+                            {statusBadge.label}
+                          </Badge>
+                          {row.status === 'over' && row.planned > 0 && (
+                            <span className="flex items-center gap-1 text-[11px] text-red-600 font-semibold">
+                              <AlertTriangle className="w-3 h-3" />
+                              تجاوز {formatCurrency(Math.abs(row.remaining))}
+                            </span>
+                          )}
+                        </div>
+                        <span className={`text-sm font-bold ${
+                          row.status === 'over' ? 'text-red-600' :
+                          row.status === 'critical' ? 'text-orange-600' :
+                          row.status === 'warning' ? 'text-yellow-700' :
+                          row.status === 'unplanned' ? 'text-rose-600' :
+                          'text-emerald-700'
+                        }`}>
+                          {row.planned > 0 ? `${pct.toFixed(0)}%` : '—'}
+                        </span>
+                      </div>
+                      <div className="h-3 bg-slate-100 rounded-full overflow-hidden mb-2">
+                        <div
+                          className={`h-full ${statusColor} transition-all duration-500`}
+                          style={{ width: `${cappedPct}%` }}
+                        />
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-[11px] sm:text-xs">
+                        <div>
+                          <span className="text-muted-foreground block">المخطط</span>
+                          <span className="font-semibold">{formatCurrency(row.planned)}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground block">المنصرف</span>
+                          <span className="font-semibold">{formatCurrency(row.spentTotal)}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground block">المتبقي</span>
+                          <span className={`font-semibold ${row.remaining < 0 ? 'text-red-600' : 'text-emerald-700'}`}>
+                            {formatCurrency(Math.abs(row.remaining))}
+                            {row.remaining < 0 ? ' −' : ''}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* الإجمالي */}
+                <div className="bg-amber-100/60 rounded-lg p-3 border border-amber-300" data-testid="budget-total">
+                  <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+                    <span className="font-bold text-sm">الإجمالي</span>
+                    <span className={`text-sm font-bold ${
+                      dashboard!.overallBudgetPercentage > 100 ? 'text-red-600' :
+                      dashboard!.overallBudgetPercentage > 80 ? 'text-orange-600' :
+                      'text-emerald-700'
+                    }`}>
+                      {dashboard!.totalPlanned > 0 ? `${dashboard!.overallBudgetPercentage.toFixed(0)}%` : '—'}
+                    </span>
+                  </div>
+                  <div className="h-3 bg-white rounded-full overflow-hidden mb-2">
+                    <div
+                      className={`h-full transition-all duration-500 ${
+                        dashboard!.overallBudgetPercentage > 100 ? 'bg-red-500' :
+                        dashboard!.overallBudgetPercentage > 90 ? 'bg-orange-500' :
+                        dashboard!.overallBudgetPercentage > 80 ? 'bg-yellow-500' :
+                        'bg-emerald-500'
+                      }`}
+                      style={{ width: `${Math.min(dashboard!.overallBudgetPercentage, 100)}%` }}
+                    />
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-[11px] sm:text-xs">
+                    <div>
+                      <span className="text-muted-foreground block">إجمالي المخطط</span>
+                      <span className="font-bold">{formatCurrency(dashboard!.totalPlanned)}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block">إجمالي المنصرف</span>
+                      <span className="font-bold">{formatCurrency(dashboard!.totalSpent)}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block">{(dashboard!.totalPlanned - dashboard!.totalSpent) >= 0 ? 'متبقي' : 'تجاوز'}</span>
+                      <span className={`font-bold ${(dashboard!.totalPlanned - dashboard!.totalSpent) >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                        {formatCurrency(Math.abs(dashboard!.totalPlanned - dashboard!.totalSpent))}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             )}

@@ -48,6 +48,20 @@ The system uses a modern web architecture with a React-based frontend and a Node
 - **Auto-save daily work log**: Drafts auto-save every 30s when the form is dirty (skipped if a save is in flight or a save ran in the last 25s). Header shows `آخر حفظ تلقائي: HH:MM`. `beforeunload` guard warns the user before leaving with unsaved changes. After a successful final submit the detail query is invalidated and `hasFinalSubmittedRef` flips synchronously so the next auto-save tick is a no-op. Backend PATCH `/api/construction/daily-logs/:id` returns 409 if a stale request tries to downgrade `submitted` → `draft` (defense-in-depth against slow-network race).
 - **RTL polish**: Replaced LTR `→` with `←` between start/end times in daily-log printable. Contractor-statement-detail description column widened from `max-w-[300px]` to `max-w-[500px]` (full text remains in `title` tooltip).
 
+### Construction Smart Dashboard (Priority Group 1 — May 2026)
+New endpoint `GET /api/construction/projects/:id/dashboard` aggregates everything needed for the project detail page in one call:
+- **Calculated progress** (`calculatedProgress`): financial-weighted completion from `contract_items` — `Σ(min(completedQty/qty, 1) × totalPrice) / Σ(totalPrice) × 100`. Independent from the manual `progressPercent` field; the UI shows both with a one-click "تطبيق المحسوبة" button (calls existing PATCH `/api/construction/projects/:id`) when they differ.
+- **Budget by category** (`budgetByCategory`): for each category, planned (from `project_budget_allocations`) vs actual (sum of `project_expenses.amount` + `project_work_items.actualCost`), with status thresholds: `ok` <80%, `warning` ≥80%, `critical` ≥90%, `over` ≥100%, `unplanned` (spending without allocation). Categories sorted by `spentTotal` desc. Includes `overallBudgetPercentage` for the totals row.
+- **Today's snapshot** (`today`): latest daily log (supervisor, mainTrade, workersCount), today's activities count (queries `daily_log_activities` per today's logs — wrapped in try/catch for prod-Supabase logs that may not yet have the table), today's expenses total, today's workers total. Date computed in Asia/Riyadh.
+- **Contracts summary** (`contracts`): count, totalAmount, paidAmount, remainingAmount.
+
+Frontend (`construction-project-detail.tsx`) consumes this dashboard with a 60s `refetchInterval`:
+1. **بطاقة "وضع المشروع اليوم"** — gradient blue card after the stats grid: 4 mini-cards (activities/workers/expenses/contracts) + latest log row with link to print page.
+2. **شريط الميزانية الديناميكي** — replaced the old plain table with per-category cards: status badge, colored bar (emerald/yellow/orange/red/rose), planned/spent/remaining tri-grid, "AlertTriangle + تجاوز X" inline alert when over budget. Total row uses the same color logic on `overallBudgetPercentage`.
+3. **بطاقة نسبة التقدم** — shows manual % + an amber "محسوبة: N%" badge when the calculated value differs, plus a "تطبيق المحسوبة" button (canEdit only). The بنود العمل card now shows both work-items completion and contract-items completion.
+
+No DB schema changes. Uses existing storage methods: `getContractsByProject`, `getContractItems`, `getAllConstructionCategories`, `getBudgetAllocationsByProject`, `getWorkItemsByProject`, `getProjectExpensesByProject`, `getDailyLogsByProject`, `getDailyLogActivities`.
+
 ### Performance Optimization
 - **Caching**: Server-side in-memory cache, tiered caching strategy, client persistent cache, report-specific TTLs.
 - **Database Optimization**: Database indexes, N+1 query elimination, SQL aggregation, filtered queries.

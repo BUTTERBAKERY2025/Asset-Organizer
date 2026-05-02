@@ -1775,6 +1775,237 @@ export async function registerRoutes(
     }
   });
 
+  // Project Dashboard - smart aggregation for project detail page
+  // يجمع: نسبة الإنجاز المحسوبة من بنود العقود + ملخص ميزانية لكل فئة + وضع المشروع اليوم
+  app.get("/api/construction/projects/:id/dashboard", isAuthenticated, requirePermission("construction_projects", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid project ID" });
+      }
+      const project = await storage.getConstructionProject(id);
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+      if (!isUserAdmin(req) && project.branchId) {
+        const hasAccess = await canAccessBranch(req, project.branchId);
+        if (!hasAccess) {
+          return res.status(403).json({ error: "غير مصرح بالوصول لهذا المشروع" });
+        }
+      }
+
+      // Today's date in YYYY-MM-DD (Asia/Riyadh)
+      const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Riyadh' });
+
+      const [contracts, categories, allocations, workItems, expenses, dailyLogs] = await Promise.all([
+        storage.getContractsByProject(id),
+        storage.getAllConstructionCategories(),
+        storage.getBudgetAllocationsByProject(id),
+        storage.getWorkItemsByProject(id),
+        storage.getProjectExpensesByProject(id),
+        storage.getDailyLogsByProject(id),
+      ]);
+
+      // Aggregate contracts + items
+      let contractsTotalAmount = 0;
+      let contractsPaidAmount = 0;
+      const allItems: Array<{ qty: number; completedQty: number; unitPrice: number; totalPrice: number }> = [];
+      // Parallel fetch of contract items across all contracts
+      const itemsPerContract = await Promise.all(
+        contracts.map(async (c) => {
+          contractsTotalAmount += Number(c.totalAmount) || 0;
+          contractsPaidAmount += Number(c.paidAmount) || 0;
+          try {
+            return await storage.getContractItems(c.id);
+          } catch {
+            return [];
+          }
+        })
+      );
+      for (const items of itemsPerContract) {
+        for (const it of items) {
+          const qty = Number(it.quantity) || 0;
+          const unitPrice = Number(it.unitPrice) || 0;
+          allItems.push({
+            qty,
+            completedQty: Number(it.completedQuantity) || 0,
+            unitPrice,
+            totalPrice: Number(it.totalPrice) || (qty * unitPrice),
+          });
+        }
+      }
+
+      // Calculated progress: weighted by financial value of each item
+      let totalContractValue = 0;
+      let completedValue = 0;
+      let completedItemsCount = 0;
+      for (const item of allItems) {
+        totalContractValue += item.totalPrice;
+        const itemCompletedValue = item.qty > 0
+          ? Math.min(item.completedQty / item.qty, 1) * item.totalPrice
+          : 0;
+        completedValue += itemCompletedValue;
+        if (item.qty > 0 && item.completedQty >= item.qty) completedItemsCount++;
+      }
+      const calculatedProgress = totalContractValue > 0
+        ? Math.round((completedValue / totalContractValue) * 100)
+        : 0;
+
+      // Spending by category (expenses + work-items.actualCost)
+      const expensesByCat = new Map<number | null, number>();
+      for (const exp of expenses) {
+        const k = exp.categoryId ?? null;
+        expensesByCat.set(k, (expensesByCat.get(k) || 0) + (Number(exp.amount) || 0));
+      }
+      const workItemsByCat = new Map<number | null, number>();
+      for (const wi of workItems) {
+        const k = wi.categoryId ?? null;
+        workItemsByCat.set(k, (workItemsByCat.get(k) || 0) + (Number(wi.actualCost) || 0));
+      }
+
+      type BudgetStatus = 'ok' | 'warning' | 'critical' | 'over' | 'unplanned';
+      type BudgetRow = {
+        categoryId: number | null;
+        categoryName: string;
+        planned: number;
+        spentExpenses: number;
+        spentWorkItems: number;
+        spentTotal: number;
+        remaining: number;
+        percentage: number;
+        status: BudgetStatus;
+      };
+      const budgetByCategory: BudgetRow[] = [];
+      const seenCats = new Set<number | null>();
+
+      for (const a of allocations) {
+        const catKey = a.categoryId ?? null;
+        const cat = catKey != null ? categories.find(c => c.id === catKey) : undefined;
+        const planned = Number(a.plannedAmount) || 0;
+        const spentExp = expensesByCat.get(catKey) || 0;
+        const spentWi = workItemsByCat.get(catKey) || 0;
+        const spentTotal = spentExp + spentWi;
+        const percentage = planned > 0 ? (spentTotal / planned) * 100 : 0;
+        let status: BudgetStatus = 'ok';
+        if (percentage >= 100) status = 'over';
+        else if (percentage >= 90) status = 'critical';
+        else if (percentage >= 80) status = 'warning';
+
+        budgetByCategory.push({
+          categoryId: catKey,
+          categoryName: cat?.name || (catKey == null ? 'غير مصنف' : '-'),
+          planned,
+          spentExpenses: spentExp,
+          spentWorkItems: spentWi,
+          spentTotal,
+          remaining: planned - spentTotal,
+          percentage,
+          status,
+        });
+        seenCats.add(catKey);
+      }
+
+      // Add categories with spending but without allocation
+      const allKeys: Array<number | null> = Array.from(
+        new Set<number | null>([
+          ...Array.from(expensesByCat.keys()),
+          ...Array.from(workItemsByCat.keys()),
+        ])
+      );
+      for (const k of allKeys) {
+        if (seenCats.has(k)) continue;
+        const cat = k != null ? categories.find(c => c.id === k) : undefined;
+        const spentExp = expensesByCat.get(k) || 0;
+        const spentWi = workItemsByCat.get(k) || 0;
+        const spentTotal = spentExp + spentWi;
+        if (spentTotal <= 0) continue;
+        budgetByCategory.push({
+          categoryId: k,
+          categoryName: cat?.name || 'غير مصنف',
+          planned: 0,
+          spentExpenses: spentExp,
+          spentWorkItems: spentWi,
+          spentTotal,
+          remaining: -spentTotal,
+          percentage: 0,
+          status: 'unplanned',
+        });
+      }
+
+      budgetByCategory.sort((a, b) => b.spentTotal - a.spentTotal);
+
+      const totalPlanned = budgetByCategory.reduce((s, r) => s + r.planned, 0);
+      const totalSpent = budgetByCategory.reduce((s, r) => s + r.spentTotal, 0);
+      const overallBudgetPercentage = totalPlanned > 0 ? (totalSpent / totalPlanned) * 100 : 0;
+
+      // Today's snapshot
+      const latestLog = dailyLogs.length > 0 ? dailyLogs[0] : null;
+      const todayLogs = dailyLogs.filter(l => l.logDate === todayStr);
+      let todayActivitiesCount = 0;
+      let todayWorkers = 0;
+      // Parallel fetch of today's activities across all today's logs
+      const actsPerLog = await Promise.all(
+        todayLogs.map(async (log) => {
+          todayWorkers += Number(log.workersCount) || 0;
+          try {
+            return await storage.getDailyLogActivities(log.id);
+          } catch {
+            return [];
+          }
+        })
+      );
+      for (const acts of actsPerLog) {
+        todayActivitiesCount += acts.length;
+      }
+      const todayExpensesTotal = expenses
+        .filter(e => e.expenseDate === todayStr)
+        .reduce((s, e) => s + (Number(e.amount) || 0), 0);
+
+      res.json({
+        project: {
+          id: project.id,
+          title: project.title,
+          branchId: project.branchId,
+          status: project.status,
+          budget: project.budget,
+          progressPercent: project.progressPercent || 0,
+        },
+        calculatedProgress,
+        contractItems: {
+          total: allItems.length,
+          completed: completedItemsCount,
+        },
+        contracts: {
+          count: contracts.length,
+          totalAmount: contractsTotalAmount,
+          paidAmount: contractsPaidAmount,
+          remainingAmount: contractsTotalAmount - contractsPaidAmount,
+        },
+        budgetByCategory,
+        totalPlanned,
+        totalSpent,
+        overallBudgetPercentage,
+        today: {
+          date: todayStr,
+          latestLog: latestLog ? {
+            id: latestLog.id,
+            logDate: latestLog.logDate,
+            supervisorName: latestLog.supervisorName,
+            mainTrade: latestLog.mainTrade,
+            workersCount: latestLog.workersCount || 0,
+            status: latestLog.status,
+          } : null,
+          activitiesCount: todayActivitiesCount,
+          expensesTotal: todayExpensesTotal,
+          workersToday: todayWorkers,
+        },
+      });
+    } catch (error) {
+      console.error("Error fetching project dashboard:", error);
+      res.status(500).json({ error: "Failed to fetch project dashboard" });
+    }
+  });
+
   app.post("/api/construction/projects", isAuthenticated, requirePermission("construction_projects", "create"), async (req, res) => {
     try {
       // SECURITY: Verify branch access
