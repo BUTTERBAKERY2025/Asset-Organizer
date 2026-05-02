@@ -24160,11 +24160,17 @@ export async function registerRoutes(
         let totalScheduledHours = 0, totalActualHours = 0, totalLateMinutes = 0, totalOvertimeMinutes = 0;
         const entries: any[] = [];
 
-        const start = new Date(startDate);
-        const end = new Date(endDate);
+        // Parse YYYY-MM-DD into local-date to avoid timezone drift during iteration
+        const [sy, sm, sd] = startDate.split('-').map(Number);
+        const [ey, em, ed] = endDate.split('-').map(Number);
+        const start = new Date(sy, sm - 1, sd);
+        const end = new Date(ey, em - 1, ed);
 
         for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-          const dateStr = d.toISOString().split('T')[0];
+          const yyyy = d.getFullYear();
+          const mm = String(d.getMonth() + 1).padStart(2, '0');
+          const dd = String(d.getDate()).padStart(2, '0');
+          const dateStr = `${yyyy}-${mm}-${dd}`;
           const dayKey = dayNames[d.getDay()];
           const schedule = empSchedules.find((s: any) => s.scheduleDate === dateStr);
           const attendance = empAttendance.find((a: any) => a.attendanceDate === dateStr);
@@ -24250,9 +24256,11 @@ export async function registerRoutes(
         employees: employeeReports,
       });
 
-      const filename = `branch_timesheet_${branchId}_${startDate}_${endDate}.pdf`;
+      // ASCII fallback + RFC 5987 UTF-8 encoded variant so Arabic branch names work
+      const safeAscii = `branch_timesheet_${startDate}_${endDate}.pdf`;
+      const utf8Name = encodeURIComponent(`timesheet_${branch.name}_${startDate}_${endDate}.pdf`);
       res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Disposition', `attachment; filename="${safeAscii}"; filename*=UTF-8''${utf8Name}`);
       res.setHeader('Content-Length', pdfBuffer.length.toString());
       res.end(pdfBuffer);
     } catch (error) {
