@@ -3328,7 +3328,7 @@ export async function generateBranchTimesheetPdf(data: BranchTimesheetPdfData): 
   }).join('');
 
   const employeePages = data.employees.map((emp, idx) => `
-    <div class="employee-page" ${idx > 0 ? 'style="page-break-before: always;"' : ''}>
+    <div class="employee-page">
       <div class="page-header">
         <div class="brand">BUTTER BAKERY</div>
         <h1>تقرير التايم شيت الشهري</h1>
@@ -3352,7 +3352,7 @@ export async function generateBranchTimesheetPdf(data: BranchTimesheetPdfData): 
       <table class="entries-table">
         <thead>
           <tr>
-            <th style="width:30px;">#</th>
+            <th style="width:24px;">#</th>
             <th>التاريخ</th>
             <th>اليوم</th>
             <th>بداية الدوام</th>
@@ -3369,13 +3369,13 @@ export async function generateBranchTimesheetPdf(data: BranchTimesheetPdfData): 
       <div class="signatures">
         <div class="sig-box">
           <div class="sig-title">إقرار الموظف</div>
-          <div class="sig-text">أقر بصحة بيانات الحضور والانصراف المذكورة أعلاه</div>
+          <div class="sig-text">أقر بصحة بيانات الحضور والانصراف</div>
           <div class="sig-line"></div>
           <div class="sig-label">التوقيع / التاريخ</div>
         </div>
         <div class="sig-box">
           <div class="sig-title">اعتماد المدير المباشر</div>
-          <div class="sig-text">أصادق على صحة بيانات حضور وانصراف الموظف</div>
+          <div class="sig-text">أصادق على صحة بيانات الحضور والانصراف</div>
           <div class="sig-line"></div>
           <div class="sig-label">التوقيع / التاريخ</div>
         </div>
@@ -3390,33 +3390,54 @@ export async function generateBranchTimesheetPdf(data: BranchTimesheetPdfData): 
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
       * { margin: 0; padding: 0; box-sizing: border-box; }
-      body { font-family: 'Cairo', Arial, sans-serif; direction: rtl; color: #1f2937; padding: 12px; }
-      .employee-page { page-break-inside: avoid; }
-      .page-header { text-align: center; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 2px solid #D4AF37; }
-      .page-header .brand { font-size: 18px; font-weight: 700; color: #D4AF37; letter-spacing: 2px; }
-      .page-header h1 { font-size: 15px; color: #1a1a1a; margin: 5px 0; }
-      .page-header .period { font-size: 11px; color: #6b7280; }
-      .employee-info { background: #fef3c7; border: 1px solid #fcd34d; border-radius: 8px; padding: 8px 12px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
-      .employee-name { font-size: 16px; font-weight: 700; color: #92400e; }
-      .employee-meta { font-size: 11px; color: #78350f; margin-top: 2px; }
-      .employee-counter { background: #D4AF37; color: white; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; }
-      .summary { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; margin-bottom: 10px; }
-      .summary-item { text-align: center; padding: 6px 4px; background: #f9fafb; border-radius: 6px; border: 1px solid #e5e7eb; }
+      @page { size: A4 landscape; margin: 6mm 8mm; }
+      html, body { font-family: 'Cairo', Arial, sans-serif; direction: rtl; color: #1f2937; }
+      body { font-size: 10px; }
+
+      /* Each employee = exactly one page. Force a page break BEFORE every employee
+         except the first, and prevent any internal element from splitting. */
+      .employee-page {
+        page-break-after: always;
+        break-after: page;
+        page-break-inside: avoid;
+        break-inside: avoid;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+      }
+      .employee-page:last-child { page-break-after: auto; break-after: auto; }
+
+      .page-header { text-align: center; margin-bottom: 6px; padding-bottom: 5px; border-bottom: 2px solid #D4AF37; }
+      .page-header .brand { font-size: 14px; font-weight: 700; color: #D4AF37; letter-spacing: 2px; }
+      .page-header h1 { font-size: 12px; color: #1a1a1a; margin: 2px 0; }
+      .page-header .period { font-size: 9px; color: #6b7280; }
+
+      .employee-info { background: #fef3c7; border: 1px solid #fcd34d; border-radius: 6px; padding: 5px 10px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+      .employee-name { font-size: 13px; font-weight: 700; color: #92400e; }
+      .employee-meta { font-size: 9px; color: #78350f; margin-top: 1px; }
+      .employee-counter { background: #D4AF37; color: white; padding: 2px 10px; border-radius: 16px; font-size: 9px; font-weight: 600; }
+
+      .summary { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; margin-bottom: 6px; }
+      .summary-item { text-align: center; padding: 3px 2px; background: #f9fafb; border-radius: 4px; border: 1px solid #e5e7eb; }
       .summary-item.ok { background: #f0fdf4; border-color: #bbf7d0; }
       .summary-item.bad { background: #fef2f2; border-color: #fecaca; }
       .summary-item.warn { background: #fffbeb; border-color: #fde68a; }
       .summary-item.off { background: #eff6ff; border-color: #bfdbfe; }
       .summary-item.info { background: #f5f3ff; border-color: #ddd6fe; }
-      .summary-value { font-size: 17px; font-weight: 700; color: #1f2937; }
-      .summary-label { font-size: 9px; color: #6b7280; margin-top: 2px; }
-      .entries-table { width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 12px; }
-      .entries-table th { background: #D4AF37; color: white; padding: 6px 4px; font-weight: 600; border: 1px solid #b8941f; }
-      .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-      .sig-box { border: 1px dashed #9ca3af; border-radius: 6px; padding: 10px; }
-      .sig-title { font-size: 12px; font-weight: 700; color: #1f2937; margin-bottom: 4px; }
-      .sig-text { font-size: 10px; color: #6b7280; margin-bottom: 22px; }
-      .sig-line { border-bottom: 1px solid #1f2937; margin-bottom: 4px; }
-      .sig-label { font-size: 9px; color: #6b7280; }
+      .summary-value { font-size: 13px; font-weight: 700; color: #1f2937; line-height: 1; }
+      .summary-label { font-size: 8px; color: #6b7280; margin-top: 1px; }
+
+      .entries-table { width: 100%; border-collapse: collapse; font-size: 8.5px; margin-bottom: 6px; table-layout: fixed; }
+      .entries-table th { background: #D4AF37; color: white; padding: 3px 2px; font-weight: 600; border: 1px solid #b8941f; font-size: 9px; }
+      .entries-table td { padding: 2px 3px !important; border: 1px solid #e5e7eb; line-height: 1.15; }
+      .entries-table tr { page-break-inside: avoid; break-inside: avoid; }
+
+      .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: auto; }
+      .sig-box { border: 1px dashed #9ca3af; border-radius: 4px; padding: 5px 8px; }
+      .sig-title { font-size: 10px; font-weight: 700; color: #1f2937; margin-bottom: 2px; }
+      .sig-text { font-size: 8px; color: #6b7280; margin-bottom: 14px; }
+      .sig-line { border-bottom: 1px solid #1f2937; margin-bottom: 2px; }
+      .sig-label { font-size: 7.5px; color: #6b7280; }
     </style>
   </head>
   <body>
