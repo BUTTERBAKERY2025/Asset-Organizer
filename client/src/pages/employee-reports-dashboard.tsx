@@ -22,6 +22,11 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
   Table,
   TableBody,
   TableCell,
@@ -755,47 +760,59 @@ export default function EmployeeReportsDashboardPage() {
     );
 
     const employeeLookup = new Map<string, number>();
+    const normalizeName = (s: any) => String(s || "").trim().replace(/\s+/g, " ").toLowerCase();
+    const nameLookup = new Map<string, number>();
     branchEmployees.forEach(emp => {
       employeeLookup.set(`bid:${emp.id}`, emp.id);
+      employeeLookup.set(`bid:${String(emp.id)}`, emp.id);
       employeeLookup.set(`eid:${emp.id.toString()}`, emp.id);
       employeeLookup.set(`eid:branch_emp_${emp.id}`, emp.id);
       if (emp.employeeNumber) {
         employeeLookup.set(`enum:${emp.employeeNumber}`, emp.id);
+        employeeLookup.set(`enum:${String(emp.employeeNumber).trim()}`, emp.id);
       }
       if ((emp as any).linkedUserId) {
         employeeLookup.set(`eid:${(emp as any).linkedUserId}`, emp.id);
       }
+      if (emp.employeeName) {
+        nameLookup.set(normalizeName(emp.employeeName), emp.id);
+      }
     });
     
     const matchEmployee = (rec: AttendanceRecord): number | null => {
-      if (rec.branchEmployeeId && employeeLookup.has(`bid:${rec.branchEmployeeId}`)) {
-        return employeeLookup.get(`bid:${rec.branchEmployeeId}`)!;
+      if (rec.branchEmployeeId !== null && rec.branchEmployeeId !== undefined) {
+        const k = `bid:${rec.branchEmployeeId}`;
+        if (employeeLookup.has(k)) return employeeLookup.get(k)!;
       }
-      if (rec.employeeId && employeeLookup.has(`eid:${rec.employeeId}`)) {
-        return employeeLookup.get(`eid:${rec.employeeId}`)!;
+      if (rec.employeeId) {
+        const k = `eid:${rec.employeeId}`;
+        if (employeeLookup.has(k)) return employeeLookup.get(k)!;
       }
       const employeeNumber = (rec as any).employeeNumber;
-      if (employeeNumber && employeeLookup.has(`enum:${employeeNumber}`)) {
-        return employeeLookup.get(`enum:${employeeNumber}`)!;
+      if (employeeNumber) {
+        const k = `enum:${String(employeeNumber).trim()}`;
+        if (employeeLookup.has(k)) return employeeLookup.get(k)!;
       }
       if (rec.employeeName) {
-        const match = branchEmployees.find(emp => emp.employeeName === rec.employeeName && emp.branchId === rec.branchId);
-        if (match) return match.id;
+        const k = normalizeName(rec.employeeName);
+        if (nameLookup.has(k)) return nameLookup.get(k)!;
       }
       return null;
     };
 
     // Match a schedule row to an employee using the same lookup map
     const matchScheduleEmployee = (s: any): number | null => {
-      if (s.branchEmployeeId && employeeLookup.has(`bid:${s.branchEmployeeId}`)) {
-        return employeeLookup.get(`bid:${s.branchEmployeeId}`)!;
+      if (s.branchEmployeeId !== null && s.branchEmployeeId !== undefined) {
+        const k = `bid:${s.branchEmployeeId}`;
+        if (employeeLookup.has(k)) return employeeLookup.get(k)!;
       }
-      if (s.employeeId && employeeLookup.has(`eid:${s.employeeId}`)) {
-        return employeeLookup.get(`eid:${s.employeeId}`)!;
+      if (s.employeeId) {
+        const k = `eid:${s.employeeId}`;
+        if (employeeLookup.has(k)) return employeeLookup.get(k)!;
       }
       if (s.employeeName) {
-        const match = branchEmployees.find(emp => emp.employeeName === s.employeeName && emp.branchId === salaryClosingBranch);
-        if (match) return match.id;
+        const k = normalizeName(s.employeeName);
+        if (nameLookup.has(k)) return nameLookup.get(k)!;
       }
       return null;
     };
@@ -846,6 +863,13 @@ export default function EmployeeReportsDashboardPage() {
       let absentDays = explicitAbsent;
       let totalHours = empAttendance.reduce((sum, a) => sum + (Number(a.workingHours) || 0), 0);
 
+      // Track exact dates for transparency / verification by user
+      const presentDates: string[] = [];
+      const absentDatesExplicit: string[] = []; // had attendance.status='absent'
+      const absentDatesMissing: string[] = []; // scheduled but no attendance record
+      const offDates: string[] = [];
+      empSchedules.forEach((s: any) => { if (s.isOff) offDates.push(s.scheduleDate); });
+
       if (empSchedules.length > 0) {
         // We have a signed schedule — use it as the source of truth for expected work days
         let attendedFromSchedule = 0;
@@ -858,16 +882,17 @@ export default function EmployeeReportsDashboardPage() {
           if (att && (att.status === "present" || att.status === "late")) {
             attendedFromSchedule++;
             hoursFromSchedule += Number(att.workingHours) || scheduledHoursOf(s);
+            presentDates.push(s.scheduleDate);
           } else if (att && att.status === "absent") {
             absentFromSchedule++;
+            absentDatesExplicit.push(s.scheduleDate);
           } else if (!att) {
             // Scheduled day with no check-in record at all
             // For past dates → considered absent; for future dates within month → not yet
-            // Use Asia/Riyadh local date (KSA) — UTC would shift by ~3h and could mis-classify
-            // schedule rows around local midnight.
-            const todayLocal = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" }); // YYYY-MM-DD
+            const todayLocal = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" });
             if (s.scheduleDate <= todayLocal) {
               absentFromSchedule++;
+              absentDatesMissing.push(s.scheduleDate);
             }
           }
         });
@@ -878,13 +903,25 @@ export default function EmployeeReportsDashboardPage() {
           if (!isScheduled && (a.status === "present" || a.status === "late")) {
             attendedFromSchedule++;
             hoursFromSchedule += Number(a.workingHours) || 0;
+            presentDates.push(a.attendanceDate);
           }
         });
 
         presentDays = attendedFromSchedule;
         absentDays = absentFromSchedule;
         totalHours = hoursFromSchedule;
+      } else {
+        // No schedule entries — fall back to attendance-only
+        empAttendance.forEach(a => {
+          if (a.status === "present" || a.status === "late") presentDates.push(a.attendanceDate);
+          else if (a.status === "absent") absentDatesExplicit.push(a.attendanceDate);
+        });
       }
+
+      presentDates.sort();
+      absentDatesExplicit.sort();
+      absentDatesMissing.sort();
+      offDates.sort();
 
       const baseSalary = emp.salary || 0;
       const allowances = (emp.housingAllowance || 0) + (emp.transportAllowance || 0) + (emp.foodAllowance || 0) + (emp.otherAllowances || 0);
@@ -919,6 +956,10 @@ export default function EmployeeReportsDashboardPage() {
         absenceDeduction,
         socialInsurance,
         netSalary,
+        presentDates,
+        absentDatesExplicit,
+        absentDatesMissing,
+        offDates,
       };
     });
     
@@ -6755,13 +6796,97 @@ export default function EmployeeReportsDashboardPage() {
                                 <Badge className="bg-blue-100 text-blue-800">{emp.scheduledWorkDays}</Badge>
                               </TableCell>
                               <TableCell className="text-center">
-                                <Badge className="bg-green-100 text-green-800">{emp.presentDays}</Badge>
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <button type="button" data-testid={`btn-present-${emp.id}`}>
+                                      <Badge className="bg-green-100 text-green-800 hover:bg-green-200 cursor-pointer">{emp.presentDays}</Badge>
+                                    </button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-72 max-h-80 overflow-y-auto" side="top">
+                                    <div className="text-xs font-semibold mb-2 text-green-800">
+                                      أيام الحضور المحتسبة ({emp.presentDays})
+                                    </div>
+                                    {emp.presentDates.length === 0 ? (
+                                      <p className="text-xs text-gray-500">لا توجد أيام حضور.</p>
+                                    ) : (
+                                      <div className="grid grid-cols-2 gap-1 text-[11px]">
+                                        {emp.presentDates.map(d => (
+                                          <div key={d} className="bg-green-50 px-2 py-1 rounded text-center font-mono">{d}</div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </PopoverContent>
+                                </Popover>
                               </TableCell>
                               <TableCell className="text-center">
-                                <Badge className="bg-red-100 text-red-800">{emp.absentDays}</Badge>
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <button type="button" data-testid={`btn-absent-${emp.id}`}>
+                                      <Badge className="bg-red-100 text-red-800 hover:bg-red-200 cursor-pointer">{emp.absentDays}</Badge>
+                                    </button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-80 max-h-96 overflow-y-auto" side="top">
+                                    <div className="text-xs font-semibold mb-2 text-red-800">
+                                      أيام الغياب المحتسبة ({emp.absentDays})
+                                    </div>
+                                    {emp.absentDays === 0 ? (
+                                      <p className="text-xs text-gray-500">لا توجد أيام غياب.</p>
+                                    ) : (
+                                      <div className="space-y-2">
+                                        {emp.absentDatesExplicit.length > 0 && (
+                                          <div>
+                                            <div className="text-[11px] font-semibold text-red-700 mb-1">
+                                              مسجل كغياب صريح ({emp.absentDatesExplicit.length}):
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-1 text-[11px]">
+                                              {emp.absentDatesExplicit.map(d => (
+                                                <div key={d} className="bg-red-50 px-2 py-1 rounded text-center font-mono">{d}</div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+                                        {emp.absentDatesMissing.length > 0 && (
+                                          <div>
+                                            <div className="text-[11px] font-semibold text-orange-700 mb-1">
+                                              يوم مجدول بدون سجل حضور ({emp.absentDatesMissing.length}):
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-1 text-[11px]">
+                                              {emp.absentDatesMissing.map(d => (
+                                                <div key={d} className="bg-orange-50 px-2 py-1 rounded text-center font-mono">{d}</div>
+                                              ))}
+                                            </div>
+                                            <p className="text-[10px] text-gray-500 mt-1">
+                                              لو تم تسجيل الحضور لاحقاً، سيتم إعادة الحساب تلقائياً.
+                                            </p>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </PopoverContent>
+                                </Popover>
                               </TableCell>
                               <TableCell className="text-center">
-                                <Badge className="bg-amber-100 text-amber-800">{emp.offDays}</Badge>
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <button type="button" data-testid={`btn-off-${emp.id}`}>
+                                      <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-200 cursor-pointer">{emp.offDays}</Badge>
+                                    </button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-72 max-h-80 overflow-y-auto" side="top">
+                                    <div className="text-xs font-semibold mb-2 text-amber-800">
+                                      أيام الإجازة ({emp.offDays})
+                                    </div>
+                                    {emp.offDates.length === 0 ? (
+                                      <p className="text-xs text-gray-500">لا توجد أيام إجازة.</p>
+                                    ) : (
+                                      <div className="grid grid-cols-2 gap-1 text-[11px]">
+                                        {emp.offDates.map(d => (
+                                          <div key={d} className="bg-amber-50 px-2 py-1 rounded text-center font-mono">{d}</div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </PopoverContent>
+                                </Popover>
                               </TableCell>
                               <TableCell className="text-center">{emp.totalHours}</TableCell>
                               <TableCell className="text-center">{formatCurrency(emp.baseSalary, isRTL)}</TableCell>
