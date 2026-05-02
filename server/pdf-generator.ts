@@ -15,6 +15,8 @@ import {
 export interface SalaryClosingEmployee {
   employeeName: string;
   jobTitle: string;
+  bankName?: string;
+  bankAccountNumber?: string;
   scheduledWorkDays?: number;
   offDays?: number;
   presentDays: number;
@@ -73,11 +75,15 @@ export async function generateSalaryClosingPdf(data: SalaryClosingPdfData): Prom
     const dailyRate = emp.dailyRate ?? ((emp.baseSalary + emp.allowances) / 30);
     const absenceDeduction = emp.absenceDeduction ?? 0;
     const rowBg = emp.dataSource === "signed_timesheet" ? "background:#f0fdf4;" : "";
+    const bankCell = (emp.bankName || emp.bankAccountNumber)
+      ? `${emp.bankName ? `<div style="font-weight:600; color:#374151;">${emp.bankName}</div>` : ''}${emp.bankAccountNumber ? `<div style="font-family:monospace; font-size:8px; direction:ltr; text-align:left; color:#111827;">${emp.bankAccountNumber}</div>` : ''}`
+      : `<span style="color:#b45309; font-size:8px;">⚠️ غير مسجّل</span>`;
     return `
     <tr style="${rowBg}">
       <td style="text-align: center;">${index + 1}</td>
       <td style="text-align: right;">${emp.employeeName} ${dataSourceBadge(emp.dataSource)}</td>
       <td style="text-align: right;">${emp.jobTitle}</td>
+      <td style="text-align: right; font-size:8px; max-width:120px; word-break:break-all;">${bankCell}</td>
       <td style="text-align: center; background:#eff6ff;">${emp.scheduledWorkDays ?? '-'}</td>
       <td style="text-align: center; background:#ecfdf5;">${emp.presentDays}</td>
       <td style="text-align: center; background:#fef2f2;">${emp.absentDays}</td>
@@ -179,6 +185,7 @@ export async function generateSalaryClosingPdf(data: SalaryClosingPdfData): Prom
         <th>م</th>
         <th>الموظف</th>
         <th>الوظيفة</th>
+        <th>البنك / الآيبان</th>
         <th>أيام العمل</th>
         <th>الحضور</th>
         <th>الغياب</th>

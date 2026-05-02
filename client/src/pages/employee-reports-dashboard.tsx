@@ -1012,6 +1012,8 @@ export default function EmployeeReportsDashboardPage() {
         employeeName: emp.employeeName,
         jobTitle: emp.jobTitle,
         nationality: emp.nationality,
+        bankName: (emp as any).bankName || "",
+        bankAccountNumber: (emp as any).bankAccountNumber || "",
         presentDays,
         absentDays: effectiveAbsentDays,
         offDays,
@@ -1110,6 +1112,8 @@ export default function EmployeeReportsDashboardPage() {
       [isRTL ? "الاسم" : "Name"]: emp.employeeName,
       [isRTL ? "الوظيفة" : "Job Title"]: emp.jobTitle,
       [isRTL ? "الجنسية" : "Nationality"]: emp.nationality,
+      [isRTL ? "البنك" : "Bank"]: emp.bankName || "",
+      [isRTL ? "الآيبان / رقم الحساب" : "IBAN / Account #"]: emp.bankAccountNumber || "",
       [isRTL ? "مصدر البيانات" : "Data Source"]:
         emp.dataSource === "signed_timesheet"
           ? (isRTL ? "تايم شيت موقّع ✓" : "Signed Timesheet ✓")
@@ -1168,6 +1172,8 @@ export default function EmployeeReportsDashboardPage() {
         employees: salaryClosingData.map(emp => ({
           employeeName: emp.employeeName,
           jobTitle: emp.jobTitle,
+          bankName: emp.bankName,
+          bankAccountNumber: emp.bankAccountNumber,
           scheduledWorkDays: emp.scheduledWorkDays,
           offDays: emp.offDays,
           presentDays: emp.presentDays,
@@ -6905,6 +6911,7 @@ export default function EmployeeReportsDashboardPage() {
                             <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "رقم الموظف" : "Employee #"}</TableHead>
                             <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "الاسم" : "Name"}</TableHead>
                             <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "الوظيفة" : "Job Title"}</TableHead>
+                            <TableHead className={isRTL ? "text-right" : "text-left"} title={isRTL ? "البنك ورقم الحساب البنكي / الآيبان (من ملف الموظف)" : "Bank & IBAN (from employee profile)"}>{isRTL ? "البنك / الآيبان" : "Bank / IBAN"}</TableHead>
                             <TableHead className="text-center" title={isRTL ? "أيام العمل المجدولة (من الجدول الموقّع)" : "Scheduled work days"}>{isRTL ? "أيام العمل" : "Work Days"}</TableHead>
                             <TableHead className="text-center">{isRTL ? "الحضور" : "Present"}</TableHead>
                             <TableHead className="text-center">{isRTL ? "الغياب" : "Absent"}</TableHead>
@@ -6965,6 +6972,24 @@ export default function EmployeeReportsDashboardPage() {
                                 </div>
                               </TableCell>
                               <TableCell>{emp.jobTitle}</TableCell>
+                              <TableCell className="text-xs" data-testid={`cell-bank-${emp.id}`}>
+                                {emp.bankAccountNumber || emp.bankName ? (
+                                  <div className="flex flex-col gap-0.5 leading-tight">
+                                    {emp.bankName && (
+                                      <span className="text-gray-700 font-medium">{emp.bankName}</span>
+                                    )}
+                                    {emp.bankAccountNumber && (
+                                      <span className="font-mono text-[11px] text-gray-900 dir-ltr text-left" style={{ direction: "ltr", textAlign: "left" }}>
+                                        {emp.bankAccountNumber}
+                                      </span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <Badge className="bg-amber-100 text-amber-800 border-amber-300 text-[10px] px-1.5 py-0" title="لا توجد بيانات بنكية في ملف الموظف — أضفها من شاشة الموظفين">
+                                    ⚠️ غير مسجّل
+                                  </Badge>
+                                )}
+                              </TableCell>
                               <TableCell className="text-center">
                                 <Badge className="bg-blue-100 text-blue-800">{emp.scheduledWorkDays}</Badge>
                               </TableCell>
