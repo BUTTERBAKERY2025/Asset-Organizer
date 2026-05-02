@@ -148,6 +148,42 @@ export default function EmployeeReportsDashboardPage() {
   const employees = bundle?.employees;
   const attendanceRecords = bundle?.attendance;
   const employeeSchedules = bundle?.schedules;
+
+  // استعلام مخصص لتقرير إغلاق الرواتب - يستخدم متغيرات الإغلاق المنفصلة
+  // لضمان تحميل بصمات وجداول الشهر/الفرع المختار في نافذة الإغلاق (وليس الشاشة العامة)
+  const { data: salaryClosingBundle, isLoading: salaryClosingBundleLoading } = useQuery<{
+    employees: BranchEmployee[];
+    attendance: AttendanceRecord[];
+    schedules: any[];
+  }>({
+    queryKey: ["/api/employee-reports/bundle", "salary-closing", salaryClosingBranch, salaryClosingMonth],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (salaryClosingBranch && salaryClosingBranch !== "all") params.set("branchId", salaryClosingBranch);
+      if (salaryClosingMonth) params.set("month", salaryClosingMonth);
+      const res = await fetch(`/api/employee-reports/bundle?${params.toString()}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch salary closing bundle");
+      return res.json();
+    },
+    enabled: !!salaryClosingBranch && salaryClosingBranch !== "all" && showSalaryClosingDialog,
+    staleTime: 60_000,
+  });
+
+  // عند فتح نافذة إغلاق الرواتب لفرع محدد:
+  // نستخدم فقط بيانات الـ bundle المخصص للإغلاق لتجنب عرض/تصدير بيانات قديمة من الشاشة العامة.
+  // عندما تكون النافذة مغلقة أو الفرع="all" نعتمد على بيانات الشاشة العامة كاحتياط.
+  const salaryDialogActive = !!salaryClosingBranch && salaryClosingBranch !== "all" && showSalaryClosingDialog;
+  const salaryClosingEmployees = salaryDialogActive
+    ? salaryClosingBundle?.employees
+    : (salaryClosingBundle?.employees ?? employees);
+  const salaryClosingAttendance = salaryDialogActive
+    ? salaryClosingBundle?.attendance
+    : (salaryClosingBundle?.attendance ?? attendanceRecords);
+  const salaryClosingSchedules = salaryDialogActive
+    ? salaryClosingBundle?.schedules
+    : (salaryClosingBundle?.schedules ?? employeeSchedules);
+  // مؤشر "البيانات جاهزة للإغلاق" - إما النافذة غير نشطة، أو الـ bundle المخصص اكتمل تحميله
+  const salaryClosingReady = !salaryDialogActive || (!!salaryClosingBundle && !salaryClosingBundleLoading);
   const employeesLoading = bundleLoading;
   const attendanceLoading = bundleLoading;
 
@@ -699,20 +735,20 @@ export default function EmployeeReportsDashboardPage() {
   const { salaryClosingData, salaryClosingUnlinkedCount, salaryClosingUnlinkedRecords, salaryClosingUnlinkedSummary } = useMemo(() => {
     if (!salaryClosingBranch || salaryClosingBranch === "all") return { salaryClosingData: [], salaryClosingUnlinkedCount: 0, salaryClosingUnlinkedRecords: [] as AttendanceRecord[], salaryClosingUnlinkedSummary: { totalRecords: 0, presentRecords: 0, totalHours: 0 } };
     
-    const branchEmployees = employees?.filter(emp => emp.branchId === salaryClosingBranch && emp.status === "active") || [];
+    const branchEmployees = salaryClosingEmployees?.filter(emp => emp.branchId === salaryClosingBranch && emp.status === "active") || [];
     const monthStart = `${salaryClosingMonth}-01`;
     // Compute proper last day of selected month (instead of always 31)
     const [yearNum, monthNum] = salaryClosingMonth.split("-").map(Number);
     const lastDay = new Date(yearNum, monthNum, 0).getDate();
     const monthEnd = `${salaryClosingMonth}-${String(lastDay).padStart(2, "0")}`;
 
-    const monthAttendance = attendanceRecords?.filter(rec => 
+    const monthAttendance = salaryClosingAttendance?.filter(rec => 
       rec.branchId === salaryClosingBranch && 
       rec.attendanceDate >= monthStart && 
       rec.attendanceDate <= monthEnd
     ) || [];
 
-    const monthSchedules = (employeeSchedules || []).filter((s: any) =>
+    const monthSchedules = (salaryClosingSchedules || []).filter((s: any) =>
       s.branchId === salaryClosingBranch &&
       s.scheduleDate >= monthStart &&
       s.scheduleDate <= monthEnd
@@ -881,7 +917,7 @@ export default function EmployeeReportsDashboardPage() {
     });
     
     return { salaryClosingData: data, salaryClosingUnlinkedCount: unlinkedList.length, salaryClosingUnlinkedRecords: unlinkedList, salaryClosingUnlinkedSummary: unlinkedSummary };
-  }, [salaryClosingBranch, salaryClosingMonth, employees, attendanceRecords, employeeSchedules]);
+  }, [salaryClosingBranch, salaryClosingMonth, salaryClosingEmployees, salaryClosingAttendance, salaryClosingSchedules]);
 
   const exportUnlinkedRecordsToExcel = async () => {
     const XLSX = await import("xlsx");
@@ -6567,12 +6603,29 @@ export default function EmployeeReportsDashboardPage() {
                     </Card>
                   )}
 
+                  {!salaryClosingReady && (
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-2 text-sm text-blue-800" data-testid="alert-loading-salary">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>جاري تحميل بيانات الجدول والبصمات لـ {getBranchName(salaryClosingBranch)} - {salaryClosingMonth}...</span>
+                    </div>
+                  )}
+
                   <div className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={exportSalaryClosingToExcel}>
+                    <Button
+                      variant="outline"
+                      onClick={exportSalaryClosingToExcel}
+                      disabled={!salaryClosingReady || salaryClosingData.length === 0}
+                      data-testid="button-export-salary-excel"
+                    >
                       <FileSpreadsheet className="w-4 h-4 ml-2" />
                       تصدير Excel
                     </Button>
-                    <Button variant="outline" onClick={exportSalaryClosingToPDF}>
+                    <Button
+                      variant="outline"
+                      onClick={exportSalaryClosingToPDF}
+                      disabled={!salaryClosingReady || salaryClosingData.length === 0}
+                      data-testid="button-export-salary-pdf"
+                    >
                       <Download className="w-4 h-4 ml-2" />
                       تصدير PDF
                     </Button>
