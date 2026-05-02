@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { useBranches } from "@/hooks/useBranches";
+import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -18,7 +19,7 @@ import { ar, enUS } from "date-fns/locale";
 import {
   Calendar, FileText, Pen, Download, Loader2, CheckCircle, Clock,
   AlertCircle, User, Check, XCircle, ArrowRight, LayoutDashboard, Users,
-  Sparkles, Eye, FilePlus2, AlertTriangle, FileDown, Wand2,
+  Sparkles, Eye, FilePlus2, AlertTriangle, FileDown, Wand2, Lock, History, RefreshCw,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import SignatureCanvas from "react-signature-canvas";
@@ -68,6 +69,25 @@ interface TimesheetReport {
   managerId?: string;
   managerSignedAt?: string;
   managerAcknowledgment?: string;
+  // Phase 3: lock + versioning
+  isLocked?: boolean;
+  lockedAt?: string | null;
+  lockedBy?: string | null;
+  version?: number;
+  supersededBy?: number | null;
+  supersededAt?: string | null;
+  reissueReason?: string | null;
+  createdAt: string;
+}
+
+interface TimesheetAuditEntry {
+  id: number;
+  reportId: number;
+  action: string;
+  performedBy?: string | null;
+  performedByName?: string | null;
+  ipAddress?: string | null;
+  notes?: string | null;
   createdAt: string;
 }
 
@@ -126,6 +146,7 @@ export default function TimesheetPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { branches, userBranchId, canSelectBranch } = useBranches();
+  const { isAdmin: isCurrentUserAdmin } = useAuth();
 
   const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [selectedEmployee, setSelectedEmployee] = useState<string>("");
@@ -140,6 +161,10 @@ export default function TimesheetPage() {
   const [downloadingPdfFor, setDownloadingPdfFor] = useState<number | null>(null);
   const [acknowledgmentText, setAcknowledgmentText] = useState("");
   const [showAllExceptions, setShowAllExceptions] = useState(false);
+  // Phase 3
+  const [showReissueDialog, setShowReissueDialog] = useState(false);
+  const [reissueReason, setReissueReason] = useState("");
+  const [reissuingFor, setReissuingFor] = useState<TimesheetReport | null>(null);
 
   const signatureRef = useRef<SignatureCanvas>(null);
 
@@ -364,11 +389,66 @@ export default function TimesheetPage() {
       setSelectedReport(data);
       setShowSignatureDialog(false);
       queryClient.invalidateQueries({ queryKey: ["/api/timesheet-reports"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/timesheet-reports", data.id, "audit-log"] });
     },
     onError: (error: Error) => {
       toast({ title: t("common.error"), description: error.message, variant: "destructive" });
     },
   });
+
+  // ====== Phase 3: audit log query + reissue mutation ======
+  const { data: auditLog = [] } = useQuery<TimesheetAuditEntry[]>({
+    queryKey: ["/api/timesheet-reports", selectedReport?.id, "audit-log"],
+    queryFn: async () => {
+      if (!selectedReport) return [];
+      const res = await fetch(`/api/timesheet-reports/${selectedReport.id}/audit-log`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!selectedReport,
+  });
+
+  const reissueMutation = useMutation({
+    mutationFn: async (data: { id: number; reason: string }) => {
+      const res = await fetch(`/api/timesheet-reports/${data.id}/reissue`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: data.reason }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || t("timesheet.reissue.error"));
+      }
+      return res.json();
+    },
+    onSuccess: (data: { oldReport: TimesheetReport; newReport: TimesheetReport }) => {
+      toast({ title: t("timesheet.reissue.success") });
+      setShowReissueDialog(false);
+      setReissueReason("");
+      setReissuingFor(null);
+      setSelectedReport(data.newReport);
+      setActiveTab("view");
+      queryClient.invalidateQueries({ queryKey: ["/api/timesheet-reports"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: t("common.error"), description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleOpenReissue = (report: TimesheetReport) => {
+    setReissuingFor(report);
+    setReissueReason("");
+    setShowReissueDialog(true);
+  };
+
+  const handleConfirmReissue = () => {
+    if (!reissuingFor) return;
+    if (reissueReason.trim().length < 5) {
+      toast({ title: t("common.alert"), description: t("timesheet.reissue.tooShortReason"), variant: "destructive" });
+      return;
+    }
+    reissueMutation.mutate({ id: reissuingFor.id, reason: reissueReason.trim() });
+  };
 
   // ====== Action handlers ======
   const handleGenerateForEmployee = (employeeId: string) => {
@@ -776,7 +856,7 @@ export default function TimesheetPage() {
         </Card>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3 h-auto p-1">
+          <TabsList className="grid w-full grid-cols-5 h-auto p-1">
             <TabsTrigger value="dashboard" className="gap-1 sm:gap-2 text-[10px] sm:text-xs md:text-sm py-2" data-testid="tab-dashboard">
               <LayoutDashboard className="w-3 h-3 sm:w-4 sm:h-4" />
               <span className="hidden sm:inline">{t("timesheet.dashboard.tabLabel")}</span>
@@ -791,6 +871,11 @@ export default function TimesheetPage() {
               <Clock className="w-3 h-3 sm:w-4 sm:h-4" />
               <span className="hidden sm:inline">{t("timesheet.previousRecords")}</span>
               <span className="sm:hidden">السجل</span>
+            </TabsTrigger>
+            <TabsTrigger value="audit" className="gap-1 sm:gap-2 text-[10px] sm:text-xs md:text-sm py-2" data-testid="tab-audit-log" disabled={!selectedReport}>
+              <History className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">{t("timesheet.auditLog.tab")}</span>
+              <span className="sm:hidden">سجل</span>
             </TabsTrigger>
           </TabsList>
 
@@ -901,7 +986,25 @@ export default function TimesheetPage() {
                                   </div>
                                 </TableCell>
                                 <TableCell className="text-center">
-                                  <Badge className={badge?.color}>{badge?.label}</Badge>
+                                  <div className="flex flex-col items-center gap-1">
+                                    <Badge className={badge?.color}>{badge?.label}</Badge>
+                                    {r?.isLocked && (
+                                      <span
+                                        className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-300"
+                                        title={t("timesheet.lockedReportTooltip")}
+                                        data-testid={`badge-locked-${row.id}`}
+                                      >
+                                        <Lock className="w-3 h-3" />
+                                        {t("timesheet.locked")}
+                                        {(r.version ?? 1) > 1 && <span>v{r.version}</span>}
+                                      </span>
+                                    )}
+                                    {r?.supersededBy && (
+                                      <span className="text-[10px] text-amber-700" data-testid={`badge-superseded-${row.id}`}>
+                                        {t("timesheet.supersededBy")} #{r.supersededBy}
+                                      </span>
+                                    )}
+                                  </div>
                                 </TableCell>
                                 <TableCell className="text-center text-sm">
                                   {r ? (
@@ -980,7 +1083,7 @@ export default function TimesheetPage() {
                                             {t("timesheet.dashboard.actionSign")}
                                           </Button>
                                         )}
-                                        {r!.status === "pending_manager_signature" && (
+                                        {r!.status === "pending_manager_signature" && !r!.isLocked && (
                                           <Button
                                             size="sm"
                                             variant="outline"
@@ -990,6 +1093,19 @@ export default function TimesheetPage() {
                                           >
                                             <Pen className="w-3 h-3" />
                                             {t("timesheet.dashboard.actionSign")}
+                                          </Button>
+                                        )}
+                                        {isCurrentUserAdmin && r!.isLocked && !r!.supersededBy && (
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => handleOpenReissue(r!)}
+                                            className="h-8 gap-1 border-purple-300 text-purple-800"
+                                            data-testid={`btn-reissue-${row.id}`}
+                                            title={t("timesheet.reissue.button")}
+                                          >
+                                            <RefreshCw className="w-3 h-3" />
+                                            {t("timesheet.reissue.button")}
                                           </Button>
                                         )}
                                       </>
@@ -1023,14 +1139,31 @@ export default function TimesheetPage() {
                         {selectedReport.startDate} {t("common.to")} {selectedReport.endDate}
                       </CardDescription>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <Badge className={TIMESHEET_STATUS_LABELS[selectedReport.status]?.color}>
                         {TIMESHEET_STATUS_LABELS[selectedReport.status]?.label}
                       </Badge>
+                      {(selectedReport.version ?? 1) > 1 && (
+                        <Badge variant="outline" className="border-purple-300 text-purple-700" data-testid="badge-version">
+                          {t("timesheet.version")} {selectedReport.version}
+                        </Badge>
+                      )}
+                      {selectedReport.isLocked && (
+                        <Badge variant="outline" className="border-slate-400 text-slate-700 gap-1" data-testid="badge-locked">
+                          <Lock className="w-3 h-3" />
+                          {t("timesheet.locked")}
+                        </Badge>
+                      )}
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent>
+                  {selectedReport.supersededBy && (
+                    <div className="mb-4 p-3 rounded border border-amber-300 bg-amber-50 text-amber-800 text-sm flex items-center gap-2" data-testid="alert-superseded">
+                      <AlertTriangle className="w-4 h-4" />
+                      <span>{t("timesheet.supersededWarning")} (#{selectedReport.supersededBy})</span>
+                    </div>
+                  )}
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                     <div className="p-4 bg-muted rounded-lg text-center">
                       <div className="text-2xl font-bold">{selectedReport.totalScheduledDays}</div>
@@ -1147,16 +1280,27 @@ export default function TimesheetPage() {
                       {downloadingPdfFor === selectedReport.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
                       {downloadingPdfFor === selectedReport.id ? t("timesheet.downloadingPdf") : t("timesheet.downloadPdf")}
                     </Button>
-                    {(selectedReport.status === "pending" || selectedReport.status === "pending_employee_signature") && (
+                    {(selectedReport.status === "pending" || selectedReport.status === "pending_employee_signature") && !selectedReport.isLocked && (
                       <Button onClick={() => handleOpenSignature("employee", selectedReport)} className="gap-2 h-11 sm:h-9" data-testid="btn-sign-employee">
                         <Pen className="w-4 h-4" />
                         {t("timesheet.signEmployee")}
                       </Button>
                     )}
-                    {selectedReport.status === "pending_manager_signature" && (
+                    {selectedReport.status === "pending_manager_signature" && !selectedReport.isLocked && (
                       <Button onClick={() => handleOpenSignature("manager", selectedReport)} className="gap-2 h-11 sm:h-9" data-testid="btn-sign-manager">
                         <Pen className="w-4 h-4" />
                         {t("timesheet.signManager")}
+                      </Button>
+                    )}
+                    {isCurrentUserAdmin && selectedReport.isLocked && !selectedReport.supersededBy && (
+                      <Button
+                        variant="outline"
+                        onClick={() => handleOpenReissue(selectedReport)}
+                        className="gap-2 h-11 sm:h-9 border-purple-300 text-purple-800"
+                        data-testid="btn-reissue"
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                        {t("timesheet.reissue.button")}
                       </Button>
                     )}
                   </div>
@@ -1337,6 +1481,60 @@ export default function TimesheetPage() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* ====== Phase 3: AUDIT LOG TAB ====== */}
+          <TabsContent value="audit" className="space-y-4">
+            {selectedReport && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <History className="w-5 h-5" />
+                    {t("timesheet.auditLog.title")}
+                  </CardTitle>
+                  <CardDescription>
+                    {getEmployeeName(selectedReport.employeeId)} · {selectedReport.startDate} → {selectedReport.endDate}
+                    {(selectedReport.version ?? 1) > 1 && <> · {t("timesheet.version")} {selectedReport.version}</>}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {auditLog.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-6" data-testid="text-audit-empty">
+                      {t("timesheet.auditLog.empty")}
+                    </p>
+                  ) : (
+                    <div className="rounded-md border overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className={isRTL ? "text-right" : "text-left"}>{t("timesheet.auditLog.action")}</TableHead>
+                            <TableHead>{t("timesheet.auditLog.performedBy")}</TableHead>
+                            <TableHead>{t("timesheet.auditLog.date")}</TableHead>
+                            <TableHead>{t("timesheet.auditLog.notes")}</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {auditLog.map((entry) => (
+                            <TableRow key={entry.id} data-testid={`row-audit-${entry.id}`}>
+                              <TableCell className="font-medium">
+                                <Badge variant="outline" className="text-xs">
+                                  {t(`timesheet.auditLog.actions.${entry.action}`, { defaultValue: entry.action })}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-sm">{entry.performedByName || entry.performedBy || "—"}</TableCell>
+                              <TableCell className="text-xs text-muted-foreground">
+                                {entry.createdAt ? format(new Date(entry.createdAt), "yyyy-MM-dd HH:mm") : "—"}
+                              </TableCell>
+                              <TableCell className="text-sm">{entry.notes || "—"}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
         </Tabs>
 
         {/* Signature Dialog (Phase 2 - with editable acknowledgment + smart template) */}
@@ -1416,6 +1614,50 @@ export default function TimesheetPage() {
                   <Check className="w-4 h-4" />
                 )}
                 {t("timesheet.submitSignature")}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* ====== Phase 3: Reissue Dialog ====== */}
+        <Dialog open={showReissueDialog} onOpenChange={(open) => { if (!reissueMutation.isPending) setShowReissueDialog(open); }}>
+          <DialogContent className="max-w-lg" data-testid="dialog-reissue">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <RefreshCw className="w-5 h-5 text-purple-600" />
+                {t("timesheet.reissue.title")}
+              </DialogTitle>
+              <DialogDescription>{t("timesheet.reissue.description")}</DialogDescription>
+            </DialogHeader>
+            {reissuingFor && (
+              <div className="text-sm text-muted-foreground border rounded p-2 bg-muted/40">
+                <div>{getEmployeeName(reissuingFor.employeeId)}</div>
+                <div className="text-xs">{reissuingFor.startDate} → {reissuingFor.endDate} · {t("timesheet.version")} {reissuingFor.version ?? 1}</div>
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label className="text-sm font-semibold">{t("timesheet.reissue.reasonLabel")}</Label>
+              <Textarea
+                value={reissueReason}
+                onChange={(e) => setReissueReason(e.target.value)}
+                placeholder={t("timesheet.reissue.reasonPlaceholder")}
+                rows={4}
+                className="text-sm resize-none"
+                data-testid="textarea-reissue-reason"
+              />
+            </div>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setShowReissueDialog(false)} disabled={reissueMutation.isPending} data-testid="btn-cancel-reissue">
+                {t("common.cancel")}
+              </Button>
+              <Button
+                onClick={handleConfirmReissue}
+                disabled={reissueMutation.isPending || reissueReason.trim().length < 5}
+                className="gap-2"
+                data-testid="btn-confirm-reissue"
+              >
+                {reissueMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                {t("timesheet.reissue.confirmButton")}
               </Button>
             </DialogFooter>
           </DialogContent>

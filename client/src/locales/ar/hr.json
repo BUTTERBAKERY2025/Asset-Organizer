@@ -321,7 +321,44 @@
     "downloadPdf": "تنزيل PDF",
     "downloadingPdf": "جاري التنزيل...",
     "pdfSuccess": "تم تنزيل التقرير بنجاح",
-    "pdfError": "فشل تنزيل التقرير"
+    "pdfError": "فشل تنزيل التقرير",
+    "locked": "مقفل",
+    "lockedReportTooltip": "هذا التقرير مكتمل ومقفل. يجب إعادة الإصدار لتعديله.",
+    "version": "الإصدار",
+    "supersededBy": "تم استبداله بالإصدار",
+    "supersededWarning": "هذا التقرير قديم - تم استبداله بإصدار أحدث",
+    "auditLog": {
+      "tab": "سجل التدقيق",
+      "title": "سجل التدقيق",
+      "empty": "لا توجد عمليات مسجلة بعد",
+      "action": "العملية",
+      "performedBy": "بواسطة",
+      "date": "التاريخ",
+      "notes": "ملاحظات",
+      "ipAddress": "عنوان IP",
+      "actions": {
+        "created": "إنشاء التقرير",
+        "updated": "تحديث",
+        "signed_employee": "توقيع الموظف",
+        "signed_manager": "توقيع المدير",
+        "locked": "قفل",
+        "unlocked": "فتح القفل",
+        "reissued": "إعادة الإصدار",
+        "deleted": "حذف",
+        "pdf_generated": "توليد PDF"
+      }
+    },
+    "reissue": {
+      "button": "إعادة الإصدار",
+      "title": "إعادة إصدار التقرير",
+      "description": "سيتم إنشاء إصدار جديد قابل للتوقيع. يبقى التقرير القديم محفوظاً في سجل التدقيق.",
+      "reasonLabel": "سبب إعادة الإصدار (إلزامي)",
+      "reasonPlaceholder": "مثال: تصحيح خطأ في حساب التأخير، تحديث جدول الورديات...",
+      "confirmButton": "تأكيد إعادة الإصدار",
+      "success": "تم إعادة إصدار التقرير بنجاح",
+      "error": "فشل في إعادة الإصدار",
+      "tooShortReason": "السبب قصير جداً (5 أحرف على الأقل)"
+    }
   },
   "branchEmployees": {
     "pageTitle": "موظفو الفروع",

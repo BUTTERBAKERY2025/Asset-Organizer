@@ -23926,10 +23926,16 @@ export async function registerRoutes(
         if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
       }
 
-      // Check if report already exists
+      // Check if report already exists (Phase 3: include lock status)
       const existing = await storage.getTimesheetReportByEmployeeAndDates(employeeId, startDate, endDate);
       if (existing) {
-        return res.status(400).json({ error: "يوجد تقرير مسبق لهذه الفترة", existingReportId: existing.id });
+        return res.status(400).json({
+          error: existing.isLocked
+            ? "يوجد تقرير مقفل لهذه الفترة - يجب إعادة الإصدار من سجل التقارير"
+            : "يوجد تقرير مسبق لهذه الفترة",
+          existingReportId: existing.id,
+          isLocked: existing.isLocked,
+        });
       }
 
       // Get employee info - handle both regular users and branch employees
@@ -24162,9 +24168,14 @@ export async function registerRoutes(
           }
 
           // Skip if already exists (after branch validation so out-of-branch IDs always report as failed, not skipped)
+          // Phase 3: distinguish locked vs unlocked existing reports
           const existing = await storage.getTimesheetReportByEmployeeAndDates(employeeId, startDate, endDate);
           if (existing) {
-            skipped.push({ employeeId, reason: "already_exists", existingReportId: existing.id });
+            skipped.push({
+              employeeId,
+              reason: existing.isLocked ? "already_locked" : "already_exists",
+              existingReportId: existing.id,
+            });
             continue;
           }
 
@@ -24628,11 +24639,80 @@ export async function registerRoutes(
         return res.status(400).json({ error: "حجم التوقيع كبير جداً" });
       }
       
+      // Phase 3: Block signing on locked reports
+      const existingReport = await storage.getTimesheetReport(id);
+      if (!existingReport) return res.status(404).json({ error: "التقرير غير موجود" });
+      if (existingReport.isLocked) {
+        return res.status(400).json({ error: "هذا التقرير مقفل - يجب إعادة الإصدار قبل التعديل" });
+      }
+
       const report = await storage.signTimesheetReport(id, signatureType, signature, signerId, acknowledgment);
       if (!report) {
         return res.status(404).json({ error: "التقرير غير موجود" });
       }
-      
+
+      // Phase 3: audit log + in-app notifications
+      const performerName = `${req.currentUser?.firstName || ""} ${req.currentUser?.lastName || ""}`.trim() || req.currentUser?.username || signerId;
+      try {
+        await storage.createTimesheetAuditLog({
+          reportId: id,
+          action: signatureType === 'employee' ? 'signed_employee' : 'signed_manager',
+          performedBy: signerId,
+          performedByName: performerName,
+          ipAddress: (req.ip || req.headers['x-forwarded-for'] as string || '').toString().slice(0, 100),
+          userAgent: (req.headers['user-agent'] || '').toString().slice(0, 500),
+          notes: acknowledgment ? acknowledgment.slice(0, 500) : null,
+        });
+
+        if (report.status === 'finalized' && existingReport.status !== 'finalized') {
+          await storage.createTimesheetAuditLog({
+            reportId: id,
+            action: 'locked',
+            performedBy: signerId,
+            performedByName: performerName,
+            notes: 'قفل تلقائي عند اكتمال التوقيعات',
+          });
+        }
+
+        // Notifications: branch users (best-effort)
+        const branchUsers = await storage.getAllUsers().catch(() => [] as any[]);
+        const branchManagers = branchUsers.filter((u: any) => u.branchId === report.branchId && (u.role === 'manager' || u.role === 'admin'));
+        if (signatureType === 'employee' && report.status === 'pending_manager_signature') {
+          await Promise.all(branchManagers.map((m: any) => storage.createSystemNotification({
+            userId: m.id,
+            branchId: report.branchId,
+            title: 'تقرير دوام بانتظار توقيعك',
+            message: `وقّع الموظف على تقرير دوام للفترة ${report.startDate} - ${report.endDate}`,
+            type: 'info',
+            category: 'system',
+            priority: 'normal',
+            linkType: 'meeting',
+            linkId: id,
+            linkUrl: `/timesheet?reportId=${id}`,
+            createdBy: signerId,
+          }).catch(() => null)));
+        } else if (report.status === 'finalized') {
+          // notify the employee (only if has user account)
+          if (!report.employeeId.startsWith('branch_emp_')) {
+            await storage.createSystemNotification({
+              userId: report.employeeId,
+              branchId: report.branchId,
+              title: 'اكتمل توقيع تقرير دوامك',
+              message: `تم توقيع وقفل تقرير دوامك للفترة ${report.startDate} - ${report.endDate}`,
+              type: 'success',
+              category: 'system',
+              priority: 'normal',
+              linkType: 'meeting',
+              linkId: id,
+              linkUrl: `/timesheet?reportId=${id}`,
+              createdBy: signerId,
+            }).catch(() => null);
+          }
+        }
+      } catch (auditErr) {
+        console.error("Audit/notification side-effect failed (non-blocking):", auditErr);
+      }
+
       res.json(report);
     } catch (error) {
       console.error("Error signing timesheet report:", error);
@@ -24651,15 +24731,107 @@ export async function registerRoutes(
         return res.status(404).json({ error: "التقرير غير موجود" });
       }
       
-      if (report.status === 'finalized') {
-        return res.status(400).json({ error: "لا يمكن حذف تقرير مكتمل" });
+      if (report.status === 'finalized' || report.isLocked) {
+        return res.status(400).json({ error: "لا يمكن حذف تقرير مكتمل أو مقفل - استخدم إعادة الإصدار بدلاً من ذلك" });
       }
-      
+
       await storage.deleteTimesheetReport(id);
+
+      // Phase 3: audit (best-effort; cascade may have removed it but log it for paper trail in archive separately is overkill)
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting timesheet report:", error);
       res.status(500).json({ error: "فشل في حذف التقرير" });
+    }
+  });
+
+  // ============= Phase 3: Audit Log + Reissue endpoints =============
+
+  // Get audit log for a report
+  app.get("/api/timesheet-reports/:id/audit-log", isAuthenticated, requirePermission("timesheet", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const report = await storage.getTimesheetReport(id);
+      if (!report) return res.status(404).json({ error: "التقرير غير موجود" });
+      if (!isUserAdmin(req) && report.branchId) {
+        const hasAccess = await canAccessBranch(req, report.branchId);
+        if (!hasAccess) return res.status(403).json({ error: "غير مصرح" });
+      }
+      const log = await storage.getTimesheetAuditLog(id);
+      res.json(log);
+    } catch (error) {
+      console.error("Error fetching timesheet audit log:", error);
+      res.status(500).json({ error: "فشل في جلب سجل التدقيق" });
+    }
+  });
+
+  // Reissue a locked report (admin only)
+  app.post("/api/timesheet-reports/:id/reissue", isAuthenticated, async (req, res) => {
+    try {
+      if (!isUserAdmin(req)) {
+        return res.status(403).json({ error: "إعادة الإصدار متاحة للمشرفين فقط" });
+      }
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const { reason } = req.body || {};
+      if (!reason || typeof reason !== 'string' || reason.trim().length < 5) {
+        return res.status(400).json({ error: "يجب توضيح سبب إعادة الإصدار (5 أحرف على الأقل)" });
+      }
+
+      const existing = await storage.getTimesheetReport(id);
+      if (!existing) return res.status(404).json({ error: "التقرير غير موجود" });
+      if (existing.supersededBy) {
+        return res.status(400).json({ error: "هذا التقرير سبق وتم استبداله بإصدار أحدث" });
+      }
+
+      const performerId = req.currentUser?.id || '';
+      const performerName = `${req.currentUser?.firstName || ""} ${req.currentUser?.lastName || ""}`.trim() || req.currentUser?.username || performerId;
+
+      const result = await storage.reissueTimesheetReport(id, reason.trim(), performerId);
+      if (!result) return res.status(500).json({ error: "فشل في إعادة الإصدار" });
+
+      // Audit logs (old + new)
+      try {
+        await storage.createTimesheetAuditLog({
+          reportId: id,
+          action: 'reissued',
+          performedBy: performerId,
+          performedByName: performerName,
+          ipAddress: (req.ip || '').toString().slice(0, 100),
+          userAgent: (req.headers['user-agent'] || '').toString().slice(0, 500),
+          notes: `استُبدل بالإصدار #${result.newReport.id}: ${reason.trim().slice(0, 400)}`,
+        });
+        await storage.createTimesheetAuditLog({
+          reportId: result.newReport.id,
+          action: 'created',
+          performedBy: performerId,
+          performedByName: performerName,
+          notes: `إعادة إصدار من #${id} (الإصدار ${result.newReport.version})`,
+        });
+
+        // Notify employee if has account
+        if (!result.newReport.employeeId.startsWith('branch_emp_')) {
+          await storage.createSystemNotification({
+            userId: result.newReport.employeeId,
+            branchId: result.newReport.branchId,
+            title: 'تم إعادة إصدار تقرير دوامك',
+            message: `أُعيد إصدار تقرير الفترة ${result.newReport.startDate} - ${result.newReport.endDate}. السبب: ${reason.trim().slice(0, 200)}`,
+            type: 'warning',
+            category: 'system',
+            priority: 'high',
+            linkType: 'meeting',
+            linkId: result.newReport.id,
+            linkUrl: `/timesheet?reportId=${result.newReport.id}`,
+            createdBy: performerId,
+          }).catch(() => null);
+        }
+      } catch (e) { console.error("Reissue audit/notification failed:", e); }
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error reissuing timesheet report:", error);
+      res.status(500).json({ error: "فشل في إعادة الإصدار" });
     }
   });
 

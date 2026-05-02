@@ -321,7 +321,44 @@
     "downloadPdf": "Download PDF",
     "downloadingPdf": "Downloading...",
     "pdfSuccess": "Report downloaded successfully",
-    "pdfError": "Failed to download report"
+    "pdfError": "Failed to download report",
+    "locked": "Locked",
+    "lockedReportTooltip": "This report is finalized and locked. Reissue it to make changes.",
+    "version": "Version",
+    "supersededBy": "Superseded by version",
+    "supersededWarning": "This report is outdated — a newer version exists",
+    "auditLog": {
+      "tab": "Audit Log",
+      "title": "Audit Log",
+      "empty": "No actions recorded yet",
+      "action": "Action",
+      "performedBy": "By",
+      "date": "Date",
+      "notes": "Notes",
+      "ipAddress": "IP Address",
+      "actions": {
+        "created": "Created",
+        "updated": "Updated",
+        "signed_employee": "Employee signed",
+        "signed_manager": "Manager signed",
+        "locked": "Locked",
+        "unlocked": "Unlocked",
+        "reissued": "Reissued",
+        "deleted": "Deleted",
+        "pdf_generated": "PDF generated"
+      }
+    },
+    "reissue": {
+      "button": "Reissue",
+      "title": "Reissue Report",
+      "description": "A new signable version will be created. The old report stays preserved in the audit log.",
+      "reasonLabel": "Reason for reissue (required)",
+      "reasonPlaceholder": "e.g. correct late-time miscalculation, updated shift schedule...",
+      "confirmButton": "Confirm reissue",
+      "success": "Report reissued successfully",
+      "error": "Failed to reissue report",
+      "tooShortReason": "Reason is too short (min 5 chars)"
+    }
   },
   "branchEmployees": {
     "pageTitle": "Branch Employees",

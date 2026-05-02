@@ -4992,6 +4992,14 @@ export const timesheetReports = pgTable("timesheet_reports", {
   managerSignedAt: timestamp("manager_signed_at"),
   managerAcknowledgment: text("manager_acknowledgment"),
   notes: text("notes"),
+  // Phase 3: قفل الفترة + إعادة الإصدار
+  isLocked: boolean("is_locked").default(false).notNull(),
+  lockedAt: timestamp("locked_at"),
+  lockedBy: varchar("locked_by").references(() => users.id),
+  version: integer("version").default(1).notNull(),
+  supersededBy: integer("superseded_by"),
+  supersededAt: timestamp("superseded_at"),
+  reissueReason: text("reissue_reason"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
@@ -5000,6 +5008,8 @@ export const timesheetReports = pgTable("timesheet_reports", {
   index("idx_timesheet_reports_status").on(table.status),
   index("idx_timesheet_reports_dates").on(table.startDate, table.endDate),
   index("idx_timesheet_reports_branch_employee").on(table.branchEmployeeId),
+  index("idx_timesheet_reports_locked").on(table.isLocked),
+  index("idx_timesheet_reports_superseded").on(table.supersededBy),
 ]);
 
 export const insertTimesheetReportSchema = createInsertSchema(timesheetReports).omit({
@@ -5052,6 +5062,40 @@ export const TIMESHEET_STATUS_LABELS: Record<TimesheetStatus, string> = {
   pending_manager_signature: "بانتظار توقيع المدير",
   finalized: "مكتمل",
 };
+
+// Phase 3: Audit Log - سجل تدقيق تقارير الدوام
+export const TIMESHEET_AUDIT_ACTIONS = [
+  "created", "updated", "signed_employee", "signed_manager",
+  "locked", "unlocked", "reissued", "deleted", "pdf_generated"
+] as const;
+export type TimesheetAuditAction = (typeof TIMESHEET_AUDIT_ACTIONS)[number];
+
+export const timesheetAuditLog = pgTable("timesheet_audit_log", {
+  id: serial("id").primaryKey(),
+  reportId: integer("report_id").notNull().references(() => timesheetReports.id, { onDelete: "cascade" }),
+  action: text("action").notNull(),
+  performedBy: varchar("performed_by").references(() => users.id),
+  performedByName: text("performed_by_name"),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  beforeState: jsonb("before_state"),
+  afterState: jsonb("after_state"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_timesheet_audit_report").on(table.reportId),
+  index("idx_timesheet_audit_action").on(table.action),
+  index("idx_timesheet_audit_date").on(table.createdAt),
+  index("idx_timesheet_audit_user").on(table.performedBy),
+]);
+
+export const insertTimesheetAuditLogSchema = createInsertSchema(timesheetAuditLog).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type TimesheetAuditLog = typeof timesheetAuditLog.$inferSelect;
+export type InsertTimesheetAuditLog = z.infer<typeof insertTimesheetAuditLogSchema>;
 
 // =====================================================
 // Branch Employees - موظفي الفروع مع بيانات الرواتب

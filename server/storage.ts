@@ -317,10 +317,13 @@ import {
   type InsertAttendanceSummary,
   timesheetReports,
   timesheetReportEntries,
+  timesheetAuditLog,
   type TimesheetReport,
   type InsertTimesheetReport,
   type TimesheetReportEntry,
   type InsertTimesheetReportEntry,
+  type TimesheetAuditLog,
+  type InsertTimesheetAuditLog,
   branchEmployees,
   type BranchEmployee,
   type InsertBranchEmployee,
@@ -1207,6 +1210,12 @@ export interface IStorage {
   updateTimesheetReport(id: number, report: Partial<InsertTimesheetReport>): Promise<TimesheetReport | undefined>;
   deleteTimesheetReport(id: number): Promise<boolean>;
   signTimesheetReport(id: number, signatureType: 'employee' | 'manager', signature: string, signerId: string, acknowledgment?: string): Promise<TimesheetReport | undefined>;
+  // Phase 3: lock / reissue / audit
+  lockTimesheetReport(id: number, lockedBy: string): Promise<TimesheetReport | undefined>;
+  unlockTimesheetReport(id: number): Promise<TimesheetReport | undefined>;
+  reissueTimesheetReport(id: number, reason: string, performedBy: string): Promise<{ oldReport: TimesheetReport; newReport: TimesheetReport } | undefined>;
+  createTimesheetAuditLog(entry: InsertTimesheetAuditLog): Promise<TimesheetAuditLog>;
+  getTimesheetAuditLog(reportId: number): Promise<TimesheetAuditLog[]>;
 
   // Timesheet Report Entries - سجلات التقرير اليومية
   getTimesheetReportEntries(reportId: number): Promise<TimesheetReportEntry[]>;
@@ -10097,12 +10106,112 @@ export class DatabaseStorage implements IStorage {
       updates.managerAcknowledgment = acknowledgment || 'أصادق على صحة بيانات حضور وانصراف الموظف';
       if (report.employeeSignature) {
         updates.status = 'finalized';
+        // Phase 3: lock automatically on finalization
+        (updates as any).isLocked = true;
+        (updates as any).lockedAt = new Date();
+        (updates as any).lockedBy = signerId;
       } else {
         updates.status = 'pending_employee_signature';
       }
     }
 
     return await this.updateTimesheetReport(id, updates);
+  }
+
+  // Phase 3: lock / unlock / reissue / audit log
+  async lockTimesheetReport(id: number, lockedBy: string): Promise<TimesheetReport | undefined> {
+    const [updated] = await db.update(timesheetReports)
+      .set({ isLocked: true, lockedAt: new Date(), lockedBy, updatedAt: new Date() } as any)
+      .where(eq(timesheetReports.id, id))
+      .returning();
+    return updated;
+  }
+
+  async unlockTimesheetReport(id: number): Promise<TimesheetReport | undefined> {
+    const [updated] = await db.update(timesheetReports)
+      .set({ isLocked: false, lockedAt: null, lockedBy: null, updatedAt: new Date() } as any)
+      .where(eq(timesheetReports.id, id))
+      .returning();
+    return updated;
+  }
+
+  async reissueTimesheetReport(id: number, reason: string, performedBy: string): Promise<{ oldReport: TimesheetReport; newReport: TimesheetReport } | undefined> {
+    return await db.transaction(async (tx: any) => {
+      // Lock the old row inside the transaction to prevent concurrent reissues
+      const lockedRows = await tx.execute(
+        sql`SELECT * FROM timesheet_reports WHERE id = ${id} FOR UPDATE`
+      );
+      const oldReport: any = (lockedRows as any).rows?.[0];
+      if (!oldReport) return undefined;
+      if (oldReport.superseded_by) {
+        throw new Error("التقرير تم استبداله بالفعل");
+      }
+      const oldEntries = await tx.select().from(timesheetReportEntries).where(eq(timesheetReportEntries.reportId, id));
+
+      // Create new version (clean, pending_employee_signature)
+      const [newReport] = await tx.insert(timesheetReports).values({
+        employeeId: oldReport.employee_id,
+        branchId: oldReport.branch_id,
+        branchEmployeeId: oldReport.branch_employee_id,
+        startDate: oldReport.start_date,
+        endDate: oldReport.end_date,
+        generatedBy: performedBy,
+        status: "pending_employee_signature",
+        totalScheduledDays: oldReport.total_scheduled_days,
+        totalPresentDays: oldReport.total_present_days,
+        totalAbsentDays: oldReport.total_absent_days,
+        totalLateDays: oldReport.total_late_days,
+        totalScheduledHours: oldReport.total_scheduled_hours,
+        totalActualHours: oldReport.total_actual_hours,
+        totalOvertimeMinutes: oldReport.total_overtime_minutes,
+        totalLateMinutes: oldReport.total_late_minutes,
+        version: (oldReport.version || 1) + 1,
+        isLocked: false,
+        reissueReason: reason,
+      }).returning();
+
+      // Copy daily entries
+      if (oldEntries.length > 0) {
+        await tx.insert(timesheetReportEntries).values(
+          oldEntries.map((e: any) => ({
+            reportId: newReport.id,
+            date: e.date,
+            dayOfWeek: e.dayOfWeek,
+            scheduledStartTime: e.scheduledStartTime,
+            scheduledEndTime: e.scheduledEndTime,
+            scheduledHours: e.scheduledHours,
+            actualStartTime: e.actualStartTime,
+            actualEndTime: e.actualEndTime,
+            actualHours: e.actualHours,
+            status: e.status,
+            isOff: e.isOff,
+            lateMinutes: e.lateMinutes,
+            overtimeMinutes: e.overtimeMinutes,
+            checkInSignature: e.checkInSignature,
+            notes: e.notes,
+          }))
+        );
+      }
+
+      // Mark old as superseded
+      const [supersededOld] = await tx.update(timesheetReports)
+        .set({ supersededBy: newReport.id, supersededAt: new Date(), updatedAt: new Date() } as any)
+        .where(eq(timesheetReports.id, id))
+        .returning();
+
+      return { oldReport: supersededOld, newReport };
+    });
+  }
+
+  async createTimesheetAuditLog(entry: InsertTimesheetAuditLog): Promise<TimesheetAuditLog> {
+    const [created] = await db.insert(timesheetAuditLog).values(entry).returning();
+    return created;
+  }
+
+  async getTimesheetAuditLog(reportId: number): Promise<TimesheetAuditLog[]> {
+    return await db.select().from(timesheetAuditLog)
+      .where(eq(timesheetAuditLog.reportId, reportId))
+      .orderBy(desc(timesheetAuditLog.createdAt));
   }
 
   // Timesheet Report Entries - سجلات التقرير اليومية
