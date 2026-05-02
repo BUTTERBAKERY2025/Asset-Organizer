@@ -701,12 +701,22 @@ export default function EmployeeReportsDashboardPage() {
     
     const branchEmployees = employees?.filter(emp => emp.branchId === salaryClosingBranch && emp.status === "active") || [];
     const monthStart = `${salaryClosingMonth}-01`;
-    const monthEnd = `${salaryClosingMonth}-31`;
+    // Compute proper last day of selected month (instead of always 31)
+    const [yearNum, monthNum] = salaryClosingMonth.split("-").map(Number);
+    const lastDay = new Date(yearNum, monthNum, 0).getDate();
+    const monthEnd = `${salaryClosingMonth}-${String(lastDay).padStart(2, "0")}`;
+
     const monthAttendance = attendanceRecords?.filter(rec => 
       rec.branchId === salaryClosingBranch && 
       rec.attendanceDate >= monthStart && 
       rec.attendanceDate <= monthEnd
     ) || [];
+
+    const monthSchedules = (employeeSchedules || []).filter((s: any) =>
+      s.branchId === salaryClosingBranch &&
+      s.scheduleDate >= monthStart &&
+      s.scheduleDate <= monthEnd
+    );
 
     const employeeLookup = new Map<string, number>();
     branchEmployees.forEach(emp => {
@@ -738,6 +748,33 @@ export default function EmployeeReportsDashboardPage() {
       }
       return null;
     };
+
+    // Match a schedule row to an employee using the same lookup map
+    const matchScheduleEmployee = (s: any): number | null => {
+      if (s.branchEmployeeId && employeeLookup.has(`bid:${s.branchEmployeeId}`)) {
+        return employeeLookup.get(`bid:${s.branchEmployeeId}`)!;
+      }
+      if (s.employeeId && employeeLookup.has(`eid:${s.employeeId}`)) {
+        return employeeLookup.get(`eid:${s.employeeId}`)!;
+      }
+      if (s.employeeName) {
+        const match = branchEmployees.find(emp => emp.employeeName === s.employeeName && emp.branchId === salaryClosingBranch);
+        if (match) return match.id;
+      }
+      return null;
+    };
+
+    // Helper: compute scheduled hours for a single schedule row (HH:MM start/end minus break)
+    const scheduledHoursOf = (s: any): number => {
+      if (!s.startTime || !s.endTime || s.isOff) return 0;
+      const [sh, sm] = String(s.startTime).split(":").map(Number);
+      const [eh, em] = String(s.endTime).split(":").map(Number);
+      let mins = (eh * 60 + em) - (sh * 60 + sm);
+      if (mins < 0) mins += 24 * 60; // overnight shift
+      const breakMin = Number(s.breakDuration) || 0;
+      mins = Math.max(0, mins - breakMin);
+      return mins / 60;
+    };
     
     const unlinkedList: AttendanceRecord[] = [];
     monthAttendance.forEach(rec => {
@@ -753,15 +790,65 @@ export default function EmployeeReportsDashboardPage() {
     };
 
     const data = branchEmployees.map(emp => {
+      // Schedule-based metrics (planned)
+      const empSchedules = monthSchedules.filter((s: any) => matchScheduleEmployee(s) === emp.id);
+      const offDays = empSchedules.filter((s: any) => s.isOff === true).length;
+      const scheduledWorkDays = empSchedules.filter((s: any) => s.isOff !== true).length;
+      const scheduledHoursTotal = empSchedules.reduce((sum: number, s: any) => sum + scheduledHoursOf(s), 0);
+
+      // Attendance records for the employee
       const empAttendance = monthAttendance.filter(a => matchEmployee(a) === emp.id);
-      const presentDays = empAttendance.filter(a => a.status === "present" || a.status === "late").length;
-      const absentDays = empAttendance.filter(a => a.status === "absent").length;
+      const attendanceByDate = new Map<string, AttendanceRecord>();
+      empAttendance.forEach(a => attendanceByDate.set(a.attendanceDate, a));
+
+      const explicitPresent = empAttendance.filter(a => a.status === "present" || a.status === "late").length;
+      const explicitAbsent = empAttendance.filter(a => a.status === "absent").length;
       const lateDays = empAttendance.filter(a => a.status === "late").length;
-      
-      const totalHours = empAttendance.reduce((sum, a) => {
-        if (a.workingHours) return sum + Number(a.workingHours);
-        return sum;
-      }, 0);
+
+      // Hybrid metrics: prefer schedule + attendance combination
+      let presentDays = explicitPresent;
+      let absentDays = explicitAbsent;
+      let totalHours = empAttendance.reduce((sum, a) => sum + (Number(a.workingHours) || 0), 0);
+
+      if (empSchedules.length > 0) {
+        // We have a signed schedule — use it as the source of truth for expected work days
+        let attendedFromSchedule = 0;
+        let absentFromSchedule = 0;
+        let hoursFromSchedule = 0;
+
+        empSchedules.forEach((s: any) => {
+          if (s.isOff) return; // off days don't count as work
+          const att = attendanceByDate.get(s.scheduleDate);
+          if (att && (att.status === "present" || att.status === "late")) {
+            attendedFromSchedule++;
+            hoursFromSchedule += Number(att.workingHours) || scheduledHoursOf(s);
+          } else if (att && att.status === "absent") {
+            absentFromSchedule++;
+          } else if (!att) {
+            // Scheduled day with no check-in record at all
+            // For past dates → considered absent; for future dates within month → not yet
+            // Use Asia/Riyadh local date (KSA) — UTC would shift by ~3h and could mis-classify
+            // schedule rows around local midnight.
+            const todayLocal = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" }); // YYYY-MM-DD
+            if (s.scheduleDate <= todayLocal) {
+              absentFromSchedule++;
+            }
+          }
+        });
+
+        // Also count attendance records that exist on dates NOT in the schedule (extra shifts)
+        empAttendance.forEach(a => {
+          const isScheduled = empSchedules.some((s: any) => s.scheduleDate === a.attendanceDate);
+          if (!isScheduled && (a.status === "present" || a.status === "late")) {
+            attendedFromSchedule++;
+            hoursFromSchedule += Number(a.workingHours) || 0;
+          }
+        });
+
+        presentDays = attendedFromSchedule;
+        absentDays = absentFromSchedule;
+        totalHours = hoursFromSchedule;
+      }
 
       const baseSalary = emp.salary || 0;
       const allowances = (emp.housingAllowance || 0) + (emp.transportAllowance || 0) + (emp.foodAllowance || 0) + (emp.otherAllowances || 0);
@@ -780,6 +867,9 @@ export default function EmployeeReportsDashboardPage() {
         nationality: emp.nationality,
         presentDays,
         absentDays,
+        offDays,
+        scheduledWorkDays,
+        scheduledHours: Math.round(scheduledHoursTotal * 10) / 10,
         lateDays,
         totalHours: Math.round(totalHours * 10) / 10,
         baseSalary,
@@ -791,7 +881,7 @@ export default function EmployeeReportsDashboardPage() {
     });
     
     return { salaryClosingData: data, salaryClosingUnlinkedCount: unlinkedList.length, salaryClosingUnlinkedRecords: unlinkedList, salaryClosingUnlinkedSummary: unlinkedSummary };
-  }, [salaryClosingBranch, salaryClosingMonth, employees, attendanceRecords]);
+  }, [salaryClosingBranch, salaryClosingMonth, employees, attendanceRecords, employeeSchedules]);
 
   const exportUnlinkedRecordsToExcel = async () => {
     const XLSX = await import("xlsx");
@@ -863,6 +953,9 @@ export default function EmployeeReportsDashboardPage() {
       [isRTL ? "الاسم" : "Name"]: emp.employeeName,
       [isRTL ? "الوظيفة" : "Job Title"]: emp.jobTitle,
       [isRTL ? "الجنسية" : "Nationality"]: emp.nationality,
+      [isRTL ? "أيام العمل المجدولة" : "Scheduled Work Days"]: emp.scheduledWorkDays,
+      [isRTL ? "أيام الإجازة" : "Off Days"]: emp.offDays,
+      [isRTL ? "ساعات الجدول" : "Scheduled Hours"]: emp.scheduledHours,
       [isRTL ? "أيام الحضور" : "Present Days"]: emp.presentDays,
       [isRTL ? "أيام الغياب" : "Absent Days"]: emp.absentDays,
       [isRTL ? "أيام التأخير" : "Late Days"]: emp.lateDays,
@@ -910,6 +1003,8 @@ export default function EmployeeReportsDashboardPage() {
         employees: salaryClosingData.map(emp => ({
           employeeName: emp.employeeName,
           jobTitle: emp.jobTitle,
+          scheduledWorkDays: emp.scheduledWorkDays,
+          offDays: emp.offDays,
           presentDays: emp.presentDays,
           absentDays: emp.absentDays,
           totalHours: emp.totalHours,
@@ -6515,6 +6610,50 @@ export default function EmployeeReportsDashboardPage() {
                         </div>
                       </div>
 
+                      {/* ملخص الحضور والغياب من الجدول الموقّع */}
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+                        <div className="text-center p-2 bg-blue-50 rounded-lg border border-blue-100" data-testid="summary-scheduled-days">
+                          <p className="text-xl font-bold text-blue-700">
+                            {salaryClosingData.reduce((sum, e) => sum + e.scheduledWorkDays, 0)}
+                          </p>
+                          <p className="text-[11px] text-gray-600">أيام عمل مجدولة</p>
+                        </div>
+                        <div className="text-center p-2 bg-green-50 rounded-lg border border-green-100" data-testid="summary-present">
+                          <p className="text-xl font-bold text-green-700">
+                            {salaryClosingData.reduce((sum, e) => sum + e.presentDays, 0)}
+                          </p>
+                          <p className="text-[11px] text-gray-600">إجمالي الحضور</p>
+                        </div>
+                        <div className="text-center p-2 bg-red-50 rounded-lg border border-red-100" data-testid="summary-absent">
+                          <p className="text-xl font-bold text-red-700">
+                            {salaryClosingData.reduce((sum, e) => sum + e.absentDays, 0)}
+                          </p>
+                          <p className="text-[11px] text-gray-600">إجمالي الغياب</p>
+                        </div>
+                        <div className="text-center p-2 bg-amber-50 rounded-lg border border-amber-100" data-testid="summary-off">
+                          <p className="text-xl font-bold text-amber-700">
+                            {salaryClosingData.reduce((sum, e) => sum + e.offDays, 0)}
+                          </p>
+                          <p className="text-[11px] text-gray-600">إجمالي الإجازات</p>
+                        </div>
+                        <div className="text-center p-2 bg-purple-50 rounded-lg border border-purple-100" data-testid="summary-hours">
+                          <p className="text-xl font-bold text-purple-700">
+                            {Math.round(salaryClosingData.reduce((sum, e) => sum + e.totalHours, 0) * 10) / 10}
+                          </p>
+                          <p className="text-[11px] text-gray-600">إجمالي الساعات</p>
+                        </div>
+                      </div>
+
+                      {salaryClosingData.every(e => e.scheduledWorkDays === 0) && (
+                        <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2 text-sm text-amber-800" data-testid="alert-no-schedule">
+                          <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <p className="font-semibold">لا يوجد جدول دوام موقّع لهذا الفرع في هذا الشهر</p>
+                            <p className="text-xs text-amber-700 mt-1">الأرقام تعتمد على سجلات الحضور المباشرة فقط. لحساب أدق، أنشئ الجدول الأسبوعي للموظفين من قسم "جدول الدوام".</p>
+                          </div>
+                        </div>
+                      )}
+
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -6522,8 +6661,10 @@ export default function EmployeeReportsDashboardPage() {
                             <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "رقم الموظف" : "Employee #"}</TableHead>
                             <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "الاسم" : "Name"}</TableHead>
                             <TableHead className={isRTL ? "text-right" : "text-left"}>{isRTL ? "الوظيفة" : "Job Title"}</TableHead>
+                            <TableHead className="text-center" title={isRTL ? "أيام العمل المجدولة (من الجدول الموقّع)" : "Scheduled work days"}>{isRTL ? "أيام العمل" : "Work Days"}</TableHead>
                             <TableHead className="text-center">{isRTL ? "الحضور" : "Present"}</TableHead>
                             <TableHead className="text-center">{isRTL ? "الغياب" : "Absent"}</TableHead>
+                            <TableHead className="text-center" title={isRTL ? "الإجازات (isOff في الجدول الموقّع)" : "Off days from signed schedule"}>{isRTL ? "الإجازات" : "Off"}</TableHead>
                             <TableHead className="text-center">{isRTL ? "الساعات" : "Hours"}</TableHead>
                             <TableHead className="text-center">{isRTL ? "الراتب" : "Salary"}</TableHead>
                             <TableHead className="text-center">{isRTL ? "البدلات" : "Allowances"}</TableHead>
@@ -6539,10 +6680,16 @@ export default function EmployeeReportsDashboardPage() {
                               <TableCell className="font-medium">{emp.employeeName}</TableCell>
                               <TableCell>{emp.jobTitle}</TableCell>
                               <TableCell className="text-center">
+                                <Badge className="bg-blue-100 text-blue-800">{emp.scheduledWorkDays}</Badge>
+                              </TableCell>
+                              <TableCell className="text-center">
                                 <Badge className="bg-green-100 text-green-800">{emp.presentDays}</Badge>
                               </TableCell>
                               <TableCell className="text-center">
                                 <Badge className="bg-red-100 text-red-800">{emp.absentDays}</Badge>
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <Badge className="bg-amber-100 text-amber-800">{emp.offDays}</Badge>
                               </TableCell>
                               <TableCell className="text-center">{emp.totalHours}</TableCell>
                               <TableCell className="text-center">{formatCurrency(emp.baseSalary, isRTL)}</TableCell>

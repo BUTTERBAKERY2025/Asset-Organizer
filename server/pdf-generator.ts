@@ -15,6 +15,8 @@ import {
 export interface SalaryClosingEmployee {
   employeeName: string;
   jobTitle: string;
+  scheduledWorkDays?: number;
+  offDays?: number;
   presentDays: number;
   absentDays: number;
   totalHours: number;
@@ -55,8 +57,10 @@ export async function generateSalaryClosingPdf(data: SalaryClosingPdfData): Prom
       <td style="text-align: center;">${index + 1}</td>
       <td style="text-align: right;">${emp.employeeName}</td>
       <td style="text-align: right;">${emp.jobTitle}</td>
-      <td style="text-align: center;">${emp.presentDays}</td>
-      <td style="text-align: center;">${emp.absentDays}</td>
+      <td style="text-align: center; background:#eff6ff;">${emp.scheduledWorkDays ?? '-'}</td>
+      <td style="text-align: center; background:#ecfdf5;">${emp.presentDays}</td>
+      <td style="text-align: center; background:#fef2f2;">${emp.absentDays}</td>
+      <td style="text-align: center; background:#fffbeb;">${emp.offDays ?? '-'}</td>
       <td style="text-align: center;">${emp.totalHours}</td>
       <td style="text-align: center;">${formatNumber(emp.baseSalary)}</td>
       <td style="text-align: center;">${formatNumber(emp.allowances)}</td>
@@ -138,8 +142,10 @@ export async function generateSalaryClosingPdf(data: SalaryClosingPdfData): Prom
         <th>م</th>
         <th>الموظف</th>
         <th>الوظيفة</th>
+        <th>أيام العمل</th>
         <th>الحضور</th>
         <th>الغياب</th>
+        <th>الإجازات</th>
         <th>الساعات</th>
         <th>الراتب</th>
         <th>البدلات</th>
