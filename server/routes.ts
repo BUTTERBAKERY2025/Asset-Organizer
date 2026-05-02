@@ -93,6 +93,7 @@ import {
   generateInventoryCountPdf, type InventoryCountPdfData,
   generateTodayAttendancePdf, type TodayAttendancePdfData,
   generateEmployeeAttendanceReportPdf, type EmployeeAttendanceReportPdfData,
+  generateBranchTimesheetPdf, type BranchTimesheetPdfData,
   generateAttendanceLogPdf, type AttendanceLogPdfData
 } from "./pdf-generator";
 import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertProjectExpenseSchema, insertProjectDailyLogSchema, insertProjectDailyLogPhotoSchema, insertDailyLogActivitySchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertInfluencerContractSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema, isMadeToOrderCategory, suggestCategoryFromProductName, userBranchAccess } from "@shared/schema";
@@ -24088,6 +24089,175 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error generating timesheet report:", error);
       res.status(500).json({ error: "فشل في إنشاء التقرير" });
+    }
+  });
+
+  // Generate branch-wide timesheet PDF (multi-page, one employee per page)
+  app.post("/api/timesheet-reports/generate-branch-pdf", isAuthenticated, requirePermission("timesheet", "create"), async (req, res) => {
+    try {
+      const { branchId, startDate, endDate } = req.body;
+      if (!branchId || branchId === "all" || !startDate || !endDate) {
+        return res.status(400).json({ error: "يجب اختيار فرع محدد وفترة زمنية" });
+      }
+
+      if (!isUserAdmin(req)) {
+        const hasAccess = await canAccessBranch(req, branchId);
+        if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول لهذا الفرع" });
+      }
+
+      const branch = await storage.getBranch(branchId);
+      if (!branch) return res.status(404).json({ error: "الفرع غير موجود" });
+
+      // Build employee list (mirrors UI logic): branch users + branch_employees without linked user
+      const allUsers = await storage.getAllUsers();
+      const branchUsers = allUsers.filter((u: any) => u.branchId === branchId);
+      const branchEmps = await storage.getBranchEmployeesByBranch(branchId);
+      const standaloneEmps = branchEmps.filter((be: any) => !be.linkedUserId && (be.status === 'active' || !be.status));
+
+      type Emp = { id: string; name: string; jobTitle: string; employeeNumber?: string };
+      const employees: Emp[] = [
+        ...branchUsers.map((u: any) => ({
+          id: u.id,
+          name: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.username || 'موظف',
+          jobTitle: u.jobTitle || '-',
+        })),
+        ...standaloneEmps.map((be: any) => ({
+          id: `branch_emp_${be.id}`,
+          name: be.employeeName,
+          jobTitle: be.jobTitle,
+          employeeNumber: be.employeeNumber || undefined,
+        })),
+      ];
+
+      if (employees.length === 0) {
+        return res.status(400).json({ error: "لا يوجد موظفون في هذا الفرع" });
+      }
+
+      // Fetch schedules and attendance once for the whole branch+range
+      const allSchedules = await storage.getEmployeeSchedulesByBranchAndDateRange(branchId, startDate, endDate);
+      const allAttendance = await storage.getAllAttendanceRecords({ branchId, startDate, endDate });
+
+      const dayNames = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+      const arDayMap: Record<string, string> = {
+        sat: "السبت", sun: "الأحد", mon: "الاثنين", tue: "الثلاثاء", wed: "الأربعاء", thu: "الخميس", fri: "الجمعة"
+      };
+      const arStatusMap: Record<string, string> = {
+        present: "حاضر", late: "متأخر", absent: "غائب", day_off: "إجازة", pending: "معلق"
+      };
+      const monthLabel = (() => {
+        try {
+          const d = new Date(startDate);
+          const months = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
+          return `${months[d.getMonth()]} ${d.getFullYear()}`;
+        } catch { return ""; }
+      })();
+
+      const employeeReports = employees.map(emp => {
+        const empSchedules = allSchedules.filter((s: any) => s.employeeId === emp.id);
+        const empAttendance = allAttendance.filter((a: any) => a.employeeId === emp.id);
+
+        let scheduledDays = 0, presentDays = 0, absentDays = 0, lateDays = 0, offDays = 0;
+        let totalScheduledHours = 0, totalActualHours = 0, totalLateMinutes = 0, totalOvertimeMinutes = 0;
+        const entries: any[] = [];
+
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          const dateStr = d.toISOString().split('T')[0];
+          const dayKey = dayNames[d.getDay()];
+          const schedule = empSchedules.find((s: any) => s.scheduleDate === dateStr);
+          const attendance = empAttendance.find((a: any) => a.attendanceDate === dateStr);
+
+          const isOff = schedule?.isOff ?? (dayKey === 'fri' && !schedule);
+          const scheduledStart = schedule?.startTime || (isOff ? "-" : "08:00");
+          const scheduledEnd = schedule?.endTime || (isOff ? "-" : "16:00");
+
+          let scheduledHours = 0;
+          if (!isOff && schedule?.startTime && schedule?.endTime) {
+            const sp = schedule.startTime.split(':').map(Number);
+            const ep = schedule.endTime.split(':').map(Number);
+            scheduledHours = (ep[0] + ep[1] / 60) - (sp[0] + sp[1] / 60);
+            if (scheduledHours < 0) scheduledHours += 24;
+          } else if (!isOff) {
+            scheduledHours = 8;
+          }
+
+          let statusKey = "pending";
+          if (isOff) {
+            statusKey = "day_off";
+          } else if (attendance) {
+            statusKey = (attendance.status === "present" || attendance.status === "late" || attendance.status === "absent")
+              ? attendance.status
+              : "absent";
+          } else {
+            statusKey = "absent";
+          }
+
+          const actualHours = attendance?.workingHours || 0;
+          const lateMin = attendance?.lateMinutes || 0;
+          const otMin = attendance?.overtimeMinutes || 0;
+
+          if (isOff) {
+            offDays++;
+          } else {
+            scheduledDays++;
+            totalScheduledHours += scheduledHours;
+            if (statusKey === "present" || statusKey === "late") {
+              presentDays++;
+              totalActualHours += actualHours;
+              totalOvertimeMinutes += otMin;
+            }
+            if (statusKey === "late") {
+              lateDays++;
+              totalLateMinutes += lateMin;
+            }
+            if (statusKey === "absent") absentDays++;
+          }
+
+          entries.push({
+            date: dateStr,
+            dayName: arDayMap[dayKey] || dayKey,
+            scheduledStart,
+            scheduledEnd,
+            actualCheckIn: attendance?.actualCheckIn || (isOff ? "-" : "غ"),
+            actualCheckOut: attendance?.actualCheckOut || (isOff ? "-" : "غ"),
+            workHours: actualHours ? actualHours.toFixed(1) : "-",
+            status: arStatusMap[statusKey] || statusKey,
+            isOff,
+            checkInSignature: attendance?.checkInSignature || null,
+          });
+        }
+
+        return {
+          employeeName: emp.name,
+          jobTitle: emp.jobTitle,
+          employeeNumber: emp.employeeNumber,
+          scheduledDays, presentDays, absentDays, lateDays, offDays,
+          totalScheduledHours: Math.round(totalScheduledHours * 100) / 100,
+          totalActualHours: Math.round(totalActualHours * 100) / 100,
+          totalLateMinutes,
+          totalOvertimeMinutes,
+          entries,
+        };
+      });
+
+      const pdfBuffer = await generateBranchTimesheetPdf({
+        branchName: branch.name,
+        periodStart: startDate,
+        periodEnd: endDate,
+        monthLabel,
+        employees: employeeReports,
+      });
+
+      const filename = `branch_timesheet_${branchId}_${startDate}_${endDate}.pdf`;
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Length', pdfBuffer.length.toString());
+      res.end(pdfBuffer);
+    } catch (error) {
+      console.error("Error generating branch timesheet PDF:", error);
+      res.status(500).json({ error: "فشل في إنشاء تقرير الفرع" });
     }
   });
 

@@ -246,6 +246,15 @@
       "monthlyReport": "Monthly Timesheet Report",
       "fromDate": "From Date",
       "toDate": "To Date"
+    },
+    "branchPdf": {
+      "title": "Full Branch Report (PDF)",
+      "description": "Download one PDF containing all employees of the selected branch — one page per employee with check-in/out and signature areas",
+      "downloadBtn": "Download Full Branch Report",
+      "generating": "Generating report...",
+      "selectBranchFirst": "Please select a specific branch (not \"All Branches\")",
+      "success": "Branch report generated successfully",
+      "error": "Failed to generate branch report"
     }
   },
   "branchEmployees": {

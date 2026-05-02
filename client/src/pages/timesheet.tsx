@@ -127,6 +127,7 @@ export default function TimesheetPage() {
   const [signatureType, setSignatureType] = useState<"employee" | "manager">("employee");
   const [selectedReport, setSelectedReport] = useState<TimesheetReport | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isDownloadingBranchPdf, setIsDownloadingBranchPdf] = useState(false);
   
   const signatureRef = useRef<SignatureCanvas>(null);
 
@@ -270,6 +271,49 @@ export default function TimesheetPage() {
       { employeeId: selectedEmployee, branchId, startDate, endDate },
       { onSettled: () => setIsGenerating(false) }
     );
+  };
+
+  const handleDownloadBranchPdf = async () => {
+    if (!selectedBranch || selectedBranch === "all") {
+      toast({ title: t("common.alert"), description: t("timesheet.branchPdf.selectBranchFirst"), variant: "destructive" });
+      return;
+    }
+
+    const [year, month] = selectedMonth.split("-").map(Number);
+    const monthDate = new Date(year, month - 1, 1);
+    const startDate = format(startOfMonth(monthDate), "yyyy-MM-dd");
+    const endDate = format(endOfMonth(monthDate), "yyyy-MM-dd");
+
+    setIsDownloadingBranchPdf(true);
+    try {
+      const res = await fetch("/api/timesheet-reports/generate-branch-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ branchId: selectedBranch, startDate, endDate }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: t("timesheet.branchPdf.error") }));
+        throw new Error(err.error || t("timesheet.branchPdf.error"));
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const branchName = branches.find(b => b.id === selectedBranch)?.name || selectedBranch;
+      a.download = `timesheet_${branchName}_${selectedMonth}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast({ title: t("timesheet.branchPdf.success") });
+    } catch (e: any) {
+      toast({ title: t("common.alert"), description: e.message || t("timesheet.branchPdf.error"), variant: "destructive" });
+    } finally {
+      setIsDownloadingBranchPdf(false);
+    }
   };
 
   const handleOpenSignature = (type: "employee" | "manager", report: TimesheetReport) => {
@@ -608,6 +652,38 @@ export default function TimesheetPage() {
                     <>
                       <FileText className="w-4 h-4" />
                       {t("timesheet.generateBtn")}
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="border-amber-200 bg-amber-50/40">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-amber-900">
+                  <Download className="w-5 h-5" />
+                  {t("timesheet.branchPdf.title")}
+                </CardTitle>
+                <CardDescription className="text-amber-800/80">
+                  {t("timesheet.branchPdf.description")}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button
+                  onClick={handleDownloadBranchPdf}
+                  disabled={isDownloadingBranchPdf || !selectedBranch || selectedBranch === "all"}
+                  className="w-full gap-2 h-11 sm:h-9 bg-amber-600 hover:bg-amber-700 text-white"
+                  data-testid="btn-download-branch-pdf"
+                >
+                  {isDownloadingBranchPdf ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      {t("timesheet.branchPdf.generating")}
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4" />
+                      {t("timesheet.branchPdf.downloadBtn")}
                     </>
                   )}
                 </Button>

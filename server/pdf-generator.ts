@@ -3249,3 +3249,180 @@ export async function generateAttendanceLogPdf(data: AttendanceLogPdfData): Prom
 
   return await generatePdfFromHtml(html, { landscape: false });
 }
+
+// ==================== Branch-Wide Timesheet PDF (Multi-page) ====================
+
+export interface BranchTimesheetEntry {
+  date: string;
+  dayName: string;
+  scheduledStart: string;
+  scheduledEnd: string;
+  actualCheckIn: string;
+  actualCheckOut: string;
+  workHours: string;
+  status: string;
+  isOff: boolean;
+  checkInSignature?: string | null;
+}
+
+export interface BranchTimesheetEmployeeReport {
+  employeeName: string;
+  jobTitle: string;
+  employeeNumber?: string;
+  scheduledDays: number;
+  presentDays: number;
+  absentDays: number;
+  lateDays: number;
+  offDays: number;
+  totalScheduledHours: number;
+  totalActualHours: number;
+  totalLateMinutes: number;
+  totalOvertimeMinutes: number;
+  entries: BranchTimesheetEntry[];
+}
+
+export interface BranchTimesheetPdfData {
+  branchName: string;
+  periodStart: string;
+  periodEnd: string;
+  monthLabel: string;
+  employees: BranchTimesheetEmployeeReport[];
+}
+
+export async function generateBranchTimesheetPdf(data: BranchTimesheetPdfData): Promise<Buffer> {
+  const escapeHtml = (s: string | null | undefined) => String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+  const statusColors: Record<string, { bg: string; text: string }> = {
+    'حاضر': { bg: '#dcfce7', text: '#166534' },
+    'متأخر': { bg: '#fef3c7', text: '#92400e' },
+    'غائب': { bg: '#fee2e2', text: '#991b1b' },
+    'إجازة': { bg: '#dbeafe', text: '#1e40af' },
+    'معلق': { bg: '#f3f4f6', text: '#374151' },
+  };
+
+  const renderEntries = (entries: BranchTimesheetEntry[]) => entries.map((e, i) => {
+    const colors = statusColors[e.status] || statusColors['معلق'];
+    let sigHtml = '<span style="color:#9ca3af;">-</span>';
+    if (e.checkInSignature && e.checkInSignature.startsWith('data:image')) {
+      sigHtml = `<img src="${e.checkInSignature}" style="max-width:55px;max-height:25px;" />`;
+    }
+    return `<tr style="background:${i % 2 === 0 ? '#fff' : '#f9fafb'};">
+        <td style="text-align:center;padding:5px;border:1px solid #e5e7eb;">${i + 1}</td>
+        <td style="text-align:center;padding:5px;border:1px solid #e5e7eb;font-weight:500;">${escapeHtml(e.date)}</td>
+        <td style="text-align:center;padding:5px;border:1px solid #e5e7eb;">${escapeHtml(e.dayName)}</td>
+        <td style="text-align:center;padding:5px;border:1px solid #e5e7eb;">${escapeHtml(e.scheduledStart)}</td>
+        <td style="text-align:center;padding:5px;border:1px solid #e5e7eb;">${escapeHtml(e.scheduledEnd)}</td>
+        <td style="text-align:center;padding:5px;border:1px solid #e5e7eb;color:#166534;font-weight:500;">${escapeHtml(e.actualCheckIn)}</td>
+        <td style="text-align:center;padding:5px;border:1px solid #e5e7eb;color:#2563eb;font-weight:500;">${escapeHtml(e.actualCheckOut)}</td>
+        <td style="text-align:center;padding:5px;border:1px solid #e5e7eb;">${escapeHtml(e.workHours)}</td>
+        <td style="text-align:center;padding:5px;border:1px solid #e5e7eb;">
+          <span style="background:${colors.bg};color:${colors.text};padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;">${escapeHtml(e.status)}</span>
+        </td>
+        <td style="text-align:center;padding:5px;border:1px solid #e5e7eb;">${sigHtml}</td>
+      </tr>`;
+  }).join('');
+
+  const employeePages = data.employees.map((emp, idx) => `
+    <div class="employee-page" ${idx > 0 ? 'style="page-break-before: always;"' : ''}>
+      <div class="page-header">
+        <div class="brand">BUTTER BAKERY</div>
+        <h1>تقرير التايم شيت الشهري</h1>
+        <div class="period">${escapeHtml(data.branchName)} — ${escapeHtml(data.monthLabel)} (${escapeHtml(data.periodStart)} → ${escapeHtml(data.periodEnd)})</div>
+      </div>
+      <div class="employee-info">
+        <div>
+          <div class="employee-name">${escapeHtml(emp.employeeName)}</div>
+          <div class="employee-meta">${escapeHtml(emp.jobTitle || '-')}${emp.employeeNumber ? ' • ' + escapeHtml(emp.employeeNumber) : ''}</div>
+        </div>
+        <div class="employee-counter">موظف ${idx + 1} من ${data.employees.length}</div>
+      </div>
+      <div class="summary">
+        <div class="summary-item"><div class="summary-value">${emp.scheduledDays}</div><div class="summary-label">أيام العمل</div></div>
+        <div class="summary-item ok"><div class="summary-value">${emp.presentDays}</div><div class="summary-label">الحضور</div></div>
+        <div class="summary-item bad"><div class="summary-value">${emp.absentDays}</div><div class="summary-label">الغياب</div></div>
+        <div class="summary-item warn"><div class="summary-value">${emp.lateDays}</div><div class="summary-label">التأخير</div></div>
+        <div class="summary-item off"><div class="summary-value">${emp.offDays}</div><div class="summary-label">الإجازات</div></div>
+        <div class="summary-item info"><div class="summary-value">${emp.totalActualHours.toFixed(1)}</div><div class="summary-label">ساعات العمل</div></div>
+      </div>
+      <table class="entries-table">
+        <thead>
+          <tr>
+            <th style="width:30px;">#</th>
+            <th>التاريخ</th>
+            <th>اليوم</th>
+            <th>بداية الدوام</th>
+            <th>نهاية الدوام</th>
+            <th>الحضور</th>
+            <th>الانصراف</th>
+            <th>الساعات</th>
+            <th>الحالة</th>
+            <th>توقيع الموظف</th>
+          </tr>
+        </thead>
+        <tbody>${renderEntries(emp.entries)}</tbody>
+      </table>
+      <div class="signatures">
+        <div class="sig-box">
+          <div class="sig-title">إقرار الموظف</div>
+          <div class="sig-text">أقر بصحة بيانات الحضور والانصراف المذكورة أعلاه</div>
+          <div class="sig-line"></div>
+          <div class="sig-label">التوقيع / التاريخ</div>
+        </div>
+        <div class="sig-box">
+          <div class="sig-title">اعتماد المدير المباشر</div>
+          <div class="sig-text">أصادق على صحة بيانات حضور وانصراف الموظف</div>
+          <div class="sig-line"></div>
+          <div class="sig-label">التوقيع / التاريخ</div>
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  const html = `<!DOCTYPE html>
+  <html dir="rtl" lang="ar">
+  <head>
+    <meta charset="UTF-8">
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { font-family: 'Cairo', Arial, sans-serif; direction: rtl; color: #1f2937; padding: 12px; }
+      .employee-page { page-break-inside: avoid; }
+      .page-header { text-align: center; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 2px solid #D4AF37; }
+      .page-header .brand { font-size: 18px; font-weight: 700; color: #D4AF37; letter-spacing: 2px; }
+      .page-header h1 { font-size: 15px; color: #1a1a1a; margin: 5px 0; }
+      .page-header .period { font-size: 11px; color: #6b7280; }
+      .employee-info { background: #fef3c7; border: 1px solid #fcd34d; border-radius: 8px; padding: 8px 12px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+      .employee-name { font-size: 16px; font-weight: 700; color: #92400e; }
+      .employee-meta { font-size: 11px; color: #78350f; margin-top: 2px; }
+      .employee-counter { background: #D4AF37; color: white; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+      .summary { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; margin-bottom: 10px; }
+      .summary-item { text-align: center; padding: 6px 4px; background: #f9fafb; border-radius: 6px; border: 1px solid #e5e7eb; }
+      .summary-item.ok { background: #f0fdf4; border-color: #bbf7d0; }
+      .summary-item.bad { background: #fef2f2; border-color: #fecaca; }
+      .summary-item.warn { background: #fffbeb; border-color: #fde68a; }
+      .summary-item.off { background: #eff6ff; border-color: #bfdbfe; }
+      .summary-item.info { background: #f5f3ff; border-color: #ddd6fe; }
+      .summary-value { font-size: 17px; font-weight: 700; color: #1f2937; }
+      .summary-label { font-size: 9px; color: #6b7280; margin-top: 2px; }
+      .entries-table { width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 12px; }
+      .entries-table th { background: #D4AF37; color: white; padding: 6px 4px; font-weight: 600; border: 1px solid #b8941f; }
+      .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+      .sig-box { border: 1px dashed #9ca3af; border-radius: 6px; padding: 10px; }
+      .sig-title { font-size: 12px; font-weight: 700; color: #1f2937; margin-bottom: 4px; }
+      .sig-text { font-size: 10px; color: #6b7280; margin-bottom: 22px; }
+      .sig-line { border-bottom: 1px solid #1f2937; margin-bottom: 4px; }
+      .sig-label { font-size: 9px; color: #6b7280; }
+    </style>
+  </head>
+  <body>
+    ${employeePages}
+  </body>
+  </html>`;
+
+  return await generatePdfFromHtml(html, { landscape: true });
+}
