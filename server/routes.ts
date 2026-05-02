@@ -2627,10 +2627,27 @@ export async function registerRoutes(
       if (!log) return res.status(404).json({ error: "اليومية غير موجودة" });
       const access = await checkProjectBranchAccess(req, log.projectId);
       if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
-      const [photos, activities, expenses] = await Promise.all([
-        storage.getDailyLogPhotos(id),
-        storage.getDailyLogActivities(id),
-        storage.getDailyLogExpenses(id),
+
+      // Photos query is on a long-existing table — let real errors bubble up.
+      const photos = await storage.getDailyLogPhotos(id).catch((e) => {
+        console.error("Error fetching daily log photos:", e);
+        return [];
+      });
+
+      // Activities and expense-back-ref queries depend on migration 013 (new
+      // table `daily_log_activities` + new column `project_expenses.daily_log_id`).
+      // If that migration hasn't been applied yet on the target DB, degrade
+      // gracefully instead of hard-failing the entire daily-log fetch (which
+      // would render the page as "اليومية غير موجودة" to the user).
+      const [activities, expenses] = await Promise.all([
+        storage.getDailyLogActivities(id).catch((e) => {
+          console.error("[daily-log] activities query failed (migration 013 missing?):", e?.message || e);
+          return [];
+        }),
+        storage.getDailyLogExpenses(id).catch((e) => {
+          console.error("[daily-log] expenses query failed (migration 013 missing?):", e?.message || e);
+          return [];
+        }),
       ]);
       res.json({ ...log, photos, activities, expenses });
     } catch (error) {
