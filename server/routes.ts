@@ -24477,7 +24477,7 @@ export async function registerRoutes(
         monthEnd = `${month}-${String(lastDay).padStart(2, "0")}`;
       }
 
-      const [employees, attendance, schedules, signedTimesheets] = await Promise.all([
+      const [employees, attendance, schedules, signedTimesheets, salaryDeductions] = await Promise.all([
         (async () => {
           try {
             if (allowedBranches === null) {
@@ -24549,12 +24549,132 @@ export async function registerRoutes(
             return [];
           } catch (e) { return []; }
         })(),
+        (async () => {
+          try {
+            if (!month) return [];
+            if (branchFilter.singleBranchId) {
+              return await storage.getSalaryDeductionsByBranchAndMonth(branchFilter.singleBranchId, month);
+            }
+            if (branchFilter.branchIds && branchFilter.branchIds.length > 0) {
+              const all = await Promise.all(
+                branchFilter.branchIds.map(bid =>
+                  storage.getSalaryDeductionsByBranchAndMonth(bid, month).catch(() => [])
+                )
+              );
+              return all.flat();
+            }
+            // Admin all-branches scope (branchIds === null, hasAccess === true)
+            if (branchFilter.branchIds === null) {
+              return await storage.getAllSalaryDeductionsByMonth(month);
+            }
+            return [];
+          } catch (e) { return []; }
+        })(),
       ]);
 
-      res.json({ employees, attendance, schedules, signedTimesheets });
+      res.json({ employees, attendance, schedules, signedTimesheets, salaryDeductions });
     } catch (error) {
       console.error("Error fetching employee reports bundle:", error);
       res.status(500).json({ error: "فشل في جلب بيانات تقارير الموظفين" });
+    }
+  });
+
+  // ===== Salary Deductions CRUD - السُلف والخصومات اليدوية =====
+  app.get("/api/salary-deductions", isAuthenticated, requirePermission("branch_employees", "view"), async (req, res) => {
+    try {
+      const branchId = req.query.branchId as string | undefined;
+      const month = req.query.month as string | undefined;
+      const employeeIdParam = req.query.branchEmployeeId as string | undefined;
+
+      if (employeeIdParam && month) {
+        const eid = parseInt(employeeIdParam, 10);
+        if (Number.isNaN(eid)) return res.status(400).json({ error: "رقم الموظف غير صحيح" });
+        const emp = await storage.getBranchEmployee(eid);
+        if (!emp) return res.status(404).json({ error: "الموظف غير موجود" });
+        const hasAccess = await canAccessBranch(req, emp.branchId);
+        if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول" });
+        const rows = await storage.getSalaryDeductionsByEmployeeAndMonth(eid, month);
+        return res.json(rows);
+      }
+
+      if (!branchId || !month) {
+        return res.status(400).json({ error: "branchId و month مطلوبان" });
+      }
+      const hasAccess = await canAccessBranch(req, branchId);
+      if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول" });
+      const rows = await storage.getSalaryDeductionsByBranchAndMonth(branchId, month);
+      res.json(rows);
+    } catch (error) {
+      console.error("Error fetching salary deductions:", error);
+      res.status(500).json({ error: "فشل في جلب السُلف والخصومات" });
+    }
+  });
+
+  app.post("/api/salary-deductions", isAuthenticated, requirePermission("branch_employees", "edit"), async (req, res) => {
+    try {
+      const { insertSalaryDeductionSchema } = await import("@shared/schema");
+      const parsed = insertSalaryDeductionSchema.safeParse({
+        ...req.body,
+        createdBy: (req as any).user?.id,
+      });
+      if (!parsed.success) {
+        return res.status(400).json({ error: "بيانات غير صحيحة", details: parsed.error.errors });
+      }
+      const emp = await storage.getBranchEmployee(parsed.data.branchEmployeeId);
+      if (!emp) return res.status(404).json({ error: "الموظف غير موجود" });
+      if (emp.branchId !== parsed.data.branchId) {
+        return res.status(400).json({ error: "الفرع لا يطابق فرع الموظف" });
+      }
+      const hasAccess = await canAccessBranch(req, parsed.data.branchId);
+      if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول" });
+      const row = await storage.createSalaryDeduction(parsed.data);
+      res.status(201).json(row);
+    } catch (error) {
+      console.error("Error creating salary deduction:", error);
+      res.status(500).json({ error: "فشل في إضافة السلفة/الخصم" });
+    }
+  });
+
+  app.put("/api/salary-deductions/:id", isAuthenticated, requirePermission("branch_employees", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ error: "رقم غير صحيح" });
+      const existing = await storage.getSalaryDeduction(id);
+      if (!existing) return res.status(404).json({ error: "السجل غير موجود" });
+      const hasAccess = await canAccessBranch(req, existing.branchId);
+      if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول" });
+      // Lock down: only allow editing safe fields. Immutable: branchId, branchEmployeeId, createdBy, month, id, timestamps.
+      const { z } = await import("zod");
+      const updateSchema = z.object({
+        type: z.enum(["advance", "deduction", "loan_installment", "penalty", "other"]).optional(),
+        amount: z.number().positive().optional(),
+        description: z.string().nullable().optional(),
+      }).strict();
+      const parsed = updateSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "بيانات غير صحيحة (الحقول المسموح تعديلها: النوع، المبلغ، الوصف)", details: parsed.error.errors });
+      }
+      const row = await storage.updateSalaryDeduction(id, parsed.data);
+      res.json(row);
+    } catch (error) {
+      console.error("Error updating salary deduction:", error);
+      res.status(500).json({ error: "فشل في تحديث السلفة/الخصم" });
+    }
+  });
+
+  app.delete("/api/salary-deductions/:id", isAuthenticated, requirePermission("branch_employees", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ error: "رقم غير صحيح" });
+      const existing = await storage.getSalaryDeduction(id);
+      if (!existing) return res.status(404).json({ error: "السجل غير موجود" });
+      const hasAccess = await canAccessBranch(req, existing.branchId);
+      if (!hasAccess) return res.status(403).json({ error: "غير مصرح بالوصول" });
+      await storage.deleteSalaryDeduction(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting salary deduction:", error);
+      res.status(500).json({ error: "فشل في حذف السلفة/الخصم" });
     }
   });
 

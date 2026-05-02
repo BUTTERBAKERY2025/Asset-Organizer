@@ -324,6 +324,9 @@ import {
   branchEmployees,
   type BranchEmployee,
   type InsertBranchEmployee,
+  salaryDeductions,
+  type SalaryDeduction,
+  type InsertSalaryDeduction,
   branchShiftProfiles,
   type BranchShiftProfile,
   type InsertBranchShiftProfile,
@@ -1211,6 +1214,15 @@ export interface IStorage {
   createBulkTimesheetReportEntries(entries: InsertTimesheetReportEntry[]): Promise<TimesheetReportEntry[]>;
   updateTimesheetReportEntry(id: number, entry: Partial<InsertTimesheetReportEntry>): Promise<TimesheetReportEntry | undefined>;
   getFinalizedTimesheetEntriesByBranchAndDateRange(branchId: string, startDate: string, endDate: string): Promise<Array<{ report: TimesheetReport; entries: TimesheetReportEntry[] }>>;
+
+  // Salary Deductions - السُلف والخصومات اليدوية الشهرية
+  getSalaryDeductionsByBranchAndMonth(branchId: string, month: string): Promise<SalaryDeduction[]>;
+  getAllSalaryDeductionsByMonth(month: string): Promise<SalaryDeduction[]>;
+  getSalaryDeductionsByEmployeeAndMonth(branchEmployeeId: number, month: string): Promise<SalaryDeduction[]>;
+  getSalaryDeduction(id: number): Promise<SalaryDeduction | undefined>;
+  createSalaryDeduction(deduction: InsertSalaryDeduction): Promise<SalaryDeduction>;
+  updateSalaryDeduction(id: number, deduction: Partial<InsertSalaryDeduction>): Promise<SalaryDeduction | undefined>;
+  deleteSalaryDeduction(id: number): Promise<boolean>;
 
   // Branch Employees - موظفي الفروع
   getAllBranchEmployees(): Promise<BranchEmployee[]>;
@@ -10146,6 +10158,57 @@ export class DatabaseStorage implements IStorage {
       entriesByReport.set(e.reportId, list);
     }
     return reports.map(r => ({ report: r, entries: entriesByReport.get(r.id) || [] }));
+  }
+
+  // ===== Salary Deductions - السُلف والخصومات اليدوية الشهرية =====
+  async getAllSalaryDeductionsByMonth(month: string): Promise<SalaryDeduction[]> {
+    return await db.select()
+      .from(salaryDeductions)
+      .where(eq(salaryDeductions.month, month))
+      .orderBy(desc(salaryDeductions.createdAt));
+  }
+
+  async getSalaryDeductionsByBranchAndMonth(branchId: string, month: string): Promise<SalaryDeduction[]> {
+    return await db.select()
+      .from(salaryDeductions)
+      .where(and(
+        eq(salaryDeductions.branchId, branchId),
+        eq(salaryDeductions.month, month),
+      ))
+      .orderBy(desc(salaryDeductions.createdAt));
+  }
+
+  async getSalaryDeductionsByEmployeeAndMonth(branchEmployeeId: number, month: string): Promise<SalaryDeduction[]> {
+    return await db.select()
+      .from(salaryDeductions)
+      .where(and(
+        eq(salaryDeductions.branchEmployeeId, branchEmployeeId),
+        eq(salaryDeductions.month, month),
+      ))
+      .orderBy(desc(salaryDeductions.createdAt));
+  }
+
+  async getSalaryDeduction(id: number): Promise<SalaryDeduction | undefined> {
+    const [row] = await db.select().from(salaryDeductions).where(eq(salaryDeductions.id, id));
+    return row;
+  }
+
+  async createSalaryDeduction(deduction: InsertSalaryDeduction): Promise<SalaryDeduction> {
+    const [row] = await db.insert(salaryDeductions).values(deduction).returning();
+    return row;
+  }
+
+  async updateSalaryDeduction(id: number, deduction: Partial<InsertSalaryDeduction>): Promise<SalaryDeduction | undefined> {
+    const [row] = await db.update(salaryDeductions)
+      .set({ ...deduction, updatedAt: new Date() })
+      .where(eq(salaryDeductions.id, id))
+      .returning();
+    return row;
+  }
+
+  async deleteSalaryDeduction(id: number): Promise<boolean> {
+    const result = await db.delete(salaryDeductions).where(eq(salaryDeductions.id, id));
+    return (result.rowCount ?? 0) > 0;
   }
 
   // Branch Employees - موظفي الفروع

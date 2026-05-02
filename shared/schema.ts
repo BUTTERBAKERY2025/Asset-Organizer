@@ -5108,6 +5108,50 @@ export const insertBranchEmployeeSchema = createInsertSchema(branchEmployees).om
 export type BranchEmployee = typeof branchEmployees.$inferSelect;
 export type InsertBranchEmployee = z.infer<typeof insertBranchEmployeeSchema>;
 
+// =====================================================
+// Salary Deductions - السُلف والخصومات اليدوية الشهرية
+// =====================================================
+// جدول لتسجيل أي سُلفة أو خصم يدوي شهري على الموظف يُخصم من صافي الراتب
+// عند إغلاق الراتب الشهري.
+export const salaryDeductions = pgTable("salary_deductions", {
+  id: serial("id").primaryKey(),
+  branchEmployeeId: integer("branch_employee_id").notNull().references(() => branchEmployees.id, { onDelete: "cascade" }),
+  branchId: varchar("branch_id").notNull().references(() => branches.id),
+  month: text("month").notNull(), // YYYY-MM شهر الخصم
+  type: text("type").notNull(), // advance (سلفة) | deduction (خصم) | loan_installment (قسط) | penalty (جزاء/مخالفة) | other
+  amount: real("amount").notNull(), // المبلغ بالريال (موجب — يُخصم من الصافي)
+  description: text("description"), // وصف اختياري (سبب السلفة/الخصم)
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_salary_deductions_branch").on(table.branchId),
+  index("idx_salary_deductions_employee").on(table.branchEmployeeId),
+  index("idx_salary_deductions_month").on(table.month),
+  index("idx_salary_deductions_branch_month").on(table.branchId, table.month),
+]);
+
+export const insertSalaryDeductionSchema = createInsertSchema(salaryDeductions, {
+  amount: z.number().positive("المبلغ يجب أن يكون موجب"),
+  type: z.enum(["advance", "deduction", "loan_installment", "penalty", "other"]),
+  month: z.string().regex(/^\d{4}-\d{2}$/, "صيغة الشهر يجب أن تكون YYYY-MM"),
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type SalaryDeduction = typeof salaryDeductions.$inferSelect;
+export type InsertSalaryDeduction = z.infer<typeof insertSalaryDeductionSchema>;
+
+export const SALARY_DEDUCTION_TYPE_LABELS: Record<string, string> = {
+  advance: "سلفة",
+  deduction: "خصم يدوي",
+  loan_installment: "قسط قرض",
+  penalty: "جزاء/مخالفة",
+  other: "أخرى",
+};
+
 // Branch Job Titles - وظائف موظفي الفروع
 export const BRANCH_JOB_TITLES = [
   "كاشير",

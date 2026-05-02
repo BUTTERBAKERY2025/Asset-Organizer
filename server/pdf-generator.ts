@@ -17,6 +17,8 @@ export interface SalaryClosingEmployee {
   jobTitle: string;
   bankName?: string;
   bankAccountNumber?: string;
+  manualDeductions?: Array<{ type: string; amount: number; description?: string | null }>;
+  manualDeductionsTotal?: number;
   scheduledWorkDays?: number;
   offDays?: number;
   presentDays: number;
@@ -59,9 +61,10 @@ export async function generateSalaryClosingPdf(data: SalaryClosingPdfData): Prom
       grossSalary: acc.grossSalary + (emp.baseSalary + emp.allowances),
       absenceDeduction: acc.absenceDeduction + (emp.absenceDeduction || 0),
       socialInsurance: acc.socialInsurance + emp.socialInsurance,
+      manualDeductions: acc.manualDeductions + (emp.manualDeductionsTotal || 0),
       netSalary: acc.netSalary + emp.netSalary,
     }),
-    { baseSalary: 0, allowances: 0, grossSalary: 0, absenceDeduction: 0, socialInsurance: 0, netSalary: 0 }
+    { baseSalary: 0, allowances: 0, grossSalary: 0, absenceDeduction: 0, socialInsurance: 0, manualDeductions: 0, netSalary: 0 }
   );
 
   const dataSourceBadge = (src?: string): string => {
@@ -74,10 +77,14 @@ export async function generateSalaryClosingPdf(data: SalaryClosingPdfData): Prom
   const employeeRows = data.employees.map((emp, index) => {
     const dailyRate = emp.dailyRate ?? ((emp.baseSalary + emp.allowances) / 30);
     const absenceDeduction = emp.absenceDeduction ?? 0;
+    const manualTotal = emp.manualDeductionsTotal ?? 0;
     const rowBg = emp.dataSource === "signed_timesheet" ? "background:#f0fdf4;" : "";
     const bankCell = (emp.bankName || emp.bankAccountNumber)
       ? `${emp.bankName ? `<div style="font-weight:600; color:#374151;">${emp.bankName}</div>` : ''}${emp.bankAccountNumber ? `<div style="font-family:monospace; font-size:8px; direction:ltr; text-align:left; color:#111827;">${emp.bankAccountNumber}</div>` : ''}`
       : `<span style="color:#b45309; font-size:8px;">⚠️ غير مسجّل</span>`;
+    const manualCell = manualTotal > 0
+      ? `<div style="font-weight:700; color:#9a3412;">- ${formatNumber(manualTotal)}</div>${(emp.manualDeductions || []).map(d => `<div style="font-size:7px; color:#7c2d12;">${d.type}: ${formatNumber(d.amount)}${d.description ? ` (${d.description})` : ''}</div>`).join('')}`
+      : `<span style="color:#9ca3af;">-</span>`;
     return `
     <tr style="${rowBg}">
       <td style="text-align: center;">${index + 1}</td>
@@ -94,6 +101,7 @@ export async function generateSalaryClosingPdf(data: SalaryClosingPdfData): Prom
       <td style="text-align: center; color:#6b7280; font-size:8px;">${formatNumber(Math.round(dailyRate * 100) / 100)}</td>
       <td style="text-align: center; color: ${absenceDeduction > 0 ? 'red' : 'inherit'};">${absenceDeduction > 0 ? '- ' + formatNumber(absenceDeduction) : '-'}</td>
       <td style="text-align: center; color: ${emp.socialInsurance > 0 ? 'red' : 'inherit'};">${emp.socialInsurance > 0 ? '- ' + formatNumber(emp.socialInsurance) : '-'}</td>
+      <td style="text-align: right; background:#fff7ed; font-size:8px; max-width:140px; word-break:break-word;">${manualCell}</td>
       <td style="text-align: center; font-weight: bold;">${formatNumber(emp.netSalary)}</td>
     </tr>
   `;
@@ -186,7 +194,7 @@ export async function generateSalaryClosingPdf(data: SalaryClosingPdfData): Prom
         <th>الموظف</th>
         <th>الوظيفة</th>
         <th>البنك / الآيبان</th>
-        <th>أيام العمل</th>
+        <th>أيام العمل المجدولة</th>
         <th>الحضور</th>
         <th>الغياب</th>
         <th>الإجازات</th>
@@ -196,6 +204,7 @@ export async function generateSalaryClosingPdf(data: SalaryClosingPdfData): Prom
         <th>قيمة اليوم</th>
         <th>خصم الغياب</th>
         <th>التأمينات</th>
+        <th>سُلف/خصومات</th>
         <th>الصافي</th>
       </tr>
     </thead>
@@ -211,6 +220,7 @@ export async function generateSalaryClosingPdf(data: SalaryClosingPdfData): Prom
       <td style="text-align: center;">${formatNumber(totals.allowances)} ريال</td>
       <td style="text-align: center; color: red;">- ${formatNumber(totals.absenceDeduction)} ريال</td>
       <td style="text-align: center; color: red;">- ${formatNumber(totals.socialInsurance)} ريال</td>
+      <td style="text-align: center; color: #9a3412;">- ${formatNumber(totals.manualDeductions)} ريال</td>
       <td style="text-align: center; font-weight: bold;">${formatNumber(totals.netSalary)} ريال</td>
     </tr>
   </table>
@@ -222,6 +232,7 @@ export async function generateSalaryClosingPdf(data: SalaryClosingPdfData): Prom
     { label: 'إجمالي الرواتب (شامل البدلات)', value: formatNumber(totals.grossSalary) + ' ريال' },
     { label: 'إجمالي خصم الغياب', value: '- ' + formatNumber(totals.absenceDeduction) + ' ريال' },
     { label: 'إجمالي التأمينات', value: '- ' + formatNumber(totals.socialInsurance) + ' ريال' },
+    { label: 'إجمالي السُلف والخصومات اليدوية', value: '- ' + formatNumber(totals.manualDeductions) + ' ريال' },
     { label: 'صافي الرواتب المستحقة', value: formatNumber(totals.netSalary) + ' ريال' },
     { label: 'متوسط الصافي', value: formatNumber(Math.round(safeAverage(totals.netSalary, data.employees.length))) + ' ريال' },
   ])}

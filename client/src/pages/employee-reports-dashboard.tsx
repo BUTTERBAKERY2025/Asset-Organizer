@@ -34,9 +34,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { getQueryFn } from "@/lib/queryClient";
+import { getQueryFn, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { Textarea } from "@/components/ui/textarea";
 import { useBranches } from "@/hooks/useBranches";
 import {
   BarChart,
@@ -76,8 +78,230 @@ import {
   Wallet,
   RefreshCw,
   Shield,
+  Plus,
+  Trash2,
+  MinusCircle,
 } from "lucide-react";
-import type { BranchEmployee, AttendanceRecord, TimesheetReport } from "@shared/schema";
+import type { BranchEmployee, AttendanceRecord, TimesheetReport, SalaryDeduction } from "@shared/schema";
+import { SALARY_DEDUCTION_TYPE_LABELS } from "@shared/schema";
+
+// =====================================================
+// مكوّن نافذة إدارة السُلف والخصومات اليدوية للموظف
+// =====================================================
+function DeductionsPopover({
+  branchEmployeeId,
+  branchId,
+  month,
+  employeeName,
+  initialDeductions,
+  totalAmount,
+  onChanged,
+}: {
+  branchEmployeeId: number;
+  branchId: string;
+  month: string;
+  employeeName: string;
+  initialDeductions: SalaryDeduction[];
+  totalAmount: number;
+  onChanged: () => void;
+}) {
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [newType, setNewType] = useState<string>("advance");
+  const [newAmount, setNewAmount] = useState<string>("");
+  const [newDescription, setNewDescription] = useState<string>("");
+
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/employee-reports/bundle", "salary-closing"] });
+    onChanged();
+  };
+
+  const createMutation = useMutation({
+    mutationFn: async (payload: { type: string; amount: number; description: string }) => {
+      const res = await fetch("/api/salary-deductions", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          branchEmployeeId,
+          branchId,
+          month,
+          type: payload.type,
+          amount: payload.amount,
+          description: payload.description || null,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "فشل الحفظ");
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "تم الإضافة", description: "تم تسجيل السلفة/الخصم بنجاح" });
+      setNewAmount("");
+      setNewDescription("");
+      refresh();
+    },
+    onError: (e: any) => toast({ title: "خطأ", description: e.message, variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/salary-deductions/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "فشل الحذف");
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "تم الحذف", description: "تم حذف السجل بنجاح" });
+      refresh();
+    },
+    onError: (e: any) => toast({ title: "خطأ", description: e.message, variant: "destructive" }),
+  });
+
+  const handleAdd = () => {
+    const amount = parseFloat(newAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast({ title: "مبلغ غير صحيح", description: "أدخل مبلغ موجب", variant: "destructive" });
+      return;
+    }
+    createMutation.mutate({ type: newType, amount, description: newDescription.trim() });
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          data-testid={`btn-deductions-${branchEmployeeId}`}
+          className="flex flex-col items-center gap-0.5 hover:bg-orange-50 rounded p-1 transition-colors w-full"
+          title="إضافة/تعديل السُلف والخصومات اليدوية"
+        >
+          {totalAmount > 0 ? (
+            <Badge className="bg-orange-100 text-orange-800 border-orange-300 hover:bg-orange-200 cursor-pointer text-xs">
+              - {totalAmount.toLocaleString("ar-SA", { maximumFractionDigits: 2 })} ر.س
+            </Badge>
+          ) : (
+            <span className="text-gray-400 text-xs flex items-center gap-1">
+              <Plus className="w-3 h-3" /> إضافة
+            </span>
+          )}
+          {initialDeductions.length > 0 && (
+            <span className="text-[10px] text-gray-500">{initialDeductions.length} عنصر</span>
+          )}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-96 max-h-[500px] overflow-y-auto" side="top">
+        <div className="space-y-3">
+          <div className="border-b pb-2">
+            <div className="text-sm font-bold text-gray-900">السُلف والخصومات اليدوية</div>
+            <div className="text-xs text-gray-600">{employeeName} — {month}</div>
+          </div>
+
+          {initialDeductions.length > 0 && (
+            <div className="space-y-1.5">
+              <div className="text-xs font-semibold text-gray-700">السجلات الحالية:</div>
+              {initialDeductions.map(d => (
+                <div key={d.id} className="flex items-start justify-between gap-2 p-2 bg-orange-50 border border-orange-200 rounded text-xs">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <Badge className="bg-orange-200 text-orange-900 text-[10px] px-1.5 py-0">
+                        {SALARY_DEDUCTION_TYPE_LABELS[d.type] || d.type}
+                      </Badge>
+                      <span className="font-bold text-orange-900">
+                        {d.amount.toLocaleString("ar-SA", { maximumFractionDigits: 2 })} ر.س
+                      </span>
+                    </div>
+                    {d.description && (
+                      <div className="text-gray-600 mt-0.5 break-words">{d.description}</div>
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      if (confirm(`حذف ${SALARY_DEDUCTION_TYPE_LABELS[d.type]} بمبلغ ${d.amount} ر.س؟`)) {
+                        deleteMutation.mutate(d.id);
+                      }
+                    }}
+                    disabled={deleteMutation.isPending}
+                    className="h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                    data-testid={`btn-delete-deduction-${d.id}`}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              ))}
+              <div className="text-xs font-bold text-orange-900 text-left pt-1 border-t border-orange-200">
+                الإجمالي: - {totalAmount.toLocaleString("ar-SA", { maximumFractionDigits: 2 })} ر.س
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-2 pt-2 border-t">
+            <div className="text-xs font-semibold text-gray-700">إضافة جديدة:</div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-[11px]">النوع</Label>
+                <Select value={newType} onValueChange={setNewType}>
+                  <SelectTrigger className="h-8 text-xs" data-testid="select-deduction-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(SALARY_DEDUCTION_TYPE_LABELS).map(([k, v]) => (
+                      <SelectItem key={k} value={k} className="text-xs">{v}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-[11px]">المبلغ (ر.س)</Label>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.01"
+                  value={newAmount}
+                  onChange={e => setNewAmount(e.target.value)}
+                  placeholder="0.00"
+                  className="h-8 text-xs"
+                  data-testid="input-deduction-amount"
+                />
+              </div>
+            </div>
+            <div>
+              <Label className="text-[11px]">الوصف (اختياري)</Label>
+              <Textarea
+                value={newDescription}
+                onChange={e => setNewDescription(e.target.value)}
+                placeholder="مثال: سلفة شهر يناير، خصم تأخير..."
+                rows={2}
+                className="text-xs resize-none"
+                data-testid="input-deduction-description"
+              />
+            </div>
+            <Button
+              type="button"
+              onClick={handleAdd}
+              disabled={createMutation.isPending || !newAmount}
+              size="sm"
+              className="w-full h-8 text-xs bg-orange-600 hover:bg-orange-700"
+              data-testid="btn-add-deduction"
+            >
+              <Plus className="w-3.5 h-3.5 ml-1" />
+              {createMutation.isPending ? "جاري الحفظ..." : "إضافة"}
+            </Button>
+          </div>
+
+          <div className="text-[10px] text-gray-500 pt-1 border-t">
+            💡 المبلغ المُسجَّل سيُخصم من صافي الراتب تلقائياً عند إغلاق هذا الشهر.
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 const COLORS = ["#f59e0b", "#10b981", "#3b82f6", "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6", "#f97316"];
 
@@ -162,6 +386,7 @@ export default function EmployeeReportsDashboardPage() {
     attendance: AttendanceRecord[];
     schedules: any[];
     signedTimesheets?: Array<{ report: any; entries: any[] }>;
+    salaryDeductions?: SalaryDeduction[];
   }>({
     queryKey: ["/api/employee-reports/bundle", "salary-closing", salaryClosingBranch, salaryClosingMonth],
     queryFn: async () => {
@@ -192,6 +417,9 @@ export default function EmployeeReportsDashboardPage() {
   const salaryClosingSignedTimesheets = salaryDialogActive
     ? salaryClosingBundle?.signedTimesheets
     : (salaryClosingBundle?.signedTimesheets ?? bundle?.signedTimesheets);
+  const salaryClosingDeductions: SalaryDeduction[] = (salaryDialogActive
+    ? salaryClosingBundle?.salaryDeductions
+    : salaryClosingBundle?.salaryDeductions) ?? [];
   // مؤشر "البيانات جاهزة للإغلاق" - إما النافذة غير نشطة، أو الـ bundle المخصص اكتمل تحميله
   const salaryClosingReady = !salaryDialogActive || (!!salaryClosingBundle && !salaryClosingBundleLoading);
   const employeesLoading = bundleLoading;
@@ -1002,9 +1230,18 @@ export default function EmployeeReportsDashboardPage() {
       const absenceDeduction = noWorkAtAll
         ? Math.round((grossSalary - socialInsurance) * 100) / 100  // كامل الراتب يُخصم بعد التأمينات
         : Math.round(absentDays * dailyRate * 100) / 100;
-      const netSalary = noWorkAtAll
+
+      // السُلف والخصومات اليدوية لهذا الموظف في هذا الشهر
+      const empDeductions = salaryClosingDeductions.filter(d => d.branchEmployeeId === emp.id);
+      const manualDeductionsTotal = Math.round(
+        empDeductions.reduce((sum, d) => sum + (d.amount || 0), 0) * 100
+      ) / 100;
+
+      // الصافي بعد كل الخصومات (لا يقل عن صفر)
+      const netBeforeManual = noWorkAtAll
         ? 0
         : Math.round((grossSalary - socialInsurance - absenceDeduction) * 100) / 100;
+      const netSalary = Math.max(0, Math.round((netBeforeManual - manualDeductionsTotal) * 100) / 100);
 
       return {
         id: emp.id,
@@ -1027,6 +1264,8 @@ export default function EmployeeReportsDashboardPage() {
         dailyRate: Math.round(dailyRate * 100) / 100,
         absenceDeduction,
         socialInsurance,
+        manualDeductions: empDeductions,
+        manualDeductionsTotal,
         netSalary,
         dataSource,
         signedReportInfo,
@@ -1039,7 +1278,7 @@ export default function EmployeeReportsDashboardPage() {
     });
     
     return { salaryClosingData: data, salaryClosingUnlinkedCount: unlinkedList.length, salaryClosingUnlinkedRecords: unlinkedList, salaryClosingUnlinkedSummary: unlinkedSummary };
-  }, [salaryClosingBranch, salaryClosingMonth, salaryClosingEmployees, salaryClosingAttendance, salaryClosingSchedules, salaryClosingSignedTimesheets]);
+  }, [salaryClosingBranch, salaryClosingMonth, salaryClosingEmployees, salaryClosingAttendance, salaryClosingSchedules, salaryClosingSignedTimesheets, salaryClosingDeductions]);
 
   const exportUnlinkedRecordsToExcel = async () => {
     const XLSX = await import("xlsx");
@@ -1096,6 +1335,7 @@ export default function EmployeeReportsDashboardPage() {
       { [isRTL ? "البيان" : "Item"]: isRTL ? "إجمالي الرواتب (شامل البدلات)" : "Total Salaries (Incl. Allowances)", [isRTL ? "القيمة" : "Value"]: salaryClosingData.reduce((sum, e) => sum + e.grossSalary, 0) },
       { [isRTL ? "البيان" : "Item"]: isRTL ? "إجمالي خصم الغياب" : "Total Absence Deduction", [isRTL ? "القيمة" : "Value"]: salaryClosingData.reduce((sum, e) => sum + e.absenceDeduction, 0) },
       { [isRTL ? "البيان" : "Item"]: isRTL ? "إجمالي التأمينات الاجتماعية" : "Total Social Insurance", [isRTL ? "القيمة" : "Value"]: salaryClosingData.reduce((sum, e) => sum + e.socialInsurance, 0) },
+      { [isRTL ? "البيان" : "Item"]: isRTL ? "إجمالي السُلف والخصومات اليدوية" : "Total Manual Deductions", [isRTL ? "القيمة" : "Value"]: salaryClosingData.reduce((sum, e) => sum + (e.manualDeductionsTotal || 0), 0) },
       { [isRTL ? "البيان" : "Item"]: isRTL ? "صافي الرواتب المستحقة" : "Net Salaries Due", [isRTL ? "القيمة" : "Value"]: salaryClosingData.reduce((sum, e) => sum + e.netSalary, 0) },
       { [isRTL ? "البيان" : "Item"]: "", [isRTL ? "القيمة" : "Value"]: "" },
       { [isRTL ? "البيان" : "Item"]: isRTL ? "سجلات حضور غير مرتبطة" : "Unlinked Attendance Records", [isRTL ? "القيمة" : "Value"]: salaryClosingUnlinkedCount },
@@ -1114,6 +1354,10 @@ export default function EmployeeReportsDashboardPage() {
       [isRTL ? "الجنسية" : "Nationality"]: emp.nationality,
       [isRTL ? "البنك" : "Bank"]: emp.bankName || "",
       [isRTL ? "الآيبان / رقم الحساب" : "IBAN / Account #"]: emp.bankAccountNumber || "",
+      [isRTL ? "السُلف والخصومات اليدوية" : "Manual Deductions"]: emp.manualDeductionsTotal || 0,
+      [isRTL ? "تفاصيل السُلف/الخصومات" : "Deductions Detail"]: (emp.manualDeductions || [])
+        .map((d: any) => `${SALARY_DEDUCTION_TYPE_LABELS[d.type] || d.type}: ${d.amount}${d.description ? ` (${d.description})` : ""}`)
+        .join(" | "),
       [isRTL ? "مصدر البيانات" : "Data Source"]:
         emp.dataSource === "signed_timesheet"
           ? (isRTL ? "تايم شيت موقّع ✓" : "Signed Timesheet ✓")
@@ -1184,6 +1428,12 @@ export default function EmployeeReportsDashboardPage() {
           dailyRate: emp.dailyRate,
           absenceDeduction: emp.absenceDeduction,
           socialInsurance: emp.socialInsurance,
+          manualDeductions: (emp.manualDeductions || []).map((d: any) => ({
+            type: SALARY_DEDUCTION_TYPE_LABELS[d.type] || d.type,
+            amount: d.amount,
+            description: d.description,
+          })),
+          manualDeductionsTotal: emp.manualDeductionsTotal || 0,
           netSalary: emp.netSalary,
           dataSource: emp.dataSource,
         })),
@@ -6781,7 +7031,7 @@ export default function EmployeeReportsDashboardPage() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
+                      <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
                         <div className="text-center p-3 bg-blue-50 rounded-lg" data-testid="card-employee-count">
                           <p className="text-2xl font-bold text-blue-600">{salaryClosingData.length}</p>
                           <p className="text-sm text-gray-600">عدد الموظفين</p>
@@ -6803,6 +7053,12 @@ export default function EmployeeReportsDashboardPage() {
                             {formatCurrency(salaryClosingData.reduce((sum, e) => sum + e.socialInsurance, 0))}
                           </p>
                           <p className="text-sm text-gray-600">التأمينات الاجتماعية</p>
+                        </div>
+                        <div className="text-center p-3 bg-orange-100 rounded-lg border border-orange-300" data-testid="card-manual-deductions" title="إجمالي السُلف والخصومات اليدوية المُدخلة لهذا الشهر">
+                          <p className="text-2xl font-bold text-orange-700">
+                            {formatCurrency(salaryClosingData.reduce((sum, e) => sum + (e.manualDeductionsTotal || 0), 0))}
+                          </p>
+                          <p className="text-sm text-gray-700">سُلف وخصومات</p>
                         </div>
                         <div className="text-center p-3 bg-amber-50 rounded-lg" data-testid="card-net-salary">
                           <p className="text-2xl font-bold text-amber-600">
@@ -6922,6 +7178,7 @@ export default function EmployeeReportsDashboardPage() {
                             <TableHead className="text-center" title={isRTL ? "قيمة اليوم = الراتب الإجمالي ÷ 30" : "Daily rate = Gross salary / 30"}>{isRTL ? "قيمة اليوم" : "Daily Rate"}</TableHead>
                             <TableHead className="text-center" title={isRTL ? "خصم الغياب = أيام الغياب × قيمة اليوم" : "Absence deduction = absent days × daily rate"}>{isRTL ? "خصم الغياب" : "Absence Deduction"}</TableHead>
                             <TableHead className="text-center">{isRTL ? "التأمينات" : "Insurance"}</TableHead>
+                            <TableHead className="text-center bg-orange-50" title={isRTL ? "السُلف والخصومات اليدوية الشهرية — اضغط للإضافة/التعديل" : "Manual advances & deductions — click to edit"}>{isRTL ? "سُلف/خصومات" : "Advances/Deductions"}</TableHead>
                             <TableHead className="text-center">{isRTL ? "الصافي" : "Net"}</TableHead>
                           </TableRow>
                         </TableHeader>
@@ -7095,6 +7352,17 @@ export default function EmployeeReportsDashboardPage() {
                               </TableCell>
                               <TableCell className="text-center text-red-600">
                                 {emp.socialInsurance > 0 ? `- ${formatCurrency(emp.socialInsurance, isRTL)}` : "-"}
+                              </TableCell>
+                              <TableCell className="text-center bg-orange-50/40">
+                                <DeductionsPopover
+                                  branchEmployeeId={emp.id}
+                                  branchId={salaryClosingBranch}
+                                  month={salaryClosingMonth}
+                                  employeeName={emp.employeeName}
+                                  initialDeductions={emp.manualDeductions || []}
+                                  totalAmount={emp.manualDeductionsTotal || 0}
+                                  onChanged={() => {}}
+                                />
                               </TableCell>
                               <TableCell className="text-center font-bold">{formatCurrency(emp.netSalary, isRTL)}</TableCell>
                             </TableRow>
