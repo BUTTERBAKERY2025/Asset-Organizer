@@ -32,7 +32,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Loader2, Eye, Pencil, Trash2, Printer, Calendar, FileText } from "lucide-react";
+import { Plus, Loader2, Eye, Pencil, Trash2, Printer, Calendar, FileText, FileDown, MessageCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
@@ -90,6 +90,33 @@ export default function DailyLogsListPage() {
     projects.forEach((p) => m.set(p.id, p));
     return m;
   }, [projects]);
+
+  const handleWhatsAppShare = (log: ProjectDailyLog) => {
+    const projectTitle = projectMap.get(log.projectId)?.title || `#${log.projectId}`;
+    const trade = (log as any).mainTrade
+      ? TRADE_LABELS[(log as any).mainTrade] || (log as any).mainTrade
+      : null;
+    const lines = [
+      `*يومية أعمال موقع*`,
+      `📍 المشروع: ${projectTitle}`,
+      `📅 التاريخ: ${log.logDate}`,
+      `👤 المشرف: ${log.supervisorName}`,
+      log.workersCount ? `👷 عدد العمالة: ${log.workersCount}` : null,
+      trade ? `🔧 التشطيب: ${trade}` : null,
+      ``,
+      `*ملخص الأعمال:*`,
+      log.workDescription,
+      ``,
+      `🔗 رابط اليومية: ${window.location.origin}/construction/daily-logs/${log.id}/print`,
+    ].filter(Boolean).join("\n");
+    const url = `https://wa.me/?text=${encodeURIComponent(lines)}`;
+    window.open(url, "_blank");
+  };
+
+  const openPrint = (id: number, autoPrint = false) => {
+    const url = `/construction/daily-logs/${id}/print${autoPrint ? "?autoprint=1" : ""}`;
+    window.open(url, "_blank");
+  };
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
@@ -242,17 +269,35 @@ export default function DailyLogsListPage() {
                           )}
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-1">
-                            <Link href={`/construction/daily-logs/${log.id}/print`}>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                title="طباعة"
-                                data-testid={`button-print-${log.id}`}
-                              >
-                                <Printer className="h-4 w-4" />
-                              </Button>
-                            </Link>
+                          <div className="flex items-center gap-1 flex-wrap">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              title="مشاركة واتساب"
+                              onClick={() => handleWhatsAppShare(log)}
+                              data-testid={`button-whatsapp-${log.id}`}
+                              className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                            >
+                              <MessageCircle className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              title="تصدير PDF"
+                              onClick={() => openPrint(log.id, true)}
+                              data-testid={`button-pdf-${log.id}`}
+                            >
+                              <FileDown className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              title="طباعة"
+                              onClick={() => openPrint(log.id, true)}
+                              data-testid={`button-print-${log.id}`}
+                            >
+                              <Printer className="h-4 w-4" />
+                            </Button>
                             <Link href={`/construction/daily-logs/${log.id}`}>
                               <Button
                                 size="icon"

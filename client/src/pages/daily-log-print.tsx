@@ -1,7 +1,8 @@
+import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Loader2, Printer, ArrowRight } from "lucide-react";
+import { Loader2, Printer, ArrowRight, FileDown, MessageCircle } from "lucide-react";
 import type {
   ProjectDailyLog, ProjectDailyLogPhoto, ConstructionProject, Contractor,
   DailyLogActivity, ProjectExpense,
@@ -67,6 +68,71 @@ export default function DailyLogPrintPage() {
   const project = projects.find((p) => p.id === log?.projectId);
   const contractor = contractors.find((c) => c.id === log?.contractorId);
 
+  // Auto-trigger print dialog when ?autoprint=1 is in the URL (used for "تصدير PDF")
+  // Use a ref to ensure it only fires once even if dependent queries resolve later.
+  const hasAutoPrintedRef = useRef(false);
+  const originalTitleRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!log || hasAutoPrintedRef.current) return;
+    const search = new URLSearchParams(window.location.search);
+    if (search.get("autoprint") !== "1") return;
+    hasAutoPrintedRef.current = true;
+
+    if (originalTitleRef.current === null) {
+      originalTitleRef.current = document.title;
+    }
+    document.title = `يومية_${project?.title || log.projectId}_${log.logDate}`;
+
+    const restoreTitle = () => {
+      if (originalTitleRef.current !== null) {
+        document.title = originalTitleRef.current;
+      }
+    };
+    window.addEventListener("afterprint", restoreTitle, { once: true });
+
+    const t = setTimeout(() => window.print(), 800);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("afterprint", restoreTitle);
+      restoreTitle();
+    };
+  }, [log, project]);
+
+  const triggerPrintWithTitle = () => {
+    if (!log) return;
+    const oldTitle = document.title;
+    document.title = `يومية_${project?.title || log.projectId}_${log.logDate}`;
+    const restore = () => { document.title = oldTitle; };
+    window.addEventListener("afterprint", restore, { once: true });
+    window.print();
+    setTimeout(restore, 2000);
+  };
+
+  const handleWhatsAppShare = () => {
+    if (!log) return;
+    const MAX_DESC = 1000;
+    const desc = log.workDescription || "";
+    const truncatedDesc = desc.length > MAX_DESC ? desc.slice(0, MAX_DESC) + "…" : desc;
+    const lines = [
+      `*يومية أعمال موقع*`,
+      `📍 المشروع: ${project?.title || `#${log.projectId}`}`,
+      `📅 التاريخ: ${log.logDate}`,
+      `👤 المشرف: ${log.supervisorName}`,
+      log.workersCount ? `👷 عدد العمالة: ${log.workersCount}` : null,
+      (log as any).mainTrade
+        ? `🔧 التشطيب: ${TRADE_LABELS[(log as any).mainTrade] || (log as any).mainTrade}`
+        : null,
+      ``,
+      `*ملخص الأعمال:*`,
+      truncatedDesc,
+      ``,
+      `🔗 رابط اليومية: ${window.location.origin}/construction/daily-logs/${log.id}/print`,
+    ].filter(Boolean).join("\n");
+    const url = `https://wa.me/?text=${encodeURIComponent(lines)}`;
+    window.open(url, "_blank");
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -104,17 +170,36 @@ export default function DailyLogPrintPage() {
   return (
     <div className="bg-white min-h-screen" dir="rtl">
       {/* Action bar (hidden on print) */}
-      <div className="print:hidden bg-gray-100 border-b p-4 flex items-center justify-between">
+      <div className="print:hidden bg-gray-100 border-b p-4 flex items-center justify-between flex-wrap gap-2">
         <Link href="/construction/daily-logs">
           <Button variant="outline" size="sm" data-testid="button-back">
             <ArrowRight className="h-4 w-4 ml-1" />
             رجوع
           </Button>
         </Link>
-        <Button onClick={() => window.print()} data-testid="button-print">
-          <Printer className="h-4 w-4 ml-2" />
-          طباعة / حفظ PDF
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            onClick={handleWhatsAppShare}
+            data-testid="button-whatsapp-share"
+            className="bg-green-600 text-white hover:bg-green-700 border-green-600"
+          >
+            <MessageCircle className="h-4 w-4 ml-2" />
+            مشاركة واتساب
+          </Button>
+          <Button
+            variant="outline"
+            onClick={triggerPrintWithTitle}
+            data-testid="button-export-pdf"
+          >
+            <FileDown className="h-4 w-4 ml-2" />
+            تصدير PDF
+          </Button>
+          <Button onClick={() => window.print()} data-testid="button-print">
+            <Printer className="h-4 w-4 ml-2" />
+            طباعة
+          </Button>
+        </div>
       </div>
 
       <div className="max-w-4xl mx-auto p-8 print:p-4 text-black">
