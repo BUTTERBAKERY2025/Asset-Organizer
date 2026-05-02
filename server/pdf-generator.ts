@@ -3307,23 +3307,27 @@ export async function generateBranchTimesheetPdf(data: BranchTimesheetPdfData): 
 
   const renderEntries = (entries: BranchTimesheetEntry[]) => entries.map((e, i) => {
     const colors = statusColors[e.status] || statusColors['معلق'];
-    let sigHtml = '<span style="color:#9ca3af;">-</span>';
+    let sigHtml = '<span style="color:#d1d5db;">—</span>';
     if (e.checkInSignature && e.checkInSignature.startsWith('data:image')) {
-      sigHtml = `<img src="${e.checkInSignature}" style="max-width:55px;max-height:25px;" />`;
+      sigHtml = `<img src="${e.checkInSignature}" style="max-width:50px;max-height:20px;" />`;
     }
-    return `<tr style="background:${i % 2 === 0 ? '#fff' : '#f9fafb'};">
-        <td style="text-align:center;padding:5px;border:1px solid #e5e7eb;">${i + 1}</td>
-        <td style="text-align:center;padding:5px;border:1px solid #e5e7eb;font-weight:500;">${escapeHtml(e.date)}</td>
-        <td style="text-align:center;padding:5px;border:1px solid #e5e7eb;">${escapeHtml(e.dayName)}</td>
-        <td style="text-align:center;padding:5px;border:1px solid #e5e7eb;">${escapeHtml(e.scheduledStart)}</td>
-        <td style="text-align:center;padding:5px;border:1px solid #e5e7eb;">${escapeHtml(e.scheduledEnd)}</td>
-        <td style="text-align:center;padding:5px;border:1px solid #e5e7eb;color:#166534;font-weight:500;">${escapeHtml(e.actualCheckIn)}</td>
-        <td style="text-align:center;padding:5px;border:1px solid #e5e7eb;color:#2563eb;font-weight:500;">${escapeHtml(e.actualCheckOut)}</td>
-        <td style="text-align:center;padding:5px;border:1px solid #e5e7eb;">${escapeHtml(e.workHours)}</td>
-        <td style="text-align:center;padding:5px;border:1px solid #e5e7eb;">
-          <span style="background:${colors.bg};color:${colors.text};padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;">${escapeHtml(e.status)}</span>
-        </td>
-        <td style="text-align:center;padding:5px;border:1px solid #e5e7eb;">${sigHtml}</td>
+    const dash = '<span style="color:#d1d5db;">—</span>';
+    const checkInDisplay = (e.actualCheckIn && e.actualCheckIn !== 'غ' && e.actualCheckIn !== '-') ? escapeHtml(e.actualCheckIn) : dash;
+    const checkOutDisplay = (e.actualCheckOut && e.actualCheckOut !== 'غ' && e.actualCheckOut !== '-') ? escapeHtml(e.actualCheckOut) : dash;
+    const hoursDisplay = (e.workHours && e.workHours !== '-') ? escapeHtml(e.workHours) : dash;
+    const startDisplay = (e.scheduledStart && e.scheduledStart !== '-') ? escapeHtml(e.scheduledStart) : dash;
+    const endDisplay = (e.scheduledEnd && e.scheduledEnd !== '-') ? escapeHtml(e.scheduledEnd) : dash;
+    return `<tr class="${i % 2 === 0 ? 'row-even' : 'row-odd'}${e.isOff ? ' row-off' : ''}">
+        <td class="c">${i + 1}</td>
+        <td class="c b">${escapeHtml(e.date)}</td>
+        <td class="c">${escapeHtml(e.dayName)}</td>
+        <td class="c">${startDisplay}</td>
+        <td class="c">${endDisplay}</td>
+        <td class="c ci">${checkInDisplay}</td>
+        <td class="c co">${checkOutDisplay}</td>
+        <td class="c">${hoursDisplay}</td>
+        <td class="c"><span class="badge" style="background:${colors.bg};color:${colors.text};">${escapeHtml(e.status)}</span></td>
+        <td class="c">${sigHtml}</td>
       </tr>`;
   }).join('');
 
@@ -3352,19 +3356,28 @@ export async function generateBranchTimesheetPdf(data: BranchTimesheetPdfData): 
       <table class="entries-table">
         <thead>
           <tr>
-            <th style="width:24px;">#</th>
-            <th>التاريخ</th>
-            <th>اليوم</th>
-            <th>بداية الدوام</th>
-            <th>نهاية الدوام</th>
-            <th>الحضور</th>
-            <th>الانصراف</th>
-            <th>الساعات</th>
-            <th>الحالة</th>
+            <th style="width:22px;">#</th>
+            <th style="width:68px;">التاريخ</th>
+            <th style="width:55px;">اليوم</th>
+            <th style="width:55px;">بداية الدوام</th>
+            <th style="width:55px;">نهاية الدوام</th>
+            <th style="width:55px;">الحضور</th>
+            <th style="width:55px;">الانصراف</th>
+            <th style="width:45px;">الساعات</th>
+            <th style="width:60px;">الحالة</th>
             <th>توقيع الموظف</th>
           </tr>
         </thead>
         <tbody>${renderEntries(emp.entries)}</tbody>
+        <tfoot>
+          <tr class="totals-row">
+            <td colspan="7" style="text-align:left;padding-left:8px;">الإجمالي</td>
+            <td class="c b">${emp.totalActualHours.toFixed(1)}</td>
+            <td class="c" colspan="2">
+              تأخير: ${emp.totalLateMinutes} د • إضافي: ${emp.totalOvertimeMinutes} د
+            </td>
+          </tr>
+        </tfoot>
       </table>
       <div class="signatures">
         <div class="sig-box">
@@ -3390,54 +3403,56 @@ export async function generateBranchTimesheetPdf(data: BranchTimesheetPdfData): 
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
       * { margin: 0; padding: 0; box-sizing: border-box; }
-      @page { size: A4 landscape; margin: 6mm 8mm; }
+      @page { size: A4 landscape; margin: 5mm 7mm; }
       html, body { font-family: 'Cairo', Arial, sans-serif; direction: rtl; color: #1f2937; }
-      body { font-size: 10px; }
+      body { font-size: 9px; }
 
-      /* Each employee = exactly one page. Force a page break BEFORE every employee
-         except the first, and prevent any internal element from splitting. */
+      /* Each employee = exactly one page. */
       .employee-page {
         page-break-after: always;
         break-after: page;
-        page-break-inside: avoid;
-        break-inside: avoid;
-        height: 100%;
-        display: flex;
-        flex-direction: column;
       }
       .employee-page:last-child { page-break-after: auto; break-after: auto; }
 
-      .page-header { text-align: center; margin-bottom: 6px; padding-bottom: 5px; border-bottom: 2px solid #D4AF37; }
-      .page-header .brand { font-size: 14px; font-weight: 700; color: #D4AF37; letter-spacing: 2px; }
-      .page-header h1 { font-size: 12px; color: #1a1a1a; margin: 2px 0; }
-      .page-header .period { font-size: 9px; color: #6b7280; }
+      .page-header { text-align: center; margin-bottom: 4px; padding-bottom: 3px; border-bottom: 2px solid #D4AF37; }
+      .page-header .brand { font-size: 13px; font-weight: 700; color: #D4AF37; letter-spacing: 2px; }
+      .page-header h1 { font-size: 11px; color: #1a1a1a; margin: 1px 0; }
+      .page-header .period { font-size: 8.5px; color: #6b7280; }
 
-      .employee-info { background: #fef3c7; border: 1px solid #fcd34d; border-radius: 6px; padding: 5px 10px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
-      .employee-name { font-size: 13px; font-weight: 700; color: #92400e; }
-      .employee-meta { font-size: 9px; color: #78350f; margin-top: 1px; }
-      .employee-counter { background: #D4AF37; color: white; padding: 2px 10px; border-radius: 16px; font-size: 9px; font-weight: 600; }
+      .employee-info { background: #fef3c7; border: 1px solid #fcd34d; border-radius: 5px; padding: 4px 9px; margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center; }
+      .employee-name { font-size: 12px; font-weight: 700; color: #92400e; }
+      .employee-meta { font-size: 8.5px; color: #78350f; margin-top: 0; }
+      .employee-counter { background: #D4AF37; color: white; padding: 2px 8px; border-radius: 14px; font-size: 8.5px; font-weight: 600; }
 
-      .summary { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; margin-bottom: 6px; }
+      .summary { display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px; margin-bottom: 4px; }
       .summary-item { text-align: center; padding: 3px 2px; background: #f9fafb; border-radius: 4px; border: 1px solid #e5e7eb; }
       .summary-item.ok { background: #f0fdf4; border-color: #bbf7d0; }
       .summary-item.bad { background: #fef2f2; border-color: #fecaca; }
       .summary-item.warn { background: #fffbeb; border-color: #fde68a; }
       .summary-item.off { background: #eff6ff; border-color: #bfdbfe; }
       .summary-item.info { background: #f5f3ff; border-color: #ddd6fe; }
-      .summary-value { font-size: 13px; font-weight: 700; color: #1f2937; line-height: 1; }
-      .summary-label { font-size: 8px; color: #6b7280; margin-top: 1px; }
+      .summary-value { font-size: 12px; font-weight: 700; color: #1f2937; line-height: 1; }
+      .summary-label { font-size: 7.5px; color: #6b7280; margin-top: 1px; }
 
-      .entries-table { width: 100%; border-collapse: collapse; font-size: 8.5px; margin-bottom: 6px; table-layout: fixed; }
-      .entries-table th { background: #D4AF37; color: white; padding: 3px 2px; font-weight: 600; border: 1px solid #b8941f; font-size: 9px; }
-      .entries-table td { padding: 2px 3px !important; border: 1px solid #e5e7eb; line-height: 1.15; }
-      .entries-table tr { page-break-inside: avoid; break-inside: avoid; }
+      .entries-table { width: 100%; border-collapse: collapse; font-size: 8px; margin-bottom: 4px; table-layout: fixed; }
+      .entries-table th { background: #D4AF37; color: white; padding: 3px 2px; font-weight: 600; border: 1px solid #b8941f; font-size: 8.5px; }
+      .entries-table td { padding: 1.5px 2px; border: 1px solid #e5e7eb; line-height: 1.1; }
+      .entries-table td.c { text-align: center; }
+      .entries-table td.b { font-weight: 500; }
+      .entries-table td.ci { color: #166534; font-weight: 500; }
+      .entries-table td.co { color: #2563eb; font-weight: 500; }
+      .entries-table .badge { padding: 1px 5px; border-radius: 3px; font-size: 8px; font-weight: 600; display: inline-block; }
+      .entries-table tr.row-even td { background: #fff; }
+      .entries-table tr.row-odd td { background: #f9fafb; }
+      .entries-table tr.row-off td { background: #eff6ff !important; }
+      .entries-table tfoot .totals-row td { background: #fffbeb; font-weight: 700; padding: 4px 2px; border-top: 2px solid #D4AF37; font-size: 9px; }
 
-      .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: auto; }
-      .sig-box { border: 1px dashed #9ca3af; border-radius: 4px; padding: 5px 8px; }
-      .sig-title { font-size: 10px; font-weight: 700; color: #1f2937; margin-bottom: 2px; }
-      .sig-text { font-size: 8px; color: #6b7280; margin-bottom: 14px; }
+      .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px; }
+      .sig-box { border: 1px dashed #9ca3af; border-radius: 4px; padding: 4px 8px; }
+      .sig-title { font-size: 9.5px; font-weight: 700; color: #1f2937; margin-bottom: 1px; }
+      .sig-text { font-size: 7.5px; color: #6b7280; margin-bottom: 12px; }
       .sig-line { border-bottom: 1px solid #1f2937; margin-bottom: 2px; }
-      .sig-label { font-size: 7.5px; color: #6b7280; }
+      .sig-label { font-size: 7px; color: #6b7280; }
     </style>
   </head>
   <body>
