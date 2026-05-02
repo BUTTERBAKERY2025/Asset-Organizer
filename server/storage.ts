@@ -1210,6 +1210,7 @@ export interface IStorage {
   createTimesheetReportEntry(entry: InsertTimesheetReportEntry): Promise<TimesheetReportEntry>;
   createBulkTimesheetReportEntries(entries: InsertTimesheetReportEntry[]): Promise<TimesheetReportEntry[]>;
   updateTimesheetReportEntry(id: number, entry: Partial<InsertTimesheetReportEntry>): Promise<TimesheetReportEntry | undefined>;
+  getFinalizedTimesheetEntriesByBranchAndDateRange(branchId: string, startDate: string, endDate: string): Promise<Array<{ report: TimesheetReport; entries: TimesheetReportEntry[] }>>;
 
   // Branch Employees - موظفي الفروع
   getAllBranchEmployees(): Promise<BranchEmployee[]>;
@@ -10116,6 +10117,35 @@ export class DatabaseStorage implements IStorage {
       .where(eq(timesheetReportEntries.id, id))
       .returning();
     return updated;
+  }
+
+  async getFinalizedTimesheetEntriesByBranchAndDateRange(
+    branchId: string,
+    startDate: string,
+    endDate: string
+  ): Promise<Array<{ report: TimesheetReport; entries: TimesheetReportEntry[] }>> {
+    const reports = await db.select().from(timesheetReports)
+      .where(and(
+        eq(timesheetReports.branchId, branchId),
+        eq(timesheetReports.status, 'finalized'),
+        lte(timesheetReports.startDate, endDate),
+        gte(timesheetReports.endDate, startDate),
+      ));
+    if (reports.length === 0) return [];
+    const reportIds = reports.map(r => r.id);
+    const allEntries = await db.select().from(timesheetReportEntries)
+      .where(and(
+        inArray(timesheetReportEntries.reportId, reportIds),
+        gte(timesheetReportEntries.date, startDate),
+        lte(timesheetReportEntries.date, endDate),
+      ));
+    const entriesByReport = new Map<number, TimesheetReportEntry[]>();
+    for (const e of allEntries) {
+      const list = entriesByReport.get(e.reportId) || [];
+      list.push(e);
+      entriesByReport.set(e.reportId, list);
+    }
+    return reports.map(r => ({ report: r, entries: entriesByReport.get(r.id) || [] }));
   }
 
   // Branch Employees - موظفي الفروع

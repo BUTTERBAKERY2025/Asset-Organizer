@@ -26,12 +26,18 @@ export interface SalaryClosingEmployee {
   absenceDeduction?: number;
   socialInsurance: number;
   netSalary: number;
+  dataSource?: "signed_timesheet" | "schedule_attendance" | "attendance_only";
 }
 
 export interface SalaryClosingPdfData {
   branchName: string;
   month: string;
   employees: SalaryClosingEmployee[];
+  dataSourceSummary?: {
+    signed: number;
+    schedule: number;
+    attendanceOnly: number;
+  };
 }
 
 function formatNumber(num: number): string {
@@ -56,13 +62,21 @@ export async function generateSalaryClosingPdf(data: SalaryClosingPdfData): Prom
     { baseSalary: 0, allowances: 0, grossSalary: 0, absenceDeduction: 0, socialInsurance: 0, netSalary: 0 }
   );
 
+  const dataSourceBadge = (src?: string): string => {
+    if (src === "signed_timesheet") return '<span style="display:inline-block; background:#d1fae5; color:#065f46; border:1px solid #6ee7b7; padding:1px 5px; border-radius:8px; font-size:7px; font-weight:700;">✓ موقّع</span>';
+    if (src === "schedule_attendance") return '<span style="display:inline-block; background:#dbeafe; color:#1e40af; border:1px solid #93c5fd; padding:1px 5px; border-radius:8px; font-size:7px;">جدول</span>';
+    if (src === "attendance_only") return '<span style="display:inline-block; background:#ffedd5; color:#9a3412; border:1px solid #fdba74; padding:1px 5px; border-radius:8px; font-size:7px;">بصمة</span>';
+    return '';
+  };
+
   const employeeRows = data.employees.map((emp, index) => {
     const dailyRate = emp.dailyRate ?? ((emp.baseSalary + emp.allowances) / 30);
     const absenceDeduction = emp.absenceDeduction ?? 0;
+    const rowBg = emp.dataSource === "signed_timesheet" ? "background:#f0fdf4;" : "";
     return `
-    <tr>
+    <tr style="${rowBg}">
       <td style="text-align: center;">${index + 1}</td>
-      <td style="text-align: right;">${emp.employeeName}</td>
+      <td style="text-align: right;">${emp.employeeName} ${dataSourceBadge(emp.dataSource)}</td>
       <td style="text-align: right;">${emp.jobTitle}</td>
       <td style="text-align: center; background:#eff6ff;">${emp.scheduledWorkDays ?? '-'}</td>
       <td style="text-align: center; background:#ecfdf5;">${emp.presentDays}</td>
@@ -78,6 +92,18 @@ export async function generateSalaryClosingPdf(data: SalaryClosingPdfData): Prom
     </tr>
   `;
   }).join('');
+
+  const dsSummary = data.dataSourceSummary;
+  const dataSourceSummaryHtml = dsSummary
+    ? `<div style="margin: 10px 0; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; background: linear-gradient(to left, #ecfdf5, #eff6ff); font-size: 9px;">
+        <div style="font-weight: 700; margin-bottom: 4px; color: #374151;">مصدر بيانات الحضور:</div>
+        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+          <span><strong style="color:#065f46;">${dsSummary.signed}</strong> موظف بتايم شيت موقّع ✓</span>
+          <span><strong style="color:#1e40af;">${dsSummary.schedule}</strong> موظف بجدول + بصمة</span>
+          <span><strong style="color:#9a3412;">${dsSummary.attendanceOnly}</strong> موظف ببصمة فقط</span>
+        </div>
+      </div>`
+    : '';
 
   const html = `
 <!DOCTYPE html>
@@ -145,6 +171,7 @@ export async function generateSalaryClosingPdf(data: SalaryClosingPdfData): Prom
 <body>
   ${getPdfHeaderHtml('تقرير إغلاق الرواتب الشهرية', `الفرع: ${data.branchName} | الشهر: ${data.month}`)}
   <div class="info-row">عدد الموظفين: ${data.employees.length} | إجمالي الرواتب: ${formatNumber(totals.grossSalary)} ريال | صافي المستحق: ${formatNumber(totals.netSalary)} ريال</div>
+  ${dataSourceSummaryHtml}
   
   <table>
     <thead>

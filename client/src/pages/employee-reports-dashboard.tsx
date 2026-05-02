@@ -136,6 +136,7 @@ export default function EmployeeReportsDashboardPage() {
     employees: BranchEmployee[];
     attendance: AttendanceRecord[];
     schedules: any[];
+    signedTimesheets?: Array<{ report: any; entries: any[] }>;
   }>({
     queryKey: ["/api/employee-reports/bundle", selectedBranch, selectedMonth],
     queryFn: async () => {
@@ -160,6 +161,7 @@ export default function EmployeeReportsDashboardPage() {
     employees: BranchEmployee[];
     attendance: AttendanceRecord[];
     schedules: any[];
+    signedTimesheets?: Array<{ report: any; entries: any[] }>;
   }>({
     queryKey: ["/api/employee-reports/bundle", "salary-closing", salaryClosingBranch, salaryClosingMonth],
     queryFn: async () => {
@@ -187,6 +189,9 @@ export default function EmployeeReportsDashboardPage() {
   const salaryClosingSchedules = salaryDialogActive
     ? salaryClosingBundle?.schedules
     : (salaryClosingBundle?.schedules ?? employeeSchedules);
+  const salaryClosingSignedTimesheets = salaryDialogActive
+    ? salaryClosingBundle?.signedTimesheets
+    : (salaryClosingBundle?.signedTimesheets ?? bundle?.signedTimesheets);
   // مؤشر "البيانات جاهزة للإغلاق" - إما النافذة غير نشطة، أو الـ bundle المخصص اكتمل تحميله
   const salaryClosingReady = !salaryDialogActive || (!!salaryClosingBundle && !salaryClosingBundleLoading);
   const employeesLoading = bundleLoading;
@@ -759,6 +764,12 @@ export default function EmployeeReportsDashboardPage() {
       s.scheduleDate <= monthEnd
     );
 
+    // Index signed (finalized) timesheet entries by employee match keys
+    const signedByEmpId = new Map<number, { report: any; entries: any[] }>();
+    const signedReports = (salaryClosingSignedTimesheets || []).filter((r: any) =>
+      r.report && r.report.branchId === salaryClosingBranch && r.report.status === "finalized"
+    );
+
     const employeeLookup = new Map<string, number>();
     const normalizeName = (s: any) => String(s || "").trim().replace(/\s+/g, " ").toLowerCase();
     const nameLookup = new Map<string, number>();
@@ -799,6 +810,30 @@ export default function EmployeeReportsDashboardPage() {
       }
       return null;
     };
+
+    // Now resolve signed timesheet reports → employee id, keep latest report per employee
+    signedReports.forEach((r: any) => {
+      const rep = r.report;
+      let empId: number | null = null;
+      if (rep.branchEmployeeId !== null && rep.branchEmployeeId !== undefined) {
+        const k = `bid:${rep.branchEmployeeId}`;
+        if (employeeLookup.has(k)) empId = employeeLookup.get(k)!;
+      }
+      if (empId === null && rep.employeeId) {
+        const k = `eid:${rep.employeeId}`;
+        if (employeeLookup.has(k)) empId = employeeLookup.get(k)!;
+      }
+      if (empId === null) return;
+      const existing = signedByEmpId.get(empId);
+      // Prefer the most recent signed report (by managerSignedAt or createdAt)
+      if (!existing) {
+        signedByEmpId.set(empId, r);
+      } else {
+        const ts = (rep.managerSignedAt || rep.updatedAt || rep.createdAt || "");
+        const tsExisting = (existing.report.managerSignedAt || existing.report.updatedAt || existing.report.createdAt || "");
+        if (ts > tsExisting) signedByEmpId.set(empId, r);
+      }
+    });
 
     // Match a schedule row to an employee using the same lookup map
     const matchScheduleEmployee = (s: any): number | null => {
@@ -845,73 +880,98 @@ export default function EmployeeReportsDashboardPage() {
     const data = branchEmployees.map(emp => {
       // Schedule-based metrics (planned)
       const empSchedules = monthSchedules.filter((s: any) => matchScheduleEmployee(s) === emp.id);
-      const offDays = empSchedules.filter((s: any) => s.isOff === true).length;
-      const scheduledWorkDays = empSchedules.filter((s: any) => s.isOff !== true).length;
-      const scheduledHoursTotal = empSchedules.reduce((sum: number, s: any) => sum + scheduledHoursOf(s), 0);
-
-      // Attendance records for the employee
       const empAttendance = monthAttendance.filter(a => matchEmployee(a) === emp.id);
       const attendanceByDate = new Map<string, AttendanceRecord>();
       empAttendance.forEach(a => attendanceByDate.set(a.attendanceDate, a));
 
-      const explicitPresent = empAttendance.filter(a => a.status === "present" || a.status === "late").length;
-      const explicitAbsent = empAttendance.filter(a => a.status === "absent").length;
       const lateDays = empAttendance.filter(a => a.status === "late").length;
 
-      // Hybrid metrics: prefer schedule + attendance combination
-      let presentDays = explicitPresent;
-      let absentDays = explicitAbsent;
-      let totalHours = empAttendance.reduce((sum, a) => sum + (Number(a.workingHours) || 0), 0);
-
-      // Track exact dates for transparency / verification by user
       const presentDates: string[] = [];
-      const absentDatesExplicit: string[] = []; // had attendance.status='absent'
-      const absentDatesMissing: string[] = []; // scheduled but no attendance record
+      const absentDatesExplicit: string[] = [];
+      const absentDatesMissing: string[] = [];
       const offDates: string[] = [];
-      empSchedules.forEach((s: any) => { if (s.isOff) offDates.push(s.scheduleDate); });
 
-      if (empSchedules.length > 0) {
-        // We have a signed schedule — use it as the source of truth for expected work days
-        let attendedFromSchedule = 0;
-        let absentFromSchedule = 0;
-        let hoursFromSchedule = 0;
+      let presentDays = 0;
+      let absentDays = 0;
+      let offDays = 0;
+      let scheduledWorkDays = 0;
+      let scheduledHoursTotal = 0;
+      let totalHours = 0;
+      // dataSource: "signed_timesheet" (موقّع), "schedule_attendance" (جدول+بصمة), "attendance_only" (بصمة فقط)
+      let dataSource: "signed_timesheet" | "schedule_attendance" | "attendance_only" = "attendance_only";
+      let signedReportInfo: { id: number; managerSignedAt: string | null; employeeSignedAt: string | null } | null = null;
+
+      const signed = signedByEmpId.get(emp.id);
+
+      if (signed && signed.entries.length > 0) {
+        // ✅ مصدر الحقيقة: التايم شيت الموقّع من الموظف والمدير
+        dataSource = "signed_timesheet";
+        signedReportInfo = {
+          id: signed.report.id,
+          managerSignedAt: signed.report.managerSignedAt || null,
+          employeeSignedAt: signed.report.employeeSignedAt || null,
+        };
+        const entries = signed.entries.filter((e: any) => e.date >= monthStart && e.date <= monthEnd);
+        entries.forEach((e: any) => {
+          if (e.isOff || e.status === "day_off") {
+            offDays++;
+            offDates.push(e.date);
+            return;
+          }
+          scheduledWorkDays++;
+          scheduledHoursTotal += Number(e.scheduledHours) || 0;
+          if (e.status === "present" || e.status === "late") {
+            presentDays++;
+            presentDates.push(e.date);
+            totalHours += Number(e.actualHours) || Number(e.scheduledHours) || 0;
+          } else if (e.status === "absent") {
+            absentDays++;
+            absentDatesExplicit.push(e.date);
+          } else {
+            // pending or unknown — لا نحسبها (التقرير الموقّع نهائي)
+          }
+        });
+      } else if (empSchedules.length > 0) {
+        // المسار القديم: جدول + بصمة
+        dataSource = "schedule_attendance";
+        offDays = empSchedules.filter((s: any) => s.isOff === true).length;
+        scheduledWorkDays = empSchedules.filter((s: any) => s.isOff !== true).length;
+        scheduledHoursTotal = empSchedules.reduce((sum: number, s: any) => sum + scheduledHoursOf(s), 0);
+        empSchedules.forEach((s: any) => { if (s.isOff) offDates.push(s.scheduleDate); });
 
         empSchedules.forEach((s: any) => {
-          if (s.isOff) return; // off days don't count as work
+          if (s.isOff) return;
           const att = attendanceByDate.get(s.scheduleDate);
           if (att && (att.status === "present" || att.status === "late")) {
-            attendedFromSchedule++;
-            hoursFromSchedule += Number(att.workingHours) || scheduledHoursOf(s);
+            presentDays++;
+            totalHours += Number(att.workingHours) || scheduledHoursOf(s);
             presentDates.push(s.scheduleDate);
           } else if (att && att.status === "absent") {
-            absentFromSchedule++;
+            absentDays++;
             absentDatesExplicit.push(s.scheduleDate);
           } else if (!att) {
-            // Scheduled day with no check-in record at all
-            // For past dates → considered absent; for future dates within month → not yet
             const todayLocal = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" });
             if (s.scheduleDate <= todayLocal) {
-              absentFromSchedule++;
+              absentDays++;
               absentDatesMissing.push(s.scheduleDate);
             }
           }
         });
 
-        // Also count attendance records that exist on dates NOT in the schedule (extra shifts)
         empAttendance.forEach(a => {
           const isScheduled = empSchedules.some((s: any) => s.scheduleDate === a.attendanceDate);
           if (!isScheduled && (a.status === "present" || a.status === "late")) {
-            attendedFromSchedule++;
-            hoursFromSchedule += Number(a.workingHours) || 0;
+            presentDays++;
+            totalHours += Number(a.workingHours) || 0;
             presentDates.push(a.attendanceDate);
           }
         });
-
-        presentDays = attendedFromSchedule;
-        absentDays = absentFromSchedule;
-        totalHours = hoursFromSchedule;
       } else {
-        // No schedule entries — fall back to attendance-only
+        // المسار الاحتياطي: بصمة فقط (لا جدول ولا تايم شيت موقّع)
+        dataSource = "attendance_only";
+        presentDays = empAttendance.filter(a => a.status === "present" || a.status === "late").length;
+        absentDays = empAttendance.filter(a => a.status === "absent").length;
+        totalHours = empAttendance.reduce((sum, a) => sum + (Number(a.workingHours) || 0), 0);
         empAttendance.forEach(a => {
           if (a.status === "present" || a.status === "late") presentDates.push(a.attendanceDate);
           else if (a.status === "absent") absentDatesExplicit.push(a.attendanceDate);
@@ -956,6 +1016,8 @@ export default function EmployeeReportsDashboardPage() {
         absenceDeduction,
         socialInsurance,
         netSalary,
+        dataSource,
+        signedReportInfo,
         presentDates,
         absentDatesExplicit,
         absentDatesMissing,
@@ -1037,6 +1099,12 @@ export default function EmployeeReportsDashboardPage() {
       [isRTL ? "الاسم" : "Name"]: emp.employeeName,
       [isRTL ? "الوظيفة" : "Job Title"]: emp.jobTitle,
       [isRTL ? "الجنسية" : "Nationality"]: emp.nationality,
+      [isRTL ? "مصدر البيانات" : "Data Source"]:
+        emp.dataSource === "signed_timesheet"
+          ? (isRTL ? "تايم شيت موقّع ✓" : "Signed Timesheet ✓")
+          : emp.dataSource === "schedule_attendance"
+          ? (isRTL ? "جدول + بصمة" : "Schedule + Attendance")
+          : (isRTL ? "بصمة فقط" : "Attendance only"),
       [isRTL ? "أيام العمل المجدولة" : "Scheduled Work Days"]: emp.scheduledWorkDays,
       [isRTL ? "أيام الإجازة" : "Off Days"]: emp.offDays,
       [isRTL ? "ساعات الجدول" : "Scheduled Hours"]: emp.scheduledHours,
@@ -1100,7 +1168,13 @@ export default function EmployeeReportsDashboardPage() {
           absenceDeduction: emp.absenceDeduction,
           socialInsurance: emp.socialInsurance,
           netSalary: emp.netSalary,
+          dataSource: emp.dataSource,
         })),
+        dataSourceSummary: {
+          signed: salaryClosingData.filter(e => e.dataSource === "signed_timesheet").length,
+          schedule: salaryClosingData.filter(e => e.dataSource === "schedule_attendance").length,
+          attendanceOnly: salaryClosingData.filter(e => e.dataSource === "attendance_only").length,
+        },
       };
 
       const response = await fetch("/api/pdf/salary-closing", {
@@ -6755,6 +6829,54 @@ export default function EmployeeReportsDashboardPage() {
                         </div>
                       </div>
 
+                      {/* مؤشر مصدر البيانات: تايم شيت موقّع vs جدول vs بصمة فقط */}
+                      {(() => {
+                        const signedCount = salaryClosingData.filter(e => e.dataSource === "signed_timesheet").length;
+                        const scheduleCount = salaryClosingData.filter(e => e.dataSource === "schedule_attendance").length;
+                        const attendanceOnlyCount = salaryClosingData.filter(e => e.dataSource === "attendance_only").length;
+                        const total = salaryClosingData.length;
+                        if (total === 0) return null;
+                        const signedPct = Math.round((signedCount / total) * 100);
+                        return (
+                          <div className="mb-4 p-3 border rounded-lg bg-gradient-to-r from-emerald-50 to-blue-50" data-testid="data-source-summary">
+                            <div className="flex items-center justify-between mb-2">
+                              <p className="text-sm font-semibold text-gray-700">مصدر بيانات الحضور لكل موظف</p>
+                              <Badge className={signedPct === 100 ? "bg-emerald-600" : signedPct >= 50 ? "bg-emerald-500" : "bg-orange-500"}>
+                                {signedPct}% موقّع
+                              </Badge>
+                            </div>
+                            <div className="grid grid-cols-3 gap-3">
+                              <div className="flex items-center gap-2 p-2 bg-emerald-100 rounded text-xs" data-testid="count-signed">
+                                <span className="text-emerald-700 font-bold text-lg">{signedCount}</span>
+                                <div>
+                                  <p className="font-semibold text-emerald-900">✓ تايم شيت موقّع</p>
+                                  <p className="text-[10px] text-emerald-700">مصدر الحقيقة</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 p-2 bg-blue-100 rounded text-xs" data-testid="count-schedule">
+                                <span className="text-blue-700 font-bold text-lg">{scheduleCount}</span>
+                                <div>
+                                  <p className="font-semibold text-blue-900">جدول + بصمة</p>
+                                  <p className="text-[10px] text-blue-700">لم يتم توقيع التايم شيت</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 p-2 bg-orange-100 rounded text-xs" data-testid="count-attendance-only">
+                                <span className="text-orange-700 font-bold text-lg">{attendanceOnlyCount}</span>
+                                <div>
+                                  <p className="font-semibold text-orange-900">بصمة فقط</p>
+                                  <p className="text-[10px] text-orange-700">بدون جدول ولا توقيع</p>
+                                </div>
+                              </div>
+                            </div>
+                            {signedCount < total && (
+                              <p className="text-[11px] text-gray-600 mt-2">
+                                💡 لضمان الدقة الكاملة وحل أي تناقض في البيانات، أنصح بإصدار وتوقيع التايم شيت لكل الموظفين قبل إغلاق الرواتب.
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })()}
+
                       {salaryClosingData.every(e => e.scheduledWorkDays === 0) && (
                         <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2 text-sm text-amber-800" data-testid="alert-no-schedule">
                           <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
@@ -6787,10 +6909,41 @@ export default function EmployeeReportsDashboardPage() {
                         </TableHeader>
                         <TableBody>
                           {salaryClosingData.map((emp, index) => (
-                            <TableRow key={emp.id}>
+                            <TableRow key={emp.id} className={emp.dataSource === "signed_timesheet" ? "bg-emerald-50/30" : ""}>
                               <TableCell>{index + 1}</TableCell>
                               <TableCell className="font-mono">{emp.employeeNumber}</TableCell>
-                              <TableCell className="font-medium">{emp.employeeName}</TableCell>
+                              <TableCell className="font-medium">
+                                <div className="flex items-center gap-2">
+                                  <span>{emp.employeeName}</span>
+                                  {emp.dataSource === "signed_timesheet" && (
+                                    <Badge
+                                      className="bg-emerald-100 text-emerald-800 border-emerald-300 text-[10px] px-1.5 py-0"
+                                      title={`تايم شيت موقّع #${emp.signedReportInfo?.id} — مصدر الحقيقة`}
+                                      data-testid={`badge-signed-${emp.id}`}
+                                    >
+                                      ✓ موقّع
+                                    </Badge>
+                                  )}
+                                  {emp.dataSource === "schedule_attendance" && (
+                                    <Badge
+                                      className="bg-blue-100 text-blue-800 border-blue-300 text-[10px] px-1.5 py-0"
+                                      title="محسوب من الجدول + البصمة (لا يوجد تايم شيت موقّع)"
+                                      data-testid={`badge-schedule-${emp.id}`}
+                                    >
+                                      جدول
+                                    </Badge>
+                                  )}
+                                  {emp.dataSource === "attendance_only" && (
+                                    <Badge
+                                      className="bg-orange-100 text-orange-800 border-orange-300 text-[10px] px-1.5 py-0"
+                                      title="محسوب من البصمة فقط (لا يوجد جدول ولا تايم شيت موقّع)"
+                                      data-testid={`badge-attendance-only-${emp.id}`}
+                                    >
+                                      بصمة فقط
+                                    </Badge>
+                                  )}
+                                </div>
+                              </TableCell>
                               <TableCell>{emp.jobTitle}</TableCell>
                               <TableCell className="text-center">
                                 <Badge className="bg-blue-100 text-blue-800">{emp.scheduledWorkDays}</Badge>

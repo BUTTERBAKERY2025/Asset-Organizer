@@ -24477,7 +24477,7 @@ export async function registerRoutes(
         monthEnd = `${month}-${String(lastDay).padStart(2, "0")}`;
       }
 
-      const [employees, attendance, schedules] = await Promise.all([
+      const [employees, attendance, schedules, signedTimesheets] = await Promise.all([
         (async () => {
           try {
             if (allowedBranches === null) {
@@ -24530,9 +24530,28 @@ export async function registerRoutes(
             return [];
           } catch (e) { return []; }
         })(),
+        (async () => {
+          try {
+            if (!monthStart || !monthEnd) return [];
+            if (branchFilter.singleBranchId) {
+              return await storage.getFinalizedTimesheetEntriesByBranchAndDateRange(
+                branchFilter.singleBranchId, monthStart, monthEnd
+              );
+            }
+            if (branchFilter.branchIds && branchFilter.branchIds.length > 0) {
+              const allReports = await Promise.all(
+                branchFilter.branchIds.map(bid =>
+                  storage.getFinalizedTimesheetEntriesByBranchAndDateRange(bid, monthStart!, monthEnd!).catch(() => [])
+                )
+              );
+              return allReports.flat();
+            }
+            return [];
+          } catch (e) { return []; }
+        })(),
       ]);
 
-      res.json({ employees, attendance, schedules });
+      res.json({ employees, attendance, schedules, signedTimesheets });
     } catch (error) {
       console.error("Error fetching employee reports bundle:", error);
       res.status(500).json({ error: "فشل في جلب بيانات تقارير الموظفين" });
