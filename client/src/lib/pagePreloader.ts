@@ -356,12 +356,16 @@ export function preloadAndCache(key: string): Promise<any> {
     return mod;
   }).catch(err => {
     if (isChunkLoadError(err)) {
-      const alreadyReloaded = sessionStorage.getItem('__chunk_reload');
-      if (!alreadyReloaded) {
-        sessionStorage.setItem('__chunk_reload', '1');
+      const reloadCount = parseInt(sessionStorage.getItem('__chunk_reload_count') || '0', 10) || 0;
+      const lastReloadAt = parseInt(sessionStorage.getItem('__chunk_reload_at') || '0', 10);
+      const effectiveCount = (Date.now() - lastReloadAt > 60_000) ? 0 : reloadCount;
+      if (effectiveCount < 1) {
+        sessionStorage.setItem('__chunk_reload_count', String(effectiveCount + 1));
+        sessionStorage.setItem('__chunk_reload_at', String(Date.now()));
         window.location.reload();
         return new Promise(() => {});
       }
+      // Loop guard hit — let the ErrorBoundary render the recovery UI
     }
     throw err;
   });

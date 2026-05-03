@@ -31,18 +31,47 @@ export class ErrorBoundary extends Component<Props, State> {
       msg.includes('error loading dynamically imported');
 
     if (isChunkError) {
-      const alreadyReloaded = sessionStorage.getItem('__chunk_reload');
-      if (!alreadyReloaded) {
-        sessionStorage.setItem('__chunk_reload', '1');
+      const reloadCountRaw = sessionStorage.getItem('__chunk_reload_count') || '0';
+      const reloadCount = parseInt(reloadCountRaw, 10) || 0;
+      const lastReloadAt = parseInt(sessionStorage.getItem('__chunk_reload_at') || '0', 10);
+      const now = Date.now();
+      const RELOAD_WINDOW_MS = 60_000;
+      const MAX_RELOADS = 1;
+
+      // Reset the counter if last reload was long ago (user genuinely hit a stale-cache issue later)
+      const effectiveCount = (now - lastReloadAt > RELOAD_WINDOW_MS) ? 0 : reloadCount;
+
+      if (effectiveCount < MAX_RELOADS) {
+        sessionStorage.setItem('__chunk_reload_count', String(effectiveCount + 1));
+        sessionStorage.setItem('__chunk_reload_at', String(now));
         window.location.reload();
         return;
       }
+      // Hit the limit — show a clear message instead of looping reloads
+      console.error('[ChunkError] Reload limit reached. Showing recovery UI.', error);
     }
 
     console.error('Application error:', error);
     console.error('Error stack:', error.stack);
     console.error('Component stack:', errorInfo.componentStack);
   }
+
+  private isChunkError(): boolean {
+    const msg = this.state.error?.message || '';
+    return (
+      this.state.error?.name === 'ChunkLoadError' ||
+      msg.includes('dynamically imported module') ||
+      msg.includes('Loading chunk') ||
+      msg.includes('error loading dynamically imported')
+    );
+  }
+
+  private handleHardReload = () => {
+    sessionStorage.removeItem('__chunk_reload_count');
+    sessionStorage.removeItem('__chunk_reload_at');
+    // Force-bypass cache
+    window.location.reload();
+  };
 
   private handleReload = () => {
     window.location.reload();
@@ -59,6 +88,7 @@ export class ErrorBoundary extends Component<Props, State> {
   public render() {
     if (this.state.hasError) {
       const canRetry = this.state.retryCount < 3;
+      const chunkErr = this.isChunkError();
       
       return (
         <div 
@@ -71,10 +101,12 @@ export class ErrorBoundary extends Component<Props, State> {
               <AlertTriangle className="w-8 h-8 text-red-600" />
             </div>
             <h1 className="text-xl font-bold text-[#1a3a2f] mb-2">
-              حدث خطأ غير متوقع
+              {chunkErr ? "تم تحديث النظام" : "حدث خطأ غير متوقع"}
             </h1>
             <p className="text-[#1a3a2f]/70 text-sm mb-4">
-              نعتذر عن هذا الخطأ. يرجى المحاولة مرة أخرى.
+              {chunkErr
+                ? "صدر إصدار جديد من النظام. اضغط على زر التحديث لتحميل أحدث نسخة."
+                : "نعتذر عن هذا الخطأ. يرجى المحاولة مرة أخرى."}
             </p>
             {process.env.NODE_ENV === 'development' && this.state.error && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 text-left text-xs max-h-32 overflow-auto">
@@ -83,7 +115,7 @@ export class ErrorBoundary extends Component<Props, State> {
               </div>
             )}
             <div className="flex gap-3 justify-center">
-              {canRetry && (
+              {canRetry && !chunkErr && (
                 <Button 
                   onClick={this.handleRetry}
                   variant="outline"
@@ -94,11 +126,11 @@ export class ErrorBoundary extends Component<Props, State> {
                 </Button>
               )}
               <Button 
-                onClick={this.handleReload}
+                onClick={chunkErr ? this.handleHardReload : this.handleReload}
                 className="bg-[#e67e22] hover:bg-[#d35400] text-white"
               >
                 <RefreshCw className="w-4 h-4 ml-2" />
-                تحديث الصفحة
+                {chunkErr ? "تحديث النظام الآن" : "تحديث الصفحة"}
               </Button>
             </div>
           </div>
