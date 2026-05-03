@@ -595,6 +595,95 @@ export const insertContractRetentionSchema = createInsertSchema(contractRetentio
 export type ContractRetention = typeof contractRetentions.$inferSelect;
 export type InsertContractRetention = z.infer<typeof insertContractRetentionSchema>;
 
+// ============================================================
+// Contract Variations table - أوامر التغيير (Phase 3)
+// ============================================================
+// Tracks Variation Orders (VOs) / Change Orders. When a VO is approved,
+// the contract.totalAmount is adjusted by VO.amount inside a transaction.
+export const contractVariations = pgTable("contract_variations", {
+  id: serial("id").primaryKey(),
+  contractId: integer("contract_id")
+    .notNull()
+    .references(() => constructionContracts.id, { onDelete: "cascade" }),
+  variationNumber: text("variation_number").notNull(),                  // VO-001
+  title: text("title").notNull(),
+  description: text("description"),
+  type: text("type").notNull().default("addition"),                     // addition | deduction | scope_change | time_extension
+  amount: real("amount").notNull().default(0),                          // موجب=زيادة، سالب=تخفيض، 0 لو time-only
+  durationChangeDays: integer("duration_change_days").default(0),
+  reason: text("reason"),
+  status: text("status").notNull().default("draft"),                    // draft | pending_approval | approved | rejected
+  requestedBy: varchar("requested_by").references(() => users.id),
+  requestedAt: timestamp("requested_at").defaultNow(),
+  approvedBy: varchar("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  rejectionReason: text("rejection_reason"),
+  attachmentUrl: text("attachment_url"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_contract_variations_contract").on(table.contractId),
+  index("idx_contract_variations_status").on(table.status),
+]);
+
+export const insertContractVariationSchema = createInsertSchema(contractVariations).omit({
+  id: true,
+  approvedBy: true,
+  approvedAt: true,
+  rejectionReason: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ContractVariation = typeof contractVariations.$inferSelect;
+export type InsertContractVariation = z.infer<typeof insertContractVariationSchema>;
+
+// ============================================================
+// Contract Guarantees table - الضمانات البنكية (Phase 3)
+// ============================================================
+// Tracks bank guarantees provided by contractor (bid bond, performance,
+// advance payment, maintenance). Status auto-derived from expiry_date
+// in the UI; explicit release marks status='released'.
+export const contractGuarantees = pgTable("contract_guarantees", {
+  id: serial("id").primaryKey(),
+  contractId: integer("contract_id")
+    .notNull()
+    .references(() => constructionContracts.id, { onDelete: "cascade" }),
+  guaranteeNumber: text("guarantee_number").notNull(),
+  type: text("type").notNull().default("performance"),                  // bid | performance | advance | maintenance
+  bankName: text("bank_name").notNull(),
+  amount: real("amount").notNull(),
+  currency: text("currency").notNull().default("SAR"),
+  issueDate: text("issue_date").notNull(),
+  expiryDate: text("expiry_date").notNull(),
+  status: text("status").notNull().default("active"),                   // active | expired | released | claimed
+  releasedAt: timestamp("released_at"),
+  releasedBy: varchar("released_by").references(() => users.id),
+  releaseNotes: text("release_notes"),
+  attachmentUrl: text("attachment_url"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_contract_guarantees_contract").on(table.contractId),
+  index("idx_contract_guarantees_status").on(table.status),
+  index("idx_contract_guarantees_expiry").on(table.expiryDate),
+]);
+
+export const insertContractGuaranteeSchema = createInsertSchema(contractGuarantees).omit({
+  id: true,
+  releasedAt: true,
+  releasedBy: true,
+  releaseNotes: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ContractGuarantee = typeof contractGuarantees.$inferSelect;
+export type InsertContractGuarantee = z.infer<typeof insertContractGuaranteeSchema>;
+
 // Project Expenses table - مصروفات المشروع المباشرة (غير مرتبطة بعقد)
 export const projectExpenses = pgTable("project_expenses", {
   id: serial("id").primaryKey(),

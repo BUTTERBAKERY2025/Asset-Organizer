@@ -84,6 +84,12 @@ import {
   contractRetentions,
   type ContractRetention,
   type InsertContractRetention,
+  contractVariations,
+  type ContractVariation,
+  type InsertContractVariation,
+  contractGuarantees,
+  type ContractGuarantee,
+  type InsertContractGuarantee,
   type ProjectExpense,
   type InsertProjectExpense,
   type ProjectDailyLog,
@@ -671,6 +677,21 @@ export interface IStorage {
   getContractRetentions(contractId: number): Promise<ContractRetention[]>;
   getRetentionSummary(contractId: number): Promise<{ totalHeld: number; totalReleased: number; currentlyHeld: number }>;
   releaseContractRetention(contractId: number, releasedBy: string, notes?: string): Promise<{ released: number }>;
+  // Contract Variations (Phase 3)
+  getContractVariations(contractId: number): Promise<ContractVariation[]>;
+  getContractVariation(id: number): Promise<ContractVariation | undefined>;
+  createContractVariation(variation: InsertContractVariation): Promise<ContractVariation>;
+  updateContractVariation(id: number, variation: Partial<InsertContractVariation>): Promise<ContractVariation | undefined>;
+  deleteContractVariation(id: number): Promise<boolean>;
+  approveContractVariation(id: number, approvedBy: string): Promise<ContractVariation>;
+  rejectContractVariation(id: number, rejectedBy: string, reason: string): Promise<ContractVariation>;
+  // Contract Guarantees (Phase 3)
+  getContractGuarantees(contractId: number): Promise<ContractGuarantee[]>;
+  getContractGuarantee(id: number): Promise<ContractGuarantee | undefined>;
+  createContractGuarantee(g: InsertContractGuarantee): Promise<ContractGuarantee>;
+  updateContractGuarantee(id: number, g: Partial<InsertContractGuarantee>): Promise<ContractGuarantee | undefined>;
+  deleteContractGuarantee(id: number): Promise<boolean>;
+  releaseContractGuarantee(id: number, releasedBy: string, notes?: string): Promise<ContractGuarantee>;
 
   // Project Expenses
   getAllProjectExpenses(branchIds?: string[] | null): Promise<ProjectExpense[]>;
@@ -2334,6 +2355,171 @@ export class DatabaseStorage implements IStorage {
         .where(eq(constructionContracts.id, contractId));
 
       return { released: currentlyHeld };
+    });
+  }
+
+  // ========== Contract Variations (Phase 3: Variation Orders) ==========
+  async getContractVariations(contractId: number): Promise<ContractVariation[]> {
+    return await db
+      .select()
+      .from(contractVariations)
+      .where(eq(contractVariations.contractId, contractId))
+      .orderBy(desc(contractVariations.createdAt));
+  }
+
+  async getContractVariation(id: number): Promise<ContractVariation | undefined> {
+    const [v] = await db.select().from(contractVariations).where(eq(contractVariations.id, id));
+    return v || undefined;
+  }
+
+  async createContractVariation(variation: InsertContractVariation): Promise<ContractVariation> {
+    const [created] = await db.insert(contractVariations).values(variation).returning();
+    return created;
+  }
+
+  async updateContractVariation(id: number, variation: Partial<InsertContractVariation>): Promise<ContractVariation | undefined> {
+    // Defense in depth: storage layer also enforces no-edit-if-approved
+    return await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(contractVariations)
+        .where(eq(contractVariations.id, id))
+        .for('update');
+      if (!existing) return undefined;
+      if (existing.status === 'approved') {
+        throw new Error('لا يمكن تعديل أمر تغيير معتمد');
+      }
+      const [updated] = await tx
+        .update(contractVariations)
+        .set({ ...variation, updatedAt: new Date() })
+        .where(eq(contractVariations.id, id))
+        .returning();
+      return updated || undefined;
+    });
+  }
+
+  async deleteContractVariation(id: number): Promise<boolean> {
+    const result = await db.delete(contractVariations).where(eq(contractVariations.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Approving a VO atomically: lock the VO, mark approved, then add VO.amount to contract.totalAmount.
+  // Idempotent: calling on an already-approved VO returns it without re-applying amount.
+  async approveContractVariation(id: number, approvedBy: string): Promise<ContractVariation> {
+    return await db.transaction(async (tx) => {
+      const [vo] = await tx
+        .select()
+        .from(contractVariations)
+        .where(eq(contractVariations.id, id))
+        .for('update');
+      if (!vo) throw new Error('أمر التغيير غير موجود');
+      if (vo.status === 'approved') return vo;
+      if (vo.status === 'rejected') throw new Error('لا يمكن اعتماد أمر تغيير مرفوض');
+
+      const [updated] = await tx
+        .update(contractVariations)
+        .set({ status: 'approved', approvedBy, approvedAt: new Date(), updatedAt: new Date() })
+        .where(eq(contractVariations.id, id))
+        .returning();
+
+      if (vo.amount !== 0) {
+        const [contract] = await tx
+          .select()
+          .from(constructionContracts)
+          .where(eq(constructionContracts.id, vo.contractId))
+          .for('update');
+        if (contract) {
+          const newTotal = Math.round(((contract.totalAmount || 0) + vo.amount) * 100) / 100;
+          await tx.update(constructionContracts)
+            .set({ totalAmount: newTotal, updatedAt: new Date() })
+            .where(eq(constructionContracts.id, vo.contractId));
+        }
+      }
+
+      return updated;
+    });
+  }
+
+  async rejectContractVariation(id: number, rejectedBy: string, reason: string): Promise<ContractVariation> {
+    return await db.transaction(async (tx) => {
+      const [vo] = await tx
+        .select()
+        .from(contractVariations)
+        .where(eq(contractVariations.id, id))
+        .for('update');
+      if (!vo) throw new Error('أمر التغيير غير موجود');
+      if (vo.status === 'approved') throw new Error('لا يمكن رفض أمر تغيير معتمد');
+
+      const [updated] = await tx
+        .update(contractVariations)
+        .set({
+          status: 'rejected',
+          approvedBy: rejectedBy,
+          approvedAt: new Date(),
+          rejectionReason: reason,
+          updatedAt: new Date(),
+        })
+        .where(eq(contractVariations.id, id))
+        .returning();
+      return updated;
+    });
+  }
+
+  // ========== Contract Guarantees (Phase 3: Bank Guarantees) ==========
+  async getContractGuarantees(contractId: number): Promise<ContractGuarantee[]> {
+    return await db
+      .select()
+      .from(contractGuarantees)
+      .where(eq(contractGuarantees.contractId, contractId))
+      .orderBy(desc(contractGuarantees.createdAt));
+  }
+
+  async getContractGuarantee(id: number): Promise<ContractGuarantee | undefined> {
+    const [g] = await db.select().from(contractGuarantees).where(eq(contractGuarantees.id, id));
+    return g || undefined;
+  }
+
+  async createContractGuarantee(g: InsertContractGuarantee): Promise<ContractGuarantee> {
+    const [created] = await db.insert(contractGuarantees).values(g).returning();
+    return created;
+  }
+
+  async updateContractGuarantee(id: number, g: Partial<InsertContractGuarantee>): Promise<ContractGuarantee | undefined> {
+    const [updated] = await db
+      .update(contractGuarantees)
+      .set({ ...g, updatedAt: new Date() })
+      .where(eq(contractGuarantees.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteContractGuarantee(id: number): Promise<boolean> {
+    const result = await db.delete(contractGuarantees).where(eq(contractGuarantees.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async releaseContractGuarantee(id: number, releasedBy: string, notes?: string): Promise<ContractGuarantee> {
+    return await db.transaction(async (tx) => {
+      const [g] = await tx
+        .select()
+        .from(contractGuarantees)
+        .where(eq(contractGuarantees.id, id))
+        .for('update');
+      if (!g) throw new Error('الضمان غير موجود');
+      if (g.status === 'released') throw new Error('تم الإفراج عن هذا الضمان مسبقاً');
+
+      const [updated] = await tx
+        .update(contractGuarantees)
+        .set({
+          status: 'released',
+          releasedAt: new Date(),
+          releasedBy,
+          releaseNotes: notes,
+          updatedAt: new Date(),
+        })
+        .where(eq(contractGuarantees.id, id))
+        .returning();
+      return updated;
     });
   }
 

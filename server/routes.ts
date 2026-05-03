@@ -97,7 +97,7 @@ import {
   generateSingleTimesheetPdf,
   generateAttendanceLogPdf, type AttendanceLogPdfData
 } from "./pdf-generator";
-import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertContractMilestoneSchema, insertProjectExpenseSchema, insertProjectDailyLogSchema, insertProjectDailyLogPhotoSchema, insertDailyLogActivitySchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertInfluencerContractSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema, isMadeToOrderCategory, suggestCategoryFromProductName, userBranchAccess } from "@shared/schema";
+import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertContractMilestoneSchema, insertContractVariationSchema, insertContractGuaranteeSchema, insertProjectExpenseSchema, insertProjectDailyLogSchema, insertProjectDailyLogPhotoSchema, insertDailyLogActivitySchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertInfluencerContractSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema, isMadeToOrderCategory, suggestCategoryFromProductName, userBranchAccess } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, isUserAdmin, getAllowedBranchIds, getEffectiveBranchFilter, invalidateAuthCache } from "./auth";
 import { authRateLimiter, biometricRateLimiter, uploadRateLimiter, apiRateLimiter, validateFileUpload, sanitizeFilename, trackLoginAttempt } from "./security";
@@ -2725,6 +2725,198 @@ export async function registerRoutes(
     } catch (e) {
       console.error("Error deleting milestone:", e);
       res.status(500).json({ error: "فشل في حذف المرحلة" });
+    }
+  });
+
+  // ==================== Contract Variations (Phase 3) ====================
+  app.get("/api/construction/contracts/:contractId/variations", isAuthenticated, requirePermission("contracts", "view"), async (req, res) => {
+    try {
+      const contractId = parseInt(req.params.contractId, 10);
+      if (isNaN(contractId)) return res.status(400).json({ error: "Invalid contract ID" });
+      const access = await checkContractBranchAccess(req, contractId);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+      const items = await storage.getContractVariations(contractId);
+      res.json(items);
+    } catch (e) {
+      console.error("Error fetching variations:", e);
+      res.status(500).json({ error: "فشل في جلب أوامر التغيير" });
+    }
+  });
+
+  app.post("/api/construction/contract-variations", isAuthenticated, requirePermission("contracts", "create"), async (req, res) => {
+    try {
+      const access = await checkContractBranchAccess(req, req.body.contractId);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+      const validated = insertContractVariationSchema.parse({
+        ...req.body,
+        requestedBy: req.currentUser?.id,
+      });
+      const created = await storage.createContractVariation(validated);
+      res.status(201).json(created);
+    } catch (e) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: "Invalid data", details: e.errors });
+      console.error("Error creating variation:", e);
+      res.status(500).json({ error: "فشل في إنشاء أمر التغيير" });
+    }
+  });
+
+  app.patch("/api/construction/contract-variations/:id", isAuthenticated, requirePermission("contracts", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const existing = await storage.getContractVariation(id);
+      if (!existing) return res.status(404).json({ error: "Not found" });
+      if (existing.status === 'approved') return res.status(409).json({ error: "لا يمكن تعديل أمر تغيير معتمد" });
+      const access = await checkContractBranchAccess(req, existing.contractId);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+      const validated = insertContractVariationSchema.partial().parse(req.body);
+      const updated = await storage.updateContractVariation(id, validated);
+      res.json(updated);
+    } catch (e) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: "Invalid data", details: e.errors });
+      console.error("Error updating variation:", e);
+      res.status(500).json({ error: "فشل في التحديث" });
+    }
+  });
+
+  app.delete("/api/construction/contract-variations/:id", isAuthenticated, requirePermission("contracts", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const existing = await storage.getContractVariation(id);
+      if (!existing) return res.status(404).json({ error: "Not found" });
+      if (existing.status === 'approved') return res.status(409).json({ error: "لا يمكن حذف أمر تغيير معتمد" });
+      const access = await checkContractBranchAccess(req, existing.contractId);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+      const ok = await storage.deleteContractVariation(id);
+      res.json({ success: ok });
+    } catch (e) {
+      console.error("Error deleting variation:", e);
+      res.status(500).json({ error: "فشل في الحذف" });
+    }
+  });
+
+  app.post("/api/construction/contract-variations/:id/approve", isAuthenticated, requirePermission("contracts", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const existing = await storage.getContractVariation(id);
+      if (!existing) return res.status(404).json({ error: "Not found" });
+      const access = await checkContractBranchAccess(req, existing.contractId);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+      const userId = req.currentUser?.id;
+      if (!userId) return res.status(401).json({ error: "Unauthorized" });
+      const result = await storage.approveContractVariation(id, userId);
+      res.json(result);
+    } catch (e: any) {
+      console.error("Error approving variation:", e);
+      res.status(500).json({ error: e?.message || "فشل في الاعتماد" });
+    }
+  });
+
+  app.post("/api/construction/contract-variations/:id/reject", isAuthenticated, requirePermission("contracts", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const reason = (req.body?.reason || '').trim();
+      if (!reason) return res.status(400).json({ error: "سبب الرفض مطلوب" });
+      const existing = await storage.getContractVariation(id);
+      if (!existing) return res.status(404).json({ error: "Not found" });
+      const access = await checkContractBranchAccess(req, existing.contractId);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+      const userId = req.currentUser?.id;
+      if (!userId) return res.status(401).json({ error: "Unauthorized" });
+      const result = await storage.rejectContractVariation(id, userId, reason);
+      res.json(result);
+    } catch (e: any) {
+      console.error("Error rejecting variation:", e);
+      res.status(500).json({ error: e?.message || "فشل في الرفض" });
+    }
+  });
+
+  // ==================== Contract Guarantees (Phase 3) ====================
+  app.get("/api/construction/contracts/:contractId/guarantees", isAuthenticated, requirePermission("contracts", "view"), async (req, res) => {
+    try {
+      const contractId = parseInt(req.params.contractId, 10);
+      if (isNaN(contractId)) return res.status(400).json({ error: "Invalid contract ID" });
+      const access = await checkContractBranchAccess(req, contractId);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+      const items = await storage.getContractGuarantees(contractId);
+      res.json(items);
+    } catch (e) {
+      console.error("Error fetching guarantees:", e);
+      res.status(500).json({ error: "فشل في جلب الضمانات" });
+    }
+  });
+
+  app.post("/api/construction/contract-guarantees", isAuthenticated, requirePermission("contracts", "create"), async (req, res) => {
+    try {
+      const access = await checkContractBranchAccess(req, req.body.contractId);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+      const validated = insertContractGuaranteeSchema.parse({
+        ...req.body,
+        createdBy: req.currentUser?.id,
+      });
+      const created = await storage.createContractGuarantee(validated);
+      res.status(201).json(created);
+    } catch (e) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: "Invalid data", details: e.errors });
+      console.error("Error creating guarantee:", e);
+      res.status(500).json({ error: "فشل في إضافة الضمان" });
+    }
+  });
+
+  app.patch("/api/construction/contract-guarantees/:id", isAuthenticated, requirePermission("contracts", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const existing = await storage.getContractGuarantee(id);
+      if (!existing) return res.status(404).json({ error: "Not found" });
+      if (existing.status === 'released') return res.status(409).json({ error: "لا يمكن تعديل ضمان تم الإفراج عنه" });
+      const access = await checkContractBranchAccess(req, existing.contractId);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+      const validated = insertContractGuaranteeSchema.partial().parse(req.body);
+      const updated = await storage.updateContractGuarantee(id, validated);
+      res.json(updated);
+    } catch (e) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: "Invalid data", details: e.errors });
+      console.error("Error updating guarantee:", e);
+      res.status(500).json({ error: "فشل في التحديث" });
+    }
+  });
+
+  app.delete("/api/construction/contract-guarantees/:id", isAuthenticated, requirePermission("contracts", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const existing = await storage.getContractGuarantee(id);
+      if (!existing) return res.status(404).json({ error: "Not found" });
+      if (existing.status === 'released') return res.status(409).json({ error: "لا يمكن حذف ضمان تم الإفراج عنه" });
+      const access = await checkContractBranchAccess(req, existing.contractId);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+      const ok = await storage.deleteContractGuarantee(id);
+      res.json({ success: ok });
+    } catch (e) {
+      console.error("Error deleting guarantee:", e);
+      res.status(500).json({ error: "فشل في الحذف" });
+    }
+  });
+
+  app.post("/api/construction/contract-guarantees/:id/release", isAuthenticated, requirePermission("contracts", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const existing = await storage.getContractGuarantee(id);
+      if (!existing) return res.status(404).json({ error: "Not found" });
+      const access = await checkContractBranchAccess(req, existing.contractId);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+      const userId = req.currentUser?.id;
+      if (!userId) return res.status(401).json({ error: "Unauthorized" });
+      const result = await storage.releaseContractGuarantee(id, userId, req.body?.notes);
+      res.json(result);
+    } catch (e: any) {
+      console.error("Error releasing guarantee:", e);
+      res.status(500).json({ error: e?.message || "فشل في الإفراج" });
     }
   });
 

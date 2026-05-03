@@ -37,6 +37,7 @@ import type {
   ConstructionContract, Contractor, ConstructionProject,
   ContractMilestone, ContractItem, ContractPayment,
 } from "@shared/schema";
+import { ContractVariationsCard, ContractGuaranteesCard } from "@/components/contract-variations-guarantees";
 
 // ============================================================
 // Form schema for milestones
@@ -549,6 +550,20 @@ export default function ContractDetailPage() {
             </Card>
           )
         )}
+
+        {/* Phase 3: Variations + Guarantees */}
+        <ContractVariationsCard
+          contractId={contractId}
+          canCreate={canCreateMilestone}
+          canEdit={canEditMilestone}
+          canDelete={canDeleteMilestone}
+        />
+        <ContractGuaranteesCard
+          contractId={contractId}
+          canCreate={canCreateMilestone}
+          canEdit={canEditMilestone}
+          canDelete={canDeleteMilestone}
+        />
 
         {/* Milestones section */}
         <Card>
