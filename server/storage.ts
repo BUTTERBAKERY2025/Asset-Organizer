@@ -81,6 +81,9 @@ import {
   contractMilestones,
   type ContractMilestone,
   type InsertContractMilestone,
+  contractRetentions,
+  type ContractRetention,
+  type InsertContractRetention,
   type ProjectExpense,
   type InsertProjectExpense,
   type ProjectDailyLog,
@@ -664,6 +667,10 @@ export interface IStorage {
   updateContractMilestone(id: number, milestone: Partial<InsertContractMilestone>): Promise<ContractMilestone | undefined>;
   deleteContractMilestone(id: number): Promise<boolean>;
   generateMilestonePaymentRequest(milestoneId: number, requestedBy: string): Promise<PaymentRequest>;
+  // Contract Retentions (Phase 2)
+  getContractRetentions(contractId: number): Promise<ContractRetention[]>;
+  getRetentionSummary(contractId: number): Promise<{ totalHeld: number; totalReleased: number; currentlyHeld: number }>;
+  releaseContractRetention(contractId: number, releasedBy: string, notes?: string): Promise<{ released: number }>;
 
   // Project Expenses
   getAllProjectExpenses(branchIds?: string[] | null): Promise<ProjectExpense[]>;
@@ -2089,16 +2096,72 @@ export class DatabaseStorage implements IStorage {
   }
 
   async markPaymentRequestAsPaid(id: number): Promise<PaymentRequest | undefined> {
-    const [updated] = await db
-      .update(paymentRequests)
-      .set({ 
-        status: 'paid', 
-        paidAt: new Date(),
-        updatedAt: new Date() 
-      })
-      .where(eq(paymentRequests.id, id))
-      .returning();
-    return updated || undefined;
+    // Phase 2: All operations wrapped in a single transaction to prevent race conditions.
+    // Idempotency: if the request is already 'paid', skip side-effects (milestone+retention)
+    // so re-clicks or concurrent requests can't create duplicate retention rows.
+    return await db.transaction(async (tx) => {
+      // 1) Read current state with row lock (prevents two concurrent updaters)
+      const [current] = await tx
+        .select()
+        .from(paymentRequests)
+        .where(eq(paymentRequests.id, id))
+        .for('update');
+      if (!current) return undefined;
+
+      const wasAlreadyPaid = current.status === 'paid';
+
+      const [updated] = await tx
+        .update(paymentRequests)
+        .set({ status: 'paid', paidAt: new Date(), updatedAt: new Date() })
+        .where(eq(paymentRequests.id, id))
+        .returning();
+
+      // Skip side-effects on duplicate calls (idempotent)
+      if (wasAlreadyPaid) return updated;
+
+      try {
+        // 2) Find linked milestone (locked) — only one row per payment_request_id by design
+        const [linkedMilestone] = await tx
+          .select()
+          .from(contractMilestones)
+          .where(eq(contractMilestones.paymentRequestId, id))
+          .for('update');
+
+        if (linkedMilestone && linkedMilestone.status !== 'paid') {
+          const [contract] = await tx
+            .select()
+            .from(constructionContracts)
+            .where(eq(constructionContracts.id, linkedMilestone.contractId));
+          const retentionPct = contract?.retentionPercentage || 0;
+          const retentionAmount = retentionPct > 0
+            ? Math.round((linkedMilestone.amount * retentionPct / 100) * 100) / 100
+            : 0;
+          const netPaid = Math.round((linkedMilestone.amount - retentionAmount) * 100) / 100;
+
+          await tx.update(contractMilestones)
+            .set({ status: 'paid', paidAt: new Date(), paidAmount: netPaid, updatedAt: new Date() })
+            .where(eq(contractMilestones.id, linkedMilestone.id));
+
+          if (retentionAmount > 0) {
+            await tx.insert(contractRetentions).values({
+              contractId: linkedMilestone.contractId,
+              milestoneId: linkedMilestone.id,
+              paymentRequestId: id,
+              type: 'hold',
+              amount: retentionAmount,
+              percentage: retentionPct,
+              notes: `احتجاز تلقائي عند صرف مرحلة "${linkedMilestone.title}"`,
+            });
+          }
+        }
+      } catch (e) {
+        console.error('[markPaymentRequestAsPaid] auto-milestone-update failed:', e);
+        // Re-throw to roll back the whole transaction — payment & milestone must stay consistent
+        throw e;
+      }
+
+      return updated;
+    });
   }
 
   // Contract Payments
@@ -2204,6 +2267,74 @@ export class DatabaseStorage implements IStorage {
       .where(eq(contractMilestones.id, milestoneId));
 
     return newRequest;
+  }
+
+  // ========== Contract Retentions (Phase 2: Warranty Hold) ==========
+  async getContractRetentions(contractId: number): Promise<ContractRetention[]> {
+    return await db
+      .select()
+      .from(contractRetentions)
+      .where(eq(contractRetentions.contractId, contractId))
+      .orderBy(desc(contractRetentions.createdAt));
+  }
+
+  async getRetentionSummary(contractId: number): Promise<{ totalHeld: number; totalReleased: number; currentlyHeld: number }> {
+    const rows = await db
+      .select()
+      .from(contractRetentions)
+      .where(eq(contractRetentions.contractId, contractId));
+    const totalHeld = rows.filter(r => r.type === 'hold').reduce((s, r) => s + r.amount, 0);
+    const totalReleased = rows.filter(r => r.type === 'release').reduce((s, r) => s + r.amount, 0);
+    return {
+      totalHeld: Math.round(totalHeld * 100) / 100,
+      totalReleased: Math.round(totalReleased * 100) / 100,
+      currentlyHeld: Math.round((totalHeld - totalReleased) * 100) / 100,
+    };
+  }
+
+  async releaseContractRetention(contractId: number, releasedBy: string, notes?: string): Promise<{ released: number }> {
+    // Phase 2: Wrapped in transaction with row lock to prevent double-release races.
+    return await db.transaction(async (tx) => {
+      // Lock the contract row so concurrent release attempts serialize
+      const [contract] = await tx
+        .select()
+        .from(constructionContracts)
+        .where(eq(constructionContracts.id, contractId))
+        .for('update');
+
+      if (!contract) throw new Error('العقد غير موجود');
+      if (contract.retentionReleased) throw new Error('تم الإفراج عن الضمان مسبقاً');
+
+      // Compute currently held inside the transaction (after lock)
+      const rows = await tx
+        .select()
+        .from(contractRetentions)
+        .where(eq(contractRetentions.contractId, contractId));
+      const totalHeld = rows.filter(r => r.type === 'hold').reduce((s, r) => s + r.amount, 0);
+      const totalReleased = rows.filter(r => r.type === 'release').reduce((s, r) => s + r.amount, 0);
+      const currentlyHeld = Math.round((totalHeld - totalReleased) * 100) / 100;
+
+      if (currentlyHeld <= 0) throw new Error('لا يوجد مبلغ محتجز للإفراج عنه');
+
+      await tx.insert(contractRetentions).values({
+        contractId,
+        type: 'release',
+        amount: currentlyHeld,
+        notes: notes || 'إفراج عن كامل المبلغ المحتجز',
+        createdBy: releasedBy,
+      });
+
+      await tx.update(constructionContracts)
+        .set({
+          retentionReleased: true,
+          retentionReleasedAt: new Date(),
+          retentionReleasedBy: releasedBy,
+          updatedAt: new Date(),
+        })
+        .where(eq(constructionContracts.id, contractId));
+
+      return { released: currentlyHeld };
+    });
   }
 
   // ========== Project Expenses ==========

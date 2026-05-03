@@ -104,6 +104,10 @@ export default function ContractDetailPage() {
   const [editTarget, setEditTarget] = useState<ContractMilestone | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ContractMilestone | null>(null);
   const [requestTarget, setRequestTarget] = useState<ContractMilestone | null>(null);
+  // Phase 2: Retention dialogs
+  const [isRetentionSettingsOpen, setIsRetentionSettingsOpen] = useState(false);
+  const [isReleaseRetentionOpen, setIsReleaseRetentionOpen] = useState(false);
+  const [retentionForm, setRetentionForm] = useState({ percentage: 0, releaseDate: "" });
 
   // ============================================================
   // Data fetching
@@ -135,6 +139,14 @@ export default function ContractDetailPage() {
     queryKey: [`/api/construction/contracts/${contractId}/payments`],
     enabled: !!contractId,
   });
+
+  // Phase 2: Retention data
+  const { data: retentionData } = useQuery<{ rows: any[]; summary: { totalHeld: number; totalReleased: number; currentlyHeld: number } }>({
+    queryKey: [`/api/construction/contracts/${contractId}/retentions`],
+    enabled: !!contractId,
+  });
+  const retentionSummary = retentionData?.summary || { totalHeld: 0, totalReleased: 0, currentlyHeld: 0 };
+  const retentionRows = retentionData?.rows || [];
 
   const contractor = useMemo(
     () => contractors.find((c) => c.id === contract?.contractorId),
@@ -295,6 +307,47 @@ export default function ContractDetailPage() {
   };
 
   // ============================================================
+  // Phase 2: Retention mutations
+  // ============================================================
+  const openRetentionSettings = () => {
+    setRetentionForm({
+      percentage: contract?.retentionPercentage || 0,
+      releaseDate: contract?.retentionReleaseDate || "",
+    });
+    setIsRetentionSettingsOpen(true);
+  };
+
+  const updateRetentionMutation = useMutation({
+    mutationFn: async (data: { percentage: number; releaseDate: string }) => {
+      const res = await apiRequest("PATCH", `/api/construction/contracts/${contractId}`, {
+        retentionPercentage: data.percentage,
+        retentionReleaseDate: data.releaseDate || null,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/construction/contracts/${contractId}`] });
+      setIsRetentionSettingsOpen(false);
+      toast({ title: "تم تحديث إعدادات الضمان" });
+    },
+    onError: (e: any) => toast({ title: "فشل التحديث", description: e.message, variant: "destructive" }),
+  });
+
+  const releaseRetentionMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/construction/contracts/${contractId}/release-retention`, {});
+      return res.json();
+    },
+    onSuccess: (r: any) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/construction/contracts/${contractId}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/construction/contracts/${contractId}/retentions`] });
+      setIsReleaseRetentionOpen(false);
+      toast({ title: "تم الإفراج عن الضمان", description: `المبلغ: ${formatSAR(r.released)}` });
+    },
+    onError: (e: any) => toast({ title: "فشل الإفراج", description: e.message, variant: "destructive" }),
+  });
+
+  // ============================================================
   // Render
   // ============================================================
   if (contractLoading) {
@@ -409,6 +462,93 @@ export default function ContractDetailPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Phase 2: Retention card */}
+        {(contract.retentionPercentage || 0) > 0 || retentionSummary.totalHeld > 0 ? (
+          <Card className="border-purple-200 bg-purple-50/30">
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Wallet className="h-5 w-5 text-purple-600" />
+                  احتجاز الضمان (Retention)
+                </CardTitle>
+                <CardDescription>
+                  نسبة من كل دفعة تُحتجز كضمان، وتُفرج بعد انتهاء فترة الضمان
+                </CardDescription>
+              </div>
+              <div className="flex gap-2">
+                {canEditMilestone && !contract.retentionReleased && (
+                  <Button size="sm" variant="outline" onClick={openRetentionSettings} data-testid="button-retention-settings">
+                    <Pencil className="h-3.5 w-3.5 ml-1" /> الإعدادات
+                  </Button>
+                )}
+                {canEditMilestone && retentionSummary.currentlyHeld > 0 && !contract.retentionReleased && (
+                  <Button
+                    size="sm"
+                    className="bg-emerald-600 hover:bg-emerald-700"
+                    onClick={() => setIsReleaseRetentionOpen(true)}
+                    disabled={releaseRetentionMutation.isPending}
+                    data-testid="button-release-retention"
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5 ml-1" /> إفراج عن الضمان
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+              <div>
+                <div className="text-xs text-muted-foreground">نسبة الاحتجاز</div>
+                <div className="text-lg font-bold text-purple-700" data-testid="text-retention-percent">
+                  {contract.retentionPercentage || 0}%
+                </div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">المحتجز حالياً</div>
+                <div className="text-lg font-bold text-amber-700" data-testid="text-retention-held">
+                  {formatSAR(retentionSummary.currentlyHeld)}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">تم الإفراج عنه</div>
+                <div className="text-lg font-bold text-emerald-700" data-testid="text-retention-released">
+                  {formatSAR(retentionSummary.totalReleased)}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">تاريخ الإفراج المتوقع</div>
+                <div className="text-base font-semibold" data-testid="text-retention-release-date">
+                  {contract.retentionReleaseDate || "غير محدد"}
+                </div>
+              </div>
+              {contract.retentionReleased && (
+                <div className="col-span-full bg-emerald-100 text-emerald-800 rounded-lg p-2 text-xs flex items-center gap-2" data-testid="badge-retention-released">
+                  <CheckCircle2 className="h-4 w-4" />
+                  تم الإفراج عن كامل الضمان
+                  {contract.retentionReleasedAt && ` بتاريخ ${new Date(contract.retentionReleasedAt as any).toLocaleDateString('ar-SA')}`}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          canEditMilestone && (
+            <Card className="border-dashed border-purple-200">
+              <CardContent className="p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Wallet className="h-6 w-6 text-purple-400" />
+                  <div>
+                    <div className="font-semibold text-sm">احتجاز الضمان غير مُفعّل</div>
+                    <div className="text-xs text-muted-foreground">
+                      فعّل الاحتجاز لتخصم نسبة من كل دفعة تلقائياً وتُفرج عنها بعد فترة الضمان
+                    </div>
+                  </div>
+                </div>
+                <Button size="sm" variant="outline" onClick={openRetentionSettings} data-testid="button-enable-retention">
+                  تفعيل
+                </Button>
+              </CardContent>
+            </Card>
+          )
+        )}
 
         {/* Milestones section */}
         <Card>
@@ -610,6 +750,88 @@ export default function ContractDetailPage() {
             >
               {deleteMutation.isPending && <Loader2 className="h-4 w-4 animate-spin ml-1" />}
               حذف
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Phase 2: Retention settings dialog */}
+      <Dialog open={isRetentionSettingsOpen} onOpenChange={setIsRetentionSettingsOpen}>
+        <DialogContent dir="rtl">
+          <DialogHeader>
+            <DialogTitle>إعدادات احتجاز الضمان</DialogTitle>
+            <DialogDescription>
+              نسبة الاحتجاز ستُخصم تلقائياً من كل دفعة عند تأكيد الصرف.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>نسبة الاحتجاز (%)</Label>
+              <Input
+                type="number"
+                step="0.5"
+                min={0}
+                max={50}
+                value={retentionForm.percentage}
+                onChange={(e) => setRetentionForm({ ...retentionForm, percentage: parseFloat(e.target.value) || 0 })}
+                data-testid="input-retention-percentage"
+              />
+              <p className="text-xs text-muted-foreground mt-1">شائع: 5% أو 10%</p>
+            </div>
+            <div>
+              <Label>تاريخ الإفراج المتوقع</Label>
+              <Input
+                type="date"
+                value={retentionForm.releaseDate}
+                onChange={(e) => setRetentionForm({ ...retentionForm, releaseDate: e.target.value })}
+                data-testid="input-retention-release-date"
+              />
+            </div>
+            {contract.totalAmount > 0 && retentionForm.percentage > 0 && (
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 text-sm">
+                <span>إذا تم صرف كامل العقد: سيُحتجز </span>
+                <span className="font-bold text-purple-700">
+                  {formatSAR((contract.totalAmount * retentionForm.percentage) / 100)}
+                </span>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsRetentionSettingsOpen(false)} data-testid="button-cancel-retention">إلغاء</Button>
+            <Button
+              onClick={() => updateRetentionMutation.mutate(retentionForm)}
+              disabled={updateRetentionMutation.isPending}
+              className="bg-purple-600 hover:bg-purple-700"
+              data-testid="button-save-retention"
+            >
+              {updateRetentionMutation.isPending && <Loader2 className="h-4 w-4 animate-spin ml-1" />}
+              حفظ
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Phase 2: Release retention confirmation */}
+      <AlertDialog open={isReleaseRetentionOpen} onOpenChange={setIsReleaseRetentionOpen}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>إفراج عن مبلغ الضمان</AlertDialogTitle>
+            <AlertDialogDescription>
+              سيتم الإفراج عن <strong>{formatSAR(retentionSummary.currentlyHeld)}</strong> المحتجزة كضمان.
+              هذه العملية تُسجَّل في سجل التدقيق ولا يمكن التراجع عنها بسهولة.
+              <br /><br />
+              تأكد من انتهاء فترة الضمان وإصلاح أي عيوب قبل الإفراج.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-release">إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => releaseRetentionMutation.mutate()}
+              className="bg-emerald-600 hover:bg-emerald-700"
+              data-testid="button-confirm-release"
+            >
+              {releaseRetentionMutation.isPending && <Loader2 className="h-4 w-4 animate-spin ml-1" />}
+              تأكيد الإفراج
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

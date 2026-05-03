@@ -2728,6 +2728,40 @@ export async function registerRoutes(
     }
   });
 
+  // ==================== Contract Retention (Phase 2) ====================
+  app.get("/api/construction/contracts/:id/retentions", isAuthenticated, requirePermission("contracts", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const access = await checkContractBranchAccess(req, id);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+      const [rows, summary] = await Promise.all([
+        storage.getContractRetentions(id),
+        storage.getRetentionSummary(id),
+      ]);
+      res.json({ rows, summary });
+    } catch (e) {
+      console.error("Error fetching retentions:", e);
+      res.status(500).json({ error: "فشل في جلب بيانات الاحتجاز" });
+    }
+  });
+
+  app.post("/api/construction/contracts/:id/release-retention", isAuthenticated, requirePermission("contracts", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const access = await checkContractBranchAccess(req, id);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+      const userId = req.currentUser?.id;
+      if (!userId) return res.status(401).json({ error: "Unauthorized" });
+      const result = await storage.releaseContractRetention(id, userId, req.body?.notes);
+      res.json(result);
+    } catch (e: any) {
+      console.error("Error releasing retention:", e);
+      res.status(500).json({ error: e?.message || "فشل في إفراج الضمان" });
+    }
+  });
+
   // Convert a milestone into a payment request (one-click). Locks the milestone
   // status to 'requested' so the same milestone can't generate two requests.
   app.post("/api/construction/contract-milestones/:id/request-payment", isAuthenticated, requirePermission("payment_requests", "create"), async (req, res) => {

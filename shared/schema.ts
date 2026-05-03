@@ -380,8 +380,14 @@ export const constructionContracts = pgTable("construction_contracts", {
   paidAmount: real("paid_amount").default(0),
   startDate: text("start_date"),
   endDate: text("end_date"),
-  paymentTerms: text("payment_terms"), // شروط الدفع
+  paymentTerms: text("payment_terms"), // شروط الدفع (نص حر قديم — استبدل بـ contractMilestones)
   warrantyPeriod: text("warranty_period"), // فترة الضمان
+  // Phase 2: احتجاز الضمان (Retention)
+  retentionPercentage: real("retention_percentage").default(0),         // نسبة الاحتجاز من كل دفعة
+  retentionReleaseDate: text("retention_release_date"),                 // تاريخ الإفراج المتوقع
+  retentionReleased: boolean("retention_released").default(false),
+  retentionReleasedAt: timestamp("retention_released_at"),
+  retentionReleasedBy: varchar("retention_released_by").references(() => users.id),
   notes: text("notes"),
   attachmentUrl: text("attachment_url"),
   createdBy: varchar("created_by").references(() => users.id),
@@ -393,6 +399,9 @@ export const insertConstructionContractSchema = createInsertSchema(
   constructionContracts,
 ).omit({
   id: true,
+  retentionReleased: true,
+  retentionReleasedAt: true,
+  retentionReleasedBy: true,
   createdAt: true,
   updatedAt: true,
 });
@@ -552,6 +561,39 @@ export const insertContractMilestoneSchema = createInsertSchema(contractMileston
 
 export type ContractMilestone = typeof contractMilestones.$inferSelect;
 export type InsertContractMilestone = z.infer<typeof insertContractMilestoneSchema>;
+
+// ============================================================
+// Contract Retentions table - حركات احتجاز الضمان (Phase 2)
+// ============================================================
+// Audit log of every retention hold/release on a contract.
+// Held when a payment is marked paid (if contract.retentionPercentage > 0),
+// released by an explicit user action after the warranty period.
+export const contractRetentions = pgTable("contract_retentions", {
+  id: serial("id").primaryKey(),
+  contractId: integer("contract_id")
+    .notNull()
+    .references(() => constructionContracts.id, { onDelete: "cascade" }),
+  milestoneId: integer("milestone_id").references(() => contractMilestones.id, { onDelete: "set null" }),
+  paymentRequestId: integer("payment_request_id").references(() => paymentRequests.id, { onDelete: "set null" }),
+  type: text("type").notNull().default("hold"),         // 'hold' | 'release'
+  amount: real("amount").notNull(),                      // مبلغ موجب دائماً
+  percentage: real("percentage"),                        // نسبة الاحتجاز المطبقة وقت الحركة
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_contract_retentions_contract").on(table.contractId),
+  index("idx_contract_retentions_milestone").on(table.milestoneId),
+  index("idx_contract_retentions_type").on(table.type),
+]);
+
+export const insertContractRetentionSchema = createInsertSchema(contractRetentions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ContractRetention = typeof contractRetentions.$inferSelect;
+export type InsertContractRetention = z.infer<typeof insertContractRetentionSchema>;
 
 // Project Expenses table - مصروفات المشروع المباشرة (غير مرتبطة بعقد)
 export const projectExpenses = pgTable("project_expenses", {
