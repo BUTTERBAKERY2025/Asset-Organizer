@@ -14,6 +14,7 @@ const pageImports: Record<string, () => Promise<any>> = {
   "construction-dashboard": () => import("@/pages/construction-dashboard"),
   "construction-reports": () => import("@/pages/construction-reports"),
   "contracts": () => import("@/pages/contracts"),
+  "contract-detail": () => import("@/pages/contract-detail"),
   "payment-requests": () => import("@/pages/payment-requests"),
   "contractor-statements": () => import("@/pages/contractor-statements"),
   "contractor-statement-detail": () => import("@/pages/contractor-statement-detail"),

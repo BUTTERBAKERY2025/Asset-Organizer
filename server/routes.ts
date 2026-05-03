@@ -97,7 +97,7 @@ import {
   generateSingleTimesheetPdf,
   generateAttendanceLogPdf, type AttendanceLogPdfData
 } from "./pdf-generator";
-import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertProjectExpenseSchema, insertProjectDailyLogSchema, insertProjectDailyLogPhotoSchema, insertDailyLogActivitySchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertInfluencerContractSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema, isMadeToOrderCategory, suggestCategoryFromProductName, userBranchAccess } from "@shared/schema";
+import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertContractMilestoneSchema, insertProjectExpenseSchema, insertProjectDailyLogSchema, insertProjectDailyLogPhotoSchema, insertDailyLogActivitySchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertInfluencerContractSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema, isMadeToOrderCategory, suggestCategoryFromProductName, userBranchAccess } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, isUserAdmin, getAllowedBranchIds, getEffectiveBranchFilter, invalidateAuthCache } from "./auth";
 import { authRateLimiter, biometricRateLimiter, uploadRateLimiter, apiRateLimiter, validateFileUpload, sanitizeFilename, trackLoginAttempt } from "./security";
@@ -2659,6 +2659,95 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error fetching contract payments:", error);
       res.status(500).json({ error: "Failed to fetch contract payments" });
+    }
+  });
+
+  // ==================== Contract Milestones (Phase 1) ====================
+  app.get("/api/construction/contracts/:contractId/milestones", isAuthenticated, requirePermission("contracts", "view"), async (req, res) => {
+    try {
+      const contractId = parseInt(req.params.contractId, 10);
+      if (isNaN(contractId)) return res.status(400).json({ error: "Invalid contract ID" });
+      const access = await checkContractBranchAccess(req, contractId);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح بالوصول لمراحل الدفع" });
+      const items = await storage.getContractMilestones(contractId);
+      res.json(items);
+    } catch (e) {
+      console.error("Error fetching milestones:", e);
+      res.status(500).json({ error: "فشل في جلب مراحل الدفع" });
+    }
+  });
+
+  app.post("/api/construction/contract-milestones", isAuthenticated, requirePermission("contracts", "create"), async (req, res) => {
+    try {
+      const access = await checkContractBranchAccess(req, req.body.contractId);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح بإضافة مراحل لهذا العقد" });
+      const validated = insertContractMilestoneSchema.parse({
+        ...req.body,
+        createdBy: req.currentUser?.id,
+      });
+      const created = await storage.createContractMilestone(validated);
+      res.status(201).json(created);
+    } catch (e) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: "Invalid data", details: e.errors });
+      console.error("Error creating milestone:", e);
+      res.status(500).json({ error: "فشل في إنشاء المرحلة" });
+    }
+  });
+
+  app.patch("/api/construction/contract-milestones/:id", isAuthenticated, requirePermission("contracts", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const existing = await storage.getContractMilestone(id);
+      if (!existing) return res.status(404).json({ error: "Milestone not found" });
+      const access = await checkContractBranchAccess(req, existing.contractId);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح بتعديل هذه المرحلة" });
+      const validated = insertContractMilestoneSchema.partial().parse(req.body);
+      const updated = await storage.updateContractMilestone(id, validated);
+      res.json(updated);
+    } catch (e) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: "Invalid data", details: e.errors });
+      console.error("Error updating milestone:", e);
+      res.status(500).json({ error: "فشل في تحديث المرحلة" });
+    }
+  });
+
+  app.delete("/api/construction/contract-milestones/:id", isAuthenticated, requirePermission("contracts", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const existing = await storage.getContractMilestone(id);
+      if (!existing) return res.status(404).json({ error: "Milestone not found" });
+      const access = await checkContractBranchAccess(req, existing.contractId);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح بحذف هذه المرحلة" });
+      const ok = await storage.deleteContractMilestone(id);
+      res.json({ success: ok });
+    } catch (e) {
+      console.error("Error deleting milestone:", e);
+      res.status(500).json({ error: "فشل في حذف المرحلة" });
+    }
+  });
+
+  // Convert a milestone into a payment request (one-click). Locks the milestone
+  // status to 'requested' so the same milestone can't generate two requests.
+  app.post("/api/construction/contract-milestones/:id/request-payment", isAuthenticated, requirePermission("payment_requests", "create"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const existing = await storage.getContractMilestone(id);
+      if (!existing) return res.status(404).json({ error: "Milestone not found" });
+      if (existing.paymentRequestId) {
+        return res.status(409).json({ error: "هذه المرحلة لها طلب صرف بالفعل" });
+      }
+      const access = await checkContractBranchAccess(req, existing.contractId);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+      const userId = req.currentUser?.id;
+      if (!userId) return res.status(401).json({ error: "Unauthorized" });
+      const pr = await storage.generateMilestonePaymentRequest(id, userId);
+      res.status(201).json(pr);
+    } catch (e: any) {
+      console.error("Error generating milestone payment request:", e);
+      res.status(500).json({ error: e?.message || "فشل في إنشاء طلب الصرف" });
     }
   });
 

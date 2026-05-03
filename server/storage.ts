@@ -78,6 +78,9 @@ import {
   type InsertPaymentRequest,
   type ContractPayment,
   type InsertContractPayment,
+  contractMilestones,
+  type ContractMilestone,
+  type InsertContractMilestone,
   type ProjectExpense,
   type InsertProjectExpense,
   type ProjectDailyLog,
@@ -654,6 +657,13 @@ export interface IStorage {
   // Contract Payments
   getContractPayments(contractId: number): Promise<ContractPayment[]>;
   createContractPayment(payment: InsertContractPayment): Promise<ContractPayment>;
+  // Contract Milestones (Phase 1)
+  getContractMilestones(contractId: number): Promise<ContractMilestone[]>;
+  getContractMilestone(id: number): Promise<ContractMilestone | undefined>;
+  createContractMilestone(milestone: InsertContractMilestone): Promise<ContractMilestone>;
+  updateContractMilestone(id: number, milestone: Partial<InsertContractMilestone>): Promise<ContractMilestone | undefined>;
+  deleteContractMilestone(id: number): Promise<boolean>;
+  generateMilestonePaymentRequest(milestoneId: number, requestedBy: string): Promise<PaymentRequest>;
 
   // Project Expenses
   getAllProjectExpenses(branchIds?: string[] | null): Promise<ProjectExpense[]>;
@@ -2109,6 +2119,91 @@ export class DatabaseStorage implements IStorage {
     await this.updateContract(payment.contractId, { paidAmount: totalPaid });
     
     return newPayment;
+  }
+
+  // ========== Contract Milestones (Phase 1: Structured Payment Plans) ==========
+  async getContractMilestones(contractId: number): Promise<ContractMilestone[]> {
+    return await db
+      .select()
+      .from(contractMilestones)
+      .where(eq(contractMilestones.contractId, contractId))
+      .orderBy(contractMilestones.sequence);
+  }
+
+  async getContractMilestone(id: number): Promise<ContractMilestone | undefined> {
+    const [m] = await db.select().from(contractMilestones).where(eq(contractMilestones.id, id));
+    return m || undefined;
+  }
+
+  // Computes amount automatically from contract.totalAmount when amountType='percentage'.
+  // This prevents the user from having to recalculate when contract value changes.
+  async createContractMilestone(milestone: InsertContractMilestone): Promise<ContractMilestone> {
+    const toInsert: any = { ...milestone };
+    if (milestone.amountType === "percentage" && milestone.percentage != null) {
+      const contract = await this.getContract(milestone.contractId);
+      if (contract && contract.totalAmount) {
+        toInsert.amount = Math.round((contract.totalAmount * milestone.percentage / 100) * 100) / 100;
+      }
+    }
+    const [created] = await db.insert(contractMilestones).values(toInsert).returning();
+    return created;
+  }
+
+  async updateContractMilestone(id: number, milestone: Partial<InsertContractMilestone>): Promise<ContractMilestone | undefined> {
+    const toUpdate: any = { ...milestone, updatedAt: new Date() };
+    // Recompute amount if percentage changes
+    if (milestone.amountType === "percentage" && milestone.percentage != null) {
+      const existing = await this.getContractMilestone(id);
+      if (existing) {
+        const contract = await this.getContract(existing.contractId);
+        if (contract && contract.totalAmount) {
+          toUpdate.amount = Math.round((contract.totalAmount * milestone.percentage / 100) * 100) / 100;
+        }
+      }
+    }
+    const [updated] = await db
+      .update(contractMilestones)
+      .set(toUpdate)
+      .where(eq(contractMilestones.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteContractMilestone(id: number): Promise<boolean> {
+    const result = await db.delete(contractMilestones).where(eq(contractMilestones.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Converts a milestone into a payment request and links them.
+  // Marks the milestone as 'requested' so it can't be re-requested by accident.
+  async generateMilestonePaymentRequest(milestoneId: number, requestedBy: string): Promise<PaymentRequest> {
+    const milestone = await this.getContractMilestone(milestoneId);
+    if (!milestone) throw new Error("Milestone not found");
+    if (milestone.paymentRequestId) throw new Error("هذه المرحلة لها طلب صرف بالفعل");
+    const contract = await this.getContract(milestone.contractId);
+    if (!contract) throw new Error("Contract not found");
+
+    const requestNumber = `PR-M${milestoneId}-${Date.now().toString().slice(-6)}`;
+    const newRequest = await this.createPaymentRequest({
+      projectId: contract.projectId,
+      contractId: contract.id,
+      contractorId: contract.contractorId,
+      requestNumber,
+      requestType: "transfer",
+      amount: milestone.amount,
+      description: `${contract.title} - ${milestone.title}`,
+      status: "pending",
+      priority: "normal",
+      requestDate: new Date().toISOString().split("T")[0],
+      dueDate: milestone.dueDate || undefined,
+      requestedBy,
+    } as any);
+
+    await db.update(contractMilestones)
+      .set({ paymentRequestId: newRequest.id, status: "requested", updatedAt: new Date() })
+      .where(eq(contractMilestones.id, milestoneId));
+
+    return newRequest;
   }
 
   // ========== Project Expenses ==========

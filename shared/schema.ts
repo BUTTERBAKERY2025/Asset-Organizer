@@ -507,6 +507,52 @@ export const insertContractPaymentSchema = createInsertSchema(
 export type ContractPayment = typeof contractPayments.$inferSelect;
 export type InsertContractPayment = z.infer<typeof insertContractPaymentSchema>;
 
+// ============================================================
+// Contract Milestones table - مراحل/دفعات العقد المهيكلة (Phase 1)
+// ============================================================
+// Replaces the free-text `payment_terms` field with structured, trackable
+// milestones (e.g., "30% advance", "40% at 50% progress", "30% on delivery").
+// Each milestone can be converted into a paymentRequest with one click.
+export const contractMilestones = pgTable("contract_milestones", {
+  id: serial("id").primaryKey(),
+  contractId: integer("contract_id")
+    .notNull()
+    .references(() => constructionContracts.id, { onDelete: "cascade" }),
+  sequence: integer("sequence").notNull().default(1),       // ترتيب المرحلة
+  title: text("title").notNull(),                            // "دفعة مقدمة"، "إنجاز 50%"
+  description: text("description"),                          // ما يجب إنجازه قبل الصرف
+  amountType: text("amount_type").notNull().default("percentage"), // percentage | fixed
+  percentage: real("percentage"),                            // إذا amountType=percentage
+  amount: real("amount").notNull().default(0),               // المبلغ بالريال
+  triggerType: text("trigger_type").notNull().default("manual"), // manual | date | progress | item_completion
+  triggerDate: text("trigger_date"),                         // إذا trigger=date
+  triggerProgressPercent: real("trigger_progress_percent"),  // إذا trigger=progress
+  status: text("status").notNull().default("pending"),       // pending | due | requested | paid | cancelled
+  dueDate: text("due_date"),                                 // تاريخ الاستحقاق
+  paymentRequestId: integer("payment_request_id").references(() => paymentRequests.id, { onDelete: "set null" }),
+  paidAt: timestamp("paid_at"),
+  paidAmount: real("paid_amount").default(0),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_contract_milestones_contract").on(table.contractId),
+  index("idx_contract_milestones_status").on(table.status),
+]);
+
+export const insertContractMilestoneSchema = createInsertSchema(contractMilestones).omit({
+  id: true,
+  paidAt: true,
+  paidAmount: true,
+  paymentRequestId: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ContractMilestone = typeof contractMilestones.$inferSelect;
+export type InsertContractMilestone = z.infer<typeof insertContractMilestoneSchema>;
+
 // Project Expenses table - مصروفات المشروع المباشرة (غير مرتبطة بعقد)
 export const projectExpenses = pgTable("project_expenses", {
   id: serial("id").primaryKey(),
