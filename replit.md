@@ -12,10 +12,10 @@ Preferred communication style: Simple, everyday language.
 - Database updates require manual SQL execution in Supabase SQL Editor before code deployment
 
 ## System Architecture
-The system uses a modern web architecture with a React-based frontend and a Node.js/Express backend.
+The system uses a modern web architecture with a React-based frontend and a Node.js/Express backend, optimized for an Arabic-first, RTL user experience.
 
 ### UI/UX Decisions
-- **Arabic-First Design**: Default RTL layout with Arabic fonts (Cairo) and interface text.
+- **Arabic-First Design**: Default RTL layout with Arabic fonts (Cairo).
 - **Theming**: Custom "Butter Gold" theme using Tailwind CSS.
 - **Reporting**: Integrated charting (Recharts) and export functionalities (XLSX, react-to-print).
 - **iPad / Tablet Field Usability**: Optimized for field use with numeric keypads, touch targets, parallel photo uploads, searchable comboboxes, inline status quick-edit, slow-connection banner, and auto-save for daily work logs.
@@ -23,38 +23,39 @@ The system uses a modern web architecture with a React-based frontend and a Node
 ### Technical Implementations
 - **Frontend**: React with TypeScript, Wouter for routing, TanStack React Query for state, shadcn/ui for components, Tailwind CSS v4, React Hook Form with Zod.
 - **Backend**: Node.js with Express, TypeScript, ESM modules, esbuild, RESTful JSON API (`/api/*`).
-- **Database**: PostgreSQL managed with Drizzle ORM, schema defined in `shared/schema.ts`.
+- **Database**: PostgreSQL managed with Drizzle ORM.
 
 ### Feature Specifications
 - **Core Modules**: Branch-based inventory and operations, asset status tracking, 15% Saudi VAT calculation, construction project management, operations and production management, cashier sales journal.
-- **Advanced Features**: Unified command center, comprehensive role-based access control (RBAC) with multi-branch support, P&L dashboard, marketing influencer management, employee integration (attendance, schedules, timesheets), influencer contract management (with PDF export), finished goods inventory with atomic transfers, warehouse and materials management, document management with version control, executive secretariat system, social responsibility module, weekly schedule lock system, advanced attendance reports, smart incentives and points system, display bar and daily waste system, system notifications and broadcast messages.
-- **Timesheet Management**: Enhanced reporting and dashboard, including single and branch-wide PDF generation with detailed employee data, exceptions, and acknowledgment features. Phase 3 adds period locking on finalization, immutable audit log of every action (created/signed/locked/reissued), admin reissue flow with mandatory reason that creates a new versioned report and supersedes the prior one, and in-app notifications when employees sign (manager notified) and when reports finalize (employee notified). Locked reports refuse re-signing and deletion until reissued. **Schema change**: 7 new columns on `timesheet_reports` (`is_locked`, `locked_at`, `locked_by`, `version`, `superseded_by`, `superseded_at`, `reissue_reason`) + new `timesheet_audit_log` table — must be applied in Supabase SQL Editor before Render deploy.
-- **Salary Management**: Manual salary deductions and advances, monthly salary closing with multi-source data prioritization (signed timesheets, schedule + attendance, attendance only), and automatic absence deduction calculation.
+- **Advanced Features**: Unified command center, comprehensive role-based access control (RBAC) with multi-branch support, P&L dashboard, marketing influencer management, employee integration, influencer contract management, finished goods inventory with atomic transfers, warehouse and materials management, document management with version control, executive secretariat system, social responsibility module, weekly schedule lock system, advanced attendance reports, smart incentives and points system, display bar and daily waste system, system notifications and broadcast messages.
+- **Timesheet Management**: Enhanced reporting, period locking, immutable audit logs, and admin reissue flow.
+- **Salary Management**: Manual deductions and advances, monthly closing with multi-source data prioritization, and automatic absence deduction.
 - **Accounting Software Integration**: Automatic journal entries, financial reconciliation, hierarchical Saudi Chart of Accounts, export to Qoyod, Zoho Books, and CSV.
-- **Event POS**: Module for seasonal events with ZATCA-compliant invoicing, product catalog management, multiple payment methods, and print-ready receipts.
-- **Organizational Structure**: Interactive org chart displaying company hierarchy.
-- **Contractor Account Statements**: Unified page for contractor KPIs, detailed statements, and payment request linking.
-- **Project Daily Work Logs**: iPad-friendly form linking activities to contractor, contract, and contract items, with automatic quantity increments and inline expense recording.
-- **Construction Smart Dashboard**: Aggregates project details, financial-weighted progress, budget by category, project snapshot, and contracts summary.
-- **Contract Payment Milestones (Phase 1)**: Replaces the legacy free-text `payment_terms` field with structured, trackable milestones on each construction contract. Each milestone has a sequence, title, description, amount (computed as % of contract total OR fixed), trigger type (manual/date/progress/item_completion), due date, and status (pending → due → requested → paid). One-click conversion to a `paymentRequest` (links the two so the same milestone can't generate two requests). Visual timeline UI on the contract detail page (`/contracts/:id`) shows status dots, amounts, percentages, and inline actions. Live preview shows the computed amount as the user types the percentage. **Schema change**: new table `contract_milestones` (15 columns + 3 indexes) — must be applied via `migrations/014_contract_milestones.sql` in Supabase SQL Editor before Render deploy.
-- **Contract Retention & Auto Status (Phase 2)**: Adds warranty hold (retention) management to construction contracts. Each contract can define a `retentionPercentage` (e.g., 5% or 10%) and `retentionReleaseDate`. When a payment request linked to a milestone is marked as paid, the system: (1) auto-flips the milestone status to `paid` and sets `paidAmount = milestone.amount − retention`, (2) inserts a `contract_retentions` audit row of type `hold` for the retention amount. The contract detail page shows a dedicated retention card (currently held, total released, release date) with two actions: edit settings, and "إفراج عن الضمان" which inserts a single `release` row equal to currently-held and marks the contract as `retentionReleased=true`. Full audit trail of every hold/release. **Schema change**: 5 new columns on `construction_contracts` (`retention_percentage`, `retention_release_date`, `retention_released`, `retention_released_at`, `retention_released_by`) + new `contract_retentions` table — must be applied via `migrations/015_contract_retention.sql` in Supabase SQL Editor before Render deploy.
-- **Liquidated Damages & Contract Templates (Phase 4)**: **(A) غرامات التأخير**: structured tracking of late-delivery penalties on construction contracts. Each contract can enable LD with a daily rate (% of total/day, e.g., 0.1%), a max cap (% of total, e.g., 10%), planned and actual completion dates. The system calculates `daysLate = max(0, actual − planned)` (or actual=today if not set), `raw = total × dailyRate% × daysLate`, `final = min(raw, total × maxPct%)`. Three actions, all transactional with row locks: **calculate** (stores `ldCalculatedAmount`, `ldCalculatedDays`, `ldCalculatedAt`), **apply** (flips `ldApplied=true`, blocked if waived or amount=0), **waive** (flips `ldWaived=true`, requires non-empty reason, blocked if applied). Idempotent — applied/waived are mutually exclusive and cannot be undone. UI card on `/contracts/:id` shows live status badge, daily rate, cap, days late, calculated amount with "وصل للسقف" indicator when capped. **(B) قوالب العقود**: reusable templates for common contract types (مدنية، كهرباء، ميكانيكية، تشطيبات، عام) with default terms, retention %, LD settings, and JSONB arrays of default milestones and guarantees. New page `/contracts/templates` provides full CRUD with inline editors for milestones (title, %, sequence, trigger) and guarantees (type, %, validity months). `POST /api/construction/contracts/from-template` atomically creates a new contract + all default milestones (computed amounts from % of contract total) + all default guarantees (placeholder bank, expiry from validityMonths) inside one transaction with row lock on template, increments `usage_count`. **Schema change**: 12 new LD columns on `construction_contracts` + new `contract_templates` table (12 cols + 2 indexes) — must be applied via `migrations/017_ld_and_templates.sql` in Supabase SQL Editor before Render deploy.
-- **Contract Variations & Bank Guarantees (Phase 3)**: Adds two independent capabilities to construction contracts. **(A) Variation Orders (أوامر التغيير)**: structured tracking of additions/deductions/scope-changes/time-extensions on a contract. Each VO has `variationNumber` (VO-001), title, description, type, amount (positive/negative), durationChangeDays, reason, status (draft → pending_approval → approved/rejected), and audit fields (requestedBy/At, approvedBy/At, rejectionReason). **Approving a VO atomically adds VO.amount to `contract.totalAmount` inside a transaction with row locks** — idempotent (re-approving doesn't double-apply). Approved VOs cannot be edited/deleted; rejected VOs cannot be re-approved. **(B) Bank Guarantees (الضمانات البنكية)**: tracks contractor-provided guarantees of types `bid` (ابتدائي), `performance` (حسن تنفيذ), `advance` (دفعة مقدمة), `maintenance` (صيانة) with bank name, amount, currency (default SAR), issue/expiry dates, and status (active → expired/released/claimed). Status auto-derives "expired" in UI when expiryDate < today, and shows an amber "ينتهي خلال X يوم" badge when within 30 days. Explicit release marks status='released' with audit fields. UI lives on `/contracts/:id` as two new cards (blue=variations, indigo=guarantees) above the milestones section. **Schema change**: 2 new tables `contract_variations` (18 cols + 2 idx) and `contract_guarantees` (16 cols + 3 idx) — must be applied via `migrations/016_variations_guarantees.sql` in Supabase SQL Editor before Render deploy.
+- **Event POS**: ZATCA-compliant invoicing, product catalog, multiple payment methods, and print-ready receipts.
+- **Organizational Structure**: Interactive org chart.
+- **Contractor Account Statements**: Unified page for KPIs, detailed statements, and payment request linking.
+- **Project Daily Work Logs**: iPad-friendly form for activity logging, quantity increments, and inline expense recording.
+- **Construction Smart Dashboard**: Aggregates project details, financial progress, budget, and contracts summary.
+- **Contract Milestones**: Structured, trackable milestones with sequence, title, amount, trigger type, due date, and status.
+- **Contract Retention**: Warranty hold management (retention percentage, release date) with audit trails.
+- **Enhanced BOQ & Automatic Accounting Integration**: Hierarchical Bill of Quantities with Excel import, and automatic journal entry creation for contract events (variation approval, retention release, liquidated damages).
+- **Liquidated Damages & Contract Templates**: Structured tracking of late-delivery penalties and reusable contract templates for various contract types.
+- **Contract Variations & Bank Guarantees**: Tracking of additions/deductions/scope changes/time extensions, and management of contractor-provided bank guarantees.
 
 ### Performance Optimization
-- **Caching**: Server-side in-memory, tiered, client persistent, report-specific TTLs. Client-side `refetchOnMount: false` honours staleTime; `refetchOnReconnect: true` keeps data fresh after offline.
-- **Optimistic Updates**: System notifications mark-as-read and mark-all-as-read flip cache instantly via `onMutate` + `onError` rollback + `onSettled` reconciliation, so badge counter responds without server round-trip.
-- **Network Resilience**: Smart auto-retry (3 attempts with 1s/3s/6s backoff) for transient errors (network failure, timeout, 408/425/429/5xx) — eliminates the "I had to reload to get my data" experience when Supabase Pooler returns 502/503 on cold-start. Permanent errors (400/401/403/404/409/410/422) skip retry. Every fetch wrapped in `AbortController` with a 30s hard timeout so the UI never hangs forever. `<DataErrorBanner />` slides in at bottom-right when any background query has failed and offers a single "إعادة المحاولة" button that re-fetches all failed queries in parallel without a page reload.
-- **Predicate-based Invalidation**: High-frequency forms (display-bar waste, social responsibility) use a single predicate-based `invalidateQueries` per mutation instead of 2-3 separate calls — reduces re-render waves.
-- **Unified Loading Skeletons**: AuthGate and Suspense fallbacks share the same `skeleton-shimmer` visual language, removing the dark spinner flash on first paint.
+- **Caching**: Server-side in-memory, client-side persistent, and report-specific TTLs.
+- **Optimistic Updates**: Instant UI feedback for actions like marking notifications as read.
+- **Network Resilience**: Smart auto-retry for transient errors, `AbortController` for timeouts, and error banners for failed background queries.
+- **Predicate-based Invalidation**: Reduces re-render waves for high-frequency forms.
+- **Unified Loading Skeletons**: Consistent visual language for loading states.
 - **Database Optimization**: Indexes, N+1 query elimination, SQL aggregation, filtered queries.
-- **API Optimization**: Batch API, consolidated reports bundle, gzip compression, prefetch on hover.
-- **Frontend Performance**: AuthGate instant render, deduplicated init fetch, mobile-aware preloading.
+- **API Optimization**: Batch API, consolidated reports, gzip compression, prefetch on hover.
+- **Frontend Performance**: Instant AuthGate render, deduplicated initial fetches, mobile-aware preloading.
 
 ### Data Integrity
-- **Employee Schedule Deduplication**: UNIQUE indexes and startup migration for data consistency.
+- **Employee Schedule Deduplication**: UNIQUE indexes and startup migrations.
 - **Transactional Bulk Save**: Atomic operations for employee schedules.
-- **Upsert Pattern**: Handles existing records for single and bulk schedule saves.
+- **Upsert Pattern**: Handles existing records for single and bulk saves.
 
 ### System Design Choices
 - **Shared Schema**: Centralized database schema definition.

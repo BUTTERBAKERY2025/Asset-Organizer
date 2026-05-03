@@ -2920,6 +2920,63 @@ export async function registerRoutes(
     }
   });
 
+  // ==================== Phase 5: BOQ Import + Contract Journal Entries ====================
+  app.get("/api/construction/contracts/:id/boq", isAuthenticated, requirePermission("contracts", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const access = await checkContractBranchAccess(req, id);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+      const items = await storage.getContractBoq(id);
+      res.json(items);
+    } catch (e) {
+      console.error("Error fetching BOQ:", e);
+      res.status(500).json({ error: "فشل" });
+    }
+  });
+
+  app.post("/api/construction/contracts/:id/boq/import", isAuthenticated, requirePermission("contracts", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const access = await checkContractBranchAccess(req, id);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+      const userId = req.currentUser?.id;
+      if (!userId) return res.status(401).json({ error: "Unauthorized" });
+      const schema = z.object({
+        items: z.array(z.object({
+          itemNumber: z.string().optional(),
+          description: z.string().min(1),
+          unit: z.string().optional(),
+          quantity: z.number().min(0),
+          unitPrice: z.number().min(0),
+          isSection: z.boolean().optional(),
+        })).min(1).max(2000),
+      });
+      const data = schema.parse(req.body);
+      const result = await storage.importBoqItems(id, data.items, userId);
+      res.json(result);
+    } catch (e: any) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: "Invalid data", details: e.errors });
+      console.error("Error importing BOQ:", e);
+      res.status(400).json({ error: e?.message || "فشل الاستيراد" });
+    }
+  });
+
+  app.get("/api/construction/contracts/:id/journal-entries", isAuthenticated, requirePermission("contracts", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const access = await checkContractBranchAccess(req, id);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+      const entries = await storage.getContractJournalEntries(id);
+      res.json(entries);
+    } catch (e) {
+      console.error("Error fetching contract journal entries:", e);
+      res.status(500).json({ error: "فشل" });
+    }
+  });
+
   // ==================== Liquidated Damages (Phase 4) ====================
   app.post("/api/construction/contracts/:id/ld/calculate", isAuthenticated, requirePermission("contracts", "edit"), async (req, res) => {
     try {
@@ -3931,7 +3988,7 @@ export async function registerRoutes(
           return res.status(403).json({ error: "غير مصرح بتحديث حالة الدفع لهذا الطلب" });
         }
       }
-      const request = await storage.markPaymentRequestAsPaid(id);
+      const request = await storage.markPaymentRequestAsPaid(id, req.currentUser?.id);
       if (!request) {
         return res.status(404).json({ error: "Payment request not found" });
       }

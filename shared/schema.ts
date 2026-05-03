@@ -435,7 +435,7 @@ export type InsertConstructionContract = z.infer<
 >;
 
 // Contract Items table - بنود العقد
-export const contractItems = pgTable("contract_items", {
+export const contractItems: any = pgTable("contract_items", {
   id: serial("id").primaryKey(),
   contractId: integer("contract_id")
     .notNull()
@@ -443,6 +443,11 @@ export const contractItems = pgTable("contract_items", {
   categoryId: integer("category_id").references(
     () => constructionCategories.id,
   ),
+  // Phase 5: BOQ hierarchical numbering (1, 1.1, 1.2.1) + section grouping
+  itemNumber: text("item_number"),
+  parentId: integer("parent_id").references((): any => contractItems.id, { onDelete: "cascade" }),
+  isSection: boolean("is_section").default(false),
+  sortOrder: integer("sort_order").default(0),
   description: text("description").notNull(),
   unit: text("unit").default("قطعة"),
   quantity: real("quantity").notNull().default(1),
@@ -1847,6 +1852,8 @@ export const accountingJournalEntries = pgTable("accounting_journal_entries", {
   status: text("status").default("draft").notNull(), // 'draft', 'posted', 'reconciled', 'void'
   reconciliationStatus: text("reconciliation_status").default("pending"), // 'pending', 'matched', 'discrepancy', 'resolved'
   reconciliationNotes: text("reconciliation_notes"),
+  // Phase 5: link journal entries directly to a construction contract for auto-integration
+  constructionContractId: integer("construction_contract_id").references(() => constructionContracts.id, { onDelete: "set null" }),
   postedBy: varchar("posted_by").references(() => users.id),
   postedAt: timestamp("posted_at"),
   createdBy: varchar("created_by").references(() => users.id),
@@ -1857,6 +1864,7 @@ export const accountingJournalEntries = pgTable("accounting_journal_entries", {
   index("idx_journal_entry_branch").on(table.branchId),
   index("idx_journal_entry_status").on(table.status),
   index("idx_journal_reconciliation").on(table.reconciliationStatus),
+  index("idx_journal_entry_contract").on(table.constructionContractId),
 ]);
 
 export const insertAccountingJournalEntrySchema = createInsertSchema(accountingJournalEntries).omit({

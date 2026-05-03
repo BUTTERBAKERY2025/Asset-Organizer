@@ -664,7 +664,7 @@ export interface IStorage {
   deletePaymentRequest(id: number): Promise<boolean>;
   approvePaymentRequest(id: number, approvedBy: string): Promise<PaymentRequest | undefined>;
   rejectPaymentRequest(id: number, reason: string): Promise<PaymentRequest | undefined>;
-  markPaymentRequestAsPaid(id: number): Promise<PaymentRequest | undefined>;
+  markPaymentRequestAsPaid(id: number, paidBy?: string): Promise<PaymentRequest | undefined>;
   
   // Contract Payments
   getContractPayments(contractId: number): Promise<ContractPayment[]>;
@@ -695,6 +695,12 @@ export interface IStorage {
   updateContractGuarantee(id: number, g: Partial<InsertContractGuarantee>): Promise<ContractGuarantee | undefined>;
   deleteContractGuarantee(id: number): Promise<boolean>;
   releaseContractGuarantee(id: number, releasedBy: string, notes?: string): Promise<ContractGuarantee>;
+  // Phase 5: Construction Accounting Integration
+  createContractJournalEntry(args: { contractId: number; eventType: 'milestone_paid' | 'retention_held' | 'retention_released' | 'ld_applied' | 'variation_approved'; amount: number; description: string; userId: string; entryDate?: string }): Promise<AccountingJournalEntry>;
+  getContractJournalEntries(contractId: number): Promise<AccountingJournalEntry[]>;
+  importBoqItems(contractId: number, items: Array<{ itemNumber?: string; description: string; unit?: string; quantity: number; unitPrice: number; isSection?: boolean }>, userId: string): Promise<{ inserted: number }>;
+  getContractBoq(contractId: number): Promise<ContractItem[]>;
+
   // Liquidated Damages (Phase 4)
   calculateLiquidatedDamages(contractId: number): Promise<ConstructionContract>;
   applyLiquidatedDamages(contractId: number, userId: string): Promise<ConstructionContract>;
@@ -2130,7 +2136,7 @@ export class DatabaseStorage implements IStorage {
     return updated || undefined;
   }
 
-  async markPaymentRequestAsPaid(id: number): Promise<PaymentRequest | undefined> {
+  async markPaymentRequestAsPaid(id: number, paidBy?: string): Promise<PaymentRequest | undefined> {
     // Phase 2: All operations wrapped in a single transaction to prevent race conditions.
     // Idempotency: if the request is already 'paid', skip side-effects (milestone+retention)
     // so re-clicks or concurrent requests can't create duplicate retention rows.
@@ -2187,6 +2193,26 @@ export class DatabaseStorage implements IStorage {
               percentage: retentionPct,
               notes: `احتجاز تلقائي عند صرف مرحلة "${linkedMilestone.title}"`,
             });
+
+            // Phase 5: Auto journal entry for retention held
+            await this.createContractJournalEntry({
+              contractId: linkedMilestone.contractId,
+              eventType: 'retention_held',
+              amount: retentionAmount,
+              description: `احتجاز ضمان (${retentionPct}%) من مرحلة "${linkedMilestone.title}"`,
+              userId: paidBy || 'system',
+            }, tx);
+          }
+
+          // Phase 5: Auto journal entry for milestone paid (net amount after retention)
+          if (netPaid > 0) {
+            await this.createContractJournalEntry({
+              contractId: linkedMilestone.contractId,
+              eventType: 'milestone_paid',
+              amount: netPaid,
+              description: `صرف مرحلة "${linkedMilestone.title}" - طلب صرف #${id}`,
+              userId: paidBy || 'system',
+            }, tx);
           }
         }
       } catch (e) {
@@ -2368,6 +2394,15 @@ export class DatabaseStorage implements IStorage {
         })
         .where(eq(constructionContracts.id, contractId));
 
+      // Phase 5: Auto journal entry for retention release
+      await this.createContractJournalEntry({
+        contractId,
+        eventType: 'retention_released',
+        amount: currentlyHeld,
+        description: `إفراج عن ضمان محتجز للعقد رقم ${contractId}${notes ? ` — ${notes}` : ''}`,
+        userId: releasedBy,
+      }, tx);
+
       return { released: currentlyHeld };
     });
   }
@@ -2447,6 +2482,15 @@ export class DatabaseStorage implements IStorage {
           await tx.update(constructionContracts)
             .set({ totalAmount: newTotal, updatedAt: new Date() })
             .where(eq(constructionContracts.id, vo.contractId));
+
+          // Phase 5: Auto journal entry for approved variation
+          await this.createContractJournalEntry({
+            contractId: vo.contractId,
+            eventType: 'variation_approved',
+            amount: vo.amount,
+            description: `أمر تغيير معتمد ${vo.variationNumber}: ${vo.title}`,
+            userId: approvedBy,
+          }, tx);
         }
       }
 
@@ -2537,6 +2581,126 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
+  // ========== Phase 5: Construction Accounting Integration ==========
+  // Creates a balanced journal entry for a contract event using the existing accounting tables.
+  // Uses Saudi standard chart of accounts conventions:
+  //   5101 Construction Expenses | 2101 Contractors Payable | 2102 Retention Held | 4910 Penalty Income
+  // tx is optional — when called from inside another transaction, pass it through.
+  async createContractJournalEntry(args: {
+    contractId: number;
+    eventType: 'milestone_paid' | 'retention_held' | 'retention_released' | 'ld_applied' | 'variation_approved';
+    amount: number;
+    description: string;
+    userId: string;
+    entryDate?: string;
+  }, tx?: any): Promise<AccountingJournalEntry> {
+    const exec = tx || db;
+    const date = args.entryDate || new Date().toISOString().slice(0, 10);
+    const amt = Math.abs(Math.round(args.amount * 100) / 100).toFixed(2);
+
+    // Map event → debit/credit accounts (cash basis simplified)
+    let debit: { code: string; name: string };
+    let credit: { code: string; name: string };
+    switch (args.eventType) {
+      case 'milestone_paid':
+        debit  = { code: '5101', name: 'مصاريف مقاولات وإنشاءات' };
+        credit = { code: '1101', name: 'النقدية - الحساب الجاري' };
+        break;
+      case 'retention_held':
+        debit  = { code: '5101', name: 'مصاريف مقاولات وإنشاءات' };
+        credit = { code: '2102', name: 'ضمان محتجز - مقاولون' };
+        break;
+      case 'retention_released':
+        debit  = { code: '2102', name: 'ضمان محتجز - مقاولون' };
+        credit = { code: '1101', name: 'النقدية - الحساب الجاري' };
+        break;
+      case 'ld_applied':
+        debit  = { code: '2101', name: 'ذمم دائنة - مقاولون' };
+        credit = { code: '4910', name: 'إيرادات غرامات تأخير' };
+        break;
+      case 'variation_approved':
+        debit  = { code: '5101', name: 'مصاريف مقاولات وإنشاءات' };
+        credit = { code: '2101', name: 'ذمم دائنة - مقاولون' };
+        break;
+    }
+
+    const entryNumber = `CON-${args.contractId}-${args.eventType.toUpperCase()}-${Date.now()}`;
+    const [entry] = await exec.insert(accountingJournalEntries).values({
+      entryNumber,
+      entryDate: date,
+      entryType: 'manual',
+      description: args.description,
+      referenceType: 'construction_contract',
+      referenceId: String(args.contractId),
+      constructionContractId: args.contractId,
+      totalDebit: amt,
+      totalCredit: amt,
+      status: 'posted',
+      postedBy: args.userId,
+      postedAt: new Date(),
+      createdBy: args.userId,
+    }).returning();
+
+    await exec.insert(journalEntryLines).values([
+      { journalEntryId: entry.id, lineNumber: 1, accountCode: debit.code, accountName: debit.name, description: args.description, debitAmount: amt, creditAmount: '0' },
+      { journalEntryId: entry.id, lineNumber: 2, accountCode: credit.code, accountName: credit.name, description: args.description, debitAmount: '0', creditAmount: amt },
+    ]);
+
+    return entry;
+  }
+
+  async getContractJournalEntries(contractId: number): Promise<AccountingJournalEntry[]> {
+    return await db
+      .select()
+      .from(accountingJournalEntries)
+      .where(eq(accountingJournalEntries.constructionContractId, contractId))
+      .orderBy(desc(accountingJournalEntries.entryDate), desc(accountingJournalEntries.id));
+  }
+
+  async getContractBoq(contractId: number): Promise<ContractItem[]> {
+    return await db
+      .select()
+      .from(contractItems)
+      .where(eq(contractItems.contractId, contractId))
+      .orderBy(contractItems.sortOrder, contractItems.id);
+  }
+
+  async importBoqItems(
+    contractId: number,
+    items: Array<{ itemNumber?: string; description: string; unit?: string; quantity: number; unitPrice: number; isSection?: boolean }>,
+    userId: string
+  ): Promise<{ inserted: number }> {
+    if (!items || items.length === 0) return { inserted: 0 };
+    return await db.transaction(async (tx) => {
+      const [contract] = await tx.select().from(constructionContracts).where(eq(constructionContracts.id, contractId));
+      if (!contract) throw new Error('العقد غير موجود');
+
+      // Find current max sort_order to append after existing items
+      const existing = await tx.select().from(contractItems).where(eq(contractItems.contractId, contractId));
+      let nextSort = existing.length > 0 ? Math.max(...existing.map(i => i.sortOrder || 0)) + 1 : 1;
+
+      const rows = items.map((it, idx) => {
+        const qty = Number(it.quantity) || 0;
+        const price = Number(it.unitPrice) || 0;
+        return {
+          contractId,
+          itemNumber: it.itemNumber || String(nextSort + idx),
+          isSection: !!it.isSection,
+          sortOrder: nextSort + idx,
+          description: it.description,
+          unit: it.unit || 'قطعة',
+          quantity: qty,
+          unitPrice: price,
+          totalPrice: it.isSection ? 0 : Math.round(qty * price * 100) / 100,
+          status: 'pending',
+        };
+      });
+
+      await tx.insert(contractItems).values(rows as any);
+      return { inserted: rows.length };
+    });
+  }
+
   // ========== Liquidated Damages (Phase 4) ==========
   // Calculates LD = min(totalAmount * dailyRate% * daysLate, totalAmount * maxPct%)
   // Days are counted from planned_completion_date until actual_completion_date,
@@ -2602,6 +2766,16 @@ export class DatabaseStorage implements IStorage {
         })
         .where(eq(constructionContracts.id, contractId))
         .returning();
+
+      // Phase 5: Auto journal entry for applied LD
+      await this.createContractJournalEntry({
+        contractId,
+        eventType: 'ld_applied',
+        amount: contract.ldCalculatedAmount || 0,
+        description: `تطبيق غرامة تأخير على العقد رقم ${contractId} (${contract.ldCalculatedDays || 0} يوم)`,
+        userId,
+      }, tx);
+
       return updated;
     });
   }
