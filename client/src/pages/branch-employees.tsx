@@ -1402,15 +1402,20 @@ export default function BranchEmployeesPage() {
         
         let successCount = 0;
         let errorCount = 0;
+        let skippedCount = 0;
+        const failedRows: { row: number; name: string; reason: string }[] = [];
         
-        for (const row of jsonData as any[]) {
+        for (let i = 0; i < (jsonData as any[]).length; i++) {
+          const row = (jsonData as any[])[i];
+          const rowNumber = i + 2; // +2 because Excel row 1 is header, data starts at row 2
+          const employeeName = row["الاسم"] || row["اسم الموظف"] || "";
+          
           try {
-            // استخدام الفرع المحدد في نافذة الاستيراد
             const resolvedBranchId = importBranchId;
             
             const employeeData = {
               branchId: resolvedBranchId,
-              employeeName: row["الاسم"] || row["اسم الموظف"] || "",
+              employeeName,
               jobTitle: row["الوظيفة"] || "عامل",
               nationality: row["الجنسية"] || "أخرى",
               salary: Number(row["الراتب"] || row["الراتب الأساسي"] || 0),
@@ -1423,7 +1428,10 @@ export default function BranchEmployeesPage() {
               status: "active",
             };
             
-            if (!employeeData.employeeName) continue;
+            if (!employeeData.employeeName) {
+              skippedCount++;
+              continue;
+            }
             
             const res = await fetch("/api/branch-employees", {
               method: "POST",
@@ -1435,20 +1443,49 @@ export default function BranchEmployeesPage() {
               successCount++;
             } else {
               const errorText = await res.text();
-              console.error("Import error:", errorText);
+              console.error(`Import error row ${rowNumber}:`, errorText);
+              let reason = errorText;
+              try {
+                const parsed = JSON.parse(errorText);
+                reason = parsed.message || parsed.error || errorText;
+              } catch { /* keep raw text */ }
+              failedRows.push({ row: rowNumber, name: employeeName || "(بدون اسم)", reason: String(reason).slice(0, 200) });
               errorCount++;
             }
-          } catch (err) {
-            console.error("Import row error:", err);
+          } catch (err: any) {
+            console.error(`Import row ${rowNumber} error:`, err);
+            failedRows.push({ row: rowNumber, name: employeeName || "(بدون اسم)", reason: err?.message || "خطأ غير معروف" });
             errorCount++;
           }
         }
         
         if (successCount > 0) {
-          alert(`تم استيراد ${successCount} موظف بنجاح${errorCount > 0 ? ` (${errorCount} أخطاء)` : ""}`);
           queryClient.invalidateQueries({ queryKey: ["/api/branch-employees/bundle"] });
-        } else if (errorCount > 0) {
-          alert(`فشل استيراد الموظفين. تحقق من صحة البيانات في ملف Excel`);
+          toast({
+            title: `تم استيراد ${successCount} موظف بنجاح`,
+            description: errorCount > 0
+              ? `فشل ${errorCount} صف${skippedCount > 0 ? ` • تم تجاهل ${skippedCount} صف فارغ` : ""}`
+              : (skippedCount > 0 ? `تم تجاهل ${skippedCount} صف فارغ` : undefined),
+          });
+        }
+        
+        if (errorCount > 0) {
+          const detailLines = failedRows.slice(0, 10).map(f => `• الصف ${f.row} (${f.name}): ${f.reason}`).join("\n");
+          const more = failedRows.length > 10 ? `\n... و${failedRows.length - 10} صف آخر` : "";
+          toast({
+            title: `فشل استيراد ${errorCount} موظف`,
+            description: detailLines + more,
+            variant: "destructive",
+          });
+          console.error("All import failures:", failedRows);
+        }
+        
+        if (successCount === 0 && errorCount === 0 && skippedCount > 0) {
+          toast({
+            title: "الملف فارغ",
+            description: `جميع الصفوف (${skippedCount}) تفتقر لاسم الموظف`,
+            variant: "destructive",
+          });
         }
         
         setIsImportDialogOpen(false);
@@ -1457,9 +1494,13 @@ export default function BranchEmployeesPage() {
         setIsImporting(false);
       };
       reader.readAsArrayBuffer(importFile);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Import error:", error);
-      alert("حدث خطأ أثناء الاستيراد");
+      toast({
+        title: "تعذر قراءة الملف",
+        description: error?.message || "تأكد أن الملف بصيغة Excel صحيحة",
+        variant: "destructive",
+      });
       setIsImporting(false);
     }
   };

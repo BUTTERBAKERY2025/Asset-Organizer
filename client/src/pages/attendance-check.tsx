@@ -406,12 +406,25 @@ export default function AttendanceCheckPage() {
       }
     } catch (error: any) {
       console.error("[Fingerprint Verify] Error:", error?.name, error?.message);
-      if (error?.name === "NotAllowedError") {
+      const name = error?.name;
+      if (name === "NotAllowedError") {
         setBiometricStatus("idle");
         toast({ title: "تم الإلغاء", description: "تم إلغاء التحقق من البصمة. يمكنك المحاولة مرة أخرى", variant: "destructive" });
+      } else if (name === "SecurityError") {
+        setBiometricStatus("failed");
+        toast({ title: "خطأ أمني", description: "يجب فتح الصفحة عبر HTTPS أو على نفس النطاق المسجَّل", variant: "destructive" });
+      } else if (name === "InvalidStateError") {
+        setBiometricStatus("failed");
+        toast({ title: "البصمة غير مسجَّلة على هذا الجهاز", description: "يرجى تسجيل البصمة أولاً من إدارة البصمات", variant: "destructive" });
+      } else if (name === "NotSupportedError") {
+        setBiometricStatus("failed");
+        toast({ title: "غير مدعوم", description: "هذا الجهاز أو المتصفح لا يدعم البصمة", variant: "destructive" });
+      } else if (name === "AbortError" || name === "TimeoutError") {
+        setBiometricStatus("idle");
+        toast({ title: "انتهت المهلة", description: "لم يتم تنفيذ البصمة في الوقت المحدد. حاول مرة أخرى", variant: "destructive" });
       } else {
         setBiometricStatus("failed");
-        toast({ title: "فشل البصمة", description: "يمكنك المحاولة مرة أخرى", variant: "destructive" });
+        toast({ title: "فشل البصمة", description: error?.message || "يمكنك المحاولة مرة أخرى", variant: "destructive" });
       }
     }
   };
@@ -491,9 +504,18 @@ export default function AttendanceCheckPage() {
       toast({ title: "تم تسجيل البصمة", description: "تم تسجيل بصمة الإصبع بنجاح. يمكنك الآن التحقق منها." });
       setBiometricStatus("idle");
     } catch (error: any) {
-      console.error("[Register Fingerprint] Error:", error);
-      if (error?.name === "NotAllowedError") {
+      console.error("[Register Fingerprint] Error:", error?.name, error?.message);
+      const name = error?.name;
+      if (name === "NotAllowedError") {
         toast({ title: "تم الإلغاء", description: "تم إلغاء تسجيل البصمة", variant: "destructive" });
+      } else if (name === "SecurityError") {
+        toast({ title: "خطأ أمني", description: "يجب فتح الصفحة عبر HTTPS لتسجيل البصمة", variant: "destructive" });
+      } else if (name === "InvalidStateError") {
+        toast({ title: "البصمة مسجَّلة مسبقاً", description: "هذه البصمة مسجَّلة على هذا الجهاز بالفعل", variant: "destructive" });
+      } else if (name === "NotSupportedError") {
+        toast({ title: "غير مدعوم", description: "هذا الجهاز لا يدعم تسجيل البصمة", variant: "destructive" });
+      } else if (name === "AbortError" || name === "TimeoutError") {
+        toast({ title: "انتهت المهلة", description: "لم يتم إكمال التسجيل في الوقت المحدد", variant: "destructive" });
       } else {
         toast({ title: "خطأ", description: error?.message || "فشل في تسجيل البصمة", variant: "destructive" });
       }
