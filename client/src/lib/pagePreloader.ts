@@ -136,13 +136,8 @@ const PRIORITY_WAVE_1 = [
   "platform-home", "dashboard", "cashier-journals", "operations-dashboard",
 ];
 const PRIORITY_WAVE_2 = [
-  "branch-employees", "sales-analytics", "products", "event-pos",
+  "branch-employees", "sales-analytics", "products",
   "branch-daily-closures", "targets-dashboard",
-];
-const PRIORITY_WAVE_3 = [
-  "production-dashboard", "warehouse-dashboard", "marketing-dashboard",
-  "shift-management", "attendance-dashboard", "branch-shifts",
-  "executive-dashboard", "settings-dashboard",
 ];
 
 let preloadStarted = false;
@@ -169,27 +164,22 @@ export function startAggressivePreload() {
 
   const lowEnd = isLowEndDevice();
   const mobile = isMobileDevice();
-  const idle = (window as any).requestIdleCallback || ((cb: Function) => setTimeout(cb, 200));
+  const idle = (window as any).requestIdleCallback || ((cb: Function) => setTimeout(cb, 500));
 
   idle(() => {
+    // Wave 1: only the truly first-impression pages
     PRIORITY_WAVE_1.forEach(p => preloadPage(p));
 
-    if (lowEnd) return;
+    // Skip secondary preloading on slow networks/low-end devices/mobile
+    // — adjacent prefetch on hover/navigation will cover the rest just-in-time
+    if (lowEnd || mobile) return;
 
-    const wave2Delay = mobile ? 2000 : 800;
+    // Desktop only: gentle Wave 2 after 2.5s of idle time
     setTimeout(() => {
       idle(() => {
         PRIORITY_WAVE_2.forEach(p => preloadPage(p));
-
-        if (mobile) return;
-
-        setTimeout(() => {
-          idle(() => {
-            PRIORITY_WAVE_3.forEach(p => preloadPage(p));
-          });
-        }, 1500);
       });
-    }, wave2Delay);
+    }, 2500);
   });
 }
 

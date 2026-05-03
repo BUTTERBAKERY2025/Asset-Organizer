@@ -2,23 +2,29 @@ import { useEffect, useState, useRef } from "react";
 import { AlertTriangle, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const PING_INTERVAL_MS = 25000;
-const PING_TIMEOUT_MS = 6000;
-const SLOW_LATENCY_MS = 2500;
+const PING_INTERVAL_MS = 30000;
+const PING_TIMEOUT_MS = 8000;
+const SLOW_LATENCY_MS = 4000;
+const SLOW_STREAK_THRESHOLD = 3; // require 3 consecutive slow pings before showing banner
 
 /**
  * Detects slow internet (high latency) and shows an amber banner.
  * Complements the existing OfflineIndicator (which only handles full disconnect).
  * Useful for site engineers/supervisors working from a tablet on weak 3G/4G.
+ *
+ * Requires SLOW_STREAK_THRESHOLD consecutive slow pings before showing the banner
+ * to avoid flickering on transient hiccups (e.g. a single slow request during preload).
  */
 export function SlowConnectionBanner() {
   const [isSlow, setIsSlow] = useState(false);
   const [latency, setLatency] = useState<number | null>(null);
   const [dismissed, setDismissed] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const slowStreakRef = useRef(0);
 
   const ping = async () => {
     if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      slowStreakRef.current = 0;
       setIsSlow(false);
       setLatency(null);
       return;
@@ -37,14 +43,25 @@ export function SlowConnectionBanner() {
       if (!res.ok) throw new Error("bad status");
       const elapsed = Date.now() - start;
       setLatency(elapsed);
-      const slow = elapsed > SLOW_LATENCY_MS;
-      setIsSlow(slow);
-      if (!slow) setDismissed(false);
+      if (elapsed > SLOW_LATENCY_MS) {
+        slowStreakRef.current += 1;
+        if (slowStreakRef.current >= SLOW_STREAK_THRESHOLD) {
+          setIsSlow(true);
+        }
+      } else {
+        slowStreakRef.current = 0;
+        setIsSlow(false);
+        setDismissed(false);
+      }
     } catch {
       clearTimeout(timeoutId);
-      // Treat timeout/error as slow (offline is handled by OfflineIndicator)
+      // Treat timeout/error as a slow signal (offline is handled by OfflineIndicator).
+      // Still require the streak threshold to avoid one-off failures triggering the banner.
+      slowStreakRef.current += 1;
       setLatency(null);
-      setIsSlow(true);
+      if (slowStreakRef.current >= SLOW_STREAK_THRESHOLD) {
+        setIsSlow(true);
+      }
     }
   };
 

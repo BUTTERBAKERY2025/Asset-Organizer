@@ -473,17 +473,17 @@ export function Layout({ children }: { children: React.ReactNode }) {
         setLocation(href);
       });
     };
-    if (typeof (document as any).startViewTransition === 'function') {
-      document.documentElement.classList.add('vt-active');
-      const vt = (document as any).startViewTransition(navigate);
-      vt.finished.then(() => document.documentElement.classList.remove('vt-active')).catch(() => document.documentElement.classList.remove('vt-active'));
-    } else {
-      navigate();
-    }
+    // Use a single transition mechanism. View Transitions already coordinate paint
+    // with React rendering; stacking startTransition + Suspense fallback on top
+    // produced visible flicker. Plain navigate() lets the route's own loading state
+    // drive UI updates.
+    navigate();
+    // The progress bar is hidden by the location effect when the new route mounts.
+    // Fall back to a short safety timeout (was 1500ms — too long for cached pages).
     setTimeout(() => {
       const b = document.getElementById("nav-progress-bar");
-      if (b && b.classList.contains("loading")) { b.className = "complete"; setTimeout(() => { b.className = ""; }, 200); }
-    }, 1500);
+      if (b && b.classList.contains("loading")) { b.className = "complete"; setTimeout(() => { b.className = ""; }, 150); }
+    }, 600);
   }, [setLocation, location]);
 
   const renderNavItem = useCallback((item: NavItem, inGroup = false) => (
