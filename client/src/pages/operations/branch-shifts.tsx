@@ -124,9 +124,14 @@ const compressImage = (file: File, maxWidth = 1200, quality = 0.7): Promise<stri
   });
 };
 
-const saveToLocalStorage = (key: string, data: any) => {
-  try { localStorage.setItem(`butter_shift_${key}`, JSON.stringify({ data, timestamp: Date.now() })); }
-  catch (e) { console.error("Failed to save to localStorage:", e); }
+const saveToLocalStorage = (key: string, data: any): boolean => {
+  try {
+    localStorage.setItem(`butter_shift_${key}`, JSON.stringify({ data, timestamp: Date.now() }));
+    return true;
+  } catch (e) {
+    console.error("Failed to save to localStorage:", e);
+    return false;
+  }
 };
 
 const getFromLocalStorage = (key: string) => {
@@ -143,6 +148,25 @@ const getFromLocalStorage = (key: string) => {
 const clearLocalStorage = (key: string) => {
   try { localStorage.removeItem(`butter_shift_${key}`); }
   catch (e) { console.error("Failed to clear localStorage:", e); }
+};
+
+const getPendingShiftsCount = (): number => {
+  const pending = getFromLocalStorage("pending_shifts");
+  return Array.isArray(pending) ? pending.length : 0;
+};
+
+const queueForSync = (item: { url: string; method: string; data: any; label?: string }): boolean => {
+  const existing = getFromLocalStorage("pending_shifts");
+  const list = Array.isArray(existing) ? existing : [];
+  list.push({ ...item, queuedAt: Date.now(), attempts: 0 });
+  return saveToLocalStorage("pending_shifts", list);
+};
+
+const isNetworkError = (err: any): boolean => {
+  if (!err) return false;
+  if (err instanceof TypeError) return true;
+  const msg = String(err?.message || "").toLowerCase();
+  return msg.includes("failed to fetch") || msg.includes("network") || msg.includes("load failed");
 };
 
 export default function BranchShiftsPage() {
@@ -166,6 +190,10 @@ export default function BranchShiftsPage() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [hasSignature, setHasSignature] = useState(false);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [pendingSyncCount, setPendingSyncCount] = useState<number>(0);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const isSyncingRef = useRef(false);
+  const [lastSyncError, setLastSyncError] = useState<string>("");
   const [gpsLocation, setGpsLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [gpsError, setGpsError] = useState<string>("");
   const [supervisorNotes, setSupervisorNotes] = useState<string>("");
@@ -191,7 +219,20 @@ export default function BranchShiftsPage() {
     };
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
-    return () => { window.removeEventListener("online", handleOnline); window.removeEventListener("offline", handleOffline); };
+    setPendingSyncCount(getPendingShiftsCount());
+    if (navigator.onLine && getPendingShiftsCount() > 0) {
+      syncPendingData();
+    }
+    const interval = setInterval(() => {
+      const c = getPendingShiftsCount();
+      setPendingSyncCount(c);
+      if (c > 0 && navigator.onLine && !isSyncingRef.current) syncPendingData();
+    }, 30000);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      clearInterval(interval);
+    };
   }, []);
 
   useEffect(() => {
@@ -204,16 +245,70 @@ export default function BranchShiftsPage() {
     }
   }, []);
 
-  const syncPendingData = async () => {
+  const syncPendingData = async (manual = false) => {
+    if (isSyncingRef.current) return;
     const pendingData = getFromLocalStorage("pending_shifts");
-    if (pendingData && pendingData.length > 0) {
-      for (const item of pendingData) {
-        try { await fetch(item.url, { method: item.method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(item.data) }); }
-        catch (e) { console.error("Failed to sync:", e); }
-      }
-      clearLocalStorage("pending_shifts");
-      toast({ title: "تم مزامنة البيانات المعلقة بنجاح" });
+    if (!Array.isArray(pendingData) || pendingData.length === 0) {
+      setPendingSyncCount(0);
+      if (manual) toast({ title: "لا توجد بيانات معلقة للمزامنة" });
+      return;
     }
+    if (!navigator.onLine) {
+      if (manual) toast({ title: "لا يوجد اتصال بالإنترنت", description: "ستتم المزامنة تلقائياً عند عودة الاتصال", variant: "destructive" });
+      return;
+    }
+
+    isSyncingRef.current = true;
+    setIsSyncing(true);
+    setLastSyncError("");
+    const failed: any[] = [];
+    let succeeded = 0;
+    let lastErrorMsg = "";
+
+    for (const item of pendingData) {
+      const attempts = (item.attempts || 0) + 1;
+      try {
+        const res = await fetch(item.url, {
+          method: item.method,
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(item.data),
+        });
+        if (!res.ok) {
+          let errMsg = `HTTP ${res.status}`;
+          try { const errBody = await res.json(); errMsg = errBody.error || errMsg; } catch {}
+          throw new Error(errMsg);
+        }
+        succeeded++;
+      } catch (e: any) {
+        lastErrorMsg = e?.message || "خطأ في الشبكة";
+        console.error("Failed to sync item:", item.url, e);
+        if (attempts < 5) {
+          failed.push({ ...item, attempts, lastError: lastErrorMsg });
+        } else {
+          console.error("Item exceeded retry limit, dropping:", item);
+        }
+      }
+    }
+
+    if (failed.length > 0) {
+      saveToLocalStorage("pending_shifts", failed);
+      setLastSyncError(lastErrorMsg);
+      toast({
+        title: `تمت مزامنة ${succeeded} ، وفشلت ${failed.length}`,
+        description: `سبب الفشل: ${lastErrorMsg}. سيُعاد المحاولة تلقائياً أو اضغط زر إعادة المحاولة.`,
+        variant: "destructive",
+      });
+    } else {
+      clearLocalStorage("pending_shifts");
+      setLastSyncError("");
+      toast({ title: `تمت مزامنة ${succeeded} عنصر بنجاح` });
+      queryClient.invalidateQueries({ queryKey: ["/api/branch-shifts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/branch-shifts/dashboard/today"] });
+    }
+    setPendingSyncCount(failed.length);
+    setIsSyncing(false);
+    isSyncingRef.current = false;
   };
 
   useEffect(() => {
@@ -319,37 +414,90 @@ export default function BranchShiftsPage() {
 
   const saveResponseMutation = useMutation({
     mutationFn: async (data: any) => {
-      const res = await fetch(`/api/branch-shifts/${currentShift?.id}/responses`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-      if (!res.ok) { const err = await res.json(); throw new Error(err.error || "فشل في حفظ الاستجابات"); }
-      return res.json();
+      const url = `/api/branch-shifts/${currentShift?.id}/responses`;
+      try {
+        const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(data) });
+        if (!res.ok) { const err = await res.json(); throw new Error(err.error || "فشل في حفظ الاستجابات"); }
+        return res.json();
+      } catch (e: any) {
+        if (isNetworkError(e)) {
+          const queued = queueForSync({ url, method: "POST", data, label: "حفظ ردود قائمة الفحص" });
+          setPendingSyncCount(getPendingShiftsCount());
+          if (queued) {
+            toast({ title: "محفوظ محلياً", description: "سيُرسَل تلقائياً عند عودة الاتصال" });
+            return { _queued: true };
+          }
+          throw new Error("فشل الحفظ المحلي ولا يوجد اتصال — البيانات قد تُفقد");
+        }
+        throw e;
+      }
     },
     onError: (error: Error) => { toast({ title: error.message, variant: "destructive" }); },
   });
 
   const saveSignatureMutation = useMutation({
     mutationFn: async (data: any) => {
-      const res = await fetch(`/api/branch-shifts/${currentShift?.id}/signatures`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-      if (!res.ok) throw new Error("Failed to save signature");
-      return res.json();
+      const url = `/api/branch-shifts/${currentShift?.id}/signatures`;
+      try {
+        const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(data) });
+        if (!res.ok) throw new Error("Failed to save signature");
+        return res.json();
+      } catch (e: any) {
+        if (isNetworkError(e)) {
+          const queued = queueForSync({ url, method: "POST", data, label: "حفظ التوقيع" });
+          setPendingSyncCount(getPendingShiftsCount());
+          if (queued) {
+            toast({ title: "التوقيع محفوظ محلياً", description: "سيُرسَل تلقائياً عند عودة الاتصال" });
+            return { _queued: true };
+          }
+          throw new Error("فشل حفظ التوقيع محلياً");
+        }
+        throw e;
+      }
     },
-    onSuccess: () => { toast({ title: "تم حفظ التوقيع بنجاح" }); setShowSignature(false); setHasSignature(true); },
+    onSuccess: (result: any) => {
+      if (result?._queued) { setShowSignature(false); return; }
+      toast({ title: "تم حفظ التوقيع بنجاح" });
+      setShowSignature(false);
+      setHasSignature(true);
+    },
+    onError: (error: Error) => { toast({ title: error.message, variant: "destructive" }); },
   });
 
   const completeShiftMutation = useMutation({
     mutationFn: async (data: any) => {
       const dataWithLocation = { ...data, gpsLatitude: gpsLocation?.lat, gpsLongitude: gpsLocation?.lng };
-      const res = await fetch(`/api/branch-shifts/${currentShift?.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(dataWithLocation) });
-      if (!res.ok) { const err = await res.json(); throw new Error(err.error || "فشل في إكمال الشفت"); }
-      return res.json();
-    },
-    onSuccess: async () => {
+      const url = `/api/branch-shifts/${currentShift?.id}`;
       try {
-        const branchName = branches.find((b: any) => b.id === currentShift?.branchId)?.name || currentShift?.branchId;
-        await fetch("/api/notifications", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: activeTab === "opening" ? "تم فتح فرع" : "تم إغلاق فرع", message: `${activeTab === "opening" ? "تم إكمال إجراءات الفتح" : "تم إكمال إجراءات الإغلاق"} لفرع ${branchName} بواسطة ${supervisorName}`, type: "shift_completion", priority: "normal", targetRole: "admin", metadata: { branchId: currentShift?.branchId, shiftType: currentShift?.shiftType, completionType: activeTab, supervisorName, gpsLocation } }),
-        });
-      } catch (e) { console.error("Failed to send notification:", e); }
+        const res = await fetch(url, { method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(dataWithLocation) });
+        if (!res.ok) { const err = await res.json(); throw new Error(err.error || "فشل في إكمال الشفت"); }
+        return res.json();
+      } catch (e: any) {
+        if (isNetworkError(e)) {
+          const queued = queueForSync({ url, method: "PATCH", data: dataWithLocation, label: "إكمال الشفت" });
+          setPendingSyncCount(getPendingShiftsCount());
+          if (queued) {
+            toast({ title: "إكمال الشفت محفوظ محلياً", description: "سيُرسَل تلقائياً عند عودة الاتصال" });
+            return { _queued: true };
+          }
+          throw new Error("فشل حفظ إكمال الشفت محلياً");
+        }
+        throw e;
+      }
+    },
+    onSuccess: async (result: any) => {
+      if (result?._queued) {
+        return;
+      }
+      if (navigator.onLine) {
+        try {
+          const branchName = branches.find((b: any) => b.id === currentShift?.branchId)?.name || currentShift?.branchId;
+          await fetch("/api/notifications", {
+            method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+            body: JSON.stringify({ title: activeTab === "opening" ? "تم فتح فرع" : "تم إغلاق فرع", message: `${activeTab === "opening" ? "تم إكمال إجراءات الفتح" : "تم إكمال إجراءات الإغلاق"} لفرع ${branchName} بواسطة ${supervisorName}`, type: "shift_completion", priority: "normal", targetRole: "admin", metadata: { branchId: currentShift?.branchId, shiftType: currentShift?.shiftType, completionType: activeTab, supervisorName, gpsLocation } }),
+          });
+        } catch (e) { console.error("Failed to send notification:", e); }
+      }
       if (currentShift) clearLocalStorage(`shift_${currentShift.id}_responses`);
       queryClient.invalidateQueries({ queryKey: ["/api/branch-shifts"] });
       queryClient.invalidateQueries({ queryKey: ["/api/branch-shifts/dashboard/today", workingDate] });
@@ -629,6 +777,34 @@ export default function BranchShiftsPage() {
               </Tabs>
 
               {/* Status Indicators */}
+              {pendingSyncCount > 0 && (
+                <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-3 flex items-center justify-between gap-3" data-testid="banner-pending-sync">
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <RefreshCw className={`h-5 w-5 text-amber-600 flex-shrink-0 ${isSyncing ? "animate-spin" : ""}`} />
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-amber-900" data-testid="text-pending-count">
+                        {pendingSyncCount} عنصر بانتظار المزامنة
+                      </p>
+                      {lastSyncError && (
+                        <p className="text-[11px] text-red-600 truncate" data-testid="text-sync-error">
+                          آخر خطأ: {lastSyncError}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-amber-400 text-amber-800 hover:bg-amber-100 flex-shrink-0"
+                    onClick={() => syncPendingData(true)}
+                    disabled={isSyncing || isOffline}
+                    data-testid="button-retry-sync"
+                  >
+                    {isSyncing ? <Loader2 className="h-4 w-4 animate-spin ml-1" /> : <RefreshCw className="h-4 w-4 ml-1" />}
+                    إعادة المحاولة
+                  </Button>
+                </div>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="bg-gradient-to-l from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-3 text-center">
                   <Clock className="h-5 w-5 text-amber-600 mx-auto mb-1" />
