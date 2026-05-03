@@ -1531,6 +1531,11 @@ export default function EmployeeReportsDashboardPage() {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error("Error exporting branch comparison PDF:", error);
+      toast({
+        title: isRTL ? "فشل تصدير PDF لمقارنة الفروع" : "Failed to export branch comparison PDF",
+        description: (error as Error)?.message,
+        variant: "destructive",
+      });
     }
   };
 
@@ -1589,6 +1594,11 @@ export default function EmployeeReportsDashboardPage() {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error("Error exporting job comparison PDF:", error);
+      toast({
+        title: isRTL ? "فشل تصدير PDF لمقارنة الوظائف" : "Failed to export job comparison PDF",
+        description: (error as Error)?.message,
+        variant: "destructive",
+      });
     }
   };
 
@@ -1652,6 +1662,11 @@ export default function EmployeeReportsDashboardPage() {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error("Error exporting salaries table PDF:", error);
+      toast({
+        title: isRTL ? "فشل تصدير PDF لجدول الرواتب" : "Failed to export salaries PDF",
+        description: (error as Error)?.message,
+        variant: "destructive",
+      });
     }
   };
 
@@ -1775,6 +1790,11 @@ export default function EmployeeReportsDashboardPage() {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error("Error exporting KPIs PDF:", error);
+      toast({
+        title: isRTL ? "فشل تصدير PDF للمؤشرات" : "Failed to export KPIs PDF",
+        description: (error as Error)?.message,
+        variant: "destructive",
+      });
     }
   };
 
@@ -6101,6 +6121,11 @@ export default function EmployeeReportsDashboardPage() {
                     window.URL.revokeObjectURL(url);
                   } catch (error) {
                     console.error("Error exporting health certificates PDF:", error);
+                    toast({
+                      title: isRTL ? "فشل تصدير PDF للشهادات الصحية" : "Failed to export health certificates PDF",
+                      description: (error as Error)?.message,
+                      variant: "destructive",
+                    });
                   }
                 }} data-testid="button-export-health-pdf">
                   <FileText className="w-4 h-4 ml-1" />
@@ -6436,6 +6461,11 @@ export default function EmployeeReportsDashboardPage() {
                     window.URL.revokeObjectURL(url);
                   } catch (error) {
                     console.error("Error exporting comparisons PDF:", error);
+                    toast({
+                      title: isRTL ? "فشل تصدير PDF للمقارنات" : "Failed to export comparisons PDF",
+                      description: (error as Error)?.message,
+                      variant: "destructive",
+                    });
                   }
                 }} data-testid="button-export-comparisons-pdf">
                   <FileText className="w-4 h-4 ml-1" />

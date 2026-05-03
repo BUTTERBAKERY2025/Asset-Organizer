@@ -889,7 +889,14 @@ export default function DisplayBarWastePage() {
             return updated;
           });
         })
-        .catch(err => console.error("Error loading saved waste items:", err));
+        .catch(err => {
+          console.error("Error loading saved waste items:", err);
+          toast({
+            title: "تعذر تحميل أصناف الهالك المحفوظة",
+            description: err?.message || "تحقق من الاتصال وحاول مرة أخرى",
+            variant: "destructive",
+          });
+        });
     } else {
       setSavedReportId(null);
       setSavedReportStatus("draft");

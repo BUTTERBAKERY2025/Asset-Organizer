@@ -43,6 +43,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
 import { useProductionContext } from "@/contexts/ProductionContext";
 import { useBranches } from "@/hooks/useBranches";
 import {
@@ -617,6 +618,7 @@ function TransfersReportTab({ branchId, startDate, endDate }: { branchId: string
 }
 
 export default function ProductionReportsPage() {
+  const { toast } = useToast();
   const { selectedBranch, setSelectedBranch, selectedDate, setSelectedDate } = useProductionContext();
   const [startDate, setStartDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [endDate, setEndDate] = useState(format(new Date(), "yyyy-MM-dd"));
@@ -870,10 +872,15 @@ export default function ProductionReportsPage() {
       XLSX.writeFile(wb, `تقارير_الإنتاج_${startDate}_${endDate}.xlsx`);
     } catch (error) {
       console.error("Export error:", error);
+      toast({
+        title: "فشل تصدير ملف Excel",
+        description: (error as Error)?.message || "تحقق من البيانات وحاول مرة أخرى",
+        variant: "destructive",
+      });
     } finally {
       setIsExporting(null);
     }
-  }, [reportData, branches, selectedBranch, startDate, endDate, processedData]);
+  }, [reportData, branches, selectedBranch, startDate, endDate, processedData, toast]);
 
   const exportToCSV = useCallback(async (reportType: string) => {
     if (!reportData) return;
@@ -907,10 +914,15 @@ export default function ProductionReportsPage() {
       link.click();
     } catch (error) {
       console.error("Export error:", error);
+      toast({
+        title: "فشل تصدير ملف CSV",
+        description: (error as Error)?.message || "تحقق من البيانات وحاول مرة أخرى",
+        variant: "destructive",
+      });
     } finally {
       setIsExporting(null);
     }
-  }, [reportData, startDate, processedData]);
+  }, [reportData, startDate, processedData, toast]);
 
   const exportToPDF = useCallback(async () => {
     setIsExporting("pdf");
@@ -937,10 +949,15 @@ export default function ProductionReportsPage() {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error("PDF export error:", error);
+      toast({
+        title: "فشل تصدير ملف PDF",
+        description: (error as Error)?.message || "تحقق من الاتصال وحاول مرة أخرى",
+        variant: "destructive",
+      });
     } finally {
       setIsExporting(null);
     }
-  }, [reportData, startDate, endDate]);
+  }, [reportData, startDate, endDate, toast]);
 
   return (
     <Layout>

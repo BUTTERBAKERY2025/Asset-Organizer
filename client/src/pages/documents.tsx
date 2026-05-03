@@ -478,9 +478,16 @@ export default function DocumentsPage() {
           const blob = await response.blob();
           const url = URL.createObjectURL(blob);
           setPreviewBlobUrl(url);
+        } else {
+          throw new Error(`HTTP ${response.status}`);
         }
       } catch (error) {
         console.error("Error loading preview:", error);
+        toast({
+          title: "تعذر تحميل معاينة الوثيقة",
+          description: (error as Error)?.message || "تحقق من الاتصال وحاول مرة أخرى",
+          variant: "destructive",
+        });
       } finally {
         setIsLoadingPreview(false);
       }

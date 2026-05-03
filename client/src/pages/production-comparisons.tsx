@@ -338,6 +338,11 @@ export default function ProductionComparisonsPage() {
       }
     } catch (error) {
       console.error("Error fetching history:", error);
+      toast({
+        title: "تعذر تحميل سجل المقارنات",
+        description: (error as Error)?.message || "تحقق من الاتصال وحاول مرة أخرى",
+        variant: "destructive",
+      });
     }
   };
 

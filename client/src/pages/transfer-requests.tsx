@@ -409,6 +409,11 @@ export default function TransferRequestsPage() {
       }
     } catch (error) {
       console.error("Error fetching items:", error);
+      toast({
+        title: isRTL ? "تعذر تحميل أصناف الطلب" : "Failed to load request items",
+        description: (error as Error)?.message || (isRTL ? "تحقق من الاتصال وحاول مرة أخرى" : "Check your connection and try again"),
+        variant: "destructive",
+      });
     }
   };
 
@@ -467,6 +472,11 @@ export default function TransferRequestsPage() {
       }
     } catch (error) {
       console.error("Error fetching items for delivery confirmation:", error);
+      toast({
+        title: isRTL ? "تعذر تحميل أصناف التحويل" : "Failed to load transfer items",
+        description: (error as Error)?.message || (isRTL ? "تحقق من الاتصال وحاول مرة أخرى" : "Check your connection and try again"),
+        variant: "destructive",
+      });
     }
   };
 
