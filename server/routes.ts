@@ -24470,12 +24470,19 @@ export async function registerRoutes(
         };
       });
 
+      // Exclude employees with zero attendance (no present/late days) from the branch PDF
+      const employeeReportsWithAttendance = employeeReports.filter(r => (r.presentDays || 0) > 0);
+
+      if (employeeReportsWithAttendance.length === 0) {
+        return res.status(400).json({ error: "لا يوجد موظفون لديهم حضور في هذه الفترة" });
+      }
+
       const pdfBuffer = await generateBranchTimesheetPdf({
         branchName: branch.name,
         periodStart: startDate,
         periodEnd: endDate,
         monthLabel,
-        employees: employeeReports,
+        employees: employeeReportsWithAttendance,
       });
 
       // ASCII fallback + RFC 5987 UTF-8 encoded variant so Arabic branch names work
