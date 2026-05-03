@@ -38,6 +38,7 @@ import type {
   ContractMilestone, ContractItem, ContractPayment,
 } from "@shared/schema";
 import { ContractVariationsCard, ContractGuaranteesCard } from "@/components/contract-variations-guarantees";
+import { ContractLiquidatedDamagesCard } from "@/components/contract-liquidated-damages";
 
 // ============================================================
 // Form schema for milestones
@@ -564,6 +565,8 @@ export default function ContractDetailPage() {
           canEdit={canEditMilestone}
           canDelete={canDeleteMilestone}
         />
+
+        <ContractLiquidatedDamagesCard contract={contract} canEdit={canEditMilestone} />
 
         {/* Milestones section */}
         <Card>

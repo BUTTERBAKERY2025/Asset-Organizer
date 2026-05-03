@@ -90,6 +90,9 @@ import {
   contractGuarantees,
   type ContractGuarantee,
   type InsertContractGuarantee,
+  contractTemplates,
+  type ContractTemplate,
+  type InsertContractTemplate,
   type ProjectExpense,
   type InsertProjectExpense,
   type ProjectDailyLog,
@@ -692,6 +695,17 @@ export interface IStorage {
   updateContractGuarantee(id: number, g: Partial<InsertContractGuarantee>): Promise<ContractGuarantee | undefined>;
   deleteContractGuarantee(id: number): Promise<boolean>;
   releaseContractGuarantee(id: number, releasedBy: string, notes?: string): Promise<ContractGuarantee>;
+  // Liquidated Damages (Phase 4)
+  calculateLiquidatedDamages(contractId: number): Promise<ConstructionContract>;
+  applyLiquidatedDamages(contractId: number, userId: string): Promise<ConstructionContract>;
+  waiveLiquidatedDamages(contractId: number, userId: string, reason: string): Promise<ConstructionContract>;
+  // Contract Templates (Phase 4)
+  getContractTemplates(activeOnly?: boolean): Promise<ContractTemplate[]>;
+  getContractTemplate(id: number): Promise<ContractTemplate | undefined>;
+  createContractTemplate(t: InsertContractTemplate): Promise<ContractTemplate>;
+  updateContractTemplate(id: number, t: Partial<InsertContractTemplate>): Promise<ContractTemplate | undefined>;
+  deleteContractTemplate(id: number): Promise<boolean>;
+  createContractFromTemplate(templateId: number, base: { projectId: number; contractorId: number; title: string; totalAmount: number; startDate?: string; endDate?: string; createdBy: string }): Promise<ConstructionContract>;
 
   // Project Expenses
   getAllProjectExpenses(branchIds?: string[] | null): Promise<ProjectExpense[]>;
@@ -2520,6 +2534,222 @@ export class DatabaseStorage implements IStorage {
         .where(eq(contractGuarantees.id, id))
         .returning();
       return updated;
+    });
+  }
+
+  // ========== Liquidated Damages (Phase 4) ==========
+  // Calculates LD = min(totalAmount * dailyRate% * daysLate, totalAmount * maxPct%)
+  // Days are counted from planned_completion_date until actual_completion_date,
+  // or until today if actual is not set yet. Stores result on the contract row.
+  async calculateLiquidatedDamages(contractId: number): Promise<ConstructionContract> {
+    return await db.transaction(async (tx) => {
+      const [contract] = await tx
+        .select()
+        .from(constructionContracts)
+        .where(eq(constructionContracts.id, contractId))
+        .for('update');
+      if (!contract) throw new Error('العقد غير موجود');
+      if (!contract.ldEnabled) throw new Error('غرامة التأخير غير مفعّلة على هذا العقد');
+      if (!contract.plannedCompletionDate) throw new Error('تاريخ التسليم المخطط غير محدد');
+
+      const planned = new Date(contract.plannedCompletionDate);
+      const actual = contract.actualCompletionDate ? new Date(contract.actualCompletionDate) : new Date();
+      if (isNaN(planned.getTime())) throw new Error('تاريخ التسليم المخطط غير صالح');
+      if (isNaN(actual.getTime())) throw new Error('تاريخ التسليم الفعلي غير صالح');
+
+      const daysLate = Math.max(0, Math.floor((actual.getTime() - planned.getTime()) / (1000 * 60 * 60 * 24)));
+      const dailyRate = contract.ldDailyRate || 0;
+      const maxPct = contract.ldMaxPercentage || 0;
+      const total = contract.totalAmount || 0;
+      const raw = Math.round(total * (dailyRate / 100) * daysLate * 100) / 100;
+      const cap = Math.round(total * (maxPct / 100) * 100) / 100;
+      const calculated = Math.min(raw, cap);
+
+      const [updated] = await tx
+        .update(constructionContracts)
+        .set({
+          ldCalculatedAmount: calculated,
+          ldCalculatedDays: daysLate,
+          ldCalculatedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(constructionContracts.id, contractId))
+        .returning();
+      return updated;
+    });
+  }
+
+  async applyLiquidatedDamages(contractId: number, userId: string): Promise<ConstructionContract> {
+    return await db.transaction(async (tx) => {
+      const [contract] = await tx
+        .select()
+        .from(constructionContracts)
+        .where(eq(constructionContracts.id, contractId))
+        .for('update');
+      if (!contract) throw new Error('العقد غير موجود');
+      if (contract.ldApplied) throw new Error('الغرامة مطبّقة مسبقاً');
+      if (contract.ldWaived) throw new Error('تم التنازل عن الغرامة');
+      if (!contract.ldCalculatedAmount || contract.ldCalculatedAmount <= 0) {
+        throw new Error('يجب حساب الغرامة أولاً');
+      }
+      const [updated] = await tx
+        .update(constructionContracts)
+        .set({
+          ldApplied: true,
+          ldActionAt: new Date(),
+          ldActionBy: userId,
+          updatedAt: new Date(),
+        })
+        .where(eq(constructionContracts.id, contractId))
+        .returning();
+      return updated;
+    });
+  }
+
+  async waiveLiquidatedDamages(contractId: number, userId: string, reason: string): Promise<ConstructionContract> {
+    return await db.transaction(async (tx) => {
+      const [contract] = await tx
+        .select()
+        .from(constructionContracts)
+        .where(eq(constructionContracts.id, contractId))
+        .for('update');
+      if (!contract) throw new Error('العقد غير موجود');
+      if (contract.ldApplied) throw new Error('لا يمكن التنازل عن غرامة مطبّقة');
+      if (contract.ldWaived) throw new Error('تم التنازل مسبقاً');
+
+      const [updated] = await tx
+        .update(constructionContracts)
+        .set({
+          ldWaived: true,
+          ldWaivedReason: reason,
+          ldActionAt: new Date(),
+          ldActionBy: userId,
+          updatedAt: new Date(),
+        })
+        .where(eq(constructionContracts.id, contractId))
+        .returning();
+      return updated;
+    });
+  }
+
+  // ========== Contract Templates (Phase 4) ==========
+  async getContractTemplates(activeOnly = false): Promise<ContractTemplate[]> {
+    if (activeOnly) {
+      return await db.select().from(contractTemplates).where(eq(contractTemplates.isActive, true)).orderBy(desc(contractTemplates.usageCount), contractTemplates.name);
+    }
+    return await db.select().from(contractTemplates).orderBy(desc(contractTemplates.usageCount), contractTemplates.name);
+  }
+
+  async getContractTemplate(id: number): Promise<ContractTemplate | undefined> {
+    const [t] = await db.select().from(contractTemplates).where(eq(contractTemplates.id, id));
+    return t || undefined;
+  }
+
+  async createContractTemplate(t: InsertContractTemplate): Promise<ContractTemplate> {
+    const [created] = await db.insert(contractTemplates).values(t).returning();
+    return created;
+  }
+
+  async updateContractTemplate(id: number, t: Partial<InsertContractTemplate>): Promise<ContractTemplate | undefined> {
+    const [updated] = await db
+      .update(contractTemplates)
+      .set({ ...t, updatedAt: new Date() })
+      .where(eq(contractTemplates.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteContractTemplate(id: number): Promise<boolean> {
+    const r = await db.delete(contractTemplates).where(eq(contractTemplates.id, id)).returning();
+    return r.length > 0;
+  }
+
+  // Creates a new contract using template defaults (terms, retention, LD, milestones, guarantees).
+  // All inserts in one transaction. Increments template usage_count.
+  async createContractFromTemplate(
+    templateId: number,
+    base: { projectId: number; contractorId: number; title: string; totalAmount: number; startDate?: string; endDate?: string; createdBy: string }
+  ): Promise<ConstructionContract> {
+    return await db.transaction(async (tx) => {
+      const [tpl] = await tx.select().from(contractTemplates).where(eq(contractTemplates.id, templateId)).for('update');
+      if (!tpl) throw new Error('القالب غير موجود');
+      if (!tpl.isActive) throw new Error('القالب غير نشط');
+
+      const [contract] = await tx.insert(constructionContracts).values({
+        projectId: base.projectId,
+        contractorId: base.contractorId,
+        title: base.title,
+        description: tpl.description || null,
+        contractType: 'fixed_price',
+        status: 'draft',
+        totalAmount: base.totalAmount,
+        startDate: base.startDate || null,
+        endDate: base.endDate || null,
+        plannedCompletionDate: base.endDate || null,
+        paymentTerms: tpl.defaultTerms || null,
+        retentionPercentage: tpl.defaultRetentionPercentage || 0,
+        ldEnabled: tpl.defaultLdEnabled || false,
+        ldDailyRate: tpl.defaultLdDailyRate || 0,
+        ldMaxPercentage: tpl.defaultLdMaxPercentage || 10,
+        createdBy: base.createdBy,
+      }).returning();
+
+      // Insert default milestones
+      const defaultMilestones = (tpl.defaultMilestones as any[]) || [];
+      if (defaultMilestones.length > 0) {
+        const rows = defaultMilestones.map((m, idx) => {
+          const amountType = m.amountType || 'percentage';
+          const pct = amountType === 'percentage' ? Number(m.percentage) || 0 : null;
+          const amount = amountType === 'percentage'
+            ? Math.round(((base.totalAmount * (pct || 0)) / 100) * 100) / 100
+            : Number(m.amount) || 0;
+          return {
+            contractId: contract.id,
+            sequence: m.sequence ?? idx + 1,
+            title: m.title || `مرحلة ${idx + 1}`,
+            description: m.description || null,
+            amountType,
+            percentage: pct,
+            amount,
+            triggerType: m.triggerType || 'manual',
+            status: 'pending',
+          };
+        });
+        await tx.insert(contractMilestones).values(rows as any);
+      }
+
+      // Insert default guarantees (placeholder rows — user fills bank/dates later)
+      const defaultGuarantees = (tpl.defaultGuarantees as any[]) || [];
+      if (defaultGuarantees.length > 0) {
+        const today = new Date().toISOString().slice(0, 10);
+        const rows = defaultGuarantees.map((g, idx) => {
+          const pct = Number(g.amountPercentage) || 0;
+          const amount = Math.round((base.totalAmount * (pct / 100)) * 100) / 100;
+          const months = Number(g.validityMonths) || 12;
+          const expiry = new Date();
+          expiry.setMonth(expiry.getMonth() + months);
+          return {
+            contractId: contract.id,
+            guaranteeNumber: `G-${contract.id}-${idx + 1}`,
+            type: g.type || 'performance',
+            bankName: 'يُحدّد لاحقاً',
+            amount,
+            currency: 'SAR',
+            issueDate: today,
+            expiryDate: expiry.toISOString().slice(0, 10),
+            status: 'active',
+            createdBy: base.createdBy,
+          };
+        });
+        await tx.insert(contractGuarantees).values(rows as any);
+      }
+
+      // Increment usage_count
+      await tx.update(contractTemplates)
+        .set({ usageCount: (tpl.usageCount || 0) + 1, updatedAt: new Date() })
+        .where(eq(contractTemplates.id, templateId));
+
+      return contract;
     });
   }
 

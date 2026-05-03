@@ -97,7 +97,7 @@ import {
   generateSingleTimesheetPdf,
   generateAttendanceLogPdf, type AttendanceLogPdfData
 } from "./pdf-generator";
-import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertContractMilestoneSchema, insertContractVariationSchema, insertContractGuaranteeSchema, insertProjectExpenseSchema, insertProjectDailyLogSchema, insertProjectDailyLogPhotoSchema, insertDailyLogActivitySchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertInfluencerContractSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema, isMadeToOrderCategory, suggestCategoryFromProductName, userBranchAccess } from "@shared/schema";
+import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertContractMilestoneSchema, insertContractVariationSchema, insertContractGuaranteeSchema, insertContractTemplateSchema, insertProjectExpenseSchema, insertProjectDailyLogSchema, insertProjectDailyLogPhotoSchema, insertDailyLogActivitySchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertInfluencerContractSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema, isMadeToOrderCategory, suggestCategoryFromProductName, userBranchAccess } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, isUserAdmin, getAllowedBranchIds, getEffectiveBranchFilter, invalidateAuthCache } from "./auth";
 import { authRateLimiter, biometricRateLimiter, uploadRateLimiter, apiRateLimiter, validateFileUpload, sanitizeFilename, trackLoginAttempt } from "./security";
@@ -2917,6 +2917,156 @@ export async function registerRoutes(
     } catch (e: any) {
       console.error("Error releasing guarantee:", e);
       res.status(500).json({ error: e?.message || "فشل في الإفراج" });
+    }
+  });
+
+  // ==================== Liquidated Damages (Phase 4) ====================
+  app.post("/api/construction/contracts/:id/ld/calculate", isAuthenticated, requirePermission("contracts", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const access = await checkContractBranchAccess(req, id);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+      const result = await storage.calculateLiquidatedDamages(id);
+      res.json(result);
+    } catch (e: any) {
+      console.error("Error calculating LD:", e);
+      res.status(400).json({ error: e?.message || "فشل حساب الغرامة" });
+    }
+  });
+
+  app.post("/api/construction/contracts/:id/ld/apply", isAuthenticated, requirePermission("contracts", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const access = await checkContractBranchAccess(req, id);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+      const userId = req.currentUser?.id;
+      if (!userId) return res.status(401).json({ error: "Unauthorized" });
+      const result = await storage.applyLiquidatedDamages(id, userId);
+      res.json(result);
+    } catch (e: any) {
+      console.error("Error applying LD:", e);
+      res.status(400).json({ error: e?.message || "فشل التطبيق" });
+    }
+  });
+
+  app.post("/api/construction/contracts/:id/ld/waive", isAuthenticated, requirePermission("contracts", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const reason = (req.body?.reason || '').trim();
+      if (!reason) return res.status(400).json({ error: "سبب التنازل مطلوب" });
+      const access = await checkContractBranchAccess(req, id);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+      const userId = req.currentUser?.id;
+      if (!userId) return res.status(401).json({ error: "Unauthorized" });
+      const result = await storage.waiveLiquidatedDamages(id, userId, reason);
+      res.json(result);
+    } catch (e: any) {
+      console.error("Error waiving LD:", e);
+      res.status(400).json({ error: e?.message || "فشل التنازل" });
+    }
+  });
+
+  // ==================== Contract Templates (Phase 4) ====================
+  app.get("/api/construction/contract-templates", isAuthenticated, requirePermission("contracts", "view"), async (req, res) => {
+    try {
+      const activeOnly = req.query.activeOnly === 'true';
+      const items = await storage.getContractTemplates(activeOnly);
+      res.json(items);
+    } catch (e) {
+      console.error("Error fetching templates:", e);
+      res.status(500).json({ error: "فشل في جلب القوالب" });
+    }
+  });
+
+  app.get("/api/construction/contract-templates/:id", isAuthenticated, requirePermission("contracts", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const t = await storage.getContractTemplate(id);
+      if (!t) return res.status(404).json({ error: "Not found" });
+      res.json(t);
+    } catch (e) {
+      console.error("Error fetching template:", e);
+      res.status(500).json({ error: "فشل" });
+    }
+  });
+
+  app.post("/api/construction/contract-templates", isAuthenticated, requirePermission("contracts", "create"), async (req, res) => {
+    try {
+      const validated = insertContractTemplateSchema.parse({
+        ...req.body,
+        createdBy: req.currentUser?.id,
+      });
+      const created = await storage.createContractTemplate(validated);
+      res.status(201).json(created);
+    } catch (e) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: "Invalid data", details: e.errors });
+      console.error("Error creating template:", e);
+      res.status(500).json({ error: "فشل في إنشاء القالب" });
+    }
+  });
+
+  app.patch("/api/construction/contract-templates/:id", isAuthenticated, requirePermission("contracts", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const validated = insertContractTemplateSchema.partial().parse(req.body);
+      const updated = await storage.updateContractTemplate(id, validated);
+      if (!updated) return res.status(404).json({ error: "Not found" });
+      res.json(updated);
+    } catch (e) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: "Invalid data", details: e.errors });
+      console.error("Error updating template:", e);
+      res.status(500).json({ error: "فشل في التحديث" });
+    }
+  });
+
+  app.delete("/api/construction/contract-templates/:id", isAuthenticated, requirePermission("contracts", "delete"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const ok = await storage.deleteContractTemplate(id);
+      res.json({ success: ok });
+    } catch (e) {
+      console.error("Error deleting template:", e);
+      res.status(500).json({ error: "فشل في الحذف" });
+    }
+  });
+
+  app.post("/api/construction/contracts/from-template", isAuthenticated, requirePermission("contracts", "create"), async (req, res) => {
+    try {
+      const schema = z.object({
+        templateId: z.number().int().positive(),
+        projectId: z.number().int().positive(),
+        contractorId: z.number().int().positive(),
+        title: z.string().min(1),
+        totalAmount: z.number().min(0),
+        startDate: z.string().optional(),
+        endDate: z.string().optional(),
+      });
+      const data = schema.parse(req.body);
+      // Branch access via project
+      const access = await checkProjectBranchAccess(req, data.projectId);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+      const userId = req.currentUser?.id;
+      if (!userId) return res.status(401).json({ error: "Unauthorized" });
+      const contract = await storage.createContractFromTemplate(data.templateId, {
+        projectId: data.projectId,
+        contractorId: data.contractorId,
+        title: data.title,
+        totalAmount: data.totalAmount,
+        startDate: data.startDate,
+        endDate: data.endDate,
+        createdBy: userId,
+      });
+      res.status(201).json(contract);
+    } catch (e: any) {
+      if (e instanceof z.ZodError) return res.status(400).json({ error: "Invalid data", details: e.errors });
+      console.error("Error creating contract from template:", e);
+      res.status(400).json({ error: e?.message || "فشل" });
     }
   });
 

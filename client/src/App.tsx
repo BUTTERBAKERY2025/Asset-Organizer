@@ -36,6 +36,7 @@ const ConstructionDashboardPage = makeLazy("construction-dashboard");
 const ConstructionReportsPage = makeLazy("construction-reports");
 const ContractsPage = makeLazy("contracts");
 const ContractDetailPage = makeLazy("contract-detail");
+const ContractTemplatesPage = makeLazy("contract-templates");
 const PaymentRequestsPage = makeLazy("payment-requests");
 const ContractorStatementsPage = makeLazy("contractor-statements");
 const ContractorStatementDetailPage = makeLazy("contractor-statement-detail");
@@ -313,6 +314,7 @@ const Router = React.memo(function Router() {
       <Route path="/construction-dashboard">{() => <ModulePage component={ConstructionDashboardPage} module="construction_projects" />}</Route>
       <Route path="/contractors">{() => <ModulePage component={ContractorsPage} module="contractors" />}</Route>
       <Route path="/contracts">{() => <ModulePage component={ContractsPage} module="contracts" />}</Route>
+      <Route path="/contracts/templates">{() => <ModulePage component={ContractTemplatesPage} module="contracts" />}</Route>
       <Route path="/contracts/:id">{() => <ModulePage component={ContractDetailPage} module="contracts" />}</Route>
       <Route path="/payment-requests">{() => <ModulePage component={PaymentRequestsPage} module="payment_requests" />}</Route>
       <Route path="/budget-planning">{() => <ModulePage component={BudgetPlanningPage} module="budget_planning" />}</Route>

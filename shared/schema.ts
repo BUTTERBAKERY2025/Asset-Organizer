@@ -388,6 +388,20 @@ export const constructionContracts = pgTable("construction_contracts", {
   retentionReleased: boolean("retention_released").default(false),
   retentionReleasedAt: timestamp("retention_released_at"),
   retentionReleasedBy: varchar("retention_released_by").references(() => users.id),
+  // Phase 4: غرامات التأخير (Liquidated Damages)
+  ldEnabled: boolean("ld_enabled").default(false),
+  ldDailyRate: real("ld_daily_rate").default(0),                          // % يومياً، مثلاً 0.1 = 0.1%
+  ldMaxPercentage: real("ld_max_percentage").default(10),                 // سقف % من قيمة العقد
+  plannedCompletionDate: text("planned_completion_date"),
+  actualCompletionDate: text("actual_completion_date"),
+  ldCalculatedAmount: real("ld_calculated_amount").default(0),
+  ldCalculatedDays: integer("ld_calculated_days").default(0),
+  ldCalculatedAt: timestamp("ld_calculated_at"),
+  ldApplied: boolean("ld_applied").default(false),
+  ldWaived: boolean("ld_waived").default(false),
+  ldWaivedReason: text("ld_waived_reason"),
+  ldActionAt: timestamp("ld_action_at"),
+  ldActionBy: varchar("ld_action_by").references(() => users.id),
   notes: text("notes"),
   attachmentUrl: text("attachment_url"),
   createdBy: varchar("created_by").references(() => users.id),
@@ -402,6 +416,15 @@ export const insertConstructionContractSchema = createInsertSchema(
   retentionReleased: true,
   retentionReleasedAt: true,
   retentionReleasedBy: true,
+  // Phase 4: server-managed LD fields
+  ldCalculatedAmount: true,
+  ldCalculatedDays: true,
+  ldCalculatedAt: true,
+  ldApplied: true,
+  ldWaived: true,
+  ldWaivedReason: true,
+  ldActionAt: true,
+  ldActionBy: true,
   createdAt: true,
   updatedAt: true,
 });
@@ -683,6 +706,44 @@ export const insertContractGuaranteeSchema = createInsertSchema(contractGuarante
 
 export type ContractGuarantee = typeof contractGuarantees.$inferSelect;
 export type InsertContractGuarantee = z.infer<typeof insertContractGuaranteeSchema>;
+
+// ============================================================
+// Contract Templates (Phase 4)
+// ============================================================
+// Reusable templates for common contract types (civil, electrical, MEP, finishing).
+// When creating a new contract from a template, default values are pre-filled
+// and default milestones/guarantees are auto-created.
+export const contractTemplates = pgTable("contract_templates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  category: text("category"),                                    // مدنية | كهرباء | ميكانيكية | تشطيبات | عام
+  defaultTerms: text("default_terms"),
+  defaultRetentionPercentage: real("default_retention_percentage").default(0),
+  defaultLdEnabled: boolean("default_ld_enabled").default(false),
+  defaultLdDailyRate: real("default_ld_daily_rate").default(0),
+  defaultLdMaxPercentage: real("default_ld_max_percentage").default(10),
+  defaultMilestones: jsonb("default_milestones").default([]),    // [{title, amountType, percentage, sequence, triggerType}]
+  defaultGuarantees: jsonb("default_guarantees").default([]),    // [{type, amountPercentage, validityMonths}]
+  isActive: boolean("is_active").default(true),
+  usageCount: integer("usage_count").default(0),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_contract_templates_category").on(table.category),
+  index("idx_contract_templates_active").on(table.isActive),
+]);
+
+export const insertContractTemplateSchema = createInsertSchema(contractTemplates).omit({
+  id: true,
+  usageCount: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ContractTemplate = typeof contractTemplates.$inferSelect;
+export type InsertContractTemplate = z.infer<typeof insertContractTemplateSchema>;
 
 // Project Expenses table - مصروفات المشروع المباشرة (غير مرتبطة بعقد)
 export const projectExpenses = pgTable("project_expenses", {
