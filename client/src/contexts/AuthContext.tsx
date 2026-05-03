@@ -41,16 +41,30 @@ export function AuthGate({ children }: AuthGateProps) {
   }, [canShowApp, hasResolved, isLoading, isAuthenticated]);
 
   if (!hasResolved) {
+    // Unified skeleton instead of a centered spinner. Matches PageLoadingFallback's
+    // visual language so the very first paint feels like the app is already loading
+    // its layout, not "trying to connect" from scratch. Removes the dark blank flash.
     return (
-      <div 
-        className="min-h-screen bg-[#F5F0E6] flex items-center justify-center" 
+      <div
+        className="min-h-screen bg-[#F5F0E6] p-6 space-y-5 skeleton-delayed"
         dir="rtl"
         style={{ fontFamily: "'Cairo', sans-serif" }}
+        data-testid="auth-gate-skeleton"
       >
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-3 border-amber-500 border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm text-amber-700">جاري الاتصال بالنظام...</span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 skeleton-shimmer rounded-full" style={{ animationDelay: '0ms' }} />
+            <div className="h-7 skeleton-shimmer w-40 rounded-lg" style={{ animationDelay: '40ms' }} />
+          </div>
+          <div className="h-9 skeleton-shimmer w-28 rounded-lg opacity-40" style={{ animationDelay: '80ms' }} />
         </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="h-[88px] skeleton-shimmer rounded-xl" style={{ animationDelay: '0ms' }} />
+          <div className="h-[88px] skeleton-shimmer rounded-xl opacity-85" style={{ animationDelay: '40ms' }} />
+          <div className="h-[88px] skeleton-shimmer rounded-xl opacity-75" style={{ animationDelay: '80ms' }} />
+          <div className="h-[88px] skeleton-shimmer rounded-xl opacity-65 hidden lg:block" style={{ animationDelay: '120ms' }} />
+        </div>
+        <div className="h-64 skeleton-shimmer rounded-xl" style={{ animationDelay: '40ms' }} />
       </div>
     );
   }

@@ -38,7 +38,10 @@ The system uses a modern web architecture with a React-based frontend and a Node
 - **Construction Smart Dashboard**: Aggregates project details, financial-weighted progress, budget by category, project snapshot, and contracts summary.
 
 ### Performance Optimization
-- **Caching**: Server-side in-memory, tiered, client persistent, report-specific TTLs.
+- **Caching**: Server-side in-memory, tiered, client persistent, report-specific TTLs. Client-side `refetchOnMount: false` honours staleTime; `refetchOnReconnect: true` keeps data fresh after offline.
+- **Optimistic Updates**: System notifications mark-as-read and mark-all-as-read flip cache instantly via `onMutate` + `onError` rollback + `onSettled` reconciliation, so badge counter responds without server round-trip.
+- **Predicate-based Invalidation**: High-frequency forms (display-bar waste, social responsibility) use a single predicate-based `invalidateQueries` per mutation instead of 2-3 separate calls — reduces re-render waves.
+- **Unified Loading Skeletons**: AuthGate and Suspense fallbacks share the same `skeleton-shimmer` visual language, removing the dark spinner flash on first paint.
 - **Database Optimization**: Indexes, N+1 query elimination, SQL aggregation, filtered queries.
 - **API Optimization**: Batch API, consolidated reports bundle, gzip compression, prefetch on hover.
 - **Frontend Performance**: AuthGate instant render, deduplicated init fetch, mobile-aware preloading.

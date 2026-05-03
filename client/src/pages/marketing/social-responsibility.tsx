@@ -117,12 +117,21 @@ export default function SocialResponsibilityPage() {
     queryKey: ["/api/social-responsibility/discounts"],
   });
 
+  // Single helper: one predicate-based invalidation refreshes every social-responsibility
+  // query (organizations, initiatives, discounts, stats) in a single batched render
+  // instead of two separate invalidate calls per mutation.
+  const invalidateSocialResponsibility = () =>
+    queryClient.invalidateQueries({
+      predicate: (q) =>
+        typeof q.queryKey[0] === "string" &&
+        (q.queryKey[0] as string).startsWith("/api/social-responsibility"),
+    });
+
   // Organization mutations
   const createOrgMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/social-responsibility/organizations", data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/social-responsibility/organizations"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/social-responsibility/stats"] });
+      invalidateSocialResponsibility();
       toast({ title: "تم إضافة الجهة بنجاح" });
       setShowOrgDialog(false);
       setSelectedOrg(null);
@@ -134,7 +143,7 @@ export default function SocialResponsibilityPage() {
     mutationFn: ({ id, data }: { id: number; data: any }) => 
       apiRequest("PUT", `/api/social-responsibility/organizations/${id}`, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/social-responsibility/organizations"] });
+      invalidateSocialResponsibility();
       toast({ title: "تم تحديث الجهة بنجاح" });
       setShowOrgDialog(false);
       setSelectedOrg(null);
@@ -145,8 +154,7 @@ export default function SocialResponsibilityPage() {
   const deleteOrgMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/social-responsibility/organizations/${id}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/social-responsibility/organizations"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/social-responsibility/stats"] });
+      invalidateSocialResponsibility();
       toast({ title: "تم حذف الجهة بنجاح" });
     },
     onError: () => toast({ title: "فشل في حذف الجهة", variant: "destructive" }),
@@ -156,8 +164,7 @@ export default function SocialResponsibilityPage() {
   const createInitiativeMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/social-responsibility/initiatives", data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/social-responsibility/initiatives"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/social-responsibility/stats"] });
+      invalidateSocialResponsibility();
       toast({ title: "تم إضافة المبادرة بنجاح" });
       setShowInitiativeDialog(false);
       setSelectedInitiative(null);
@@ -169,7 +176,7 @@ export default function SocialResponsibilityPage() {
     mutationFn: ({ id, data }: { id: number; data: any }) => 
       apiRequest("PUT", `/api/social-responsibility/initiatives/${id}`, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/social-responsibility/initiatives"] });
+      invalidateSocialResponsibility();
       toast({ title: "تم تحديث المبادرة بنجاح" });
       setShowInitiativeDialog(false);
       setSelectedInitiative(null);
@@ -180,8 +187,7 @@ export default function SocialResponsibilityPage() {
   const deleteInitiativeMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/social-responsibility/initiatives/${id}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/social-responsibility/initiatives"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/social-responsibility/stats"] });
+      invalidateSocialResponsibility();
       toast({ title: "تم حذف المبادرة بنجاح" });
     },
     onError: () => toast({ title: "فشل في حذف المبادرة", variant: "destructive" }),
@@ -191,8 +197,7 @@ export default function SocialResponsibilityPage() {
   const createDiscountMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/social-responsibility/discounts", data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/social-responsibility/discounts"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/social-responsibility/stats"] });
+      invalidateSocialResponsibility();
       toast({ title: "تم إضافة الخصم بنجاح" });
       setShowDiscountDialog(false);
       setSelectedDiscount(null);
@@ -204,7 +209,7 @@ export default function SocialResponsibilityPage() {
     mutationFn: ({ id, data }: { id: number; data: any }) => 
       apiRequest("PUT", `/api/social-responsibility/discounts/${id}`, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/social-responsibility/discounts"] });
+      invalidateSocialResponsibility();
       toast({ title: "تم تحديث الخصم بنجاح" });
       setShowDiscountDialog(false);
       setSelectedDiscount(null);
@@ -215,8 +220,7 @@ export default function SocialResponsibilityPage() {
   const deleteDiscountMutation = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/social-responsibility/discounts/${id}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/social-responsibility/discounts"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/social-responsibility/stats"] });
+      invalidateSocialResponsibility();
       toast({ title: "تم حذف الخصم بنجاح" });
     },
     onError: () => toast({ title: "فشل في حذف الخصم", variant: "destructive" }),

@@ -111,11 +111,33 @@ export function NotificationsDropdown() {
     refetchInterval: 60 * 1000,
   });
 
+  // Optimistic update: flip isRead in the cache immediately so the badge counter
+  // and the unread highlight disappear the instant the user clicks. The server
+  // request runs in the background; if it fails we restore the previous cache.
   const markAsReadMutation = useMutation({
     mutationFn: async (id: number) => {
       return await apiRequest("POST", `/api/system-notifications/${id}/read`);
     },
-    onSuccess: () => {
+    onMutate: async (id: number) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/system-notifications"] });
+      const previous = queryClient.getQueryData<SystemNotification[]>(["/api/system-notifications"]);
+      if (previous) {
+        queryClient.setQueryData<SystemNotification[]>(
+          ["/api/system-notifications"],
+          previous.map((n) => (n.id === id ? { ...n, isRead: true } : n))
+        );
+      }
+      return { previous };
+    },
+    onError: (_err, _id, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(["/api/system-notifications"], context.previous);
+      }
+    },
+    // onSettled (after success or error) reconciles with the server in case any
+    // side-effect fields (timestamps, related counters) changed beyond isRead.
+    // Optimistic UI already showed the change instantly — this is a quiet refresh.
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/system-notifications"] });
     },
   });
@@ -124,7 +146,23 @@ export function NotificationsDropdown() {
     mutationFn: async () => {
       return await apiRequest("POST", "/api/system-notifications/read-all");
     },
-    onSuccess: () => {
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ["/api/system-notifications"] });
+      const previous = queryClient.getQueryData<SystemNotification[]>(["/api/system-notifications"]);
+      if (previous) {
+        queryClient.setQueryData<SystemNotification[]>(
+          ["/api/system-notifications"],
+          previous.map((n) => ({ ...n, isRead: true }))
+        );
+      }
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(["/api/system-notifications"], context.previous);
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/system-notifications"] });
     },
   });

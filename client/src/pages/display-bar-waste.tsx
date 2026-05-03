@@ -998,9 +998,11 @@ export default function DisplayBarWastePage() {
     },
     onSuccess: (reportData: any) => {
       loadedReportRef.current = `${wasteBranch}_${selectedDate}_${reportData.id}`;
-      queryClient.invalidateQueries({ queryKey: ["/api/waste-reports"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/waste-reports/history"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/waste-reports/analytics"] });
+      // Single predicate-based invalidation instead of three separate calls — batches
+      // the state updates and triggers one re-render wave instead of three.
+      queryClient.invalidateQueries({
+        predicate: (q) => typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).startsWith("/api/waste-reports"),
+      });
       setSavedReportId(reportData.id);
       setSavedReportStatus(reportData.status || "draft");
       toast({ title: reportData.existing ? "تم تحديث تقرير الهالك الموجود" : "تم حفظ تقرير الهالك اليومي بنجاح" });
@@ -1022,8 +1024,9 @@ export default function DisplayBarWastePage() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/waste-reports"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/waste-reports/history"] });
+      queryClient.invalidateQueries({
+        predicate: (q) => typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).startsWith("/api/waste-reports"),
+      });
       setSavedReportStatus("submitted");
       toast({ title: "تم إرسال التقرير للاعتماد بنجاح" });
     },
@@ -1036,8 +1039,9 @@ export default function DisplayBarWastePage() {
       return response.json();
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/waste-reports"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/waste-reports/history"] });
+      queryClient.invalidateQueries({
+        predicate: (q) => typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).startsWith("/api/waste-reports"),
+      });
       toast({ title: variables.status === "approved" ? "تم اعتماد التقرير بنجاح" : "تم رفض التقرير" });
     },
     onError: (err: any) => toast({ title: err.message || "حدث خطأ", variant: "destructive" }),
