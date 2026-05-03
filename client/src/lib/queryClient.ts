@@ -16,16 +16,38 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
+// Hard ceiling on every network request. Prevents the UI from hanging
+// indefinitely when Supabase Pooler stalls or a mobile connection drops mid-request.
+// 30s is comfortably above the server's statement_timeout (45s would never reach client
+// in practice — Supabase usually 502s long before that on stalls).
+const FETCH_TIMEOUT_MS = 30000;
+
+function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = FETCH_TIMEOUT_MS): Promise<Response> {
+  // Respect any AbortSignal the caller passes by chaining it with the internal timeout.
+  const controller = new AbortController();
+  const externalSignal = options.signal as AbortSignal | undefined;
+  const onExternalAbort = () => controller.abort(externalSignal?.reason);
+  if (externalSignal) {
+    if (externalSignal.aborted) controller.abort(externalSignal.reason);
+    else externalSignal.addEventListener("abort", onExternalAbort, { once: true });
+  }
+  const timeoutId = setTimeout(() => controller.abort(new Error("Request timed out")), timeoutMs);
+  return fetch(url, { ...options, signal: controller.signal }).finally(() => {
+    clearTimeout(timeoutId);
+    if (externalSignal) externalSignal.removeEventListener("abort", onExternalAbort);
+  });
+}
+
 const inflightRequests = new Map<string, Promise<{ status: number; statusText: string; headers: Headers; body: ArrayBuffer }>>();
 
 async function deduplicatedFetch(url: string, options?: RequestInit): Promise<Response> {
   const method = options?.method || "GET";
   if (method !== "GET") {
-    return fetch(url, options);
+    return fetchWithTimeout(url, options);
   }
   let entry = inflightRequests.get(url);
   if (!entry) {
-    const fetchPromise = fetch(url, { ...options, cache: 'no-store' as RequestCache });
+    const fetchPromise = fetchWithTimeout(url, { ...options, cache: 'no-store' as RequestCache });
     const bodyPromise = fetchPromise.then(async (res) => {
       const body = await res.arrayBuffer();
       return { status: res.status, statusText: res.statusText, headers: res.headers, body };
@@ -48,7 +70,7 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
-  const res = await fetch(url, {
+  const res = await fetchWithTimeout(url, {
     method,
     headers: data ? { "Content-Type": "application/json" } : {},
     body: data ? JSON.stringify(data) : undefined,
@@ -103,13 +125,22 @@ export const queryClient = new QueryClient({
       refetchOnReconnect: true,
       staleTime: CACHE_TIMES.MEDIUM,
       gcTime: 1000 * 60 * 120,
+      // Smart retry: 3 attempts total for transient errors, none for real client errors.
+      // Solves the "I have to reload to get my data" problem — Supabase Pooler often
+      // returns 502/503/504 on cold-start, and mobile networks drop one packet here
+      // and there. Without retry, each glitch becomes a visible failure.
       retry: (failureCount, error) => {
-        if (error instanceof Error && error.message.startsWith("401")) {
-          return false;
-        }
-        return failureCount < 1;
+        const msg = error instanceof Error ? error.message : "";
+        // Permanent / authoritative errors — never retry, the answer won't change
+        // (auth, permissions, validation, not-found):
+        if (/^(400|401|403|404|409|410|422):/.test(msg)) return false;
+        // Everything else (network failure, timeout, 408/425/429/500/502/503/504,
+        // dropped connection mid-stream) is transient — try up to 3 times total.
+        return failureCount < 2;
       },
-      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 3000),
+      // Exponential backoff: 1s → 3s → 6s. Gives Supabase enough time to recover
+      // from a cold-start without making the user wait forever.
+      retryDelay: (attemptIndex) => Math.min(1000 * Math.pow(2.5, attemptIndex), 6000),
       structuralSharing: true,
       networkMode: "offlineFirst",
       placeholderData: (previousData: any) => previousData,

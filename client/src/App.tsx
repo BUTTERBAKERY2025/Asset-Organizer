@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { PWAInstallPrompt } from "@/components/pwa-install-prompt";
 import { OfflineIndicator } from "@/components/offline-indicator";
 import { SlowConnectionBanner } from "@/components/slow-connection-banner";
+import { DataErrorBanner } from "@/components/data-error-banner";
 import { InactivityLogout } from "@/components/inactivity-logout";
 import { ProductionProvider } from "@/contexts/ProductionContext";
 import { ProtectedRoute, PublicOnlyRoute, ModuleProtectedRoute } from "@/components/protected-route";
@@ -414,6 +415,7 @@ function App() {
               <PWAInstallPrompt />
               <OfflineIndicator />
               <SlowConnectionBanner />
+              <DataErrorBanner />
             </TooltipProvider>
           </ProductionProvider>
         </AuthGate>
