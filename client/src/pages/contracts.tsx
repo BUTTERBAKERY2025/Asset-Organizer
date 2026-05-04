@@ -60,6 +60,17 @@ const contractFormSchema = z.object({
   endDate: z.string().optional().nullable(),
   paymentTerms: z.string().optional().nullable(),
   warrantyPeriod: z.string().optional().nullable(),
+  // Phase 6: Official contract document fields
+  scopeOfWork: z.string().optional().nullable(),
+  termsAndConditions: z.string().optional().nullable(),
+  executionDuration: z.string().optional().nullable(),
+  workLocation: z.string().optional().nullable(),
+  firstPartyName: z.string().optional().nullable(),
+  firstPartyRepresentative: z.string().optional().nullable(),
+  firstPartyTitle: z.string().optional().nullable(),
+  firstPartyIdNumber: z.string().optional().nullable(),
+  signatureDate: z.string().optional().nullable(),
+  signatureLocation: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
 });
 
@@ -151,6 +162,16 @@ export default function ContractsPage() {
       endDate: "",
       paymentTerms: "",
       warrantyPeriod: "",
+      scopeOfWork: "",
+      termsAndConditions: "",
+      executionDuration: "",
+      workLocation: "",
+      firstPartyName: "شركة باتر بيكري",
+      firstPartyRepresentative: "",
+      firstPartyTitle: "المدير التنفيذي",
+      firstPartyIdNumber: "",
+      signatureDate: "",
+      signatureLocation: "الرياض",
       notes: "",
     },
   });
@@ -240,6 +261,16 @@ export default function ContractsPage() {
       endDate: contract.endDate || "",
       paymentTerms: contract.paymentTerms || "",
       warrantyPeriod: contract.warrantyPeriod || "",
+      scopeOfWork: (contract as any).scopeOfWork || "",
+      termsAndConditions: (contract as any).termsAndConditions || "",
+      executionDuration: (contract as any).executionDuration || "",
+      workLocation: (contract as any).workLocation || "",
+      firstPartyName: (contract as any).firstPartyName || "شركة باتر بيكري",
+      firstPartyRepresentative: (contract as any).firstPartyRepresentative || "",
+      firstPartyTitle: (contract as any).firstPartyTitle || "المدير التنفيذي",
+      firstPartyIdNumber: (contract as any).firstPartyIdNumber || "",
+      signatureDate: (contract as any).signatureDate || "",
+      signatureLocation: (contract as any).signatureLocation || "الرياض",
       notes: contract.notes || "",
     });
     setIsEditOpen(true);
@@ -613,8 +644,8 @@ export default function ContractsPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>رقم العقد</Label>
-                <Input {...form.register("contractNumber")} placeholder="مثال: C-2024-001" data-testid="input-contract-number" />
+                <Label>رقم العقد <span className="text-xs text-muted-foreground">(يُنشأ تلقائياً إذا تركته فارغاً)</span></Label>
+                <Input {...form.register("contractNumber")} placeholder="مثال: CON-2026-0001 (تلقائي)" data-testid="input-contract-number" />
               </div>
               <div className="space-y-2">
                 <Label>عنوان العقد *</Label>
@@ -709,6 +740,74 @@ export default function ContractsPage() {
               <Label>ملاحظات</Label>
               <Textarea {...form.register("notes")} placeholder="ملاحظات إضافية" data-testid="input-notes" />
             </div>
+
+            {/* Phase 6: Official contract document section */}
+            <details className="border border-amber-200 rounded-lg bg-amber-50/30">
+              <summary className="cursor-pointer p-3 font-semibold text-amber-800">
+                تفاصيل العقد الموقّع (للطباعة الرسمية)
+              </summary>
+              <div className="p-3 space-y-3 border-t border-amber-200">
+                <div className="space-y-2">
+                  <Label>نطاق الأعمال التفصيلي</Label>
+                  <Textarea
+                    rows={5}
+                    {...form.register("scopeOfWork")}
+                    placeholder="اشرح بالتفصيل الأعمال المطلوب تنفيذها، المواد، المواصفات الفنية، حدود العمل..."
+                    data-testid="input-scope-of-work"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>مدة التنفيذ</Label>
+                    <Input {...form.register("executionDuration")} placeholder="مثال: 90 يوم تقويمي" data-testid="input-execution-duration" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>موقع التنفيذ</Label>
+                    <Input {...form.register("workLocation")} placeholder="مثال: فرع الرياض، حي النخيل" data-testid="input-work-location" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>الشروط والأحكام</Label>
+                  <Textarea
+                    rows={5}
+                    {...form.register("termsAndConditions")}
+                    placeholder="الشروط العامة، التزامات الطرفين، شروط فسخ العقد، أي بنود خاصة..."
+                    data-testid="input-terms"
+                  />
+                </div>
+                <div className="border-t pt-3">
+                  <div className="text-sm font-semibold mb-2 text-amber-900">بيانات الطرف الأول (الشركة)</div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label>اسم الشركة</Label>
+                      <Input {...form.register("firstPartyName")} data-testid="input-first-party-name" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>السجل التجاري / الهوية</Label>
+                      <Input {...form.register("firstPartyIdNumber")} placeholder="رقم السجل التجاري" data-testid="input-first-party-id" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>الممثل / المخوّل بالتوقيع</Label>
+                      <Input {...form.register("firstPartyRepresentative")} placeholder="الاسم الكامل" data-testid="input-first-party-rep" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>المنصب</Label>
+                      <Input {...form.register("firstPartyTitle")} data-testid="input-first-party-title" />
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3 border-t pt-3">
+                  <div className="space-y-2">
+                    <Label>تاريخ التوقيع</Label>
+                    <Input type="date" {...form.register("signatureDate")} data-testid="input-signature-date" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>مكان التوقيع</Label>
+                    <Input {...form.register("signatureLocation")} data-testid="input-signature-location" />
+                  </div>
+                </div>
+              </div>
+            </details>
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsAddOpen(false)}>

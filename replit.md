@@ -41,6 +41,7 @@ The system uses a modern web architecture with a React-based frontend and a Node
 - **Enhanced BOQ & Automatic Accounting Integration**: Hierarchical Bill of Quantities with Excel import, and automatic journal entry creation for contract events (variation approval, retention release, liquidated damages).
 - **Liquidated Damages & Contract Templates**: Structured tracking of late-delivery penalties and reusable contract templates for various contract types.
 - **Contract Variations & Bank Guarantees**: Tracking of additions/deductions/scope changes/time extensions, and management of contractor-provided bank guarantees.
+- **Auto Contract Numbering & Official Document (Phase 6)**: Automatic `CON-YYYY-NNNN` numbering on creation, expanded fields for scope of work, terms & conditions, parties, signature data; printable A4 RTL official contract document exportable as PDF via react-to-print.
 
 ### Performance Optimization
 - **Caching**: Server-side in-memory, client-side persistent, and report-specific TTLs.

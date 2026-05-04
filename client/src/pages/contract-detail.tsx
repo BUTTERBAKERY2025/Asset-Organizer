@@ -31,7 +31,7 @@ import { apiRequest, queryClient as globalQueryClient } from "@/lib/queryClient"
 import {
   ArrowRight, Plus, Pencil, Trash2, Loader2, FileText,
   Calendar, DollarSign, Building2, User, CheckCircle2, Clock,
-  AlertCircle, Send, Wallet, Receipt, TrendingUp,
+  AlertCircle, Send, Wallet, Receipt, TrendingUp, Printer,
 } from "lucide-react";
 import type {
   ConstructionContract, Contractor, ConstructionProject,
@@ -40,6 +40,9 @@ import type {
 import { ContractVariationsCard, ContractGuaranteesCard } from "@/components/contract-variations-guarantees";
 import { ContractLiquidatedDamagesCard } from "@/components/contract-liquidated-damages";
 import { ContractAccountingCard, ContractBoqCard } from "@/components/contract-accounting-card";
+import { ContractDocument } from "@/components/contract-document";
+import { useRef } from "react";
+import { useReactToPrint } from "react-to-print";
 
 // ============================================================
 // Form schema for milestones
@@ -111,6 +114,9 @@ export default function ContractDetailPage() {
   const [isRetentionSettingsOpen, setIsRetentionSettingsOpen] = useState(false);
   const [isReleaseRetentionOpen, setIsReleaseRetentionOpen] = useState(false);
   const [retentionForm, setRetentionForm] = useState({ percentage: 0, releaseDate: "" });
+  // Phase 6: Official document
+  const [isDocumentOpen, setIsDocumentOpen] = useState(false);
+  const documentRef = useRef<HTMLDivElement>(null);
 
   // ============================================================
   // Data fetching
@@ -159,6 +165,12 @@ export default function ContractDetailPage() {
     () => projects.find((p) => p.id === contract?.projectId),
     [projects, contract],
   );
+
+  // Phase 6: Print handler (must be after contract is in scope)
+  const handlePrintDocument = useReactToPrint({
+    contentRef: documentRef,
+    documentTitle: `عقد-${contract?.contractNumber || contractId}`,
+  } as any);
 
   // ============================================================
   // Financial summary (computed)
@@ -408,6 +420,14 @@ export default function ContractDetailPage() {
                   <p className="text-sm text-muted-foreground" data-testid="text-contract-description">{contract.description}</p>
                 )}
               </div>
+              <Button
+                onClick={() => setIsDocumentOpen(true)}
+                className="bg-amber-700 hover:bg-amber-800 text-white"
+                data-testid="button-print-contract"
+              >
+                <Printer className="h-4 w-4 ml-2" />
+                طباعة العقد الرسمي
+              </Button>
             </div>
           </CardHeader>
           <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
@@ -883,6 +903,32 @@ export default function ContractDetailPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Phase 6: Official Contract Document */}
+      <Dialog open={isDocumentOpen} onOpenChange={setIsDocumentOpen}>
+        <DialogContent className="max-w-5xl max-h-[95vh] overflow-y-auto p-0">
+          <DialogHeader className="p-4 border-b sticky top-0 bg-background z-10 flex-row items-center justify-between">
+            <div>
+              <DialogTitle>العقد الرسمي للطباعة</DialogTitle>
+              <DialogDescription>وثيقة عقد موحّدة بين الطرفين</DialogDescription>
+            </div>
+            <Button onClick={() => handlePrintDocument?.()} className="bg-amber-700 hover:bg-amber-800" data-testid="button-do-print">
+              <Printer className="h-4 w-4 ml-2" />
+              طباعة / حفظ PDF
+            </Button>
+          </DialogHeader>
+          <div className="bg-gray-100 p-4">
+            <ContractDocument
+              ref={documentRef}
+              contract={contract}
+              contractor={contractor}
+              project={project}
+              milestones={milestones}
+              boqItems={items}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }

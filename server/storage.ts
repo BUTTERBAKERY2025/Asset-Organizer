@@ -2014,14 +2014,50 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createContract(contract: InsertConstructionContract): Promise<ConstructionContract> {
-    const [newContract] = await db.insert(constructionContracts).values(contract).returning();
-    return newContract;
+    // Phase 6: Auto-generate contract number if not provided: CON-YYYY-NNNN
+    // Race-safe: retry on unique violation (Postgres code 23505) up to 5 times.
+    const year = new Date().getFullYear();
+    const userProvidedNumber = !!(contract.contractNumber && String(contract.contractNumber).trim() !== "");
+
+    const maxRetries = userProvidedNumber ? 1 : 5;
+    let lastErr: any = null;
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      const finalContract: any = { ...contract, contractYear: year };
+      if (!userProvidedNumber) {
+        const yearRows: any = await db
+          .select({ id: constructionContracts.id })
+          .from(constructionContracts)
+          .where(eq(constructionContracts.contractYear, year));
+        const count = Array.isArray(yearRows) ? yearRows.length : (yearRows?.rows?.length || 0);
+        // Add attempt offset so a collided retry skips ahead
+        const seq = String(count + 1 + attempt).padStart(4, '0');
+        finalContract.contractNumber = `CON-${year}-${seq}`;
+      }
+      try {
+        const inserted: any = await db.insert(constructionContracts).values(finalContract).returning();
+        const rows = Array.isArray(inserted) ? inserted : (inserted?.rows || []);
+        return rows[0];
+      } catch (err: any) {
+        lastErr = err;
+        // Postgres unique_violation
+        if (err?.code === '23505' && !userProvidedNumber) {
+          continue; // try next sequence
+        }
+        throw err;
+      }
+    }
+    throw lastErr || new Error('Failed to create contract after retries');
   }
 
   async updateContract(id: number, contract: Partial<InsertConstructionContract>): Promise<ConstructionContract | undefined> {
+    // Phase 6: Never blank-out contractNumber via PATCH — drop empty values.
+    const sanitized: any = { ...contract };
+    if ('contractNumber' in sanitized && (sanitized.contractNumber == null || String(sanitized.contractNumber).trim() === '')) {
+      delete sanitized.contractNumber;
+    }
     const [updated] = await db
       .update(constructionContracts)
-      .set({ ...contract, updatedAt: new Date() })
+      .set({ ...sanitized, updatedAt: new Date() })
       .where(eq(constructionContracts.id, id))
       .returning();
     return updated || undefined;
