@@ -21,6 +21,8 @@ const pageImports: Record<string, () => Promise<any>> = {
   "payment-requests": () => import("@/pages/payment-requests"),
   "contractor-statements": () => import("@/pages/contractor-statements"),
   "contractor-statement-detail": () => import("@/pages/contractor-statement-detail"),
+  "contractor-oversight": () => import("@/pages/contractor-oversight"),
+  "contract-templates": () => import("@/pages/contract-templates"),
   "daily-logs-list": () => import("@/pages/daily-logs-list"),
   "daily-work-log": () => import("@/pages/daily-work-log"),
   "daily-log-print": () => import("@/pages/daily-log-print"),
