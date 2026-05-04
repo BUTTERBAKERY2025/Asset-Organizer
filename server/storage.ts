@@ -550,6 +550,19 @@ import {
   posHeldOrders,
   type PosHeldOrder,
   type InsertPosHeldOrder,
+  // Phase 8: Field Hub
+  fieldChecklistTemplates,
+  type FieldChecklistTemplate,
+  type InsertFieldChecklistTemplate,
+  fieldChecklistTemplateItems,
+  type FieldChecklistTemplateItem,
+  type InsertFieldChecklistTemplateItem,
+  fieldChecklists,
+  type FieldChecklist,
+  type InsertFieldChecklist,
+  fieldChecklistItems,
+  type FieldChecklistItem,
+  type InsertFieldChecklistItem,
 } from "@shared/schema";
 
 type TransferHistory = typeof transferHistory.$inferSelect;
@@ -1482,6 +1495,73 @@ export interface IStorage {
     paymentMethod: string;
     invoiceNumber: string;
   }[]>;
+
+  // ============== Phase 8: Field Hub - Checklists ==============
+  getFieldChecklistTemplates(includeInactive?: boolean): Promise<FieldChecklistTemplate[]>;
+  getFieldChecklistTemplate(id: number): Promise<FieldChecklistTemplate | undefined>;
+  getFieldChecklistTemplateItems(templateId: number): Promise<FieldChecklistTemplateItem[]>;
+  createFieldChecklistTemplate(
+    template: InsertFieldChecklistTemplate,
+    items?: Omit<InsertFieldChecklistTemplateItem, "templateId">[],
+  ): Promise<FieldChecklistTemplate>;
+  updateFieldChecklistTemplate(
+    id: number,
+    template: Partial<InsertFieldChecklistTemplate>,
+  ): Promise<FieldChecklistTemplate | undefined>;
+  deleteFieldChecklistTemplate(id: number): Promise<boolean>;
+  replaceFieldChecklistTemplateItems(
+    templateId: number,
+    items: Omit<InsertFieldChecklistTemplateItem, "templateId">[],
+  ): Promise<FieldChecklistTemplateItem[]>;
+
+  getFieldChecklists(filters?: {
+    projectId?: number;
+    contractId?: number;
+    assignedTo?: string;
+    status?: string;
+    branchIds?: string[] | null;
+  }): Promise<FieldChecklist[]>;
+  getFieldChecklist(id: number): Promise<FieldChecklist | undefined>;
+  getFieldChecklistItems(checklistId: number): Promise<FieldChecklistItem[]>;
+  createFieldChecklist(
+    data: InsertFieldChecklist,
+    items?: Omit<InsertFieldChecklistItem, "checklistId">[],
+  ): Promise<FieldChecklist>;
+  createFieldChecklistFromTemplate(input: {
+    templateId: number;
+    title?: string;
+    projectId?: number | null;
+    contractId?: number | null;
+    dailyLogId?: number | null;
+    branchId?: string | null;
+    assignedTo?: string | null;
+    dueDate?: string | null;
+    notes?: string | null;
+    createdBy: string;
+  }): Promise<FieldChecklist>;
+  updateFieldChecklist(
+    id: number,
+    data: Partial<InsertFieldChecklist>,
+  ): Promise<FieldChecklist | undefined>;
+  deleteFieldChecklist(id: number): Promise<boolean>;
+  updateFieldChecklistItem(
+    itemId: number,
+    data: { status?: string; notes?: string | null; photos?: any; checkedBy?: string },
+  ): Promise<FieldChecklistItem | undefined>;
+  completeFieldChecklist(
+    id: number,
+    completedBy: string,
+  ): Promise<FieldChecklist | undefined>;
+  getFieldHubData(
+    userId: string,
+    branchIds: string[] | null,
+  ): Promise<{
+    projects: any[];
+    todayLogs: any[];
+    openChecklists: FieldChecklist[];
+    recentPhotos: any[];
+    stats: { openChecklists: number; overdueChecklists: number; logsToday: number };
+  }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -16514,6 +16594,413 @@ export class DatabaseStorage implements IStorage {
       paymentMethod: r.paymentMethod || '',
       invoiceNumber: r.invoiceNumber || '',
     }));
+  }
+
+  // ============================================================
+  // Phase 8: Field Hub - Checklists implementation
+  // ============================================================
+  async getFieldChecklistTemplates(includeInactive = false): Promise<FieldChecklistTemplate[]> {
+    if (includeInactive) {
+      return await db.select().from(fieldChecklistTemplates).orderBy(desc(fieldChecklistTemplates.createdAt));
+    }
+    return await db
+      .select()
+      .from(fieldChecklistTemplates)
+      .where(eq(fieldChecklistTemplates.isActive, true))
+      .orderBy(desc(fieldChecklistTemplates.createdAt));
+  }
+
+  async getFieldChecklistTemplate(id: number): Promise<FieldChecklistTemplate | undefined> {
+    const [row] = await db.select().from(fieldChecklistTemplates).where(eq(fieldChecklistTemplates.id, id));
+    return row || undefined;
+  }
+
+  async getFieldChecklistTemplateItems(templateId: number): Promise<FieldChecklistTemplateItem[]> {
+    return await db
+      .select()
+      .from(fieldChecklistTemplateItems)
+      .where(eq(fieldChecklistTemplateItems.templateId, templateId))
+      .orderBy(fieldChecklistTemplateItems.sequence);
+  }
+
+  async createFieldChecklistTemplate(
+    template: InsertFieldChecklistTemplate,
+    items: Omit<InsertFieldChecklistTemplateItem, "templateId">[] = [],
+  ): Promise<FieldChecklistTemplate> {
+    return await db.transaction(async (tx) => {
+      const [created] = await tx.insert(fieldChecklistTemplates).values(template).returning();
+      if (items.length) {
+        await tx.insert(fieldChecklistTemplateItems).values(
+          items.map((it, idx) => ({
+            ...it,
+            templateId: created.id,
+            sequence: it.sequence ?? idx + 1,
+          })),
+        );
+      }
+      return created;
+    });
+  }
+
+  async updateFieldChecklistTemplate(
+    id: number,
+    template: Partial<InsertFieldChecklistTemplate>,
+  ): Promise<FieldChecklistTemplate | undefined> {
+    const [row] = await db
+      .update(fieldChecklistTemplates)
+      .set({ ...template, updatedAt: new Date() })
+      .where(eq(fieldChecklistTemplates.id, id))
+      .returning();
+    return row || undefined;
+  }
+
+  async deleteFieldChecklistTemplate(id: number): Promise<boolean> {
+    const result = await db.delete(fieldChecklistTemplates).where(eq(fieldChecklistTemplates.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async replaceFieldChecklistTemplateItems(
+    templateId: number,
+    items: Omit<InsertFieldChecklistTemplateItem, "templateId">[],
+  ): Promise<FieldChecklistTemplateItem[]> {
+    return await db.transaction(async (tx) => {
+      await tx.delete(fieldChecklistTemplateItems).where(eq(fieldChecklistTemplateItems.templateId, templateId));
+      if (!items.length) return [];
+      const inserted = await tx
+        .insert(fieldChecklistTemplateItems)
+        .values(
+          items.map((it, idx) => ({
+            ...it,
+            templateId,
+            sequence: it.sequence ?? idx + 1,
+          })),
+        )
+        .returning();
+      return inserted;
+    });
+  }
+
+  async getFieldChecklists(filters: {
+    projectId?: number;
+    contractId?: number;
+    assignedTo?: string;
+    status?: string;
+    branchIds?: string[] | null;
+  } = {}): Promise<FieldChecklist[]> {
+    const conds: any[] = [];
+    if (filters.projectId) conds.push(eq(fieldChecklists.projectId, filters.projectId));
+    if (filters.contractId) conds.push(eq(fieldChecklists.contractId, filters.contractId));
+    if (filters.assignedTo) conds.push(eq(fieldChecklists.assignedTo, filters.assignedTo));
+    if (filters.status) conds.push(eq(fieldChecklists.status, filters.status));
+    if (filters.branchIds !== null && filters.branchIds !== undefined) {
+      // empty array = deny all (no branch access)
+      if (filters.branchIds.length === 0) {
+        return [];
+      }
+      conds.push(
+        or(
+          inArray(fieldChecklists.branchId, filters.branchIds),
+          isNull(fieldChecklists.branchId),
+        ),
+      );
+    }
+    const q = conds.length ? db.select().from(fieldChecklists).where(and(...conds)) : db.select().from(fieldChecklists);
+    return await q.orderBy(desc(fieldChecklists.createdAt));
+  }
+
+  async getFieldChecklist(id: number): Promise<FieldChecklist | undefined> {
+    const [row] = await db.select().from(fieldChecklists).where(eq(fieldChecklists.id, id));
+    return row || undefined;
+  }
+
+  async getFieldChecklistItems(checklistId: number): Promise<FieldChecklistItem[]> {
+    return await db
+      .select()
+      .from(fieldChecklistItems)
+      .where(eq(fieldChecklistItems.checklistId, checklistId))
+      .orderBy(fieldChecklistItems.sequence);
+  }
+
+  async createFieldChecklist(
+    data: InsertFieldChecklist,
+    items: Omit<InsertFieldChecklistItem, "checklistId">[] = [],
+  ): Promise<FieldChecklist> {
+    return await db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(fieldChecklists)
+        .values({ ...data, totalCount: items.length })
+        .returning();
+      if (items.length) {
+        await tx.insert(fieldChecklistItems).values(
+          items.map((it, idx) => ({
+            ...it,
+            checklistId: created.id,
+            sequence: it.sequence ?? idx + 1,
+            status: it.status ?? "pending",
+          })),
+        );
+      }
+      return created;
+    });
+  }
+
+  async createFieldChecklistFromTemplate(input: {
+    templateId: number;
+    title?: string;
+    projectId?: number | null;
+    contractId?: number | null;
+    dailyLogId?: number | null;
+    branchId?: string | null;
+    assignedTo?: string | null;
+    dueDate?: string | null;
+    notes?: string | null;
+    createdBy: string;
+  }): Promise<FieldChecklist> {
+    const tpl = await this.getFieldChecklistTemplate(input.templateId);
+    if (!tpl) throw new Error("القالب غير موجود");
+    const tplItems = await this.getFieldChecklistTemplateItems(input.templateId);
+    return await this.createFieldChecklist(
+      {
+        templateId: tpl.id,
+        title: input.title || tpl.name,
+        category: tpl.category,
+        projectId: input.projectId ?? null,
+        contractId: input.contractId ?? null,
+        dailyLogId: input.dailyLogId ?? null,
+        branchId: input.branchId ?? null,
+        assignedTo: input.assignedTo ?? null,
+        dueDate: input.dueDate ?? null,
+        notes: input.notes ?? null,
+        status: "open",
+        createdBy: input.createdBy,
+      } as InsertFieldChecklist,
+      tplItems.map((it) => ({
+        sequence: it.sequence,
+        text: it.text,
+        isRequired: it.isRequired,
+        requiresPhoto: it.requiresPhoto,
+        notes: it.notes ?? null,
+        status: "pending",
+      })),
+    );
+  }
+
+  async updateFieldChecklist(
+    id: number,
+    data: Partial<InsertFieldChecklist>,
+  ): Promise<FieldChecklist | undefined> {
+    const [row] = await db
+      .update(fieldChecklists)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(fieldChecklists.id, id))
+      .returning();
+    return row || undefined;
+  }
+
+  async deleteFieldChecklist(id: number): Promise<boolean> {
+    const result = await db.delete(fieldChecklists).where(eq(fieldChecklists.id, id)).returning();
+    return result.length > 0;
+  }
+
+  private async recountFieldChecklist(checklistId: number): Promise<void> {
+    const items = await this.getFieldChecklistItems(checklistId);
+    const total = items.length;
+    const pass = items.filter((i) => i.status === "pass").length;
+    const fail = items.filter((i) => i.status === "fail").length;
+    const na = items.filter((i) => i.status === "na").length;
+    const anyChecked = items.some((i) => i.status !== "pending");
+    const cur = await this.getFieldChecklist(checklistId);
+    const nextStatus =
+      cur?.status === "completed" || cur?.status === "cancelled"
+        ? cur.status
+        : anyChecked
+        ? "in_progress"
+        : "open";
+    await db
+      .update(fieldChecklists)
+      .set({
+        passCount: pass,
+        failCount: fail,
+        naCount: na,
+        totalCount: total,
+        status: nextStatus,
+        updatedAt: new Date(),
+      })
+      .where(eq(fieldChecklists.id, checklistId));
+  }
+
+  async updateFieldChecklistItem(
+    itemId: number,
+    data: { status?: string; notes?: string | null; photos?: any; checkedBy?: string; checklistId?: number },
+  ): Promise<FieldChecklistItem | undefined> {
+    const updates: any = {};
+    if (data.status !== undefined) updates.status = data.status;
+    if (data.notes !== undefined) updates.notes = data.notes;
+    if (data.photos !== undefined) updates.photos = data.photos;
+    if (data.status && data.status !== "pending") {
+      updates.checkedAt = new Date();
+      if (data.checkedBy) updates.checkedBy = data.checkedBy;
+    }
+    return await db.transaction(async (tx) => {
+      const conds: any[] = [eq(fieldChecklistItems.id, itemId)];
+      if (data.checklistId !== undefined) {
+        conds.push(eq(fieldChecklistItems.checklistId, data.checklistId));
+      }
+      const [row] = await tx
+        .update(fieldChecklistItems)
+        .set(updates)
+        .where(and(...conds))
+        .returning();
+      if (!row) return undefined;
+      // Recount inline within tx
+      const allItems = await tx
+        .select()
+        .from(fieldChecklistItems)
+        .where(eq(fieldChecklistItems.checklistId, row.checklistId));
+      const total = allItems.length;
+      const pass = allItems.filter((i) => i.status === "pass").length;
+      const fail = allItems.filter((i) => i.status === "fail").length;
+      const na = allItems.filter((i) => i.status === "na").length;
+      const anyChecked = allItems.some((i) => i.status !== "pending");
+      const [cur] = await tx.select().from(fieldChecklists).where(eq(fieldChecklists.id, row.checklistId));
+      const nextStatus =
+        cur && (cur.status === "completed" || cur.status === "cancelled")
+          ? cur.status
+          : anyChecked
+          ? "in_progress"
+          : "open";
+      await tx
+        .update(fieldChecklists)
+        .set({
+          passCount: pass,
+          failCount: fail,
+          naCount: na,
+          totalCount: total,
+          status: nextStatus,
+          updatedAt: new Date(),
+        })
+        .where(eq(fieldChecklists.id, row.checklistId));
+      return row;
+    });
+  }
+
+  async completeFieldChecklist(
+    id: number,
+    completedBy: string,
+  ): Promise<FieldChecklist | undefined> {
+    const items = await this.getFieldChecklistItems(id);
+    const requiredOpen = items.filter((i) => i.isRequired && i.status === "pending");
+    if (requiredOpen.length > 0) {
+      throw new Error(`يوجد ${requiredOpen.length} بند إجباري لم يُفحص بعد`);
+    }
+    const missingPhoto = items.filter(
+      (i) =>
+        i.requiresPhoto &&
+        i.status !== "na" &&
+        (!Array.isArray(i.photos) || (i.photos as any[]).length === 0),
+    );
+    if (missingPhoto.length > 0) {
+      throw new Error(`يوجد ${missingPhoto.length} بند يتطلب صورة لم تُرفع`);
+    }
+    const [row] = await db
+      .update(fieldChecklists)
+      .set({
+        status: "completed",
+        completedAt: new Date(),
+        completedBy,
+        updatedAt: new Date(),
+      })
+      .where(eq(fieldChecklists.id, id))
+      .returning();
+    return row || undefined;
+  }
+
+  async getFieldHubData(
+    userId: string,
+    branchIds: string[] | null,
+  ): Promise<{
+    projects: any[];
+    todayLogs: any[];
+    openChecklists: FieldChecklist[];
+    recentPhotos: any[];
+    stats: { openChecklists: number; overdueChecklists: number; logsToday: number };
+  }> {
+    const today = new Date().toISOString().slice(0, 10);
+    // Projects accessible to the user
+    const projConds: any[] = [];
+    if (branchIds && branchIds.length > 0) {
+      projConds.push(
+        or(
+          inArray(constructionProjects.branchId, branchIds),
+          isNull(constructionProjects.branchId),
+        ),
+      );
+    }
+    const projects = await (projConds.length
+      ? db.select().from(constructionProjects).where(and(...projConds))
+      : db.select().from(constructionProjects)
+    )
+      .orderBy(desc(constructionProjects.createdAt))
+      .limit(20);
+
+    const projectIds = projects.map((p) => p.id);
+
+    // Today's logs for these projects
+    const todayLogs = projectIds.length
+      ? await db
+          .select()
+          .from(projectDailyLogs)
+          .where(and(inArray(projectDailyLogs.projectId, projectIds), eq(projectDailyLogs.logDate, today)))
+          .orderBy(desc(projectDailyLogs.createdAt))
+      : [];
+
+    // Open checklists assigned to user OR in their projects
+    const checklistConds: any[] = [
+      or(eq(fieldChecklists.status, "open"), eq(fieldChecklists.status, "in_progress")) as any,
+    ];
+    if (projectIds.length) {
+      checklistConds.push(
+        or(eq(fieldChecklists.assignedTo, userId), inArray(fieldChecklists.projectId, projectIds)) as any,
+      );
+    } else {
+      checklistConds.push(eq(fieldChecklists.assignedTo, userId));
+    }
+    const openChecklists = await db
+      .select()
+      .from(fieldChecklists)
+      .where(and(...checklistConds))
+      .orderBy(desc(fieldChecklists.createdAt))
+      .limit(50);
+
+    // Recent photos in their projects (last 20)
+    let recentPhotos: any[] = [];
+    if (projectIds.length) {
+      const r = await db.execute(sql`
+        SELECT p.*, l.project_id AS "projectId", l.log_date AS "logDate"
+        FROM project_daily_log_photos p
+        JOIN project_daily_logs l ON l.id = p.daily_log_id
+        WHERE l.project_id = ANY(${projectIds}::int[])
+        ORDER BY p.uploaded_at DESC
+        LIMIT 20
+      `);
+      recentPhotos = (r as any).rows || (r as any) || [];
+    }
+
+    const overdue = openChecklists.filter(
+      (c) => c.dueDate && c.dueDate < today,
+    ).length;
+
+    return {
+      projects,
+      todayLogs,
+      openChecklists,
+      recentPhotos,
+      stats: {
+        openChecklists: openChecklists.length,
+        overdueChecklists: overdue,
+        logsToday: todayLogs.length,
+      },
+    };
   }
 }
 

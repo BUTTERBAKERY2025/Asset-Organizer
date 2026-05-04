@@ -29,6 +29,9 @@ const MaintenancePage = makeLazy("maintenance");
 const InspectionsPage = makeLazy("inspections");
 const UsersPage = makeLazy("users");
 const ConstructionProjectsPage = makeLazy("construction-projects");
+const FieldHubPage = makeLazy("field-hub");
+const FieldChecklistTemplatesPage = makeLazy("field-checklist-templates");
+const FieldChecklistDetailPage = makeLazy("field-checklist-detail");
 const ConstructionProjectDetailPage = makeLazy("construction-project-detail");
 const ContractorsPage = makeLazy("contractors");
 const ReportsPage = makeLazy("reports");
@@ -328,6 +331,9 @@ const Router = React.memo(function Router() {
       <Route path="/construction/daily-logs/:id/print">{() => <ModulePage component={DailyLogPrintPage} module="project_daily_logs" />}</Route>
       <Route path="/construction/daily-logs/:id/edit">{() => <ModulePage component={DailyWorkLogPage} module="project_daily_logs" />}</Route>
       <Route path="/construction/daily-logs/:id">{() => <ModulePage component={DailyWorkLogPage} module="project_daily_logs" />}</Route>
+      <Route path="/field-hub">{() => <ModulePage component={FieldHubPage} module="construction_projects" />}</Route>
+      <Route path="/field-checklists/templates">{() => <ModulePage component={FieldChecklistTemplatesPage} module="construction_projects" />}</Route>
+      <Route path="/field-checklists/:id">{() => <ModulePage component={FieldChecklistDetailPage} module="construction_projects" />}</Route>
       
       {/* Marketing - التسويق */}
       <Route path="/marketing">{() => <ModulePage component={MarketingDashboardPage} module="marketing" />}</Route>

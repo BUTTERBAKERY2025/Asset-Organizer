@@ -98,6 +98,7 @@ import {
   generateSingleTimesheetPdf,
   generateAttendanceLogPdf, type AttendanceLogPdfData
 } from "./pdf-generator";
+import { insertFieldChecklistTemplateSchema, insertFieldChecklistTemplateItemSchema, insertFieldChecklistSchema, insertFieldChecklistItemSchema } from "@shared/schema";
 import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertContractMilestoneSchema, insertContractVariationSchema, insertContractGuaranteeSchema, insertContractTemplateSchema, insertProjectExpenseSchema, insertProjectDailyLogSchema, insertProjectDailyLogPhotoSchema, insertDailyLogActivitySchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertInfluencerContractSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema, isMadeToOrderCategory, suggestCategoryFromProductName, userBranchAccess } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, isUserAdmin, getAllowedBranchIds, getEffectiveBranchFilter, invalidateAuthCache } from "./auth";
@@ -4012,6 +4013,338 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error deleting photo:", error);
       res.status(500).json({ error: "فشل في حذف الصورة" });
+    }
+  });
+
+  // ============================================================
+  // Phase 8: Field Hub - Checklist Templates + Checklists
+  // ============================================================
+  // List templates
+  // Helper: verify branch access for a checklist (handles project-linked or branch-only)
+  async function checkChecklistAccess(req: any, checklist: { projectId: number | null; branchId: string | null; assignedTo: string | null; createdBy: string }): Promise<boolean> {
+    if (checklist.projectId) {
+      const a = await checkProjectBranchAccess(req, checklist.projectId);
+      return a.allowed;
+    }
+    const isAdminUser = await isUserAdmin(req);
+    if (isAdminUser) return true;
+    const userId = req.currentUser?.id;
+    if (checklist.assignedTo === userId || checklist.createdBy === userId) return true;
+    if (!checklist.branchId) return false; // no branch & not yours → deny
+    return await canAccessBranch(req, checklist.branchId);
+  }
+
+  app.get("/api/field-checklist-templates", isAuthenticated, requirePermission("construction_projects", "view"), async (req, res) => {
+    try {
+      const includeInactive = req.query.includeInactive === "true";
+      const tpls = await storage.getFieldChecklistTemplates(includeInactive);
+      res.json(tpls);
+    } catch (error) {
+      console.error("Error fetching field-checklist-templates:", error);
+      res.status(500).json({ error: "فشل في جلب قوالب قوائم التحقق" });
+    }
+  });
+
+  // Get one template + its items
+  app.get("/api/field-checklist-templates/:id", isAuthenticated, requirePermission("construction_projects", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const template = await storage.getFieldChecklistTemplate(id);
+      if (!template) return res.status(404).json({ error: "القالب غير موجود" });
+      const items = await storage.getFieldChecklistTemplateItems(id);
+      res.json({ template, items });
+    } catch (error) {
+      console.error("Error fetching field-checklist-template:", error);
+      res.status(500).json({ error: "فشل في جلب القالب" });
+    }
+  });
+
+  // Create template (admin / construction managers)
+  app.post("/api/field-checklist-templates", isAuthenticated, async (req, res) => {
+    try {
+      const userRole = (req as any).currentUser?.role;
+      const allowed = ["admin", "ceo", "general_manager", "construction_manager", "project_manager"];
+      if (!allowed.includes(userRole)) {
+        return res.status(403).json({ error: "غير مصرح بإنشاء القوالب" });
+      }
+      const itemsRaw: any[] = Array.isArray(req.body.items) ? req.body.items : [];
+      const validated = insertFieldChecklistTemplateSchema.parse({
+        ...req.body,
+        createdBy: (req as any).currentUser?.id,
+      });
+      const items = itemsRaw.map((it: any, idx: number) => ({
+        sequence: it.sequence ?? idx + 1,
+        text: String(it.text || "").trim(),
+        isRequired: it.isRequired !== false,
+        requiresPhoto: !!it.requiresPhoto,
+        notes: it.notes ?? null,
+      })).filter(it => it.text.length > 0);
+      const created = await storage.createFieldChecklistTemplate(validated, items);
+      res.status(201).json(created);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      console.error("Error creating field-checklist-template:", error);
+      res.status(500).json({ error: "فشل في إنشاء القالب" });
+    }
+  });
+
+  app.put("/api/field-checklist-templates/:id", isAuthenticated, async (req, res) => {
+    try {
+      const userRole = (req as any).currentUser?.role;
+      const allowed = ["admin", "ceo", "general_manager", "construction_manager", "project_manager"];
+      if (!allowed.includes(userRole)) {
+        return res.status(403).json({ error: "غير مصرح بتعديل القوالب" });
+      }
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const updates = insertFieldChecklistTemplateSchema.partial().parse(req.body);
+      const updated = await storage.updateFieldChecklistTemplate(id, updates);
+      if (!updated) return res.status(404).json({ error: "القالب غير موجود" });
+      if (Array.isArray(req.body.items)) {
+        const items = req.body.items.map((it: any, idx: number) => ({
+          sequence: it.sequence ?? idx + 1,
+          text: String(it.text || "").trim(),
+          isRequired: it.isRequired !== false,
+          requiresPhoto: !!it.requiresPhoto,
+          notes: it.notes ?? null,
+        })).filter((it: any) => it.text.length > 0);
+        await storage.replaceFieldChecklistTemplateItems(id, items);
+      }
+      res.json(updated);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      console.error("Error updating field-checklist-template:", error);
+      res.status(500).json({ error: "فشل في تحديث القالب" });
+    }
+  });
+
+  app.delete("/api/field-checklist-templates/:id", isAuthenticated, async (req, res) => {
+    try {
+      const userRole = (req as any).currentUser?.role;
+      const allowed = ["admin", "ceo", "general_manager", "construction_manager"];
+      if (!allowed.includes(userRole)) {
+        return res.status(403).json({ error: "غير مصرح بحذف القوالب" });
+      }
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const ok = await storage.deleteFieldChecklistTemplate(id);
+      res.json({ success: ok });
+    } catch (error) {
+      console.error("Error deleting field-checklist-template:", error);
+      res.status(500).json({ error: "فشل في حذف القالب" });
+    }
+  });
+
+  // List checklists (filtered by user's branches)
+  app.get("/api/field-checklists", isAuthenticated, requirePermission("construction_projects", "view"), async (req, res) => {
+    try {
+      const userId = (req as any).currentUser?.id;
+      const isAdminUser = await isUserAdmin(req as any);
+      const branchIds = isAdminUser ? null : await getAllowedBranchIds(req as any);
+      const filters: any = {};
+      if (req.query.projectId) filters.projectId = parseInt(req.query.projectId as string, 10);
+      if (req.query.contractId) filters.contractId = parseInt(req.query.contractId as string, 10);
+      if (req.query.status) filters.status = String(req.query.status);
+      if (req.query.assignedToMe === "true") filters.assignedTo = userId;
+      filters.branchIds = branchIds;
+      const list = await storage.getFieldChecklists(filters);
+      res.json(list);
+    } catch (error) {
+      console.error("Error fetching field-checklists:", error);
+      res.status(500).json({ error: "فشل في جلب قوائم التحقق" });
+    }
+  });
+
+  // Get checklist + items
+  app.get("/api/field-checklists/:id", isAuthenticated, requirePermission("construction_projects", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const checklist = await storage.getFieldChecklist(id);
+      if (!checklist) return res.status(404).json({ error: "القائمة غير موجودة" });
+      if (!(await checkChecklistAccess(req as any, checklist))) {
+        return res.status(403).json({ error: "غير مصرح" });
+      }
+      const items = await storage.getFieldChecklistItems(id);
+      res.json({ checklist, items });
+    } catch (error) {
+      console.error("Error fetching field-checklist:", error);
+      res.status(500).json({ error: "فشل في جلب القائمة" });
+    }
+  });
+
+  // Create checklist (manual items, optional)
+  app.post("/api/field-checklists", isAuthenticated, requirePermission("construction_projects", "edit"), async (req, res) => {
+    try {
+      const userId = (req as any).currentUser?.id;
+      const itemsRaw: any[] = Array.isArray(req.body.items) ? req.body.items : [];
+      const validated = insertFieldChecklistSchema.parse({
+        ...req.body,
+        createdBy: userId,
+      });
+      if (validated.projectId) {
+        const access = await checkProjectBranchAccess(req as any, validated.projectId);
+        if (!access.allowed) return res.status(403).json({ error: "غير مصرح بهذا المشروع" });
+      }
+      const items = itemsRaw.map((it: any, idx: number) => ({
+        sequence: it.sequence ?? idx + 1,
+        text: String(it.text || "").trim(),
+        isRequired: it.isRequired !== false,
+        requiresPhoto: !!it.requiresPhoto,
+        notes: it.notes ?? null,
+        status: "pending",
+      })).filter(it => it.text.length > 0);
+      const created = await storage.createFieldChecklist(validated, items);
+      res.status(201).json(created);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      console.error("Error creating field-checklist:", error);
+      res.status(500).json({ error: "فشل في إنشاء القائمة" });
+    }
+  });
+
+  // Create checklist from a template
+  app.post("/api/field-checklists/from-template", isAuthenticated, requirePermission("construction_projects", "edit"), async (req, res) => {
+    try {
+      const userId = (req as any).currentUser?.id;
+      const { templateId, title, projectId, contractId, dailyLogId, branchId, assignedTo, dueDate, notes } = req.body;
+      if (!templateId) return res.status(400).json({ error: "templateId required" });
+      if (projectId) {
+        const access = await checkProjectBranchAccess(req as any, projectId);
+        if (!access.allowed) return res.status(403).json({ error: "غير مصرح بهذا المشروع" });
+      }
+      const created = await storage.createFieldChecklistFromTemplate({
+        templateId: Number(templateId),
+        title,
+        projectId: projectId ? Number(projectId) : null,
+        contractId: contractId ? Number(contractId) : null,
+        dailyLogId: dailyLogId ? Number(dailyLogId) : null,
+        branchId: branchId || null,
+        assignedTo: assignedTo || null,
+        dueDate: dueDate || null,
+        notes: notes || null,
+        createdBy: userId,
+      });
+      res.status(201).json(created);
+    } catch (error: any) {
+      console.error("Error creating from template:", error);
+      res.status(500).json({ error: error?.message || "فشل في إنشاء القائمة من القالب" });
+    }
+  });
+
+  // Update checklist (assignee, dueDate, notes, etc)
+  app.put("/api/field-checklists/:id", isAuthenticated, requirePermission("construction_projects", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const existing = await storage.getFieldChecklist(id);
+      if (!existing) return res.status(404).json({ error: "القائمة غير موجودة" });
+      if (!(await checkChecklistAccess(req as any, existing))) {
+        return res.status(403).json({ error: "غير مصرح" });
+      }
+      const updates = insertFieldChecklistSchema.partial().parse(req.body);
+      const updated = await storage.updateFieldChecklist(id, updates);
+      res.json(updated);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data", details: error.errors });
+      }
+      console.error("Error updating field-checklist:", error);
+      res.status(500).json({ error: "فشل في تحديث القائمة" });
+    }
+  });
+
+  app.delete("/api/field-checklists/:id", isAuthenticated, requirePermission("construction_projects", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const existing = await storage.getFieldChecklist(id);
+      if (!existing) return res.status(404).json({ error: "القائمة غير موجودة" });
+      const userRole = (req as any).currentUser?.role;
+      if (!(await checkChecklistAccess(req as any, existing))) {
+        return res.status(403).json({ error: "غير مصرح" });
+      }
+      const allowedRoles = ["admin", "ceo", "general_manager", "construction_manager", "project_manager"];
+      if (!allowedRoles.includes(userRole) && existing.createdBy !== (req as any).currentUser?.id) {
+        return res.status(403).json({ error: "غير مصرح بحذف هذه القائمة" });
+      }
+      const ok = await storage.deleteFieldChecklist(id);
+      res.json({ success: ok });
+    } catch (error) {
+      console.error("Error deleting field-checklist:", error);
+      res.status(500).json({ error: "فشل في حذف القائمة" });
+    }
+  });
+
+  // Update one item (status / notes / photos)
+  app.patch("/api/field-checklists/:id/items/:itemId", isAuthenticated, requirePermission("construction_projects", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const itemId = parseInt(req.params.itemId, 10);
+      if (isNaN(id) || isNaN(itemId)) return res.status(400).json({ error: "Invalid ID" });
+      const existing = await storage.getFieldChecklist(id);
+      if (!existing) return res.status(404).json({ error: "القائمة غير موجودة" });
+      if (existing.status === "completed" || existing.status === "cancelled") {
+        return res.status(400).json({ error: "لا يمكن تعديل بنود قائمة منتهية" });
+      }
+      if (!(await checkChecklistAccess(req as any, existing))) {
+        return res.status(403).json({ error: "غير مصرح" });
+      }
+      const allowedStatus = ["pending", "pass", "fail", "na"];
+      if (req.body.status && !allowedStatus.includes(req.body.status)) {
+        return res.status(400).json({ error: "حالة غير صالحة" });
+      }
+      const updated = await storage.updateFieldChecklistItem(itemId, {
+        status: req.body.status,
+        notes: req.body.notes,
+        photos: req.body.photos,
+        checkedBy: (req as any).currentUser?.id,
+        checklistId: id, // IDOR guard: ensure item belongs to this checklist
+      });
+      if (!updated) return res.status(404).json({ error: "البند غير موجود في هذه القائمة" });
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating checklist item:", error);
+      res.status(500).json({ error: "فشل في تحديث البند" });
+    }
+  });
+
+  // Complete checklist
+  app.post("/api/field-checklists/:id/complete", isAuthenticated, requirePermission("construction_projects", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const existing = await storage.getFieldChecklist(id);
+      if (!existing) return res.status(404).json({ error: "القائمة غير موجودة" });
+      if (!(await checkChecklistAccess(req as any, existing))) {
+        return res.status(403).json({ error: "غير مصرح" });
+      }
+      const completed = await storage.completeFieldChecklist(id, (req as any).currentUser?.id);
+      res.json(completed);
+    } catch (error: any) {
+      console.error("Error completing checklist:", error);
+      res.status(400).json({ error: error?.message || "فشل في إغلاق القائمة" });
+    }
+  });
+
+  // Field Hub dashboard data (mobile)
+  app.get("/api/field-hub", isAuthenticated, requirePermission("construction_projects", "view"), async (req, res) => {
+    try {
+      const userId = (req as any).currentUser?.id;
+      const isAdminUser = await isUserAdmin(req as any);
+      const branchIds = isAdminUser ? null : await getAllowedBranchIds(req as any);
+      const data = await storage.getFieldHubData(userId, branchIds);
+      res.json(data);
+    } catch (error) {
+      console.error("Error fetching field-hub data:", error);
+      res.status(500).json({ error: "فشل في جلب بيانات الميدان" });
     }
   });
 

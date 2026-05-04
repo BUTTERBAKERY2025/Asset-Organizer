@@ -859,6 +859,12 @@ export const projectDailyLogPhotos = pgTable("project_daily_log_photos", {
   photoUrl: text("photo_url").notNull(),
   caption: text("caption"),
   photoType: text("photo_type").default("during"), // before, during, after
+  // Phase 8: GPS metadata captured at the moment the photo was taken
+  gpsLatitude: real("gps_latitude"),
+  gpsLongitude: real("gps_longitude"),
+  gpsAccuracy: real("gps_accuracy"),
+  capturedAt: timestamp("captured_at"),
+  deviceInfo: text("device_info"),
   uploadedBy: varchar("uploaded_by").references(() => users.id),
   uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
 }, (table) => [
@@ -910,6 +916,118 @@ export const insertDailyLogActivitySchema = createInsertSchema(dailyLogActivitie
 
 export type DailyLogActivity = typeof dailyLogActivities.$inferSelect;
 export type InsertDailyLogActivity = z.infer<typeof insertDailyLogActivitySchema>;
+
+// ============================================================
+// Phase 8: Field Hub — Field Checklists + GPS-tagged Photos
+// (Names are prefixed with "field" to avoid clash with the Branch
+//  Shift checklist tables defined later in this file.)
+// ============================================================
+export const fieldChecklistTemplates = pgTable("field_checklist_templates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  // safety / quality / handover / commissioning / inspection / opening / maintenance
+  category: text("category").notNull(),
+  // optional: paint / tiling / hvac / plumbing / electrical / gypsum / glass / mdf / signage
+  trade: text("trade"),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_field_checklist_templates_category").on(table.category),
+  index("idx_field_checklist_templates_active").on(table.isActive),
+]);
+
+export const insertFieldChecklistTemplateSchema = createInsertSchema(fieldChecklistTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type FieldChecklistTemplate = typeof fieldChecklistTemplates.$inferSelect;
+export type InsertFieldChecklistTemplate = z.infer<typeof insertFieldChecklistTemplateSchema>;
+
+export const fieldChecklistTemplateItems = pgTable("field_checklist_template_items", {
+  id: serial("id").primaryKey(),
+  templateId: integer("template_id").notNull().references(() => fieldChecklistTemplates.id, { onDelete: "cascade" }),
+  sequence: integer("sequence").notNull(),
+  text: text("text").notNull(),
+  isRequired: boolean("is_required").default(true).notNull(),
+  requiresPhoto: boolean("requires_photo").default(false).notNull(),
+  notes: text("notes"),
+}, (table) => [
+  index("idx_field_checklist_template_items_template").on(table.templateId),
+]);
+
+export const insertFieldChecklistTemplateItemSchema = createInsertSchema(fieldChecklistTemplateItems).omit({ id: true });
+export type FieldChecklistTemplateItem = typeof fieldChecklistTemplateItems.$inferSelect;
+export type InsertFieldChecklistTemplateItem = z.infer<typeof insertFieldChecklistTemplateItemSchema>;
+
+// Checklist instance — a field checklist actually being filled in the field
+export const fieldChecklists = pgTable("field_checklists", {
+  id: serial("id").primaryKey(),
+  templateId: integer("template_id").references(() => fieldChecklistTemplates.id),
+  title: text("title").notNull(),
+  category: text("category").notNull(),
+  projectId: integer("project_id").references(() => constructionProjects.id, { onDelete: "cascade" }),
+  contractId: integer("contract_id").references(() => constructionContracts.id, { onDelete: "set null" }),
+  dailyLogId: integer("daily_log_id").references(() => projectDailyLogs.id, { onDelete: "set null" }),
+  branchId: varchar("branch_id").references(() => branches.id),
+  assignedTo: varchar("assigned_to").references(() => users.id),
+  dueDate: text("due_date"),
+  status: text("status").default("open").notNull(), // open / in_progress / completed / cancelled
+  completedAt: timestamp("completed_at"),
+  completedBy: varchar("completed_by").references(() => users.id),
+  passCount: integer("pass_count").default(0).notNull(),
+  failCount: integer("fail_count").default(0).notNull(),
+  naCount: integer("na_count").default(0).notNull(),
+  totalCount: integer("total_count").default(0).notNull(),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_field_checklists_project").on(table.projectId),
+  index("idx_field_checklists_contract").on(table.contractId),
+  index("idx_field_checklists_status").on(table.status),
+  index("idx_field_checklists_assigned").on(table.assignedTo),
+]);
+
+export const insertFieldChecklistSchema = createInsertSchema(fieldChecklists).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  completedAt: true,
+  completedBy: true,
+  passCount: true,
+  failCount: true,
+  naCount: true,
+  totalCount: true,
+});
+export type FieldChecklist = typeof fieldChecklists.$inferSelect;
+export type InsertFieldChecklist = z.infer<typeof insertFieldChecklistSchema>;
+
+export const fieldChecklistItems = pgTable("field_checklist_items", {
+  id: serial("id").primaryKey(),
+  checklistId: integer("checklist_id").notNull().references(() => fieldChecklists.id, { onDelete: "cascade" }),
+  sequence: integer("sequence").notNull(),
+  text: text("text").notNull(),
+  isRequired: boolean("is_required").default(true).notNull(),
+  requiresPhoto: boolean("requires_photo").default(false).notNull(),
+  status: text("status").default("pending").notNull(), // pending / pass / fail / na
+  notes: text("notes"),
+  // Photos as a JSON-encoded array: [{url, lat, lng, accuracy, capturedAt}]
+  photos: jsonb("photos"),
+  checkedBy: varchar("checked_by").references(() => users.id),
+  checkedAt: timestamp("checked_at"),
+}, (table) => [
+  index("idx_field_checklist_items_checklist").on(table.checklistId),
+]);
+
+export const insertFieldChecklistItemSchema = createInsertSchema(fieldChecklistItems).omit({ id: true });
+export type FieldChecklistItem = typeof fieldChecklistItems.$inferSelect;
+export type InsertFieldChecklistItem = z.infer<typeof insertFieldChecklistItemSchema>;
+
 
 // System Modules for permissions - جميع وحدات النظام
 export const SYSTEM_MODULES = [
