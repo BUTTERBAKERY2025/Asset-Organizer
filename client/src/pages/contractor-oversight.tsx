@@ -23,6 +23,7 @@ import {
   Star,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Layout } from "@/components/layout";
 
 type Alert = {
   id: string;
@@ -157,31 +158,36 @@ export default function ContractorOversightPage() {
 
   if (isLoading) {
     return (
-      <div className="p-4 md:p-6 space-y-4" dir="rtl">
-        <Skeleton className="h-10 w-64" />
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-28" />)}
+      <Layout>
+        <div className="p-4 md:p-6 space-y-4" dir="rtl">
+          <Skeleton className="h-10 w-64" />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-28" />)}
+          </div>
+          <Skeleton className="h-96" />
         </div>
-        <Skeleton className="h-96" />
-      </div>
+      </Layout>
     );
   }
 
   if (error || !data) {
     return (
-      <div className="p-6" dir="rtl">
-        <Card className="border-red-300">
-          <CardContent className="pt-6 text-center text-red-600">
-            تعذّر تحميل بيانات الرقابة. حاول التحديث.
-          </CardContent>
-        </Card>
-      </div>
+      <Layout>
+        <div className="p-6" dir="rtl">
+          <Card className="border-red-300">
+            <CardContent className="pt-6 text-center text-red-600">
+              تعذّر تحميل بيانات الرقابة. حاول التحديث.
+            </CardContent>
+          </Card>
+        </div>
+      </Layout>
     );
   }
 
   const { kpis, contractors, alerts } = data;
 
   return (
+    <Layout>
     <div className="p-4 md:p-6 space-y-5 max-w-[1600px] mx-auto" dir="rtl" data-testid="page-contractor-oversight">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -322,6 +328,7 @@ export default function ContractorOversightPage() {
         </TabsContent>
       </Tabs>
     </div>
+    </Layout>
   );
 }
 
