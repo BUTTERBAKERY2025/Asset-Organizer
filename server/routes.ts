@@ -2479,12 +2479,20 @@ export async function registerRoutes(
       });
       const contract = await storage.createContract(validatedData);
       res.status(201).json(contract);
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Invalid data", details: error.errors });
       }
       console.error("Error creating contract:", error);
-      res.status(500).json({ error: "Failed to create contract" });
+      // Phase 6: Surface specific DB errors to help diagnose missing migration on prod
+      const msg = error?.message || "Failed to create contract";
+      if (error?.code === '42703') {
+        return res.status(500).json({ error: `عمود مفقود في قاعدة البيانات: ${msg}. نفّذ migration 019 في Supabase.` });
+      }
+      if (error?.code === '23505') {
+        return res.status(409).json({ error: `رقم العقد مكرر: ${error?.detail || msg}` });
+      }
+      res.status(500).json({ error: `فشل إنشاء العقد: ${msg}` });
     }
   });
 

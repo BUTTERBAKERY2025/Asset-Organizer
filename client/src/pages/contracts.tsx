@@ -183,7 +183,10 @@ export default function ContractsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error("Failed to create contract");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || err.message || `HTTP ${res.status}`);
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -192,8 +195,8 @@ export default function ContractsPage() {
       form.reset();
       toast({ title: "تم إنشاء العقد بنجاح" });
     },
-    onError: () => {
-      toast({ title: "فشل في إنشاء العقد", variant: "destructive" });
+    onError: (e: any) => {
+      toast({ title: "فشل في إنشاء العقد", description: e?.message || "", variant: "destructive" });
     },
   });
 
