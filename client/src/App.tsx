@@ -39,6 +39,7 @@ const ContractDetailPage = makeLazy("contract-detail");
 const ContractTemplatesPage = makeLazy("contract-templates");
 const PaymentRequestsPage = makeLazy("payment-requests");
 const ContractorStatementsPage = makeLazy("contractor-statements");
+const ContractorOversightPage = makeLazy("contractor-oversight");
 const ContractorStatementDetailPage = makeLazy("contractor-statement-detail");
 const DailyLogsListPage = makeLazy("daily-logs-list");
 const DailyWorkLogPage = makeLazy("daily-work-log");
@@ -320,6 +321,7 @@ const Router = React.memo(function Router() {
       <Route path="/budget-planning">{() => <ModulePage component={BudgetPlanningPage} module="budget_planning" />}</Route>
       <Route path="/construction-reports">{() => <ModulePage component={ConstructionReportsPage} module="reports" />}</Route>
       <Route path="/contractor-statements">{() => <ModulePage component={ContractorStatementsPage} module="contractor_statements" />}</Route>
+      <Route path="/contractor-oversight">{() => <ModulePage component={ContractorOversightPage} module="contracts" />}</Route>
       <Route path="/contractors/:id/statement">{() => <ModulePage component={ContractorStatementDetailPage} module="contractor_statements" />}</Route>
       <Route path="/construction/daily-logs">{() => <ModulePage component={DailyLogsListPage} module="project_daily_logs" />}</Route>
       <Route path="/construction/daily-logs/new">{() => <ModulePage component={DailyWorkLogPage} module="project_daily_logs" />}</Route>

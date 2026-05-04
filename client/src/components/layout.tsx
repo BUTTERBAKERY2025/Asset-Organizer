@@ -16,7 +16,7 @@ import {
   Shield, MapPin, Megaphone, UserCheck, Calendar, UsersRound, Building, Briefcase,
   Receipt, PieChart, Lock, Layers, PieChartIcon, Share2, Languages, Warehouse,
   PackageCheck, Send, ShoppingCart, FolderOpen, Landmark, Scale, Vote, FileCheck,
-  Sparkles, Crown, Handshake, DoorOpen, Bell, Store
+  Sparkles, Crown, Handshake, DoorOpen, Bell, Store, ShieldAlert
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
@@ -83,7 +83,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
     "/branches": "assets", "/inspections": "assets", "/maintenance": "assets", "/reports": "assets",
     "/construction-projects": "construction", "/contractors": "construction", "/contracts": "construction",
     "/payment-requests": "construction", "/budget-planning": "construction", "/construction-reports": "construction",
-    "/construction-dashboard": "construction",
+    "/construction-dashboard": "construction", "/contractor-statements": "construction", "/contractor-oversight": "construction",
+    "/construction/daily-logs": "construction",
     "/marketing": "marketing", "/marketing-campaigns": "marketing", "/marketing-social": "marketing",
     "/social-responsibility": "marketing", "/marketing-influencers": "marketing", "/influencer-contracts": "marketing",
     "/marketing-calendar": "marketing", "/marketing-tasks": "marketing", "/marketing-reports": "marketing",
@@ -330,6 +331,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { href: "/contracts", label: t("sidebar.contracts"), icon: FileSignature, module: "contracts", indent: true },
           { href: "/payment-requests", label: t("sidebar.paymentRequests"), icon: Wallet, module: "payment_requests", indent: true },
           { href: "/contractor-statements", label: "كشوف حساب المقاولين", icon: Receipt, module: "contractor_statements", indent: true },
+          { href: "/contractor-oversight", label: "لوحة رقابة المقاولين", icon: ShieldAlert, module: "contracts", indent: true },
           { href: "/construction/daily-logs", label: "يوميات الأعمال", icon: ClipboardList, module: "project_daily_logs", indent: true },
           { href: "/budget-planning", label: t("sidebar.budgetPlanning"), icon: Calculator, module: "budget_planning", indent: true },
           { href: "/construction-reports", label: t("sidebar.constructionReports"), icon: FileBarChart, module: "reports", indent: true },

@@ -7,7 +7,7 @@ import * as NotificationService from "./notification-service";
 import type { AuthenticatedRequest } from "./types/express";
 import { eq, and, desc, inArray, gte, lte, sql, or, isNull, type SQL } from "drizzle-orm";
 import type { User } from "@shared/schema";
-import { shifts as shiftsTable, cashierPointsLedger } from "@shared/schema";
+import { shifts as shiftsTable, cashierPointsLedger, contractMilestones as contractMilestonesTable, contractGuarantees as contractGuaranteesTable, contractVariations as contractVariationsTable, constructionProjects as constructionProjectsTable } from "@shared/schema";
 
 // Helper to safely get current user from authenticated request
 function getCurrentUser(req: Request): User {
@@ -2522,6 +2522,352 @@ export async function registerRoutes(
       }
       console.error("Error updating contract:", error);
       res.status(500).json({ error: "Failed to update contract" });
+    }
+  });
+
+  // ============================================================
+  // Phase 7: Contractor Oversight Dashboard
+  // ============================================================
+  // Aggregates contractor performance, KPIs, and proactive alerts
+  // for construction contracts oversight.
+  app.get("/api/construction/oversight", isAuthenticated, requirePermission("contracts", "view"), async (req, res) => {
+    try {
+      const today = new Date();
+      const todayStr = today.toISOString().slice(0, 10);
+      const in7 = new Date(today.getTime() + 7 * 86400000).toISOString().slice(0, 10);
+      const in30 = new Date(today.getTime() + 30 * 86400000).toISOString().slice(0, 10);
+
+      // SECURITY: Branch filter — only show contracts whose project belongs to allowed branches
+      const branchFilter = getEffectiveBranchFilter(req, req.query.branchId as string | undefined);
+      if (!branchFilter.hasAccess) {
+        return res.status(403).json({ error: "غير مصرح بالوصول" });
+      }
+
+      const [allContractors, allContracts] = await Promise.all([
+        storage.getAllContractors(),
+        storage.getAllContracts(),
+      ]);
+
+      // Filter contracts by branch using a single batched project query
+      let contracts = allContracts;
+      if (branchFilter.branchIds !== null) {
+        const projectIds = Array.from(new Set(allContracts.map(c => c.projectId)));
+        const projects = projectIds.length > 0
+          ? await db.select().from(constructionProjectsTable).where(inArray(constructionProjectsTable.id, projectIds))
+          : [];
+        const allowedProjectIds = new Set(
+          projects.filter(p => branchFilter.branchIds!.includes(p.branchId || "")).map(p => p.id)
+        );
+        contracts = allContracts.filter(c => allowedProjectIds.has(c.projectId));
+      }
+
+      // Restrict contractors to those with contracts in scope
+      const contractorIdsInScope = new Set(contracts.map(c => c.contractorId));
+      const contractors = allContractors.filter(ctr => contractorIdsInScope.has(ctr.id));
+
+      // Batch-fetch all per-contract collections (single query each)
+      const contractIds = contracts.map(c => c.id);
+      const [allMilestones, allGuarantees, allVariations] = contractIds.length > 0
+        ? await Promise.all([
+            db.select().from(contractMilestonesTable).where(inArray(contractMilestonesTable.contractId, contractIds)),
+            db.select().from(contractGuaranteesTable).where(inArray(contractGuaranteesTable.contractId, contractIds)),
+            db.select().from(contractVariationsTable).where(inArray(contractVariationsTable.contractId, contractIds)),
+          ])
+        : [[], [], []];
+
+      // Group by contractId for O(1) lookup
+      const groupBy = <T extends { contractId: number }>(arr: T[]) => {
+        const m = new Map<number, T[]>();
+        for (const x of arr) {
+          const list = m.get(x.contractId) || [];
+          list.push(x);
+          m.set(x.contractId, list);
+        }
+        return m;
+      };
+      const milestonesByContract = groupBy(allMilestones);
+      const guaranteesByContract = groupBy(allGuarantees);
+      const variationsByContract = groupBy(allVariations);
+
+      const contractData = contracts.map(c => ({
+        contract: c,
+        milestones: milestonesByContract.get(c.id) || [],
+        guarantees: guaranteesByContract.get(c.id) || [],
+        variations: variationsByContract.get(c.id) || [],
+      }));
+
+      const alerts: any[] = [];
+      const contractorMap = new Map<number, any>();
+
+      // Initialize aggregates per contractor
+      for (const ctr of contractors) {
+        contractorMap.set(ctr.id, {
+          id: ctr.id,
+          name: ctr.name,
+          phone: ctr.phone || "",
+          email: ctr.email || "",
+          activeContracts: 0,
+          completedContracts: 0,
+          totalContractsValue: 0,
+          totalPaid: 0,
+          overdueMilestones: 0,
+          dueSoonMilestones: 0,
+          expiringGuarantees: 0,
+          activeGuarantees: 0,
+          totalLD: 0,
+          ldAppliedCount: 0,
+          pendingVariations: 0,
+          approvedVariations: 0,
+          contractsList: [] as any[],
+          deductions: 0,
+          deductReasons: [] as string[],
+        });
+      }
+
+      // Aggregate per-contract data into contractors and build alerts
+      for (const { contract: c, milestones, guarantees, variations } of contractData) {
+        const cAgg = contractorMap.get(c.contractorId);
+        if (!cAgg) continue;
+        cAgg.contractsList.push({
+          id: c.id,
+          contractNumber: c.contractNumber,
+          title: c.title,
+          status: c.status,
+          totalAmount: c.totalAmount,
+          paidAmount: c.paidAmount || 0,
+        });
+        cAgg.totalContractsValue += Number(c.totalAmount || 0);
+        cAgg.totalPaid += Number(c.paidAmount || 0);
+        if (c.status === "active") cAgg.activeContracts += 1;
+        if (c.status === "completed") cAgg.completedContracts += 1;
+        if (c.ldApplied) {
+          cAgg.ldAppliedCount += 1;
+          cAgg.totalLD += Number(c.ldCalculatedAmount || 0);
+        }
+
+        // Milestones
+        for (const m of milestones) {
+          if (m.status === "paid" || m.status === "cancelled") continue;
+          if (m.dueDate) {
+            if (m.dueDate < todayStr) {
+              cAgg.overdueMilestones += 1;
+              const daysLate = Math.floor((today.getTime() - new Date(m.dueDate).getTime()) / 86400000);
+              const severity = daysLate > 7 ? "critical" : "warning";
+              alerts.push({
+                id: `m-${m.id}`,
+                severity,
+                type: "milestone_overdue",
+                contractorId: c.contractorId,
+                contractorName: cAgg.name,
+                contractId: c.id,
+                contractNumber: c.contractNumber,
+                title: `مرحلة متأخرة: ${m.title}`,
+                description: `${cAgg.name} — متأخرة ${daysLate} يوم عن موعد ${m.dueDate}`,
+                amount: m.amount,
+                dueDate: m.dueDate,
+              });
+            } else if (m.dueDate <= in7) {
+              cAgg.dueSoonMilestones += 1;
+            }
+          }
+        }
+
+        // Guarantees
+        for (const g of guarantees) {
+          if (g.status !== "active") continue;
+          cAgg.activeGuarantees += 1;
+          if (g.expiryDate <= todayStr) {
+            cAgg.expiringGuarantees += 1;
+            alerts.push({
+              id: `g-${g.id}`,
+              severity: "critical",
+              type: "guarantee_expired",
+              contractorId: c.contractorId,
+              contractorName: cAgg.name,
+              contractId: c.id,
+              contractNumber: c.contractNumber,
+              title: `ضمان بنكي منتهي: ${g.guaranteeNumber}`,
+              description: `${g.bankName} — انتهى في ${g.expiryDate}`,
+              amount: g.amount,
+              dueDate: g.expiryDate,
+            });
+          } else if (g.expiryDate <= in7) {
+            cAgg.expiringGuarantees += 1;
+            alerts.push({
+              id: `g-${g.id}`,
+              severity: "critical",
+              type: "guarantee_expiring",
+              contractorId: c.contractorId,
+              contractorName: cAgg.name,
+              contractId: c.id,
+              contractNumber: c.contractNumber,
+              title: `ضمان بنكي يقارب الانتهاء: ${g.guaranteeNumber}`,
+              description: `${g.bankName} — ينتهي في ${g.expiryDate}`,
+              amount: g.amount,
+              dueDate: g.expiryDate,
+            });
+          } else if (g.expiryDate <= in30) {
+            alerts.push({
+              id: `g-${g.id}`,
+              severity: "warning",
+              type: "guarantee_expiring_soon",
+              contractorId: c.contractorId,
+              contractorName: cAgg.name,
+              contractId: c.id,
+              contractNumber: c.contractNumber,
+              title: `ضمان بنكي ينتهي خلال 30 يوم: ${g.guaranteeNumber}`,
+              description: `${g.bankName} — ينتهي في ${g.expiryDate}`,
+              amount: g.amount,
+              dueDate: g.expiryDate,
+            });
+          }
+        }
+
+        // Variations
+        for (const v of variations) {
+          if (v.status === "pending_approval" || v.status === "draft") {
+            cAgg.pendingVariations += 1;
+            const daysOld = v.requestedAt ? Math.floor((today.getTime() - new Date(v.requestedAt).getTime()) / 86400000) : 0;
+            if (daysOld > 14) {
+              alerts.push({
+                id: `v-${v.id}`,
+                severity: "info",
+                type: "variation_pending",
+                contractorId: c.contractorId,
+                contractorName: cAgg.name,
+                contractId: c.id,
+                contractNumber: c.contractNumber,
+                title: `أمر تغيير معلّق: ${v.variationNumber}`,
+                description: `${v.title} — معلّق منذ ${daysOld} يوم`,
+                amount: v.amount,
+                dueDate: null,
+              });
+            }
+          } else if (v.status === "approved") {
+            cAgg.approvedVariations += 1;
+          }
+        }
+
+        // Budget burn alert
+        if (c.status === "active" && Number(c.totalAmount) > 0) {
+          const burn = Number(c.paidAmount || 0) / Number(c.totalAmount);
+          if (burn >= 0.9) {
+            alerts.push({
+              id: `b-${c.id}`,
+              severity: "warning",
+              type: "budget_high",
+              contractorId: c.contractorId,
+              contractorName: cAgg.name,
+              contractId: c.id,
+              contractNumber: c.contractNumber,
+              title: `استهلاك ميزانية مرتفع: ${c.title}`,
+              description: `صُرف ${(burn * 100).toFixed(0)}% من قيمة العقد`,
+              amount: c.totalAmount,
+              dueDate: null,
+            });
+          }
+        }
+
+        // LD calculated but not applied
+        if (c.ldCalculatedAmount && Number(c.ldCalculatedAmount) > 0 && !c.ldApplied && !c.ldWaived) {
+          alerts.push({
+            id: `ld-${c.id}`,
+            severity: "warning",
+            type: "ld_pending",
+            contractorId: c.contractorId,
+            contractorName: cAgg.name,
+            contractId: c.id,
+            contractNumber: c.contractNumber,
+            title: `غرامة تأخير محسوبة بانتظار القرار: ${c.title}`,
+            description: `${Number(c.ldCalculatedAmount).toLocaleString("ar-SA")} ر.س — ${c.ldCalculatedDays} يوم تأخير`,
+            amount: c.ldCalculatedAmount,
+            dueDate: null,
+          });
+        }
+      }
+
+      // Compute score per contractor
+      const contractorsOut = Array.from(contractorMap.values()).map((c) => {
+        let score = 100;
+        const reasons: string[] = [];
+        if (c.overdueMilestones > 0) {
+          const d = Math.min(30, c.overdueMilestones * 5);
+          score -= d;
+          reasons.push(`-${d} تأخير ${c.overdueMilestones} مرحلة`);
+        }
+        if (c.ldAppliedCount > 0) {
+          const d = Math.min(20, c.ldAppliedCount * 10);
+          score -= d;
+          reasons.push(`-${d} غرامات مطبقة (${c.ldAppliedCount})`);
+        }
+        if (c.expiringGuarantees > 0) {
+          const d = Math.min(15, c.expiringGuarantees * 5);
+          score -= d;
+          reasons.push(`-${d} ضمان بنكي يقارب الانتهاء (${c.expiringGuarantees})`);
+        }
+        if (c.pendingVariations > 2) {
+          const d = Math.min(10, (c.pendingVariations - 2) * 3);
+          score -= d;
+          reasons.push(`-${d} أوامر تغيير معلّقة كثيرة`);
+        }
+        score = Math.max(0, Math.min(100, score));
+        let grade = "ضعيف";
+        let gradeColor = "red";
+        if (score >= 90) { grade = "ممتاز"; gradeColor = "green"; }
+        else if (score >= 75) { grade = "جيد جداً"; gradeColor = "blue"; }
+        else if (score >= 60) { grade = "مقبول"; gradeColor = "yellow"; }
+        const paymentProgress = c.totalContractsValue > 0
+          ? Math.round((c.totalPaid / c.totalContractsValue) * 100)
+          : 0;
+        return {
+          id: c.id,
+          name: c.name,
+          phone: c.phone,
+          email: c.email,
+          score,
+          grade,
+          gradeColor,
+          scoreReasons: reasons,
+          activeContracts: c.activeContracts,
+          completedContracts: c.completedContracts,
+          totalContractsValue: c.totalContractsValue,
+          totalPaid: c.totalPaid,
+          paymentProgress,
+          overdueMilestones: c.overdueMilestones,
+          dueSoonMilestones: c.dueSoonMilestones,
+          activeGuarantees: c.activeGuarantees,
+          expiringGuarantees: c.expiringGuarantees,
+          totalLD: c.totalLD,
+          ldAppliedCount: c.ldAppliedCount,
+          pendingVariations: c.pendingVariations,
+          approvedVariations: c.approvedVariations,
+          contractsCount: c.contractsList.length,
+        };
+      }).sort((a, b) => b.score - a.score);
+
+      // Sort alerts: critical first, then warning, then info
+      const sevOrder: Record<string, number> = { critical: 0, warning: 1, info: 2 };
+      alerts.sort((a, b) => (sevOrder[a.severity] - sevOrder[b.severity]));
+
+      // Top performer: only consider contractors with at least one contract
+      const ranked = contractorsOut.filter(c => c.contractsCount > 0);
+      const kpis = {
+        totalContractors: contractors.length,
+        activeContractors: contractorsOut.filter(c => c.activeContracts > 0).length,
+        totalActiveContracts: contracts.filter(c => c.status === "active").length,
+        totalActiveValue: contracts.filter(c => c.status === "active").reduce((s, c) => s + Number(c.totalAmount || 0), 0),
+        totalPaid: contracts.reduce((s, c) => s + Number(c.paidAmount || 0), 0),
+        totalAlerts: alerts.length,
+        criticalAlerts: alerts.filter(a => a.severity === "critical").length,
+        warningAlerts: alerts.filter(a => a.severity === "warning").length,
+        topPerformer: ranked[0]?.name || null,
+        topPerformerScore: ranked[0]?.score ?? null,
+      };
+
+      res.json({ contractors: contractorsOut, alerts, kpis });
+    } catch (error: any) {
+      console.error("Error fetching contractor oversight:", error);
+      res.status(500).json({ error: "فشل في جلب بيانات الرقابة", details: error?.message });
     }
   });
 
