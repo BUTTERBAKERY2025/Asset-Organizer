@@ -214,13 +214,12 @@
 }
 
 @keyframes pageReady {
-  0% { opacity: 0; transform: translateY(6px); }
-  35% { opacity: 0.6; }
-  100% { opacity: 1; transform: translateY(0); }
+  from { opacity: 0.85; }
+  to { opacity: 1; }
 }
 
 .page-ready {
-  animation: pageReady 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: pageReady 90ms ease-out both;
 }
 
 html.vt-active .page-ready {

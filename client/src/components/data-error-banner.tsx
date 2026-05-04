@@ -1,47 +1,106 @@
-import { useEffect, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+import { useQueryClient, type Query } from "@tanstack/react-query";
 import { AlertCircle, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-/**
- * Surfaces failed background queries with a single "retry all" button so the
- * user never has to reload the whole page when Supabase has a hiccup.
- *
- * Subscribes to the query cache and counts how many queries are in the `error`
- * state. When > 0, slides in a small amber banner at the bottom-left. Clicking
- * "إعادة المحاولة" calls refetch on every failed query in parallel and clears
- * the banner once they all settle (success or fail).
- */
+const SHOW_DELAY_MS = 2500;
+const MIN_DISPLAY_MS = 4000;
+
+function isTransientError(q: Query): boolean {
+  if (q.state.status !== "error") return false;
+  if (q.getObserversCount() === 0) return false;
+  const err = q.state.error;
+  const msg = err instanceof Error ? err.message : String(err || "");
+  if (/^(400|401|403|404|409|410|422):/.test(msg)) return false;
+  if (/abort/i.test(msg) || /cancel/i.test(msg)) return false;
+  return true;
+}
+
 export function DataErrorBanner() {
   const queryClient = useQueryClient();
   const [failedCount, setFailedCount] = useState(0);
+  const [visible, setVisible] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  const showTimer = useRef<number | null>(null);
+  const hideTimer = useRef<number | null>(null);
+  const shownAt = useRef<number | null>(null);
+  const dismissedRef = useRef(false);
+
+  useEffect(() => { dismissedRef.current = dismissed; }, [dismissed]);
 
   useEffect(() => {
     const cache = queryClient.getQueryCache();
+    const clearShow = () => { if (showTimer.current) { window.clearTimeout(showTimer.current); showTimer.current = null; } };
+    const clearHide = () => { if (hideTimer.current) { window.clearTimeout(hideTimer.current); hideTimer.current = null; } };
     const recompute = () => {
-      const failed = cache.getAll().filter((q) => q.state.status === "error").length;
+      const failed = cache.getAll().filter(isTransientError).length;
       setFailedCount(failed);
-      if (failed === 0) setDismissed(false);
+      if (failed === 0) {
+        clearShow();
+        const elapsed = shownAt.current ? Date.now() - shownAt.current : Infinity;
+        if (visible && elapsed < MIN_DISPLAY_MS) {
+          if (!hideTimer.current) {
+            hideTimer.current = window.setTimeout(() => {
+              const stillFailed = cache.getAll().filter(isTransientError).length;
+              hideTimer.current = null;
+              if (stillFailed === 0) {
+                setVisible(false);
+                setDismissed(false);
+                shownAt.current = null;
+              }
+            }, MIN_DISPLAY_MS - elapsed);
+          }
+        } else {
+          clearHide();
+          setVisible(false);
+          setDismissed(false);
+          shownAt.current = null;
+        }
+        return;
+      }
+      clearHide();
+      if (!visible && !showTimer.current && !dismissed) {
+        showTimer.current = window.setTimeout(() => {
+          showTimer.current = null;
+          if (dismissedRef.current) return;
+          const stillFailed = cache.getAll().filter(isTransientError).length;
+          if (stillFailed > 0) {
+            setVisible(true);
+            shownAt.current = Date.now();
+          }
+        }, SHOW_DELAY_MS);
+      }
     };
     recompute();
     const unsubscribe = cache.subscribe(() => recompute());
-    return unsubscribe;
-  }, [queryClient]);
+    return () => {
+      unsubscribe();
+      clearShow();
+      clearHide();
+    };
+  }, [queryClient, visible, dismissed]);
+
+  const handleDismiss = () => {
+    if (showTimer.current) { window.clearTimeout(showTimer.current); showTimer.current = null; }
+    if (hideTimer.current) { window.clearTimeout(hideTimer.current); hideTimer.current = null; }
+    setDismissed(true);
+    setVisible(false);
+    shownAt.current = null;
+  };
 
   const handleRetry = async () => {
     setRetrying(true);
     try {
-      const failed = queryClient.getQueryCache().getAll().filter((q) => q.state.status === "error");
+      const failed = queryClient.getQueryCache().getAll().filter(isTransientError);
       await Promise.allSettled(failed.map((q) => queryClient.refetchQueries({ queryKey: q.queryKey, exact: true })));
     } finally {
       setRetrying(false);
     }
   };
 
-  if (failedCount === 0 || dismissed) return null;
+  if (!visible || failedCount === 0 || dismissed) return null;
 
   return (
     <div
@@ -81,7 +140,7 @@ export function DataErrorBanner() {
       </div>
       <button
         type="button"
-        onClick={() => setDismissed(true)}
+        onClick={handleDismiss}
         className="text-amber-700 hover:text-amber-900 p-1 -mt-1 -mr-1 rounded"
         aria-label="إغلاق"
         data-testid="button-dismiss-error-banner"
