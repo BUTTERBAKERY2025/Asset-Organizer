@@ -716,7 +716,7 @@ export function ContractGuaranteesCard({
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
-      </Dialog>
+      </AlertDialog>
     </>
   );
 }
