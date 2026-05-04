@@ -563,6 +563,12 @@ import {
   fieldChecklistItems,
   type FieldChecklistItem,
   type InsertFieldChecklistItem,
+  reportSchedules,
+  type ReportSchedule,
+  type InsertReportSchedule,
+  reportRuns,
+  type ReportRun,
+  type InsertReportRun,
 } from "@shared/schema";
 
 type TransferHistory = typeof transferHistory.$inferSelect;
@@ -1562,6 +1568,17 @@ export interface IStorage {
     recentPhotos: any[];
     stats: { openChecklists: number; overdueChecklists: number; logsToday: number };
   }>;
+
+  // Phase 11: Report schedules + runs
+  getAllReportSchedules(): Promise<ReportSchedule[]>;
+  getReportSchedule(id: number): Promise<ReportSchedule | undefined>;
+  createReportSchedule(data: InsertReportSchedule): Promise<ReportSchedule>;
+  updateReportSchedule(id: number, data: Partial<InsertReportSchedule>): Promise<ReportSchedule | undefined>;
+  deleteReportSchedule(id: number): Promise<boolean>;
+  getReportRunsBySchedule(scheduleId: number, limit?: number): Promise<ReportRun[]>;
+  getRecentReportRuns(limit?: number): Promise<ReportRun[]>;
+  getNotificationQueue(filters?: { status?: string; channel?: string; limit?: number }): Promise<NotificationQueueItem[]>;
+  retryNotificationQueueItem(id: number): Promise<NotificationQueueItem | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -17001,6 +17018,62 @@ export class DatabaseStorage implements IStorage {
         logsToday: todayLogs.length,
       },
     };
+  }
+
+  // ===== Phase 11: Report schedules + runs =====
+  async getAllReportSchedules(): Promise<ReportSchedule[]> {
+    return db.select().from(reportSchedules).orderBy(desc(reportSchedules.createdAt));
+  }
+
+  async getReportSchedule(id: number): Promise<ReportSchedule | undefined> {
+    const [s] = await db.select().from(reportSchedules).where(eq(reportSchedules.id, id));
+    return s || undefined;
+  }
+
+  async createReportSchedule(data: InsertReportSchedule): Promise<ReportSchedule> {
+    const [created] = await db.insert(reportSchedules).values(data).returning();
+    return created;
+  }
+
+  async updateReportSchedule(id: number, data: Partial<InsertReportSchedule>): Promise<ReportSchedule | undefined> {
+    const [updated] = await db.update(reportSchedules)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(reportSchedules.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteReportSchedule(id: number): Promise<boolean> {
+    const result = await db.delete(reportSchedules).where(eq(reportSchedules.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async getReportRunsBySchedule(scheduleId: number, limit = 50): Promise<ReportRun[]> {
+    return db.select().from(reportRuns)
+      .where(eq(reportRuns.scheduleId, scheduleId))
+      .orderBy(desc(reportRuns.runAt))
+      .limit(limit);
+  }
+
+  async getRecentReportRuns(limit = 50): Promise<ReportRun[]> {
+    return db.select().from(reportRuns).orderBy(desc(reportRuns.runAt)).limit(limit);
+  }
+
+  async getNotificationQueue(filters: { status?: string; channel?: string; limit?: number } = {}): Promise<NotificationQueueItem[]> {
+    const conds: any[] = [];
+    if (filters.status) conds.push(eq(notificationQueue.status, filters.status));
+    if (filters.channel) conds.push(eq(notificationQueue.channel, filters.channel));
+    const q = db.select().from(notificationQueue);
+    const filtered = conds.length > 0 ? q.where(and(...conds)) : q;
+    return filtered.orderBy(desc(notificationQueue.createdAt)).limit(filters.limit || 200);
+  }
+
+  async retryNotificationQueueItem(id: number): Promise<NotificationQueueItem | undefined> {
+    const [updated] = await db.update(notificationQueue)
+      .set({ status: "pending", retryCount: 0, errorMessage: null, lastAttemptAt: null })
+      .where(eq(notificationQueue.id, id))
+      .returning();
+    return updated || undefined;
   }
 }
 

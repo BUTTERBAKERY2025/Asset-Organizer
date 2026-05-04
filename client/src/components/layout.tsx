@@ -16,7 +16,7 @@ import {
   Shield, MapPin, Megaphone, UserCheck, Calendar, UsersRound, Building, Briefcase,
   Receipt, PieChart, Lock, Layers, PieChartIcon, Share2, Languages, Warehouse,
   PackageCheck, Send, ShoppingCart, FolderOpen, Landmark, Scale, Vote, FileCheck,
-  Sparkles, Crown, Handshake, DoorOpen, Bell, Store, ShieldAlert
+  Sparkles, Crown, Handshake, DoorOpen, Bell, Store, ShieldAlert, MessageCircle
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
@@ -100,7 +100,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     "/documents": "executive", "/governance": "executive", "/visitors": "executive", "/travel-requests": "executive",
     "/settings": "settings", "/security-management": "settings", "/users": "settings",
     "/rbac-management": "settings", "/integrations": "settings", "/audit-logs": "settings",
-    "/backups": "settings", "/biometric-settings": "settings", "/notifications-management": "settings",
+    "/backups": "settings", "/biometric-settings": "settings", "/notifications-management": "settings", "/notifications-center": "settings",
   }), []);
 
   const getInitialOpenGroups = useCallback(() => {
@@ -409,6 +409,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { href: "/audit-logs", label: t("sidebar.auditLogs"), icon: FileSearch, module: "audit_logs", indent: true },
           { href: "/backups", label: t("sidebar.backups"), icon: HardDrive, module: "backups", indent: true },
           { href: "/notifications-management", label: t("sidebar.notificationsManagement"), icon: Bell, module: "settings", indent: true, adminOnly: true },
+          { href: "/notifications-center", label: "مركز الإشعارات والتقارير", icon: MessageCircle, module: "settings", indent: true, adminOnly: true },
         ],
       },
     },

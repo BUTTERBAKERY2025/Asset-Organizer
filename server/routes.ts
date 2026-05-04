@@ -99,6 +99,11 @@ import {
   generateAttendanceLogPdf, type AttendanceLogPdfData
 } from "./pdf-generator";
 import { insertFieldChecklistTemplateSchema, insertFieldChecklistTemplateItemSchema, insertFieldChecklistSchema, insertFieldChecklistItemSchema } from "@shared/schema";
+import { insertReportScheduleSchema } from "@shared/schema";
+import { generateReport, REPORT_TYPE_LABELS, type ReportType } from "./report-generator";
+import { executeSchedule, computeNextRun } from "./scheduler";
+import { sendWhatsAppMessage, isTwilioConfigured } from "./twilio-service";
+import { recipientsSchema as reportRecipientsSchema } from "./scheduler";
 import { insertBranchSchema, insertInventoryItemSchema, insertSavedFilterSchema, insertUserSchema, insertConstructionProjectSchema, insertContractorSchema, insertProjectWorkItemSchema, insertProjectBudgetAllocationSchema, insertConstructionContractSchema, insertContractItemSchema, insertPaymentRequestSchema, insertContractPaymentSchema, insertContractMilestoneSchema, insertContractVariationSchema, insertContractGuaranteeSchema, insertContractTemplateSchema, insertProjectExpenseSchema, insertProjectDailyLogSchema, insertProjectDailyLogPhotoSchema, insertDailyLogActivitySchema, insertUserPermissionSchema, insertProductSchema, insertShiftSchema, insertShiftEmployeeSchema, insertProductionOrderSchema, insertQualityCheckSchema, insertTargetWeightProfileSchema, insertBranchMonthlyTargetSchema, insertIncentiveTierSchema, insertIncentiveAwardSchema, SYSTEM_MODULES, MODULE_ACTIONS, JOB_ROLE_PERMISSION_TEMPLATES, JOB_TITLE_LABELS, MODULE_LABELS, ACTION_LABELS, JOB_TITLES, insertDisplayBarReceiptSchema, insertDisplayBarDailySummarySchema, insertWasteReportSchema, insertWasteItemSchema, insertMarketingCampaignSchema, insertCampaignBudgetAllocationSchema, insertCampaignGoalSchema, insertCampaignExpenseSchema, insertMarketingCalendarEventSchema, insertMarketingInfluencerSchema, insertInfluencerCampaignLinkSchema, insertInfluencerContactSchema, insertInfluencerPaymentSchema, insertInfluencerContractSchema, insertMarketingTaskSchema, insertMarketingTaskActivitySchema, insertMarketingPerformanceReportSchema, insertMarketingAssetSchema, insertMarketingTeamMemberSchema, insertMarketingAlertSchema, insertScheduleTemplateSchema, insertSchedulePeriodSchema, insertEmployeeScheduleSchema, insertAttendanceRecordSchema, insertTimeEntrySchema, isMadeToOrderCategory, suggestCategoryFromProductName, userBranchAccess } from "@shared/schema";
 import { z } from "zod";
 import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, isUserAdmin, getAllowedBranchIds, getEffectiveBranchFilter, invalidateAuthCache } from "./auth";
@@ -33467,6 +33472,216 @@ export async function registerRoutes(
       console.error("Server error:", error); res.status(500).json({ error: "حدث خطأ في الخادم" });
     }
   });
+
+  // ===== Phase 11: WhatsApp Integration + Monthly Automated Reports =====
+
+  app.get("/api/notifications-center/status", isAuthenticated, requirePermission("settings", "view"), async (_req, res) => {
+    try {
+      res.json({
+        twilioConfigured: isTwilioConfigured(),
+        reportTypes: REPORT_TYPE_LABELS,
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/notification-queue", isAuthenticated, requirePermission("settings", "view"), async (req, res) => {
+    try {
+      const status = (req.query.status as string) || undefined;
+      const channel = (req.query.channel as string) || undefined;
+      const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 200;
+      const items = await storage.getNotificationQueue({ status, channel, limit });
+      res.json(items);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/notification-queue/:id/retry", isAuthenticated, requirePermission("settings", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "معرّف غير صالح" });
+      const updated = await storage.retryNotificationQueueItem(id);
+      if (!updated) return res.status(404).json({ error: "العنصر غير موجود" });
+      res.json(updated);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/notification-queue/test-whatsapp", isAuthenticated, requirePermission("settings", "edit"), async (req, res) => {
+    try {
+      const { phone, message } = req.body || {};
+      if (!phone || !message) return res.status(400).json({ error: "phone و message مطلوبان" });
+      if (!isTwilioConfigured()) return res.status(400).json({ error: "Twilio غير مهيأ" });
+      const result = await sendWhatsAppMessage(String(phone), String(message));
+      res.json(result);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/report-schedules", isAuthenticated, requirePermission("settings", "view"), async (_req, res) => {
+    try {
+      const schedules = await storage.getAllReportSchedules();
+      res.json(schedules);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/report-schedules", isAuthenticated, requirePermission("settings", "edit"), async (req, res) => {
+    try {
+      const user = getCurrentUser(req);
+      const parsed = insertReportScheduleSchema.parse({ ...req.body, createdBy: user.id });
+      const validTypes = Object.keys(REPORT_TYPE_LABELS);
+      if (!validTypes.includes(parsed.reportType)) {
+        return res.status(400).json({ error: `نوع تقرير غير مدعوم. الأنواع المتاحة: ${validTypes.join(", ")}` });
+      }
+      const recipientsCheck = reportRecipientsSchema.safeParse(parsed.recipients);
+      if (!recipientsCheck.success) {
+        return res.status(400).json({ error: "صيغة المستلمين غير صحيحة: " + recipientsCheck.error.issues.map(i => i.message).join(", ") });
+      }
+      if (parsed.dayOfMonth < 1 || parsed.dayOfMonth > 28) {
+        return res.status(400).json({ error: "اليوم يجب أن يكون بين 1 و 28" });
+      }
+      if (parsed.hour < 0 || parsed.hour > 23) {
+        return res.status(400).json({ error: "الساعة يجب أن تكون بين 0 و 23" });
+      }
+      if (parsed.branchId) {
+        const branch = await storage.getBranch(parsed.branchId);
+        if (!branch) return res.status(400).json({ error: "الفرع المحدد غير موجود" });
+        if (!isUserAdmin(user) && !(await canAccessBranch(user, parsed.branchId))) {
+          return res.status(403).json({ error: "لا يمكنك إنشاء جدول لهذا الفرع" });
+        }
+      } else if (!isUserAdmin(user)) {
+        return res.status(403).json({ error: "إنشاء جدول لجميع الفروع متاح للمسؤولين فقط" });
+      }
+      const created = await storage.createReportSchedule(parsed);
+      const nextRun = computeNextRun(created.dayOfMonth, created.hour);
+      await storage.updateReportSchedule(created.id, { nextRunAt: nextRun } as any);
+      const final = await storage.getReportSchedule(created.id);
+      res.status(201).json(final);
+    } catch (e: any) {
+      res.status(400).json({ error: e.message });
+    }
+  });
+
+  app.put("/api/report-schedules/:id", isAuthenticated, requirePermission("settings", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "معرّف غير صالح" });
+      const existing = await storage.getReportSchedule(id);
+      if (!existing) return res.status(404).json({ error: "الجدول غير موجود" });
+      const user = getCurrentUser(req);
+      if (existing.branchId && !isUserAdmin(user) && !(await canAccessBranch(user, existing.branchId))) {
+        return res.status(403).json({ error: "لا يمكنك تعديل جدول هذا الفرع" });
+      }
+      if (!existing.branchId && !isUserAdmin(user)) {
+        return res.status(403).json({ error: "تعديل جدول لجميع الفروع متاح للمسؤولين فقط" });
+      }
+      const updates: any = { ...req.body };
+      delete updates.id; delete updates.createdBy; delete updates.createdAt; delete updates.lastRunAt;
+      if (updates.recipients !== undefined) {
+        const r = reportRecipientsSchema.safeParse(updates.recipients);
+        if (!r.success) return res.status(400).json({ error: "صيغة المستلمين غير صحيحة" });
+      }
+      if (updates.dayOfMonth != null && (updates.dayOfMonth < 1 || updates.dayOfMonth > 28)) {
+        return res.status(400).json({ error: "اليوم يجب أن يكون بين 1 و 28" });
+      }
+      if (updates.hour != null && (updates.hour < 0 || updates.hour > 23)) {
+        return res.status(400).json({ error: "الساعة يجب أن تكون بين 0 و 23" });
+      }
+      if (updates.dayOfMonth != null || updates.hour != null) {
+        const dom = updates.dayOfMonth ?? existing.dayOfMonth;
+        const h = updates.hour ?? existing.hour;
+        updates.nextRunAt = computeNextRun(dom, h);
+      }
+      const updated = await storage.updateReportSchedule(id, updates);
+      res.json(updated);
+    } catch (e: any) {
+      res.status(400).json({ error: e.message });
+    }
+  });
+
+  app.delete("/api/report-schedules/:id", isAuthenticated, requirePermission("settings", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "معرّف غير صالح" });
+      const existing = await storage.getReportSchedule(id);
+      if (!existing) return res.status(404).json({ error: "الجدول غير موجود" });
+      const user = getCurrentUser(req);
+      if (existing.branchId && !isUserAdmin(user) && !(await canAccessBranch(user, existing.branchId))) {
+        return res.status(403).json({ error: "لا يمكنك حذف جدول هذا الفرع" });
+      }
+      if (!existing.branchId && !isUserAdmin(user)) {
+        return res.status(403).json({ error: "حذف جدول لجميع الفروع متاح للمسؤولين فقط" });
+      }
+      const ok = await storage.deleteReportSchedule(id);
+      if (!ok) return res.status(404).json({ error: "الجدول غير موجود" });
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/report-schedules/:id/run-now", isAuthenticated, requirePermission("settings", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "معرّف غير صالح" });
+      const schedule = await storage.getReportSchedule(id);
+      if (!schedule) return res.status(404).json({ error: "الجدول غير موجود" });
+      const user = getCurrentUser(req);
+      if (schedule.branchId && !isUserAdmin(user) && !(await canAccessBranch(user, schedule.branchId))) {
+        return res.status(403).json({ error: "لا يمكنك تشغيل جدول هذا الفرع" });
+      }
+      if (!schedule.branchId && !isUserAdmin(user)) {
+        return res.status(403).json({ error: "تشغيل جدول لجميع الفروع متاح للمسؤولين فقط" });
+      }
+      const runId = await executeSchedule(schedule, user.id);
+      res.json({ success: true, runId });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/report-schedules/:id/runs", isAuthenticated, requirePermission("settings", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "معرّف غير صالح" });
+      const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
+      const runs = await storage.getReportRunsBySchedule(id, limit);
+      res.json(runs);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.get("/api/report-runs", isAuthenticated, requirePermission("settings", "view"), async (req, res) => {
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
+      const runs = await storage.getRecentReportRuns(limit);
+      res.json(runs);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  app.post("/api/reports/preview", isAuthenticated, requirePermission("settings", "view"), async (req, res) => {
+    try {
+      const { reportType, periodMonth, branchId } = req.body || {};
+      if (!reportType || !periodMonth) return res.status(400).json({ error: "reportType و periodMonth مطلوبان" });
+      if (!Object.keys(REPORT_TYPE_LABELS).includes(reportType)) {
+        return res.status(400).json({ error: "نوع تقرير غير مدعوم" });
+      }
+      const report = await generateReport(reportType as ReportType, periodMonth, branchId || null);
+      res.json(report);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   return httpServer;
 }
 

@@ -9637,3 +9637,60 @@ export const insertPosHeldOrderSchema = createInsertSchema(posHeldOrders).omit({
 });
 export type PosHeldOrder = typeof posHeldOrders.$inferSelect;
 export type InsertPosHeldOrder = z.infer<typeof insertPosHeldOrderSchema>;
+
+// المرحلة 11: جداول جدولة التقارير الشهرية الآلية
+export const reportSchedules = pgTable("report_schedules", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  reportType: text("report_type").notNull(),
+  branchId: varchar("branch_id").references(() => branches.id, { onDelete: "set null" }),
+  recipients: jsonb("recipients").notNull(),
+  dayOfMonth: integer("day_of_month").default(1).notNull(),
+  hour: integer("hour").default(8).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  lastRunAt: timestamp("last_run_at"),
+  nextRunAt: timestamp("next_run_at"),
+  notes: text("notes"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_report_schedules_active").on(table.isActive),
+  index("idx_report_schedules_next_run").on(table.nextRunAt),
+  index("idx_report_schedules_branch").on(table.branchId),
+]);
+
+export const insertReportScheduleSchema = createInsertSchema(reportSchedules).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  lastRunAt: true,
+  nextRunAt: true,
+});
+export type ReportSchedule = typeof reportSchedules.$inferSelect;
+export type InsertReportSchedule = z.infer<typeof insertReportScheduleSchema>;
+
+export const reportRuns = pgTable("report_runs", {
+  id: serial("id").primaryKey(),
+  scheduleId: integer("schedule_id").notNull().references(() => reportSchedules.id, { onDelete: "cascade" }),
+  runAt: timestamp("run_at").defaultNow().notNull(),
+  periodMonth: text("period_month").notNull(),
+  status: text("status").default("pending").notNull(),
+  summary: jsonb("summary"),
+  messageBody: text("message_body"),
+  recipientsCount: integer("recipients_count").default(0).notNull(),
+  sentCount: integer("sent_count").default(0).notNull(),
+  failedCount: integer("failed_count").default(0).notNull(),
+  errorMessage: text("error_message"),
+  triggeredBy: varchar("triggered_by").references(() => users.id),
+}, (table) => [
+  index("idx_report_runs_schedule").on(table.scheduleId),
+  index("idx_report_runs_run_at").on(table.runAt),
+]);
+
+export const insertReportRunSchema = createInsertSchema(reportRuns).omit({
+  id: true,
+  runAt: true,
+});
+export type ReportRun = typeof reportRuns.$inferSelect;
+export type InsertReportRun = z.infer<typeof insertReportRunSchema>;

@@ -209,6 +209,14 @@ process.on("SIGINT", () => gracefulShutdown("SIGINT"));
     console.log("Supabase Storage bucket setup skipped:", e instanceof Error ? e.message : e);
   }
   
+  // Phase 11: start scheduler (queue worker + monthly reports)
+  try {
+    const { startScheduler } = await import("./scheduler");
+    startScheduler();
+  } catch (e) {
+    console.log("Scheduler start failed:", e instanceof Error ? e.message : e);
+  }
+
   // Register object storage routes for file uploads (after session middleware)
   // registerObjectStorageRoutes(app); // Disabled - using Supabase Storage instead
 

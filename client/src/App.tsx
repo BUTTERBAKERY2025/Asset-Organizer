@@ -98,6 +98,7 @@ const SocialResponsibilityPage = makeLazy("social-responsibility");
 const SettingsDashboardPage = makeLazy("settings-dashboard");
 const BiometricSettingsPage = makeLazy("biometric-settings");
 const NotificationsManagementPage = makeLazy("notifications-management");
+const NotificationsCenterPage = makeLazy("notifications-center");
 const ShiftManagementPage = makeLazy("shift-management");
 const AttendanceCheckPage = makeLazy("attendance-check");
 const TimesheetPage = makeLazy("timesheet");
@@ -361,6 +362,7 @@ const Router = React.memo(function Router() {
       <Route path="/backups">{() => <AdminPage component={BackupsPage} module="backups" />}</Route>
       <Route path="/biometric-settings">{() => <AdminPage component={BiometricSettingsPage} module="settings" />}</Route>
       <Route path="/notifications-management">{() => <AdminPage component={NotificationsManagementPage} module="settings" />}</Route>
+      <Route path="/notifications-center">{() => <AdminPage component={NotificationsCenterPage} module="settings" />}</Route>
       
       {/* Warehouse - المخازن والتحويلات */}
       <Route path="/warehouse">{() => <ModulePage component={WarehouseDashboardPage} module="warehouse" />}</Route>
