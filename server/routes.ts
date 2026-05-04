@@ -7,7 +7,8 @@ import * as NotificationService from "./notification-service";
 import type { AuthenticatedRequest } from "./types/express";
 import { eq, and, desc, inArray, gte, lte, sql, or, isNull, type SQL } from "drizzle-orm";
 import type { User } from "@shared/schema";
-import { shifts as shiftsTable, cashierPointsLedger, contractMilestones as contractMilestonesTable, contractGuarantees as contractGuaranteesTable, contractVariations as contractVariationsTable, constructionProjects as constructionProjectsTable } from "@shared/schema";
+import { shifts as shiftsTable, cashierPointsLedger, contractMilestones as contractMilestonesTable, contractGuarantees as contractGuaranteesTable, contractVariations as contractVariationsTable, constructionProjects as constructionProjectsTable, systemAuditLogs as systemAuditLogsTable } from "@shared/schema";
+import { auditEvent, getApprovalThresholds, APPROVAL_THRESHOLDS } from "./audit-helpers";
 
 // Helper to safely get current user from authenticated request
 function getCurrentUser(req: Request): User {
@@ -2478,6 +2479,17 @@ export async function registerRoutes(
         createdBy: req.currentUser?.id
       });
       const contract = await storage.createContract(validatedData);
+      // PHASE 9: Audit
+      await auditEvent({
+        req,
+        module: "contracts",
+        entityId: contract.id,
+        entityName: contract.contractNumber || contract.title || `عقد #${contract.id}`,
+        action: "create",
+        description: `إنشاء عقد ${contract.contractNumber}: ${contract.title}`,
+        details: { totalAmount: contract.totalAmount, projectId: contract.projectId, contractorId: contract.contractorId },
+        targetId: contract.id,
+      });
       res.status(201).json(contract);
     } catch (error: any) {
       if (error instanceof z.ZodError) {
@@ -2889,6 +2901,17 @@ export async function registerRoutes(
       if (!success) {
         return res.status(404).json({ error: "Contract not found" });
       }
+      // PHASE 9: Audit
+      await auditEvent({
+        req,
+        module: "contracts",
+        entityId: id,
+        entityName: existingContract?.contractNumber || `عقد #${id}`,
+        action: "delete",
+        description: `حذف العقد ${existingContract?.contractNumber || ''}`,
+        details: { totalAmount: existingContract?.totalAmount, contractorId: existingContract?.contractorId },
+        targetId: id,
+      });
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting contract:", error);
@@ -3160,7 +3183,30 @@ export async function registerRoutes(
       if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
       const userId = req.currentUser?.id;
       if (!userId) return res.status(401).json({ error: "Unauthorized" });
+      // PHASE 9: Large variations need executive approval
+      const contract = await storage.getContract(existing.contractId);
+      const totalAmt = contract?.totalAmount || 0;
+      if (totalAmt > 0 && Math.abs(existing.amount) / totalAmt * 100 >= APPROVAL_THRESHOLDS.variationPercent) {
+        const user: any = req.currentUser;
+        const isExec = user?.role === "admin" || user?.role === "ceo" || user?.role === "general_manager" || user?.role === "finance_manager";
+        if (!isExec) {
+          return res.status(403).json({
+            error: `أوامر التغيير التي تتجاوز ${APPROVAL_THRESHOLDS.variationPercent}% من قيمة العقد تحتاج موافقة الإدارة العليا.`,
+          });
+        }
+      }
       const result = await storage.approveContractVariation(id, userId);
+      // PHASE 9: Audit
+      await auditEvent({
+        req,
+        module: "contract_variations",
+        entityId: id,
+        entityName: existing.variationNumber || `VO-${id}`,
+        action: "approve",
+        description: `اعتماد أمر تغيير ${existing.variationNumber}: ${existing.title}`,
+        details: { amount: existing.amount, contractId: existing.contractId, type: existing.type },
+        targetId: existing.contractId,
+      });
       res.json(result);
     } catch (e: any) {
       console.error("Error approving variation:", e);
@@ -3181,6 +3227,17 @@ export async function registerRoutes(
       const userId = req.currentUser?.id;
       if (!userId) return res.status(401).json({ error: "Unauthorized" });
       const result = await storage.rejectContractVariation(id, userId, reason);
+      // PHASE 9: Audit
+      await auditEvent({
+        req,
+        module: "contract_variations",
+        entityId: id,
+        entityName: existing.variationNumber || `VO-${id}`,
+        action: "reject",
+        description: `رفض أمر تغيير ${existing.variationNumber} — السبب: ${reason}`,
+        details: { amount: existing.amount, contractId: existing.contractId, reason },
+        targetId: existing.contractId,
+      });
       res.json(result);
     } catch (e: any) {
       console.error("Error rejecting variation:", e);
@@ -3267,6 +3324,17 @@ export async function registerRoutes(
       const userId = req.currentUser?.id;
       if (!userId) return res.status(401).json({ error: "Unauthorized" });
       const result = await storage.releaseContractGuarantee(id, userId, req.body?.notes);
+      // PHASE 9: Audit
+      await auditEvent({
+        req,
+        module: "contract_guarantees",
+        entityId: id,
+        entityName: existing.guaranteeNumber || `ضمان #${id}`,
+        action: "release_guarantee",
+        description: `الإفراج عن ضمان بنكي ${existing.guaranteeNumber || ''} بقيمة ${Number(existing.amount).toLocaleString("ar-SA")} ر.س`,
+        details: { amount: existing.amount, contractId: existing.contractId, type: existing.type, notes: req.body?.notes },
+        targetId: existing.contractId,
+      });
       res.json(result);
     } catch (e: any) {
       console.error("Error releasing guarantee:", e);
@@ -3355,6 +3423,16 @@ export async function registerRoutes(
       const userId = req.currentUser?.id;
       if (!userId) return res.status(401).json({ error: "Unauthorized" });
       const result = await storage.applyLiquidatedDamages(id, userId);
+      // PHASE 9: Audit
+      await auditEvent({
+        req,
+        module: "contract_ld",
+        entityId: id,
+        action: "apply_ld",
+        description: `تطبيق غرامة تأخير على العقد بقيمة ${Number((result as any)?.amount || 0).toLocaleString("ar-SA")} ر.س`,
+        details: { amount: (result as any)?.amount, contractId: id },
+        targetId: id,
+      });
       res.json(result);
     } catch (e: any) {
       console.error("Error applying LD:", e);
@@ -3373,6 +3451,16 @@ export async function registerRoutes(
       const userId = req.currentUser?.id;
       if (!userId) return res.status(401).json({ error: "Unauthorized" });
       const result = await storage.waiveLiquidatedDamages(id, userId, reason);
+      // PHASE 9: Audit
+      await auditEvent({
+        req,
+        module: "contract_ld",
+        entityId: id,
+        action: "waive_ld",
+        description: `التنازل عن غرامة التأخير — السبب: ${reason}`,
+        details: { contractId: id, reason },
+        targetId: id,
+      });
       res.json(result);
     } catch (e: any) {
       console.error("Error waiving LD:", e);
@@ -3508,11 +3596,52 @@ export async function registerRoutes(
       const userId = req.currentUser?.id;
       if (!userId) return res.status(401).json({ error: "Unauthorized" });
       const result = await storage.releaseContractRetention(id, userId, req.body?.notes);
+      // PHASE 9: Audit
+      await auditEvent({
+        req,
+        module: "contract_retentions",
+        entityId: id,
+        action: "release_retention",
+        description: `الإفراج عن احتجاز الضمان للعقد`,
+        details: { contractId: id, releasedAmount: (result as any)?.releasedAmount, notes: req.body?.notes },
+        targetId: id,
+      });
       res.json(result);
     } catch (e: any) {
       console.error("Error releasing retention:", e);
       res.status(500).json({ error: e?.message || "فشل في إفراج الضمان" });
     }
+  });
+
+  // ==================== PHASE 9: Audit timeline + thresholds ====================
+  // Returns audit log for a contract (entityId match in module='contracts',
+  // OR targetId match across related modules: payment_requests, variations, guarantees, ld, retentions).
+  app.get("/api/construction/contracts/:id/audit", isAuthenticated, requirePermission("contracts", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const access = await checkContractBranchAccess(req, id);
+      if (!access.allowed) return res.status(403).json({ error: "غير مصرح" });
+      const idStr = String(id);
+      const rows = await db.select().from(systemAuditLogsTable)
+        .where(
+          or(
+            and(eq(systemAuditLogsTable.module, "contracts"), eq(systemAuditLogsTable.entityId, idStr)),
+            eq(systemAuditLogsTable.targetId, idStr),
+          )
+        )
+        .orderBy(desc(systemAuditLogsTable.createdAt))
+        .limit(500);
+      res.json(rows);
+    } catch (e: any) {
+      console.error("Error fetching contract audit:", e);
+      res.status(500).json({ error: "فشل في جلب سجل التدقيق" });
+    }
+  });
+
+  // Approval thresholds (read-only)
+  app.get("/api/app-settings/approval-thresholds", isAuthenticated, async (_req, res) => {
+    res.json(getApprovalThresholds());
   });
 
   // Convert a milestone into a payment request (one-click). Locks the milestone
@@ -4288,10 +4417,39 @@ export async function registerRoutes(
           return res.status(403).json({ error: "غير مصرح بالموافقة على هذا الطلب" });
         }
       }
+      // PHASE 9: Mandatory invoice attachment for amounts >= medium threshold
+      if (existingRequest && existingRequest.amount >= APPROVAL_THRESHOLDS.medium) {
+        if (!existingRequest.attachmentUrl || !existingRequest.invoiceNumber) {
+          return res.status(400).json({
+            error: `طلبات الصرف بقيمة ${APPROVAL_THRESHOLDS.medium.toLocaleString("ar-SA")} ر.س أو أكثر تتطلّب إرفاق الفاتورة ورقمها قبل الموافقة. حرّر الطلب أولاً وأضف المرفق ورقم الفاتورة.`,
+          });
+        }
+      }
+      // PHASE 9: Large payments require explicit large-approval permission
+      if (existingRequest && existingRequest.amount >= APPROVAL_THRESHOLDS.large) {
+        const user: any = req.currentUser;
+        const isAdmin = user?.role === "admin" || user?.role === "ceo" || user?.role === "general_manager" || user?.role === "finance_manager";
+        if (!isAdmin) {
+          return res.status(403).json({
+            error: `طلبات الصرف بقيمة ${APPROVAL_THRESHOLDS.large.toLocaleString("ar-SA")} ر.س أو أكثر تحتاج موافقة المدير المالي أو الإدارة العليا.`,
+          });
+        }
+      }
       const request = await storage.approvePaymentRequest(id, getCurrentUser(req).id);
       if (!request) {
         return res.status(404).json({ error: "Payment request not found" });
       }
+      // PHASE 9: Audit
+      await auditEvent({
+        req,
+        module: "payment_requests",
+        entityId: id,
+        entityName: request.requestNumber || request.description?.slice(0, 60) || `طلب #${id}`,
+        action: "approve",
+        description: `اعتماد طلب صرف بقيمة ${Number(request.amount).toLocaleString("ar-SA")} ر.س`,
+        details: { amount: request.amount, invoiceNumber: request.invoiceNumber, contractId: request.contractId, contractorId: request.contractorId },
+        targetId: request.contractId || undefined,
+      });
       res.json(request);
     } catch (error) {
       console.error("Error approving payment request:", error);
@@ -4321,6 +4479,17 @@ export async function registerRoutes(
       if (!request) {
         return res.status(404).json({ error: "Payment request not found" });
       }
+      // PHASE 9: Audit
+      await auditEvent({
+        req,
+        module: "payment_requests",
+        entityId: id,
+        entityName: request.requestNumber || `طلب #${id}`,
+        action: "reject",
+        description: `رفض طلب صرف — السبب: ${reason}`,
+        details: { amount: request.amount, reason, contractId: request.contractId },
+        targetId: request.contractId || undefined,
+      });
       res.json(request);
     } catch (error) {
       console.error("Error rejecting payment request:", error);
@@ -4342,14 +4511,31 @@ export async function registerRoutes(
           return res.status(403).json({ error: "غير مصرح بتحديث حالة الدفع لهذا الطلب" });
         }
       }
+      // PHASE 9: Mandatory invoice attachment before mark-paid (any amount)
+      if (existingRequest && (!existingRequest.attachmentUrl || !existingRequest.invoiceNumber)) {
+        return res.status(400).json({
+          error: "لا يمكن إثبات الصرف بدون إرفاق الفاتورة ورقمها. حرّر الطلب وأضف المرفق ورقم الفاتورة.",
+        });
+      }
       const request = await storage.markPaymentRequestAsPaid(id, req.currentUser?.id);
       if (!request) {
         return res.status(404).json({ error: "Payment request not found" });
       }
+      // PHASE 9: Audit
+      await auditEvent({
+        req,
+        module: "payment_requests",
+        entityId: id,
+        entityName: request.requestNumber || `طلب #${id}`,
+        action: "mark_paid",
+        description: `إثبات صرف طلب بقيمة ${Number(request.amount).toLocaleString("ar-SA")} ر.س`,
+        details: { amount: request.amount, invoiceNumber: request.invoiceNumber, contractId: request.contractId },
+        targetId: request.contractId || undefined,
+      });
       res.json(request);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error marking payment request as paid:", error);
-      res.status(500).json({ error: "Failed to mark payment request as paid" });
+      res.status(500).json({ error: error?.message || "Failed to mark payment request as paid" });
     }
   });
 

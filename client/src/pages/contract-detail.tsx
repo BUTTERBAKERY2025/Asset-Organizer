@@ -41,6 +41,7 @@ import { ContractVariationsCard, ContractGuaranteesCard } from "@/components/con
 import { ContractLiquidatedDamagesCard } from "@/components/contract-liquidated-damages";
 import { ContractAccountingCard, ContractBoqCard } from "@/components/contract-accounting-card";
 import { ContractDocument } from "@/components/contract-document";
+import { ContractAuditTimeline } from "@/components/contract-audit-timeline";
 import { useRef } from "react";
 import { useReactToPrint } from "react-to-print";
 
@@ -592,6 +593,9 @@ export default function ContractDetailPage() {
         <ContractBoqCard contractId={contractId} contractTotal={contract.totalAmount || 0} canEdit={canEditMilestone} />
 
         <ContractAccountingCard contractId={contractId} canEdit={canEditMilestone} />
+
+        {/* Phase 9: Audit timeline */}
+        <ContractAuditTimeline contractId={contractId} />
 
         {/* Milestones section */}
         <Card>
