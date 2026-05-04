@@ -183,7 +183,7 @@ export default function CashierShiftPerformance() {
       params.append("startDate", reportStartDate);
       params.append("endDate", reportEndDate);
       const res = await fetch(`/api/cashier-journals-report?${params}`);
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       const data = await res.json();
       return data.journals || [];
     },
@@ -214,7 +214,7 @@ export default function CashierShiftPerformance() {
       if (selectedDate) params.append("date", selectedDate);
       if (selectedShift !== "all") params.append("shiftType", selectedShift);
       const res = await fetch(`/api/smart-incentives/challenges-as-targets?${params}`);
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     }
   });
@@ -282,7 +282,7 @@ export default function CashierShiftPerformance() {
         cache: 'no-store',
         headers: { 'Cache-Control': 'no-cache' }
       });
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     staleTime: 15000,

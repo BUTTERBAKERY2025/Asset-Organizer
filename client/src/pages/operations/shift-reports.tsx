@@ -176,7 +176,7 @@ export default function ShiftReportsPage() {
     queryFn: async () => {
       if (!selectedShift) return [];
       const res = await fetch(`/api/branch-shifts/${selectedShift.id}/responses`);
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     enabled: !!selectedShift,
@@ -187,7 +187,7 @@ export default function ShiftReportsPage() {
     queryFn: async () => {
       if (!selectedShift) return [];
       const res = await fetch(`/api/branch-shifts/${selectedShift.id}/signatures`);
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     enabled: !!selectedShift,

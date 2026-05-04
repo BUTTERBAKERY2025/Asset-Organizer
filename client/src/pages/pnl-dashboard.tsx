@@ -1267,7 +1267,7 @@ export default function PnLDashboard() {
     queryFn: async () => {
       if (!selectedBranchId) return null;
       const res = await fetch(`/api/pnl/branch-settings/${selectedBranchId}`);
-      if (!res.ok) return null;
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     enabled: !!selectedBranchId,
@@ -1279,7 +1279,7 @@ export default function PnLDashboard() {
     queryFn: async () => {
       if (!selectedBranchId) return null;
       const res = await fetch(`/api/pnl/monthly-inputs/${selectedBranchId}/${selectedYear}/${selectedMonth}`);
-      if (!res.ok) return null;
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     enabled: !!selectedBranchId && !!selectedYear && !!selectedMonth,

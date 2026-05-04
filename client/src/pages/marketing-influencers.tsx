@@ -247,7 +247,7 @@ export default function MarketingInfluencersPage() {
     queryFn: async () => {
       if (!selectedInfluencer) return [];
       const res = await fetch(`/api/marketing/influencers/${selectedInfluencer.id}/payments`);
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     enabled: !!selectedInfluencer && isDetailSheetOpen,
@@ -258,7 +258,7 @@ export default function MarketingInfluencersPage() {
     queryFn: async () => {
       if (!selectedInfluencer) return 0;
       const res = await fetch(`/api/marketing/influencers/${selectedInfluencer.id}/total-payments`);
-      if (!res.ok) return 0;
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       const data = await res.json();
       return data.total || 0;
     },
@@ -270,7 +270,7 @@ export default function MarketingInfluencersPage() {
     queryFn: async () => {
       if (!selectedInfluencer) return [];
       const res = await fetch(`/api/marketing/influencers/${selectedInfluencer.id}/expenses`);
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     enabled: !!selectedInfluencer && isDetailSheetOpen,
@@ -281,7 +281,7 @@ export default function MarketingInfluencersPage() {
     queryFn: async () => {
       if (!selectedInfluencer) return 0;
       const res = await fetch(`/api/marketing/influencers/${selectedInfluencer.id}/total-expenses`);
-      if (!res.ok) return 0;
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       const data = await res.json();
       return data.total || 0;
     },
@@ -292,7 +292,7 @@ export default function MarketingInfluencersPage() {
     queryKey: ["/api/marketing/campaigns"],
     queryFn: async () => {
       const res = await fetch("/api/marketing/campaigns");
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     staleTime: 1000 * 60 * 5, // 5 minutes
@@ -303,7 +303,7 @@ export default function MarketingInfluencersPage() {
     queryKey: ["/api/marketing/influencer-links/all"],
     queryFn: async () => {
       const res = await fetch("/api/marketing/influencer-links");
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     enabled: activePageTab === "coverage-links",

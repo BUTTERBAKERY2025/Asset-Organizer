@@ -111,11 +111,14 @@ export default function AttendanceCheckPage() {
     queryFn: async () => {
       if (!selectedBranch || !selectedShift) return { employees: [], biometricStatus: {} };
       const res = await fetch(`/api/attendance-check/bundle?branchId=${selectedBranch}&shiftType=${selectedShift}&date=${selectedDate}`, { credentials: "include" });
-      if (!res.ok) return { employees: [], biometricStatus: {} };
+      if (!res.ok) {
+        throw new Error(`${res.status}: فشل تحميل بيانات الحضور`);
+      }
       return res.json();
     },
     enabled: !!selectedBranch && !!selectedShift,
     staleTime: 15_000,
+    refetchOnMount: "always",
   });
 
   const scheduledEmployees = attendanceBundle?.employees;
@@ -130,7 +133,9 @@ export default function AttendanceCheckPage() {
           queryKey: ["/api/attendance-check/bundle", selectedBranch, shift, selectedDate],
           queryFn: async () => {
             const res = await fetch(`/api/attendance-check/bundle?branchId=${selectedBranch}&shiftType=${shift}&date=${selectedDate}`, { credentials: "include" });
-            if (!res.ok) return { employees: [], biometricStatus: {} };
+            if (!res.ok) {
+              throw new Error(`${res.status}: فشل تحميل بيانات الحضور`);
+            }
             return res.json();
           },
           staleTime: 15_000,

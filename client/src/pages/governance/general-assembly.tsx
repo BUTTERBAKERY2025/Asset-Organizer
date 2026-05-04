@@ -169,7 +169,7 @@ export default function GeneralAssemblyPage() {
     queryFn: async () => {
       if (!invitationMeetingId) return [];
       const res = await fetch(`/api/governance/meetings/${invitationMeetingId}/rsvps`, { credentials: "include" });
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     enabled: !!invitationMeetingId && showInvitations,

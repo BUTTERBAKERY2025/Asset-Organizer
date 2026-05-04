@@ -82,7 +82,7 @@ export function NotificationsDropdown() {
     queryKey: ["/api/inventory/low-quantity"],
     queryFn: async () => {
       const res = await fetch("/api/inventory/low-quantity");
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     staleTime: 5 * 60 * 1000,
@@ -93,7 +93,7 @@ export function NotificationsDropdown() {
     queryKey: ["/api/inventory/maintenance-needed"],
     queryFn: async () => {
       const res = await fetch("/api/inventory/maintenance-needed");
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     staleTime: 5 * 60 * 1000,
@@ -104,7 +104,7 @@ export function NotificationsDropdown() {
     queryKey: ["/api/system-notifications"],
     queryFn: async () => {
       const res = await fetch("/api/system-notifications");
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     staleTime: 30 * 1000,

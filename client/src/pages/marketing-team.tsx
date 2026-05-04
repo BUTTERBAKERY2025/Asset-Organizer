@@ -83,7 +83,7 @@ export default function MarketingTeamPage() {
     queryKey: ["/api/marketing/team"],
     queryFn: async () => {
       const res = await fetch("/api/marketing/team");
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
   });
@@ -92,7 +92,7 @@ export default function MarketingTeamPage() {
     queryKey: ["/api/marketing/tasks"],
     queryFn: async () => {
       const res = await fetch("/api/marketing/tasks");
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
   });

@@ -1201,7 +1201,7 @@ function AccountingSection({ exports }: { exports: AccountingExport[] }) {
     queryKey: ["/api/accounting/journal-entries", journalQueryParams.toString()],
     queryFn: async () => {
       const res = await fetch(`/api/accounting/journal-entries?${journalQueryParams.toString()}`, { credentials: "include" });
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     enabled: acctTab === 'journal',
@@ -1211,7 +1211,7 @@ function AccountingSection({ exports }: { exports: AccountingExport[] }) {
     queryKey: ["/api/accounting/reconciliations"],
     queryFn: async () => {
       const res = await fetch("/api/accounting/reconciliations", { credentials: "include" });
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     enabled: acctTab === 'reconciliation',
@@ -1221,7 +1221,7 @@ function AccountingSection({ exports }: { exports: AccountingExport[] }) {
     queryKey: ["/api/accounting/chart-of-accounts"],
     queryFn: async () => {
       const res = await fetch("/api/accounting/chart-of-accounts", { credentials: "include" });
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     enabled: acctTab === 'accounts',
@@ -1231,7 +1231,7 @@ function AccountingSection({ exports }: { exports: AccountingExport[] }) {
     queryKey: ["/api/accounting/journal-entries", expandedEntry],
     queryFn: async () => {
       const res = await fetch(`/api/accounting/journal-entries/${expandedEntry}`, { credentials: "include" });
-      if (!res.ok) return null;
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     enabled: expandedEntry !== null,

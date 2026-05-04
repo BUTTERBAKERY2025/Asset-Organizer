@@ -74,7 +74,7 @@ export default function MarketingGoalsPage() {
     queryKey: ["/api/marketing/campaigns"],
     queryFn: async () => {
       const res = await fetch("/api/marketing/campaigns");
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
   });
@@ -94,7 +94,7 @@ export default function MarketingGoalsPage() {
         return allGoals;
       }
       const res = await fetch(`/api/marketing/campaigns/${selectedCampaignId}/goals`);
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     enabled: campaigns.length > 0,

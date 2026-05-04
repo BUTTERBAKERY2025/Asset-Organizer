@@ -87,7 +87,7 @@ export default function ConstructionDashboardPage() {
     queryKey: ["/api/construction/work-items"],
     queryFn: async () => {
       const res = await fetch("/api/construction/work-items");
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     staleTime: 1000 * 60 * 5, // 5 minutes

@@ -73,7 +73,7 @@ export default function MarketingAlertsPage() {
     queryKey: ["/api/marketing/alerts"],
     queryFn: async () => {
       const res = await fetch("/api/marketing/alerts");
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
   });

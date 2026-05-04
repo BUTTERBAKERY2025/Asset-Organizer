@@ -180,7 +180,7 @@ export default function SecurityManagementPage() {
     queryKey: ["/api/security/alerts"],
     queryFn: async () => {
       const res = await fetch("/api/security/alerts", { credentials: "include" });
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
   });
@@ -189,7 +189,7 @@ export default function SecurityManagementPage() {
     queryKey: ["/api/rbac/role-templates"],
     queryFn: async () => {
       const res = await fetch("/api/rbac/role-templates", { credentials: "include" });
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
   });

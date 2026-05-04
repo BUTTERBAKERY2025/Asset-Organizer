@@ -186,7 +186,7 @@ export default function TimesheetPage() {
       const params = new URLSearchParams();
       if (selectedBranch && selectedBranch !== "all") params.append("branchId", selectedBranch);
       const res = await fetch(`/api/branch-employees?${params}`);
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
   });
@@ -402,7 +402,7 @@ export default function TimesheetPage() {
     queryFn: async () => {
       if (!selectedReport) return [];
       const res = await fetch(`/api/timesheet-reports/${selectedReport.id}/audit-log`);
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     enabled: !!selectedReport,

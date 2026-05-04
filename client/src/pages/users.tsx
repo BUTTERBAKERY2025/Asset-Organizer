@@ -221,7 +221,7 @@ export default function UsersPage() {
     queryFn: async () => {
       if (!selectedUser) return [];
       const res = await fetch(`/api/users/${selectedUser.id}/permissions`);
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       const data = await res.json();
       const state: PermissionState = {};
       for (const perm of data) {
@@ -239,7 +239,7 @@ export default function UsersPage() {
     queryFn: async () => {
       if (!selectedUser) return [];
       const res = await fetch(`/api/users/${selectedUser.id}/permissions-with-sources`);
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       const data: PermissionWithSource[] = await res.json();
       const sourcesMap = new Map<string, PermissionWithSource>();
       for (const perm of data) {

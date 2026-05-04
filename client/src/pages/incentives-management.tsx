@@ -194,7 +194,7 @@ export default function IncentivesManagement() {
       params.set("branchId", branchTargetBranchId);
       params.set("yearMonth", branchTargetYearMonth);
       const res = await fetch(`/api/targets/monthly?${params}`, { credentials: "include" });
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     enabled: branchTargetEnabled,
@@ -227,7 +227,7 @@ export default function IncentivesManagement() {
       if (walletDateTo) params.set("dateTo", walletDateTo);
       params.set("_t", Date.now().toString());
       const res = await fetch(`/api/smart-incentives/points-ledger?${params.toString()}`, { cache: 'no-store' });
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     enabled: ledgerQueryEnabled,
@@ -240,7 +240,7 @@ export default function IncentivesManagement() {
     queryFn: async () => {
       if (!walletCashierId) return null;
       const res = await fetch(`/api/smart-incentives/points-summary/${walletCashierId}?yearMonth=${selectedMonth}&_t=${Date.now()}`, { cache: 'no-store' });
-      if (!res.ok) return null;
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     enabled: !!walletCashierId,

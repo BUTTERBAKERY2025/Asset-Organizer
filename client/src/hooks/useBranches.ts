@@ -10,7 +10,7 @@ export function useBranches() {
     queryKey: ["/api/branches"],
     queryFn: async () => {
       const res = await fetch("/api/branches", { credentials: "include" });
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     staleTime: 1000 * 60 * 60, // 1 hour - branches rarely change

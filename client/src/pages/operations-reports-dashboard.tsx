@@ -763,7 +763,7 @@ export default function OperationsReportsDashboardPage() {
     queryKey: [`/api/targets/progress-summary?yearMonth=${currentYearMonth}`],
     queryFn: async () => {
       const res = await fetch(`/api/targets/progress-summary?yearMonth=${currentYearMonth}`);
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     enabled: activeTab === 'targets',
@@ -902,7 +902,7 @@ export default function OperationsReportsDashboardPage() {
     queryKey: [`/api/reports/executive-summary?${queryString}`],
     queryFn: async () => {
       const res = await fetch(`/api/reports/executive-summary?${queryString}`);
-      if (!res.ok) return null;
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     enabled: activeTab === 'executive',
@@ -964,7 +964,7 @@ export default function OperationsReportsDashboardPage() {
     queryKey: [`/api/reports/payment-mismatch-analysis?${queryString}`],
     queryFn: async () => {
       const res = await fetch(`/api/reports/payment-mismatch-analysis?${queryString}`);
-      if (!res.ok) return null;
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     enabled: activeTab === 'payment-mismatch',

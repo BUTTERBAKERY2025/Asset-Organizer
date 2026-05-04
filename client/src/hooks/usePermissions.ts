@@ -16,7 +16,7 @@ export function usePermissions() {
     queryKey: ["/api/my-permissions"],
     queryFn: async () => {
       const res = await fetch("/api/my-permissions", { credentials: "include" });
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     enabled: !!user,

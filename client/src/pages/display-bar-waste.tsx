@@ -172,7 +172,7 @@ export default function DisplayBarWastePage() {
     queryKey: ["/api/products"],
     queryFn: async () => {
       const res = await fetch("/api/products");
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
   });
@@ -184,7 +184,7 @@ export default function DisplayBarWastePage() {
       if (selectedBranch !== "all") params.append("branchId", selectedBranch);
       if (selectedDate) params.append("date", selectedDate);
       const res = await fetch(`/api/display-bar/receipts?${params}`, { credentials: "include" });
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       const data = await res.json();
       return Array.isArray(data) ? data : [];
     },
@@ -200,7 +200,7 @@ export default function DisplayBarWastePage() {
         params.append("dateTo", selectedDate);
       }
       const res = await fetch(`/api/waste-reports?${params}`, { credentials: "include" });
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       const data = await res.json();
       return Array.isArray(data) ? data : [];
     },
@@ -225,7 +225,7 @@ export default function DisplayBarWastePage() {
       if (selectedBranch !== "all") params.append("branchId", selectedBranch);
       if (selectedDate) params.append("date", selectedDate);
       const res = await fetch(`/api/waste-reports/analytics?${params}`, { credentials: "include" });
-      if (!res.ok) return null;
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
   });
@@ -250,7 +250,7 @@ export default function DisplayBarWastePage() {
       if (selectedBranch !== "all") params.append("branchId", selectedBranch);
       if (selectedDate) params.append("date", selectedDate);
       const res = await fetch(`/api/display-bar/summary?${params}`, { credentials: "include" });
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     enabled: selectedBranch !== "all" && activeTab === "waste",
@@ -280,7 +280,7 @@ export default function DisplayBarWastePage() {
       if (historyDateTo) params.append("dateTo", historyDateTo);
       if (historyStatus !== "all") params.append("status", historyStatus);
       const res = await fetch(`/api/waste-reports/history?${params}`, { credentials: "include" });
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     enabled: activeTab === "history",
@@ -323,7 +323,7 @@ export default function DisplayBarWastePage() {
       params.append("dateTo", analyticsDateTo);
       if (analyticsCategory !== "all") params.append("category", analyticsCategory);
       const res = await fetch(`/api/waste-reports/analytics-detailed?${params}`, { credentials: "include" });
-      if (!res.ok) return null;
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     enabled: activeTab === "reports",
@@ -338,7 +338,7 @@ export default function DisplayBarWastePage() {
       params.append("dateFrom", analyticsDateFrom);
       params.append("dateTo", analyticsDateTo);
       const res = await fetch(`/api/waste-reports/product-details/${selectedProductId}?${params}`, { credentials: "include" });
-      if (!res.ok) return null;
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     enabled: !!selectedProductId && showProductDetailDialog,
@@ -392,7 +392,7 @@ export default function DisplayBarWastePage() {
     queryFn: async () => {
       if (!viewingReport?.id) return [];
       const res = await fetch(`/api/waste-reports/${viewingReport.id}/items`, { credentials: "include" });
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     enabled: !!viewingReport?.id && showReportDetailsDialog,

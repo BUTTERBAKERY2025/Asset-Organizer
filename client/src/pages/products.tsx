@@ -70,7 +70,7 @@ export default function ProductsPage() {
     queryKey: ["/api/products"],
     queryFn: async () => {
       const res = await fetch("/api/products");
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
   });

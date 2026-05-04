@@ -90,7 +90,7 @@ export default function MarketingDashboardPage() {
     queryKey: ["/api/marketing/campaigns"],
     queryFn: async () => {
       const res = await fetch("/api/marketing/campaigns");
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
   });
@@ -100,7 +100,7 @@ export default function MarketingDashboardPage() {
     queryKey: ["/api/marketing/influencers"],
     queryFn: async () => {
       const res = await fetch("/api/marketing/influencers");
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
   });
@@ -110,7 +110,7 @@ export default function MarketingDashboardPage() {
     queryKey: ["/api/marketing/tasks"],
     queryFn: async () => {
       const res = await fetch("/api/marketing/tasks");
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
   });
@@ -120,7 +120,7 @@ export default function MarketingDashboardPage() {
     queryKey: ["/api/marketing/team"],
     queryFn: async () => {
       const res = await fetch("/api/marketing/team");
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
   });
@@ -130,7 +130,7 @@ export default function MarketingDashboardPage() {
     queryKey: ["/api/marketing/calendar-events"],
     queryFn: async () => {
       const res = await fetch("/api/marketing/calendar-events");
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
   });
@@ -140,7 +140,7 @@ export default function MarketingDashboardPage() {
     queryKey: ["/api/marketing/expenses"],
     queryFn: async () => {
       const res = await fetch("/api/marketing/expenses");
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
   });

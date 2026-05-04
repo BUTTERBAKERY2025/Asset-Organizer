@@ -107,7 +107,7 @@ export default function ShareholdersPage() {
     queryFn: async () => {
       if (!selectedShareholder?.id) return [];
       const res = await fetch(`/api/governance/shareholders/${selectedShareholder.id}/documents`);
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     enabled: !!selectedShareholder?.id && showDetails,

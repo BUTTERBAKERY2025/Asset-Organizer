@@ -234,7 +234,7 @@ export default function DailyProductionPage() {
       const params = new URLSearchParams();
       if (branchId) params.set("branchId", branchId);
       const res = await fetch(`/api/daily-production/chefs?${params}`, { credentials: "include" });
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     enabled: !!branchId,
@@ -248,7 +248,7 @@ export default function DailyProductionPage() {
       if (branchId) params.set("branchId", branchId);
       params.set("_t", Date.now().toString());
       const res = await fetch(`/api/daily-production/unfinished?${params}`, { credentials: "include", cache: "no-store" });
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     enabled: !!branchId,

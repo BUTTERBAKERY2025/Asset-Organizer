@@ -77,7 +77,7 @@ export function ItemCardDialog({ item, branchName, open, onOpenChange }: ItemCar
     queryFn: async () => {
       if (!item?.id) return [];
       const res = await fetch(`/api/asset-transfers/by-item/${item.id}`);
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     enabled: !!item?.id && open,

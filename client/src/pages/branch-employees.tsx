@@ -267,7 +267,7 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
     queryKey: ["/api/employee-transfers"],
     queryFn: async () => {
       const res = await fetch("/api/employee-transfers");
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
   });
@@ -983,7 +983,7 @@ export default function BranchEmployeesPage() {
     queryKey: ["/api/employee-settings"],
     queryFn: async () => {
       const res = await fetch("/api/employee-settings", { credentials: "include" });
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       const data = await res.json();
       return Array.isArray(data) ? data : [];
     },

@@ -361,7 +361,7 @@ export default function BranchShiftsPage() {
     queryKey: ["/api/shifts/employee-count", selectedBranch, workingDate, selectedShiftType],
     queryFn: async () => {
       const res = await fetch(`/api/shifts/employee-count?branchId=${selectedBranch}&date=${workingDate}&shiftType=${selectedShiftType}`, { credentials: "include" });
-      if (!res.ok) return { count: 0 };
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     enabled: !!selectedBranch,
@@ -385,7 +385,7 @@ export default function BranchShiftsPage() {
     queryKey: ["/api/branch-shifts/dashboard/today", workingDate],
     queryFn: async () => {
       const res = await fetch(`/api/branch-shifts/dashboard/today?date=${workingDate}`, { credentials: "include" });
-      if (!res.ok) return { dashboard: [], shifts: [] };
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
   });

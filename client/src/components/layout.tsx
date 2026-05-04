@@ -212,7 +212,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     queryKey: ["/api/branches"],
     queryFn: async () => {
       const res = await fetch("/api/branches");
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     enabled: isAuthenticated,

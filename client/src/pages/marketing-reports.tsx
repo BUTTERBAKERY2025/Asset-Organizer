@@ -70,7 +70,7 @@ export default function MarketingReportsPage() {
     queryKey: ["/api/marketing/campaigns"],
     queryFn: async () => {
       const res = await fetch("/api/marketing/campaigns");
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
   });
@@ -79,7 +79,7 @@ export default function MarketingReportsPage() {
     queryKey: ["/api/marketing/expenses"],
     queryFn: async () => {
       const res = await fetch("/api/marketing/expenses");
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
   });
@@ -88,7 +88,7 @@ export default function MarketingReportsPage() {
     queryKey: ["/api/marketing/influencers"],
     queryFn: async () => {
       const res = await fetch("/api/marketing/influencers");
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
   });
@@ -97,7 +97,7 @@ export default function MarketingReportsPage() {
     queryKey: ["/api/marketing/influencer-payments"],
     queryFn: async () => {
       const res = await fetch("/api/marketing/influencer-payments");
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
   });

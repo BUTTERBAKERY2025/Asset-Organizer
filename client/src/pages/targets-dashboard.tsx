@@ -202,7 +202,7 @@ export default function TargetsDashboard() {
     queryKey: ["/api/smart-incentives/top-cashiers", selectedMonth],
     queryFn: async () => {
       const res = await fetch(`/api/smart-incentives/top-cashiers?yearMonth=${selectedMonth}&limit=20`);
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
   });

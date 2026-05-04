@@ -143,7 +143,7 @@ export default function ResolutionsPage() {
     queryFn: async () => {
       if (!selectedResolution?.id) return [];
       const res = await fetch(`/api/governance/resolutions/${selectedResolution.id}/signatures`);
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     enabled: !!selectedResolution?.id && showSignatures,

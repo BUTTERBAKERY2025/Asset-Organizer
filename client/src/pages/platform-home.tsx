@@ -170,7 +170,7 @@ export default function PlatformHomePage() {
     queryFn: async () => {
       const branchParam = activeBranch?.id ? `?branchId=${activeBranch.id}` : '';
       const res = await fetch(`/api/dashboard/stats${branchParam}`);
-      if (!res.ok) return null;
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     enabled: isAuthenticated,
@@ -190,7 +190,7 @@ export default function PlatformHomePage() {
     queryKey: ["/api/branch-employees/count"],
     queryFn: async () => {
       const res = await fetch("/api/branch-employees?countOnly=true");
-      if (!res.ok) return 0;
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       const data = await res.json();
       if (typeof data === 'number') return data;
       if (Array.isArray(data)) return data.filter((e: any) => e.status === 'active').length;

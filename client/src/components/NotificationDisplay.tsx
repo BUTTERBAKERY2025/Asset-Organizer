@@ -447,7 +447,7 @@ export function NotificationDisplay() {
     queryKey: ["/api/active-notifications"],
     queryFn: async () => {
       const res = await fetch("/api/active-notifications", { credentials: "include" });
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     refetchInterval: 60000,

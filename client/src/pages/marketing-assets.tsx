@@ -93,7 +93,7 @@ export default function MarketingAssetsPage() {
     queryKey: ["/api/branches"],
     queryFn: async () => {
       const res = await fetch("/api/branches");
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
   });
@@ -102,7 +102,7 @@ export default function MarketingAssetsPage() {
     queryKey: ["/api/marketing/campaigns"],
     queryFn: async () => {
       const res = await fetch("/api/marketing/campaigns");
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
   });
@@ -111,7 +111,7 @@ export default function MarketingAssetsPage() {
     queryKey: ["/api/marketing/assets"],
     queryFn: async () => {
       const res = await fetch("/api/marketing/assets");
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
   });

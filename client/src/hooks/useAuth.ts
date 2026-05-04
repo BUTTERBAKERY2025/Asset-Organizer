@@ -31,7 +31,7 @@ export function useAuth() {
         queryClient.setQueryData(["/api/auth/me"], null);
         return null;
       }
-      if (!res.ok) return null;
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     retry: 1,

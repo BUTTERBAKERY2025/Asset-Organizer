@@ -219,7 +219,7 @@ export default function NotificationsManagement() {
     queryKey: ["/api/system-notifications/read-stats"],
     queryFn: async () => {
       const res = await fetch("/api/system-notifications/read-stats", { credentials: "include" });
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
   });

@@ -163,7 +163,7 @@ export default function TargetsPlanning() {
     queryKey: ["/api/seasons-holidays/by-month", { yearMonth: selectedMonth }],
     queryFn: async () => {
       const res = await fetch(`/api/seasons-holidays/by-month?yearMonth=${selectedMonth}`);
-      if (!res.ok) return [];
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     }
   });

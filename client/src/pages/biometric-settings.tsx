@@ -192,7 +192,7 @@ export default function BiometricSettingsPage() {
     queryKey: ["/api/biometric-settings/stats"],
     queryFn: async () => {
       const res = await fetch("/api/biometric-settings/stats", { credentials: "include" });
-      if (!res.ok) return null;
+      if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
     },
     enabled: isAdmin,
