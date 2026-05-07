@@ -882,10 +882,16 @@ export function registerGovernanceRoutes(app: Express) {
   app.post("/api/governance/resolutions", isAuthenticated, requirePermission("governance_resolutions", "create"), async (req, res) => {
     try {
       const year = new Date().getFullYear();
-      const maxResResult = await db.select({ maxNum: sql<string>`MAX(resolution_number)` }).from(boardResolutions);
-      const lastResNum = maxResResult[0]?.maxNum ? parseInt(maxResResult[0].maxNum.replace(/\D/g, '').slice(-4)) : 0;
+      // Compute next number scoped to this year only, to avoid collisions across years
+      const maxResResult = await db
+        .select({ maxNum: sql<string>`MAX(resolution_number)` })
+        .from(boardResolutions)
+        .where(sql`resolution_number LIKE ${`RES-${year}-%`}`);
+      const lastResNum = maxResResult[0]?.maxNum
+        ? parseInt(String(maxResResult[0].maxNum).split('-').pop() || '0', 10) || 0
+        : 0;
       const resolutionNumber = `RES-${year}-${String(lastResNum + 1).padStart(4, '0')}`;
-      
+
       const data = insertBoardResolutionSchema.parse({
         ...req.body,
         resolutionNumber,
@@ -895,9 +901,16 @@ export function registerGovernanceRoutes(app: Express) {
       });
       const [resolution] = await db.insert(boardResolutions).values(data).returning();
       res.status(201).json(resolution);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating resolution:", error);
-      res.status(500).json({ error: "فشل في إنشاء القرار" });
+      // Surface the real reason so the user can see it in the browser network tab
+      const message =
+        error?.code === '23505'
+          ? `رقم القرار مستخدم بالفعل: ${error?.detail || error?.constraint || ''}`
+          : error?.issues
+            ? `بيانات غير صالحة: ${error.issues.map((i: any) => `${i.path?.join('.')}: ${i.message}`).join(' | ')}`
+            : error?.message || 'فشل في إنشاء القرار';
+      res.status(500).json({ error: message, code: error?.code, detail: error?.detail });
     }
   });
 

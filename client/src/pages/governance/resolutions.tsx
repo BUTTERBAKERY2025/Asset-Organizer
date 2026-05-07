@@ -185,7 +185,14 @@ export default function ResolutionsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error("Failed to create resolution");
+      if (!res.ok) {
+        let serverMsg = "Failed to create resolution";
+        try {
+          const body = await res.json();
+          serverMsg = body?.error || body?.message || serverMsg;
+        } catch {}
+        throw new Error(serverMsg);
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -193,8 +200,12 @@ export default function ResolutionsPage() {
       setIsDialogOpen(false);
       toast({ title: "تم إنشاء القرار بنجاح" });
     },
-    onError: () => {
-      toast({ title: "فشل في إنشاء القرار", variant: "destructive" });
+    onError: (err: any) => {
+      toast({
+        title: "فشل في إنشاء القرار",
+        description: err?.message || "حدث خطأ غير معروف",
+        variant: "destructive",
+      });
     },
   });
 
