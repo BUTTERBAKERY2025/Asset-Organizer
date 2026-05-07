@@ -719,11 +719,10 @@ export default function ResolutionsPage() {
                                       background: white;
                                     }
                                     
-                                    /* Force everything to stay on a single page */
-                                    .document, .main-content, .content-section, .signatures-section,
+                                    /* Keep critical small blocks together; allow long text to flow naturally */
                                     .header, .resolution-title-box, .voting-box, .result-badge,
                                     .signature-card, .section-title, .meta-section, .footer,
-                                    .resolution-text {
+                                    .signatures-section {
                                       page-break-inside: avoid;
                                       break-inside: avoid;
                                     }
@@ -889,17 +888,15 @@ export default function ResolutionsPage() {
                                     }
                                     
                                     .resolution-text {
-                                      line-height: 1.5;
+                                      line-height: 1.6;
                                       text-align: justify;
                                       white-space: pre-wrap;
-                                      font-size: 9px;
+                                      font-size: 9.5px;
                                       color: #333;
                                       padding: 6px 8px;
                                       background: white;
                                       border-radius: 4px;
                                       border: 1px solid #eee;
-                                      max-height: 130mm;
-                                      overflow: hidden;
                                     }
                                     
                                     /* Voting Section */
