@@ -694,110 +694,72 @@ export default function ResolutionsPage() {
                                   <style>
                                     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
                                     
-                                    /* Page Setup with Page Numbers */
+                                    /* Single-Page Setup */
                                     @page { 
                                       size: A4 landscape; 
-                                      margin: 15mm 12mm 20mm 12mm;
-                                      @bottom-center {
-                                        content: "صفحة " counter(page) " من " counter(pages);
-                                        font-family: 'Cairo', sans-serif;
-                                        font-size: 10px;
-                                        color: #666;
-                                      }
+                                      margin: 8mm 8mm 8mm 8mm;
                                     }
                                     
                                     * { box-sizing: border-box; margin: 0; padding: 0; }
                                     
-                                    body { 
+                                    html, body { 
                                       font-family: 'Cairo', sans-serif; 
                                       direction: rtl; 
                                       background: white;
                                       color: #1a1a1a;
-                                      line-height: 1.6;
-                                      font-size: 11pt;
-                                      counter-reset: page;
+                                      line-height: 1.4;
+                                      font-size: 10pt;
                                     }
                                     
                                     .document {
-                                      max-width: 277mm;
+                                      width: 100%;
+                                      max-width: 281mm;
                                       margin: 0 auto;
                                       padding: 0;
                                       background: white;
                                     }
                                     
-                                    /* Prevent Page Breaks Inside Critical Elements */
-                                    .header, .resolution-title-box, .voting-box, .result-badge, 
-                                    .signature-card, .section-title, .meta-section {
+                                    /* Force everything to stay on a single page */
+                                    .document, .main-content, .content-section, .signatures-section,
+                                    .header, .resolution-title-box, .voting-box, .result-badge,
+                                    .signature-card, .section-title, .meta-section, .footer,
+                                    .resolution-text {
                                       page-break-inside: avoid;
                                       break-inside: avoid;
                                     }
                                     
-                                    /* Keep Section Headers with Their Content */
                                     .section-title {
                                       page-break-after: avoid;
                                       break-after: avoid;
-                                      margin-top: 15px;
+                                      margin-top: 8px;
                                     }
                                     
-                                    /* Content sections can break between paragraphs */
-                                    .content-section {
-                                      page-break-inside: auto;
-                                    }
-                                    
-                                    /* Force Signatures Section to Stay Together or Start New Page */
-                                    .signatures-section {
-                                      page-break-inside: avoid;
-                                      break-inside: avoid;
-                                      page-break-before: auto;
-                                    }
-                                    
-                                    /* Resolution text paragraphs */
-                                    .resolution-text {
-                                      page-break-inside: auto;
-                                      orphans: 4;
-                                      widows: 4;
-                                    }
-                                    
-                                    /* Multi-page layout: Stack vertically for long content */
                                     @media print {
-                                      .main-content {
-                                        display: block !important;
-                                      }
-                                      .content-section {
-                                        margin-bottom: 20px;
-                                      }
-                                      .signatures-section {
-                                        margin-top: 20px;
-                                      }
-                                      .signature-card {
-                                        display: inline-block;
-                                        width: 30%;
-                                        vertical-align: top;
-                                        margin: 5px;
-                                      }
+                                      .document { padding: 0; }
+                                      body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
                                     }
                                     
-                                    /* Header Section */
+                                    /* Header Section - compact */
                                     .header {
                                       display: flex;
                                       justify-content: space-between;
                                       align-items: center;
-                                      padding: 10px 15px;
-                                      margin-bottom: 15px;
+                                      padding: 6px 10px;
+                                      margin-bottom: 8px;
                                       background: linear-gradient(to left, #f8faf9, #fff, #f8faf9);
-                                      border: 2px solid #1a5f3c;
-                                      border-radius: 8px;
+                                      border: 1.5px solid #1a5f3c;
+                                      border-radius: 6px;
                                     }
                                     
                                     .logo-section {
                                       display: flex;
                                       align-items: center;
-                                      gap: 12px;
+                                      gap: 8px;
                                     }
                                     
                                     .logo-circle {
-                                      width: 50px;
-                                      height: 50px;
+                                      width: 36px;
+                                      height: 36px;
                                       background: linear-gradient(135deg, #d4a853, #b8962f);
                                       border-radius: 50%;
                                       display: flex;
@@ -805,32 +767,27 @@ export default function ResolutionsPage() {
                                       justify-content: center;
                                       color: white;
                                       font-weight: 800;
-                                      font-size: 20px;
-                                      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+                                      font-size: 16px;
                                     }
                                     
-                                    .company-info {
-                                      text-align: right;
-                                    }
+                                    .company-info { text-align: right; }
                                     
                                     .company-name-ar {
-                                      font-size: 18px;
+                                      font-size: 13px;
                                       font-weight: 800;
                                       color: #1a5f3c;
-                                      margin-bottom: 1px;
                                     }
                                     
                                     .company-name-en {
-                                      font-size: 10px;
+                                      font-size: 8px;
                                       color: #555;
                                       font-weight: 600;
-                                      letter-spacing: 0.5px;
                                     }
                                     
                                     .company-details {
-                                      font-size: 9px;
+                                      font-size: 7px;
                                       color: #777;
-                                      margin-top: 3px;
+                                      margin-top: 1px;
                                     }
                                     
                                     .doc-title-section {
@@ -841,110 +798,108 @@ export default function ResolutionsPage() {
                                     .doc-type-badge {
                                       background: linear-gradient(135deg, #1a5f3c 0%, #2d8f5e 100%);
                                       color: white;
-                                      padding: 10px 40px;
-                                      font-size: 16px;
+                                      padding: 5px 22px;
+                                      font-size: 12px;
                                       font-weight: 700;
-                                      border-radius: 6px;
+                                      border-radius: 4px;
                                       display: inline-block;
-                                      box-shadow: 0 2px 8px rgba(26,95,60,0.3);
                                     }
                                     
                                     .resolution-number {
-                                      font-size: 12px;
+                                      font-size: 10px;
                                       color: #1a5f3c;
                                       font-weight: 700;
-                                      margin-top: 6px;
+                                      margin-top: 3px;
                                     }
                                     
                                     .meta-section {
                                       text-align: left;
-                                      font-size: 10px;
+                                      font-size: 8px;
                                       color: #444;
                                       background: #f5f5f5;
-                                      padding: 8px 12px;
-                                      border-radius: 6px;
-                                      min-width: 140px;
+                                      padding: 5px 8px;
+                                      border-radius: 4px;
+                                      min-width: 120px;
                                     }
                                     
                                     .meta-item {
-                                      margin-bottom: 4px;
+                                      margin-bottom: 2px;
                                       display: flex;
                                       justify-content: space-between;
-                                      gap: 8px;
+                                      gap: 6px;
                                     }
                                     
-                                    .meta-label {
-                                      color: #888;
-                                      font-weight: 600;
-                                    }
+                                    .meta-label { color: #888; font-weight: 600; }
                                     
                                     /* Main Content - Two Column Layout */
                                     .main-content {
                                       display: grid;
-                                      grid-template-columns: 1fr 260px;
-                                      gap: 20px;
-                                      margin-top: 12px;
+                                      grid-template-columns: 1fr 240px;
+                                      gap: 10px;
+                                      margin-top: 6px;
                                     }
                                     
                                     .content-section {
                                       background: #fafafa;
                                       border: 1px solid #e0e0e0;
-                                      border-radius: 10px;
-                                      padding: 18px;
+                                      border-radius: 6px;
+                                      padding: 8px 10px;
                                     }
                                     
                                     .section-title {
                                       display: flex;
                                       align-items: center;
-                                      gap: 10px;
-                                      font-size: 13px;
+                                      gap: 6px;
+                                      font-size: 10px;
                                       font-weight: 700;
                                       color: #1a5f3c;
-                                      margin-bottom: 12px;
-                                      padding-bottom: 8px;
-                                      border-bottom: 2px solid #1a5f3c;
+                                      margin-bottom: 6px;
+                                      padding-bottom: 4px;
+                                      border-bottom: 1.5px solid #1a5f3c;
                                     }
                                     
                                     .section-icon {
-                                      width: 26px;
-                                      height: 26px;
+                                      width: 18px;
+                                      height: 18px;
                                       background: linear-gradient(135deg, #1a5f3c, #2d8f5e);
                                       color: white;
                                       border-radius: 50%;
                                       display: flex;
                                       align-items: center;
                                       justify-content: center;
-                                      font-size: 12px;
+                                      font-size: 9px;
                                       font-weight: bold;
                                       flex-shrink: 0;
                                     }
                                     
                                     .resolution-title-box {
                                       background: linear-gradient(to left, #e8f5e9, #fff, #e8f5e9);
-                                      padding: 14px 18px;
-                                      border-radius: 8px;
+                                      padding: 6px 10px;
+                                      border-radius: 5px;
                                       text-align: center;
-                                      margin-bottom: 15px;
+                                      margin-bottom: 6px;
                                       border: 1px solid #c8e6c9;
                                     }
                                     
                                     .resolution-title-box h2 {
-                                      font-size: 14px;
+                                      font-size: 11px;
                                       font-weight: 700;
                                       color: #1a1a1a;
-                                      line-height: 1.5;
+                                      line-height: 1.4;
                                     }
                                     
                                     .resolution-text {
-                                      line-height: 2;
+                                      line-height: 1.5;
                                       text-align: justify;
                                       white-space: pre-wrap;
-                                      font-size: 11px;
+                                      font-size: 9px;
                                       color: #333;
-                                      padding: 12px 15px;
+                                      padding: 6px 8px;
                                       background: white;
-                                      border-radius: 6px;
+                                      border-radius: 4px;
                                       border: 1px solid #eee;
+                                      max-height: 130mm;
+                                      overflow: hidden;
                                     }
                                     
                                     /* Voting Section */
@@ -952,19 +907,16 @@ export default function ResolutionsPage() {
                                       display: flex;
                                       justify-content: space-around;
                                       background: linear-gradient(to bottom, #f0f7f4, #e8f5e9);
-                                      padding: 12px 15px;
-                                      border-radius: 8px;
-                                      margin-top: 15px;
+                                      padding: 6px 10px;
+                                      border-radius: 5px;
+                                      margin-top: 6px;
                                       border: 1px solid #c8e6c9;
                                     }
                                     
-                                    .vote-item {
-                                      text-align: center;
-                                      padding: 5px 15px;
-                                    }
+                                    .vote-item { text-align: center; padding: 2px 8px; }
                                     
                                     .vote-count {
-                                      font-size: 24px;
+                                      font-size: 16px;
                                       font-weight: 800;
                                       display: block;
                                     }
@@ -974,19 +926,18 @@ export default function ResolutionsPage() {
                                     .vote-count.abstain { color: #757575; }
                                     
                                     .vote-label {
-                                      font-size: 10px;
+                                      font-size: 8px;
                                       color: #555;
                                       font-weight: 600;
-                                      margin-top: 2px;
                                     }
                                     
                                     .result-badge {
                                       text-align: center;
-                                      margin-top: 12px;
-                                      padding: 10px 15px;
+                                      margin-top: 5px;
+                                      padding: 5px 10px;
                                       background: ${resolution.status === 'approved' || resolution.status === 'implemented' ? 'linear-gradient(to left, #e8f5e9, #c8e6c9)' : resolution.status === 'rejected' ? 'linear-gradient(to left, #ffebee, #ffcdd2)' : 'linear-gradient(to left, #fff3e0, #ffe0b2)'};
-                                      border-radius: 6px;
-                                      font-size: 13px;
+                                      border-radius: 4px;
+                                      font-size: 10px;
                                       font-weight: 700;
                                       color: ${resolution.status === 'approved' || resolution.status === 'implemented' ? '#1b5e20' : resolution.status === 'rejected' ? '#b71c1c' : '#e65100'};
                                       border: 1px solid ${resolution.status === 'approved' || resolution.status === 'implemented' ? '#a5d6a7' : resolution.status === 'rejected' ? '#ef9a9a' : '#ffcc80'};
@@ -996,23 +947,22 @@ export default function ResolutionsPage() {
                                     .signatures-section {
                                       background: linear-gradient(to bottom, #fff, #fafafa);
                                       border: 1px solid #e0e0e0;
-                                      border-radius: 10px;
-                                      padding: 15px;
+                                      border-radius: 6px;
+                                      padding: 8px 10px;
                                     }
                                     
                                     .signatures-grid {
-                                      display: flex;
-                                      flex-direction: column;
-                                      gap: 12px;
+                                      display: grid;
+                                      grid-template-columns: 1fr 1fr;
+                                      gap: 6px;
                                     }
                                     
                                     .signature-card {
                                       background: white;
                                       border: 1px solid #e0e0e0;
-                                      border-radius: 8px;
-                                      padding: 12px;
+                                      border-radius: 5px;
+                                      padding: 5px 6px;
                                       text-align: center;
-                                      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
                                     }
                                     
                                     .signature-card.signed {
@@ -1021,68 +971,69 @@ export default function ResolutionsPage() {
                                     }
                                     
                                     .sig-header {
-                                      margin-bottom: 8px;
-                                      padding-bottom: 6px;
+                                      margin-bottom: 3px;
+                                      padding-bottom: 3px;
                                       border-bottom: 1px dashed #ddd;
                                     }
                                     
                                     .sig-name {
-                                      font-size: 11px;
+                                      font-size: 9px;
                                       font-weight: 700;
                                       color: #1a1a1a;
+                                      line-height: 1.2;
                                     }
                                     
                                     .sig-position {
-                                      font-size: 9px;
+                                      font-size: 7px;
                                       color: #666;
-                                      margin-top: 2px;
+                                      margin-top: 1px;
                                     }
                                     
                                     .sig-content {
-                                      min-height: 55px;
+                                      min-height: 28px;
                                       display: flex;
                                       align-items: center;
                                       justify-content: center;
-                                      padding: 5px;
+                                      padding: 2px;
                                     }
                                     
                                     .sig-image {
-                                      max-width: 130px;
-                                      max-height: 50px;
+                                      max-width: 80px;
+                                      max-height: 26px;
                                       object-fit: contain;
                                     }
                                     
                                     .sig-line {
                                       color: #bbb;
-                                      font-size: 14px;
-                                      letter-spacing: 2px;
+                                      font-size: 11px;
+                                      letter-spacing: 1px;
                                     }
                                     
                                     .sig-pending {
                                       color: #ff9800;
-                                      font-size: 9px;
+                                      font-size: 7px;
                                       font-style: italic;
-                                      padding: 4px 10px;
+                                      padding: 2px 6px;
                                       background: #fff8e1;
-                                      border-radius: 10px;
+                                      border-radius: 8px;
                                     }
                                     
                                     .sig-declined {
                                       color: #f44336;
-                                      font-size: 9px;
-                                      padding: 4px 10px;
+                                      font-size: 7px;
+                                      padding: 2px 6px;
                                       background: #ffebee;
-                                      border-radius: 10px;
+                                      border-radius: 8px;
                                     }
                                     
                                     .sig-footer {
                                       display: flex;
                                       justify-content: space-between;
                                       align-items: center;
-                                      margin-top: 8px;
-                                      padding-top: 6px;
+                                      margin-top: 3px;
+                                      padding-top: 3px;
                                       border-top: 1px dotted #eee;
-                                      font-size: 8px;
+                                      font-size: 7px;
                                     }
                                     
                                     .sig-date {
@@ -1112,14 +1063,14 @@ export default function ResolutionsPage() {
                                     
                                     /* Footer */
                                     .footer {
-                                      margin-top: 20px;
-                                      padding: 12px 15px;
+                                      margin-top: 6px;
+                                      padding: 4px 10px;
                                       background: #f5f5f5;
-                                      border-radius: 6px;
+                                      border-radius: 4px;
                                       display: flex;
                                       justify-content: space-between;
                                       align-items: center;
-                                      font-size: 9px;
+                                      font-size: 7px;
                                       color: #666;
                                     }
                                     
@@ -1204,7 +1155,7 @@ export default function ResolutionsPage() {
                                           ${resolution.description || 'بناءً على الصلاحيات المخولة لمجلس الإدارة، وبعد الاطلاع على الموضوع المعروض، تقرر ما يلي:\n\n' + resolution.title}
                                         </div>
                                         
-                                        <div class="section-title" style="margin-top: 18px;">
+                                        <div class="section-title" style="margin-top: 8px;">
                                           <div class="section-icon">٢</div>
                                           <span>نتيجة التصويت</span>
                                         </div>
