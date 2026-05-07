@@ -61,7 +61,12 @@ if (process.env.NODE_ENV === "production") {
     referrerPolicy: { policy: "strict-origin-when-cross-origin" },
   });
   app.use((req, res, next) => {
-    if (req.path === '/vote-resolution.html' || req.path.startsWith('/api/public/')) {
+    if (
+      req.path === '/vote-resolution.html' ||
+      req.path === '/sign-resolution.html' ||
+      req.path === '/discount-standalone.html' ||
+      req.path.startsWith('/api/public/')
+    ) {
       return next();
     }
     return helmetMiddleware(req, res, next);
