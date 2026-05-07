@@ -8398,12 +8398,14 @@ export type InsertResolutionSignature = z.infer<typeof insertResolutionSignature
 export const votingTokens = pgTable("voting_tokens", {
   id: serial("id").primaryKey(),
   resolutionId: integer("resolution_id").notNull().references(() => boardResolutions.id, { onDelete: "cascade" }),
-  shareholderId: integer("shareholder_id").notNull().references(() => shareholders.id, { onDelete: "cascade" }),
+  shareholderId: integer("shareholder_id").references(() => shareholders.id, { onDelete: "cascade" }),
+  boardMemberId: integer("board_member_id").references(() => boardMembers.id, { onDelete: "cascade" }),
+  voterType: text("voter_type").notNull().default("shareholder"), // shareholder, board_member
   voteToken: text("vote_token").notNull().unique(),
   vote: text("vote"), // for, against, abstain
-  voteWeight: integer("vote_weight").default(1), // وزن التصويت (عدد الأسهم)
+  voteWeight: integer("vote_weight").default(1), // وزن التصويت (عدد الأسهم أو وزن العضو)
   comments: text("comments"),
-  signatureData: text("signature_data"), // توقيع المساهم (base64 encoded)
+  signatureData: text("signature_data"), // توقيع المصوّت (base64 encoded)
   status: text("status").default("pending").notNull(), // pending, voted, expired
   votedAt: timestamp("voted_at"),
   ipAddress: text("ip_address"),
@@ -8416,9 +8418,9 @@ export const votingTokens = pgTable("voting_tokens", {
 }, (table) => [
   index("idx_voting_tokens_resolution").on(table.resolutionId),
   index("idx_voting_tokens_shareholder").on(table.shareholderId),
+  index("idx_voting_tokens_board_member").on(table.boardMemberId),
   index("idx_voting_tokens_token").on(table.voteToken),
   index("idx_voting_tokens_status").on(table.status),
-  unique("idx_voting_tokens_unique").on(table.resolutionId, table.shareholderId),
 ]);
 
 export const insertVotingTokenSchema = createInsertSchema(votingTokens).omit({

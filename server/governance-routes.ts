@@ -1921,15 +1921,17 @@ export function registerGovernanceRoutes(app: Express) {
     });
   }, 60000);
 
-  // Get voting tokens for a resolution
+  // Get voting tokens for a resolution (supports both shareholders and board members)
   app.get("/api/governance/resolutions/:resolutionId/voting-tokens", isAuthenticated, async (req, res) => {
     try {
       const resolutionId = parseInt(req.params.resolutionId);
-      const tokens = await db
+      const rows = await db
         .select({
           id: votingTokens.id,
           resolutionId: votingTokens.resolutionId,
           shareholderId: votingTokens.shareholderId,
+          boardMemberId: votingTokens.boardMemberId,
+          voterType: votingTokens.voterType,
           voteToken: votingTokens.voteToken,
           vote: votingTokens.vote,
           voteWeight: votingTokens.voteWeight,
@@ -1940,13 +1942,31 @@ export function registerGovernanceRoutes(app: Express) {
           expiresAt: votingTokens.expiresAt,
           createdAt: votingTokens.createdAt,
           shareholderName: shareholders.fullName,
+          shareholderEmail: shareholders.email,
+          shareholderPhone: shareholders.phone,
           numberOfShares: shareholders.numberOfShares,
+          boardMemberName: boardMembers.fullName,
+          boardMemberEmail: boardMembers.email,
+          boardMemberPhone: boardMembers.phone,
         })
         .from(votingTokens)
-        .innerJoin(shareholders, eq(votingTokens.shareholderId, shareholders.id))
+        .leftJoin(shareholders, eq(votingTokens.shareholderId, shareholders.id))
+        .leftJoin(boardMembers, eq(votingTokens.boardMemberId, boardMembers.id))
         .where(eq(votingTokens.resolutionId, resolutionId))
         .orderBy(desc(votingTokens.createdAt));
-      
+
+      const tokens = rows.map(r => ({
+        ...r,
+        voterName: r.voterType === 'board_member' ? r.boardMemberName : r.shareholderName,
+        voterEmail: r.voterType === 'board_member' ? r.boardMemberEmail : r.shareholderEmail,
+        voterPhone: r.voterType === 'board_member' ? r.boardMemberPhone : r.shareholderPhone,
+        // backward-compat aliases (frontend reads shareholderName/Email/Phone too)
+        shareholderName: r.voterType === 'board_member' ? r.boardMemberName : r.shareholderName,
+        shareholderEmail: r.voterType === 'board_member' ? r.boardMemberEmail : r.shareholderEmail,
+        shareholderPhone: r.voterType === 'board_member' ? r.boardMemberPhone : r.shareholderPhone,
+        numberOfShares: r.voterType === 'board_member' ? null : r.numberOfShares,
+      }));
+
       res.json(tokens);
     } catch (error) {
       console.error("Error fetching voting tokens:", error);
@@ -1954,55 +1974,100 @@ export function registerGovernanceRoutes(app: Express) {
     }
   });
 
-  // Create voting token requests for all shareholders with voting rights
+  // Create voting token requests - for board members OR shareholders based on resolution type
   app.post("/api/governance/resolutions/:resolutionId/voting-tokens/create-requests", isAuthenticated, requirePermission("governance", "edit"), async (req, res) => {
     try {
       const resolutionId = parseInt(req.params.resolutionId);
       const { expiresInDays = 7 } = req.body;
 
-      // Get all shareholders with voting rights
-      const eligibleShareholders = await db.select()
-        .from(shareholders)
-        .where(eq(shareholders.votingRights, true));
-
-      if (eligibleShareholders.length === 0) {
-        return res.status(400).json({ error: "لا يوجد مساهمين لهم حق التصويت" });
+      const [resolution] = await db.select().from(boardResolutions).where(eq(boardResolutions.id, resolutionId)).limit(1);
+      if (!resolution) {
+        return res.status(404).json({ error: "القرار غير موجود" });
       }
 
-      // Check for existing tokens (any status)
+      const isAssemblyResolution = resolution.resolutionType === 'general_assembly' || resolution.resolutionType === 'extraordinary_assembly';
+
       const existingTokens = await db.select()
         .from(votingTokens)
         .where(eq(votingTokens.resolutionId, resolutionId));
 
-      const existingShareholderIds = new Set(existingTokens.map(t => t.shareholderId));
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + expiresInDays);
+      let createdCount = 0;
 
-      // Create tokens for shareholders that don't have pending tokens
-      for (const shareholder of eligibleShareholders) {
-        if (!existingShareholderIds.has(shareholder.id)) {
-          const voteToken = crypto.randomBytes(32).toString('hex');
-          await db.insert(votingTokens).values({
-            resolutionId,
-            shareholderId: shareholder.id,
-            voteToken,
-            voteWeight: shareholder.numberOfShares || 1,
-            status: "pending",
-            expiresAt,
-          }).onConflictDoNothing();
+      if (isAssemblyResolution) {
+        const eligibleShareholders = await db.select()
+          .from(shareholders)
+          .where(eq(shareholders.votingRights, true));
+
+        if (eligibleShareholders.length === 0) {
+          return res.status(400).json({ error: "لا يوجد مساهمين لهم حق التصويت" });
+        }
+
+        const existingShareholderIds = new Set(
+          existingTokens.filter(t => t.shareholderId).map(t => t.shareholderId)
+        );
+
+        for (const shareholder of eligibleShareholders) {
+          if (!existingShareholderIds.has(shareholder.id)) {
+            const voteToken = crypto.randomBytes(32).toString('hex');
+            const inserted = await db.insert(votingTokens).values({
+              resolutionId,
+              shareholderId: shareholder.id,
+              voterType: "shareholder",
+              voteToken,
+              voteWeight: shareholder.numberOfShares || 1,
+              status: "pending",
+              expiresAt,
+            }).onConflictDoNothing().returning({ id: votingTokens.id });
+            if (inserted.length > 0) createdCount++;
+          }
+        }
+      } else {
+        const activeMembers = await db.select()
+          .from(boardMembers)
+          .where(eq(boardMembers.status, "active"));
+
+        if (activeMembers.length === 0) {
+          return res.status(400).json({ error: "لا يوجد أعضاء مجلس إدارة نشطين" });
+        }
+
+        const existingMemberIds = new Set(
+          existingTokens.filter(t => t.boardMemberId).map(t => t.boardMemberId)
+        );
+
+        for (const member of activeMembers) {
+          if (!existingMemberIds.has(member.id)) {
+            const voteToken = crypto.randomBytes(32).toString('hex');
+            const inserted = await db.insert(votingTokens).values({
+              resolutionId,
+              boardMemberId: member.id,
+              voterType: "board_member",
+              voteToken,
+              voteWeight: 1,
+              status: "pending",
+              expiresAt,
+            }).onConflictDoNothing().returning({ id: votingTokens.id });
+            if (inserted.length > 0) createdCount++;
+          }
         }
       }
 
-      // Return all tokens with shareholder info including vote data for printing
-      const allTokens = await db
+      // Return all tokens with voter info including vote data for printing
+      const allRows = await db
         .select({
           id: votingTokens.id,
           voteToken: votingTokens.voteToken,
           shareholderId: votingTokens.shareholderId,
+          boardMemberId: votingTokens.boardMemberId,
+          voterType: votingTokens.voterType,
           shareholderName: shareholders.fullName,
           shareholderEmail: shareholders.email,
           shareholderPhone: shareholders.phone,
           numberOfShares: shareholders.numberOfShares,
+          boardMemberName: boardMembers.fullName,
+          boardMemberEmail: boardMembers.email,
+          boardMemberPhone: boardMembers.phone,
           status: votingTokens.status,
           expiresAt: votingTokens.expiresAt,
           vote: votingTokens.vote,
@@ -2011,12 +2076,25 @@ export function registerGovernanceRoutes(app: Express) {
           comments: votingTokens.comments,
         })
         .from(votingTokens)
-        .innerJoin(shareholders, eq(votingTokens.shareholderId, shareholders.id))
+        .leftJoin(shareholders, eq(votingTokens.shareholderId, shareholders.id))
+        .leftJoin(boardMembers, eq(votingTokens.boardMemberId, boardMembers.id))
         .where(eq(votingTokens.resolutionId, resolutionId));
 
+      const allTokens = allRows.map(r => ({
+        ...r,
+        voterName: r.voterType === 'board_member' ? r.boardMemberName : r.shareholderName,
+        voterEmail: r.voterType === 'board_member' ? r.boardMemberEmail : r.shareholderEmail,
+        voterPhone: r.voterType === 'board_member' ? r.boardMemberPhone : r.shareholderPhone,
+        shareholderName: r.voterType === 'board_member' ? r.boardMemberName : r.shareholderName,
+        shareholderEmail: r.voterType === 'board_member' ? r.boardMemberEmail : r.shareholderEmail,
+        shareholderPhone: r.voterType === 'board_member' ? r.boardMemberPhone : r.shareholderPhone,
+        numberOfShares: r.voterType === 'board_member' ? null : r.numberOfShares,
+      }));
+
       res.json({
-        message: `تم إنشاء ${eligibleShareholders.length - existingShareholderIds.size} رابط تصويت جديد`,
-        tokens: allTokens
+        message: `تم إنشاء ${createdCount} رابط تصويت جديد ${isAssemblyResolution ? 'للمساهمين' : 'لأعضاء مجلس الإدارة'}`,
+        voterType: isAssemblyResolution ? 'shareholders' : 'board_members',
+        tokens: allTokens,
       });
     } catch (error) {
       console.error("Error creating voting token requests:", error);
@@ -2051,17 +2129,20 @@ export function registerGovernanceRoutes(app: Express) {
         return res.status(400).json({ error: "رابط غير صالح" });
       }
 
-      const [voteRecord] = await db
+      const [rawRecord] = await db
         .select({
           id: votingTokens.id,
           resolutionId: votingTokens.resolutionId,
           shareholderId: votingTokens.shareholderId,
+          boardMemberId: votingTokens.boardMemberId,
+          voterType: votingTokens.voterType,
           voteWeight: votingTokens.voteWeight,
           status: votingTokens.status,
           vote: votingTokens.vote,
           votedAt: votingTokens.votedAt,
           expiresAt: votingTokens.expiresAt,
           shareholderName: shareholders.fullName,
+          boardMemberName: boardMembers.fullName,
           resolutionNumber: boardResolutions.resolutionNumber,
           resolutionTitle: boardResolutions.title,
           resolutionDescription: boardResolutions.description,
@@ -2070,9 +2151,16 @@ export function registerGovernanceRoutes(app: Express) {
           resolutionCreatedAt: boardResolutions.createdAt,
         })
         .from(votingTokens)
-        .innerJoin(shareholders, eq(votingTokens.shareholderId, shareholders.id))
+        .leftJoin(shareholders, eq(votingTokens.shareholderId, shareholders.id))
+        .leftJoin(boardMembers, eq(votingTokens.boardMemberId, boardMembers.id))
         .innerJoin(boardResolutions, eq(votingTokens.resolutionId, boardResolutions.id))
         .where(eq(votingTokens.voteToken, token));
+
+      const voteRecord = rawRecord ? {
+        ...rawRecord,
+        shareholderName: rawRecord.voterType === 'board_member' ? rawRecord.boardMemberName : rawRecord.shareholderName,
+        voterName: rawRecord.voterType === 'board_member' ? rawRecord.boardMemberName : rawRecord.shareholderName,
+      } : undefined;
 
       if (!voteRecord) {
         return res.status(404).json({ error: "رابط التصويت غير موجود" });
@@ -2152,8 +2240,8 @@ export function registerGovernanceRoutes(app: Express) {
       const userAgent = req.get('User-Agent');
       const voteWeight = voteRecord.voteWeight || 1;
 
-      // Update voting token
-      await db.update(votingTokens)
+      // Atomically claim the token: only update if still pending. Prevents double-voting under concurrency.
+      const claimed = await db.update(votingTokens)
         .set({
           vote,
           comments: comments || null,
@@ -2164,7 +2252,12 @@ export function registerGovernanceRoutes(app: Express) {
           userAgent,
           updatedAt: new Date(),
         })
-        .where(eq(votingTokens.id, voteRecord.id));
+        .where(and(eq(votingTokens.id, voteRecord.id), eq(votingTokens.status, "pending")))
+        .returning({ id: votingTokens.id });
+
+      if (claimed.length === 0) {
+        return res.status(400).json({ error: "تم التصويت مسبقاً" });
+      }
 
       // Update resolution vote counts
       const voteField = vote === "for" ? "forVotes" : vote === "against" ? "againstVotes" : "abstainVotes";
@@ -2176,18 +2269,30 @@ export function registerGovernanceRoutes(app: Express) {
 
       // Try to create audit trail record (non-blocking)
       try {
-        const [shareholderRecord] = await db.select({ fullName: shareholders.fullName })
-          .from(shareholders)
-          .where(eq(shareholders.id, voteRecord.shareholderId));
-        const voterName = shareholderRecord?.fullName || "مساهم (تصويت إلكتروني)";
+        const isBoardMember = voteRecord.voterType === 'board_member' && voteRecord.boardMemberId;
+        let voterName: string;
+        if (isBoardMember) {
+          const [m] = await db.select({ fullName: boardMembers.fullName })
+            .from(boardMembers)
+            .where(eq(boardMembers.id, voteRecord.boardMemberId!));
+          voterName = m?.fullName || "عضو مجلس إدارة (تصويت إلكتروني)";
+        } else if (voteRecord.shareholderId) {
+          const [s] = await db.select({ fullName: shareholders.fullName })
+            .from(shareholders)
+            .where(eq(shareholders.id, voteRecord.shareholderId));
+          voterName = s?.fullName || "مساهم (تصويت إلكتروني)";
+        } else {
+          voterName = "تصويت إلكتروني";
+        }
 
         // Ensure weightedVote fits numeric(18,4) - max 14 digits before decimal
         const safeWeightedVote = Math.min(voteWeight, 99999999999999).toFixed(4);
 
         await db.insert(resolutionVotes).values({
           resolutionId: voteRecord.resolutionId,
-          voterType: "shareholder",
-          shareholderId: voteRecord.shareholderId,
+          voterType: isBoardMember ? "board_member" : "shareholder",
+          shareholderId: isBoardMember ? null : voteRecord.shareholderId,
+          boardMemberId: isBoardMember ? voteRecord.boardMemberId : null,
           voterName,
           vote,
           comments: comments || null,
@@ -2203,7 +2308,7 @@ export function registerGovernanceRoutes(app: Express) {
           module: 'governance',
           entityId: voteRecord.resolutionId.toString(),
           entityName: 'vote',
-          action: 'تصويت مساهم',
+          action: isBoardMember ? 'تصويت عضو مجلس' : 'تصويت مساهم',
           details: JSON.stringify({
             shareholderName: voterName,
             vote: voteLabel,

@@ -1468,8 +1468,8 @@ export default function VotingPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>المساهم</TableHead>
-                        <TableHead>الأسهم</TableHead>
+                        <TableHead>{(votingTokens[0] as any)?.voterType === 'board_member' ? 'عضو مجلس الإدارة' : 'المساهم'}</TableHead>
+                        <TableHead>{(votingTokens[0] as any)?.voterType === 'board_member' ? 'الصفة' : 'الأسهم'}</TableHead>
                         <TableHead>الحالة</TableHead>
                         <TableHead>الرابط</TableHead>
                         <TableHead>الإجراءات</TableHead>
@@ -1479,7 +1479,7 @@ export default function VotingPage() {
                       {votingTokens.map((token) => (
                         <TableRow key={token.id}>
                           <TableCell className="font-medium">{token.shareholderName}</TableCell>
-                          <TableCell>{token.numberOfShares?.toLocaleString()}</TableCell>
+                          <TableCell>{(token as any).voterType === 'board_member' ? 'عضو مجلس' : token.numberOfShares?.toLocaleString()}</TableCell>
                           <TableCell>
                             <Badge className={token.status === 'voted' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}>
                               {token.status === 'voted' ? 'تم التصويت' : 'في انتظار التصويت'}
