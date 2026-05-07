@@ -1534,6 +1534,14 @@ export function registerGovernanceRoutes(app: Express) {
   // ============================================
 
   // Get signatures for a resolution (supports both board members and shareholders)
+  // Sorted by board position priority: chairman → vice_chairman → secretary → member → others
+  const POSITION_ORDER: Record<string, number> = {
+    chairman: 1,
+    vice_chairman: 2,
+    secretary: 3,
+    independent_member: 4,
+    member: 5,
+  };
   app.get("/api/governance/resolutions/:resolutionId/signatures", isAuthenticated, async (req, res) => {
     try {
       const resolutionId = parseInt(req.params.resolutionId);
@@ -1585,7 +1593,15 @@ export function registerGovernanceRoutes(app: Express) {
           memberEmail,
         });
       }
-      
+
+      // Sort: chairman first, then vice_chairman, secretary, others; shareholders last
+      enriched.sort((a, b) => {
+        const aOrder = POSITION_ORDER[a.memberPosition] ?? 99;
+        const bOrder = POSITION_ORDER[b.memberPosition] ?? 99;
+        if (aOrder !== bOrder) return aOrder - bOrder;
+        return (a.memberName || '').localeCompare(b.memberName || '', 'ar');
+      });
+
       res.json(enriched);
     } catch (error) {
       console.error("Error fetching signatures:", error);
