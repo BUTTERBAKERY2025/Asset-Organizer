@@ -210,7 +210,7 @@ html, body {
                 />
               </div>
 
-              <HBranch width="50%" drops={3} />
+              <HBranch width="40%" drops={2} />
 
               <div style={{ display: "flex", justifyContent: "center", gap: 10 }}>
                 <OrgNode
@@ -235,18 +235,6 @@ html, body {
                     { ar: "مراجعة القوائم المالية", en: "Review financial statements" },
                     { ar: "تقييم الرقابة الداخلية", en: "Assess internal controls" },
                     { ar: "التوصية بتعيين المراجع", en: "Recommend external auditor" },
-                  ]}
-                />
-                <OrgNode
-                  titleAr="لجنة المكافآت والترشيحات"
-                  titleEn="Remuneration & Nomination"
-                  headerBg="#6d28d9"
-                  borderColor="#8b5cf6"
-                  width={185}
-                  items={[
-                    { ar: "سياسات مكافآت التنفيذيين", en: "Executive compensation" },
-                    { ar: "ترشيح أعضاء المجلس", en: "Nominate board members" },
-                    { ar: "تقييم أداء المجلس", en: "Evaluate board performance" },
                   ]}
                 />
               </div>
