@@ -4,16 +4,30 @@ import { AlertCircle, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-const SHOW_DELAY_MS = 2500;
+const SHOW_DELAY_MS = 4000;
 const MIN_DISPLAY_MS = 4000;
 
 function isTransientError(q: Query): boolean {
   if (q.state.status !== "error") return false;
   if (q.getObserversCount() === 0) return false;
+  // If the query already has cached data from a previous successful fetch,
+  // the user is NOT actually missing anything — don't nag them.
+  if (q.state.data !== undefined) return false;
+  // Skip queries that are currently retrying — banner should only show
+  // after retries are exhausted.
+  if (q.state.fetchStatus === "fetching") return false;
   const err = q.state.error;
   const msg = err instanceof Error ? err.message : String(err || "");
   if (/^(400|401|403|404|409|410|422):/.test(msg)) return false;
   if (/abort/i.test(msg) || /cancel/i.test(msg)) return false;
+  // Log once per error so we can diagnose recurring failures
+  const w = window as any;
+  w.__failedQueryLog = w.__failedQueryLog || new Set<string>();
+  const sig = `${JSON.stringify(q.queryKey)}::${msg}`;
+  if (!w.__failedQueryLog.has(sig)) {
+    w.__failedQueryLog.add(sig);
+    console.warn("[data-error-banner] failing query:", q.queryKey, "→", msg);
+  }
   return true;
 }
 
