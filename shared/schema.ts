@@ -9696,3 +9696,120 @@ export const insertReportRunSchema = createInsertSchema(reportRuns).omit({
 });
 export type ReportRun = typeof reportRuns.$inferSelect;
 export type InsertReportRun = z.infer<typeof insertReportRunSchema>;
+
+// =====================================================
+// عروض العمل (Job Offers) — Phase 12
+// =====================================================
+export const jobOffers = pgTable("job_offers", {
+  id: serial("id").primaryKey(),
+  offerNumber: text("offer_number").notNull().unique(),
+  // بيانات المرشح
+  candidateName: text("candidate_name").notNull(),
+  candidateNameEn: text("candidate_name_en"),
+  nationality: text("nationality"),
+  idNumber: text("id_number"),
+  idPlace: text("id_place"),
+  idExpiry: text("id_expiry"),
+  phone: text("phone").notNull(),
+  email: text("email"),
+  qualification: text("qualification"),
+  // الوظيفة
+  position: text("position").notNull(),
+  positionEn: text("position_en"),
+  department: text("department"),
+  branchId: varchar("branch_id").references(() => branches.id),
+  branchName: text("branch_name"),
+  startDate: text("start_date").notNull(),
+  contractDurationMonths: integer("contract_duration_months").default(12).notNull(),
+  probationDays: integer("probation_days").default(180).notNull(),
+  workingHours: text("working_hours").default("8 ساعات / 6 أيام في الأسبوع"),
+  // الراتب
+  basicSalary: integer("basic_salary").default(0).notNull(),
+  housingAllowance: integer("housing_allowance").default(0).notNull(),
+  transportAllowance: integer("transport_allowance").default(0).notNull(),
+  otherAllowances: integer("other_allowances").default(0).notNull(),
+  // المزايا
+  annualLeaveDays: integer("annual_leave_days").default(21).notNull(),
+  hasMedicalInsurance: boolean("has_medical_insurance").default(true).notNull(),
+  hasTravelTickets: boolean("has_travel_tickets").default(false).notNull(),
+  benefitsNotes: text("benefits_notes"),
+  termsNotes: text("terms_notes"),
+  // الحالة
+  status: text("status").default("draft").notNull(), // draft | sent | viewed | accepted | declined | expired | cancelled
+  validityDays: integer("validity_days").default(2).notNull(),
+  sentAt: timestamp("sent_at"),
+  viewedAt: timestamp("viewed_at"),
+  respondedAt: timestamp("responded_at"),
+  expiresAt: timestamp("expires_at"),
+  // التوقيع والقبول
+  candidateSignature: text("candidate_signature"),
+  acceptedAtSignature: timestamp("accepted_at_signature"),
+  declineReason: text("decline_reason"),
+  candidateIp: text("candidate_ip"),
+  candidateUserAgent: text("candidate_user_agent"),
+  // النظام
+  createdBy: varchar("created_by").references(() => users.id),
+  cancelledBy: varchar("cancelled_by").references(() => users.id),
+  cancelReason: text("cancel_reason"),
+  // ربط الموظف بعد القبول
+  hiredEmployeeId: integer("hired_employee_id"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_job_offers_status").on(table.status),
+  index("idx_job_offers_branch").on(table.branchId),
+  index("idx_job_offers_phone").on(table.phone),
+  index("idx_job_offers_created_at").on(table.createdAt),
+]);
+
+export const jobOfferTokens = pgTable("job_offer_tokens", {
+  id: serial("id").primaryKey(),
+  offerId: integer("offer_id").notNull().references(() => jobOffers.id, { onDelete: "cascade" }),
+  token: text("token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  revokedAt: timestamp("revoked_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_job_offer_tokens_token").on(table.token),
+  index("idx_job_offer_tokens_offer").on(table.offerId),
+]);
+
+export const jobOfferAuditLog = pgTable("job_offer_audit_log", {
+  id: serial("id").primaryKey(),
+  offerId: integer("offer_id").notNull().references(() => jobOffers.id, { onDelete: "cascade" }),
+  action: text("action").notNull(), // created | updated | sent | viewed | accepted | declined | extended | cancelled | expired
+  performedBy: varchar("performed_by").references(() => users.id),
+  performedByName: text("performed_by_name"),
+  ipAddress: text("ip_address"),
+  details: jsonb("details"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_job_offer_audit_offer").on(table.offerId),
+  index("idx_job_offer_audit_created_at").on(table.createdAt),
+]);
+
+export const insertJobOfferSchema = createInsertSchema(jobOffers).omit({
+  id: true,
+  offerNumber: true,
+  status: true,
+  sentAt: true,
+  viewedAt: true,
+  respondedAt: true,
+  expiresAt: true,
+  candidateSignature: true,
+  acceptedAtSignature: true,
+  declineReason: true,
+  candidateIp: true,
+  candidateUserAgent: true,
+  cancelledBy: true,
+  cancelReason: true,
+  hiredEmployeeId: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const updateJobOfferSchema = insertJobOfferSchema.partial().omit({ createdBy: true });
+export type JobOffer = typeof jobOffers.$inferSelect;
+export type InsertJobOffer = z.infer<typeof insertJobOfferSchema>;
+export type JobOfferToken = typeof jobOfferTokens.$inferSelect;
+export type JobOfferAuditLog = typeof jobOfferAuditLog.$inferSelect;

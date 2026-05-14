@@ -109,6 +109,7 @@ import { z } from "zod";
 import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, getActiveBranchFilter, requireBranchAccess, canAccessBranch, isUserAdmin, getAllowedBranchIds, getEffectiveBranchFilter, invalidateAuthCache } from "./auth";
 import { authRateLimiter, biometricRateLimiter, uploadRateLimiter, apiRateLimiter, validateFileUpload, sanitizeFilename, trackLoginAttempt } from "./security";
 import { registerGovernanceRoutes } from "./governance-routes";
+import { registerJobOfferRoutes } from "./job-offers-routes";
 import { registerSocialResponsibilityRoutes } from "./social-responsibility-routes";
 import { registerSecurityRoutes } from "./security-routes";
 import { apiCacheMiddleware, invalidateCacheForPath, invalidateCache, jsonSlimMiddleware } from "./api-cache";
@@ -251,6 +252,7 @@ export async function registerRoutes(
 
   // Register governance routes
   registerGovernanceRoutes(app);
+  registerJobOfferRoutes(app);
   registerSocialResponsibilityRoutes(app);
   registerSecurityRoutes(app);
 

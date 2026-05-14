@@ -68,6 +68,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const ROUTE_TO_GROUP: Record<string, string> = useMemo(() => ({
     "/branch-employees": "hr", "/organizational-structure": "hr", "/attendance-dashboard": "hr",
     "/shift-management": "hr", "/attendance-check": "hr", "/timesheet": "hr", "/employee-reports": "hr",
+    "/hr/job-offers": "hr",
     "/production-dashboard": "production", "/advanced-production-orders": "production", "/daily-production": "production",
     "/finished-goods-inventory": "production", "/sales-data-uploads": "production", "/production-reports": "production",
     "/production-comparisons": "production", "/production-comparison-reports": "production", "/production": "production",
@@ -249,6 +250,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { href: "/attendance-check", label: t("sidebar.attendanceCheck"), icon: Clock, module: "attendance_check", indent: true },
           { href: "/timesheet", label: t("sidebar.timesheet"), icon: FileText, module: "shifts", indent: true },
           { href: "/employee-reports", label: t("sidebar.employeeReports"), icon: FileBarChart, module: "employee_reports", indent: true },
+          { href: "/hr/job-offers", label: "عروض العمل", icon: Briefcase, module: "hr_management", indent: true },
         ],
       },
     },

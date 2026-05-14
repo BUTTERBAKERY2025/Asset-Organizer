@@ -126,6 +126,8 @@ const pageImports: Record<string, () => Promise<any>> = {
   "executive-reports": () => import("@/pages/executive-reports"),
   "executive-calendar": () => import("@/pages/executive-calendar"),
   "company-templates": () => import("@/pages/company-templates"),
+  "job-offers": () => import("@/pages/job-offers"),
+  "job-offer-public": () => import("@/pages/job-offer-public"),
 };
 
 const preloadedChunks = new Set<string>();
@@ -304,6 +306,7 @@ const ROUTE_TO_PAGE: Record<string, string> = {
   "/executive/reports": "executive-reports",
   "/executive/calendar": "executive-calendar",
   "/executive/templates": "company-templates",
+  "/hr/job-offers": "job-offers",
   "/executive/org-structure": "executive-org-structure",
   "/documents": "documents",
   "/governance": "governance",

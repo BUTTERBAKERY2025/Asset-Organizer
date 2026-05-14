@@ -147,6 +147,8 @@ const TravelRequestsPage = makeLazy("travel-requests");
 const ExecutiveReportsPage = makeLazy("executive-reports");
 const ExecutiveCalendarPage = makeLazy("executive-calendar");
 const CompanyTemplatesPage = makeLazy("company-templates");
+const JobOffersPage = makeLazy("job-offers");
+const JobOfferPublicPage = makeLazy("job-offer-public");
 
 function AppLoadingFallback() {
   return (
@@ -252,6 +254,8 @@ const Router = React.memo(function Router() {
       
       {/* Public RSVP confirmation page - no auth required */}
       <Route path="/rsvp/:token">{() => <Suspense fallback={<PageLoadingFallback />}><RsvpPage /></Suspense>}</Route>
+      <Route path="/job-offer/:token">{() => <Suspense fallback={<PageLoadingFallback />}><JobOfferPublicPage /></Suspense>}</Route>
+      <Route path="/hr/job-offers">{() => <ModulePage component={JobOffersPage} module="hr_management" />}</Route>
       
       {/* HR - الموارد البشرية */}
       <Route path="/branch-employees">{() => <ModulePage component={BranchEmployeesPage} module="branch_employees" />}</Route>
