@@ -149,6 +149,9 @@ const ExecutiveCalendarPage = makeLazy("executive-calendar");
 const CompanyTemplatesPage = makeLazy("company-templates");
 const JobOffersPage = makeLazy("job-offers");
 const JobOfferPublicPage = makeLazy("job-offer-public");
+const EmploymentApplicationsPage = makeLazy("employment-applications");
+const EmploymentApplicationPublicPage = makeLazy("employment-application-public");
+const VacancyPublicPage = makeLazy("vacancy-public");
 
 function AppLoadingFallback() {
   return (
@@ -255,7 +258,10 @@ const Router = React.memo(function Router() {
       {/* Public RSVP confirmation page - no auth required */}
       <Route path="/rsvp/:token">{() => <Suspense fallback={<PageLoadingFallback />}><RsvpPage /></Suspense>}</Route>
       <Route path="/job-offer/:token">{() => <Suspense fallback={<PageLoadingFallback />}><JobOfferPublicPage /></Suspense>}</Route>
+      <Route path="/apply/v/:slug">{() => <Suspense fallback={<PageLoadingFallback />}><VacancyPublicPage /></Suspense>}</Route>
+      <Route path="/apply/:token">{() => <Suspense fallback={<PageLoadingFallback />}><EmploymentApplicationPublicPage /></Suspense>}</Route>
       <Route path="/hr/job-offers">{() => <ModulePage component={JobOffersPage} module="hr_management" />}</Route>
+      <Route path="/hr/applications">{() => <ModulePage component={EmploymentApplicationsPage} module="executive_dashboard" />}</Route>
       
       {/* HR - الموارد البشرية */}
       <Route path="/branch-employees">{() => <ModulePage component={BranchEmployeesPage} module="branch_employees" />}</Route>

@@ -68,7 +68,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const ROUTE_TO_GROUP: Record<string, string> = useMemo(() => ({
     "/branch-employees": "hr", "/organizational-structure": "hr", "/attendance-dashboard": "hr",
     "/shift-management": "hr", "/attendance-check": "hr", "/timesheet": "hr", "/employee-reports": "hr",
-    "/hr/job-offers": "executive",
+    "/hr/job-offers": "executive", "/hr/applications": "executive",
     "/production-dashboard": "production", "/advanced-production-orders": "production", "/daily-production": "production",
     "/finished-goods-inventory": "production", "/sales-data-uploads": "production", "/production-reports": "production",
     "/production-comparisons": "production", "/production-comparison-reports": "production", "/production": "production",
@@ -389,6 +389,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { href: "/executive/tasks", label: t("sidebar.executiveTasks"), icon: ClipboardCheck, module: "executive_tasks", indent: true },
           { href: "/executive/correspondence", label: t("sidebar.executiveCorrespondence"), icon: FileText, module: "executive_correspondence", indent: true },
           { href: "/executive/templates", label: "النماذج الجاهزة", icon: FileText, module: "executive_dashboard", indent: true },
+          { href: "/hr/applications", label: "طلبات التوظيف", icon: UserCheck, module: "executive_dashboard", indent: true },
           { href: "/hr/job-offers", label: "عروض العمل", icon: Briefcase, module: "executive_dashboard", indent: true },
           { href: "/documents", label: t("sidebar.documents"), icon: FolderOpen, module: "documents", indent: true },
           { href: "/governance", label: t("sidebar.governance"), icon: Landmark, module: "governance", indent: true },

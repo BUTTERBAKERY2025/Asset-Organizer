@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -115,6 +115,20 @@ export default function JobOffersPage() {
   const [step, setStep] = useState(1);
   const [viewOffer, setViewOffer] = useState<JobOffer | null>(null);
   const [shareLink, setShareLink] = useState<{ link: string; offer: JobOffer } | null>(null);
+
+  // Prefill from accepted employment application (Convert to Job Offer)
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("prefillJobOffer");
+      if (raw) {
+        const data = JSON.parse(raw);
+        setForm((f) => ({ ...f, ...data }));
+        setShowCreate(true);
+        setStep(1);
+        sessionStorage.removeItem("prefillJobOffer");
+      }
+    } catch {}
+  }, []);
 
   const { data: offers = [], isLoading } = useQuery<JobOffer[]>({
     queryKey: ["/api/hr/job-offers"],

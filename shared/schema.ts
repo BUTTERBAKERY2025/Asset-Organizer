@@ -9813,3 +9813,142 @@ export type JobOffer = typeof jobOffers.$inferSelect;
 export type InsertJobOffer = z.infer<typeof insertJobOfferSchema>;
 export type JobOfferToken = typeof jobOfferTokens.$inferSelect;
 export type JobOfferAuditLog = typeof jobOfferAuditLog.$inferSelect;
+
+// =====================================================
+// طلبات التوظيف (Employment Applications) — Phase 13
+// =====================================================
+export const jobVacancies = pgTable("job_vacancies", {
+  id: serial("id").primaryKey(),
+  slug: text("slug").notNull().unique(), // public URL slug
+  title: text("title").notNull(),
+  titleEn: text("title_en"),
+  department: text("department"),
+  branchId: varchar("branch_id").references(() => branches.id),
+  branchName: text("branch_name"),
+  description: text("description"),
+  requirements: text("requirements"),
+  isOpen: boolean("is_open").default(true).notNull(),
+  closedAt: timestamp("closed_at"),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_job_vacancies_slug").on(table.slug),
+  index("idx_job_vacancies_branch").on(table.branchId),
+  index("idx_job_vacancies_is_open").on(table.isOpen),
+]);
+
+export const employmentApplications = pgTable("employment_applications", {
+  id: serial("id").primaryKey(),
+  applicationNumber: text("application_number").notNull().unique(),
+  source: text("source").default("directed").notNull(), // 'directed' | 'open'
+  vacancyId: integer("vacancy_id").references(() => jobVacancies.id, { onDelete: "set null" }),
+  // الوظيفة المستهدفة
+  targetPosition: text("target_position"),
+  targetBranchId: varchar("target_branch_id").references(() => branches.id),
+  targetBranchName: text("target_branch_name"),
+  // البيانات الشخصية
+  fullNameAr: text("full_name_ar"),
+  fullNameEn: text("full_name_en"),
+  nationality: text("nationality"),
+  idNumber: text("id_number"),
+  idType: text("id_type"), // 'national' | 'iqama' | 'passport'
+  idExpiry: text("id_expiry"),
+  dob: text("dob"),
+  gender: text("gender"),
+  maritalStatus: text("marital_status"),
+  city: text("city"),
+  address: text("address"),
+  // التواصل (phone مطلوب للموجّه)
+  phone: text("phone").notNull(),
+  whatsapp: text("whatsapp"),
+  email: text("email"),
+  // المؤهلات / الخبرات / المهارات
+  education: jsonb("education"), // [{degree, field, institution, yearFrom, yearTo, gpa?}]
+  experience: jsonb("experience"), // [{company, position, from, to, current?, summary?}]
+  skills: jsonb("skills"), // string[]
+  languages: jsonb("languages"), // [{name, level}]
+  references: jsonb("references"), // [{name, position, company, phone, email}]
+  // التوقعات
+  expectedSalary: integer("expected_salary"),
+  availabilityDate: text("availability_date"),
+  // المرفقات (data URL أو رابط خارجي)
+  cvUrl: text("cv_url"),
+  photoUrl: text("photo_url"),
+  idCopyUrl: text("id_copy_url"),
+  // التوقيع والإقرار
+  signature: text("signature"),
+  agreedToTerms: boolean("agreed_to_terms").default(false).notNull(),
+  // الحالة
+  status: text("status").default("invited").notNull(),
+  // invited | submitted | under_review | shortlisted | interviewed | accepted | rejected | withdrawn | expired | cancelled
+  rating: integer("rating"), // 1-5
+  hrNotes: text("hr_notes"),
+  rejectionReason: text("rejection_reason"),
+  // ربط بعرض العمل بعد القبول
+  convertedToOfferId: integer("converted_to_offer_id"),
+  // التواقيت
+  invitedAt: timestamp("invited_at"),
+  submittedAt: timestamp("submitted_at"),
+  reviewedAt: timestamp("reviewed_at"),
+  decidedAt: timestamp("decided_at"),
+  expiresAt: timestamp("expires_at"),
+  // الميتا
+  applicantIp: text("applicant_ip"),
+  applicantUserAgent: text("applicant_user_agent"),
+  createdBy: varchar("created_by").references(() => users.id),
+  reviewedBy: varchar("reviewed_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_emp_app_status").on(table.status),
+  index("idx_emp_app_branch").on(table.targetBranchId),
+  index("idx_emp_app_phone").on(table.phone),
+  index("idx_emp_app_vacancy").on(table.vacancyId),
+  index("idx_emp_app_created_at").on(table.createdAt),
+]);
+
+export const employmentApplicationTokens = pgTable("employment_application_tokens", {
+  id: serial("id").primaryKey(),
+  applicationId: integer("application_id").notNull().references(() => employmentApplications.id, { onDelete: "cascade" }),
+  token: text("token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  revokedAt: timestamp("revoked_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_emp_app_tokens_token").on(table.token),
+  index("idx_emp_app_tokens_app").on(table.applicationId),
+]);
+
+export const employmentApplicationAuditLog = pgTable("employment_application_audit_log", {
+  id: serial("id").primaryKey(),
+  applicationId: integer("application_id").notNull().references(() => employmentApplications.id, { onDelete: "cascade" }),
+  action: text("action").notNull(),
+  performedBy: varchar("performed_by").references(() => users.id),
+  performedByName: text("performed_by_name"),
+  ipAddress: text("ip_address"),
+  details: jsonb("details"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_emp_app_audit_app").on(table.applicationId),
+  index("idx_emp_app_audit_created_at").on(table.createdAt),
+]);
+
+export const insertJobVacancySchema = createInsertSchema(jobVacancies).omit({
+  id: true, slug: true, createdAt: true, updatedAt: true, closedAt: true, createdBy: true,
+});
+export const updateJobVacancySchema = insertJobVacancySchema.partial();
+export type JobVacancy = typeof jobVacancies.$inferSelect;
+export type InsertJobVacancy = z.infer<typeof insertJobVacancySchema>;
+
+export const insertEmploymentApplicationSchema = createInsertSchema(employmentApplications).omit({
+  id: true, applicationNumber: true, status: true, submittedAt: true, reviewedAt: true,
+  decidedAt: true, expiresAt: true, applicantIp: true, applicantUserAgent: true,
+  reviewedBy: true, convertedToOfferId: true, createdAt: true, updatedAt: true,
+});
+export const updateEmploymentApplicationSchema = insertEmploymentApplicationSchema.partial();
+export type EmploymentApplication = typeof employmentApplications.$inferSelect;
+export type InsertEmploymentApplication = z.infer<typeof insertEmploymentApplicationSchema>;
+export type EmploymentApplicationToken = typeof employmentApplicationTokens.$inferSelect;
+export type EmploymentApplicationAuditLog = typeof employmentApplicationAuditLog.$inferSelect;

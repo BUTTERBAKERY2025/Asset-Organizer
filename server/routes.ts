@@ -110,6 +110,7 @@ import { setupAuth, isAuthenticated, requirePermission, requireAnyPermission, ge
 import { authRateLimiter, biometricRateLimiter, uploadRateLimiter, apiRateLimiter, validateFileUpload, sanitizeFilename, trackLoginAttempt } from "./security";
 import { registerGovernanceRoutes } from "./governance-routes";
 import { registerJobOfferRoutes } from "./job-offers-routes";
+import { registerEmploymentApplicationRoutes } from "./employment-applications-routes";
 import { registerSocialResponsibilityRoutes } from "./social-responsibility-routes";
 import { registerSecurityRoutes } from "./security-routes";
 import { apiCacheMiddleware, invalidateCacheForPath, invalidateCache, jsonSlimMiddleware } from "./api-cache";
@@ -253,6 +254,7 @@ export async function registerRoutes(
   // Register governance routes
   registerGovernanceRoutes(app);
   registerJobOfferRoutes(app);
+  registerEmploymentApplicationRoutes(app);
   registerSocialResponsibilityRoutes(app);
   registerSecurityRoutes(app);
 
