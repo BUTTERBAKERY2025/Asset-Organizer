@@ -453,6 +453,30 @@ export default function AssemblyMinutesPage() {
       console.error('Error fetching attendance signatures:', err);
     }
 
+    try {
+      const resolutionsRes = await fetch(`/api/governance/resolutions`, { credentials: 'include' });
+      if (resolutionsRes.ok) {
+        const allResolutions = await resolutionsRes.json();
+        const meetingResolutions = (Array.isArray(allResolutions) ? allResolutions : []).filter((r: any) => r.meetingId === m.meetingId);
+        for (const resolution of meetingResolutions) {
+          try {
+            const sigRes = await fetch(`/api/governance/resolutions/${resolution.id}/signatures`, { credentials: 'include' });
+            if (!sigRes.ok) continue;
+            const sigs = await sigRes.json();
+            for (const s of (Array.isArray(sigs) ? sigs : [])) {
+              if (s.status !== 'signed' || !isSafeSig(s.signatureData)) continue;
+              const entry = { url: s.signatureData as string, signedAt: s.signedAt };
+              const name = s.memberName || s.signerName;
+              if (name && !sigByName.has(normName(name))) sigByName.set(normName(name), entry);
+              if (s.shareholderId && !sigByShareholderId.has(Number(s.shareholderId))) sigByShareholderId.set(Number(s.shareholderId), entry);
+            }
+          } catch {}
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching resolution signatures:', err);
+    }
+
     const attendeesRows = attendees.map((a: any, i: number) => {
       const inlineSig = isSafeSig(a.signatureUrl) ? { url: a.signatureUrl as string, signedAt: a.signedAt } : null;
       const sig = inlineSig || (a.shareholderId && sigByShareholderId.get(Number(a.shareholderId))) || sigByName.get(normName(a.name));
