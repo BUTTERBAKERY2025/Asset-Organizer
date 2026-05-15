@@ -46,9 +46,18 @@ function isTransientError(q: Query): boolean {
   return true;
 }
 
+function endpointFromQueryKey(key: any): string {
+  let raw: string;
+  if (Array.isArray(key) && key.length > 0 && typeof key[0] === "string") raw = key[0];
+  else if (typeof key === "string") raw = key;
+  else { try { raw = JSON.stringify(key); } catch { raw = String(key); } }
+  return raw.split("?")[0];
+}
+
 export function DataErrorBanner() {
   const queryClient = useQueryClient();
   const [failedCount, setFailedCount] = useState(0);
+  const [failedEndpoints, setFailedEndpoints] = useState<string[]>([]);
   const [visible, setVisible] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [retrying, setRetrying] = useState(false);
@@ -64,8 +73,10 @@ export function DataErrorBanner() {
     const clearShow = () => { if (showTimer.current) { window.clearTimeout(showTimer.current); showTimer.current = null; } };
     const clearHide = () => { if (hideTimer.current) { window.clearTimeout(hideTimer.current); hideTimer.current = null; } };
     const recompute = () => {
-      const failed = cache.getAll().filter(isTransientError).length;
+      const failedQueries = cache.getAll().filter(isTransientError);
+      const failed = failedQueries.length;
       setFailedCount(failed);
+      setFailedEndpoints(Array.from(new Set(failedQueries.map((q) => endpointFromQueryKey(q.queryKey)))));
       if (failed === 0) {
         clearShow();
         const elapsed = shownAt.current ? Date.now() - shownAt.current : Infinity;
@@ -165,6 +176,16 @@ export function DataErrorBanner() {
             ? "طلب واحد لم يكتمل — اضغط لإعادة المحاولة بدون إعادة تحميل الصفحة."
             : `${failedCount} طلبات لم تكتمل — اضغط لإعادة المحاولة بدون إعادة تحميل الصفحة.`}
         </p>
+        {failedEndpoints.length > 0 && (
+          <p
+            className="text-[10px] text-amber-700/70 mt-1 font-mono break-all leading-tight"
+            data-testid="text-failed-endpoint"
+            dir="ltr"
+          >
+            {failedEndpoints.slice(0, 2).join(" • ")}
+            {failedEndpoints.length > 2 ? ` +${failedEndpoints.length - 2}` : ""}
+          </p>
+        )}
         <div className="flex items-center gap-2 mt-2">
           <Button
             size="sm"
