@@ -12,10 +12,56 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Loader2, User, Lock, Eye, EyeOff, HelpCircle, MessageCircle, Mail } from "lucide-react";
+import { Loader2, User, Lock, Eye, EyeOff, HelpCircle, MessageCircle, Mail, Languages } from "lucide-react";
 import logo from "@assets/logo_butter_bakery__1768502624540.png";
 
 const REMEMBER_KEY = "__btr_ru";
+const LANG_KEY = "__btr_lang";
+
+type Lang = "ar" | "en";
+
+const T = {
+  ar: {
+    systemTitle: "BUTTER BAKERY SYSTEM",
+    subtitle: "تسجيل الدخول للمتابعة",
+    username: "اسم المستخدم",
+    usernamePh: "أدخل اسم المستخدم",
+    password: "كلمة المرور",
+    passwordPh: "أدخل كلمة المرور",
+    remember: "تذكرني",
+    needHelp: "تحتاج مساعدة؟",
+    whatsapp: "مساعدة عبر واتساب",
+    contactAdmin: "تواصل مع المسؤول",
+    forgot: "نسيت كلمة المرور",
+    submit: "متابعة",
+    submitting: "جارٍ الدخول...",
+    showPwd: "إظهار كلمة المرور",
+    hidePwd: "إخفاء كلمة المرور",
+    loginFailed: "فشل تسجيل الدخول",
+    rights: "شركة الزبد الأفضل التجارية — جميع الحقوق محفوظة",
+    switchLang: "English",
+  },
+  en: {
+    systemTitle: "BUTTER BAKERY SYSTEM",
+    subtitle: "Log in to continue",
+    username: "Username",
+    usernamePh: "Enter your username",
+    password: "Password",
+    passwordPh: "Enter your password",
+    remember: "Remember me",
+    needHelp: "Need help?",
+    whatsapp: "Help via WhatsApp",
+    contactAdmin: "Contact administrator",
+    forgot: "Forgot password",
+    submit: "Continue",
+    submitting: "Logging in...",
+    showPwd: "Show password",
+    hidePwd: "Hide password",
+    loginFailed: "Login failed",
+    rights: "Butter Bakery Trading Co. — All rights reserved",
+    switchLang: "العربية",
+  },
+} as const;
 
 export default function LoginPage() {
   const [, setLocation] = useLocation();
@@ -27,6 +73,20 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [honeypot, setHoneypot] = useState("");
   const [formKey, setFormKey] = useState(0);
+  const [lang, setLang] = useState<Lang>(() => {
+    try {
+      const saved = localStorage.getItem(LANG_KEY);
+      if (saved === "ar" || saved === "en") return saved;
+    } catch {}
+    return "ar";
+  });
+  const t = T[lang];
+  const isRTL = lang === "ar";
+  const toggleLang = () => {
+    const next: Lang = lang === "ar" ? "en" : "ar";
+    setLang(next);
+    try { localStorage.setItem(LANG_KEY, next); } catch {}
+  };
 
   const { setupInteractionListener } = useWelcomeSound("systemWelcomeSound");
 
@@ -60,7 +120,7 @@ export default function LoginPage() {
     setError("");
 
     if (honeypot) {
-      setError("فشل تسجيل الدخول");
+      setError(t.loginFailed);
       return;
     }
 
@@ -89,16 +149,30 @@ export default function LoginPage() {
     } catch (err: any) {
       setPassword("");
       setFormKey((prev) => prev + 1);
-      setError(err.message || "فشل تسجيل الدخول");
+      setError(err.message || t.loginFailed);
     }
   };
 
+  const textAlignClass = isRTL ? "text-right" : "text-left";
+
   return (
     <main
-      dir="rtl"
-      lang="ar"
+      dir={isRTL ? "rtl" : "ltr"}
+      lang={lang}
       className="min-h-screen min-h-[100dvh] flex flex-col relative overflow-hidden bg-[radial-gradient(circle_at_20%_10%,#fef6ec_0%,transparent_45%),radial-gradient(circle_at_85%_90%,#eaf5ee_0%,transparent_50%),linear-gradient(180deg,#f8fafc_0%,#f4f6fa_100%)]"
     >
+      {/* Language toggle (top corner) */}
+      <button
+        type="button"
+        onClick={toggleLang}
+        className="absolute top-4 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/90 backdrop-blur border border-slate-200 text-[12px] font-semibold text-[#1a3a2f] hover:bg-white hover:border-[#e67e22] hover:text-[#e67e22] transition-all shadow-sm"
+        style={isRTL ? { left: 16 } : { right: 16 }}
+        aria-label="Switch language"
+        data-testid="button-lang-toggle"
+      >
+        <Languages className="w-3.5 h-3.5" />
+        {t.switchLang}
+      </button>
       {/* Subtle dot pattern */}
       <div
         aria-hidden="true"
@@ -130,14 +204,14 @@ export default function LoginPage() {
               <img
                 src={logo}
                 alt="Butter Bakery"
-                className="h-20 sm:h-24 w-auto drop-shadow-sm"
+                className="h-32 sm:h-36 md:h-40 w-auto drop-shadow-md"
                 data-testid="img-logo"
               />
-              <h1 className="text-[15px] sm:text-base font-bold text-[#1a3a2f] mt-3 leading-tight">
-                نظام إدارة المشروعات والأصول والصيانة
+              <h1 className="text-[17px] sm:text-lg md:text-xl font-extrabold text-[#1a3a2f] mt-3 leading-tight tracking-wide">
+                {t.systemTitle}
               </h1>
-              <p className="text-[12px] text-slate-500 mt-1">
-                تسجيل الدخول للمتابعة
+              <p className="text-[12px] sm:text-[13px] text-slate-500 mt-1">
+                {t.subtitle}
               </p>
               <div className="w-12 h-[3px] bg-[#e67e22] rounded-full mt-3"></div>
             </div>
@@ -163,24 +237,26 @@ export default function LoginPage() {
               <div className="space-y-1.5">
                 <Label
                   htmlFor="username"
-                  className="text-[13px] font-semibold text-slate-700"
+                  className={`text-[13px] font-semibold text-slate-700 block ${textAlignClass}`}
                 >
-                  اسم المستخدم <span className="text-red-500">*</span>
+                  {t.username} <span className="text-red-500">*</span>
                 </Label>
                 <div className="relative">
-                  <User className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <User
+                    className={`w-4 h-4 text-slate-400 absolute top-1/2 -translate-y-1/2 pointer-events-none ${isRTL ? "right-3" : "left-3"}`}
+                  />
                   <Input
                     id="username"
                     name="btr_user_field"
                     type="text"
-                    placeholder="أدخل اسم المستخدم"
+                    placeholder={t.usernamePh}
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     onFocus={(e) => e.target.removeAttribute("readonly")}
                     readOnly
                     autoComplete="off"
                     aria-describedby={error ? "login-error" : undefined}
-                    className="h-11 pr-10 bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-[#e67e22] focus:ring-2 focus:ring-[#e67e22]/20 rounded-lg text-right text-sm transition-all"
+                    className={`h-11 ${isRTL ? "pr-10" : "pl-10"} bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-[#e67e22] focus:ring-2 focus:ring-[#e67e22]/20 rounded-lg ${textAlignClass} text-sm transition-all`}
                     data-testid="input-username"
                     required
                     data-lpignore="true"
@@ -194,24 +270,26 @@ export default function LoginPage() {
               <div className="space-y-1.5">
                 <Label
                   htmlFor="password"
-                  className="text-[13px] font-semibold text-slate-700"
+                  className={`text-[13px] font-semibold text-slate-700 block ${textAlignClass}`}
                 >
-                  كلمة المرور <span className="text-red-500">*</span>
+                  {t.password} <span className="text-red-500">*</span>
                 </Label>
                 <div className="relative">
-                  <Lock className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <Lock
+                    className={`w-4 h-4 text-slate-400 absolute top-1/2 -translate-y-1/2 pointer-events-none ${isRTL ? "right-3" : "left-3"}`}
+                  />
                   <Input
                     id="password"
                     name="btr_pass_field"
                     type={showPassword ? "text" : "password"}
-                    placeholder="أدخل كلمة المرور"
+                    placeholder={t.passwordPh}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     onFocus={(e) => e.target.removeAttribute("readonly")}
                     readOnly
                     autoComplete="new-password"
                     aria-describedby={error ? "login-error" : undefined}
-                    className="h-11 pr-10 pl-10 bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-[#e67e22] focus:ring-2 focus:ring-[#e67e22]/20 rounded-lg text-right text-sm transition-all"
+                    className={`h-11 pr-10 pl-10 bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-[#e67e22] focus:ring-2 focus:ring-[#e67e22]/20 rounded-lg ${textAlignClass} text-sm transition-all`}
                     data-testid="input-password"
                     required
                     data-lpignore="true"
@@ -221,8 +299,8 @@ export default function LoginPage() {
                   <button
                     type="button"
                     onClick={() => setShowPassword((s) => !s)}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-[#e67e22] transition-colors p-1 rounded focus:outline-none focus:ring-2 focus:ring-[#e67e22]/30"
-                    aria-label={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
+                    className={`absolute top-1/2 -translate-y-1/2 text-slate-400 hover:text-[#e67e22] transition-colors p-1 rounded focus:outline-none focus:ring-2 focus:ring-[#e67e22]/30 ${isRTL ? "left-3" : "right-3"}`}
+                    aria-label={showPassword ? t.hidePwd : t.showPwd}
                     tabIndex={-1}
                     data-testid="button-toggle-password"
                   >
@@ -245,7 +323,7 @@ export default function LoginPage() {
                     htmlFor="rememberMe"
                     className="text-slate-600 cursor-pointer text-[13px] select-none"
                   >
-                    تذكرني
+                    {t.remember}
                   </Label>
                 </div>
 
@@ -257,40 +335,40 @@ export default function LoginPage() {
                       data-testid="button-help-menu"
                     >
                       <HelpCircle className="w-3.5 h-3.5" />
-                      تحتاج مساعدة؟
+                      {t.needHelp}
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start" className="w-56">
                     <DropdownMenuItem asChild>
                       <a
-                        href="https://wa.me/966500000000?text=احتاج%20مساعدة%20في%20الدخول%20لنظام%20باتر%20بيكري"
+                        href="https://wa.me/966500000000"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-center gap-2 cursor-pointer"
                         data-testid="link-whatsapp-help"
                       >
                         <MessageCircle className="w-4 h-4 text-[#25D366]" />
-                        مساعدة عبر واتساب
+                        {t.whatsapp}
                       </a>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>
                       <a
-                        href="mailto:admin@butterbakery.co?subject=طلب%20استعادة%20كلمة%20المرور"
+                        href="mailto:admin@butterbakery.co"
                         className="flex items-center gap-2 cursor-pointer"
                         data-testid="link-email-admin"
                       >
                         <Mail className="w-4 h-4 text-[#1a3a2f]" />
-                        تواصل مع المسؤول
+                        {t.contactAdmin}
                       </a>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>
                       <a
-                        href="mailto:admin@butterbakery.co?subject=نسيت%20كلمة%20المرور"
+                        href="mailto:admin@butterbakery.co?subject=Forgot%20password"
                         className="flex items-center gap-2 cursor-pointer"
                         data-testid="link-forgot-password"
                       >
                         <Lock className="w-4 h-4 text-slate-500" />
-                        نسيت كلمة المرور
+                        {t.forgot}
                       </a>
                     </DropdownMenuItem>
                   </DropdownMenuContent>
@@ -317,11 +395,11 @@ export default function LoginPage() {
               >
                 {isLoggingIn ? (
                   <>
-                    <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                    <span>جارٍ الدخول...</span>
+                    <Loader2 className={`${isRTL ? "ml-2" : "mr-2"} h-4 w-4 animate-spin`} />
+                    <span>{t.submitting}</span>
                   </>
                 ) : (
-                  "متابعة"
+                  t.submit
                 )}
               </Button>
             </form>
@@ -339,7 +417,7 @@ export default function LoginPage() {
               www.butterbakery.co
             </a>
             <p className="text-[10px] text-slate-400">
-              © {new Date().getFullYear()} شركة الزبد الأفضل التجارية — جميع الحقوق محفوظة
+              © {new Date().getFullYear()} {t.rights}
             </p>
           </div>
         </div>
