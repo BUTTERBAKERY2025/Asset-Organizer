@@ -1360,7 +1360,7 @@ export default function AssemblyMinutesPage() {
                     </DialogDescription>
                   </DialogHeader>
 
-                  <div className="flex gap-2 mb-2">
+                  <div className="flex gap-2 mb-2 flex-wrap">
                     <Button
                       variant="outline"
                       size="sm"
@@ -1380,6 +1380,16 @@ export default function AssemblyMinutesPage() {
                     >
                       <Download className="h-4 w-4" />
                       تصدير PDF
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1 border-purple-300 text-purple-700 hover:bg-purple-50"
+                      onClick={() => setLocation(`/governance/resolutions?meetingId=${selectedMinutes.meetingId}`)}
+                      data-testid="detail-send-signatures"
+                    >
+                      <Send className="h-4 w-4" />
+                      إرسال طلبات توقيع
                     </Button>
                   </div>
 

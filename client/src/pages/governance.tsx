@@ -58,6 +58,15 @@ const governanceModules: GovernanceModule[] = [
     href: "/governance/general-assembly",
   },
   {
+    id: "board-meetings",
+    title: "اجتماعات المجلس",
+    description: "جدولة اجتماعات مجلس الإدارة وإدارة جداول الأعمال",
+    icon: Calendar,
+    color: "text-sky-600",
+    bgColor: "bg-sky-100",
+    href: "/governance/meetings",
+  },
+  {
     id: "minutes",
     title: "محاضر الجمعيات",
     description: "توثيق وأرشفة محاضر الاجتماعات والقرارات",

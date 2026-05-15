@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { Link, useSearch } from "wouter";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -280,15 +280,25 @@ export default function ResolutionsPage() {
     createMutation.mutate(data);
   };
 
+  const search = useSearch();
+  const meetingIdFilter = useMemo(() => {
+    const params = new URLSearchParams(search);
+    const v = params.get("meetingId");
+    if (!v) return null;
+    const n = parseInt(v, 10);
+    return Number.isNaN(n) ? null : n;
+  }, [search]);
+
   const filteredResolutions = resolutions.filter((r) => {
     const matchesSearch = r.title.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === "all" || r.status === statusFilter;
+    const matchesMeeting = meetingIdFilter === null || r.meetingId === meetingIdFilter;
     const matchesTab = activeTab === "all" || 
       (activeTab === "pending" && (r.status === "draft" || r.status === "proposed" || r.status === "voting")) ||
       (activeTab === "approved" && r.status === "approved") ||
       (activeTab === "rejected" && r.status === "rejected") ||
       (activeTab === "implemented" && r.status === "implemented");
-    return matchesSearch && matchesStatus && matchesTab;
+    return matchesSearch && matchesStatus && matchesTab && matchesMeeting;
   });
 
   const draftCount = resolutions.filter(r => r.status === "draft").length;

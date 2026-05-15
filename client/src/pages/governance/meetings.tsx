@@ -42,6 +42,7 @@ import {
   UserCheck,
   Paperclip,
   History,
+  Scale,
 } from "lucide-react";
 import type { GovernanceMeeting, BoardMember } from "@shared/schema";
 import { exportToExcel, exportToCSV, printAsPDF } from "@/lib/export-utils";
@@ -509,6 +510,17 @@ export default function MeetingsPage() {
                             <UserCheck className="h-3 w-3 sm:h-4 sm:w-4" />
                             <span className="hidden md:inline">الحضور</span>
                           </Button>
+                          <Link href={`/governance/resolutions?meetingId=${meeting.id}`}>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-1 text-xs h-7 sm:h-8 px-2 sm:px-3 hidden sm:flex"
+                              data-testid={`view-resolutions-${meeting.id}`}
+                            >
+                              <Scale className="h-3 w-3 sm:h-4 sm:w-4" />
+                              <span className="hidden md:inline">عرض القرارات</span>
+                            </Button>
+                          </Link>
                           <Button
                             variant="outline"
                             size="sm"
