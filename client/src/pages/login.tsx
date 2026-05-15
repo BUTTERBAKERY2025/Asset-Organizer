@@ -228,7 +228,7 @@ export default function LoginPage() {
                 className="bb-logo h-24 sm:h-28 md:h-32 lg:h-36 xl:h-40 w-auto drop-shadow-md"
                 data-testid="img-logo"
               />
-              <h1 className="text-[15px] sm:text-base md:text-lg lg:text-xl font-extrabold text-[#1a3a2f] mt-3 leading-tight tracking-wide">
+              <h1 className="text-[15px] sm:text-base md:text-lg lg:text-xl font-extrabold text-[#1a3a2f] -mt-2 sm:-mt-3 md:-mt-4 leading-tight tracking-wide">
                 {t.systemTitle}
               </h1>
               <p className="text-[11px] sm:text-[12px] md:text-[13px] text-slate-500 mt-1">
