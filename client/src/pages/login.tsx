@@ -40,6 +40,8 @@ const T = {
     loginFailed: "فشل تسجيل الدخول",
     rights: "شركة الزبد الأفضل التجارية — جميع الحقوق محفوظة",
     switchLang: "English",
+    switchLangShort: "EN",
+    switchLangAria: "التبديل إلى الإنجليزية",
   },
   en: {
     systemTitle: "BUTTER BAKERY SYSTEM",
@@ -60,6 +62,8 @@ const T = {
     loginFailed: "Login failed",
     rights: "Butter Bakery Trading Co. — All rights reserved",
     switchLang: "العربية",
+    switchLangShort: "ع",
+    switchLangAria: "Switch to Arabic",
   },
 } as const;
 
@@ -171,16 +175,19 @@ export default function LoginPage() {
       <button
         type="button"
         onClick={toggleLang}
-        className="fixed top-3 sm:top-4 z-30 flex items-center gap-1.5 h-9 sm:h-9 px-3 sm:px-3.5 rounded-full bg-white/95 backdrop-blur border border-slate-200 text-[12px] sm:text-[13px] font-semibold text-[#1a3a2f] hover:bg-white hover:border-[#e67e22] hover:text-[#e67e22] active:scale-95 transition-all shadow-sm min-h-[36px]"
+        className="fixed z-30 inline-flex items-center justify-center gap-1.5 sm:gap-2 h-10 sm:h-10 md:h-11 min-w-[44px] min-h-[44px] px-2.5 sm:px-3.5 md:px-4 rounded-full bg-white/95 backdrop-blur border border-slate-200 text-[13px] sm:text-[13px] md:text-sm font-semibold text-[#1a3a2f] hover:bg-white hover:border-[#e67e22] hover:text-[#e67e22] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e67e22]/40 active:scale-95 transition-all shadow-md hover:shadow-lg"
         style={{
           ...(isRTL ? { left: "max(12px, env(safe-area-inset-left))" } : { right: "max(12px, env(safe-area-inset-right))" }),
           top: "max(12px, env(safe-area-inset-top))",
         }}
-        aria-label="Switch language"
+        aria-label={t.switchLangAria}
+        title={t.switchLang}
         data-testid="button-lang-toggle"
       >
-        <Languages className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-        {t.switchLang}
+        <Languages className="w-4 h-4 md:w-[18px] md:h-[18px] shrink-0 text-[#e67e22]" aria-hidden="true" />
+        {/* Short label on mobile, full label on tablet+ */}
+        <span className="sm:hidden">{t.switchLangShort}</span>
+        <span className="hidden sm:inline">{t.switchLang}</span>
       </button>
       {/* Subtle dot pattern */}
       <div
