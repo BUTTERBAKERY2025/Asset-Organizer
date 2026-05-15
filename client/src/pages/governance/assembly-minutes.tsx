@@ -405,9 +405,32 @@ export default function AssemblyMinutesPage() {
 
     const contentWithFixedHijri = m.content ? fixHijriInContent(sanitize(m.content), meetingDate) : "";
 
-    const attendeesRows = attendees.map((a: any, i: number) =>
-      `<tr><td style="text-align:center;">${i + 1}</td><td>${sanitize(a.name)}</td><td style="text-align:center;">${(a.shares || 0).toLocaleString()}</td><td style="text-align:center;">${a.percentage || '0'}%</td><td style="text-align:center;">${a.status === 'present' ? 'حاضر' : a.status === 'proxy' ? 'بالوكالة' : 'غائب'}</td></tr>`
-    ).join('');
+    const normName = (s: any) => String(s || '').trim().replace(/\s+/g, ' ').toLowerCase();
+    const isSafeSig = (u: any) => typeof u === 'string' && (/^data:image\/(png|jpe?g|gif|webp|svg\+xml);base64,/.test(u) || /^https:\/\//.test(u));
+    const sigByName = new Map<string, { url: string; signedAt?: string | null }>();
+    const sigByShareholderId = new Map<number, { url: string; signedAt?: string | null }>();
+    try {
+      const attRes = await fetch(`/api/governance/meetings/${m.meetingId}/attendance`, { credentials: 'include' });
+      if (attRes.ok) {
+        const attRows = await attRes.json();
+        for (const r of (Array.isArray(attRows) ? attRows : [])) {
+          if (!isSafeSig(r.signatureUrl)) continue;
+          const entry = { url: r.signatureUrl as string, signedAt: r.signedAt };
+          if (r.attendeeName) sigByName.set(normName(r.attendeeName), entry);
+          if (r.shareholderId) sigByShareholderId.set(Number(r.shareholderId), entry);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching attendance signatures:', err);
+    }
+
+    const attendeesRows = attendees.map((a: any, i: number) => {
+      const sig = (a.shareholderId && sigByShareholderId.get(Number(a.shareholderId))) || sigByName.get(normName(a.name));
+      const sigCell = sig
+        ? `<img src="${sig.url}" alt="توقيع ${sanitize(a.name)}" style="max-width:120px;max-height:50px;object-fit:contain;background:white;padding:2px;border:1px solid #eee;border-radius:4px;" />${sig.signedAt ? `<div style="font-size:8px;color:#999;margin-top:2px;">${new Date(sig.signedAt).toLocaleDateString('en-GB')}</div>` : ''}`
+        : `<span style="color:#bbb;font-size:10px;">—</span>`;
+      return `<tr><td style="text-align:center;">${i + 1}</td><td>${sanitize(a.name)}</td><td style="text-align:center;">${(a.shares || 0).toLocaleString()}</td><td style="text-align:center;">${a.percentage || '0'}%</td><td style="text-align:center;">${a.status === 'present' ? 'حاضر' : a.status === 'proxy' ? 'بالوكالة' : 'غائب'}</td><td style="text-align:center;">${sigCell}</td></tr>`;
+    }).join('');
 
     const decisionsHtml = decisions.map((d: any, i: number) =>
       `<div style="margin-bottom:8px;"><strong>${d.number || i + 1}.</strong> ${sanitize(d.description)}${d.responsible ? ` <span style="color:#666;">(المسؤول: ${sanitize(d.responsible)})</span>` : ''}</div>`
@@ -663,7 +686,7 @@ export default function AssemblyMinutesPage() {
     <div class="section-title">قائمة الحضور (${attendees.length} مساهم)</div>
     <table>
       <thead>
-        <tr><th>#</th><th>اسم المساهم</th><th>عدد الأسهم</th><th>النسبة</th><th>الحالة</th></tr>
+        <tr><th>#</th><th>اسم المساهم</th><th>عدد الأسهم</th><th>النسبة</th><th>الحالة</th><th>التوقيع</th></tr>
       </thead>
       <tbody>${attendeesRows}</tbody>
     </table>
