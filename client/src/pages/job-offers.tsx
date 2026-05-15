@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -651,29 +651,244 @@ function OfferDetails({ offer }: { offer: JobOffer }) {
       )}
 
       <div className="hidden">
-        <div ref={printRef} className="p-6 bg-white" dir="rtl">
-          <h2 className="text-2xl font-bold text-center mb-2">عرض عمل / Job Offer</h2>
-          <p className="text-center text-sm text-slate-600 mb-4">شركة الزبد الأفضل التجارية - Butter Bakery Trading Co.</p>
-          <p className="text-sm">رقم العرض: <strong>{offer.offerNumber}</strong></p>
-          <table className="w-full border-collapse border mt-3 text-sm">
-            <tbody>
-              <tr><td className="border p-2 bg-slate-50">الاسم</td><td className="border p-2">{offer.candidateName}</td></tr>
-              <tr><td className="border p-2 bg-slate-50">الوظيفة</td><td className="border p-2">{offer.position}</td></tr>
-              <tr><td className="border p-2 bg-slate-50">الفرع</td><td className="border p-2">{offer.branchName}</td></tr>
-              <tr><td className="border p-2 bg-slate-50">تاريخ المباشرة</td><td className="border p-2">{offer.startDate}</td></tr>
-              <tr><td className="border p-2 bg-slate-50">إجمالي الراتب الشهري</td><td className="border p-2 font-bold">{total.toLocaleString("en-US")} ر.س</td></tr>
-              <tr><td className="border p-2 bg-slate-50">الحالة</td><td className="border p-2">{STATUS_LABELS[offer.status]?.label}</td></tr>
-            </tbody>
-          </table>
-          {offer.candidateSignature && (
-            <div className="mt-4">
-              <p className="text-sm font-semibold">توقيع المرشح:</p>
-              <img src={offer.candidateSignature} alt="sig" className="max-h-24" />
-            </div>
-          )}
-        </div>
+        <PrintableOffer ref={printRef} offer={offer} total={total} />
       </div>
     </div>
+  );
+}
+
+const PrintableOffer = React.forwardRef<HTMLDivElement, { offer: JobOffer; total: number }>(
+  ({ offer, total }, ref) => {
+    const today = new Date().toLocaleDateString("ar-SA");
+    const sentDate = offer.sentAt ? new Date(offer.sentAt).toLocaleDateString("ar-SA") : today;
+    const respondedDate = offer.respondedAt ? new Date(offer.respondedAt).toLocaleString("ar-SA") : null;
+    const fmt = (n: number) => n.toLocaleString("en-US");
+
+    return (
+      <div ref={ref} dir="rtl" className="bg-white">
+        <style>{`
+          @page { size: A4; margin: 14mm 12mm; }
+          @media print {
+            .print-page { page-break-inside: avoid; }
+            .no-break { page-break-inside: avoid; }
+          }
+          .print-root { font-family: 'Cairo', system-ui, sans-serif; color: #1a1a1a; }
+          .gradient-line { background: linear-gradient(90deg, #1a3a2f 0%, #b88a3a 50%, #1a3a2f 100%); }
+          .gold-line { background: linear-gradient(90deg, transparent 0%, #b88a3a 30%, #b88a3a 70%, transparent 100%); }
+          .watermark { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 380px; height: 380px; opacity: 0.05; pointer-events: none; z-index: 0; }
+        `}</style>
+
+        <div className="print-root p-6 relative">
+          <img src="/company-logo.png" alt="" className="watermark" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+
+          {/* Header / دباجة */}
+          <div className="relative z-10">
+            <div className="gradient-line h-1.5 mb-2 rounded" />
+            <div className="flex items-center justify-between gap-4 pb-2">
+              <div className="flex-shrink-0">
+                <img
+                  src="/company-logo.png"
+                  alt="Logo"
+                  className="h-24 w-auto object-contain"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                />
+              </div>
+              <div className="flex-1 text-center">
+                <h1 className="text-xl font-bold text-[#1a3a2f] leading-tight">شركة الزبد الأفضل التجارية</h1>
+                <h2 className="text-sm font-semibold text-[#1a3a2f] leading-tight">Best Butter Trading Company</h2>
+                <p className="text-xs text-slate-600 mt-0.5">سجل تجاري / C.R: 7026155296 — المملكة العربية السعودية</p>
+              </div>
+              <div className="flex-shrink-0 text-left text-[10px] text-slate-700 border border-[#1a3a2f] rounded p-2 min-w-[120px]">
+                <div><span className="font-bold">رقم العرض:</span> {offer.offerNumber}</div>
+                <div><span className="font-bold">التاريخ:</span> {sentDate}</div>
+              </div>
+            </div>
+            <div className="gold-line h-0.5 mb-3" />
+
+            <div className="text-center border-2 border-[#1a3a2f] rounded py-1.5 mb-4 bg-amber-50">
+              <h2 className="text-lg font-bold text-[#1a3a2f]">عرض عمل رسمي</h2>
+              <p className="text-xs font-semibold text-[#1a3a2f]">Official Job Offer</p>
+            </div>
+          </div>
+
+          {/* Salutation */}
+          <div className="relative z-10 mb-3 text-sm leading-relaxed">
+            <p>السلام عليكم ورحمة الله وبركاته،</p>
+            <p className="mt-1">
+              السيد/ة <strong>{offer.candidateName}</strong>
+              {offer.candidateNameEn && <span className="text-slate-600"> ({offer.candidateNameEn})</span>} المحترم/ة،
+            </p>
+            <p className="mt-2">
+              يسعدنا في <strong>شركة الزبد الأفضل التجارية</strong> أن نتقدم إليكم بعرض العمل التالي للانضمام إلى فريقنا في وظيفة
+              <strong> {offer.position}</strong>{offer.positionEn && <span className="text-slate-600"> / {offer.positionEn}</span>}.
+            </p>
+          </div>
+
+          {/* Candidate Info */}
+          <div className="relative z-10 no-break mb-3">
+            <h3 className="text-sm font-bold text-[#1a3a2f] border-b border-[#b88a3a] pb-1 mb-2">١. بيانات المرشح / Candidate Information</h3>
+            <table className="w-full border-collapse text-xs">
+              <tbody>
+                <PrintRow label="الاسم الكامل" labelEn="Full Name" value={offer.candidateName} />
+                {offer.candidateNameEn && <PrintRow label="الاسم بالإنجليزية" labelEn="Name (English)" value={offer.candidateNameEn} />}
+                <PrintRow label="الجنسية" labelEn="Nationality" value={offer.nationality || "-"} />
+                <PrintRow label="رقم الهوية / الإقامة" labelEn="ID / Iqama No." value={offer.idNumber || "-"} />
+                {offer.idPlace && <PrintRow label="مكان الإصدار" labelEn="Issue Place" value={offer.idPlace} />}
+                {offer.idExpiry && <PrintRow label="تاريخ الانتهاء" labelEn="Expiry Date" value={offer.idExpiry} />}
+                <PrintRow label="رقم الهاتف" labelEn="Phone" value={offer.phone} />
+                {offer.email && <PrintRow label="البريد الإلكتروني" labelEn="Email" value={offer.email} />}
+                {offer.qualification && <PrintRow label="المؤهل العلمي" labelEn="Qualification" value={offer.qualification} />}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Job Info */}
+          <div className="relative z-10 no-break mb-3">
+            <h3 className="text-sm font-bold text-[#1a3a2f] border-b border-[#b88a3a] pb-1 mb-2">٢. تفاصيل الوظيفة / Position Details</h3>
+            <table className="w-full border-collapse text-xs">
+              <tbody>
+                <PrintRow label="المسمى الوظيفي" labelEn="Position" value={`${offer.position}${offer.positionEn ? " / " + offer.positionEn : ""}`} />
+                {offer.department && <PrintRow label="القسم" labelEn="Department" value={offer.department} />}
+                {offer.branchName && <PrintRow label="الفرع / موقع العمل" labelEn="Branch / Work Location" value={offer.branchName} />}
+                <PrintRow label="تاريخ المباشرة" labelEn="Start Date" value={offer.startDate} />
+                <PrintRow label="مدة العقد" labelEn="Contract Duration" value={`${offer.contractDurationMonths} شهر / ${offer.contractDurationMonths} months`} />
+                <PrintRow label="فترة التجربة" labelEn="Probation Period" value={`${offer.probationDays} يوم / ${offer.probationDays} days`} />
+                {offer.workingHours && <PrintRow label="ساعات العمل" labelEn="Working Hours" value={offer.workingHours} />}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Salary Breakdown */}
+          <div className="relative z-10 no-break mb-3">
+            <h3 className="text-sm font-bold text-[#1a3a2f] border-b border-[#b88a3a] pb-1 mb-2">٣. الراتب والبدلات / Salary & Allowances</h3>
+            <table className="w-full border-collapse text-xs border-2 border-[#1a3a2f]">
+              <thead className="bg-[#1a3a2f] text-white">
+                <tr>
+                  <th className="border border-[#1a3a2f] p-2 text-right">البند / Item</th>
+                  <th className="border border-[#1a3a2f] p-2 text-center w-32">المبلغ (ر.س) / Amount (SAR)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td className="border p-2">الراتب الأساسي / Basic Salary</td><td className="border p-2 text-center font-mono">{fmt(offer.basicSalary)}</td></tr>
+                <tr className="bg-slate-50"><td className="border p-2">بدل السكن / Housing Allowance</td><td className="border p-2 text-center font-mono">{fmt(offer.housingAllowance)}</td></tr>
+                <tr><td className="border p-2">بدل المواصلات / Transport Allowance</td><td className="border p-2 text-center font-mono">{fmt(offer.transportAllowance)}</td></tr>
+                <tr className="bg-slate-50"><td className="border p-2">بدلات أخرى / Other Allowances</td><td className="border p-2 text-center font-mono">{fmt(offer.otherAllowances)}</td></tr>
+                <tr className="bg-amber-100 font-bold">
+                  <td className="border-2 border-[#1a3a2f] p-2 text-[#1a3a2f]">الإجمالي الشهري / Monthly Total</td>
+                  <td className="border-2 border-[#1a3a2f] p-2 text-center text-[#1a3a2f] font-mono text-sm">{fmt(total)} ر.س</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* Benefits */}
+          <div className="relative z-10 no-break mb-3">
+            <h3 className="text-sm font-bold text-[#1a3a2f] border-b border-[#b88a3a] pb-1 mb-2">٤. المزايا الإضافية / Additional Benefits</h3>
+            <table className="w-full border-collapse text-xs">
+              <tbody>
+                <PrintRow label="الإجازة السنوية" labelEn="Annual Leave" value={`${offer.annualLeaveDays} يوم / ${offer.annualLeaveDays} days`} />
+                <PrintRow label="التأمين الطبي" labelEn="Medical Insurance" value={offer.hasMedicalInsurance ? "مشمول / Included" : "غير مشمول / Not included"} />
+                <PrintRow label="تذاكر السفر" labelEn="Travel Tickets" value={offer.hasTravelTickets ? "مشمول / Included" : "غير مشمول / Not included"} />
+                {offer.benefitsNotes && <PrintRow label="ملاحظات إضافية" labelEn="Additional Notes" value={offer.benefitsNotes} />}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Terms */}
+          {offer.termsNotes && (
+            <div className="relative z-10 no-break mb-3">
+              <h3 className="text-sm font-bold text-[#1a3a2f] border-b border-[#b88a3a] pb-1 mb-2">٥. الشروط والأحكام / Terms & Conditions</h3>
+              <div className="text-xs whitespace-pre-wrap border border-slate-300 rounded p-2 bg-slate-50">{offer.termsNotes}</div>
+            </div>
+          )}
+
+          {/* Status & Signatures */}
+          <div className="relative z-10 no-break mt-4">
+            <h3 className="text-sm font-bold text-[#1a3a2f] border-b border-[#b88a3a] pb-1 mb-2">٦. حالة العرض والتوقيعات / Status & Signatures</h3>
+
+            {offer.status === "accepted" && (
+              <div className="border-2 border-green-600 bg-green-50 rounded p-3 mb-2">
+                <p className="text-sm font-bold text-green-800">
+                  ✓ تم قبول العرض / Offer Accepted
+                  {respondedDate && <span className="font-normal text-xs mr-2"> — {respondedDate}</span>}
+                </p>
+              </div>
+            )}
+            {offer.status === "declined" && (
+              <div className="border-2 border-red-600 bg-red-50 rounded p-3 mb-2">
+                <p className="text-sm font-bold text-red-800">
+                  ✗ تم رفض العرض / Offer Declined
+                  {respondedDate && <span className="font-normal text-xs mr-2"> — {respondedDate}</span>}
+                </p>
+                {offer.declineReason && <p className="text-xs mt-1 text-red-700">السبب: {offer.declineReason}</p>}
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-4 mt-3">
+              <div className="border border-slate-400 rounded p-2 text-center min-h-[120px] flex flex-col justify-between">
+                <p className="text-xs font-bold text-[#1a3a2f]">عن الشركة / Company Representative</p>
+                <div className="flex-1 flex items-center justify-center">
+                  <p className="text-[10px] text-slate-500">إدارة الموارد البشرية</p>
+                </div>
+                <div className="border-t border-slate-300 pt-1 mt-2">
+                  <p className="text-[10px] text-slate-600">التوقيع والختم / Signature & Stamp</p>
+                </div>
+              </div>
+
+              <div className="border border-slate-400 rounded p-2 text-center min-h-[120px] flex flex-col justify-between">
+                <p className="text-xs font-bold text-[#1a3a2f]">المرشح / Candidate</p>
+                <div className="flex-1 flex items-center justify-center">
+                  {offer.candidateSignature ? (
+                    <img src={offer.candidateSignature} alt="signature" className="max-h-16 object-contain" />
+                  ) : (
+                    <p className="text-[10px] text-slate-400">في انتظار التوقيع</p>
+                  )}
+                </div>
+                <div className="border-t border-slate-300 pt-1 mt-2">
+                  <p className="text-[10px] text-slate-600">{offer.candidateName}</p>
+                  {offer.acceptedAtSignature && (
+                    <p className="text-[9px] text-slate-500">{new Date(offer.acceptedAtSignature).toLocaleString("ar-SA")}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {offer.candidateIp && (
+              <p className="text-[9px] text-slate-500 mt-2 text-center">
+                توقيع إلكتروني موثّق — IP: {offer.candidateIp}
+              </p>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="relative z-10 mt-6 pt-2 border-t-2 border-[#1a3a2f]">
+            <div className="flex justify-between items-center text-[10px] text-slate-700">
+              <p className="font-semibold">شركة الزبد الأفضل التجارية</p>
+              <p>C.R: 7026155296</p>
+              <p className="font-semibold">Best Butter Trading Company</p>
+            </div>
+            <div className="gradient-line h-1 mt-1 rounded" />
+            <p className="text-center text-[9px] text-slate-500 mt-1">
+              هذا المستند صادر إلكترونياً ولا يحتاج إلى توقيع يدوي إن كان موقعاً رقمياً —
+              This document is electronically generated.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+);
+PrintableOffer.displayName = "PrintableOffer";
+
+function PrintRow({ label, labelEn, value }: { label: string; labelEn: string; value: string }) {
+  return (
+    <tr>
+      <td className="border border-slate-300 p-1.5 bg-slate-50 w-1/3">
+        <div className="font-semibold text-[11px]">{label}</div>
+        <div className="text-[9px] text-slate-500">{labelEn}</div>
+      </td>
+      <td className="border border-slate-300 p-1.5">{value}</td>
+    </tr>
   );
 }
 
