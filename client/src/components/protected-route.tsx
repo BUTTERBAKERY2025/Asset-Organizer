@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useLocation, Redirect } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -83,6 +84,15 @@ function AccessDeniedPage({ message }: { message?: string }) {
 }
 
 function InlineSkeleton() {
+  // Delay rendering the spinner so transient (cached/fast) auth-ready transitions
+  // don't flash a loader on every navigation. Matches the 350ms threshold used
+  // by DelayedFallback in App.tsx so the user sees a stable, flicker-free UI.
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setShow(true), 350);
+    return () => clearTimeout(t);
+  }, []);
+  if (!show) return <div className="min-h-[200px]" data-testid="inline-skeleton-placeholder" />;
   return (
     <div className="min-h-[200px] flex items-center justify-center" data-testid="inline-skeleton">
       <Loader2 className="h-6 w-6 animate-spin text-amber-600" />

@@ -165,7 +165,10 @@ function AppLoadingFallback() {
 function DelayedFallback() {
   const [show, setShow] = useState(false);
   useEffect(() => {
-    const t = setTimeout(() => setShow(true), 60);
+    // 350ms threshold — already-cached chunks render in <50ms and never trigger
+    // the skeleton, eliminating the flash on every navigation. Only genuinely
+    // slow loads (first-time chunk fetch) will show the skeleton.
+    const t = setTimeout(() => setShow(true), 350);
     return () => clearTimeout(t);
   }, []);
   if (!show) return <div className="min-h-[60vh]" />;
