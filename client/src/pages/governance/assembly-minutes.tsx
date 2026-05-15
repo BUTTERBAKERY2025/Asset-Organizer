@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
+import SignatureCanvas from "react-signature-canvas";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { Layout } from "@/components/layout";
@@ -112,6 +113,8 @@ export default function AssemblyMinutesPage() {
   const [selectedMinutes, setSelectedMinutes] = useState<MeetingMinutes | null>(null);
   const [activeTab, setActiveTab] = useState("all");
   const [deleteMinutesId, setDeleteMinutesId] = useState<number | null>(null);
+  const [signingAttendeeIndex, setSigningAttendeeIndex] = useState<number | null>(null);
+  const sigPadRef = useRef<SignatureCanvas | null>(null);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { isAdmin } = useAuth();
@@ -170,6 +173,32 @@ export default function AssemblyMinutesPage() {
     },
     onError: (error: any) => {
       toast({ title: error.message || "فشل في حذف المحضر", variant: "destructive" });
+    },
+  });
+
+  const updateAttendanceListMutation = useMutation({
+    mutationFn: async ({ id, attendanceList }: { id: number; attendanceList: any[] }) => {
+      const res = await fetch(`/api/governance/minutes/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ attendanceList }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "فشل في حفظ التوقيع");
+      }
+      return res.json();
+    },
+    onSuccess: (updated: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/governance/minutes"] });
+      if (selectedMinutes && updated && updated.id === selectedMinutes.id) {
+        setSelectedMinutes({ ...selectedMinutes, attendanceList: updated.attendanceList });
+      }
+      toast({ title: "تم حفظ التوقيع بنجاح" });
+    },
+    onError: (error: any) => {
+      toast({ title: error.message || "فشل في حفظ التوقيع", variant: "destructive" });
     },
   });
 
@@ -425,7 +454,8 @@ export default function AssemblyMinutesPage() {
     }
 
     const attendeesRows = attendees.map((a: any, i: number) => {
-      const sig = (a.shareholderId && sigByShareholderId.get(Number(a.shareholderId))) || sigByName.get(normName(a.name));
+      const inlineSig = isSafeSig(a.signatureUrl) ? { url: a.signatureUrl as string, signedAt: a.signedAt } : null;
+      const sig = inlineSig || (a.shareholderId && sigByShareholderId.get(Number(a.shareholderId))) || sigByName.get(normName(a.name));
       const sigCell = sig
         ? `<img src="${sig.url}" alt="توقيع ${sanitize(a.name)}" style="max-width:120px;max-height:50px;object-fit:contain;background:white;padding:2px;border:1px solid #eee;border-radius:4px;" />${sig.signedAt ? `<div style="font-size:8px;color:#999;margin-top:2px;">${new Date(sig.signedAt).toLocaleDateString('en-GB')}</div>` : ''}`
         : `<span style="color:#bbb;font-size:10px;">—</span>`;
@@ -1383,16 +1413,62 @@ export default function AssemblyMinutesPage() {
                                   <TableHead className="text-right">الاسم</TableHead>
                                   <TableHead className="text-right">الأسهم</TableHead>
                                   <TableHead className="text-right">النسبة</TableHead>
+                                  <TableHead className="text-right">التوقيع</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
-                                {selectedMinutes.attendanceList.map((a: any, i: number) => (
-                                  <TableRow key={i}>
-                                    <TableCell className="font-medium text-sm">{a.name}</TableCell>
-                                    <TableCell className="text-sm">{(a.shares || 0).toLocaleString()}</TableCell>
-                                    <TableCell className="text-sm">{a.percentage}%</TableCell>
-                                  </TableRow>
-                                ))}
+                                {selectedMinutes.attendanceList.map((a: any, i: number) => {
+                                  const hasSig = typeof a.signatureUrl === 'string' && a.signatureUrl.startsWith('data:image/');
+                                  const isPresent = !a.status || a.status === 'present' || a.status === 'proxy';
+                                  return (
+                                    <TableRow key={i}>
+                                      <TableCell className="font-medium text-sm">{a.name}</TableCell>
+                                      <TableCell className="text-sm">{(a.shares || 0).toLocaleString()}</TableCell>
+                                      <TableCell className="text-sm">{a.percentage}%</TableCell>
+                                      <TableCell>
+                                        <div className="flex items-center gap-2">
+                                          {hasSig && (
+                                            <img
+                                              src={a.signatureUrl}
+                                              alt="توقيع"
+                                              className="h-8 w-20 object-contain border rounded bg-white"
+                                              data-testid={`img-attendee-signature-${i}`}
+                                            />
+                                          )}
+                                          <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-7 px-2 text-xs"
+                                            disabled={!isPresent}
+                                            onClick={() => setSigningAttendeeIndex(i)}
+                                            data-testid={`button-sign-attendee-${i}`}
+                                          >
+                                            {hasSig ? 'تعديل' : 'توقيع'}
+                                          </Button>
+                                          {hasSig && (
+                                            <Button
+                                              type="button"
+                                              variant="ghost"
+                                              size="sm"
+                                              className="h-7 px-2 text-xs text-red-600 hover:text-red-700"
+                                              onClick={() => {
+                                                if (!selectedMinutes) return;
+                                                const next = (selectedMinutes.attendanceList as any[]).map((x, idx) =>
+                                                  idx === i ? { ...x, signatureUrl: null, signedAt: null } : x
+                                                );
+                                                updateAttendanceListMutation.mutate({ id: selectedMinutes.id, attendanceList: next });
+                                              }}
+                                              data-testid={`button-clear-attendee-signature-${i}`}
+                                            >
+                                              مسح
+                                            </Button>
+                                          )}
+                                        </div>
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })}
                               </TableBody>
                             </Table>
                           </CardContent>
@@ -1431,6 +1507,54 @@ export default function AssemblyMinutesPage() {
             })()}
           </DialogContent>
         </Dialog>
+
+        <Dialog open={signingAttendeeIndex !== null} onOpenChange={(open) => { if (!open) setSigningAttendeeIndex(null); }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>توقيع المساهم</DialogTitle>
+              <DialogDescription>
+                {selectedMinutes && signingAttendeeIndex !== null
+                  ? (selectedMinutes.attendanceList as any[])?.[signingAttendeeIndex]?.name
+                  : ''}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="border-2 border-dashed border-gray-300 rounded-lg bg-white">
+              <SignatureCanvas
+                ref={(ref) => { sigPadRef.current = ref; }}
+                penColor="black"
+                backgroundColor="rgba(255,255,255,1)"
+                canvasProps={{ className: "w-full h-48 rounded-lg", "data-testid": "canvas-attendee-signature" } as any}
+              />
+            </div>
+            <p className="text-xs text-gray-500 text-center">ارسم التوقيع بالإصبع أو الفأرة في المساحة أعلاه</p>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => sigPadRef.current?.clear()} data-testid="button-clear-attendee-canvas">مسح</Button>
+              <Button variant="outline" onClick={() => setSigningAttendeeIndex(null)} data-testid="button-cancel-attendee-signature">إلغاء</Button>
+              <Button
+                onClick={() => {
+                  if (!sigPadRef.current || sigPadRef.current.isEmpty()) {
+                    toast({ title: "يرجى رسم التوقيع أولاً", variant: "destructive" });
+                    return;
+                  }
+                  if (!selectedMinutes || signingAttendeeIndex === null) return;
+                  const dataUrl = sigPadRef.current.toDataURL("image/png");
+                  const next = (selectedMinutes.attendanceList as any[]).map((x, idx) =>
+                    idx === signingAttendeeIndex ? { ...x, signatureUrl: dataUrl, signedAt: new Date().toISOString() } : x
+                  );
+                  updateAttendanceListMutation.mutate(
+                    { id: selectedMinutes.id, attendanceList: next },
+                    { onSuccess: () => setSigningAttendeeIndex(null) }
+                  );
+                }}
+                disabled={updateAttendanceListMutation.isPending}
+                data-testid="button-save-attendee-signature"
+              >
+                {updateAttendanceListMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "حفظ التوقيع"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         <AlertDialog open={deleteMinutesId !== null} onOpenChange={(open) => !open && setDeleteMinutesId(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
