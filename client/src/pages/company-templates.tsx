@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { 
   ArrowRight, 
   FileText, 
@@ -2233,6 +2233,7 @@ function EmploymentApplicationTemplate() {
 
 export default function CompanyTemplates() {
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateType | null>(null);
+  const [, setLocation] = useLocation();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const renderTemplateForm = () => {
@@ -2296,6 +2297,10 @@ export default function CompanyTemplates() {
                 key={template.id}
                 className="cursor-pointer hover:shadow-md transition-all hover:border-amber-300 group"
                 onClick={() => {
+                  if (template.id === "job_offer") {
+                    setLocation("/hr/job-offers");
+                    return;
+                  }
                   setSelectedTemplate(template.id);
                   setIsDialogOpen(true);
                 }}
