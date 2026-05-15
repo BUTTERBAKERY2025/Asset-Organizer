@@ -729,6 +729,8 @@ export function registerGovernanceRoutes(app: Express) {
         attendanceMethod: a.proxyName ? "proxy" : "in_person",
         proxyHolderName: a.proxyName || null,
         votingPower: a.votingPower || null,
+        signatureUrl: a.signatureUrl || null,
+        signedAt: a.signedAt ? new Date(a.signedAt) : null,
       }));
 
       const result = await db.insert(meetingAttendance).values(records).returning();

@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
+import SignatureCanvas from "react-signature-canvas";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -124,6 +125,9 @@ export default function GeneralAssemblyPage() {
   const [selectedMeeting, setSelectedMeeting] = useState<GeneralAssembly | null>(null);
   const [attendanceList, setAttendanceList] = useState<Record<number, boolean>>({});
   const [proxyList, setProxyList] = useState<Record<number, string>>({});
+  const [signatureList, setSignatureList] = useState<Record<number, string>>({});
+  const [signingShareholderId, setSigningShareholderId] = useState<number | null>(null);
+  const sigPadRef = useRef<SignatureCanvas | null>(null);
   const [activeTab, setActiveTab] = useState("overview");
   const [invitationMeetingId, setInvitationMeetingId] = useState<number | null>(null);
   const [invitationChannels, setInvitationChannels] = useState({ sendWhatsApp: true, sendSMS: false });
@@ -1480,6 +1484,7 @@ export default function GeneralAssemblyPage() {
                 <TableHead className="text-right">عدد الأسهم</TableHead>
                 <TableHead className="text-right">النسبة</TableHead>
                 <TableHead className="text-right">التوكيل (اختياري)</TableHead>
+                <TableHead className="text-right">التوقيع</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -1508,6 +1513,41 @@ export default function GeneralAssemblyPage() {
                         className="h-8"
                       />
                     </TableCell>
+                    <TableCell>
+                      {signatureList[shareholder.id] ? (
+                        <div className="flex items-center gap-2">
+                          <img
+                            src={signatureList[shareholder.id]}
+                            alt="توقيع"
+                            className="h-8 w-20 object-contain border rounded bg-white"
+                            data-testid={`img-signature-preview-${shareholder.id}`}
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 px-2"
+                            disabled={!attendanceList[shareholder.id]}
+                            onClick={() => setSigningShareholderId(shareholder.id)}
+                            data-testid={`button-resign-${shareholder.id}`}
+                          >
+                            تعديل
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8"
+                          disabled={!attendanceList[shareholder.id]}
+                          onClick={() => setSigningShareholderId(shareholder.id)}
+                          data-testid={`button-sign-${shareholder.id}`}
+                        >
+                          توقيع
+                        </Button>
+                      )}
+                    </TableCell>
                   </TableRow>
                 );
               })}
@@ -1520,6 +1560,7 @@ export default function GeneralAssemblyPage() {
               className="gap-2"
               onClick={async () => {
                 if (!selectedMeeting) return;
+                const nowIso = new Date().toISOString();
                 const attendees = shareholders.filter(s => s.votingRights).map(s => ({
                   shareholderId: s.id,
                   attendeeName: s.fullName,
@@ -1529,6 +1570,8 @@ export default function GeneralAssemblyPage() {
                   votingPower: shareholderStats.totalShares > 0 
                     ? ((s.numberOfShares || 0) / shareholderStats.totalShares * 100).toFixed(4)
                     : "0",
+                  signatureUrl: (attendanceList[s.id] && signatureList[s.id]) ? signatureList[s.id] : null,
+                  signedAt: (attendanceList[s.id] && signatureList[s.id]) ? nowIso : null,
                 }));
                 try {
                   const res = await fetch(`/api/governance/meetings/${selectedMeeting.id}/attendance/bulk`, {
@@ -1553,6 +1596,58 @@ export default function GeneralAssemblyPage() {
             >
               <CheckSquare className="h-4 w-4" />
               حفظ الحضور
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* نافذة رسم التوقيع */}
+      <Dialog open={signingShareholderId !== null} onOpenChange={(open) => { if (!open) setSigningShareholderId(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>توقيع المساهم</DialogTitle>
+            <DialogDescription>
+              {shareholders.find(s => s.id === signingShareholderId)?.fullName}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="border-2 border-dashed border-gray-300 rounded-lg bg-white">
+            <SignatureCanvas
+              ref={(ref) => { sigPadRef.current = ref; }}
+              penColor="black"
+              backgroundColor="rgba(255,255,255,1)"
+              canvasProps={{ className: "w-full h-48 rounded-lg", "data-testid": "canvas-signature" } as any}
+            />
+          </div>
+          <p className="text-xs text-gray-500 text-center">ارسم توقيعك بالإصبع أو الفأرة في المساحة أعلاه</p>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => sigPadRef.current?.clear()}
+              data-testid="button-clear-signature"
+            >
+              مسح
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setSigningShareholderId(null)}
+              data-testid="button-cancel-signature"
+            >
+              إلغاء
+            </Button>
+            <Button
+              onClick={() => {
+                if (!sigPadRef.current || sigPadRef.current.isEmpty()) {
+                  toast({ title: "يرجى رسم التوقيع أولاً", variant: "destructive" });
+                  return;
+                }
+                if (signingShareholderId === null) return;
+                const dataUrl = sigPadRef.current.toDataURL("image/png");
+                setSignatureList({ ...signatureList, [signingShareholderId]: dataUrl });
+                setSigningShareholderId(null);
+              }}
+              data-testid="button-save-signature"
+            >
+              حفظ التوقيع
             </Button>
           </DialogFooter>
         </DialogContent>
