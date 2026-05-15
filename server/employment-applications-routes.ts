@@ -669,6 +669,7 @@ export function registerEmploymentApplicationRoutes(app: Express) {
     cvUrl: z.string().optional(),
     photoUrl: z.string().optional(),
     idCopyUrl: z.string().optional(),
+    additionalData: z.record(z.any()).optional(),
     signature: z.string().min(50, "التوقيع مطلوب"),
     agreedToTerms: z.literal(true),
   });

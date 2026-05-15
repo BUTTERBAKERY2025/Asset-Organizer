@@ -9876,6 +9876,14 @@ export const employmentApplications = pgTable("employment_applications", {
   cvUrl: text("cv_url"),
   photoUrl: text("photo_url"),
   idCopyUrl: text("id_copy_url"),
+  // البيانات الموسّعة (تطابق النموذج الرسمي طلب توظيف)
+  // تشمل: تفاصيل الاسم الرباعي ar/en، مكان الميلاد، الديانة، تفاصيل الهوية والجواز،
+  // هواتف منزل/عمل، ص.ب، المعالين، الأمراض المزمنة، الحمل، فصيلة الدم،
+  // عمل سابق بالشركة، يعمل حالياً، GOSI، الحد الأدنى للراتب،
+  // رخصة القيادة، السوابق، الدورات التدريبية، مستويات اللغات (تحدث/قراءة/كتابة)،
+  // سرعة الطباعة، مهارات أخرى، هوايات، كيف عرف عن الوظيفة، أقارب في الشركة،
+  // معلومات أخرى يود إضافتها.
+  additionalData: jsonb("additional_data"),
   // التوقيع والإقرار
   signature: text("signature"),
   agreedToTerms: boolean("agreed_to_terms").default(false).notNull(),
