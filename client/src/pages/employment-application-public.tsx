@@ -22,12 +22,30 @@ export default function EmploymentApplicationPublicPage() {
 
   const submitMut = useMutation({
     mutationFn: async (payload: any) => {
-      const r = await fetch(`/api/public/applications/${token}/submit`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!r.ok) throw new Error((await r.json()).error || "خطأ في الإرسال");
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 90000);
+      let r: Response;
+      try {
+        r = await fetch(`/api/public/applications/${token}/submit`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          signal: ctrl.signal,
+        });
+      } catch (err: any) {
+        clearTimeout(timer);
+        if (err?.name === "AbortError") throw new Error("انتهت مهلة الإرسال. تأكد من الاتصال بالإنترنت وحاول مرة أخرى.");
+        throw new Error("فشل الاتصال بالخادم. تحقق من الإنترنت وحاول مجدداً.");
+      }
+      clearTimeout(timer);
+      if (!r.ok) {
+        const fallback = r.status === 413 ? "حجم البيانات كبير جداً. الرجاء استخدام ملفات أصغر."
+          : (r.status === 502 || r.status === 504) ? "الخادم لم يستجب. حاول لاحقاً."
+          : `خطأ ${r.status}`;
+        let msg = fallback;
+        try { const j = await r.json(); if (j?.error) msg = j.error; } catch {}
+        throw new Error(msg);
+      }
       return r.json();
     },
     onSuccess: () => setDone(true),

@@ -11,7 +11,8 @@ import { SignaturePad } from "@/components/signature-pad";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2, Upload, AlertCircle, Briefcase } from "lucide-react";
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_FILE_SIZE = 1.5 * 1024 * 1024; // 1.5MB
+const MAX_TOTAL_PAYLOAD = 4 * 1024 * 1024; // 4MB total — حدّ آمن لمتصفحات الجوال
 
 type EduRow = { degree: string; field: string; institution: string; yearFrom: string; yearTo: string; gpa?: string };
 type ExpRow = { company: string; position: string; from: string; to: string; current?: boolean; summary?: string };
@@ -78,7 +79,7 @@ export default function ApplicationForm({ initial, vacancy, company, submitting,
   const handleFile = async (file: File | undefined, setter: (v: string) => void, label: string) => {
     if (!file) return;
     if (file.size > MAX_FILE_SIZE) {
-      toast({ title: "حجم الملف كبير", description: `الحد الأقصى ٥ ميجا. ${label}`, variant: "destructive" });
+      toast({ title: "حجم الملف كبير", description: `الحد الأقصى ١.٥ ميجا لكل ملف. ${label}`, variant: "destructive" });
       return;
     }
     try {
@@ -118,6 +119,17 @@ export default function ApplicationForm({ initial, vacancy, company, submitting,
       agreedToTerms: true,
     };
     if (!payload.email) delete payload.email;
+
+    const sizeBytes = new Blob([JSON.stringify(payload)]).size;
+    if (sizeBytes > MAX_TOTAL_PAYLOAD) {
+      const mb = (sizeBytes / 1024 / 1024).toFixed(1);
+      toast({
+        title: "حجم البيانات كبير جداً",
+        description: `إجمالي الحجم ${mb} ميجا. الرجاء استخدام صور/ملفات أصغر (الحد الأقصى ${(MAX_TOTAL_PAYLOAD / 1024 / 1024).toFixed(0)} ميجا إجمالاً).`,
+        variant: "destructive",
+      });
+      return;
+    }
     onSubmit(payload);
   };
 
@@ -420,7 +432,7 @@ export default function ApplicationForm({ initial, vacancy, company, submitting,
         <Card>
           <CardHeader><CardTitle className="text-lg">المرفقات</CardTitle></CardHeader>
           <CardContent className="space-y-3">
-            <p className="text-xs text-gray-500">الحد الأقصى لكل ملف ٥ ميجا</p>
+            <p className="text-xs text-gray-500">الحد الأقصى لكل ملف ١.٥ ميجا (إجمالي الطلب ٤ ميجا)</p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {[
                 { label: "السيرة الذاتية (PDF)", value: cvUrl, setter: setCvUrl, accept: ".pdf,.doc,.docx" },
