@@ -43,6 +43,7 @@ import {
   branchDailyClosurePayments, 
   branchDailyClosureJournals,
   cashierSalesJournals,
+  productionOrders,
   cashierPaymentBreakdowns,
   dailySalesData,
   dailyComparisons,
@@ -175,6 +176,47 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("Attendance debug error:", error);
       res.status(500).json({ error: "فشل في جلب بيانات الحضور" });
+    }
+  });
+
+  // Home dashboard quick stats — used by platform-home.tsx
+  app.get("/api/dashboard/stats", isAuthenticated, async (req, res) => {
+    try {
+      // Saudi local date (UTC+3, no DST) — matches journalDate/scheduledDate stored as local YYYY-MM-DD
+      const today = new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString().split("T")[0];
+      const queryBranchId = req.query.branchId as string | undefined;
+      const { branchIds, singleBranchId, hasAccess } = getEffectiveBranchFilter(req, queryBranchId);
+      if (!hasAccess) {
+        return res.json({ todaySales: 0, productionOrders: 0 });
+      }
+
+      const salesConds: SQL[] = [eq(cashierSalesJournals.journalDate, today)];
+      const prodConds: SQL[] = [eq(productionOrders.scheduledDate, today)];
+      if (singleBranchId) {
+        salesConds.push(eq(cashierSalesJournals.branchId, singleBranchId));
+        prodConds.push(eq(productionOrders.branchId, singleBranchId));
+      } else if (branchIds !== null && branchIds.length > 0) {
+        salesConds.push(inArray(cashierSalesJournals.branchId, branchIds));
+        prodConds.push(inArray(productionOrders.branchId, branchIds));
+      }
+
+      const [salesRow] = await db
+        .select({ total: sql<number>`COALESCE(SUM(${cashierSalesJournals.totalSales}), 0)::float` })
+        .from(cashierSalesJournals)
+        .where(and(...salesConds));
+
+      const [prodRow] = await db
+        .select({ count: sql<number>`COUNT(*)::int` })
+        .from(productionOrders)
+        .where(and(...prodConds));
+
+      res.json({
+        todaySales: Number(salesRow?.total ?? 0),
+        productionOrders: Number(prodRow?.count ?? 0),
+      });
+    } catch (error) {
+      console.error("Error fetching dashboard stats:", error);
+      res.status(500).json({ error: "فشل في جلب إحصائيات لوحة التحكم" });
     }
   });
 
