@@ -7,6 +7,19 @@ import { cn } from "@/lib/utils";
 const SHOW_DELAY_MS = 4000;
 const MIN_DISPLAY_MS = 4000;
 
+// Session-wide set of query-key signatures the user has already dismissed.
+// Persisted across route navigations so the banner doesn't pop back up
+// for the same failing endpoint after the user closed it.
+function getDismissedSet(): Set<string> {
+  const w = window as any;
+  if (!w.__bannerDismissedKeys) w.__bannerDismissedKeys = new Set<string>();
+  return w.__bannerDismissedKeys;
+}
+
+function keySig(q: Query): string {
+  return JSON.stringify(q.queryKey);
+}
+
 function isTransientError(q: Query): boolean {
   if (q.state.status !== "error") return false;
   if (q.getObserversCount() === 0) return false;
@@ -16,6 +29,8 @@ function isTransientError(q: Query): boolean {
   // Skip queries that are currently retrying — banner should only show
   // after retries are exhausted.
   if (q.state.fetchStatus === "fetching") return false;
+  // Skip queries the user already dismissed during this session.
+  if (getDismissedSet().has(keySig(q))) return false;
   const err = q.state.error;
   const msg = err instanceof Error ? err.message : String(err || "");
   if (/^(400|401|403|404|409|410|422):/.test(msg)) return false;
@@ -99,6 +114,14 @@ export function DataErrorBanner() {
   const handleDismiss = () => {
     if (showTimer.current) { window.clearTimeout(showTimer.current); showTimer.current = null; }
     if (hideTimer.current) { window.clearTimeout(hideTimer.current); hideTimer.current = null; }
+    // Remember which failing queries the user dismissed so we don't pop
+    // the banner up again for the same endpoints on later navigations.
+    // Narrow to transient (banner-eligible) queries only, so future
+    // failures with different characteristics still surface.
+    const dismissedSet = getDismissedSet();
+    queryClient.getQueryCache().getAll().filter(isTransientError).forEach((q) => {
+      dismissedSet.add(keySig(q));
+    });
     setDismissed(true);
     setVisible(false);
     shownAt.current = null;
@@ -108,6 +131,9 @@ export function DataErrorBanner() {
     setRetrying(true);
     try {
       const failed = queryClient.getQueryCache().getAll().filter(isTransientError);
+      // Clear dismissed flag for the queries we're actively retrying.
+      const dismissedSet = getDismissedSet();
+      failed.forEach((q) => dismissedSet.delete(keySig(q)));
       await Promise.allSettled(failed.map((q) => queryClient.refetchQueries({ queryKey: q.queryKey, exact: true })));
     } finally {
       setRetrying(false);
