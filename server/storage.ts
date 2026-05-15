@@ -4514,13 +4514,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createSystemAuditLog(log: InsertSystemAuditLog): Promise<SystemAuditLog> {
-    // Remove optional fields that may not exist in database yet
-    const { targetId, description, ...safeLog } = log as any;
     try {
-      const [created] = await db.insert(systemAuditLogs).values(safeLog).returning();
+      const [created] = await db.insert(systemAuditLogs).values(log).returning();
       return created;
     } catch (error: any) {
-      // If column doesn't exist, try inserting without problematic fields
+      // Defensive fallback: if a database hasn't been migrated yet (target_id/description),
+      // retry without the new optional columns instead of failing the request.
       if (error?.code === '42703') {
         const [created] = await db.insert(systemAuditLogs).values({
           module: log.module,
