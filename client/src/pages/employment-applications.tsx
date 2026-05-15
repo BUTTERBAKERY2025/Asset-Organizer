@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useReactToPrint } from "react-to-print";
 import { useLocation } from "wouter";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,7 +17,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { EmploymentApplication, JobVacancy } from "@shared/schema";
 import {
   Plus, Send, Eye, Trash2, Briefcase, Users, Search, Copy, ExternalLink,
-  CheckCircle, XCircle, Clock, FileText, Star, RefreshCw,
+  CheckCircle, XCircle, Clock, FileText, Star, RefreshCw, Printer,
 } from "lucide-react";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -66,6 +67,19 @@ export default function EmploymentApplicationsPage() {
   const [showVacancy, setShowVacancy] = useState(false);
   const [viewApp, setViewApp] = useState<EmploymentApplication | null>(null);
   const [shareLink, setShareLink] = useState<{ link: string; phone: string } | null>(null);
+  const printRef = useRef<HTMLDivElement>(null);
+  const handlePrint = useReactToPrint({
+    contentRef: printRef,
+    documentTitle: viewApp ? `Application-${viewApp.applicationNumber}` : "Application",
+    onBeforePrint: async () => {
+      const root = printRef.current;
+      if (!root) return;
+      const imgs = Array.from(root.querySelectorAll("img"));
+      await Promise.all(imgs.map((img) => img.complete ? Promise.resolve() : new Promise<void>((res) => {
+        img.onload = img.onerror = () => res();
+      })));
+    },
+  });
 
   const [createForm, setCreateForm] = useState({
     fullNameAr: "", phone: "", whatsapp: "", email: "",
@@ -626,6 +640,9 @@ export default function EmploymentApplicationsPage() {
             )}
             <DialogFooter>
               <Button variant="outline" onClick={() => setViewApp(null)}>إغلاق</Button>
+              <Button variant="outline" onClick={() => handlePrint()} className="border-amber-500 text-amber-700 hover:bg-amber-50" data-testid="button-print-application">
+                <Printer className="w-4 h-4 ml-1" /> طباعة / PDF
+              </Button>
               {viewApp?.status === "accepted" && !viewApp?.convertedToOfferId && (
                 <Button className="bg-green-600 hover:bg-green-700" onClick={() => convertToOffer(viewApp)}>
                   <Briefcase className="w-4 h-4 ml-1" /> تحويل لعرض عمل
@@ -658,7 +675,202 @@ export default function EmploymentApplicationsPage() {
             )}
           </DialogContent>
         </Dialog>
+
+        <div style={{ position: "absolute", left: "-10000px", top: 0, width: 0, height: 0, overflow: "hidden" }}>
+          {viewApp && (
+            <PrintableApplication
+              ref={printRef}
+              app={{
+                ...viewApp,
+                status: reviewForm.status as any,
+                rating: reviewForm.rating || viewApp.rating,
+                hrNotes: reviewForm.hrNotes || viewApp.hrNotes,
+                rejectionReason: reviewForm.rejectionReason || viewApp.rejectionReason,
+              }}
+            />
+          )}
+        </div>
       </div>
     </Layout>
   );
 }
+
+const PrintableApplication = React.forwardRef<HTMLDivElement, { app: EmploymentApplication }>(
+  ({ app }, ref) => {
+    const today = new Date().toLocaleDateString("ar-SA");
+    const submittedDate = app.submittedAt ? new Date(app.submittedAt).toLocaleDateString("ar-SA") : "-";
+    const Field = ({ label, value }: { label: string; value: any }) => (
+      <div style={{ display: "flex", gap: 6, fontSize: 12, padding: "3px 0", borderBottom: "1px dotted #ddd" }}>
+        <span style={{ color: "#666", minWidth: 110 }}>{label}:</span>
+        <span style={{ fontWeight: 600 }}>{value || "-"}</span>
+      </div>
+    );
+    const SectionTitle = ({ children }: { children: React.ReactNode }) => (
+      <h2 style={{ fontSize: 14, fontWeight: 700, color: "#1a3a2f", borderBottom: "2px solid #e67e22", paddingBottom: 4, marginTop: 14, marginBottom: 8 }}>
+        {children}
+      </h2>
+    );
+    return (
+      <div ref={ref} dir="rtl" style={{ fontFamily: "Cairo, Tahoma, Arial, sans-serif", padding: 24, color: "#222", background: "#fff", lineHeight: 1.6 }}>
+        <style>{`
+          @page { size: A4; margin: 12mm; }
+          @media print {
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          }
+        `}</style>
+
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "3px solid #e67e22", paddingBottom: 12, marginBottom: 14 }}>
+          <div>
+            <h1 style={{ fontSize: 20, fontWeight: 700, color: "#1a3a2f", margin: 0 }}>طلب توظيف</h1>
+            <div style={{ fontSize: 11, color: "#666", marginTop: 4 }}>شركة الزبد الأفضل التجارية — Butter Bakery Trading Co.</div>
+            <div style={{ fontSize: 10, color: "#888" }}>سجل تجاري: 7026155296</div>
+          </div>
+          <div style={{ textAlign: "left" }}>
+            <div style={{ fontSize: 11, color: "#666" }}>رقم الطلب</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#e67e22" }}>{app.applicationNumber}</div>
+            <div style={{ fontSize: 10, color: "#888", marginTop: 4 }}>تاريخ الطباعة: {today}</div>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 8, fontSize: 10, marginBottom: 10, flexWrap: "wrap" }}>
+          <span style={{ background: "#fff3e0", color: "#e67e22", padding: "3px 10px", borderRadius: 4, fontWeight: 600 }}>
+            الحالة: {STATUS_LABELS[app.status] || app.status}
+          </span>
+          <span style={{ background: "#f0f0f0", color: "#444", padding: "3px 10px", borderRadius: 4 }}>
+            المصدر: {app.source === "open" ? "تقدّم مباشر" : "موجّه"}
+          </span>
+          <span style={{ background: "#f0f0f0", color: "#444", padding: "3px 10px", borderRadius: 4 }}>
+            تاريخ التقديم: {submittedDate}
+          </span>
+        </div>
+
+        <SectionTitle>البيانات الشخصية</SectionTitle>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
+          <Field label="الاسم بالعربي" value={app.fullNameAr} />
+          <Field label="Full Name (EN)" value={app.fullNameEn} />
+          <Field label="الجنسية" value={app.nationality} />
+          <Field label="نوع الهوية" value={app.idType} />
+          <Field label="رقم الهوية" value={app.idNumber} />
+          <Field label="انتهاء الهوية" value={app.idExpiry} />
+          <Field label="تاريخ الميلاد" value={app.dob} />
+          <Field label="الجنس" value={app.gender} />
+          <Field label="الحالة الاجتماعية" value={app.maritalStatus} />
+          <Field label="المدينة" value={app.city} />
+          <Field label="العنوان" value={app.address} />
+        </div>
+
+        <SectionTitle>بيانات التواصل</SectionTitle>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
+          <Field label="الجوال" value={app.phone} />
+          <Field label="الواتساب" value={app.whatsapp} />
+          <Field label="البريد الإلكتروني" value={app.email} />
+        </div>
+
+        <SectionTitle>الوظيفة المستهدفة</SectionTitle>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
+          <Field label="المسمى الوظيفي" value={app.targetPosition} />
+          <Field label="الفرع" value={app.targetBranchName} />
+          <Field label="الراتب المتوقع" value={app.expectedSalary ? `${app.expectedSalary.toLocaleString("en-US")} ر.س` : "-"} />
+          <Field label="تاريخ الجاهزية" value={app.availabilityDate} />
+        </div>
+
+        {Array.isArray(app.education) && app.education.length > 0 && (
+          <>
+            <SectionTitle>المؤهلات العلمية</SectionTitle>
+            {(app.education as any[]).map((e, i) => (
+              <div key={i} style={{ fontSize: 12, padding: 6, border: "1px solid #eee", borderRadius: 4, marginBottom: 5 }}>
+                <strong>{e.degree || "-"}</strong> {e.field && `— ${e.field}`} <br />
+                <span style={{ color: "#555" }}>{e.institution || "-"}</span>
+                <span style={{ color: "#888", marginRight: 8 }}>({e.yearFrom || "?"} - {e.yearTo || "?"})</span>
+                {e.gpa && <span style={{ marginRight: 8 }}>المعدل: {e.gpa}</span>}
+              </div>
+            ))}
+          </>
+        )}
+
+        {Array.isArray(app.experience) && app.experience.length > 0 && (
+          <>
+            <SectionTitle>الخبرات العملية</SectionTitle>
+            {(app.experience as any[]).map((e, i) => (
+              <div key={i} style={{ fontSize: 12, padding: 6, border: "1px solid #eee", borderRadius: 4, marginBottom: 5 }}>
+                <strong>{e.position || "-"}</strong> — {e.company || "-"}<br />
+                <span style={{ color: "#888" }}>{e.from || "?"} → {e.current ? "حالياً" : (e.to || "?")}</span>
+                {e.summary && <div style={{ color: "#555", marginTop: 3 }}>{e.summary}</div>}
+              </div>
+            ))}
+          </>
+        )}
+
+        {Array.isArray(app.skills) && app.skills.length > 0 && (
+          <>
+            <SectionTitle>المهارات</SectionTitle>
+            <div style={{ fontSize: 12 }}>
+              {(app.skills as string[]).map((s, i) => (
+                <span key={i} style={{ display: "inline-block", background: "#f0f0f0", padding: "3px 8px", borderRadius: 4, margin: "2px" }}>
+                  {s}
+                </span>
+              ))}
+            </div>
+          </>
+        )}
+
+        {Array.isArray(app.languages) && app.languages.length > 0 && (
+          <>
+            <SectionTitle>اللغات</SectionTitle>
+            <div style={{ fontSize: 12 }}>
+              {(app.languages as any[]).map((l, i) => (
+                <span key={i} style={{ display: "inline-block", background: "#f0f0f0", padding: "3px 10px", borderRadius: 4, margin: "2px" }}>
+                  {l.name}: {l.level}
+                </span>
+              ))}
+            </div>
+          </>
+        )}
+
+        {Array.isArray((app as any).references) && (app as any).references.length > 0 && (
+          <>
+            <SectionTitle>المعرّفون</SectionTitle>
+            {((app as any).references as any[]).map((r, i) => (
+              <div key={i} style={{ fontSize: 12, padding: 6, border: "1px solid #eee", borderRadius: 4, marginBottom: 5 }}>
+                <strong>{r.name || "-"}</strong> {r.position && `— ${r.position}`} {r.company && `(${r.company})`}<br />
+                <span style={{ color: "#666" }}>{r.phone || "-"}</span>
+                {r.email && <span style={{ marginRight: 8 }}>{r.email}</span>}
+              </div>
+            ))}
+          </>
+        )}
+
+        {(app.hrNotes || app.rejectionReason || app.rating) && (
+          <>
+            <SectionTitle>ملاحظات الموارد البشرية</SectionTitle>
+            {app.rating ? <Field label="التقييم" value={`${app.rating} / 5`} /> : null}
+            {app.hrNotes && <Field label="ملاحظات" value={app.hrNotes} />}
+            {app.rejectionReason && <Field label="سبب الرفض" value={app.rejectionReason} />}
+          </>
+        )}
+
+        <div style={{ marginTop: 18, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <div>
+            <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>توقيع المتقدم</div>
+            {app.signature ? (
+              <img src={app.signature} alt="signature" style={{ maxHeight: 80, border: "1px solid #ddd", borderRadius: 4, padding: 4, background: "#fff" }} />
+            ) : (
+              <div style={{ height: 80, border: "1px dashed #ccc", borderRadius: 4 }} />
+            )}
+            <div style={{ fontSize: 10, color: "#888", marginTop: 4 }}>تاريخ التوقيع: {submittedDate}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>توقيع المسؤول</div>
+            <div style={{ height: 80, border: "1px dashed #ccc", borderRadius: 4 }} />
+            <div style={{ fontSize: 10, color: "#888", marginTop: 4 }}>الاسم/التاريخ: ____________________</div>
+          </div>
+        </div>
+
+        <div style={{ marginTop: 20, paddingTop: 8, borderTop: "1px solid #ddd", fontSize: 9, color: "#999", textAlign: "center" }}>
+          هذا المستند مولّد آلياً من نظام إدارة الموارد البشرية — Butter Bakery Trading Co.
+        </div>
+      </div>
+    );
+  }
+);
+PrintableApplication.displayName = "PrintableApplication";
