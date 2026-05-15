@@ -30,9 +30,9 @@ export interface PrintResolution {
   resolutionType: string;
   category?: string | null;
   status: string;
-  votesFor?: number | null;
-  votesAgainst?: number | null;
-  votesAbstain?: number | null;
+  forVotes?: number | null;
+  againstVotes?: number | null;
+  abstainVotes?: number | null;
   totalVotes?: number | null;
   requiredMajority?: string | null;
   approvedAt?: string | null;
@@ -140,9 +140,9 @@ export function buildAssemblyResolutionHtml(
   const resType = resolutionTypeLabel(resolution.resolutionType);
 
   const totalVotes = resolution.totalVotes || votes.length || 0;
-  const votesFor = resolution.votesFor ?? votes.filter((v) => v.vote === "for").length;
-  const votesAgainst = resolution.votesAgainst ?? votes.filter((v) => v.vote === "against").length;
-  const votesAbstain = resolution.votesAbstain ?? votes.filter((v) => v.vote === "abstain").length;
+  const votesFor = resolution.forVotes ?? votes.filter((v) => v.vote === "for").length;
+  const votesAgainst = resolution.againstVotes ?? votes.filter((v) => v.vote === "against").length;
+  const votesAbstain = resolution.abstainVotes ?? votes.filter((v) => v.vote === "abstain").length;
   const pct = (n: number) => (totalVotes > 0 ? ((n / totalVotes) * 100).toFixed(1) : "0.0");
 
   const votersRowsHtml = votes.length
@@ -368,9 +368,9 @@ export async function exportAssemblyResolutionExcel(
     ["تاريخ الاجتماع", fmtDate(meeting?.meetingDate || meeting?.scheduledDate)],
     ["المكان", meeting?.location || "-"],
     ["الحالة", statusBadge(resolution.status).label.replace(/[^\u0600-\u06FF\sA-Za-z]/g, "").trim()],
-    ["موافق", resolution.votesFor || votes.filter((v) => v.vote === "for").length],
-    ["معارض", resolution.votesAgainst || votes.filter((v) => v.vote === "against").length],
-    ["ممتنع", resolution.votesAbstain || votes.filter((v) => v.vote === "abstain").length],
+    ["موافق", resolution.forVotes || votes.filter((v) => v.vote === "for").length],
+    ["معارض", resolution.againstVotes || votes.filter((v) => v.vote === "against").length],
+    ["ممتنع", resolution.abstainVotes || votes.filter((v) => v.vote === "abstain").length],
     ["إجمالي الأصوات", resolution.totalVotes || votes.length],
     ["النصاب المطلوب %", resolution.requiredMajority || "-"],
     ["تاريخ الاعتماد", fmtDate(resolution.approvedAt || resolution.createdAt)],

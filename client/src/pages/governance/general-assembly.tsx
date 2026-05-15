@@ -64,6 +64,7 @@ import {
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { printAssemblyResolution, exportAssemblyResolutionExcel } from "@/lib/assembly-resolution-print";
+import { printAssemblyMeeting, exportAssemblyMeetingExcel } from "@/lib/assembly-meeting-print";
 
 interface Shareholder {
   id: number;
@@ -90,8 +91,8 @@ interface GeneralAssembly {
   description?: string;
   status: string;
   quorumRequired: number;
-  agenda?: string;
-  notes?: string;
+  agenda?: string | null;
+  notes?: string | null;
   attendeesCount?: number;
   createdAt: string;
 }
@@ -105,9 +106,9 @@ interface BoardResolution {
   status: string;
   votingDeadline?: string;
   meetingId?: number | null;
-  votesFor?: number | null;
-  votesAgainst?: number | null;
-  votesAbstain?: number | null;
+  forVotes?: number | null;
+  againstVotes?: number | null;
+  abstainVotes?: number | null;
   totalVotes?: number | null;
   requiredMajority?: string | null;
   approvedAt?: string | null;
@@ -848,9 +849,34 @@ export default function GeneralAssemblyPage() {
                                   التصويت
                                 </DropdownMenuItem>
                               </Link>
-                              <DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={async () => {
+                                  try {
+                                    await printAssemblyMeeting(meeting as any);
+                                  } catch (e) {
+                                    console.error(e);
+                                    toast({ title: "تعذر فتح نافذة الطباعة", variant: "destructive" });
+                                  }
+                                }}
+                                data-testid={`button-print-meeting-${meeting.id}`}
+                              >
                                 <Printer className="h-4 w-4 ml-2" />
-                                طباعة
+                                طباعة المحضر (مع التواقيع)
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={async () => {
+                                  try {
+                                    await exportAssemblyMeetingExcel(meeting as any);
+                                    toast({ title: "تم تصدير المحضر بصيغة Excel" });
+                                  } catch (e) {
+                                    console.error(e);
+                                    toast({ title: "تعذر تصدير المحضر", variant: "destructive" });
+                                  }
+                                }}
+                                data-testid={`button-export-meeting-${meeting.id}`}
+                              >
+                                <Download className="h-4 w-4 ml-2" />
+                                تصدير المحضر (Excel)
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem 
@@ -1056,9 +1082,9 @@ export default function GeneralAssemblyPage() {
                           ? meetings.find((m) => m.id === resolution.meetingId)
                           : undefined;
                         const totalV = resolution.totalVotes || 0;
-                        const forV = resolution.votesFor || 0;
-                        const againstV = resolution.votesAgainst || 0;
-                        const abstainV = resolution.votesAbstain || 0;
+                        const forV = resolution.forVotes || 0;
+                        const againstV = resolution.againstVotes || 0;
+                        const abstainV = resolution.abstainVotes || 0;
                         return (
                           <TableRow key={resolution.id} data-testid={`row-resolution-${resolution.id}`}>
                             <TableCell className="font-mono text-xs" data-testid={`text-resolution-number-${resolution.id}`}>
