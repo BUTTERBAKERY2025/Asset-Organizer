@@ -443,60 +443,108 @@ export default function LoginPage() {
 
 /* ─── Bakery-themed decorative SVGs (lg+ only, far from card) ─── */
 
+/* ─── Atlassian-inspired isometric platform illustrations ─── */
+
 function BakeryIllustrationLeft() {
   return (
     <div
-      className="hidden lg:block absolute left-[-30px] bottom-[-20px] w-[260px] xl:w-[320px] 2xl:w-[380px] pointer-events-none select-none opacity-90 z-0"
+      className="hidden lg:block absolute left-[-30px] bottom-[-20px] w-[300px] xl:w-[360px] 2xl:w-[420px] pointer-events-none select-none opacity-95 z-0"
       aria-hidden="true"
     >
-      <svg viewBox="0 0 360 260" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-auto">
-        {/* shadow */}
-        <ellipse cx="170" cy="240" rx="160" ry="10" fill="#1a3a2f" opacity="0.06" />
+      <svg viewBox="0 0 380 320" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-auto">
+        {/* ─── Lower floating platform (isometric) ─── */}
+        <g>
+          {/* top face */}
+          <polygon points="40,250 200,220 320,260 160,290" fill="#bfdbfe" />
+          {/* front side */}
+          <polygon points="40,250 160,290 160,310 40,270" fill="#3b82f6" />
+          {/* right side */}
+          <polygon points="160,290 320,260 320,280 160,310" fill="#1e40af" />
+        </g>
 
-        {/* wooden table */}
-        <rect x="20" y="200" width="320" height="14" rx="2" fill="#a16207" />
-        <rect x="20" y="214" width="320" height="6" fill="#854d0e" />
+        {/* ─── Upper floating platform (smaller, top-left) ─── */}
+        <g>
+          <polygon points="20,160 130,140 200,160 90,180" fill="#bfdbfe" />
+          <polygon points="20,160 90,180 90,195 20,175" fill="#3b82f6" />
+          <polygon points="90,180 200,160 200,175 90,195" fill="#1e40af" />
+        </g>
 
-        {/* flour sack */}
-        <path d="M50 200 L50 140 Q50 120 70 115 L100 110 Q120 108 122 130 L130 200 Z" fill="#fef3c7" stroke="#1a3a2f" strokeOpacity="0.25" strokeWidth="1.5" />
-        <path d="M70 115 Q90 100 100 115" stroke="#1a3a2f" strokeOpacity="0.3" strokeWidth="1.5" fill="none" />
-        <text x="72" y="170" fontSize="11" fill="#1a3a2f" opacity="0.55" fontFamily="Arial" fontWeight="bold">FLOUR</text>
-        {/* flour spill */}
-        <ellipse cx="55" cy="200" rx="22" ry="3" fill="#ffffff" opacity="0.85" />
+        {/* ─── Whiteboard / wall of papers (on upper platform) ─── */}
+        <g>
+          {/* board frame */}
+          <rect x="40" y="60" width="120" height="100" rx="2" fill="#ffffff" stroke="#1e40af" strokeOpacity="0.4" strokeWidth="1.5" />
+          {/* sticky notes */}
+          <rect x="50" y="72" width="22" height="22" fill="#fbbf24" />
+          <rect x="78" y="72" width="22" height="22" fill="#fb923c" />
+          <rect x="106" y="72" width="22" height="22" fill="#60a5fa" />
+          <rect x="50" y="100" width="22" height="22" fill="#34d399" />
+          <rect x="78" y="100" width="22" height="22" fill="#f472b6" />
+          <rect x="106" y="100" width="22" height="22" fill="#fbbf24" />
+          {/* lines under */}
+          <line x1="50" y1="135" x2="150" y2="135" stroke="#cbd5e1" strokeWidth="2" />
+          <line x1="50" y1="145" x2="130" y2="145" stroke="#cbd5e1" strokeWidth="2" />
+          <line x1="50" y1="155" x2="140" y2="155" stroke="#cbd5e1" strokeWidth="2" />
+        </g>
 
-        {/* baguette / bread loaf */}
-        <ellipse cx="200" cy="190" rx="70" ry="16" fill="#d97706" />
-        <ellipse cx="200" cy="186" rx="68" ry="14" fill="#f59e0b" />
-        {[0, 1, 2, 3, 4].map((i) => (
-          <line
-            key={i}
-            x1={155 + i * 22}
-            y1={178}
-            x2={165 + i * 22}
-            y2={194}
-            stroke="#92400e"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
-        ))}
+        {/* ─── Worker A on upper platform (left, reaching up) ─── */}
+        <g>
+          {/* legs */}
+          <rect x="22" y="148" width="4" height="14" fill="#1e3a8a" />
+          <rect x="28" y="148" width="4" height="14" fill="#1e3a8a" />
+          {/* body — orange shirt */}
+          <path d="M18 130 L36 130 L34 150 L20 150 Z" fill="#fb923c" />
+          {/* arm reaching up */}
+          <line x1="32" y1="135" x2="42" y2="115" stroke="#fdba74" strokeWidth="3" strokeLinecap="round" />
+          {/* head */}
+          <circle cx="27" cy="124" r="6" fill="#fde7d3" />
+          <path d="M22 121 Q27 117 32 121" stroke="#1e3a8a" strokeWidth="1" fill="none" />
+        </g>
 
-        {/* coffee cup with steam */}
-        <path d="M270 180 L268 200 Q268 210 280 210 L300 210 Q312 210 312 200 L310 180 Z" fill="#1a3a2f" />
-        <ellipse cx="290" cy="180" rx="20" ry="4" fill="#7c3a13" />
-        <path d="M310 188 Q322 188 322 195 Q322 202 312 202" stroke="#1a3a2f" strokeWidth="2" fill="none" />
-        {/* steam */}
-        <path d="M280 170 Q283 162 280 155 Q277 148 280 142" stroke="#94a3b8" strokeWidth="2" fill="none" strokeLinecap="round" opacity="0.7" />
-        <path d="M295 170 Q298 162 295 155 Q292 148 295 142" stroke="#94a3b8" strokeWidth="2" fill="none" strokeLinecap="round" opacity="0.7" />
+        {/* ─── Worker B on upper platform (mid, arms out) ─── */}
+        <g>
+          <rect x="68" y="148" width="4" height="14" fill="#1e3a8a" />
+          <rect x="74" y="148" width="4" height="14" fill="#1e3a8a" />
+          <path d="M64 130 L82 130 L80 150 L66 150 Z" fill="#fb923c" />
+          <line x1="65" y1="135" x2="55" y2="125" stroke="#fdba74" strokeWidth="3" strokeLinecap="round" />
+          <line x1="81" y1="135" x2="92" y2="125" stroke="#fdba74" strokeWidth="3" strokeLinecap="round" />
+          <circle cx="73" cy="124" r="6" fill="#fde7d3" />
+        </g>
 
-        {/* small croissant */}
-        <path d="M150 195 Q140 175 155 170 Q175 168 180 185 Q175 195 165 195 Z" fill="#fbbf24" stroke="#92400e" strokeWidth="1.5" />
-        <line x1="155" y1="180" x2="170" y2="190" stroke="#92400e" strokeWidth="1" />
+        {/* ─── Person on lower platform (with whiteboard / clipboard) ─── */}
+        <g>
+          {/* legs */}
+          <rect x="155" y="240" width="5" height="20" fill="#1e3a8a" />
+          <rect x="163" y="240" width="5" height="20" fill="#1e3a8a" />
+          {/* body — blue dress / tunic */}
+          <path d="M148 210 L172 210 L176 245 L144 245 Z" fill="#3b82f6" />
+          {/* arms holding a small clipboard */}
+          <line x1="150" y1="218" x2="138" y2="232" stroke="#fde7d3" strokeWidth="3" strokeLinecap="round" />
+          <line x1="170" y1="218" x2="182" y2="232" stroke="#fde7d3" strokeWidth="3" strokeLinecap="round" />
+          {/* clipboard */}
+          <rect x="135" y="225" width="14" height="18" fill="#ffffff" stroke="#1e3a8a" strokeWidth="1" />
+          <line x1="138" y1="230" x2="146" y2="230" stroke="#94a3b8" strokeWidth="0.8" />
+          <line x1="138" y1="234" x2="146" y2="234" stroke="#94a3b8" strokeWidth="0.8" />
+          {/* head with hair */}
+          <circle cx="160" cy="202" r="8" fill="#fde7d3" />
+          <path d="M152 200 Q160 188 168 200 Q170 195 165 192 Q160 188 155 192 Q150 195 152 200 Z" fill="#1e293b" />
+        </g>
 
-        {/* wheat decoration */}
-        <line x1="60" y1="105" x2="50" y2="60" stroke="#92400e" strokeWidth="1.5" strokeLinecap="round" />
-        {[0, 1, 2, 3].map((i) => (
-          <ellipse key={i} cx={56 - i * 2} cy={95 - i * 10} rx="3" ry="6" fill="#fbbf24" stroke="#92400e" strokeWidth="0.8" transform={`rotate(${-15 + i * 3} ${56 - i * 2} ${95 - i * 10})`} />
-        ))}
+        {/* ─── Floating documents / cards behind ─── */}
+        <g opacity="0.85">
+          <rect x="180" y="170" width="50" height="60" fill="#ffffff" stroke="#1e40af" strokeOpacity="0.3" strokeWidth="1" />
+          <rect x="184" y="178" width="32" height="6" fill="#3b82f6" opacity="0.6" />
+          <line x1="184" y1="190" x2="220" y2="190" stroke="#cbd5e1" strokeWidth="1.5" />
+          <line x1="184" y1="198" x2="216" y2="198" stroke="#cbd5e1" strokeWidth="1.5" />
+          <line x1="184" y1="206" x2="220" y2="206" stroke="#cbd5e1" strokeWidth="1.5" />
+          <line x1="184" y1="214" x2="210" y2="214" stroke="#cbd5e1" strokeWidth="1.5" />
+        </g>
+
+        {/* ─── Decorative lines (data flow) ─── */}
+        <g opacity="0.4">
+          <line x1="220" y1="100" x2="280" y2="100" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" />
+          <line x1="240" y1="115" x2="290" y2="115" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" />
+          <line x1="225" y1="130" x2="270" y2="130" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" />
+        </g>
       </svg>
     </div>
   );
@@ -505,60 +553,113 @@ function BakeryIllustrationLeft() {
 function BakeryIllustrationRight() {
   return (
     <div
-      className="hidden lg:block absolute right-[-20px] bottom-[-10px] w-[240px] xl:w-[300px] 2xl:w-[360px] pointer-events-none select-none opacity-90 z-0"
+      className="hidden lg:block absolute right-[-20px] bottom-[-10px] w-[280px] xl:w-[340px] 2xl:w-[400px] pointer-events-none select-none opacity-95 z-0"
       aria-hidden="true"
     >
-      <svg viewBox="0 0 340 260" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-auto">
-        {/* shadow */}
-        <ellipse cx="170" cy="240" rx="150" ry="10" fill="#1a3a2f" opacity="0.06" />
+      <svg viewBox="0 0 380 320" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-auto">
+        {/* ─── Floating isometric platform (lower) ─── */}
+        <g>
+          <polygon points="60,260 220,225 350,265 200,300" fill="#bfdbfe" />
+          <polygon points="60,260 200,300 200,318 60,278" fill="#3b82f6" />
+          <polygon points="200,300 350,265 350,285 200,318" fill="#1e40af" />
+        </g>
 
-        {/* dashboard / report tablet */}
-        <rect x="40" y="80" width="180" height="130" rx="10" fill="#ffffff" stroke="#1a3a2f" strokeOpacity="0.25" strokeWidth="2" />
-        <rect x="40" y="80" width="180" height="22" rx="10" fill="#1a3a2f" />
-        <rect x="40" y="98" width="180" height="4" fill="#1a3a2f" />
-        <circle cx="52" cy="91" r="3" fill="#e67e22" />
-        <circle cx="62" cy="91" r="3" fill="#fbbf24" />
-        <circle cx="72" cy="91" r="3" fill="#10b981" />
-        {/* mini bar chart */}
-        <rect x="55" y="160" width="14" height="40" fill="#e67e22" rx="2" />
-        <rect x="75" y="140" width="14" height="60" fill="#fbbf24" rx="2" />
-        <rect x="95" y="170" width="14" height="30" fill="#10b981" rx="2" />
-        <rect x="115" y="150" width="14" height="50" fill="#3b82f6" rx="2" />
-        <rect x="135" y="155" width="14" height="45" fill="#8b5cf6" rx="2" />
-        <rect x="155" y="135" width="14" height="65" fill="#e67e22" rx="2" />
-        {/* line */}
-        <polyline points="50,130 80,118 110,125 140,108 170,115 200,100" stroke="#1a3a2f" strokeWidth="2" fill="none" strokeOpacity="0.5" />
-        {[
-          [50, 130],
-          [80, 118],
-          [110, 125],
-          [140, 108],
-          [170, 115],
-          [200, 100],
-        ].map(([x, y], i) => (
-          <circle key={i} cx={x} cy={y} r="2.5" fill="#e67e22" />
-        ))}
+        {/* ─── Smaller floating platform (right top) ─── */}
+        <g>
+          <polygon points="240,150 340,135 380,150 280,170" fill="#bfdbfe" />
+          <polygon points="240,150 280,170 280,182 240,162" fill="#3b82f6" />
+          <polygon points="280,170 380,150 380,162 280,182" fill="#1e40af" />
+        </g>
 
-        {/* cupcake on the right */}
-        <path d="M250 200 L240 160 L290 160 L280 200 Z" fill="#fbbf24" stroke="#92400e" strokeWidth="1.5" />
-        <path d="M240 160 Q243 145 250 145 Q255 138 265 142 Q272 135 280 142 Q288 140 290 155 Q295 160 290 165 L240 165 Z" fill="#fce7f3" stroke="#be185d" strokeWidth="1.5" opacity="0.95" />
-        <circle cx="265" cy="138" r="3" fill="#dc2626" />
-        {/* sprinkles */}
-        <line x1="250" y1="155" x2="252" y2="160" stroke="#dc2626" strokeWidth="1.5" />
-        <line x1="270" y1="152" x2="273" y2="157" stroke="#10b981" strokeWidth="1.5" />
-        <line x1="280" y1="155" x2="282" y2="160" stroke="#3b82f6" strokeWidth="1.5" />
+        {/* ─── Big magnifying glass (upper-right, like the Atlassian one) ─── */}
+        <g>
+          {/* handle */}
+          <line x1="340" y1="115" x2="360" y2="135" stroke="#fb923c" strokeWidth="9" strokeLinecap="round" />
+          {/* lens ring */}
+          <circle cx="320" cy="90" r="34" fill="#dbeafe" stroke="#3b82f6" strokeWidth="6" />
+          {/* small chart inside */}
+          <rect x="305" y="90" width="6" height="14" fill="#fb923c" />
+          <rect x="313" y="82" width="6" height="22" fill="#fbbf24" />
+          <rect x="321" y="86" width="6" height="18" fill="#10b981" />
+          <rect x="329" y="78" width="6" height="26" fill="#3b82f6" />
+        </g>
 
-        {/* wooden shelf */}
-        <rect x="20" y="210" width="320" height="10" fill="#a16207" />
+        {/* ─── Picture frame on lower platform ─── */}
+        <g>
+          {/* frame */}
+          <rect x="80" y="170" width="80" height="65" fill="#ffffff" stroke="#1e40af" strokeWidth="2" />
+          {/* mountains */}
+          <polygon points="84,230 100,200 115,215 130,190 150,225 156,230" fill="#bfdbfe" />
+          <polygon points="100,230 120,205 135,225 156,230 84,230" fill="#60a5fa" opacity="0.85" />
+          {/* sun */}
+          <circle cx="140" cy="185" r="6" fill="#fbbf24" />
+        </g>
 
-        {/* chef hat decoration top */}
-        <path d="M295 90 Q305 72 320 78 Q330 65 322 82 Q335 80 332 95 L295 95 Z" fill="#ffffff" stroke="#1a3a2f" strokeOpacity="0.4" strokeWidth="1.5" />
-        <rect x="295" y="93" width="40" height="8" fill="#ffffff" stroke="#1a3a2f" strokeOpacity="0.4" strokeWidth="1.5" />
+        {/* ─── Worker holding the picture frame (left of frame) ─── */}
+        <g>
+          {/* legs */}
+          <rect x="60" y="245" width="5" height="22" fill="#1e3a8a" />
+          <rect x="68" y="245" width="5" height="22" fill="#1e3a8a" />
+          {/* body */}
+          <path d="M54 215 L78 215 L80 248 L52 248 Z" fill="#fb923c" />
+          {/* arm holding frame */}
+          <line x1="76" y1="220" x2="86" y2="200" stroke="#fde7d3" strokeWidth="3" strokeLinecap="round" />
+          {/* head */}
+          <circle cx="66" cy="208" r="7" fill="#fde7d3" />
+          <path d="M59 205 Q66 198 73 205" stroke="#1e3a8a" strokeWidth="1.5" fill="none" />
+        </g>
 
-        {/* sparkle */}
+        {/* ─── Worker holding pencil (right of frame) ─── */}
+        <g>
+          {/* legs */}
+          <rect x="170" y="248" width="5" height="22" fill="#1e3a8a" />
+          <rect x="178" y="248" width="5" height="22" fill="#1e3a8a" />
+          {/* body */}
+          <path d="M164 218 L188 218 L190 250 L162 250 Z" fill="#fb923c" />
+          {/* head */}
+          <circle cx="176" cy="211" r="7" fill="#fde7d3" />
+          {/* arms holding big pencil */}
+          <line x1="166" y1="225" x2="155" y2="240" stroke="#fde7d3" strokeWidth="3" strokeLinecap="round" />
+          <line x1="186" y1="225" x2="200" y2="195" stroke="#fde7d3" strokeWidth="3" strokeLinecap="round" />
+          {/* pencil */}
+          <line x1="155" y1="240" x2="220" y2="175" stroke="#fbbf24" strokeWidth="9" strokeLinecap="round" />
+          <line x1="158" y1="237" x2="217" y2="178" stroke="#1e3a8a" strokeWidth="1.5" opacity="0.4" />
+          {/* tip */}
+          <polygon points="220,175 230,170 225,180" fill="#1e3a8a" />
+          {/* eraser */}
+          <rect x="148" y="240" width="10" height="6" rx="2" fill="#f472b6" transform="rotate(-45 153 243)" />
+        </g>
+
+        {/* ─── Document/cards floating between (back) ─── */}
+        <g opacity="0.85">
+          <rect x="220" y="195" width="55" height="65" fill="#ffffff" stroke="#1e40af" strokeOpacity="0.3" strokeWidth="1" />
+          <rect x="226" y="203" width="35" height="6" fill="#3b82f6" opacity="0.6" />
+          <line x1="226" y1="216" x2="268" y2="216" stroke="#cbd5e1" strokeWidth="1.5" />
+          <line x1="226" y1="225" x2="265" y2="225" stroke="#cbd5e1" strokeWidth="1.5" />
+          <line x1="226" y1="234" x2="268" y2="234" stroke="#cbd5e1" strokeWidth="1.5" />
+          <line x1="226" y1="243" x2="258" y2="243" stroke="#cbd5e1" strokeWidth="1.5" />
+        </g>
+
+        {/* ─── Worker on the smaller upper platform (with magnifier) ─── */}
+        <g>
+          <rect x="288" y="160" width="4" height="14" fill="#1e3a8a" />
+          <rect x="294" y="160" width="4" height="14" fill="#1e3a8a" />
+          <path d="M284 142 L302 142 L300 162 L286 162 Z" fill="#fb923c" />
+          <circle cx="293" cy="136" r="6" fill="#fde7d3" />
+        </g>
+
+        {/* ─── Decorative dotted lines (right edge) ─── */}
+        <g opacity="0.5">
+          <line x1="345" y1="180" x2="375" y2="180" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" />
+          <line x1="340" y1="195" x2="370" y2="195" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" />
+          <line x1="350" y1="210" x2="378" y2="210" stroke="#fbbf24" strokeWidth="2" strokeLinecap="round" />
+          <line x1="345" y1="225" x2="372" y2="225" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" />
+        </g>
+
+        {/* ─── Sparkle ─── */}
         <g opacity="0.7">
-          <line x1="230" y1="60" x2="230" y2="70" stroke="#e67e22" strokeWidth="2" strokeLinecap="round" />
-          <line x1="225" y1="65" x2="235" y2="65" stroke="#e67e22" strokeWidth="2" strokeLinecap="round" />
+          <line x1="240" y1="80" x2="240" y2="92" stroke="#fbbf24" strokeWidth="2.5" strokeLinecap="round" />
+          <line x1="234" y1="86" x2="246" y2="86" stroke="#fbbf24" strokeWidth="2.5" strokeLinecap="round" />
         </g>
       </svg>
     </div>
