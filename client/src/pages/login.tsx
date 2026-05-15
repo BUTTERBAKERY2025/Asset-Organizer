@@ -363,7 +363,7 @@ export default function LoginPage() {
                   <DropdownMenuContent align="start" className="w-56">
                     <DropdownMenuItem asChild>
                       <a
-                        href="https://wa.me/966500000000"
+                        href="https://wa.me/966531920222"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-center gap-2 cursor-pointer"
@@ -375,7 +375,7 @@ export default function LoginPage() {
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>
                       <a
-                        href="mailto:admin@butterbakery.co"
+                        href="mailto:info@butterbakery.co"
                         className="flex items-center gap-2 cursor-pointer"
                         data-testid="link-email-admin"
                       >
@@ -385,7 +385,7 @@ export default function LoginPage() {
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>
                       <a
-                        href="mailto:admin@butterbakery.co?subject=Forgot%20password"
+                        href="mailto:info@butterbakery.co?subject=Forgot%20password"
                         className="flex items-center gap-2 cursor-pointer"
                         data-testid="link-forgot-password"
                       >
