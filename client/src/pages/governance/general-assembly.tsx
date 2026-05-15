@@ -63,6 +63,7 @@ import {
   CalendarCheck
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
+import { printAssemblyResolution, exportAssemblyResolutionExcel } from "@/lib/assembly-resolution-print";
 
 interface Shareholder {
   id: number;
@@ -103,6 +104,15 @@ interface BoardResolution {
   resolutionType: string;
   status: string;
   votingDeadline?: string;
+  meetingId?: number | null;
+  votesFor?: number | null;
+  votesAgainst?: number | null;
+  votesAbstain?: number | null;
+  totalVotes?: number | null;
+  requiredMajority?: string | null;
+  approvedAt?: string | null;
+  createdAt?: string | null;
+  category?: string | null;
 }
 
 export default function GeneralAssemblyPage() {
@@ -402,6 +412,13 @@ export default function GeneralAssemblyPage() {
       in_progress: 'bg-green-100 text-green-800 border-green-300',
       completed: 'bg-gray-100 text-gray-800 border-gray-300',
       cancelled: 'bg-red-100 text-red-800 border-red-300',
+      // حالات القرارات
+      draft: 'bg-gray-100 text-gray-700 border-gray-300',
+      proposed: 'bg-sky-100 text-sky-800 border-sky-300',
+      voting: 'bg-amber-100 text-amber-800 border-amber-300',
+      approved: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+      rejected: 'bg-red-100 text-red-800 border-red-300',
+      implemented: 'bg-green-100 text-green-900 border-green-400',
     };
     const labels: Record<string, string> = {
       scheduled: 'مجدولة',
@@ -409,6 +426,12 @@ export default function GeneralAssemblyPage() {
       in_progress: 'جارية',
       completed: 'مكتملة',
       cancelled: 'ملغية',
+      draft: 'مسودة',
+      proposed: 'مقترح',
+      voting: 'تحت التصويت',
+      approved: 'معتمد',
+      rejected: 'مرفوض',
+      implemented: 'تم التنفيذ',
     };
     return <Badge className={styles[status] || 'bg-gray-100'}>{labels[status] || status}</Badge>;
   };
@@ -970,90 +993,214 @@ export default function GeneralAssemblyPage() {
         {/* القرارات */}
         <TabsContent value="resolutions" className="space-y-4">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <Gavel className="h-5 w-5 text-indigo-600" />
-                قرارات الجمعية العمومية
-              </CardTitle>
-              <Link href="/governance/voting">
-                <Button className="gap-2">
-                  <Vote className="h-4 w-4" />
-                  التصويت الإلكتروني
-                </Button>
-              </Link>
+            <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Gavel className="h-5 w-5 text-indigo-600" />
+                  قرارات الجمعية العمومية
+                </CardTitle>
+                <CardDescription className="text-xs mt-1">
+                  قرارات الجمعيات العادية وغير العادية مع طباعة وتصدير رسمي يتضمن التواقيع وبيانات التصويت
+                </CardDescription>
+              </div>
+              <div className="flex gap-2">
+                <Link href="/governance/resolutions">
+                  <Button variant="outline" className="gap-2" data-testid="button-new-resolution">
+                    <Plus className="h-4 w-4" />
+                    قرار جديد
+                  </Button>
+                </Link>
+                <Link href="/governance/voting">
+                  <Button className="gap-2" data-testid="button-electronic-voting">
+                    <Vote className="h-4 w-4" />
+                    التصويت الإلكتروني
+                  </Button>
+                </Link>
+              </div>
             </CardHeader>
             <CardContent>
-              {resolutions.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">
-                  <Gavel className="h-16 w-16 mx-auto mb-4 opacity-30" />
-                  <p>لا توجد قرارات حالياً</p>
-                  <Link href="/governance/resolutions">
-                    <Button className="mt-4">
-                      <Plus className="h-4 w-4 mr-2" />
-                      إنشاء قرار جديد
-                    </Button>
-                  </Link>
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-right">رقم القرار</TableHead>
-                      <TableHead className="text-right">العنوان</TableHead>
-                      <TableHead className="text-right">النوع</TableHead>
-                      <TableHead className="text-right">الحالة</TableHead>
-                      <TableHead className="text-right">الإجراءات</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {resolutions.slice(0, 10).map((resolution) => (
-                      <TableRow key={resolution.id}>
-                        <TableCell className="font-mono">{resolution.resolutionNumber}</TableCell>
-                        <TableCell className="font-medium">{resolution.title}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">
-                            {resolution.resolutionType === 'ordinary' ? 'عادي' : 
-                             resolution.resolutionType === 'extraordinary' ? 'غير عادي' :
-                             resolution.resolutionType === 'general_assembly' ? 'جمعية عمومية' :
-                             resolution.resolutionType === 'extraordinary_assembly' ? 'جمعية غير عادية' :
-                             resolution.resolutionType}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{getStatusBadge(resolution.status)}</TableCell>
-                        <TableCell>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="gap-2"
-                            onClick={async () => {
-                              if (resolution.status !== 'voting' && resolution.status !== 'approved' && resolution.status !== 'rejected') {
-                                try {
-                                  const res = await fetch(`/api/governance/resolutions/${resolution.id}`, {
-                                    method: 'PATCH',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    credentials: 'include',
-                                    body: JSON.stringify({ status: 'voting' }),
-                                  });
-                                  if (res.ok) {
-                                    queryClient.invalidateQueries({ queryKey: ["/api/governance/resolutions"] });
-                                    toast({ title: "تم فتح التصويت على القرار بنجاح" });
-                                  }
-                                } catch (e) {
-                                  console.error('Failed to update status:', e);
-                                }
-                              }
-                              setLocation('/governance/voting');
-                            }}
-                          >
-                            <Vote className="h-4 w-4" />
-                            تصويت
-                          </Button>
-                        </TableCell>
+              {(() => {
+                // عرض قرارات الجمعية العمومية فقط (عادية وغير عادية)
+                const assemblyResolutions = resolutions.filter((r) =>
+                  ["general_assembly", "extraordinary_assembly", "ordinary", "extraordinary"].includes(r.resolutionType)
+                );
+                if (assemblyResolutions.length === 0) {
+                  return (
+                    <div className="text-center py-12 text-gray-500" data-testid="empty-assembly-resolutions">
+                      <Gavel className="h-16 w-16 mx-auto mb-4 opacity-30" />
+                      <p>لا توجد قرارات جمعية عمومية حالياً</p>
+                      <Link href="/governance/resolutions">
+                        <Button className="mt-4">
+                          <Plus className="h-4 w-4 ml-2" />
+                          إنشاء قرار جديد
+                        </Button>
+                      </Link>
+                    </div>
+                  );
+                }
+                return (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-right">رقم القرار</TableHead>
+                        <TableHead className="text-right">العنوان</TableHead>
+                        <TableHead className="text-right">النوع</TableHead>
+                        <TableHead className="text-right">التصويت</TableHead>
+                        <TableHead className="text-right">الحالة</TableHead>
+                        <TableHead className="text-right">الإجراءات</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
+                    </TableHeader>
+                    <TableBody>
+                      {assemblyResolutions.slice(0, 20).map((resolution) => {
+                        const linkedMeeting = resolution.meetingId
+                          ? meetings.find((m) => m.id === resolution.meetingId)
+                          : undefined;
+                        const totalV = resolution.totalVotes || 0;
+                        const forV = resolution.votesFor || 0;
+                        const againstV = resolution.votesAgainst || 0;
+                        const abstainV = resolution.votesAbstain || 0;
+                        return (
+                          <TableRow key={resolution.id} data-testid={`row-resolution-${resolution.id}`}>
+                            <TableCell className="font-mono text-xs" data-testid={`text-resolution-number-${resolution.id}`}>
+                              {resolution.resolutionNumber}
+                            </TableCell>
+                            <TableCell className="font-medium max-w-[280px] truncate" title={resolution.title}>
+                              {resolution.title}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="text-xs">
+                                {resolution.resolutionType === "extraordinary" || resolution.resolutionType === "extraordinary_assembly"
+                                  ? "غير عادية"
+                                  : "عادية"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              {totalV > 0 ? (
+                                <div className="flex gap-1 text-xs">
+                                  <span className="px-2 py-0.5 rounded bg-green-50 text-green-700 border border-green-200" title="موافق">
+                                    ✓ {forV}
+                                  </span>
+                                  <span className="px-2 py-0.5 rounded bg-red-50 text-red-700 border border-red-200" title="معارض">
+                                    ✗ {againstV}
+                                  </span>
+                                  <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200" title="ممتنع">
+                                    − {abstainV}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-gray-400">لا يوجد</span>
+                              )}
+                            </TableCell>
+                            <TableCell>{getStatusBadge(resolution.status)}</TableCell>
+                            <TableCell>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="outline" size="sm" className="gap-1" data-testid={`button-resolution-actions-${resolution.id}`}>
+                                    <MoreVertical className="h-4 w-4" />
+                                    إجراءات
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    onClick={async () => {
+                                      try {
+                                        await printAssemblyResolution(
+                                          resolution as any,
+                                          linkedMeeting
+                                            ? {
+                                                id: linkedMeeting.id,
+                                                title: linkedMeeting.title,
+                                                meetingType: linkedMeeting.meetingType,
+                                                meetingDate: linkedMeeting.meetingDate,
+                                                scheduledDate: linkedMeeting.scheduledDate,
+                                                location: linkedMeeting.location,
+                                              }
+                                            : undefined
+                                        );
+                                      } catch (e) {
+                                        console.error(e);
+                                        toast({ title: "تعذر فتح نافذة الطباعة", variant: "destructive" });
+                                      }
+                                    }}
+                                    data-testid={`menu-print-${resolution.id}`}
+                                  >
+                                    <Printer className="h-4 w-4 ml-2" />
+                                    طباعة قرار رسمي (مع التواقيع)
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={async () => {
+                                      try {
+                                        await exportAssemblyResolutionExcel(
+                                          resolution as any,
+                                          linkedMeeting
+                                            ? {
+                                                id: linkedMeeting.id,
+                                                title: linkedMeeting.title,
+                                                meetingType: linkedMeeting.meetingType,
+                                                meetingDate: linkedMeeting.meetingDate,
+                                                scheduledDate: linkedMeeting.scheduledDate,
+                                                location: linkedMeeting.location,
+                                              }
+                                            : undefined
+                                        );
+                                        toast({ title: "تم تصدير القرار بصيغة Excel" });
+                                      } catch (e) {
+                                        console.error(e);
+                                        toast({ title: "تعذر التصدير", variant: "destructive" });
+                                      }
+                                    }}
+                                    data-testid={`menu-export-${resolution.id}`}
+                                  >
+                                    <Download className="h-4 w-4 ml-2" />
+                                    تصدير Excel (بيانات + توقيعات)
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    onClick={async () => {
+                                      if (
+                                        resolution.status !== "voting" &&
+                                        resolution.status !== "approved" &&
+                                        resolution.status !== "rejected"
+                                      ) {
+                                        try {
+                                          const res = await fetch(`/api/governance/resolutions/${resolution.id}`, {
+                                            method: "PATCH",
+                                            headers: { "Content-Type": "application/json" },
+                                            credentials: "include",
+                                            body: JSON.stringify({ status: "voting" }),
+                                          });
+                                          if (res.ok) {
+                                            queryClient.invalidateQueries({ queryKey: ["/api/governance/resolutions"] });
+                                            toast({ title: "تم فتح التصويت على القرار" });
+                                          }
+                                        } catch (e) {
+                                          console.error("Failed to update status:", e);
+                                        }
+                                      }
+                                      setLocation("/governance/voting");
+                                    }}
+                                    data-testid={`menu-vote-${resolution.id}`}
+                                  >
+                                    <Vote className="h-4 w-4 ml-2" />
+                                    فتح التصويت / إدارة الأصوات
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => setLocation(`/governance/resolutions?id=${resolution.id}`)}
+                                    data-testid={`menu-details-${resolution.id}`}
+                                  >
+                                    <Eye className="h-4 w-4 ml-2" />
+                                    تفاصيل القرار وإدارة التواقيع
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                );
+              })()}
             </CardContent>
           </Card>
         </TabsContent>
