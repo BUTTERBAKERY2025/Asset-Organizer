@@ -2301,6 +2301,10 @@ export default function CompanyTemplates() {
                     setLocation("/hr/job-offers");
                     return;
                   }
+                  if (template.id === "employment_application") {
+                    setLocation("/hr/applications");
+                    return;
+                  }
                   setSelectedTemplate(template.id);
                   setIsDialogOpen(true);
                 }}
