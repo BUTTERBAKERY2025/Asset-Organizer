@@ -469,9 +469,9 @@ export default function EmployeeReportsDashboardPage() {
     };
   }, [filteredEmployees]);
 
-  // Filtered and sorted employees for salary tab
+  // Filtered and sorted employees for salary tab — active only
   const salaryFilteredEmployees = useMemo(() => {
-    let result = [...filteredEmployees];
+    let result = filteredEmployees.filter(emp => emp.status === "active");
     
     // Apply search filter
     if (salarySearchQuery.trim()) {
@@ -4726,7 +4726,26 @@ export default function EmployeeReportsDashboardPage() {
             <TabsContent value="salaries" className="space-y-6">
               {/* Salary KPI Cards */}
               {(() => {
-                const salaryStats = filteredEmployees.reduce((acc, emp) => {
+                // الموظفون النشطون فقط — استبعاد المنتهية خدماتهم/المستبعدين/في إجازة
+                const activeEmployees = filteredEmployees.filter(emp => emp.status === "active");
+
+                // حساب نسبة الشهر المنقضية (للحساب "حتى تاريخه")
+                // selectedMonth شكله "YYYY-MM"
+                const todaySA = new Date(Date.now() + 3 * 60 * 60 * 1000);
+                const currentYM = todaySA.toISOString().slice(0, 7);
+                const [selYear, selMonth] = selectedMonth.split("-").map(Number);
+                const daysInSelectedMonth = new Date(selYear, selMonth, 0).getDate();
+                let proratedFactor = 1;
+                if (selectedMonth > currentYM) {
+                  proratedFactor = 0;
+                } else if (selectedMonth === currentYM) {
+                  proratedFactor = todaySA.getUTCDate() / daysInSelectedMonth;
+                }
+                const daysElapsed = selectedMonth === currentYM
+                  ? todaySA.getUTCDate()
+                  : (selectedMonth > currentYM ? 0 : daysInSelectedMonth);
+
+                const salaryStats = activeEmployees.reduce((acc, emp) => {
                   const housing = emp.housingAllowance || 0;
                   const transport = emp.transportAllowance || 0;
                   const food = emp.foodAllowance || 0;
@@ -4751,8 +4770,8 @@ export default function EmployeeReportsDashboardPage() {
                 const avgSalary = salaryStats.count > 0 ? Math.round(salaryStats.totalNet / salaryStats.count) : 0;
                 const costPerEmployee = salaryStats.count > 0 ? Math.round((salaryStats.totalBasic + salaryStats.totalAllowances) / salaryStats.count) : 0;
 
-                // Salary distribution by branch
-                const salaryByBranch = filteredEmployees.reduce((acc, emp) => {
+                // Salary distribution by branch (active employees only)
+                const salaryByBranch = activeEmployees.reduce((acc, emp) => {
                   const branchName = getBranchName(emp.branchId);
                   if (!acc[branchName]) {
                     acc[branchName] = { name: branchName, basic: 0, allowances: 0, insurance: 0, net: 0, count: 0 };
@@ -4783,7 +4802,7 @@ export default function EmployeeReportsDashboardPage() {
                   { range: "8,000 - 10,000", min: 8000, max: 10000, count: 0 },
                   { range: isRTL ? "أكثر من 10,000" : "Above 10,000", min: 10000, max: Infinity, count: 0 },
                 ];
-                filteredEmployees.forEach(emp => {
+                activeEmployees.forEach(emp => {
                   const salary = emp.totalSalary || 0;
                   const range = salaryRanges.find(r => salary >= r.min && salary < r.max);
                   if (range) range.count++;
@@ -4797,16 +4816,50 @@ export default function EmployeeReportsDashboardPage() {
                   { name: isRTL ? "بدلات أخرى" : "Other", value: salaryStats.totalOther, color: "#8b5cf6" },
                 ].filter(a => a.value > 0);
 
+                const salaryToDate = Math.round(salaryStats.totalNet * proratedFactor);
+                const inactiveCount = filteredEmployees.length - activeEmployees.length;
                 return (
                   <>
+                    {/* شريط معلومات يوضّح أساس الحساب */}
+                    <div className="rounded-lg border bg-blue-50/60 border-blue-200 px-4 py-3 text-sm text-blue-900 flex flex-wrap items-center gap-x-6 gap-y-1" data-testid="text-salary-basis">
+                      <span className="font-semibold">
+                        {isRTL ? "أساس الحساب: الموظفون النشطون فقط" : "Calculation basis: Active employees only"}
+                      </span>
+                      <span>
+                        {isRTL ? `النشطون: ${activeEmployees.length}` : `Active: ${activeEmployees.length}`}
+                      </span>
+                      {inactiveCount > 0 && (
+                        <span className="text-amber-700">
+                          {isRTL ? `مستبعد (منتهي/موقوف/إجازة): ${inactiveCount}` : `Excluded (terminated/inactive/leave): ${inactiveCount}`}
+                        </span>
+                      )}
+                      <span>
+                        {isRTL
+                          ? `حتى تاريخه: ${daysElapsed} من ${daysInSelectedMonth} يوم (${Math.round(proratedFactor * 100)}%)`
+                          : `To-date: ${daysElapsed} of ${daysInSelectedMonth} days (${Math.round(proratedFactor * 100)}%)`}
+                      </span>
+                    </div>
+
                     {/* KPI Cards Row */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
                       <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
                         <CardContent className="pt-4">
                           <div className="text-center">
                             <DollarSign className="w-6 h-6 mx-auto text-green-600 mb-1" />
-                            <p className="text-xs text-green-600">{isRTL ? "إجمالي الرواتب" : "Total Salaries"}</p>
-                            <p className="text-lg font-bold text-green-800">{formatCurrency(salaryStats.totalNet, isRTL)}</p>
+                            <p className="text-xs text-green-600">{isRTL ? "إجمالي الرواتب (شهري)" : "Total Salaries (Monthly)"}</p>
+                            <p className="text-lg font-bold text-green-800" data-testid="text-salary-total-monthly">{formatCurrency(salaryStats.totalNet, isRTL)}</p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-300 ring-1 ring-emerald-300">
+                        <CardContent className="pt-4">
+                          <div className="text-center">
+                            <DollarSign className="w-6 h-6 mx-auto text-emerald-700 mb-1" />
+                            <p className="text-xs text-emerald-700 font-semibold">{isRTL ? "إجمالي الرواتب حتى تاريخه" : "Salaries To-Date"}</p>
+                            <p className="text-lg font-bold text-emerald-900" data-testid="text-salary-to-date">{formatCurrency(salaryToDate, isRTL)}</p>
+                            <p className="text-[10px] text-emerald-700 mt-0.5">
+                              {isRTL ? `${daysElapsed}/${daysInSelectedMonth} يوم` : `${daysElapsed}/${daysInSelectedMonth} days`}
+                            </p>
                           </div>
                         </CardContent>
                       </Card>
@@ -5124,7 +5177,7 @@ export default function EmployeeReportsDashboardPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <Badge variant="outline" className="bg-white">
-                          {salaryFilteredEmployees.length} {isRTL ? "من" : "of"} {filteredEmployees.length} {isRTL ? "موظف" : "employees"}
+                          {salaryFilteredEmployees.length} {isRTL ? "من" : "of"} {filteredEmployees.filter(e => e.status === "active").length} {isRTL ? "موظف نشط" : "active"}
                         </Badge>
                         <Button 
                           variant="ghost" 
