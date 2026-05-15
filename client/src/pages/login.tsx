@@ -159,18 +159,27 @@ export default function LoginPage() {
     <main
       dir={isRTL ? "rtl" : "ltr"}
       lang={lang}
-      className="min-h-screen min-h-[100dvh] flex flex-col relative overflow-hidden bg-[radial-gradient(circle_at_20%_10%,#fef6ec_0%,transparent_45%),radial-gradient(circle_at_85%_90%,#eaf5ee_0%,transparent_50%),linear-gradient(180deg,#f8fafc_0%,#f4f6fa_100%)]"
+      className="min-h-screen min-h-[100dvh] flex flex-col relative overflow-x-hidden overflow-y-auto bg-[radial-gradient(circle_at_20%_10%,#fef6ec_0%,transparent_45%),radial-gradient(circle_at_85%_90%,#eaf5ee_0%,transparent_50%),linear-gradient(180deg,#f8fafc_0%,#f4f6fa_100%)]"
+      style={{
+        paddingTop: "env(safe-area-inset-top)",
+        paddingBottom: "env(safe-area-inset-bottom)",
+        paddingLeft: "env(safe-area-inset-left)",
+        paddingRight: "env(safe-area-inset-right)",
+      }}
     >
-      {/* Language toggle (top corner) */}
+      {/* Language toggle (top corner) — adapts to device */}
       <button
         type="button"
         onClick={toggleLang}
-        className="absolute top-4 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/90 backdrop-blur border border-slate-200 text-[12px] font-semibold text-[#1a3a2f] hover:bg-white hover:border-[#e67e22] hover:text-[#e67e22] transition-all shadow-sm"
-        style={isRTL ? { left: 16 } : { right: 16 }}
+        className="fixed top-3 sm:top-4 z-30 flex items-center gap-1.5 h-9 sm:h-9 px-3 sm:px-3.5 rounded-full bg-white/95 backdrop-blur border border-slate-200 text-[12px] sm:text-[13px] font-semibold text-[#1a3a2f] hover:bg-white hover:border-[#e67e22] hover:text-[#e67e22] active:scale-95 transition-all shadow-sm min-h-[36px]"
+        style={{
+          ...(isRTL ? { left: "max(12px, env(safe-area-inset-left))" } : { right: "max(12px, env(safe-area-inset-right))" }),
+          top: "max(12px, env(safe-area-inset-top))",
+        }}
         aria-label="Switch language"
         data-testid="button-lang-toggle"
       >
-        <Languages className="w-3.5 h-3.5" />
+        <Languages className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
         {t.switchLang}
       </button>
       {/* Subtle dot pattern */}
@@ -188,32 +197,37 @@ export default function LoginPage() {
       <BakeryIllustrationLeft />
       <BakeryIllustrationRight />
 
-      {/* Centered card */}
-      <div className="flex-1 flex items-center justify-center px-4 py-8 sm:py-12 relative z-10">
-        <div className="w-full max-w-[420px] animate-[fadeInUp_0.5s_ease-out]">
+      {/* Centered card — adaptive to device */}
+      <div className="flex-1 flex items-center justify-center px-3 sm:px-4 md:px-6 py-14 sm:py-12 md:py-14 relative z-10">
+        <div className="w-full max-w-[360px] sm:max-w-[400px] md:max-w-[440px] lg:max-w-[460px] animate-[fadeInUp_0.5s_ease-out]">
           <style>{`
             @keyframes fadeInUp {
               from { opacity: 0; transform: translateY(12px); }
               to   { opacity: 1; transform: translateY(0); }
             }
+            @media (max-height: 700px) {
+              .bb-logo { height: 5rem !important; }
+              .bb-card-pad { padding: 1.25rem 1.25rem !important; }
+              .bb-header-mb { margin-bottom: 0.75rem !important; }
+            }
           `}</style>
 
-          <div className="bg-white rounded-2xl shadow-[0_8px_32px_rgba(15,23,42,0.08)] border border-slate-200/60 p-7 sm:p-9">
-            {/* Header: large logo + system title */}
-            <div className="flex flex-col items-center text-center mb-6">
+          <div className="bb-card-pad bg-white rounded-2xl sm:rounded-3xl shadow-[0_8px_32px_rgba(15,23,42,0.08)] sm:shadow-[0_12px_40px_rgba(15,23,42,0.10)] border border-slate-200/60 p-5 sm:p-7 md:p-8 lg:p-9">
+            {/* Header: adaptive logo + system title */}
+            <div className="bb-header-mb flex flex-col items-center text-center mb-5 sm:mb-6">
               <img
                 src={logo}
                 alt="Butter Bakery"
-                className="h-32 sm:h-36 md:h-40 w-auto drop-shadow-md"
+                className="bb-logo h-24 sm:h-28 md:h-32 lg:h-36 xl:h-40 w-auto drop-shadow-md"
                 data-testid="img-logo"
               />
-              <h1 className="text-[17px] sm:text-lg md:text-xl font-extrabold text-[#1a3a2f] mt-3 leading-tight tracking-wide">
+              <h1 className="text-[15px] sm:text-base md:text-lg lg:text-xl font-extrabold text-[#1a3a2f] mt-3 leading-tight tracking-wide">
                 {t.systemTitle}
               </h1>
-              <p className="text-[12px] sm:text-[13px] text-slate-500 mt-1">
+              <p className="text-[11px] sm:text-[12px] md:text-[13px] text-slate-500 mt-1">
                 {t.subtitle}
               </p>
-              <div className="w-12 h-[3px] bg-[#e67e22] rounded-full mt-3"></div>
+              <div className="w-10 sm:w-12 h-[2.5px] sm:h-[3px] bg-[#e67e22] rounded-full mt-2 sm:mt-3"></div>
             </div>
 
             <form
@@ -256,8 +270,9 @@ export default function LoginPage() {
                     readOnly
                     autoComplete="off"
                     aria-describedby={error ? "login-error" : undefined}
-                    className={`h-11 ${isRTL ? "pr-10" : "pl-10"} bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-[#e67e22] focus:ring-2 focus:ring-[#e67e22]/20 rounded-lg ${textAlignClass} text-sm transition-all`}
+                    className={`h-12 sm:h-11 text-base sm:text-sm ${isRTL ? "pr-10" : "pl-10"} bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-[#e67e22] focus:ring-2 focus:ring-[#e67e22]/20 rounded-lg ${textAlignClass} transition-all`}
                     data-testid="input-username"
+                    inputMode="text"
                     required
                     data-lpignore="true"
                     data-1p-ignore="true"
@@ -289,7 +304,7 @@ export default function LoginPage() {
                     readOnly
                     autoComplete="new-password"
                     aria-describedby={error ? "login-error" : undefined}
-                    className={`h-11 pr-10 pl-10 bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-[#e67e22] focus:ring-2 focus:ring-[#e67e22]/20 rounded-lg ${textAlignClass} text-sm transition-all`}
+                    className={`h-12 sm:h-11 text-base sm:text-sm pr-10 pl-10 bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-[#e67e22] focus:ring-2 focus:ring-[#e67e22]/20 rounded-lg ${textAlignClass} transition-all`}
                     data-testid="input-password"
                     required
                     data-lpignore="true"
@@ -310,18 +325,18 @@ export default function LoginPage() {
               </div>
 
               {/* Remember me + Help */}
-              <div className="flex items-center justify-between pt-1">
+              <div className="flex items-center justify-between pt-1 gap-2 flex-wrap">
                 <div className="flex items-center gap-2">
                   <Checkbox
                     id="rememberMe"
                     checked={rememberMe}
                     onCheckedChange={(checked) => setRememberMe(checked === true)}
-                    className="h-4 w-4 border-slate-400 data-[state=checked]:bg-[#e67e22] data-[state=checked]:border-[#e67e22]"
+                    className="h-5 w-5 sm:h-4 sm:w-4 border-slate-400 data-[state=checked]:bg-[#e67e22] data-[state=checked]:border-[#e67e22]"
                     data-testid="checkbox-remember-me"
                   />
                   <Label
                     htmlFor="rememberMe"
-                    className="text-slate-600 cursor-pointer text-[13px] select-none"
+                    className="text-slate-600 cursor-pointer text-[13px] sm:text-[13px] select-none"
                   >
                     {t.remember}
                   </Label>
@@ -331,7 +346,7 @@ export default function LoginPage() {
                   <DropdownMenuTrigger asChild>
                     <button
                       type="button"
-                      className="flex items-center gap-1 text-[12px] text-slate-500 hover:text-[#e67e22] transition-colors"
+                      className="flex items-center gap-1 text-[12px] sm:text-[12px] text-slate-500 hover:text-[#e67e22] transition-colors py-1 min-h-[32px]"
                       data-testid="button-help-menu"
                     >
                       <HelpCircle className="w-3.5 h-3.5" />
@@ -389,7 +404,7 @@ export default function LoginPage() {
               {/* Submit */}
               <Button
                 type="submit"
-                className="w-full h-11 text-sm font-semibold bg-[#e67e22] hover:bg-[#d35400] text-white rounded-lg shadow-sm hover:shadow-md hover:shadow-[#e67e22]/25 transition-all duration-200 active:scale-[0.99]"
+                className="w-full h-12 sm:h-11 text-base sm:text-sm font-semibold bg-[#e67e22] hover:bg-[#d35400] text-white rounded-lg shadow-sm hover:shadow-md hover:shadow-[#e67e22]/25 transition-all duration-200 active:scale-[0.99]"
                 disabled={isLoggingIn}
                 data-testid="button-login"
               >
@@ -406,17 +421,17 @@ export default function LoginPage() {
           </div>
 
           {/* Compact footer below card */}
-          <div className="flex flex-col items-center gap-1 mt-5 text-center">
+          <div className="flex flex-col items-center gap-1 mt-4 sm:mt-5 text-center px-2">
             <a
               href="https://www.butterbakery.co"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[11px] text-slate-400 hover:text-[#e67e22] transition-colors tracking-wider"
+              className="text-[11px] sm:text-[12px] text-slate-400 hover:text-[#e67e22] transition-colors tracking-wider"
               data-testid="link-website"
             >
               www.butterbakery.co
             </a>
-            <p className="text-[10px] text-slate-400">
+            <p className="text-[10px] sm:text-[11px] text-slate-400 leading-relaxed">
               © {new Date().getFullYear()} {t.rights}
             </p>
           </div>
@@ -431,7 +446,7 @@ export default function LoginPage() {
 function BakeryIllustrationLeft() {
   return (
     <div
-      className="hidden lg:block absolute left-[-30px] bottom-[-20px] w-[300px] xl:w-[360px] pointer-events-none select-none opacity-95 z-0"
+      className="hidden lg:block absolute left-[-30px] bottom-[-20px] w-[260px] xl:w-[320px] 2xl:w-[380px] pointer-events-none select-none opacity-90 z-0"
       aria-hidden="true"
     >
       <svg viewBox="0 0 360 260" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-auto">
@@ -490,7 +505,7 @@ function BakeryIllustrationLeft() {
 function BakeryIllustrationRight() {
   return (
     <div
-      className="hidden lg:block absolute right-[-20px] bottom-[-10px] w-[280px] xl:w-[340px] pointer-events-none select-none opacity-95 z-0"
+      className="hidden lg:block absolute right-[-20px] bottom-[-10px] w-[240px] xl:w-[300px] 2xl:w-[360px] pointer-events-none select-none opacity-90 z-0"
       aria-hidden="true"
     >
       <svg viewBox="0 0 340 260" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-auto">
