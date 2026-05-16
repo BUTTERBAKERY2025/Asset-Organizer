@@ -55,6 +55,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { KpiCard } from "@/components/dashboard/kpi-card";
+import { Riyal } from "@/components/ui/riyal";
 
 const formatCurrency = (amount: number | null | undefined) => {
   if (amount === null || amount === undefined) return "0";
@@ -560,24 +561,24 @@ export default function BranchDailyClosingPage() {
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
                     <KpiCard
                       label="إجمالي المبيعات"
-                      value={formatCurrency(selectedTotals.totalSales)}
-                      unit="ر.س"
+                      value={Number(selectedTotals.totalSales) || 0}
+                      unit={<Riyal />}
                       icon={DollarSign}
                       tone="money"
                       data-testid="kpi-closing-total-sales"
                     />
                     <KpiCard
                       label="النقدي"
-                      value={formatCurrency(selectedTotals.cashTotal)}
-                      unit="ر.س"
+                      value={Number(selectedTotals.cashTotal) || 0}
+                      unit={<Riyal />}
                       icon={Wallet}
                       tone="production"
                       data-testid="kpi-closing-cash"
                     />
                     <KpiCard
                       label="الشبكة"
-                      value={formatCurrency(selectedTotals.networkTotal)}
-                      unit="ر.س"
+                      value={Number(selectedTotals.networkTotal) || 0}
+                      unit={<Riyal />}
                       icon={CreditCard}
                       tone="violet"
                       data-testid="kpi-closing-network"

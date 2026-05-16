@@ -29,6 +29,7 @@ import type { Branch, CashierSalesJournal, JournalAttachment } from "@shared/sch
 import { printHtmlContent } from "@/lib/print-utils";
 import { useTranslation } from "react-i18next";
 import { KpiCard, type KpiTone, type KpiIcon } from "@/components/dashboard/kpi-card";
+import { Riyal } from "@/components/ui/riyal";
 import { PageHeader } from "@/components/dashboard/page-header";
 
 const TONE_FROM_BG: Array<[RegExp, KpiTone]> = [
@@ -4036,9 +4037,9 @@ export default function OperationsReportsDashboardPage() {
                     {/* Summary Cards */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       <KpiCard label={t('returns.returnOps')} value={returnsCount} icon={Truck} tone="inventory" />
-                      <KpiCard label={t('returns.totalReturns')} value={formatCurrency(totalReturnAmount)} icon={DollarSign} tone="alert" />
+                      <KpiCard label={t('returns.totalReturns')} value={Number(totalReturnAmount) || 0} unit={<Riyal />} icon={DollarSign} tone="alert" />
                       <KpiCard label={t('returns.affectedBranches')} value={Object.keys(returnsByBranch).length} icon={Building2} tone="people" />
-                      <KpiCard label={t('returns.avgReturn')} value={returnsCount > 0 ? formatCurrency(totalReturnAmount / returnsCount) : formatCurrency(0)} icon={TrendingDown} tone="violet" />
+                      <KpiCard label={t('returns.avgReturn')} value={returnsCount > 0 ? (Number(totalReturnAmount) / returnsCount) : 0} unit={<Riyal />} icon={TrendingDown} tone="violet" />
                     </div>
 
                     {returnsCount > 0 ? (
@@ -4523,9 +4524,9 @@ export default function OperationsReportsDashboardPage() {
                     {/* Summary Cards */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       <KpiCard label={t('discrepancies.shortageCases')} value={shortages.length} icon={TrendingDown} tone="alert" />
-                      <KpiCard label={t('discrepancies.totalShortage')} value={formatCurrency(totalShortageAmount)} icon={DollarSign} tone="alert" />
+                      <KpiCard label={t('discrepancies.totalShortage')} value={Number(totalShortageAmount) || 0} unit={<Riyal />} icon={DollarSign} tone="alert" />
                       <KpiCard label={t('discrepancies.surplusCases')} value={surpluses.length} icon={TrendingUp} tone="money" />
-                      <KpiCard label={t('discrepancies.totalSurplus')} value={formatCurrency(totalSurplusAmount)} icon={DollarSign} tone="money" />
+                      <KpiCard label={t('discrepancies.totalSurplus')} value={Number(totalSurplusAmount) || 0} unit={<Riyal />} icon={DollarSign} tone="money" />
                     </div>
 
                     {/* Net Discrepancy Banner */}
@@ -5035,7 +5036,7 @@ export default function OperationsReportsDashboardPage() {
                     <KpiCard label={t('paymentMismatch.totalJournals')} value={paymentMismatchData.summary.totalJournals} icon={FileText} tone="primary" data-testid="card-total-journals" />
                     <KpiCard label={t('paymentMismatch.journalsWithMismatch')} value={paymentMismatchData.summary.journalsWithMismatch} icon={AlertTriangle} tone="inventory" data-testid="card-journals-with-mismatch" />
                     <KpiCard label={t('paymentMismatch.errorRate')} value={`${paymentMismatchData.summary.mismatchRate.toFixed(1)}%`} icon={TrendingDown} tone="alert" data-testid="card-error-rate" />
-                    <KpiCard label={t('paymentMismatch.totalMismatches')} value={formatCurrency(paymentMismatchData.summary.totalMismatchAmount)} icon={DollarSign} tone="violet" data-testid="card-total-mismatch" />
+                    <KpiCard label={t('paymentMismatch.totalMismatches')} value={Number(paymentMismatchData.summary.totalMismatchAmount) || 0} unit={<Riyal />} icon={DollarSign} tone="violet" data-testid="card-total-mismatch" />
                   </div>
 
                   {/* POS vs Terminal Comparison */}

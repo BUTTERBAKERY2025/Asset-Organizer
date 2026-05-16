@@ -1,4 +1,4 @@
-import type { ComponentType, SVGProps } from "react";
+import type { ComponentType, ReactNode, SVGProps } from "react";
 import { cn } from "@/lib/utils";
 import { TrendPill } from "./trend-pill";
 
@@ -19,7 +19,7 @@ const TONE_ICON: Record<KpiTone, string> = {
 interface KpiCardProps {
   label: string;
   value: number | string;
-  unit?: string;
+  unit?: ReactNode;
   icon?: KpiIcon;
   tone?: KpiTone;
   trend?: number | null;

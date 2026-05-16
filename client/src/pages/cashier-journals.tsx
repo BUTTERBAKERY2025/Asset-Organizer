@@ -33,6 +33,7 @@ import { printHtmlContent } from "@/lib/print-utils";
 import { TablePagination } from "@/components/ui/pagination";
 import { ExportButtons } from "@/components/export-buttons";
 import { KpiCard } from "@/components/dashboard/kpi-card";
+import { Riyal } from "@/components/ui/riyal";
 
 const STATUS_ICONS: Record<string, { variant: "default" | "secondary" | "destructive" | "outline" }> = {
   draft: { variant: "secondary" },
@@ -393,7 +394,7 @@ export default function CashierJournalsPage() {
             <KpiCard
               label={t("stats.totalSales")}
               value={stats.totalSales || 0}
-              unit="ر.س"
+              unit={<Riyal />}
               icon={DollarSign}
               tone="production"
               data-testid="stat-total-sales"
@@ -401,7 +402,7 @@ export default function CashierJournalsPage() {
             <KpiCard
               label={t("stats.totalShortage")}
               value={stats.shortageAmount || 0}
-              unit="ر.س"
+              unit={<Riyal />}
               icon={TrendingDown}
               tone="alert"
               subLabel={`${stats.totalShortages} ${t("stats.case")}`}
@@ -410,7 +411,7 @@ export default function CashierJournalsPage() {
             <KpiCard
               label={t("stats.totalSurplus")}
               value={stats.surplusAmount || 0}
-              unit="ر.س"
+              unit={<Riyal />}
               icon={TrendingUp}
               tone="inventory"
               subLabel={`${stats.totalSurpluses} ${t("stats.case")}`}
@@ -419,7 +420,7 @@ export default function CashierJournalsPage() {
             <KpiCard
               label={t("stats.avgSalesPerJournal")}
               value={stats.averageTicket || 0}
-              unit="ر.س"
+              unit={<Riyal />}
               icon={Users}
               tone="money"
               data-testid="stat-average-ticket"

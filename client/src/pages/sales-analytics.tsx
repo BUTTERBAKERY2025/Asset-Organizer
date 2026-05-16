@@ -58,6 +58,7 @@ import {
 } from "recharts";
 import type { Branch } from "@shared/schema";
 import { KpiCard } from "@/components/dashboard/kpi-card";
+import { Riyal } from "@/components/ui/riyal";
 
 export default function SalesAnalytics() {
   const currentDate = new Date();
@@ -475,14 +476,16 @@ export default function SalesAnalytics() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-4">
           <KpiCard
             label="إجمالي المبيعات"
-            value={formatCurrency(totalActualSales)}
+            value={Number(totalActualSales) || 0}
+            unit={<Riyal />}
             icon={TrendingUp}
             tone="money"
             data-testid="text-total-sales"
           />
           <KpiCard
             label="الهدف الشهري"
-            value={formatCurrency(totalTargetAmount)}
+            value={Number(totalTargetAmount) || 0}
+            unit={<Riyal />}
             icon={Target}
             tone="production"
             data-testid="text-total-target"
@@ -498,7 +501,8 @@ export default function SalesAnalytics() {
           </KpiCard>
           <KpiCard
             label="الفارق"
-            value={formatCurrency(totalVariance)}
+            value={Number(totalVariance) || 0}
+            unit={<Riyal />}
             icon={totalVariance >= 0 ? ArrowUp : ArrowDown}
             tone={totalVariance >= 0 ? "money" : "alert"}
             data-testid="text-variance"

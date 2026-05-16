@@ -56,6 +56,7 @@ import { ar } from "date-fns/locale";
 import type { Branch } from "@shared/schema";
 import { ExportButtons } from "@/components/export-buttons";
 import { KpiCard } from "@/components/dashboard/kpi-card";
+import { Riyal } from "@/components/ui/riyal";
 import { PageHeader } from "@/components/dashboard/page-header";
 
 const formatCurrency = (amount: number | null | undefined) => {
@@ -302,32 +303,32 @@ export default function BranchDailyClosuresPage() {
           />
           <KpiCard
             label="المبيعات"
-            value={formatCurrency(totals.totalSales)}
-            unit="ر.س"
+            value={Number(totals.totalSales) || 0}
+            unit={<Riyal />}
             icon={DollarSign}
             tone="money"
             data-testid="kpi-total-sales"
           />
           <KpiCard
             label="النقدي"
-            value={formatCurrency(totals.cashTotal)}
-            unit="ر.س"
+            value={Number(totals.cashTotal) || 0}
+            unit={<Riyal />}
             icon={Wallet}
             tone="production"
             data-testid="kpi-cash-total"
           />
           <KpiCard
             label="الشبكة"
-            value={formatCurrency(totals.networkTotal)}
-            unit="ر.س"
+            value={Number(totals.networkTotal) || 0}
+            unit={<Riyal />}
             icon={CreditCard}
             tone="violet"
             data-testid="kpi-network-total"
           />
           <KpiCard
             label="فرق النقدي"
-            value={formatCurrency(totals.totalCashDiscrepancy)}
-            unit="ر.س"
+            value={Number(totals.totalCashDiscrepancy) || 0}
+            unit={<Riyal />}
             icon={AlertTriangle}
             tone={Number(totals.totalCashDiscrepancy) < -0.5 ? "alert" : Number(totals.totalCashDiscrepancy) > 0.5 ? "inventory" : "money"}
             data-testid="kpi-cash-discrepancy"
