@@ -29,6 +29,8 @@ import { ItemCardDialog } from "@/components/item-card-dialog";
 import { ExcelImportDialog } from "@/components/excel-import-dialog";
 import { TablePagination } from "@/components/ui/pagination";
 import { ExportButtons } from "@/components/export-buttons";
+import { PageHeader } from "@/components/dashboard/page-header";
+import { Boxes } from "lucide-react";
 
 type InventoryItemWithBranch = InventoryItem & { branchName?: string };
 
@@ -476,42 +478,38 @@ export default function InventoryPage() {
   return (
     <Layout>
       <div className="p-3 sm:p-4 md:p-6 lg:p-10 max-w-[1400px] mx-auto space-y-4 print:space-y-0" dir="rtl">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 print:hidden">
-          <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
-            <Link href="/dashboard">
-              <Button variant="outline" size="sm" className="gap-1 sm:gap-2 h-8 sm:h-9 text-xs sm:text-sm" data-testid="button-back">
-                <ArrowRight className="h-3 w-3 sm:h-4 sm:w-4" />
-                <span className="hidden sm:inline">لوحة الأصول</span>
-                <span className="sm:hidden">رجوع</span>
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-lg sm:text-xl md:text-2xl font-bold tracking-tight text-foreground" data-testid="text-page-title">جرد الأصول والمعدات</h1>
-              <p className="text-muted-foreground mt-1 text-xs sm:text-sm">إدارة ومتابعة أصول الفروع وتجهيزاتها</p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-            <Button variant="outline" className="gap-1 sm:gap-2 h-8 sm:h-9 text-xs sm:text-sm" onClick={handlePrint} data-testid="button-print">
-              <Printer className="w-3 h-3 sm:w-4 sm:h-4" />
-              <span className="hidden sm:inline">طباعة</span>
-            </Button>
-            <ExportButtons
-              data={exportData}
-              columns={exportColumns}
-              fileName={`inventory_${isGlobalSearch ? 'all_branches' : activeBranch}_${new Date().toISOString().split('T')[0]}`}
-              title={isGlobalSearch ? "جرد الأصول - جميع الفروع" : `جرد الأصول - ${currentBranchName}`}
-              subtitle={`تاريخ التقرير: ${new Date().toLocaleDateString('en-GB')}`}
-              sheetName="المخزون"
-            />
-            <Button className="gap-2 h-11 sm:h-9" onClick={handleExport} data-testid="button-export">
-              <Download className="w-4 h-4" />
-              <span>تصدير Excel</span>
-            </Button>
-            <Button className="gap-2 h-11 sm:h-9" onClick={() => setIsImportDialogOpen(true)} data-testid="button-import">
-              <Upload className="w-4 h-4" />
-              <span>استيراد Excel</span>
-            </Button>
-          </div>
+        <div className="print:hidden">
+          <PageHeader
+            icon={Boxes}
+            tone="inventory"
+            title="جرد الأصول والمعدات"
+            description="إدارة ومتابعة أصول الفروع وتجهيزاتها"
+            backHref="/dashboard"
+            actions={
+              <>
+                <Button variant="outline" size="sm" className="gap-1.5 h-9 text-xs" onClick={handlePrint} data-testid="button-print">
+                  <Printer className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">طباعة</span>
+                </Button>
+                <ExportButtons
+                  data={exportData}
+                  columns={exportColumns}
+                  fileName={`inventory_${isGlobalSearch ? 'all_branches' : activeBranch}_${new Date().toISOString().split('T')[0]}`}
+                  title={isGlobalSearch ? "جرد الأصول - جميع الفروع" : `جرد الأصول - ${currentBranchName}`}
+                  subtitle={`تاريخ التقرير: ${new Date().toLocaleDateString('en-GB')}`}
+                  sheetName="المخزون"
+                />
+                <Button size="sm" className="gap-1.5 h-9 text-xs" onClick={handleExport} data-testid="button-export">
+                  <Download className="w-3.5 h-3.5" />
+                  <span>تصدير Excel</span>
+                </Button>
+                <Button size="sm" className="gap-1.5 h-9 text-xs" onClick={() => setIsImportDialogOpen(true)} data-testid="button-import">
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>استيراد Excel</span>
+                </Button>
+              </>
+            }
+          />
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 print:hidden">
@@ -524,22 +522,22 @@ export default function InventoryPage() {
           
           {showPrices && (
             <>
-              <Card className="bg-card">
+              <Card className="bg-card border-border">
                 <CardHeader className="pb-2">
                   <CardDescription>القيمة قبل الضريبة</CardDescription>
                   <CardTitle className="text-2xl font-mono" data-testid="text-total-value">{formatCurrency(totalValue)}</CardTitle>
                 </CardHeader>
               </Card>
-              <Card className="bg-card">
+              <Card className="bg-card border-border">
                 <CardHeader className="pb-2">
                   <CardDescription>قيمة الضريبة (15%)</CardDescription>
                   <CardTitle className="text-2xl font-mono text-muted-foreground">{formatCurrency(totalVat)}</CardTitle>
                 </CardHeader>
               </Card>
-              <Card className="bg-green-50/50 border-green-100">
+              <Card className="bg-emerald-50 dark:bg-emerald-950/30 border-emerald-100 dark:border-emerald-900/40">
                 <CardHeader className="pb-2">
                   <CardDescription>الإجمالي شامل الضريبة</CardDescription>
-                  <CardTitle className="text-2xl text-green-700 font-mono" data-testid="text-total-with-vat">{formatCurrency(totalValueWithVat)}</CardTitle>
+                  <CardTitle className="text-2xl text-emerald-700 dark:text-emerald-300 font-mono" data-testid="text-total-with-vat">{formatCurrency(totalValueWithVat)}</CardTitle>
                 </CardHeader>
               </Card>
             </>

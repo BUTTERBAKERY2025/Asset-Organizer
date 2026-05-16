@@ -2,6 +2,7 @@ import { useState, useRef, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -433,40 +434,30 @@ export default function ShiftReportsPage() {
   return (
     <Layout>
       <div className="max-w-[1400px] mx-auto p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
-        <Card className="bg-gradient-to-l from-amber-50 to-orange-50 border-amber-200">
-          <CardContent className="p-3 sm:p-4 md:p-6">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
-              <div className="flex items-center gap-3 sm:gap-4">
-                <Link href="/branch-shifts">
-                  <Button variant="outline" size="icon" className="bg-white hover:bg-amber-100 h-10 w-10 sm:h-9 sm:w-9" data-testid="btn-back">
-                    <ChevronLeft className="h-5 w-5" />
-                  </Button>
-                </Link>
-                <div className="p-2 sm:p-3 bg-amber-600 rounded-xl">
-                  <FileText className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-amber-900" data-testid="text-page-title">تقارير الفتح والإغلاق</h1>
-                  <p className="text-xs sm:text-sm text-amber-700">عرض وطباعة وتحليل تقارير شفتات الفروع</p>
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-                <Button 
-                  variant="outline" 
-                  className="gap-2 bg-white h-10 sm:h-9 text-xs sm:text-sm"
-                  onClick={exportToExcel}
-                  data-testid="btn-export-excel"
-                >
-                  <FileSpreadsheet className="h-4 w-4" />
-                  <span className="hidden sm:inline">تصدير</span> Excel
-                </Button>
-                <Badge variant="outline" className="bg-white text-amber-800 border-amber-300 px-2 sm:px-4 py-1 sm:py-2 text-[10px] sm:text-xs">
-                  {new Date().toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
-                </Badge>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <PageHeader
+          icon={FileText}
+          tone="executive"
+          title="تقارير الفتح والإغلاق"
+          description="عرض وطباعة وتحليل تقارير شفتات الفروع"
+          backHref="/branch-shifts"
+          actions={
+            <>
+              <Button 
+                variant="outline" 
+                size="sm"
+                className="gap-2 h-9 text-xs sm:text-sm"
+                onClick={exportToExcel}
+                data-testid="btn-export-excel"
+              >
+                <FileSpreadsheet className="h-4 w-4" />
+                <span className="hidden sm:inline">تصدير</span> Excel
+              </Button>
+              <Badge variant="outline" className="bg-muted/50 text-foreground border-border px-2 sm:px-3 py-1 text-[10px] sm:text-xs">
+                {new Date().toLocaleDateString("en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+              </Badge>
+            </>
+          }
+        />
 
         <Tabs value={activeView} onValueChange={(v) => setActiveView(v as "daily" | "analytics")} className="w-full">
           <TabsList className="grid w-full grid-cols-2 mb-4 h-12">

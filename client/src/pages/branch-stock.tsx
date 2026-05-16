@@ -19,6 +19,7 @@ import { Link } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/dashboard/page-header";
 
 type Branch = {
   id: string;
@@ -174,24 +175,13 @@ export default function BranchStockPage() {
   return (
     <Layout>
       <div className="p-3 sm:p-4 md:p-6 max-w-[1400px] mx-auto space-y-4 sm:space-y-6" dir={isRTL ? "rtl" : "ltr"}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <Link href="/warehouse-dashboard">
-              <Button variant="ghost" size="icon" className="h-8 w-8 sm:h-9 sm:w-9">
-                <ArrowLeft className={`w-4 h-4 sm:w-5 sm:h-5 ${isRTL ? "rotate-180" : ""}`} />
-              </Button>
-            </Link>
-            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-purple-500 flex items-center justify-center">
-              <Store className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-lg sm:text-xl md:text-2xl font-bold">{isRTL ? "مخزون الفروع" : "Branch Stock"}</h1>
-              <p className="text-muted-foreground text-xs sm:text-sm">
-                {isRTL ? "متابعة مخزون المواد في الفروع" : "Track material stock in branches"}
-              </p>
-            </div>
-          </div>
-        </div>
+        <PageHeader
+          icon={Store}
+          tone="executive"
+          title={isRTL ? "مخزون الفروع" : "Branch Stock"}
+          description={isRTL ? "متابعة مخزون المواد في الفروع" : "Track material stock in branches"}
+          backHref="/warehouse-dashboard"
+        />
 
         <Card>
           <CardHeader>
@@ -222,9 +212,9 @@ export default function BranchStockPage() {
         {selectedBranch && (
           <>
             {lowStockItems.length > 0 && (
-              <Card className="border-amber-200 bg-amber-50">
+              <Card className="border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/30">
                 <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2 text-amber-700">
+                  <CardTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
                     <AlertTriangle className="w-5 h-5" />
                     {isRTL ? "تنبيهات المخزون المنخفض" : "Low Stock Alerts"}
                   </CardTitle>
@@ -235,13 +225,13 @@ export default function BranchStockPage() {
                       <Badge 
                         key={item.id} 
                         variant="outline" 
-                        className="bg-amber-100 text-amber-800 border-amber-300"
+                        className="bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900/40"
                       >
                         {isRTL ? item.itemName : (item.itemNameEn || item.itemName)}: {item.currentQuantity} {item.unit}
                       </Badge>
                     ))}
                     {lowStockItems.length > 5 && (
-                      <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300">
+                      <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900/40">
                         +{lowStockItems.length - 5} {isRTL ? "أخرى" : "more"}
                       </Badge>
                     )}

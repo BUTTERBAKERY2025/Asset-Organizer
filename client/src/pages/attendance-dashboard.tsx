@@ -265,7 +265,7 @@ export default function AttendanceDashboardPage() {
             </div>
 
             {/* Quick guide tip */}
-            <div className="rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 border border-amber-100 dark:border-amber-900/30 px-4 py-3 flex items-center gap-2 text-sm" data-testid="quick-guide">
+            <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-900/40 px-4 py-3 flex items-center gap-2 text-sm" data-testid="quick-guide">
               <ListChecks className="w-4 h-4 text-amber-600 shrink-0" />
               <span className="font-semibold text-amber-800 dark:text-amber-300">{t("quickGuide")}</span>
               <span className="text-amber-700 dark:text-amber-400/80">{t("quickGuideSteps")}</span>

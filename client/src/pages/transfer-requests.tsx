@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -853,28 +854,14 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
   return (
     <Layout>
       <div className="p-3 sm:p-4 md:p-6 max-w-[1400px] mx-auto space-y-4 sm:space-y-6" dir={isRTL ? "rtl" : "ltr"}>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <Link href="/warehouse-dashboard">
-              <Button variant="ghost" size="icon" className="h-8 w-8 sm:h-9 sm:w-9">
-                <ArrowLeft className={`w-4 h-4 sm:w-5 sm:h-5 ${isRTL ? "rotate-180" : ""}`} />
-              </Button>
-            </Link>
-            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-green-500 flex items-center justify-center">
-              <Send className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-foreground">
-                {isRTL ? "طلبات التحويل" : "Transfer Requests"}
-              </h1>
-              <p className="text-muted-foreground text-xs sm:text-sm hidden sm:block">
-                {isRTL 
-                  ? "إدارة طلبات الأصناف من المستودع الرئيسي" 
-                  : "Manage item requests from main warehouse"}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
+        <PageHeader
+          icon={Send}
+          tone="money"
+          title={isRTL ? "طلبات التحويل" : "Transfer Requests"}
+          description={isRTL ? "إدارة طلبات الأصناف من المستودع الرئيسي" : "Manage item requests from main warehouse"}
+          backHref="/warehouse-dashboard"
+          actions={
+            <div className="flex items-center gap-2">
             <div className="hidden md:block">
               <ExportButtons
                 data={exportData}
@@ -1186,8 +1173,9 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
               </DialogFooter>
             </DialogContent>
           </Dialog>
-          </div>
-        </div>
+            </div>
+          }
+        />
 
         {/* Status Summary Cards */}
         <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 sm:gap-3">

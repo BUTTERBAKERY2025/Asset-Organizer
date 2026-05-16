@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { PageHeader } from "@/components/dashboard/page-header";
+import { Store as StoreIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -610,35 +612,27 @@ export default function BranchShiftsPage() {
   return (
     <Layout>
       <div className="max-w-[1400px] mx-auto p-3 sm:p-4 md:p-6 space-y-4" dir="rtl">
-        {/* Header */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-l from-amber-600 via-amber-500 to-orange-500 p-4 sm:p-6 text-white shadow-lg">
-          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIyMCIgY3k9IjIwIiByPSIxIiBmaWxsPSJyZ2JhKDI1NSwyNTUsMjU1LDAuMSkiLz48L3N2Zz4=')] opacity-30" />
-          <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <Link href="/operations">
-                <Button variant="ghost" size="icon" className="text-white hover:bg-white/20 h-10 w-10">
-                  <ChevronLeft className="h-5 w-5" />
-                </Button>
-              </Link>
-              <div>
-                <h1 className="text-xl sm:text-2xl font-bold" data-testid="text-page-title">نظام فتح وإغلاق الفروع</h1>
-                <p className="text-white/90 text-sm mt-0.5">قوائم التحقق اليومية مع التوثيق المصور</p>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
+        <PageHeader
+          icon={StoreIcon}
+          tone="primary"
+          title="نظام فتح وإغلاق الفروع"
+          description="قوائم التحقق اليومية مع التوثيق المصور"
+          backHref="/operations"
+          actions={
+            <>
               <Link href="/shift-reports">
-                <Button className="gap-2 bg-white/20 hover:bg-white/30 border border-white/30 text-white h-9 text-xs sm:text-sm" data-testid="btn-reports">
+                <Button variant="outline" size="sm" className="gap-2 h-9 text-xs sm:text-sm" data-testid="btn-reports">
                   <ClipboardList className="h-4 w-4" />
                   التقارير
                 </Button>
               </Link>
-              <Button className="gap-2 bg-white/20 hover:bg-white/30 border border-white/30 text-white h-9 text-xs sm:text-sm" onClick={() => setShowHistory(true)} data-testid="btn-history">
+              <Button variant="outline" size="sm" className="gap-2 h-9 text-xs sm:text-sm" onClick={() => setShowHistory(true)} data-testid="btn-history">
                 <History className="h-4 w-4" />
                 السجل
               </Button>
-            </div>
-          </div>
-        </div>
+            </>
+          }
+        />
 
         {/* Branch Status */}
         <Card className="border-0 shadow-md">

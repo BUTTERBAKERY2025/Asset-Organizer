@@ -18,6 +18,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { apiRequest } from "@/lib/queryClient";
 import { useState, useEffect } from "react";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { formatDistanceToNow } from "date-fns";
 import { ar } from "date-fns/locale";
 
@@ -236,22 +237,13 @@ export default function WarehouseDashboardPage() {
   return (
     <Layout>
       <div className="p-3 sm:p-4 md:p-6 max-w-[1400px] mx-auto space-y-4 sm:space-y-6" dir={isRTL ? "rtl" : "ltr"}>
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 sm:gap-4">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg flex-shrink-0">
-              <Warehouse className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-foreground truncate">
-                {isRTL ? "لوحة تحكم المخازن" : "Warehouse Dashboard"}
-              </h1>
-              <p className="text-muted-foreground text-xs sm:text-sm truncate">
-                {selectedBranch !== "all" ? selectedBranchName : (isRTL ? "إدارة شاملة لجميع الفروع" : "Comprehensive management for all branches")}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 sm:gap-3">
+        <PageHeader
+          icon={Warehouse}
+          tone="production"
+          title={isRTL ? "لوحة تحكم المخازن" : "Warehouse Dashboard"}
+          description={selectedBranch !== "all" ? selectedBranchName : (isRTL ? "إدارة شاملة لجميع الفروع" : "Comprehensive management for all branches")}
+          actions={
+            <div className="flex items-center gap-2 sm:gap-3">
             <Select value={selectedBranch} onValueChange={setSelectedBranch}>
               <SelectTrigger className="w-[140px] sm:w-[200px] text-xs sm:text-sm" data-testid="select-branch">
                 <Building2 className="w-4 h-4 opacity-60" />
@@ -357,8 +349,9 @@ export default function WarehouseDashboardPage() {
                 </ScrollArea>
               </SheetContent>
             </Sheet>
-          </div>
-        </div>
+            </div>
+          }
+        />
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
           {statCards.map((stat, index) => (

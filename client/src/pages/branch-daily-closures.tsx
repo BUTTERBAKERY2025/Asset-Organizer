@@ -56,6 +56,7 @@ import { ar } from "date-fns/locale";
 import type { Branch } from "@shared/schema";
 import { ExportButtons } from "@/components/export-buttons";
 import { KpiCard } from "@/components/dashboard/kpi-card";
+import { PageHeader } from "@/components/dashboard/page-header";
 
 const formatCurrency = (amount: number | null | undefined) => {
   if (amount === null || amount === undefined) return "0";
@@ -263,39 +264,33 @@ export default function BranchDailyClosuresPage() {
   return (
     <Layout>
       <div className="p-3 sm:p-4 md:p-6 lg:p-8 max-w-[1400px] mx-auto space-y-3 sm:space-y-4" dir="rtl">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <Link href="/cashier-journals">
-              <Button variant="ghost" size="icon" className="h-9 w-9 sm:h-8 sm:w-8" data-testid="btn-back">
-                <ArrowRight className="h-4 w-4" />
+        <PageHeader
+          icon={Receipt}
+          tone="inventory"
+          title="الإغلاقات اليومية للفروع"
+          description={pagination.total > 0 ? `${pagination.total} إغلاق` : undefined}
+          backHref="/cashier-journals"
+          actions={
+            <>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="h-9 w-9 p-0"
+                onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/branch-daily-closures"] })}
+                disabled={isFetching}
+                data-testid="button-refresh"
+              >
+                <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
               </Button>
-            </Link>
-            <div>
-              <h1 className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900">الإغلاقات اليومية للفروع</h1>
-              <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
-                {pagination.total > 0 && <span className="font-medium text-amber-700">{pagination.total} إغلاق</span>}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className="h-9 w-9 p-0"
-              onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/branch-daily-closures"] })}
-              disabled={isFetching}
-              data-testid="button-refresh"
-            >
-              <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
-            </Button>
-            <Link href="/branch-daily-closing" className="flex-1 sm:flex-none">
-              <Button className="gap-2 bg-amber-600 hover:bg-amber-700 w-full sm:w-auto h-9 text-xs sm:text-sm" data-testid="button-new-closure">
-                <Plus className="h-4 w-4" />
-                إغلاق يومي جديد
-              </Button>
-            </Link>
-          </div>
-        </div>
+              <Link href="/branch-daily-closing">
+                <Button size="sm" className="gap-2 bg-amber-600 hover:bg-amber-700 text-white h-9" data-testid="button-new-closure">
+                  <Plus className="h-4 w-4" />
+                  إغلاق يومي جديد
+                </Button>
+              </Link>
+            </>
+          }
+        />
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
           <KpiCard

@@ -10,6 +10,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { ExportButtons } from "@/components/export-buttons";
 import { Link } from "wouter";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { 
   BarChart3, Package, TrendingUp, TrendingDown, AlertTriangle, 
   FileText, ArrowRight, Boxes, Send, Clock, CheckCircle, Truck, Calendar,
@@ -333,27 +334,13 @@ export default function WarehouseReportsPage() {
   return (
     <Layout>
       <div className="p-3 sm:p-4 md:p-6 max-w-[1400px] mx-auto space-y-4 sm:space-y-6" dir={isRTL ? "rtl" : "ltr"}>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-indigo-500 flex items-center justify-center">
-              <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-foreground">
-                {isRTL ? "تقارير المخازن" : "Warehouse Reports"}
-              </h1>
-              <p className="text-xs sm:text-sm text-muted-foreground">
-                {isRTL ? "تقارير شاملة عن المخزون والطلبات والتحويلات" : "Comprehensive reports on inventory, requests and transfers"}
-              </p>
-            </div>
-          </div>
-          <Link href="/warehouse-dashboard">
-            <Button variant="outline" size="sm" className="gap-2 h-11 sm:h-9 w-full sm:w-auto" data-testid="btn-back-dashboard">
-              {isRTL ? "العودة للوحة التحكم" : "Back to Dashboard"}
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-          </Link>
-        </div>
+        <PageHeader
+          icon={BarChart3}
+          tone="executive"
+          title={isRTL ? "تقارير المخازن" : "Warehouse Reports"}
+          description={isRTL ? "تقارير شاملة عن المخزون والطلبات والتحويلات" : "Comprehensive reports on inventory, requests and transfers"}
+          backHref="/warehouse-dashboard"
+        />
 
         <Card>
           <CardHeader className="p-3 sm:p-4 md:p-6">
