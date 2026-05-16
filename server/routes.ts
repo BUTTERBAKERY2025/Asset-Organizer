@@ -26295,6 +26295,9 @@ export async function registerRoutes(
   app.get("/api/branch-employees/bundle", isAuthenticated, requirePermission("branch_employees", "view"), async (req, res) => {
     try {
       const queryBranchId = req.query.branchId as string | undefined;
+      const queryStatus = req.query.status as string | undefined; // active|inactive|terminated|on_leave|all
+      const VALID_STATUS = new Set(["active", "inactive", "terminated", "on_leave"]);
+      const statusFilter = queryStatus && VALID_STATUS.has(queryStatus) ? queryStatus : undefined;
       const allowedBranches = getAllowedBranchIds(req);
 
       const [employees, stats, systemUsers] = await Promise.all([
@@ -26303,23 +26306,25 @@ export async function registerRoutes(
             let emps;
             if (allowedBranches === null) {
               if (queryBranchId) {
-                emps = await storage.getBranchEmployeesByBranch(queryBranchId);
+                emps = await storage.getBranchEmployeesByBranch(queryBranchId, { status: statusFilter });
               } else {
-                emps = await storage.getAllBranchEmployees();
+                emps = await storage.getAllBranchEmployees({ status: statusFilter });
               }
             } else if (allowedBranches.length > 0) {
               if (queryBranchId && allowedBranches.includes(queryBranchId)) {
-                emps = await storage.getBranchEmployeesByBranch(queryBranchId);
+                emps = await storage.getBranchEmployeesByBranch(queryBranchId, { status: statusFilter });
               } else {
-                const allEmps = await Promise.all(
-                  allowedBranches.map(branchId => storage.getBranchEmployeesByBranch(branchId))
-                );
-                emps = allEmps.flat();
+                emps = await storage.getAllBranchEmployees({ status: statusFilter, branchIds: allowedBranches });
               }
             } else {
               emps = [];
             }
-            return emps;
+            // SAFETY: Deduplicate by id (in case any DB-level duplicates ever exist or join effects)
+            const seen = new Map();
+            for (const e of emps) {
+              if (!seen.has(e.id)) seen.set(e.id, e);
+            }
+            return Array.from(seen.values());
           } catch (e) {
             console.error("Bundle: employees fetch failed", e);
             return [];
@@ -26337,18 +26342,30 @@ export async function registerRoutes(
               const branchStatsArr = await Promise.all(
                 allowedBranches.map(bid => storage.getBranchEmployeeStats(bid))
               );
-              const merged: { total: number; byJobTitle: Record<string, number>; byBranch: Record<string, number> } = { total: 0, byJobTitle: {}, byBranch: {} };
+              const natMap = new Map<string, number>();
+              const jobMap = new Map<string, number>();
+              const statusMap = new Map<string, number>();
+              let totalEmployees = 0;
+              let totalSalaries = 0;
               for (const s of branchStatsArr) {
-                merged.total += s.total || 0;
-                for (const [k, v] of Object.entries(s.byJobTitle || {})) merged.byJobTitle[k] = (merged.byJobTitle[k] || 0) + (v as number);
-                for (const [k, v] of Object.entries(s.byBranch || {})) merged.byBranch[k] = (merged.byBranch[k] || 0) + (v as number);
+                totalEmployees += s.totalEmployees || 0;
+                totalSalaries += s.totalSalaries || 0;
+                for (const x of s.byNationality || []) natMap.set(x.nationality, (natMap.get(x.nationality) || 0) + x.count);
+                for (const x of s.byJobTitle || []) jobMap.set(x.jobTitle, (jobMap.get(x.jobTitle) || 0) + x.count);
+                for (const x of s.byStatus || []) statusMap.set(x.status, (statusMap.get(x.status) || 0) + x.count);
               }
-              return merged;
+              return {
+                totalEmployees,
+                totalSalaries,
+                byNationality: Array.from(natMap.entries()).map(([nationality, count]) => ({ nationality, count })),
+                byJobTitle: Array.from(jobMap.entries()).map(([jobTitle, count]) => ({ jobTitle, count })),
+                byStatus: Array.from(statusMap.entries()).map(([status, count]) => ({ status, count })),
+              };
             }
-            return { total: 0, byJobTitle: {}, byBranch: {} };
+            return { totalEmployees: 0, totalSalaries: 0, byNationality: [], byJobTitle: [], byStatus: [] };
           } catch (e) {
             console.error("Bundle: stats fetch failed", e);
-            return { total: 0, byJobTitle: {}, byBranch: {} };
+            return { totalEmployees: 0, totalSalaries: 0, byNationality: [], byJobTitle: [], byStatus: [] };
           }
         })(),
         (async () => {
@@ -26745,21 +26762,29 @@ export async function registerRoutes(
         const branchStatsResults = await Promise.all(
           allowedBranches.map(bid => storage.getBranchEmployeeStats(bid))
         );
-        const mergedStats: { total: number; byJobTitle: Record<string, number>; byBranch: Record<string, number> } = { total: 0, byJobTitle: {}, byBranch: {} };
+        const natMap = new Map<string, number>();
+        const jobMap = new Map<string, number>();
+        const statusMap = new Map<string, number>();
+        let totalEmployees = 0;
+        let totalSalaries = 0;
         for (const s of branchStatsResults) {
-          mergedStats.total += s.total || 0;
-          for (const [k, v] of Object.entries(s.byJobTitle || {})) {
-            mergedStats.byJobTitle[k] = (mergedStats.byJobTitle[k] || 0) + (v as number);
-          }
-          for (const [k, v] of Object.entries(s.byBranch || {})) {
-            mergedStats.byBranch[k] = (mergedStats.byBranch[k] || 0) + (v as number);
-          }
+          totalEmployees += s.totalEmployees || 0;
+          totalSalaries += s.totalSalaries || 0;
+          for (const x of s.byNationality || []) natMap.set(x.nationality, (natMap.get(x.nationality) || 0) + x.count);
+          for (const x of s.byJobTitle || []) jobMap.set(x.jobTitle, (jobMap.get(x.jobTitle) || 0) + x.count);
+          for (const x of s.byStatus || []) statusMap.set(x.status, (statusMap.get(x.status) || 0) + x.count);
         }
-        return res.json(mergedStats);
+        return res.json({
+          totalEmployees,
+          totalSalaries,
+          byNationality: Array.from(natMap.entries()).map(([nationality, count]) => ({ nationality, count })),
+          byJobTitle: Array.from(jobMap.entries()).map(([jobTitle, count]) => ({ jobTitle, count })),
+          byStatus: Array.from(statusMap.entries()).map(([status, count]) => ({ status, count })),
+        });
       }
       
       // No access - return empty stats
-      res.json({ total: 0, byJobTitle: {}, byBranch: {} });
+      res.json({ totalEmployees: 0, totalSalaries: 0, byNationality: [], byJobTitle: [], byStatus: [] });
     } catch (error) {
       console.error("Error fetching branch employee stats:", error);
       res.status(500).json({ error: "فشل في جلب إحصائيات الموظفين" });
@@ -26820,11 +26845,31 @@ export async function registerRoutes(
         });
       }
 
-      const employee = await storage.createBranchEmployee(parsed.data);
+      const changedBy = (req as any).currentUser?.id;
+      const employee = await storage.createBranchEmployee(parsed.data, changedBy);
       res.status(201).json(employee);
     } catch (error) {
       console.error("Error creating branch employee:", error);
       res.status(500).json({ error: "فشل في إضافة الموظف" });
+    }
+  });
+
+  // Status history for a branch employee
+  app.get("/api/branch-employees/:id/status-history", isAuthenticated, requirePermission("branch_employees", "view"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف الموظف غير صحيح" });
+      const employee = await storage.getBranchEmployee(id);
+      if (!employee) return res.status(404).json({ error: "الموظف غير موجود" });
+      if (!isUserAdmin(req)) {
+        const ok = await canAccessBranch(req, employee.branchId);
+        if (!ok) return res.status(403).json({ error: "غير مصرح بعرض سجل هذا الموظف" });
+      }
+      const history = await storage.getEmployeeStatusHistory(id);
+      res.json(history);
+    } catch (error) {
+      console.error("Error fetching employee status history:", error);
+      res.status(500).json({ error: "فشل في جلب سجل حالة الموظف" });
     }
   });
 
@@ -26862,7 +26907,12 @@ export async function registerRoutes(
         }
       }
       
-      const employee = await storage.updateBranchEmployee(id, parsed.data);
+      // Capture status change reason if provided (out-of-band field, not in insert schema)
+      const statusChangeReason = typeof req.body?.statusChangeReason === "string"
+        ? (req.body.statusChangeReason as string).trim() || undefined
+        : undefined;
+      const changedBy = (req as any).currentUser?.id;
+      const employee = await storage.updateBranchEmployee(id, parsed.data, changedBy, statusChangeReason);
       res.json(employee);
     } catch (error) {
       console.error("Error updating branch employee:", error);

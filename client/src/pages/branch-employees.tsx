@@ -868,7 +868,7 @@ export default function BranchEmployeesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedNationality, setSelectedNationality] = useState<string>("all");
   const [selectedJobTitle, setSelectedJobTitle] = useState<string>("all");
-  const [selectedStatus, setSelectedStatus] = useState<string>("all");
+  const [selectedStatus, setSelectedStatus] = useState<string>("active");
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<BranchEmployee | null>(null);
@@ -910,18 +910,27 @@ export default function BranchEmployeesPage() {
     stats?: any;
     systemUsers?: any[];
   }>({
-    queryKey: ["/api/branch-employees/bundle", selectedBranch],
+    queryKey: ["/api/branch-employees/bundle", selectedBranch, selectedStatus],
     queryFn: async () => {
-      const url = selectedBranch === "all" 
-        ? "/api/branch-employees/bundle" 
-        : `/api/branch-employees/bundle?branchId=${selectedBranch}`;
+      const params = new URLSearchParams();
+      if (selectedBranch !== "all") params.set("branchId", selectedBranch);
+      if (selectedStatus !== "all") params.set("status", selectedStatus);
+      const qs = params.toString();
+      const url = qs ? `/api/branch-employees/bundle?${qs}` : "/api/branch-employees/bundle";
       const res = await fetch(url);
       return res.json();
     },
     staleTime: 60 * 1000,
   });
 
-  const employees = bundle?.employees;
+  // Defensive dedupe by id (in case any duplicates ever slip through)
+  const rawEmployees = bundle?.employees as BranchEmployee[] | undefined;
+  const employees = React.useMemo(() => {
+    if (!rawEmployees) return undefined;
+    const seen = new Map<number, BranchEmployee>();
+    for (const e of rawEmployees) if (!seen.has(e.id)) seen.set(e.id, e);
+    return Array.from(seen.values());
+  }, [rawEmployees]);
   const stats = bundle?.stats;
   const systemUsers = bundle?.systemUsers;
 
@@ -940,6 +949,17 @@ export default function BranchEmployeesPage() {
     queryFn: async () => {
       if (!viewingEmployee?.id) return [];
       const res = await fetch(`/api/branch-employees/${viewingEmployee.id}/schedules`);
+      return res.json();
+    },
+    enabled: !!viewingEmployee?.id,
+  });
+
+  const { data: employeeStatusHistory, isLoading: isLoadingStatusHistory } = useQuery<any[]>({
+    queryKey: ["/api/branch-employees/status-history", viewingEmployee?.id],
+    queryFn: async () => {
+      if (!viewingEmployee?.id) return [];
+      const res = await fetch(`/api/branch-employees/${viewingEmployee.id}/status-history`);
+      if (!res.ok) return [];
       return res.json();
     },
     enabled: !!viewingEmployee?.id,
@@ -1307,9 +1327,7 @@ export default function BranchEmployeesPage() {
     if (selectedJobTitle !== "all" && emp.jobTitle !== selectedJobTitle) {
       return false;
     }
-    if (selectedStatus !== "all" && emp.status !== selectedStatus) {
-      return false;
-    }
+    // Status filter applied server-side via queryKey; no client re-filter needed
     if (salaryMin !== undefined && emp.salary < salaryMin) {
       return false;
     }
@@ -2204,6 +2222,57 @@ export default function BranchEmployeesPage() {
           </Card>
         </div>
 
+        {/* Status Tabs - فلتر الحالة (server-side) */}
+        {(() => {
+          const statusCounts: Record<string, number> = {};
+          (stats?.byStatus || []).forEach((s: any) => { statusCounts[s.status] = s.count; });
+          const totalAll = Object.values(statusCounts).reduce((a, b) => a + b, 0);
+          const tabs: { value: string; labelAr: string; labelEn: string; count: number; cls: string }[] = [
+            { value: "active", labelAr: "النشطون", labelEn: "Active", count: statusCounts["active"] || 0, cls: "bg-green-100 text-green-800 border-green-200" },
+            { value: "on_leave", labelAr: "في إجازة", labelEn: "On Leave", count: statusCounts["on_leave"] || 0, cls: "bg-amber-100 text-amber-800 border-amber-200" },
+            { value: "inactive", labelAr: "غير نشط", labelEn: "Inactive", count: statusCounts["inactive"] || 0, cls: "bg-gray-100 text-gray-800 border-gray-200" },
+            { value: "terminated", labelAr: "منتهية خدمتهم", labelEn: "Terminated", count: statusCounts["terminated"] || 0, cls: "bg-red-100 text-red-800 border-red-200" },
+            { value: "all", labelAr: "الكل", labelEn: "All", count: totalAll, cls: "bg-blue-100 text-blue-800 border-blue-200" },
+          ];
+          return (
+            <div className="flex items-center gap-2 flex-wrap" data-testid="tabs-employee-status">
+              {tabs.map((tab) => {
+                const isActive = selectedStatus === tab.value;
+                return (
+                  <button
+                    key={tab.value}
+                    onClick={() => setSelectedStatus(tab.value)}
+                    className={`px-4 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
+                      isActive
+                        ? `${tab.cls} shadow-md scale-105`
+                        : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                    }`}
+                    data-testid={`tab-status-${tab.value}`}
+                  >
+                    <span>{isRTL ? tab.labelAr : tab.labelEn}</span>
+                    <span className={`mr-2 px-2 py-0.5 rounded-full text-xs ${
+                      isActive ? "bg-white/70" : "bg-gray-100"
+                    }`}>
+                      {formatNumber(tab.count)}
+                    </span>
+                  </button>
+                );
+              })}
+              {selectedStatus === "terminated" && (
+                <div className="flex-1 text-end">
+                  <a
+                    href="/terminated-employees"
+                    className="text-sm text-amber-700 underline hover:text-amber-900"
+                    data-testid="link-terminated-page"
+                  >
+                    {isRTL ? "فتح صفحة الموظفين المنتهية خدمتهم ←" : "Open Terminated Employees page →"}
+                  </a>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         <div className="flex items-center gap-3 sm:gap-4 flex-wrap">
           <div className="flex items-center gap-2">
             <Building className="w-4 h-4 text-gray-500 hidden sm:block" />
@@ -2244,21 +2313,6 @@ export default function BranchEmployeesPage() {
                 {settingsByCategory.job_title?.filter(s => s.isActive).map((job) => (
                   <SelectItem key={job.id} value={job.labelAr}>{job.labelAr}</SelectItem>
                 ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex items-center gap-2">
-            <Users className="w-4 h-4 text-gray-500 hidden sm:block" />
-            <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-              <SelectTrigger className="w-32 sm:w-36 h-11 sm:h-10" data-testid="filter-status">
-                <SelectValue placeholder="جميع الحالات" />
-              </SelectTrigger>
-              <SelectContent className="max-h-60 overflow-y-auto">
-                <SelectItem value="all">جميع الحالات</SelectItem>
-                <SelectItem value="active">نشط</SelectItem>
-                <SelectItem value="inactive">غير نشط</SelectItem>
-                <SelectItem value="terminated">منتهي</SelectItem>
-                <SelectItem value="on_leave">في إجازة</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -2738,6 +2792,26 @@ export default function BranchEmployeesPage() {
                         <div className="flex justify-between"><span className="text-gray-500">{isRTL ? "الوظيفة:" : "Job Title:"}</span><span>{viewingEmployee.jobTitle}</span></div>
                         <div className="flex justify-between"><span className="text-gray-500">{isRTL ? "الجنسية:" : "Nationality:"}</span><span>{viewingEmployee.nationality}</span></div>
                         <div className="flex justify-between"><span className="text-gray-500">{isRTL ? "الحالة:" : "Status:"}</span>{getStatusBadge(viewingEmployee.status, isRTL)}</div>
+                        {(viewingEmployee as any).statusChangedAt && (
+                          <div className="flex justify-between">
+                            <span className="text-gray-500">{isRTL ? "آخر تغيير للحالة:" : "Status Changed:"}</span>
+                            <span>{new Date((viewingEmployee as any).statusChangedAt).toLocaleDateString(isRTL ? "ar-SA" : "en-US")}</span>
+                          </div>
+                        )}
+                        {viewingEmployee.status === "terminated" && (viewingEmployee as any).terminatedAt && (
+                          <>
+                            <div className="flex justify-between text-red-700 border-t pt-2">
+                              <span className="text-gray-500">{isRTL ? "تاريخ انتهاء الخدمة:" : "Termination Date:"}</span>
+                              <span className="font-medium">{new Date((viewingEmployee as any).terminatedAt).toLocaleDateString(isRTL ? "ar-SA" : "en-US")}</span>
+                            </div>
+                            {(viewingEmployee as any).terminationReason && (
+                              <div className="text-xs bg-red-50 border border-red-200 rounded p-2 text-red-700">
+                                <span className="font-medium">{isRTL ? "السبب: " : "Reason: "}</span>
+                                {(viewingEmployee as any).terminationReason}
+                              </div>
+                            )}
+                          </>
+                        )}
                         {viewingEmployee.linkedUserId && (
                           <div className="flex justify-between"><span className="text-gray-500">{isRTL ? "مرتبط بالنظام:" : "Linked to System:"}</span><Badge className="bg-blue-100 text-blue-800">{isRTL ? "نعم" : "Yes"}</Badge></div>
                         )}
@@ -2813,6 +2887,42 @@ export default function BranchEmployeesPage() {
                       </CardContent>
                     </Card>
                   )}
+
+                  {/* Status history timeline */}
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <Clock className="w-4 h-4" />
+                        {isRTL ? "سجل تغييرات الحالة" : "Status Change History"}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {isLoadingStatusHistory ? (
+                        <div className="text-center py-4 text-gray-400 text-sm"><Loader2 className="w-4 h-4 inline animate-spin" /></div>
+                      ) : !employeeStatusHistory || employeeStatusHistory.length === 0 ? (
+                        <p className="text-sm text-gray-500 text-center py-2">{isRTL ? "لا يوجد سجل تغييرات" : "No status changes recorded"}</p>
+                      ) : (
+                        <ol className="relative border-r-2 border-amber-200 pr-4 space-y-3">
+                          {employeeStatusHistory.map((h: any) => (
+                            <li key={h.id} className="relative" data-testid={`history-row-${h.id}`}>
+                              <span className="absolute -right-[1.4rem] top-1 w-3 h-3 rounded-full bg-amber-500 border-2 border-white"></span>
+                              <div className="flex items-center gap-2 flex-wrap text-sm">
+                                {h.oldStatus ? getStatusBadge(h.oldStatus, isRTL) : <Badge variant="outline">{isRTL ? "إنشاء" : "Created"}</Badge>}
+                                <span className="text-gray-400">←</span>
+                                {getStatusBadge(h.newStatus, isRTL)}
+                                <span className="text-xs text-gray-500 ms-auto">
+                                  {new Date(h.changedAt).toLocaleString(isRTL ? "ar-SA" : "en-US")}
+                                </span>
+                              </div>
+                              {h.reason && (
+                                <p className="text-xs text-gray-600 mt-1 bg-gray-50 rounded px-2 py-1">{h.reason}</p>
+                              )}
+                            </li>
+                          ))}
+                        </ol>
+                      )}
+                    </CardContent>
+                  </Card>
                 </TabsContent>
 
                 <TabsContent value="attendance" className="space-y-4">

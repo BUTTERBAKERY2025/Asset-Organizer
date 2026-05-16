@@ -104,6 +104,7 @@ const AttendanceCheckPage = makeLazy("attendance-check");
 const TimesheetPage = makeLazy("timesheet");
 const AttendanceDashboardPage = makeLazy("attendance-dashboard");
 const BranchEmployeesPage = makeLazy("branch-employees");
+const TerminatedEmployeesPage = makeLazy("terminated-employees");
 const OrganizationalStructurePage = makeLazy("organizational-structure");
 const EmployeeReportsDashboardPage = makeLazy("employee-reports-dashboard");
 const PnLDashboardPage = makeLazy("pnl-dashboard");
@@ -268,6 +269,7 @@ const Router = React.memo(function Router() {
       
       {/* HR - الموارد البشرية */}
       <Route path="/branch-employees">{() => <ModulePage component={BranchEmployeesPage} module="branch_employees" />}</Route>
+      <Route path="/terminated-employees">{() => <ModulePage component={TerminatedEmployeesPage} module="branch_employees" />}</Route>
       <Route path="/organizational-structure">{() => <ModulePage component={OrganizationalStructurePage} module="organizational_structure" />}</Route>
       <Route path="/attendance-dashboard">{() => <ModulePage component={AttendanceDashboardPage} module="shifts" />}</Route>
       <Route path="/shift-management">{() => <ModulePage component={ShiftManagementPage} module="shifts" />}</Route>

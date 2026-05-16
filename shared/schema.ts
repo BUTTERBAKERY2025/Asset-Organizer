@@ -5510,6 +5510,11 @@ export const branchEmployees = pgTable("branch_employees", {
   contractType: text("contract_type").default("full_time"), // full_time, part_time, contract
   workPermitNumber: text("work_permit_number"), // رقم رخصة العمل
   notes: text("notes"), // ملاحظات
+  // تتبع تغيير الحالة (Phase 12 - audit trail)
+  statusChangedAt: timestamp("status_changed_at"), // متى تغيرت الحالة آخر مرة
+  statusChangedBy: varchar("status_changed_by"), // المستخدم الذي غيّر الحالة
+  terminatedAt: timestamp("terminated_at"), // تاريخ إنهاء الخدمة (يُملأ تلقائياً عند تغيير الحالة إلى terminated)
+  terminationReason: text("termination_reason"), // سبب إنهاء الخدمة
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
@@ -5518,12 +5523,45 @@ export const branchEmployees = pgTable("branch_employees", {
   index("idx_branch_employees_status").on(table.status),
   index("idx_branch_employees_job").on(table.jobTitle),
   index("idx_branch_employees_linked_user").on(table.linkedUserId),
+  index("idx_branch_employees_branch_status").on(table.branchId, table.status),
+  index("idx_branch_employees_terminated_at").on(table.terminatedAt),
 ]);
+
+// =====================================================
+// Employee Status History - سجل تاريخ تغيرات حالة الموظفين
+// =====================================================
+export const employeeStatusHistory = pgTable("employee_status_history", {
+  id: serial("id").primaryKey(),
+  branchEmployeeId: integer("branch_employee_id").notNull().references(() => branchEmployees.id, { onDelete: "cascade" }),
+  oldStatus: text("old_status"), // الحالة السابقة (NULL لو هو أول سجل)
+  newStatus: text("new_status").notNull(), // الحالة الجديدة
+  changedAt: timestamp("changed_at").defaultNow().notNull(),
+  changedBy: varchar("changed_by").references(() => users.id), // المستخدم الذي قام بالتغيير
+  reason: text("reason"), // سبب التغيير (خاصة عند الإنهاء)
+  notes: text("notes"), // ملاحظات إضافية
+}, (table) => [
+  index("idx_emp_status_history_emp").on(table.branchEmployeeId),
+  index("idx_emp_status_history_new_status").on(table.newStatus),
+  index("idx_emp_status_history_changed_at").on(table.changedAt),
+]);
+
+export const insertEmployeeStatusHistorySchema = createInsertSchema(employeeStatusHistory).omit({
+  id: true,
+  changedAt: true,
+});
+
+export type EmployeeStatusHistory = typeof employeeStatusHistory.$inferSelect;
+export type InsertEmployeeStatusHistory = z.infer<typeof insertEmployeeStatusHistorySchema>;
 
 export const insertBranchEmployeeSchema = createInsertSchema(branchEmployees).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+  // Server-managed audit fields — never trust client input
+  statusChangedAt: true,
+  statusChangedBy: true,
+  terminatedAt: true,
+  terminationReason: true,
 });
 
 export type BranchEmployee = typeof branchEmployees.$inferSelect;

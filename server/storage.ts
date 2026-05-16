@@ -342,6 +342,9 @@ import {
   branchEmployees,
   type BranchEmployee,
   type InsertBranchEmployee,
+  employeeStatusHistory,
+  type EmployeeStatusHistory,
+  type InsertEmployeeStatusHistory,
   salaryDeductions,
   type SalaryDeduction,
   type InsertSalaryDeduction,
@@ -1311,13 +1314,14 @@ export interface IStorage {
   deleteSalaryDeduction(id: number): Promise<boolean>;
 
   // Branch Employees - موظفي الفروع
-  getAllBranchEmployees(): Promise<BranchEmployee[]>;
-  getBranchEmployeesByBranch(branchId: string): Promise<BranchEmployee[]>;
+  getAllBranchEmployees(opts?: { status?: string; branchIds?: string[] }): Promise<BranchEmployee[]>;
+  getBranchEmployeesByBranch(branchId: string, opts?: { status?: string }): Promise<BranchEmployee[]>;
   getBranchEmployee(id: number): Promise<BranchEmployee | undefined>;
   getBranchEmployeeByLinkedUserId(userId: string): Promise<BranchEmployee | undefined>;
-  createBranchEmployee(employee: InsertBranchEmployee): Promise<BranchEmployee>;
-  updateBranchEmployee(id: number, employee: Partial<InsertBranchEmployee>): Promise<BranchEmployee | undefined>;
+  createBranchEmployee(employee: InsertBranchEmployee, changedBy?: string): Promise<BranchEmployee>;
+  updateBranchEmployee(id: number, employee: Partial<InsertBranchEmployee>, changedBy?: string, statusChangeReason?: string): Promise<BranchEmployee | undefined>;
   deleteBranchEmployee(id: number): Promise<boolean>;
+  getEmployeeStatusHistory(branchEmployeeId: number): Promise<EmployeeStatusHistory[]>;
   linkBranchEmployeeToUser(branchEmployeeId: number, userId: string): Promise<BranchEmployee | undefined>;
   getBranchEmployeeStats(branchId?: string): Promise<{
     totalEmployees: number;
@@ -11269,14 +11273,34 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Branch Employees - موظفي الفروع
-  async getAllBranchEmployees(): Promise<BranchEmployee[]> {
-    return await db.select().from(branchEmployees).orderBy(branchEmployees.employeeName);
+  async getAllBranchEmployees(opts?: { status?: string; branchIds?: string[] }): Promise<BranchEmployee[]> {
+    const conds: any[] = [];
+    if (opts?.status) conds.push(eq(branchEmployees.status, opts.status));
+    if (opts?.branchIds && opts.branchIds.length > 0) {
+      conds.push(inArray(branchEmployees.branchId, opts.branchIds));
+    }
+    const q = db.select().from(branchEmployees);
+    if (conds.length > 0) {
+      return await q.where(conds.length === 1 ? conds[0] : and(...conds)).orderBy(branchEmployees.employeeName);
+    }
+    return await q.orderBy(branchEmployees.employeeName);
   }
 
-  async getBranchEmployeesByBranch(branchId: string): Promise<BranchEmployee[]> {
+  async getBranchEmployeesByBranch(branchId: string, opts?: { status?: string }): Promise<BranchEmployee[]> {
+    if (opts?.status) {
+      return await db.select().from(branchEmployees)
+        .where(and(eq(branchEmployees.branchId, branchId), eq(branchEmployees.status, opts.status)))
+        .orderBy(branchEmployees.employeeName);
+    }
     return await db.select().from(branchEmployees)
       .where(eq(branchEmployees.branchId, branchId))
       .orderBy(branchEmployees.employeeName);
+  }
+
+  async getEmployeeStatusHistory(branchEmployeeId: number): Promise<EmployeeStatusHistory[]> {
+    return await db.select().from(employeeStatusHistory)
+      .where(eq(employeeStatusHistory.branchEmployeeId, branchEmployeeId))
+      .orderBy(desc(employeeStatusHistory.changedAt));
   }
 
   async getBranchEmployee(id: number): Promise<BranchEmployee | undefined> {
@@ -11284,7 +11308,7 @@ export class DatabaseStorage implements IStorage {
     return employee || undefined;
   }
 
-  async createBranchEmployee(employee: InsertBranchEmployee): Promise<BranchEmployee> {
+  async createBranchEmployee(employee: InsertBranchEmployee, changedBy?: string): Promise<BranchEmployee> {
     const grossSalary = (employee.salary || 0) + 
       (employee.housingAllowance || 0) + 
       (employee.transportAllowance || 0) + 
@@ -11322,15 +11346,32 @@ export class DatabaseStorage implements IStorage {
       employeeNumber = `${prefix}-${String(maxNumber + 1).padStart(5, '0')}`;
     }
     
-    const [created] = await db.insert(branchEmployees).values({
-      ...employee,
-      employeeNumber,
-      totalSalary,
-    }).returning();
+    const initialStatus = employee.status || "active";
+    const now = new Date();
+    // Atomic: create employee + log initial history in one transaction.
+    // If history insert fails, the employee creation rolls back to preserve audit integrity.
+    const created = await db.transaction(async (tx) => {
+      const [row] = await tx.insert(branchEmployees).values({
+        ...employee,
+        employeeNumber,
+        totalSalary,
+        statusChangedAt: now,
+        statusChangedBy: changedBy ?? null,
+        terminatedAt: initialStatus === "terminated" ? now : null,
+      }).returning();
+      await tx.insert(employeeStatusHistory).values({
+        branchEmployeeId: row.id,
+        oldStatus: null,
+        newStatus: initialStatus,
+        changedBy: changedBy ?? null,
+        reason: "Employee created",
+      });
+      return row;
+    });
     return created;
   }
 
-  async updateBranchEmployee(id: number, employee: Partial<InsertBranchEmployee>): Promise<BranchEmployee | undefined> {
+  async updateBranchEmployee(id: number, employee: Partial<InsertBranchEmployee>, changedBy?: string, statusChangeReason?: string): Promise<BranchEmployee | undefined> {
     const current = await this.getBranchEmployee(id);
     if (!current) return undefined;
 
@@ -11349,34 +11390,68 @@ export class DatabaseStorage implements IStorage {
     const newBranchId = employee.branchId;
     const isBranchTransfer = newBranchId && newBranchId !== oldBranchId;
 
-    if (isBranchTransfer) {
+    // === Status change tracking (Phase 12) ===
+    const newStatus = employee.status;
+    const isStatusChange = newStatus !== undefined && newStatus !== current.status;
+    const now = new Date();
+    const statusFields: Record<string, any> = {};
+    if (isStatusChange) {
+      statusFields.statusChangedAt = now;
+      statusFields.statusChangedBy = changedBy ?? null;
+      if (newStatus === "terminated") {
+        statusFields.terminatedAt = now;
+        if (statusChangeReason) statusFields.terminationReason = statusChangeReason;
+      } else if (current.status === "terminated") {
+        // Re-activation: clear termination fields
+        statusFields.terminatedAt = null;
+        statusFields.terminationReason = null;
+      }
+    }
+
+    // History logging is atomic: a failure rolls back the update so audit
+    // integrity is preserved (no status change without a corresponding history row).
+    const logStatusHistory = async (executor: any) => {
+      if (!isStatusChange) return;
+      await executor.insert(employeeStatusHistory).values({
+        branchEmployeeId: id,
+        oldStatus: current.status,
+        newStatus: newStatus!,
+        changedBy: changedBy ?? null,
+        reason: statusChangeReason ?? null,
+      });
+    };
+
+    if (isBranchTransfer || isStatusChange) {
       const result = await db.transaction(async (tx) => {
         const [updated] = await tx.update(branchEmployees)
-          .set({ ...employee, totalSalary, updatedAt: new Date() })
+          .set({ ...employee, ...statusFields, totalSalary, updatedAt: now })
           .where(eq(branchEmployees.id, id))
           .returning();
 
-        const saudiTime = getSaudiArabiaTime();
-        const today = saudiTime.date;
-        const movedSchedules = await tx.update(employeeSchedules)
-          .set({ branchId: newBranchId })
-          .where(and(
-            or(
-              eq(employeeSchedules.employeeId, `branch_emp_${id}`),
-              eq(employeeSchedules.branchEmployeeId, id)
-            ),
-            gte(employeeSchedules.scheduleDate, today)
-          ))
-          .returning({ id: employeeSchedules.id });
-        console.log(`[BranchTransfer] Employee ${id}: moved ${movedSchedules.length} future schedules from ${oldBranchId} to ${newBranchId}`);
+        if (isBranchTransfer) {
+          const saudiTime = getSaudiArabiaTime();
+          const today = saudiTime.date;
+          const movedSchedules = await tx.update(employeeSchedules)
+            .set({ branchId: newBranchId })
+            .where(and(
+              or(
+                eq(employeeSchedules.employeeId, `branch_emp_${id}`),
+                eq(employeeSchedules.branchEmployeeId, id)
+              ),
+              gte(employeeSchedules.scheduleDate, today)
+            ))
+            .returning({ id: employeeSchedules.id });
+          console.log(`[BranchTransfer] Employee ${id}: moved ${movedSchedules.length} future schedules from ${oldBranchId} to ${newBranchId}`);
+        }
 
+        await logStatusHistory(tx);
         return updated;
       });
       return result;
     }
 
     const [updated] = await db.update(branchEmployees)
-      .set({ ...employee, totalSalary, updatedAt: new Date() })
+      .set({ ...employee, ...statusFields, totalSalary, updatedAt: now })
       .where(eq(branchEmployees.id, id))
       .returning();
     return updated;
