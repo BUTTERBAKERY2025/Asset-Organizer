@@ -8060,6 +8060,14 @@ export async function registerRoutes(
           return res.status(403).json({ error: "غير مصرح بالوصول لهذا اليومية" });
         }
       }
+
+      // SECURITY (IDOR): Mirror GET ownership rules — non-admin/manager users
+      // can only attach to their OWN journal, not to other cashiers' drafts
+      // they happen to know the ID of.
+      const canUploadAll = await canUserViewAllCashiers(req);
+      if (!canUploadAll && String(journal.cashierId) !== String(getCurrentUser(req).id)) {
+        return res.status(403).json({ error: "غير مصرح - يمكنك فقط إضافة مرفقات ليومياتك الخاصة" });
+      }
       
       // Allow attachments on draft journals only
       if (journal.status !== 'draft') {
@@ -8102,6 +8110,22 @@ export async function registerRoutes(
         if (!hasAccess) {
           return res.status(403).json({ error: "غير مصرح بالوصول لهذا اليومية" });
         }
+      }
+
+      // SECURITY (IDOR): Verify the attachment actually belongs to this journal
+      // before deletion. Without this, anyone with edit permission on ANY
+      // journal could delete attachments from OTHER journals by passing a
+      // foreign attachmentId in the URL.
+      const journalAttachments = await storage.getJournalAttachments(journalId);
+      const attachment = journalAttachments.find(a => a.id === attachmentId);
+      if (!attachment) {
+        return res.status(404).json({ error: "Attachment not found for this journal" });
+      }
+
+      // SECURITY: Mirror GET ownership rules for delete too.
+      const canDeleteAll = await canUserViewAllCashiers(req);
+      if (!canDeleteAll && String(journal.cashierId) !== String(getCurrentUser(req).id)) {
+        return res.status(403).json({ error: "غير مصرح - يمكنك فقط حذف مرفقات يومياتك الخاصة" });
       }
       
       if (journal.status !== 'draft') {

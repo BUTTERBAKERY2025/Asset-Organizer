@@ -32,6 +32,79 @@ import type { Branch, CashierSalesJournal, CashierPaymentBreakdown, JournalAttac
 import { ATTACHMENT_TYPE_LABELS, ATTACHMENT_TYPES, type AttachmentType } from "@shared/schema";
 import { printHtmlContent } from "@/lib/print-utils";
 
+// Type for an attachment that hasn't been persisted to the server yet.
+type PendingAttachment = {
+  attachmentType: AttachmentType;
+  fileName: string;
+  fileData: string;
+  mimeType: string;
+  fileSize: number;
+};
+
+// Upload a single attachment with up to 3 attempts (small exponential
+// backoff). Most "lost attachment" reports come from transient network
+// blips on store WiFi — auto-retry resolves the vast majority silently.
+async function uploadAttachmentWithRetry(
+  journalId: number,
+  attachment: PendingAttachment,
+  maxAttempts = 3,
+): Promise<void> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await apiRequest("POST", `/api/cashier-journals/${journalId}/attachments`, attachment);
+      return;
+    } catch (err) {
+      lastErr = err;
+      if (attempt < maxAttempts) {
+        await new Promise((r) => setTimeout(r, 500 * attempt));
+      }
+    }
+  }
+  throw lastErr;
+}
+
+// Persist failed attachments in sessionStorage keyed by journalId so they
+// survive the redirect from /new to /:id (component remounts and loses
+// in-memory state). On the edit page mount we restore them as pending
+// items, ready for the user to retry. Each journal has its own bucket —
+// strict isolation by journalId, no cross-journal contamination.
+const PENDING_STORAGE_KEY = (journalId: number | string) =>
+  `cashier-journal-pending-attachments-${journalId}`;
+
+// Returns true on success, false on quota/storage failure. Callers MUST
+// check the return value before discarding the in-memory copy of failed
+// attachments — otherwise a quota exception would silently lose them.
+function savePendingToStorage(journalId: number | string, items: PendingAttachment[]): boolean {
+  try {
+    if (items.length === 0) {
+      sessionStorage.removeItem(PENDING_STORAGE_KEY(journalId));
+    } else {
+      sessionStorage.setItem(PENDING_STORAGE_KEY(journalId), JSON.stringify(items));
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function loadPendingFromStorage(journalId: number | string): PendingAttachment[] {
+  try {
+    const raw = sessionStorage.getItem(PENDING_STORAGE_KEY(journalId));
+    return raw ? (JSON.parse(raw) as PendingAttachment[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function clearPendingFromStorage(journalId: number | string) {
+  try {
+    sessionStorage.removeItem(PENDING_STORAGE_KEY(journalId));
+  } catch {
+    // ignore
+  }
+}
+
 const PAYMENT_CATEGORIES = {
   cash: { label: "نقدي", color: "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300" },
   cards: { label: "بطاقات وشبكة", color: "bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300" },
@@ -294,13 +367,12 @@ export default function CashierJournalFormPage() {
   });
 
   const [attachments, setAttachments] = useState<JournalAttachment[]>([]);
-  const [pendingAttachments, setPendingAttachments] = useState<{
-    attachmentType: AttachmentType;
-    fileName: string;
-    fileData: string;
-    mimeType: string;
-    fileSize: number;
-  }[]>([]);
+  const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
+  // Tracks a journal that was successfully created in this session but whose
+  // attachment-persistence step failed (sessionStorage quota). Set so that
+  // pressing Save again navigates to the existing journal instead of
+  // creating a duplicate record.
+  const [createdJournalId, setCreatedJournalId] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingType, setUploadingType] = useState<AttachmentType | null>(null);
 
@@ -374,6 +446,60 @@ export default function CashierJournalFormPage() {
     }
   }, [existingAttachments]);
 
+  // Recover attachments that failed during creation (saved in sessionStorage
+  // under this journal's id) and automatically retry uploading them in the
+  // background. Gated by `existingJournal` so we only fire AFTER the user
+  // has demonstrated authorized access — otherwise a stale sessionStorage
+  // entry for a journal the user can no longer reach would loop forever
+  // on every mount, hammering the server with 403s.
+  useEffect(() => {
+    if (!isEdit || !id || !existingJournal) return;
+    const recovered = loadPendingFromStorage(id);
+    if (recovered.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      const journalIdNum = parseInt(id, 10);
+      const results = await Promise.allSettled(
+        recovered.map((att) => uploadAttachmentWithRetry(journalIdNum, att))
+      );
+      if (cancelled) return;
+      const stillFailed = recovered.filter((_, i) => results[i].status === "rejected");
+      if (stillFailed.length === 0) {
+        clearPendingFromStorage(id);
+        queryClient.invalidateQueries({ queryKey: [`/api/cashier-journals/${id}/attachments`] });
+        toast({ title: "تم استعادة ورفع المرفقات المفقودة بنجاح" });
+      } else {
+        // Detect permanent 403 (e.g. permissions revoked) vs transient
+        // failures. A 403 means we should clear the storage so we don't
+        // retry forever on every page load.
+        const isAllForbidden = results.every(
+          (r) => r.status === "rejected" && String((r as PromiseRejectedResult).reason).includes("403")
+        );
+        if (isAllForbidden) {
+          clearPendingFromStorage(id);
+          toast({
+            title: "تعذّر استعادة المرفقات",
+            description: "ليست لديك صلاحية رفع المرفقات لهذه اليومية.",
+            variant: "destructive",
+          });
+          return;
+        }
+        savePendingToStorage(id, stillFailed);
+        setPendingAttachments((prev) => [...prev, ...stillFailed]);
+        toast({
+          title: `${stillFailed.length} مرفق ينتظر إعادة المحاولة`,
+          description: "اضغط زر الحفظ لإعادة محاولة الرفع",
+          variant: "destructive",
+        });
+      }
+    })();
+    return () => { cancelled = true; };
+    // Intentionally only depend on id/isEdit/existingJournal — we only want
+    // to run this recovery ONCE per journal mount, after auth confirmed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, isEdit, existingJournal]);
+
   useEffect(() => {
     if (existingJournal) {
       setFormData({
@@ -426,37 +552,55 @@ export default function CashierJournalFormPage() {
       return res.json();
     },
     onSuccess: async (createdJournal: CashierSalesJournal) => {
-      // Upload attachments in parallel — one failure doesn't block the others.
-      // Keep any failed items in `pendingAttachments` and redirect the user to
-      // the edit page (instead of the list) so they can retry without losing
-      // their photos. This prevents the silent attachment-loss bug.
-      let failedAttachments: typeof pendingAttachments = [];
+      // Parallel uploads with per-item retry (3 attempts each). Any items
+      // that still fail are persisted to sessionStorage under the newly
+      // created journal's ID so they survive the route change /new → /:id
+      // and can be auto-retried after the edit page mounts.
+      let failedAttachments: PendingAttachment[] = [];
+      let persistenceFailed = false;
       if (pendingAttachments.length > 0) {
         const results = await Promise.allSettled(
           pendingAttachments.map((attachment) =>
-            apiRequest("POST", `/api/cashier-journals/${createdJournal.id}/attachments`, attachment)
+            uploadAttachmentWithRetry(createdJournal.id, attachment)
           )
         );
         failedAttachments = pendingAttachments.filter((_, i) => results[i].status === "rejected");
         if (failedAttachments.length > 0) {
-          console.error("Failed uploads:", results.filter(r => r.status === "rejected"));
+          console.error("Failed uploads after retries:", results.filter(r => r.status === "rejected"));
+          // Verify the persisted copy actually landed in sessionStorage before
+          // we clear the in-memory list — otherwise a quota exception would
+          // silently lose the user's photos.
+          persistenceFailed = !savePendingToStorage(createdJournal.id, failedAttachments);
         }
       }
 
       queryClient.invalidateQueries({ queryKey: ["/api/cashier-journals"] });
 
+      if (failedAttachments.length > 0 && persistenceFailed) {
+        // Worst case: uploads failed AND we can't persist. Keep them in
+        // memory and DO NOT navigate, so the user has a chance to retry
+        // without losing the photos. Remember the created journal id so
+        // a subsequent Save click navigates to it instead of creating a
+        // duplicate record.
+        setCreatedJournalId(createdJournal.id);
+        toast({
+          title: "تعذّر حفظ المرفقات الفاشلة",
+          description: "ذاكرة المتصفح ممتلئة. أعد المحاولة أو افتح اليومية المحفوظة.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setPendingAttachments([]);
+
       if (failedAttachments.length > 0) {
-        // Keep the failed ones in state and send the user to the edit page
-        // (which has retry UI for individual attachments) instead of the list.
-        setPendingAttachments(failedAttachments);
         toast({
           title: "تم حفظ اليومية — لكن فشل رفع بعض المرفقات",
-          description: `${failedAttachments.length} مرفق لم يُرفع. يمكنك إعادة المحاولة من صفحة التعديل.`,
+          description: `${failedAttachments.length} مرفق محفوظ محلياً. سيُعاد محاولة الرفع تلقائياً.`,
           variant: "destructive",
         });
         setLocation(`/cashier-journals/${createdJournal.id}`);
       } else {
-        setPendingAttachments([]);
         toast({ title: "تم إنشاء اليومية بنجاح" });
         setLocation("/cashier-journals");
       }
@@ -507,17 +651,20 @@ export default function CashierJournalFormPage() {
   });
 
   const uploadAttachmentMutation = useMutation({
-    mutationFn: async (data: { journalId: number; attachment: typeof pendingAttachments[0] }) => {
-      const res = await apiRequest("POST", `/api/cashier-journals/${data.journalId}/attachments`, data.attachment);
-      return res.json();
+    mutationFn: async (data: { journalId: number; attachment: PendingAttachment }) => {
+      // Use retry helper here too so single-file uploads in edit mode
+      // benefit from the same resilience as bulk creation uploads.
+      await uploadAttachmentWithRetry(data.journalId, data.attachment);
+      // Refetch the canonical list — the retry helper doesn't return the
+      // created row directly, but invalidating the query gets us the
+      // freshest server state which is what we want anyway.
     },
-    onSuccess: (newAttachment: JournalAttachment) => {
-      setAttachments((prev) => [...prev, newAttachment]);
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/cashier-journals/${id}/attachments`] });
       toast({ title: "تم رفع المرفق بنجاح" });
     },
     onError: () => {
-      toast({ title: "خطأ", description: "فشل في رفع المرفق", variant: "destructive" });
+      toast({ title: "خطأ", description: "فشل في رفع المرفق بعد عدة محاولات", variant: "destructive" });
     },
   });
 
@@ -623,13 +770,63 @@ export default function CashierJournalFormPage() {
   };
 
   const removePendingAttachment = (index: number) => {
-    setPendingAttachments((prev) => prev.filter((_, i) => i !== index));
+    setPendingAttachments((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      // In edit mode the pending list mirrors what's in sessionStorage
+      // (recovered items waiting for retry). Keep them in sync so removing
+      // an item from the UI also removes it from the persisted recovery
+      // queue — otherwise it would reappear on next page load.
+      if (isEdit && id) {
+        savePendingToStorage(id, next);
+      }
+      return next;
+    });
   };
 
   const isReadOnly = existingJournal && existingJournal.status !== "draft";
 
   // Threshold for shortage confirmation (50 SAR)
   const SHORTAGE_CONFIRM_THRESHOLD = 50;
+
+  // Retry uploads against an already-created journal (post-quota-failure
+  // path). Tries each pending file with retries; on full success, navigates
+  // to the journal; on partial success, attempts to persist remaining
+  // failures to sessionStorage and only navigates if persistence works.
+  // If persistence STILL fails, keeps user in place so files aren't lost.
+  const retryPendingForCreatedJournal = async (journalId: number) => {
+    if (pendingAttachments.length === 0) {
+      setLocation(`/cashier-journals/${journalId}`);
+      return;
+    }
+    const results = await Promise.allSettled(
+      pendingAttachments.map((att) => uploadAttachmentWithRetry(journalId, att))
+    );
+    const stillFailed = pendingAttachments.filter((_, i) => results[i].status === "rejected");
+    if (stillFailed.length === 0) {
+      setPendingAttachments([]);
+      setCreatedJournalId(null);
+      toast({ title: "تم رفع المرفقات بنجاح" });
+      setLocation(`/cashier-journals/${journalId}`);
+      return;
+    }
+    const persisted = savePendingToStorage(journalId, stillFailed);
+    if (persisted) {
+      setPendingAttachments([]);
+      setCreatedJournalId(null);
+      toast({
+        title: `${stillFailed.length} مرفق سيُعاد محاولة رفعه`,
+        variant: "destructive",
+      });
+      setLocation(`/cashier-journals/${journalId}`);
+    } else {
+      setPendingAttachments(stillFailed);
+      toast({
+        title: "ذاكرة المتصفح ممتلئة",
+        description: "احذف بعض المرفقات أو نظّف ذاكرة المتصفح ثم أعد المحاولة.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const doSave = () => {
     const canvas = signatureCanvasRef.current;
@@ -650,6 +847,13 @@ export default function CashierJournalFormPage() {
 
     if (isEdit) {
       updateMutation.mutate(data);
+    } else if (createdJournalId) {
+      // A journal was already created in this session but post-create
+      // persistence failed. Don't create a duplicate — instead retry the
+      // pending attachments directly against the existing journal id, then
+      // navigate based on the result. This preserves the in-memory files
+      // even when sessionStorage is unavailable.
+      retryPendingForCreatedJournal(createdJournalId);
     } else {
       createMutation.mutate(data);
     }
