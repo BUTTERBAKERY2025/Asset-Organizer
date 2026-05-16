@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useTranslation } from "react-i18next";
@@ -6,7 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
   Trophy, Factory, TrendingUp, Receipt, ClipboardList,
-  UserCheck, Package, Plus,
+  UserCheck, Package, Plus, ChevronDown, ChevronUp,
 } from "lucide-react";
 
 interface WidgetsData {
@@ -147,28 +147,40 @@ export function HeroWidgets() {
   }
 
   const showSparkline = weekSum > 0;
+
+  const [qaCollapsed, setQaCollapsed] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("butter:hero-quickactions:collapsed") === "1";
+  });
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("butter:hero-quickactions:collapsed", qaCollapsed ? "1" : "0");
+    } catch {}
+  }, [qaCollapsed]);
+  const QaToggleIcon = qaCollapsed ? ChevronDown : ChevronUp;
+
   if (!showSparkline && highlights.length === 0 && accessibleActions.length === 0) return null;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mt-4" data-testid="hero-widgets">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-2 mt-3" data-testid="hero-widgets">
       {/* Sparkline */}
       {showSparkline && (
         <div
-          className="rounded-xl border border-gray-100 dark:border-border bg-gradient-to-br from-primary/5 to-transparent p-3 flex items-center justify-between gap-3"
+          className="rounded-xl border border-gray-100 dark:border-border bg-gradient-to-br from-primary/5 to-transparent px-3 py-2 flex items-center justify-between gap-3"
           data-testid="widget-sparkline"
         >
           <div className="min-w-0">
-            <p className="text-[11px] text-gray-500 dark:text-muted-foreground mb-1">{t("widgets.weekSales")}</p>
-            <p className="text-lg font-bold text-gray-900 dark:text-foreground truncate">
+            <p className="text-[11px] text-gray-500 dark:text-muted-foreground leading-tight">{t("widgets.weekSales")}</p>
+            <p className="text-base font-bold text-gray-900 dark:text-foreground truncate leading-tight">
               {formatShort(weekSum)}{" "}
-              <span className="text-xs font-normal text-gray-500 dark:text-muted-foreground">{t("currency")}</span>
+              <span className="text-[11px] font-normal text-gray-500 dark:text-muted-foreground">{t("currency")}</span>
             </p>
-            <p className="text-[10px] text-gray-400 dark:text-muted-foreground mt-0.5">
+            <p className="text-[10px] text-gray-400 dark:text-muted-foreground leading-tight">
               {t("widgets.last7Days")}
             </p>
           </div>
           <div className="shrink-0">
-            <Sparkline data={weekTotals} />
+            <Sparkline data={weekTotals} height={30} width={120} />
           </div>
         </div>
       )}
@@ -176,10 +188,10 @@ export function HeroWidgets() {
       {/* Highlights */}
       {highlights.length > 0 && (
         <div
-          className="rounded-xl border border-gray-100 dark:border-border bg-white dark:bg-card p-3 space-y-1.5"
+          className="rounded-xl border border-gray-100 dark:border-border bg-white dark:bg-card px-3 py-2 space-y-1"
           data-testid="widget-highlights"
         >
-          <p className="text-[11px] text-gray-500 dark:text-muted-foreground mb-1">{t("widgets.highlights.title")}</p>
+          <p className="text-[11px] text-gray-500 dark:text-muted-foreground">{t("widgets.highlights.title")}</p>
           {highlights.slice(0, 3).map((h) => {
             const Icon = h.icon;
             return (
@@ -198,28 +210,43 @@ export function HeroWidgets() {
       {/* Quick Actions */}
       {accessibleActions.length > 0 && (
         <div
-          className="rounded-xl border border-gray-100 dark:border-border bg-white dark:bg-card p-3"
+          className="rounded-xl border border-gray-100 dark:border-border bg-white dark:bg-card px-3 py-2"
           data-testid="widget-quick-actions"
         >
-          <p className="text-[11px] text-gray-500 dark:text-muted-foreground mb-2">{t("widgets.quickActions.title")}</p>
-          <div className="grid grid-cols-2 gap-1.5">
-            {accessibleActions.map((a) => {
-              const Icon = a.icon;
-              return (
-                <button
-                  key={a.key}
-                  type="button"
-                  onClick={() => navigate(a.href)}
-                  className={`flex items-center gap-1.5 px-2 py-2 rounded-lg border text-xs font-medium transition-colors ${TONE_CLASS[a.tone]}`}
-                  data-testid={a.key}
-                >
-                  <Plus className="w-3 h-3 shrink-0 opacity-60" />
-                  <Icon className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">{a.label}</span>
-                </button>
-              );
-            })}
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-[11px] text-gray-500 dark:text-muted-foreground">{t("widgets.quickActions.title")}</p>
+            <button
+              type="button"
+              onClick={() => setQaCollapsed((v) => !v)}
+              className="p-0.5 rounded hover:bg-gray-100 dark:hover:bg-muted text-gray-400 hover:text-gray-600 dark:hover:text-foreground transition-colors"
+              aria-expanded={!qaCollapsed}
+              aria-label={qaCollapsed ? t("widgets.quickActions.expand") : t("widgets.quickActions.collapse")}
+              title={qaCollapsed ? t("widgets.quickActions.expand") : t("widgets.quickActions.collapse")}
+              data-testid="button-toggle-quick-actions"
+            >
+              <QaToggleIcon className="w-3.5 h-3.5" />
+            </button>
           </div>
+          {!qaCollapsed && (
+            <div className="grid grid-cols-2 gap-1">
+              {accessibleActions.map((a) => {
+                const Icon = a.icon;
+                return (
+                  <button
+                    key={a.key}
+                    type="button"
+                    onClick={() => navigate(a.href)}
+                    className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs font-medium transition-colors ${TONE_CLASS[a.tone]}`}
+                    data-testid={a.key}
+                  >
+                    <Plus className="w-3 h-3 shrink-0 opacity-60" />
+                    <Icon className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">{a.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>

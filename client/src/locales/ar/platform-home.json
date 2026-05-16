@@ -41,7 +41,9 @@
       "newCashier": "يومية كاشير",
       "newProduction": "أمر إنتاج",
       "checkIn": "تسجيل حضور",
-      "inventory": "جرد سريع"
+      "inventory": "جرد سريع",
+      "collapse": "إخفاء الإجراءات",
+      "expand": "إظهار الإجراءات"
     }
   },
   "palette": {

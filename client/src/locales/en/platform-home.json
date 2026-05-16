@@ -41,7 +41,9 @@
       "newCashier": "New cashier entry",
       "newProduction": "Production order",
       "checkIn": "Attendance check",
-      "inventory": "Inventory"
+      "inventory": "Inventory",
+      "collapse": "Hide actions",
+      "expand": "Show actions"
     }
   },
   "palette": {
