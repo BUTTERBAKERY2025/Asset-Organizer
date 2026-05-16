@@ -545,8 +545,8 @@ const settingsSections: SettingSection[] = [
     title: "السكرتارية التنفيذية",
     description: "إدارة الاجتماعات والمهام والمراسلات والزوار",
     icon: Crown,
-    color: "text-violet-600",
-    bgColor: "bg-violet-50",
+    color: "text-purple-600",
+    bgColor: "bg-purple-50",
     items: [
       {
         id: "executive",
@@ -766,7 +766,7 @@ export default function SettingsDashboardPage() {
 
   return (
     <Layout>
-      <div className="p-3 sm:p-4 md:p-6 lg:p-10 max-w-[1400px] mx-auto space-y-4 sm:space-y-6" dir="rtl">
+      <div className="p-4 md:p-6 max-w-[1400px] mx-auto space-y-6" dir="rtl">
       <PageHeader
         icon={Settings}
         tone="primary"
@@ -786,40 +786,45 @@ export default function SettingsDashboardPage() {
       </div>
 
       {visibleCriticalSettings.length > 0 && !searchQuery && (
-        <Card className="border-2 border-red-200 bg-gradient-to-br from-red-50 to-white" data-testid="section-critical">
-          <CardHeader className="pb-4">
+        <Card className="border bg-red-50" data-testid="section-critical">
+          <CardHeader className="p-4 md:p-6 pb-3">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-red-100 rounded-xl">
-                <AlertTriangle className="w-6 h-6 text-red-600" />
+              <div className="p-2 rounded-xl bg-white shadow-sm">
+                <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-red-600" />
               </div>
               <div>
-                <CardTitle className="text-xl font-bold text-red-900">الإعدادات الحرجة</CardTitle>
-                <CardDescription className="text-red-700">
+                <CardTitle className="text-base sm:text-lg font-bold">الإعدادات الحرجة</CardTitle>
+                <CardDescription className="text-xs sm:text-sm mt-0.5">
                   إعدادات أساسية للأمان وحماية النظام
                 </CardDescription>
               </div>
             </div>
           </CardHeader>
-          <CardContent className="p-3 sm:p-4 md:p-6">
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+          <CardContent className="p-4 md:p-6 pt-0">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
               {visibleCriticalSettings.map((item) => (
                 <Link key={item.id} href={item.path}>
                   <div
-                    className="p-2 sm:p-4 rounded-lg sm:rounded-xl border-2 border-red-100 bg-white hover:border-red-300 hover:shadow-lg cursor-pointer transition-all group"
+                    className="flex items-center justify-between p-2 sm:p-3 rounded-lg bg-white/80 hover:bg-white hover:shadow-md cursor-pointer transition-all group border border-transparent hover:border-gray-200"
                     data-testid={`critical-link-${item.id}`}
                   >
-                    <div className="flex items-center gap-2 sm:gap-3 mb-2">
-                      <div className="p-1.5 sm:p-2 bg-red-100 rounded-lg group-hover:bg-red-200 transition-colors">
-                        <item.icon className="w-4 h-4 sm:w-5 sm:h-5 text-red-600" />
+                    <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                      <div className="p-1 sm:p-1.5 rounded-lg bg-gray-100 group-hover:bg-gray-200 transition-colors shrink-0">
+                        <item.icon className="w-3 h-3 sm:w-4 sm:h-4 text-gray-600 group-hover:text-gray-800" />
                       </div>
-                      {item.badge && (
-                        <Badge variant={item.badgeVariant} className="text-[10px] sm:text-xs">
-                          {item.badge}
-                        </Badge>
-                      )}
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1 sm:gap-2">
+                          <span className="font-medium text-xs sm:text-sm truncate">{item.title}</span>
+                          {item.badge && (
+                            <Badge variant={item.badgeVariant || "secondary"} className="text-[8px] sm:text-[10px] px-1 sm:px-1.5 py-0">
+                              {item.badge}
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-[10px] sm:text-xs text-muted-foreground hidden sm:block line-clamp-1">{item.description}</p>
+                      </div>
                     </div>
-                    <h3 className="font-semibold text-foreground mb-1 text-xs sm:text-sm">{item.title}</h3>
-                    <p className="text-[10px] sm:text-sm text-muted-foreground line-clamp-2">{item.description}</p>
+                    <ChevronLeft className="w-3 h-3 sm:w-4 sm:h-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
                   </div>
                 </Link>
               ))}
