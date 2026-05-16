@@ -18,6 +18,7 @@ import {
 import type { SystemModule } from "@shared/schema";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SmartAlertsCard } from "@/components/smart-alerts-card";
+import { HeroWidgets } from "@/components/hero-widgets";
 
 type SemanticColor =
   | "money"
@@ -267,6 +268,9 @@ export default function PlatformHomePage() {
               </Button>
             </div>
           </div>
+
+          {/* ============ HERO WIDGETS (sparkline + highlights + quick actions) ============ */}
+          {isAuthenticated && <HeroWidgets />}
         </section>
 
         {/* ============ SMART ALERTS CARD ============ */}

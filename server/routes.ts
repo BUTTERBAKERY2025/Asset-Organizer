@@ -220,6 +220,104 @@ export async function registerRoutes(
     }
   });
 
+  // Home dashboard widgets — sparkline + highlights for hero card
+  app.get("/api/dashboard/widgets", isAuthenticated, async (req, res) => {
+    try {
+      const now = new Date(Date.now() + 3 * 60 * 60 * 1000);
+      const today = now.toISOString().split("T")[0];
+      const days: string[] = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i);
+        days.push(d.toISOString().split("T")[0]);
+      }
+      const weekStart = days[0];
+      const yesterday = days[5];
+
+      const queryBranchId = req.query.branchId as string | undefined;
+      const { branchIds, singleBranchId, hasAccess } = getEffectiveBranchFilter(req, queryBranchId);
+
+      const empty = {
+        weekSales: days.map((date) => ({ date, total: 0 })),
+        yesterdaySales: 0,
+        topBranchToday: null as null | { name: string; total: number },
+        topProductionToday: null as null | { name: string; orders: number },
+      };
+
+      if (!hasAccess) return res.json(empty);
+
+      const salesBranchCond: SQL[] = [gte(cashierSalesJournals.journalDate, weekStart), lte(cashierSalesJournals.journalDate, today)];
+      const prodBranchCond: SQL[] = [eq(productionOrders.scheduledDate, today)];
+      if (singleBranchId) {
+        salesBranchCond.push(eq(cashierSalesJournals.branchId, singleBranchId));
+        prodBranchCond.push(eq(productionOrders.branchId, singleBranchId));
+      } else if (branchIds !== null && branchIds.length > 0) {
+        salesBranchCond.push(inArray(cashierSalesJournals.branchId, branchIds));
+        prodBranchCond.push(inArray(productionOrders.branchId, branchIds));
+      }
+
+      const weeklyRows = await db
+        .select({
+          date: cashierSalesJournals.journalDate,
+          total: sql<number>`COALESCE(SUM(${cashierSalesJournals.totalSales}), 0)::float`,
+        })
+        .from(cashierSalesJournals)
+        .where(and(...salesBranchCond))
+        .groupBy(cashierSalesJournals.journalDate);
+
+      const byDate = new Map(weeklyRows.map((r) => [r.date as string, Number(r.total ?? 0)]));
+      const weekSales = days.map((date) => ({ date, total: byDate.get(date) ?? 0 }));
+      const yesterdaySales = byDate.get(yesterday) ?? 0;
+
+      const topBranchRows = await db
+        .select({
+          branchId: cashierSalesJournals.branchId,
+          name: branches.name,
+          total: sql<number>`COALESCE(SUM(${cashierSalesJournals.totalSales}), 0)::float`,
+        })
+        .from(cashierSalesJournals)
+        .innerJoin(branches, eq(branches.id, cashierSalesJournals.branchId))
+        .where(and(
+          eq(cashierSalesJournals.journalDate, today),
+          ...(singleBranchId
+            ? [eq(cashierSalesJournals.branchId, singleBranchId)]
+            : branchIds !== null && branchIds.length > 0
+              ? [inArray(cashierSalesJournals.branchId, branchIds)]
+              : []),
+        ))
+        .groupBy(cashierSalesJournals.branchId, branches.name)
+        .orderBy(desc(sql`COALESCE(SUM(${cashierSalesJournals.totalSales}), 0)`))
+        .limit(1);
+
+      const topProdRows = await db
+        .select({
+          branchId: productionOrders.branchId,
+          name: branches.name,
+          orders: sql<number>`COUNT(*)::int`,
+        })
+        .from(productionOrders)
+        .innerJoin(branches, eq(branches.id, productionOrders.branchId))
+        .where(and(...prodBranchCond))
+        .groupBy(productionOrders.branchId, branches.name)
+        .orderBy(desc(sql`COUNT(*)`))
+        .limit(1);
+
+      res.json({
+        weekSales,
+        yesterdaySales,
+        topBranchToday: topBranchRows[0]
+          ? { name: topBranchRows[0].name as string, total: Number(topBranchRows[0].total ?? 0) }
+          : null,
+        topProductionToday: topProdRows[0]
+          ? { name: topProdRows[0].name as string, orders: Number(topProdRows[0].orders ?? 0) }
+          : null,
+      });
+    } catch (error) {
+      console.error("Error fetching dashboard widgets:", error);
+      res.status(500).json({ error: "فشل في جلب بيانات الـ widgets" });
+    }
+  });
+
   app.use('/api/', (req, res, next) => {
     if (req.method === "POST" || req.method === "PUT" || req.method === "PATCH" || req.method === "DELETE") {
       const pathParts = req.path.split("/").filter(Boolean);

@@ -27,6 +27,23 @@
     "collapse": "إخفاء التنبيهات",
     "expand": "إظهار التنبيهات"
   },
+  "widgets": {
+    "weekSales": "مبيعات الأسبوع",
+    "last7Days": "آخر 7 أيام",
+    "highlights": {
+      "title": "أبرز إنجازات اليوم",
+      "weekTotal": "إجمالي الأسبوع",
+      "topBranch": "أعلى فرع مبيعاً",
+      "topProduction": "أعلى فرع إنتاجاً"
+    },
+    "quickActions": {
+      "title": "إجراءات سريعة",
+      "newCashier": "يومية كاشير",
+      "newProduction": "أمر إنتاج",
+      "checkIn": "تسجيل حضور",
+      "inventory": "جرد سريع"
+    }
+  },
   "palette": {
     "modulesSection": "الوحدات والصفحات",
     "startTyping": "اكتب حرفين على الأقل للبحث عن البيانات",

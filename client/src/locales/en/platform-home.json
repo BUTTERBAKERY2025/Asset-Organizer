@@ -27,6 +27,23 @@
     "collapse": "Hide alerts",
     "expand": "Show alerts"
   },
+  "widgets": {
+    "weekSales": "Week sales",
+    "last7Days": "Last 7 days",
+    "highlights": {
+      "title": "Today's highlights",
+      "weekTotal": "Week total",
+      "topBranch": "Top branch (sales)",
+      "topProduction": "Top branch (production)"
+    },
+    "quickActions": {
+      "title": "Quick actions",
+      "newCashier": "New cashier entry",
+      "newProduction": "Production order",
+      "checkIn": "Attendance check",
+      "inventory": "Inventory"
+    }
+  },
   "palette": {
     "modulesSection": "Modules & pages",
     "startTyping": "Type at least 2 characters to search data",
