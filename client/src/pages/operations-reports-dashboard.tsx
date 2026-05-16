@@ -253,34 +253,39 @@ function QuickStatsRow({ report, cashierJournals, hasActiveFilters }: { report: 
     : report.salesReport.totalTransactions;
   
   const formatCurrency = (amount: number) => new Intl.NumberFormat("en-SA", { style: "currency", currency: "SAR", maximumFractionDigits: 0 }).format(amount);
-  
+  const formatCompact = (amount: number) => new Intl.NumberFormat("en-SA", { notation: "compact", maximumFractionDigits: 1 }).format(amount);
+  const statNumberCls = "font-bold text-base sm:text-lg lg:text-xl xl:text-2xl tabular-nums leading-tight truncate";
+
   return (
-    <div className="grid grid-cols-2 md:grid-cols-6 gap-3 p-4 rounded-xl bg-card border border-border">
-      <div className="text-center">
-        <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(filteredTotalSales)}</p>
-        <p className="text-xs text-muted-foreground">{t('quickStats.totalSales')}</p>
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 p-3 sm:p-4 rounded-xl bg-card border border-border">
+      <div className="text-center min-w-0">
+        <p className={`${statNumberCls} text-emerald-600 dark:text-emerald-400`} title={formatCurrency(filteredTotalSales)}>
+          <span className="hidden xl:inline">{formatCurrency(filteredTotalSales)}</span>
+          <span className="xl:hidden">SAR {formatCompact(filteredTotalSales)}</span>
+        </p>
+        <p className="text-xs text-muted-foreground truncate">{t('quickStats.totalSales')}</p>
       </div>
-      <div className="text-center">
-        <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{filteredTransactions}</p>
-        <p className="text-xs text-muted-foreground">{t('quickStats.transactions')}</p>
+      <div className="text-center min-w-0">
+        <p className={`${statNumberCls} text-blue-600 dark:text-blue-400`}>{filteredTransactions.toLocaleString('en-US')}</p>
+        <p className="text-xs text-muted-foreground truncate">{t('quickStats.transactions')}</p>
       </div>
-      <div className="text-center">
-        <p className="text-2xl font-bold text-violet-600 dark:text-violet-400">
+      <div className="text-center min-w-0">
+        <p className={`${statNumberCls} text-violet-600 dark:text-violet-400`}>
           {report.productionReport.actualProduction?.totalBatches || report.productionReport.totalOrders}
         </p>
-        <p className="text-xs text-muted-foreground">{t('quickStats.productionBatches')}</p>
+        <p className="text-xs text-muted-foreground truncate">{t('quickStats.productionBatches')}</p>
       </div>
-      <div className="text-center">
-        <p className={`text-2xl font-bold ${shortageCount > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>{shortageCount}</p>
-        <p className="text-xs text-muted-foreground">{t('quickStats.shortageCases')}</p>
+      <div className="text-center min-w-0">
+        <p className={`${statNumberCls} ${shortageCount > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>{shortageCount}</p>
+        <p className="text-xs text-muted-foreground truncate">{t('quickStats.shortageCases')}</p>
       </div>
-      <div className="text-center">
-        <p className={`text-2xl font-bold ${pendingApproval > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>{pendingApproval}</p>
-        <p className="text-xs text-muted-foreground">{t('quickStats.pendingApproval')}</p>
+      <div className="text-center min-w-0">
+        <p className={`${statNumberCls} ${pendingApproval > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>{pendingApproval}</p>
+        <p className="text-xs text-muted-foreground truncate">{t('quickStats.pendingApproval')}</p>
       </div>
-      <div className="text-center">
-        <p className="text-2xl font-bold text-violet-600 dark:text-violet-400">{cashierJournals.length}</p>
-        <p className="text-xs text-muted-foreground">{t('quickStats.cashierJournals')}</p>
+      <div className="text-center min-w-0">
+        <p className={`${statNumberCls} text-violet-600 dark:text-violet-400`}>{cashierJournals.length}</p>
+        <p className="text-xs text-muted-foreground truncate">{t('quickStats.cashierJournals')}</p>
       </div>
     </div>
   );
