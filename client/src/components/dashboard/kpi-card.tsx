@@ -78,11 +78,15 @@ export function KpiCard({
           </div>
         )}
       </div>
-      <div className="flex items-baseline gap-2 flex-wrap">
-        <p className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-foreground tracking-tight" dir="ltr">
+      <div className="flex items-baseline gap-2 min-w-0">
+        <p
+          className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold text-gray-900 dark:text-foreground tracking-tight tabular-nums truncate min-w-0 leading-tight"
+          dir="ltr"
+          title={typeof value === "string" ? value : undefined}
+        >
           {formatValue(value)}
         </p>
-        {unit && <span className="text-xs font-medium text-gray-500 dark:text-muted-foreground">{unit}</span>}
+        {unit && <span className="text-xs font-medium text-gray-500 dark:text-muted-foreground shrink-0">{unit}</span>}
         {trend !== undefined && trend !== null && (
           <TrendPill value={trend} invertColors={trendInvert} />
         )}
