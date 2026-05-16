@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Layout } from "@/components/layout";
+import { PageHeader } from "@/components/dashboard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +17,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useBranches } from "@/hooks/useBranches";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Calendar, Clock, Users, Plus, Save, Check, X, ChevronRight, ChevronLeft, FileText, UserCheck, Building2, CalendarDays, Download, Printer, Loader2, ArrowRight, FileSpreadsheet, File, Upload, FileUp, AlertCircle, Copy, Lock, History, Info, AlertTriangle } from "lucide-react";
+import { Calendar, Clock, Users, Plus, Save, Check, X, ChevronRight, ChevronLeft, FileText, UserCheck, Building2, CalendarDays, Download, Printer, Loader2, FileSpreadsheet, File, Upload, FileUp, AlertCircle, Copy, Lock, History, Info, AlertTriangle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { useLocation } from "wouter";
@@ -1729,25 +1730,15 @@ export default function ShiftManagementPage() {
   return (
     <Layout>
       <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-4" dir={isRTL ? "rtl" : "ltr"}>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3 sm:gap-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-11 w-11 sm:h-8 sm:w-8"
-              onClick={() => navigate("/attendance-dashboard")}
-              data-testid="btn-back"
-            >
-              <ArrowRight className="w-5 h-5" />
-            </Button>
-            <div>
-              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-primary" data-testid="page-title">{t("shiftManagement.pageTitle")}</h1>
-              <p className="text-xs sm:text-sm text-muted-foreground mt-1">{t("shiftManagement.pageDescription")}</p>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2 items-center">
+        <PageHeader
+          icon={Calendar}
+          tone="primary"
+          title={t("shiftManagement.pageTitle")}
+          description={t("shiftManagement.pageDescription")}
+          backHref="/attendance-dashboard"
+          actions={
             <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-              <SelectTrigger className="w-48 h-11 sm:h-10" data-testid="select-branch" disabled={!canSelectBranch}>
+              <SelectTrigger className="w-48 h-10" data-testid="select-branch" disabled={!canSelectBranch}>
                 <Building2 className="w-4 h-4 ml-2" />
                 <SelectValue placeholder={t("shiftManagement.selectBranch")} />
               </SelectTrigger>
@@ -1758,8 +1749,8 @@ export default function ShiftManagementPage() {
                 ))}
               </SelectContent>
             </Select>
-          </div>
-        </div>
+          }
+        />
 
         {selectedBranch === "all" ? (
           <Card>

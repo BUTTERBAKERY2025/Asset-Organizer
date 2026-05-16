@@ -786,7 +786,7 @@ export default function TimesheetPage() {
       <div className="p-3 sm:p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir={isRTL ? "rtl" : "ltr"}>
         <PageHeader
           icon={FileText}
-          tone="violet"
+          tone="executive"
           title={t("timesheet.pageTitle")}
           description={t("timesheet.pageDescription")}
           backHref="/attendance-dashboard"

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useMemo, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Layout } from "@/components/layout";
+import { PageHeader } from "@/components/dashboard";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -57,7 +58,6 @@ import {
   Line,
 } from "recharts";
 import {
-  ChevronLeft,
   FileSpreadsheet,
   Download,
   Printer,
@@ -3180,28 +3180,24 @@ export default function EmployeeReportsDashboardPage() {
   return (
     <Layout>
       <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl" ref={printRef}>
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-9 sm:w-9" onClick={() => navigate("/attendance-dashboard")} data-testid="button-back">
-              <ChevronLeft className="w-5 h-5" />
-            </Button>
-            <div>
-              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">{isRTL ? "التقارير الشاملة" : "Comprehensive Reports"}</h1>
-              <p className="text-xs sm:text-sm text-gray-500">{isRTL ? "تقارير تحليلية شاملة لموظفي الفروع والحضور والرواتب" : "Comprehensive analytics reports for branch employees, attendance, and salaries"}</p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button 
-              variant="default" 
-              className="h-11 sm:h-9 bg-green-600 hover:bg-green-700"
+        <PageHeader
+          icon={BarChart3}
+          tone="executive"
+          title={isRTL ? "التقارير الشاملة" : "Comprehensive Reports"}
+          description={isRTL ? "تقارير تحليلية شاملة لموظفي الفروع والحضور والرواتب" : "Comprehensive analytics reports for branch employees, attendance, and salaries"}
+          backHref="/attendance-dashboard"
+          actions={
+            <Button
+              size="sm"
+              className="h-9 bg-green-600 hover:bg-green-700"
               onClick={() => setShowSalaryClosingDialog(true)}
               data-testid="button-salary-closing"
             >
               <Wallet className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
               {isRTL ? "إغلاق الرواتب الشهرية" : "Monthly Salary Closing"}
             </Button>
-          </div>
-        </div>
+          }
+        />
 
         <Card className="bg-amber-50 border-amber-200">
           <CardContent className="py-4">
