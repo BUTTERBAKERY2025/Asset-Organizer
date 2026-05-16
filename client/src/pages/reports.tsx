@@ -22,6 +22,7 @@ import { PieChart as RechartsPie, Pie, Cell, BarChart, Bar, XAxis, YAxis, Cartes
 import { PrintHeader, PrintFooter } from "@/components/print-header";
 import { finalizeBrandedWorkbook } from "@/lib/excel-utils";
 import { TablePagination } from "@/components/ui/pagination";
+import { KpiCard } from "@/components/dashboard/kpi-card";
 // Server-side PDF generation for inventory count report (supports Arabic fonts)
 async function generateInventoryCountPdf(
   items: any[], 
@@ -71,10 +72,10 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  good: "bg-green-100 text-green-800",
-  maintenance: "bg-yellow-100 text-yellow-800",
-  damaged: "bg-red-100 text-red-800",
-  missing: "bg-gray-100 text-gray-800",
+  good: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border-transparent",
+  maintenance: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border-transparent",
+  damaged: "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 border-transparent",
+  missing: "bg-gray-100 text-gray-700 dark:bg-muted dark:text-muted-foreground border-transparent",
 };
 
 const STATUS_CHART_COLORS: Record<string, string> = {
@@ -356,77 +357,49 @@ export default function ReportsPage() {
           />
 
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
-            <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
-              <CardContent className="p-3 sm:pt-4">
-                <div className="flex items-center justify-between">
-                  <Package className="w-6 h-6 sm:w-8 sm:h-8 text-amber-600" />
-                  <div className="text-left">
-                    <p className="text-xs text-amber-600">إجمالي الأصول</p>
-                    <p className="text-xl sm:text-2xl font-bold text-amber-800">{overallStats.total}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-              <CardContent className="p-3 sm:pt-4">
-                <div className="flex items-center justify-between">
-                  <CheckCircle2 className="w-6 h-6 sm:w-8 sm:h-8 text-green-600" />
-                  <div className="text-left">
-                    <p className="text-xs text-green-600">حالة جيدة</p>
-                    <p className="text-xl sm:text-2xl font-bold text-green-800">{overallStats.good}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-gradient-to-br from-yellow-50 to-yellow-100 border-yellow-200">
-              <CardContent className="p-3 sm:pt-4">
-                <div className="flex items-center justify-between">
-                  <Wrench className="w-6 h-6 sm:w-8 sm:h-8 text-yellow-600" />
-                  <div className="text-left">
-                    <p className="text-xs text-yellow-600">تحتاج صيانة</p>
-                    <p className="text-xl sm:text-2xl font-bold text-yellow-800">{overallStats.maintenance}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200">
-              <CardContent className="p-3 sm:pt-4">
-                <div className="flex items-center justify-between">
-                  <XCircle className="w-6 h-6 sm:w-8 sm:h-8 text-red-600" />
-                  <div className="text-left">
-                    <p className="text-xs text-red-600">تالف/مفقود</p>
-                    <p className="text-xl sm:text-2xl font-bold text-red-800">{overallStats.damaged + overallStats.missing}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-              <CardContent className="p-3 sm:pt-4">
-                <div className="flex items-center justify-between">
-                  <DollarSign className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600" />
-                  <div className="text-left">
-                    <p className="text-xs text-blue-600">القيمة الإجمالية</p>
-                    <p className="text-base sm:text-lg font-bold text-blue-800">{overallStats.totalValue.toLocaleString()}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-              <CardContent className="p-3 sm:pt-4">
-                <div className="flex items-center justify-between">
-                  <Camera className="w-6 h-6 sm:w-8 sm:h-8 text-purple-600" />
-                  <div className="text-left">
-                    <p className="text-xs text-purple-600">مع صور</p>
-                    <p className="text-xl sm:text-2xl font-bold text-purple-800">{overallStats.withImages}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <KpiCard
+              label="إجمالي الأصول"
+              value={overallStats.total.toLocaleString("en-US")}
+              icon={Package}
+              tone="inventory"
+              data-testid="kpi-total-assets"
+            />
+            <KpiCard
+              label="حالة جيدة"
+              value={overallStats.good}
+              icon={CheckCircle2}
+              tone="money"
+              data-testid="kpi-good-assets"
+            />
+            <KpiCard
+              label="تحتاج صيانة"
+              value={overallStats.maintenance}
+              icon={Wrench}
+              tone="inventory"
+              data-testid="kpi-maintenance-assets"
+            />
+            <KpiCard
+              label="تالف/مفقود"
+              value={overallStats.damaged + overallStats.missing}
+              icon={XCircle}
+              tone="alert"
+              data-testid="kpi-damaged-assets"
+            />
+            <KpiCard
+              label="القيمة الإجمالية"
+              value={overallStats.totalValue.toLocaleString("en-US")}
+              unit="ر.س"
+              icon={DollarSign}
+              tone="production"
+              data-testid="kpi-total-value"
+            />
+            <KpiCard
+              label="مع صور"
+              value={overallStats.withImages.toLocaleString("en-US")}
+              icon={Camera}
+              tone="violet"
+              data-testid="kpi-with-images"
+            />
           </div>
 
           <Tabs value={reportType} onValueChange={setReportType} className="print:hidden">
@@ -580,16 +553,16 @@ export default function ReportsPage() {
                           <TableCell className="text-center">{branch.total}</TableCell>
                           <TableCell className="text-center">{branch.quantity}</TableCell>
                           <TableCell className="text-center">
-                            <Badge className="bg-green-100 text-green-800">{branch.good}</Badge>
+                            <Badge className={STATUS_COLORS.good}>{branch.good}</Badge>
                           </TableCell>
                           <TableCell className="text-center">
-                            <Badge className="bg-yellow-100 text-yellow-800">{branch.maintenance}</Badge>
+                            <Badge className={STATUS_COLORS.maintenance}>{branch.maintenance}</Badge>
                           </TableCell>
                           <TableCell className="text-center">
-                            <Badge className="bg-red-100 text-red-800">{branch.damaged}</Badge>
+                            <Badge className={STATUS_COLORS.damaged}>{branch.damaged}</Badge>
                           </TableCell>
                           <TableCell className="text-center">
-                            <Badge className="bg-gray-100 text-gray-800">{branch.missing}</Badge>
+                            <Badge className={STATUS_COLORS.missing}>{branch.missing}</Badge>
                           </TableCell>
                           <TableCell className="text-center">{branch.value.toLocaleString()} ر.س</TableCell>
                           <TableCell className="text-center">
@@ -668,13 +641,13 @@ export default function ReportsPage() {
                           <TableCell className="text-center">{cat.count}</TableCell>
                           <TableCell className="text-center">{cat.quantity}</TableCell>
                           <TableCell className="text-center">
-                            <Badge className="bg-green-100 text-green-800">{cat.good}</Badge>
+                            <Badge className={STATUS_COLORS.good}>{cat.good}</Badge>
                           </TableCell>
                           <TableCell className="text-center">
-                            <Badge className="bg-yellow-100 text-yellow-800">{cat.maintenance}</Badge>
+                            <Badge className={STATUS_COLORS.maintenance}>{cat.maintenance}</Badge>
                           </TableCell>
                           <TableCell className="text-center">
-                            <Badge className="bg-red-100 text-red-800">{cat.damaged}</Badge>
+                            <Badge className={STATUS_COLORS.damaged}>{cat.damaged}</Badge>
                           </TableCell>
                           <TableCell className="text-center">{cat.value.toLocaleString()} ر.س</TableCell>
                           <TableCell className="text-center">
@@ -831,26 +804,28 @@ export default function ReportsPage() {
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <Card className="bg-purple-50 border-purple-200">
-                      <CardContent className="pt-4 text-center">
-                        <p className="text-4xl font-bold text-purple-700">{overallStats.withImages}</p>
-                        <p className="text-sm text-purple-600">أصل مع صورة</p>
-                      </CardContent>
-                    </Card>
-                    <Card className="bg-gray-50 border-gray-200">
-                      <CardContent className="pt-4 text-center">
-                        <p className="text-4xl font-bold text-gray-700">{overallStats.total - overallStats.withImages}</p>
-                        <p className="text-sm text-gray-600">أصل بدون صورة</p>
-                      </CardContent>
-                    </Card>
-                    <Card className="bg-green-50 border-green-200">
-                      <CardContent className="pt-4 text-center">
-                        <p className="text-4xl font-bold text-green-700">
-                          {overallStats.total > 0 ? Math.round((overallStats.withImages / overallStats.total) * 100) : 0}%
-                        </p>
-                        <p className="text-sm text-green-600">نسبة التغطية</p>
-                      </CardContent>
-                    </Card>
+                    <KpiCard
+                      label="أصل مع صورة"
+                      value={overallStats.withImages.toLocaleString("en-US")}
+                      icon={Camera}
+                      tone="violet"
+                      data-testid="kpi-images-with"
+                    />
+                    <KpiCard
+                      label="أصل بدون صورة"
+                      value={(overallStats.total - overallStats.withImages).toLocaleString("en-US")}
+                      icon={Image}
+                      tone="neutral"
+                      data-testid="kpi-images-without"
+                    />
+                    <KpiCard
+                      label="نسبة التغطية"
+                      value={overallStats.total > 0 ? Math.round((overallStats.withImages / overallStats.total) * 100) : 0}
+                      unit="%"
+                      icon={CheckCircle2}
+                      tone="money"
+                      data-testid="kpi-images-coverage"
+                    />
                   </div>
 
                   <div className="space-y-4">
@@ -1068,14 +1043,14 @@ export default function ReportsPage() {
                       <div className="border rounded-lg overflow-hidden">
                         <Table>
                           <TableHeader>
-                            <TableRow className="bg-amber-50">
+                            <TableRow className="bg-muted/50">
                               <TableHead className="w-12 text-center">#</TableHead>
                               <TableHead className="w-16 text-center">الصورة</TableHead>
                               <TableHead>اسم الصنف</TableHead>
                               <TableHead className="w-28">التصنيف</TableHead>
                               <TableHead className="w-20 text-center">الحالة</TableHead>
                               <TableHead className="w-24 text-center">العدد بالنظام</TableHead>
-                              <TableHead className="w-24 text-center bg-yellow-100">العدد الفعلي</TableHead>
+                              <TableHead className="w-24 text-center bg-accent/40">العدد الفعلي</TableHead>
                               <TableHead className="w-20 text-center">الفرق</TableHead>
                               <TableHead>ملاحظات</TableHead>
                             </TableRow>
@@ -1101,7 +1076,7 @@ export default function ReportsPage() {
                                   </Badge>
                                 </TableCell>
                                 <TableCell className="text-center font-bold">{item.quantity}</TableCell>
-                                <TableCell className="text-center bg-yellow-50">-</TableCell>
+                                <TableCell className="text-center bg-accent/20">-</TableCell>
                                 <TableCell className="text-center">-</TableCell>
                                 <TableCell className="text-muted-foreground text-sm">{item.notes || "-"}</TableCell>
                               </TableRow>
