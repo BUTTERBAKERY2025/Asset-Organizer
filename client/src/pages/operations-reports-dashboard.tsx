@@ -1732,12 +1732,12 @@ export default function OperationsReportsDashboardPage() {
         </div>
 
         <Collapsible open={filtersOpen} onOpenChange={setFiltersOpen}>
-          <Card className="border-amber-200 bg-gradient-to-br from-amber-50 to-white">
+          <Card className="border-border bg-card">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="text-lg flex items-center gap-2">
-                    <Filter className="w-5 h-5 text-amber-600" />
+                    <Filter className="w-5 h-5 text-amber-600 dark:text-amber-400" />
                     {t('filters.title')}
                   </CardTitle>
                   <CardDescription>{t('filters.description')}</CardDescription>
@@ -2053,38 +2053,38 @@ export default function OperationsReportsDashboardPage() {
               {/* الصف الأول: التقارير الرئيسية */}
               <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 h-auto gap-1 p-1 bg-muted/50">
                 {visibleTabs.includes("overview") && (
-                  <TabsTrigger value="overview" data-testid="tab-overview" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-amber-100 data-[state=active]:text-amber-800">
+                  <TabsTrigger value="overview" data-testid="tab-overview" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-amber-100 dark:data-[state=active]:bg-amber-950/40 data-[state=active]:text-amber-800 dark:data-[state=active]:text-amber-300">
                     <PieChartIcon className="w-4 h-4" />
                     <span className="hidden sm:inline">{t('tabs.overview')}</span>
                     <span className="sm:hidden">{t('tabs.overviewShort')}</span>
                   </TabsTrigger>
                 )}
                 {visibleTabs.includes("sales") && (
-                  <TabsTrigger value="sales" data-testid="tab-sales" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-green-100 data-[state=active]:text-green-800">
+                  <TabsTrigger value="sales" data-testid="tab-sales" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-emerald-100 dark:data-[state=active]:bg-emerald-950/40 data-[state=active]:text-emerald-800 dark:data-[state=active]:text-emerald-300">
                     <DollarSign className="w-4 h-4" />
                     {t('tabs.sales')}
                   </TabsTrigger>
                 )}
                 {visibleTabs.includes("targets") && (
-                  <TabsTrigger value="targets" data-testid="tab-targets" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-blue-100 data-[state=active]:text-blue-800">
+                  <TabsTrigger value="targets" data-testid="tab-targets" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-blue-100 dark:data-[state=active]:bg-blue-950/40 data-[state=active]:text-blue-800 dark:data-[state=active]:text-blue-300">
                     <Target className="w-4 h-4" />
                     {t('tabs.targets')}
                   </TabsTrigger>
                 )}
                 {visibleTabs.includes("production") && (
-                  <TabsTrigger value="production" data-testid="tab-production" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-purple-100 data-[state=active]:text-purple-800">
+                  <TabsTrigger value="production" data-testid="tab-production" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-violet-100 dark:data-[state=active]:bg-violet-950/40 data-[state=active]:text-violet-800 dark:data-[state=active]:text-violet-300">
                     <Factory className="w-4 h-4" />
                     {t('tabs.production')}
                   </TabsTrigger>
                 )}
                 {visibleTabs.includes("shifts") && (
-                  <TabsTrigger value="shifts" data-testid="tab-shifts" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-orange-100 data-[state=active]:text-orange-800">
+                  <TabsTrigger value="shifts" data-testid="tab-shifts" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-orange-100 dark:data-[state=active]:bg-orange-950/40 data-[state=active]:text-orange-800 dark:data-[state=active]:text-orange-300">
                     <Clock className="w-4 h-4" />
                     {t('tabs.shifts')}
                   </TabsTrigger>
                 )}
                 {visibleTabs.includes("cashier") && (
-                  <TabsTrigger value="cashier" data-testid="tab-cashier" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-teal-100 data-[state=active]:text-teal-800">
+                  <TabsTrigger value="cashier" data-testid="tab-cashier" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-teal-100 dark:data-[state=active]:bg-teal-950/40 data-[state=active]:text-teal-800 dark:data-[state=active]:text-teal-300">
                     <Wallet className="w-4 h-4" />
                     {t('tabs.cashier')}
                   </TabsTrigger>
@@ -2093,48 +2093,48 @@ export default function OperationsReportsDashboardPage() {
 
               {/* الصف الثاني: التقارير التفصيلية والتحليلية */}
               {visibleTabs.length > 6 && (
-                <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 h-auto gap-1 p-1 bg-slate-100/50 border border-slate-200">
+                <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 h-auto gap-1 p-1 bg-muted/50 border border-border">
                   {visibleTabs.includes("apps") && (
-                    <TabsTrigger value="apps" data-testid="tab-apps" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-indigo-100 data-[state=active]:text-indigo-800">
+                    <TabsTrigger value="apps" data-testid="tab-apps" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-indigo-100 dark:data-[state=active]:bg-indigo-950/40 data-[state=active]:text-indigo-800 dark:data-[state=active]:text-indigo-300">
                       <Truck className="w-4 h-4" />
                       <span className="hidden sm:inline">{t('tabs.apps')}</span>
                       <span className="sm:hidden">{t('tabs.appsShort')}</span>
                     </TabsTrigger>
                   )}
                   {visibleTabs.includes("returns") && (
-                    <TabsTrigger value="returns" data-testid="tab-returns" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-red-100 data-[state=active]:text-red-800">
+                    <TabsTrigger value="returns" data-testid="tab-returns" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-rose-100 dark:data-[state=active]:bg-rose-950/40 data-[state=active]:text-rose-800 dark:data-[state=active]:text-rose-300">
                       <Receipt className="w-4 h-4" />
                       {t('tabs.returns')}
                     </TabsTrigger>
                   )}
                   {visibleTabs.includes("discrepancies") && (
-                    <TabsTrigger value="discrepancies" data-testid="tab-discrepancies" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-yellow-100 data-[state=active]:text-yellow-800">
+                    <TabsTrigger value="discrepancies" data-testid="tab-discrepancies" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-yellow-100 dark:data-[state=active]:bg-yellow-950/40 data-[state=active]:text-yellow-800 dark:data-[state=active]:text-yellow-300">
                       <AlertTriangle className="w-4 h-4" />
                       {t('tabs.discrepancies')}
                     </TabsTrigger>
                   )}
                   {visibleTabs.includes("payment-mismatch") && (
-                    <TabsTrigger value="payment-mismatch" data-testid="tab-payment-mismatch" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-pink-100 data-[state=active]:text-pink-800">
+                    <TabsTrigger value="payment-mismatch" data-testid="tab-payment-mismatch" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-pink-100 dark:data-[state=active]:bg-pink-950/40 data-[state=active]:text-pink-800 dark:data-[state=active]:text-pink-300">
                       <CreditCard className="w-4 h-4" />
                       <span className="hidden sm:inline">{t('tabs.paymentMismatch')}</span>
                       <span className="sm:hidden">{t('tabs.paymentMismatchShort')}</span>
                     </TabsTrigger>
                   )}
                   {visibleTabs.includes("branches") && (
-                    <TabsTrigger value="branches" data-testid="tab-branches" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-cyan-100 data-[state=active]:text-cyan-800">
+                    <TabsTrigger value="branches" data-testid="tab-branches" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-cyan-100 dark:data-[state=active]:bg-cyan-950/40 data-[state=active]:text-cyan-800 dark:data-[state=active]:text-cyan-300">
                       <Building2 className="w-4 h-4" />
                       {t('tabs.branches')}
                     </TabsTrigger>
                   )}
                   {visibleTabs.includes("event-pos") && (
-                    <TabsTrigger value="event-pos" data-testid="tab-event-pos" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-orange-100 data-[state=active]:text-orange-800">
+                    <TabsTrigger value="event-pos" data-testid="tab-event-pos" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-orange-100 dark:data-[state=active]:bg-orange-950/40 data-[state=active]:text-orange-800 dark:data-[state=active]:text-orange-300">
                       <Zap className="w-4 h-4" />
                       <span className="hidden sm:inline">{t('tabs.eventPos')}</span>
                       <span className="sm:hidden">{t('tabs.eventPosShort')}</span>
                     </TabsTrigger>
                   )}
                   {visibleTabs.includes("executive") && (
-                    <TabsTrigger value="executive" data-testid="tab-executive" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-slate-700 data-[state=active]:text-white">
+                    <TabsTrigger value="executive" data-testid="tab-executive" className="gap-1.5 text-xs sm:text-sm py-2.5 data-[state=active]:bg-slate-800 dark:data-[state=active]:bg-slate-200 data-[state=active]:text-white dark:data-[state=active]:text-slate-900">
                       <FileText className="w-4 h-4" />
                       <span className="hidden sm:inline">{t('tabs.executive')}</span>
                       <span className="sm:hidden">{t('tabs.executiveShort')}</span>
