@@ -3861,19 +3861,25 @@ export default function EmployeeReportsDashboardPage() {
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
-                      <div className="grid grid-cols-3 gap-4 p-4 bg-blue-50 rounded-lg">
-                        <div className="text-center">
-                          <p className="text-lg font-bold text-blue-700">{formatCurrency(complianceMetrics.totalGosiEmployee, isRTL)}</p>
-                          <p className="text-xs text-blue-600">{isRTL ? "حصة الموظف (9.75%)" : "Employee Share (9.75%)"}</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-lg font-bold text-blue-700">{formatCurrency(complianceMetrics.totalGosiEmployer, isRTL)}</p>
-                          <p className="text-xs text-blue-600">{isRTL ? "حصة صاحب العمل (11.75%)" : "Employer Share (11.75%)"}</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-lg font-bold text-blue-800">{formatCurrency(complianceMetrics.totalGosi, isRTL)}</p>
-                          <p className="text-xs text-blue-600">{isRTL ? "الإجمالي" : "Total"}</p>
-                        </div>
+                      <div className="grid grid-cols-3 gap-4">
+                        <KpiCard
+                          label={isRTL ? "حصة الموظف (9.75%)" : "Employee Share (9.75%)"}
+                          value={complianceMetrics.totalGosiEmployee}
+                          unit={isRTL ? "ر.س" : "SAR"}
+                          tone="production"
+                        />
+                        <KpiCard
+                          label={isRTL ? "حصة صاحب العمل (11.75%)" : "Employer Share (11.75%)"}
+                          value={complianceMetrics.totalGosiEmployer}
+                          unit={isRTL ? "ر.س" : "SAR"}
+                          tone="production"
+                        />
+                        <KpiCard
+                          label={isRTL ? "الإجمالي" : "Total"}
+                          value={complianceMetrics.totalGosi}
+                          unit={isRTL ? "ر.س" : "SAR"}
+                          tone="money"
+                        />
                       </div>
                       <div className="max-h-48 overflow-y-auto overflow-x-auto -mx-2 sm:mx-0">
                         <Table className="min-w-[400px]">
@@ -4019,21 +4025,27 @@ export default function EmployeeReportsDashboardPage() {
                   <div className="mt-6 p-4 bg-gray-50 rounded-lg">
                     <h4 className="font-bold mb-3 text-gray-700">{isRTL ? "مقارنة تكاليف صاحب العمل الشهرية" : "Monthly Employer Cost Comparison"}</h4>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div className="p-3 bg-green-100 rounded-lg text-center">
-                        <p className="text-lg font-bold text-green-700">{formatCurrency(complianceMetrics.totalEmployerCostSaudi, isRTL)}</p>
-                        <p className="text-xs text-green-600">{isRTL ? "السعوديين (11.75%)" : "Saudis (11.75%)"}</p>
-                        <p className="text-xs text-gray-500">{isRTL ? `${complianceMetrics.saudiEmployees} موظف` : `${complianceMetrics.saudiEmployees} employees`}</p>
-                      </div>
-                      <div className="p-3 bg-orange-100 rounded-lg text-center">
-                        <p className="text-lg font-bold text-orange-700">{formatCurrency(complianceMetrics.totalEmployerCostNonSaudi, isRTL)}</p>
-                        <p className="text-xs text-orange-600">{isRTL ? "غير السعوديين (2%+رسوم)" : "Non-Saudis (2%+fees)"}</p>
-                        <p className="text-xs text-gray-500">{isRTL ? `${complianceMetrics.totalNonSaudiCount} موظف` : `${complianceMetrics.totalNonSaudiCount} employees`}</p>
-                      </div>
-                      <div className="p-3 bg-blue-100 rounded-lg text-center">
-                        <p className="text-lg font-bold text-blue-700">{formatCurrency(complianceMetrics.totalEmployerCost, isRTL)}</p>
-                        <p className="text-xs text-blue-600">{isRTL ? "الإجمالي الشهري" : "Monthly Total"}</p>
-                        <p className="text-xs text-gray-500">{isRTL ? `${complianceMetrics.saudiEmployees + complianceMetrics.totalNonSaudiCount} موظف` : `${complianceMetrics.saudiEmployees + complianceMetrics.totalNonSaudiCount} employees`}</p>
-                      </div>
+                      <KpiCard
+                        label={isRTL ? "السعوديين (11.75%)" : "Saudis (11.75%)"}
+                        value={complianceMetrics.totalEmployerCostSaudi}
+                        unit={isRTL ? "ر.س" : "SAR"}
+                        tone="money"
+                        subLabel={isRTL ? `${complianceMetrics.saudiEmployees} موظف` : `${complianceMetrics.saudiEmployees} employees`}
+                      />
+                      <KpiCard
+                        label={isRTL ? "غير السعوديين (2%+رسوم)" : "Non-Saudis (2%+fees)"}
+                        value={complianceMetrics.totalEmployerCostNonSaudi}
+                        unit={isRTL ? "ر.س" : "SAR"}
+                        tone="inventory"
+                        subLabel={isRTL ? `${complianceMetrics.totalNonSaudiCount} موظف` : `${complianceMetrics.totalNonSaudiCount} employees`}
+                      />
+                      <KpiCard
+                        label={isRTL ? "الإجمالي الشهري" : "Monthly Total"}
+                        value={complianceMetrics.totalEmployerCost}
+                        unit={isRTL ? "ر.س" : "SAR"}
+                        tone="production"
+                        subLabel={isRTL ? `${complianceMetrics.saudiEmployees + complianceMetrics.totalNonSaudiCount} موظف` : `${complianceMetrics.saudiEmployees + complianceMetrics.totalNonSaudiCount} employees`}
+                      />
                     </div>
                   </div>
                 </CardContent>
@@ -4898,72 +4910,58 @@ export default function EmployeeReportsDashboardPage() {
 
                     {/* KPI Cards Row */}
                     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
-                      <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-                        <CardContent className="pt-4">
-                          <div className="text-center">
-                            <DollarSign className="w-6 h-6 mx-auto text-green-600 mb-1" />
-                            <p className="text-xs text-green-600">{isRTL ? "إجمالي الرواتب (شهري)" : "Total Salaries (Monthly)"}</p>
-                            <p className="text-lg font-bold text-green-800" data-testid="text-salary-total-monthly">{formatCurrency(salaryStats.totalNet, isRTL)}</p>
-                          </div>
-                        </CardContent>
-                      </Card>
-                      <Card className="bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-300 ring-1 ring-emerald-300">
-                        <CardContent className="pt-4">
-                          <div className="text-center">
-                            <DollarSign className="w-6 h-6 mx-auto text-emerald-700 mb-1" />
-                            <p className="text-xs text-emerald-700 font-semibold">{isRTL ? "إجمالي الرواتب حتى تاريخه" : "Salaries To-Date"}</p>
-                            <p className="text-lg font-bold text-emerald-900" data-testid="text-salary-to-date">{formatCurrency(salaryToDate, isRTL)}</p>
-                            <p className="text-[10px] text-emerald-700 mt-0.5">
-                              {isRTL ? `${daysElapsed}/${daysInSelectedMonth} يوم` : `${daysElapsed}/${daysInSelectedMonth} days`}
-                            </p>
-                          </div>
-                        </CardContent>
-                      </Card>
-                      <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-                        <CardContent className="pt-4">
-                          <div className="text-center">
-                            <Wallet className="w-6 h-6 mx-auto text-blue-600 mb-1" />
-                            <p className="text-xs text-blue-600">{isRTL ? "الرواتب الأساسية" : "Basic Salaries"}</p>
-                            <p className="text-lg font-bold text-blue-800">{formatCurrency(salaryStats.totalBasic, isRTL)}</p>
-                          </div>
-                        </CardContent>
-                      </Card>
-                      <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
-                        <CardContent className="pt-4">
-                          <div className="text-center">
-                            <TrendingUp className="w-6 h-6 mx-auto text-amber-600 mb-1" />
-                            <p className="text-xs text-amber-600">{isRTL ? "إجمالي البدلات" : "Total Allowances"}</p>
-                            <p className="text-lg font-bold text-amber-800">{formatCurrency(salaryStats.totalAllowances, isRTL)}</p>
-                          </div>
-                        </CardContent>
-                      </Card>
-                      <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200">
-                        <CardContent className="pt-4">
-                          <div className="text-center">
-                            <Shield className="w-6 h-6 mx-auto text-red-600 mb-1" />
-                            <p className="text-xs text-red-600">{isRTL ? "التأمينات الاجتماعية" : "Social Insurance"}</p>
-                            <p className="text-lg font-bold text-red-800">{formatCurrency(salaryStats.totalInsurance, isRTL)}</p>
-                          </div>
-                        </CardContent>
-                      </Card>
-                      <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-                        <CardContent className="pt-4">
-                          <div className="text-center">
-                            <Users className="w-6 h-6 mx-auto text-purple-600 mb-1" />
-                            <p className="text-xs text-purple-600">{isRTL ? "متوسط الراتب" : "Average Salary"}</p>
-                            <p className="text-lg font-bold text-purple-800">{formatCurrency(avgSalary, isRTL)}</p>
-                          </div>
-                        </CardContent>
-                      </Card>
-                      <Card className="bg-gradient-to-br from-teal-50 to-teal-100 border-teal-200">
-                        <CardContent className="pt-4">
-                          <div className="text-center">
-                            <BarChart3 className="w-6 h-6 mx-auto text-teal-600 mb-1" />
-                            <p className="text-xs text-teal-600">{isRTL ? "تكلفة الموظف" : "Cost Per Employee"}</p>
-                            <p className="text-lg font-bold text-teal-800">{formatCurrency(costPerEmployee, isRTL)}</p>
-                          </div>
-                        </CardContent>
-                      </Card>
+                      <KpiCard
+                        label={isRTL ? "إجمالي الرواتب (شهري)" : "Total Salaries (Monthly)"}
+                        value={salaryStats.totalNet}
+                        unit={isRTL ? "ر.س" : "SAR"}
+                        icon={DollarSign}
+                        tone="money"
+                        data-testid="text-salary-total-monthly"
+                      />
+                      <KpiCard
+                        label={isRTL ? "إجمالي الرواتب حتى تاريخه" : "Salaries To-Date"}
+                        value={salaryToDate}
+                        unit={isRTL ? "ر.س" : "SAR"}
+                        icon={DollarSign}
+                        tone="money"
+                        subLabel={isRTL ? `${daysElapsed}/${daysInSelectedMonth} يوم` : `${daysElapsed}/${daysInSelectedMonth} days`}
+                        data-testid="text-salary-to-date"
+                      />
+                      <KpiCard
+                        label={isRTL ? "الرواتب الأساسية" : "Basic Salaries"}
+                        value={salaryStats.totalBasic}
+                        unit={isRTL ? "ر.س" : "SAR"}
+                        icon={Wallet}
+                        tone="production"
+                      />
+                      <KpiCard
+                        label={isRTL ? "إجمالي البدلات" : "Total Allowances"}
+                        value={salaryStats.totalAllowances}
+                        unit={isRTL ? "ر.س" : "SAR"}
+                        icon={TrendingUp}
+                        tone="inventory"
+                      />
+                      <KpiCard
+                        label={isRTL ? "التأمينات الاجتماعية" : "Social Insurance"}
+                        value={salaryStats.totalInsurance}
+                        unit={isRTL ? "ر.س" : "SAR"}
+                        icon={Shield}
+                        tone="alert"
+                      />
+                      <KpiCard
+                        label={isRTL ? "متوسط الراتب" : "Average Salary"}
+                        value={avgSalary}
+                        unit={isRTL ? "ر.س" : "SAR"}
+                        icon={Users}
+                        tone="violet"
+                      />
+                      <KpiCard
+                        label={isRTL ? "تكلفة الموظف" : "Cost Per Employee"}
+                        value={costPerEmployee}
+                        unit={isRTL ? "ر.س" : "SAR"}
+                        icon={BarChart3}
+                        tone="people"
+                      />
                     </div>
 
                     {/* Charts Row */}
