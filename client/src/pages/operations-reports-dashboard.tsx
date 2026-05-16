@@ -1682,7 +1682,7 @@ export default function OperationsReportsDashboardPage() {
 
   return (
     <Layout>
-      <div className="p-3 sm:p-4 md:p-6 lg:p-8 max-w-6xl mx-auto space-y-4" dir="rtl">
+      <div className="p-3 sm:p-4 md:p-6 lg:p-8 max-w-none space-y-4" dir="rtl">
         <PageHeader
           icon={BarChart3}
           tone="inventory"

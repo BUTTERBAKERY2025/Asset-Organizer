@@ -140,7 +140,7 @@ export default function AttendanceDashboardPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-6 lg:p-8 max-w-6xl mx-auto space-y-5" dir={isRTL ? "rtl" : "ltr"}>
+      <div className="p-4 md:p-6 lg:p-8 max-w-none space-y-5" dir={isRTL ? "rtl" : "ltr"}>
         <PageHeader
           icon={UserCheck}
           tone="people"

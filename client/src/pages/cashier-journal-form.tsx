@@ -1322,7 +1322,7 @@ export default function CashierJournalFormPage() {
   return (
     <Layout>
       {/* iPad-optimized: compact padding & spacing for 10.9" screens */}
-      <div className="p-2 sm:p-3 md:p-4 max-w-6xl mx-auto space-y-2" dir="rtl">
+      <div className="p-2 sm:p-3 md:p-4 max-w-none space-y-2" dir="rtl">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Link href="/cashier-journals">

@@ -2272,7 +2272,7 @@ export default function CompanyTemplates() {
   return (
     <Layout>
       <div className="p-3 sm:p-4 md:p-6" dir="rtl">
-        <div className="max-w-6xl mx-auto space-y-4 sm:space-y-6">
+        <div className="max-w-none space-y-4 sm:space-y-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-gradient-to-r from-amber-700 to-amber-600 rounded-lg px-3 sm:px-5 py-3 sm:py-4">
             <div className="flex items-center gap-3">
               <FileText className="h-5 w-5 sm:h-6 sm:w-6 text-white" />

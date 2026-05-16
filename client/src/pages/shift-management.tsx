@@ -1729,7 +1729,7 @@ export default function ShiftManagementPage() {
 
   return (
     <Layout>
-      <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-4" dir={isRTL ? "rtl" : "ltr"}>
+      <div className="p-3 sm:p-4 md:p-6 max-w-none space-y-4" dir={isRTL ? "rtl" : "ltr"}>
         <PageHeader
           icon={Calendar}
           tone="primary"

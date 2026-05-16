@@ -433,7 +433,7 @@ export default function InfluencerContractsPage() {
 
   return (
     <Layout>
-      <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-3 sm:space-y-4" dir="rtl">
+      <div className="p-3 sm:p-4 md:p-6 max-w-none space-y-3 sm:space-y-4" dir="rtl">
         <div className="flex items-center gap-2 sm:gap-3 mb-2">
           <Link href="/marketing">
             <Button variant="ghost" size="sm" className="gap-1 h-9 sm:h-10" data-testid="button-back">

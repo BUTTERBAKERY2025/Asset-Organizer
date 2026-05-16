@@ -405,7 +405,7 @@ export default function AdvancedProductionOrderFormPage() {
   if (isEdit && loadingOrder) {
     return (
       <Layout>
-        <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-4 sm:space-y-6" dir="rtl">
+        <div className="p-3 sm:p-4 md:p-6 max-w-none space-y-4 sm:space-y-6" dir="rtl">
           <Skeleton className="h-8 w-64" />
           <Skeleton className="h-[600px]" />
         </div>
@@ -415,7 +415,7 @@ export default function AdvancedProductionOrderFormPage() {
 
   return (
     <Layout>
-      <div className="p-6 max-w-6xl mx-auto space-y-6" dir="rtl">
+      <div className="p-6 max-w-none space-y-6" dir="rtl">
         <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
           <Link href="/production-dashboard" className="hover:text-amber-600 transition-colors">لوحة الإنتاج</Link>
           <span>/</span>

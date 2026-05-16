@@ -609,7 +609,7 @@ export default function BranchShiftsPage() {
 
   return (
     <Layout>
-      <div className="max-w-6xl mx-auto p-3 sm:p-4 md:p-6 space-y-4" dir="rtl">
+      <div className="max-w-none p-3 sm:p-4 md:p-6 space-y-4" dir="rtl">
         {/* Header */}
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-l from-amber-600 via-amber-500 to-orange-500 p-4 sm:p-6 text-white shadow-lg">
           <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIyMCIgY3k9IjIwIiByPSIxIiBmaWxsPSJyZ2JhKDI1NSwyNTUsMjU1LDAuMSkiLz48L3N2Zz4=')] opacity-30" />
