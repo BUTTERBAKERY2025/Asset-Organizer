@@ -160,7 +160,7 @@ export default function MarketingGoalsPage() {
   if (isLoading) {
     return (
       <Layout>
-        <div className="p-4 md:p-8 lg:p-10 max-w-none space-y-4 flex items-center justify-center min-h-[60vh]" dir="rtl">
+        <div className="p-4 md:p-8 lg:p-10 max-w-screen-2xl mx-auto space-y-4 flex items-center justify-center min-h-[60vh]" dir="rtl">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500"></div>
         </div>
       </Layout>
@@ -169,7 +169,7 @@ export default function MarketingGoalsPage() {
 
   return (
     <Layout>
-      <div className="p-3 sm:p-4 md:p-6 lg:p-8 max-w-none space-y-3 sm:space-y-4" dir="rtl">
+      <div className="p-3 sm:p-4 md:p-6 lg:p-8 max-w-screen-2xl mx-auto space-y-3 sm:space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-4 sm:mb-6">
           <div className="flex items-center gap-2 sm:gap-4">
             <Link href="/marketing">

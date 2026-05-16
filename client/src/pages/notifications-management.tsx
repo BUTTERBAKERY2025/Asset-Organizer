@@ -343,7 +343,7 @@ export default function NotificationsManagement() {
 
   return (
     <Layout>
-    <div className="p-3 sm:p-4 md:p-6 lg:p-10 max-w-none space-y-4" dir="rtl" style={{ fontFamily: "'Cairo', sans-serif" }}>
+    <div className="p-3 sm:p-4 md:p-6 lg:p-10 max-w-screen-2xl mx-auto space-y-4" dir="rtl" style={{ fontFamily: "'Cairo', sans-serif" }}>
       <div className="space-y-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>

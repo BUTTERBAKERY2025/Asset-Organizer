@@ -561,7 +561,7 @@ export default function ConstructionReportsPage() {
 
   return (
     <Layout>
-      <div className="p-3 sm:p-4 md:p-6 max-w-none space-y-4" dir="rtl">
+      <div className="p-3 sm:p-4 md:p-6 max-w-screen-2xl mx-auto space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link href="/construction-projects">

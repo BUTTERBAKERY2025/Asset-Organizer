@@ -301,7 +301,7 @@ export default function MarketingDashboardPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-none space-y-4" dir="rtl">
+      <div className="p-4 md:p-8 lg:p-10 max-w-screen-2xl mx-auto space-y-4" dir="rtl">
         <div className="flex flex-col gap-2">
           <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground" data-testid="page-title">
             لوحة تحكم التسويق

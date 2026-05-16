@@ -296,7 +296,7 @@ export default function ProductionDashboardPage() {
 
   return (
     <Layout>
-      <div className="p-3 sm:p-4 md:p-6 max-w-none space-y-4 md:space-y-6" dir="rtl">
+      <div className="p-3 sm:p-4 md:p-6 max-w-screen-2xl mx-auto space-y-4 md:space-y-6" dir="rtl">
           
           {/* Header Section */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">

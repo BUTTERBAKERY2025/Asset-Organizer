@@ -362,7 +362,7 @@ export default function CashierJournalsPage() {
 
   return (
     <Layout>
-      <div className="p-3 sm:p-4 md:p-6 max-w-none space-y-3 sm:space-y-4" dir="rtl">
+      <div className="p-3 sm:p-4 md:p-6 max-w-screen-2xl mx-auto space-y-3 sm:space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-primary" data-testid="page-title">

@@ -433,7 +433,7 @@ export default function InfluencerContractsPage() {
 
   return (
     <Layout>
-      <div className="p-3 sm:p-4 md:p-6 max-w-none space-y-3 sm:space-y-4" dir="rtl">
+      <div className="p-3 sm:p-4 md:p-6 max-w-screen-2xl mx-auto space-y-3 sm:space-y-4" dir="rtl">
         <div className="flex items-center gap-2 sm:gap-3 mb-2">
           <Link href="/marketing">
             <Button variant="ghost" size="sm" className="gap-1 h-9 sm:h-10" data-testid="button-back">
@@ -576,7 +576,7 @@ export default function InfluencerContractsPage() {
                         <TableCell>
                           <div className="flex items-center gap-1 sm:gap-2">
                             <User className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground shrink-0" />
-                            <span className="text-xs sm:text-sm truncate max-w-[80px] sm:max-w-none">{contract.influencerName}</span>
+                            <span className="text-xs sm:text-sm truncate max-w-[80px] sm:max-w-screen-2xl mx-auto">{contract.influencerName}</span>
                           </div>
                         </TableCell>
                         <TableCell className="hidden md:table-cell text-xs sm:text-sm">{contract.campaignName}</TableCell>

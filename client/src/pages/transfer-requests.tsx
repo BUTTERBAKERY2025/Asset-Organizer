@@ -852,7 +852,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
 
   return (
     <Layout>
-      <div className="p-3 sm:p-4 md:p-6 max-w-none space-y-4 sm:space-y-6" dir={isRTL ? "rtl" : "ltr"}>
+      <div className="p-3 sm:p-4 md:p-6 max-w-screen-2xl mx-auto space-y-4 sm:space-y-6" dir={isRTL ? "rtl" : "ltr"}>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div className="flex items-center gap-2 sm:gap-3">
             <Link href="/warehouse-dashboard">
@@ -1319,7 +1319,7 @@ ${selectedTransfer.notes ? `ملاحظات: ${selectedTransfer.notes}` : ''}`;
                         <TableCell>
                           <div className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
                             <Building2 className="w-3 h-3 sm:w-4 sm:h-4 text-blue-600" />
-                            <span className="font-medium truncate max-w-[80px] sm:max-w-none">{transfer.destinationBranchName || "-"}</span>
+                            <span className="font-medium truncate max-w-[80px] sm:max-w-screen-2xl mx-auto">{transfer.destinationBranchName || "-"}</span>
                           </div>
                         </TableCell>
                         <TableCell>{getStatusBadge(transfer.status, isRTL)}</TableCell>

@@ -58,7 +58,7 @@ export default function ExecutiveDashboard() {
     return (
       <Layout>
         <div className="p-4 md:p-6 lg:p-8" dir="rtl">
-          <div className="max-w-none space-y-5">
+          <div className="max-w-screen-2xl mx-auto space-y-5">
             <Skeleton className="h-12 w-full rounded-lg" />
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {[...Array(4)].map((_, i) => (
@@ -74,7 +74,7 @@ export default function ExecutiveDashboard() {
   return (
     <Layout>
       <div className="p-3 sm:p-4 md:p-6" dir="rtl">
-        <div className="max-w-none space-y-4 sm:space-y-5">
+        <div className="max-w-screen-2xl mx-auto space-y-4 sm:space-y-5">
           
           {/* Header - Compact */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-amber-700 rounded-lg px-3 sm:px-4 py-3">
