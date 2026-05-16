@@ -217,7 +217,12 @@ export default function TimesheetPage() {
       const params = new URLSearchParams();
       if (selectedBranch !== "all") params.append("branchId", selectedBranch);
       const res = await fetch(`/api/timesheet-reports?${params}`);
-      return res.json();
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
     },
     enabled: activeTab === "history" || activeTab === "dashboard",
   });
@@ -227,7 +232,12 @@ export default function TimesheetPage() {
     queryFn: async () => {
       if (!selectedReport) return [];
       const res = await fetch(`/api/timesheet-reports/${selectedReport.id}/entries`);
-      return res.json();
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
     },
     enabled: !!selectedReport,
   });
