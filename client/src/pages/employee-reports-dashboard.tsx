@@ -82,6 +82,8 @@ import {
   Plus,
   Trash2,
   MinusCircle,
+  AlertTriangle,
+  FileX,
 } from "lucide-react";
 import type { BranchEmployee, AttendanceRecord, TimesheetReport, SalaryDeduction } from "@shared/schema";
 import { SALARY_DEDUCTION_TYPE_LABELS } from "@shared/schema";
@@ -4093,22 +4095,35 @@ export default function EmployeeReportsDashboardPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                    <div className={`text-center p-3 rounded-lg ${healthCertificateAnalysis.expired > 0 ? "bg-red-50" : "bg-green-50"}`}>
-                      <p className={`text-2xl font-bold ${healthCertificateAnalysis.expired > 0 ? "text-red-600" : "text-green-600"}`}>{formatNumber(healthCertificateAnalysis.expired)}</p>
-                      <p className="text-xs text-gray-600">{isRTL ? "منتهية" : "Expired"}</p>
-                    </div>
-                    <div className={`text-center p-3 rounded-lg ${healthCertificateAnalysis.expiringWithin30.length > 0 ? "bg-orange-50" : "bg-green-50"}`}>
-                      <p className={`text-2xl font-bold ${healthCertificateAnalysis.expiringWithin30.length > 0 ? "text-orange-600" : "text-green-600"}`}>{formatNumber(healthCertificateAnalysis.expiringWithin30.length)}</p>
-                      <p className="text-xs text-gray-600">{isRTL ? "تنتهي خلال 30 يوم" : "Expiring in 30 days"}</p>
-                    </div>
-                    <div className={`text-center p-3 rounded-lg ${healthCertificateAnalysis.none > 0 ? "bg-yellow-50" : "bg-green-50"}`}>
-                      <p className={`text-2xl font-bold ${healthCertificateAnalysis.none > 0 ? "text-yellow-600" : "text-green-600"}`}>{formatNumber(healthCertificateAnalysis.none)}</p>
-                      <p className="text-xs text-gray-600">{isRTL ? "بدون شهادة" : "No Certificate"}</p>
-                    </div>
-                    <div className="text-center p-3 rounded-lg bg-green-50">
-                      <p className="text-2xl font-bold text-green-600">{healthCertificateAnalysis.complianceRate}%</p>
-                      <p className="text-xs text-gray-600">{isRTL ? "نسبة الامتثال" : "Compliance Rate"}</p>
-                    </div>
+                    <KpiCard
+                        label={isRTL ? "منتهية" : "Expired"}
+                        value={formatNumber(healthCertificateAnalysis.expired)}
+                        icon={AlertTriangle}
+                        tone={healthCertificateAnalysis.expired > 0 ? "alert" : "money"}
+                        data-testid="kpi-health-expired"
+                      />
+                      <KpiCard
+                        label={isRTL ? "تنتهي خلال 30 يوم" : "Expiring in 30 days"}
+                        value={formatNumber(healthCertificateAnalysis.expiringWithin30.length)}
+                        icon={Clock}
+                        tone={healthCertificateAnalysis.expiringWithin30.length > 0 ? "inventory" : "money"}
+                        data-testid="kpi-health-expiring"
+                      />
+                      <KpiCard
+                        label={isRTL ? "بدون شهادة" : "No Certificate"}
+                        value={formatNumber(healthCertificateAnalysis.none)}
+                        icon={FileX}
+                        tone={healthCertificateAnalysis.none > 0 ? "inventory" : "money"}
+                        data-testid="kpi-health-none"
+                      />
+                      <KpiCard
+                        label={isRTL ? "نسبة الامتثال" : "Compliance Rate"}
+                        value={healthCertificateAnalysis.complianceRate}
+                        unit="%"
+                        icon={CheckCircle}
+                        tone="money"
+                        data-testid="kpi-health-compliance"
+                      />
                   </div>
                   {(healthCertificateAnalysis.expired > 0 || healthCertificateAnalysis.expiringWithin30.length > 0) && (
                     <div className="space-y-2 max-h-48 overflow-y-auto">
@@ -4277,22 +4292,35 @@ export default function EmployeeReportsDashboardPage() {
                 <CardContent>
                   {/* ملخص الحالة */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-                    <div className="text-center p-3 bg-green-50 rounded-lg">
-                      <p className="text-2xl font-bold text-green-600">{formatNumber(complianceMetrics.documentStatusSummary.complete)}</p>
-                      <p className="text-xs text-gray-600">{isRTL ? "مكتمل" : "Complete"}</p>
-                    </div>
-                    <div className="text-center p-3 bg-yellow-50 rounded-lg">
-                      <p className="text-2xl font-bold text-yellow-600">{formatNumber(complianceMetrics.documentStatusSummary.incomplete)}</p>
-                      <p className="text-xs text-gray-600">{isRTL ? "ناقص" : "Incomplete"}</p>
-                    </div>
-                    <div className="text-center p-3 bg-red-50 rounded-lg">
-                      <p className="text-2xl font-bold text-red-600">{formatNumber(complianceMetrics.documentStatusSummary.expired)}</p>
-                      <p className="text-xs text-gray-600">{isRTL ? "منتهي" : "Expired"}</p>
-                    </div>
-                    <div className={`text-center p-3 rounded-lg ${complianceMetrics.documentStatusSummary.completionRate >= 80 ? "bg-green-50" : complianceMetrics.documentStatusSummary.completionRate >= 60 ? "bg-yellow-50" : "bg-red-50"}`}>
-                      <p className={`text-2xl font-bold ${complianceMetrics.documentStatusSummary.completionRate >= 80 ? "text-green-600" : complianceMetrics.documentStatusSummary.completionRate >= 60 ? "text-yellow-600" : "text-red-600"}`}>{complianceMetrics.documentStatusSummary.completionRate}%</p>
-                      <p className="text-xs text-gray-600">{isRTL ? "نسبة الاكتمال" : "Completion Rate"}</p>
-                    </div>
+                    <KpiCard
+                        label={isRTL ? "مكتمل" : "Complete"}
+                        value={formatNumber(complianceMetrics.documentStatusSummary.complete)}
+                        icon={CheckCircle}
+                        tone="money"
+                        data-testid="kpi-doc-complete"
+                      />
+                      <KpiCard
+                        label={isRTL ? "ناقص" : "Incomplete"}
+                        value={formatNumber(complianceMetrics.documentStatusSummary.incomplete)}
+                        icon={AlertTriangle}
+                        tone="inventory"
+                        data-testid="kpi-doc-incomplete"
+                      />
+                      <KpiCard
+                        label={isRTL ? "منتهي" : "Expired"}
+                        value={formatNumber(complianceMetrics.documentStatusSummary.expired)}
+                        icon={FileX}
+                        tone="alert"
+                        data-testid="kpi-doc-expired"
+                      />
+                      <KpiCard
+                        label={isRTL ? "نسبة الاكتمال" : "Completion Rate"}
+                        value={complianceMetrics.documentStatusSummary.completionRate}
+                        unit="%"
+                        icon={CheckCircle}
+                        tone={complianceMetrics.documentStatusSummary.completionRate >= 80 ? "money" : complianceMetrics.documentStatusSummary.completionRate >= 60 ? "inventory" : "alert"}
+                        data-testid="kpi-doc-completion-rate"
+                      />
                   </div>
 
                   {/* قائمة الموظفين بمشاكل */}
