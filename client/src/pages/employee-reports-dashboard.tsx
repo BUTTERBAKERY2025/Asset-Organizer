@@ -3179,7 +3179,7 @@ export default function EmployeeReportsDashboardPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir="rtl" ref={printRef}>
+      <div className="p-4 md:p-8 lg:p-10 max-w-7xl mx-auto space-y-4" dir="rtl" ref={printRef}>
         <PageHeader
           icon={BarChart3}
           tone="executive"
@@ -3189,7 +3189,8 @@ export default function EmployeeReportsDashboardPage() {
           actions={
             <Button
               size="sm"
-              className="h-9 bg-green-600 hover:bg-green-700"
+              variant="outline"
+              className="h-9 border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-900/50 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
               onClick={() => setShowSalaryClosingDialog(true)}
               data-testid="button-salary-closing"
             >
@@ -3199,7 +3200,7 @@ export default function EmployeeReportsDashboardPage() {
           }
         />
 
-        <Card className="bg-amber-50 border-amber-200">
+        <Card className="border-gray-100 dark:border-border">
           <CardContent className="py-4">
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <div className="space-y-2">
@@ -3267,7 +3268,7 @@ export default function EmployeeReportsDashboardPage() {
               </div>
             </div>
             {/* صف ثانٍ: مفتاح "الموظفون النشطون فقط" + شريط "حتى تاريخه" */}
-            <div className="mt-4 pt-4 border-t border-amber-200 flex flex-wrap items-center justify-between gap-3">
+            <div className="mt-4 pt-4 border-t border-gray-100 dark:border-border flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <Switch
                   id="active-only-toggle"
@@ -3275,7 +3276,7 @@ export default function EmployeeReportsDashboardPage() {
                   onCheckedChange={setActiveOnly}
                   data-testid="switch-active-only"
                 />
-                <Label htmlFor="active-only-toggle" className="cursor-pointer font-medium text-amber-900">
+                <Label htmlFor="active-only-toggle" className="cursor-pointer font-medium text-gray-700 dark:text-foreground">
                   {isRTL ? "الموظفون النشطون فقط" : "Active employees only"}
                 </Label>
                 <Badge variant={activeOnly ? "default" : "outline"} className={activeOnly ? "bg-green-600" : ""}>
@@ -3284,7 +3285,7 @@ export default function EmployeeReportsDashboardPage() {
                     : (isRTL ? "معطّل — يشمل الجميع" : "OFF — includes everyone")}
                 </Badge>
               </div>
-              <div className="text-sm text-amber-900 flex items-center gap-2" data-testid="text-period-info">
+              <div className="text-sm text-gray-600 dark:text-muted-foreground flex items-center gap-2" data-testid="text-period-info">
                 <span className="font-semibold">
                   {isRTL ? "الفترة:" : "Period:"}
                 </span>
@@ -3349,18 +3350,18 @@ export default function EmployeeReportsDashboardPage() {
         </div>
 
         {unlinkedRecordsCount > 0 && (
-          <Card className="border-orange-200 bg-orange-50">
+          <Card className="border-gray-100 dark:border-border border-l-4 border-l-amber-400 bg-amber-50/40 dark:bg-amber-950/10">
             <CardContent className="py-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-orange-100 rounded-lg">
-                    <AlertCircle className="w-5 h-5 text-orange-600" />
+                  <div className="p-2 bg-amber-100 dark:bg-amber-950/30 rounded-lg">
+                    <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
                   </div>
                   <div>
-                    <p className="font-medium text-orange-800">
+                    <p className="font-medium text-gray-900 dark:text-foreground">
                       {isRTL ? `${formatNumber(unlinkedRecordsCount)} سجل حضور غير مرتبط` : `${formatNumber(unlinkedRecordsCount)} Unlinked Attendance Records`}
                     </p>
-                    <p className="text-sm text-orange-600">
+                    <p className="text-sm text-gray-600 dark:text-muted-foreground">
                       {isRTL ? "سجلات لا يمكن ربطها بموظفين محددين - قم بتصديرها للمراجعة" : "Records that cannot be linked to specific employees - export for review"}
                     </p>
                   </div>
@@ -3369,7 +3370,7 @@ export default function EmployeeReportsDashboardPage() {
                   variant="outline" 
                   size="sm" 
                   onClick={exportUnlinkedRecordsToExcel}
-                  className="border-orange-300 text-orange-700 hover:bg-orange-100"
+                  className="h-9"
                   data-testid="button-export-unlinked"
                 >
                   <Download className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
@@ -3382,7 +3383,7 @@ export default function EmployeeReportsDashboardPage() {
 
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-8 h-8 animate-spin text-amber-600" />
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
           </div>
         ) : (
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
@@ -3523,8 +3524,8 @@ export default function EmployeeReportsDashboardPage() {
                 {/* Nationality Distribution - Clean Donut with Summary */}
                 <Card className="overflow-hidden">
                   <CardHeader className="bg-gradient-to-r from-amber-50 to-orange-50 border-b">
-                    <CardTitle className="flex items-center gap-2 text-amber-800">
-                      <PieChartIcon className="w-5 h-5" />
+                    <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-foreground">
+                      <PieChartIcon className="w-5 h-5 text-amber-600" />
                       {isRTL ? "توزيع الموظفين حسب الجنسية" : "Employee Distribution by Nationality"}
                     </CardTitle>
                     <CardDescription>{isRTL ? "أعلى 5 جنسيات + أخرى" : "Top 5 nationalities + others"}</CardDescription>
@@ -3587,8 +3588,8 @@ export default function EmployeeReportsDashboardPage() {
                 {/* Job Title Distribution - Clean Horizontal Bars */}
                 <Card className="overflow-hidden">
                   <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b">
-                    <CardTitle className="flex items-center gap-2 text-green-800">
-                      <BarChart3 className="w-5 h-5" />
+                    <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-foreground">
+                      <BarChart3 className="w-5 h-5 text-emerald-600" />
                       {isRTL ? "توزيع الموظفين حسب الوظيفة" : "Employee Distribution by Job Title"}
                     </CardTitle>
                     <CardDescription>{isRTL ? `أعلى 8 وظائف (إجمالي ${jobTitleFullData.length} وظيفة)` : `Top 8 job titles (Total ${jobTitleFullData.length} titles)`}</CardDescription>
@@ -3747,8 +3748,8 @@ export default function EmployeeReportsDashboardPage() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card data-testid="card-missing-attendance">
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-orange-700">
-                      <AlertCircle className="w-5 h-5" />
+                    <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-foreground">
+                      <AlertCircle className="w-5 h-5 text-orange-600" />
                       {isRTL ? "موظفين بحضور ناقص" : "Employees with Missing Attendance"}
                     </CardTitle>
                     <CardDescription>{isRTL ? "موظفين لديهم أكثر من 5 أيام حضور مفقودة" : "Employees with more than 5 missing attendance days"}</CardDescription>
@@ -3777,8 +3778,8 @@ export default function EmployeeReportsDashboardPage() {
 
                 <Card data-testid="card-anomalies">
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-purple-700">
-                      <XCircle className="w-5 h-5" />
+                    <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-foreground">
+                      <XCircle className="w-5 h-5 text-violet-600" />
                       {isRTL ? "قيم غير منطقية" : "Anomalies"}
                     </CardTitle>
                     <CardDescription>{isRTL ? "بيانات تحتاج مراجعة وتصحيح" : "Data that needs review and correction"}</CardDescription>
@@ -4970,8 +4971,8 @@ export default function EmployeeReportsDashboardPage() {
                       {/* Salary by Branch Chart */}
                       <Card>
                         <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b">
-                          <CardTitle className="flex items-center gap-2 text-green-800">
-                            <Building2 className="w-5 h-5" />
+                          <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-foreground">
+                            <Building2 className="w-5 h-5 text-emerald-600" />
                             {isRTL ? "توزيع الرواتب حسب الفرع" : "Salary Distribution by Branch"}
                           </CardTitle>
                           <CardDescription>{isRTL ? "إجمالي الرواتب والبدلات لكل فرع" : "Total salaries and allowances per branch"}</CardDescription>
@@ -4994,8 +4995,8 @@ export default function EmployeeReportsDashboardPage() {
                       {/* Salary Ranges Chart */}
                       <Card>
                         <CardHeader className="bg-gradient-to-r from-purple-50 to-indigo-50 border-b">
-                          <CardTitle className="flex items-center gap-2 text-purple-800">
-                            <BarChart3 className="w-5 h-5" />
+                          <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-foreground">
+                            <BarChart3 className="w-5 h-5 text-violet-600" />
                             {isRTL ? "توزيع نطاقات الرواتب" : "Salary Range Distribution"}
                           </CardTitle>
                           <CardDescription>{isRTL ? "عدد الموظفين في كل نطاق" : "Number of employees in each range"}</CardDescription>
@@ -5033,8 +5034,8 @@ export default function EmployeeReportsDashboardPage() {
                       {/* Allowances Pie Chart */}
                       <Card>
                         <CardHeader className="bg-gradient-to-r from-amber-50 to-orange-50 border-b">
-                          <CardTitle className="flex items-center gap-2 text-amber-800">
-                            <PieChartIcon className="w-5 h-5" />
+                          <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-foreground">
+                            <PieChartIcon className="w-5 h-5 text-amber-600" />
                             {isRTL ? "توزيع البدلات" : "Allowances Distribution"}
                           </CardTitle>
                           <CardDescription>{isRTL ? "نسبة كل نوع من البدلات" : "Percentage of each allowance type"}</CardDescription>
@@ -5091,8 +5092,8 @@ export default function EmployeeReportsDashboardPage() {
                       {/* Branch Summary Table */}
                       <Card>
                         <CardHeader className="bg-gradient-to-r from-blue-50 to-cyan-50 border-b">
-                          <CardTitle className="flex items-center gap-2 text-blue-800">
-                            <Building2 className="w-5 h-5" />
+                          <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-foreground">
+                            <Building2 className="w-5 h-5 text-blue-600" />
                             {isRTL ? "ملخص الرواتب حسب الفرع" : "Salary Summary by Branch"}
                           </CardTitle>
                           <CardDescription>{isRTL ? "إجماليات كل فرع" : "Totals per branch"}</CardDescription>
@@ -5986,8 +5987,8 @@ export default function EmployeeReportsDashboardPage() {
                 {/* 3. مؤشرات الدوران الوظيفي */}
                 <Card data-testid="card-turnover-metrics">
                   <CardHeader className="bg-gradient-to-r from-orange-50 to-red-50 border-b">
-                    <CardTitle className="flex items-center gap-2 text-orange-800">
-                      <RefreshCw className="w-5 h-5" />
+                    <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-foreground">
+                      <RefreshCw className="w-5 h-5 text-orange-600" />
                       {isRTL ? "مؤشرات الدوران الوظيفي" : "Turnover Metrics"}
                     </CardTitle>
                   </CardHeader>
@@ -6124,8 +6125,8 @@ export default function EmployeeReportsDashboardPage() {
               {/* 6. التنبيهات الذكية */}
               <Card data-testid="card-smart-alerts">
                 <CardHeader className="bg-gradient-to-r from-red-50 to-orange-50 border-b">
-                  <CardTitle className="flex items-center gap-2 text-red-800">
-                    <AlertCircle className="w-5 h-5" />
+                  <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-foreground">
+                    <AlertCircle className="w-5 h-5 text-rose-600" />
                     {isRTL ? "التنبيهات الذكية" : "Smart Alerts"}
                   </CardTitle>
                   <CardDescription>{isRTL ? "تنبيهات تحتاج انتباهك" : "Alerts that need your attention"}</CardDescription>
@@ -6285,8 +6286,8 @@ export default function EmployeeReportsDashboardPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Card className="border-red-200" data-testid="health-expiring-30">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-sm text-red-700 flex items-center gap-2">
-                      <AlertCircle className="w-4 h-4" />
+                    <CardTitle className="text-sm text-gray-900 dark:text-foreground flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 text-rose-600" />
                       {isRTL ? "تنتهي خلال 30 يوم" : "Expiring in 30 days"}
                     </CardTitle>
                   </CardHeader>
@@ -6321,8 +6322,8 @@ export default function EmployeeReportsDashboardPage() {
                 </Card>
                 <Card className="border-blue-200" data-testid="health-expiring-90">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-sm text-blue-700 flex items-center gap-2">
-                      <Calendar className="w-4 h-4" />
+                    <CardTitle className="text-sm text-gray-900 dark:text-foreground flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-blue-600" />
                       {isRTL ? "تنتهي خلال 90 يوم" : "Expiring in 90 days"}
                     </CardTitle>
                   </CardHeader>
