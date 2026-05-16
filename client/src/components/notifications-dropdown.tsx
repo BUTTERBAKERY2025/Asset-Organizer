@@ -177,7 +177,11 @@ export function NotificationsDropdown() {
 
   const unreadSystemNotifications = systemNotifications.filter(n => !n.isRead);
   const inventoryAlerts = lowQuantityItems.length + maintenanceItems.length;
-  const totalAlerts = inventoryAlerts + unreadSystemNotifications.length;
+  // Badge counter reflects only actionable unread items (system notifications).
+  // Inventory items are a live state snapshot — they can't be "marked read"
+  // and would otherwise inflate the badge permanently.
+  const unreadCount = unreadSystemNotifications.length;
+  const totalAlerts = unreadCount + inventoryAlerts;
 
   const getRelativeTime = (dateStr: string) => {
     try {
@@ -198,19 +202,19 @@ export function NotificationsDropdown() {
         >
           <div className="relative">
             <Bell className="w-5 h-5" />
-            {totalAlerts > 0 && (
+            {unreadCount > 0 && (
               <span className="absolute -top-1 -right-1 flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
               </span>
             )}
           </div>
-          {totalAlerts > 0 && (
+          {unreadCount > 0 && (
             <Badge 
               variant="destructive" 
               className="absolute -top-1 -right-1 h-5 min-w-5 flex items-center justify-center p-0 text-[10px] font-bold shadow-lg"
             >
-              {totalAlerts > 99 ? "99+" : totalAlerts}
+              {unreadCount > 99 ? "99+" : unreadCount}
             </Badge>
           )}
         </Button>
@@ -224,7 +228,11 @@ export function NotificationsDropdown() {
             <div>
               <h3 className="font-bold text-foreground">التنبيهات</h3>
               <p className="text-xs text-muted-foreground">
-                {totalAlerts > 0 ? `${totalAlerts} تنبيه جديد` : "لا توجد تنبيهات"}
+                {unreadCount > 0
+                  ? `${unreadCount} تنبيه جديد`
+                  : inventoryAlerts > 0
+                    ? `${inventoryAlerts} تنبيه مخزون`
+                    : "لا توجد تنبيهات"}
               </p>
             </div>
           </div>
@@ -253,7 +261,7 @@ export function NotificationsDropdown() {
               value="system" 
               className="text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-none border-b-2 border-transparent data-[state=active]:border-primary"
             >
-              النظام ({systemNotifications.length})
+              النظام ({unreadCount})
             </TabsTrigger>
             <TabsTrigger 
               value="inventory" 
