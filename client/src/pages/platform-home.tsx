@@ -167,7 +167,7 @@ export default function PlatformHomePage() {
   const pendingApprovals: number = stats?.pendingApprovals ?? 0;
 
   const formatNumber = (n: number) =>
-    new Intl.NumberFormat(currentLang === "ar" ? "ar-SA" : "en-US").format(n);
+    new Intl.NumberFormat("en-US").format(n);
 
   return (
     <Layout>

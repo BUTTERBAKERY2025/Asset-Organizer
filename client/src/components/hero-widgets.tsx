@@ -102,7 +102,7 @@ export function HeroWidgets() {
   const weekTotals = data?.weekSales?.map((d) => d.total) ?? [];
   const weekSum = weekTotals.reduce((a, b) => a + b, 0);
   const formatNumber = (n: number) =>
-    new Intl.NumberFormat(lang === "ar" ? "ar-SA" : "en-US", { maximumFractionDigits: 0 }).format(n);
+    new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(n);
   const formatShort = (n: number) => {
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
     if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
