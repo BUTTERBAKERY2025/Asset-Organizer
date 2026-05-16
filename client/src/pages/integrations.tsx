@@ -168,7 +168,7 @@ export default function IntegrationsPage() {
   });
 
   return (
-    <div className="p-4 md:p-8 lg:p-10 max-w-7xl mx-auto space-y-4" dir="rtl">
+    <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto space-y-4" dir="rtl">
       <SettingsBreadcrumb currentPage="التكاملات" currentIcon={Link2} />
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
         <div>

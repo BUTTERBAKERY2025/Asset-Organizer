@@ -432,7 +432,7 @@ export default function ShiftReportsPage() {
 
   return (
     <Layout>
-      <div className="max-w-7xl mx-auto p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
+      <div className="max-w-[1400px] mx-auto p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
         <Card className="bg-gradient-to-l from-amber-50 to-orange-50 border-amber-200">
           <CardContent className="p-3 sm:p-4 md:p-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">

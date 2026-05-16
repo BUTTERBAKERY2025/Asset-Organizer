@@ -347,7 +347,7 @@ export default function SalesAnalytics() {
   return (
     <Layout>
       <div className="p-3 sm:p-4 md:p-6 max-w-[1400px] mx-auto space-y-4" dir="rtl">
-        <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
+        <div className="max-w-[1400px] mx-auto space-y-4 sm:space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div className="flex items-center gap-3">
               <Link href="/cashier-journals">

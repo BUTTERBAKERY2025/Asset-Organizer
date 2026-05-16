@@ -765,7 +765,7 @@ export default function SettingsDashboardPage() {
 
   return (
     <Layout>
-      <div className="p-3 sm:p-4 md:p-6 lg:p-10 max-w-7xl mx-auto space-y-4 sm:space-y-6" dir="rtl">
+      <div className="p-3 sm:p-4 md:p-6 lg:p-10 max-w-[1400px] mx-auto space-y-4 sm:space-y-6" dir="rtl">
       <div className="mb-4 sm:mb-8">
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 mb-4">
           <div className="p-2 sm:p-3 bg-gradient-to-br from-primary/20 to-primary/5 rounded-xl sm:rounded-2xl w-fit">

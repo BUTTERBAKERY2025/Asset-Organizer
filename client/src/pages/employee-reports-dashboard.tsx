@@ -3181,7 +3181,7 @@ export default function EmployeeReportsDashboardPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-7xl mx-auto space-y-4" dir="rtl" ref={printRef}>
+      <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto space-y-4" dir="rtl" ref={printRef}>
         <PageHeader
           icon={BarChart3}
           tone="executive"

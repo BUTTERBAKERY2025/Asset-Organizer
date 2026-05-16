@@ -472,7 +472,7 @@ export default function BiometricSettingsPage() {
   if (!canViewBiometric) {
     return (
       <Layout>
-        <div className="p-6 max-w-7xl mx-auto" dir="rtl">
+        <div className="p-6 max-w-[1400px] mx-auto" dir="rtl">
           <div className="flex flex-col items-center justify-center py-20">
             <Shield className="h-16 w-16 text-red-400 mb-4" />
             <h2 className="text-xl font-bold text-gray-700 mb-2">غير مصرح بالوصول</h2>
@@ -491,7 +491,7 @@ export default function BiometricSettingsPage() {
 
   return (
     <Layout>
-      <div className="p-6 max-w-7xl mx-auto" dir="rtl">
+      <div className="p-6 max-w-[1400px] mx-auto" dir="rtl">
         <div className="flex items-center gap-3 mb-6">
           <Link href="/settings">
             <Button variant="ghost" size="icon" data-testid="back-to-settings">

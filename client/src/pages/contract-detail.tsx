@@ -394,7 +394,7 @@ export default function ContractDetailPage() {
 
   return (
     <Layout>
-      <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto" dir="rtl">
+      <div className="p-4 sm:p-6 space-y-6 max-w-[1400px] mx-auto" dir="rtl">
         {/* Breadcrumb / back */}
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Link href="/contracts">

@@ -172,7 +172,7 @@ export default function PlatformHomePage() {
   return (
     <Layout>
       <div
-        className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto space-y-6"
+        className="p-4 md:p-6 lg:p-8 max-w-[1400px] mx-auto space-y-6"
         dir={currentLang === "ar" ? "rtl" : "ltr"}
       >
         {/* ============ HERO CARD (conversational) ============ */}
