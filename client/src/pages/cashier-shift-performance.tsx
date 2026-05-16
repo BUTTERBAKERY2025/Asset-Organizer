@@ -29,6 +29,7 @@ import { Link } from "wouter";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line, Legend, PieChart, Pie, Cell } from "recharts";
 import type { Branch, PerformanceAlert, ShiftPerformanceTracking, User, CashierIncentiveStatement } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
+import { KpiCard } from "@/components/dashboard/kpi-card";
 
 const SHIFT_TYPES = [
   { value: "morning", label: "الشفت الصباحي", icon: Sun, color: "bg-amber-500" },
@@ -42,10 +43,10 @@ const CASHIER_ROLES = [
 ];
 
 const ALERT_COLORS = {
-  critical: { bg: "bg-red-100", border: "border-red-500", text: "text-red-700", badge: "bg-red-500" },
-  warning: { bg: "bg-amber-100", border: "border-amber-500", text: "text-amber-700", badge: "bg-amber-500" },
-  on_track: { bg: "bg-blue-100", border: "border-blue-500", text: "text-blue-700", badge: "bg-blue-500" },
-  exceeding: { bg: "bg-green-100", border: "border-green-500", text: "text-green-700", badge: "bg-green-500" },
+  critical: { bg: "bg-rose-100 dark:bg-rose-950/40", border: "border-rose-500", text: "text-rose-700 dark:text-rose-300", badge: "bg-rose-500" },
+  warning: { bg: "bg-amber-100 dark:bg-amber-950/40", border: "border-amber-500", text: "text-amber-700 dark:text-amber-300", badge: "bg-amber-500" },
+  on_track: { bg: "bg-blue-100 dark:bg-blue-950/40", border: "border-blue-500", text: "text-blue-700 dark:text-blue-300", badge: "bg-blue-500" },
+  exceeding: { bg: "bg-emerald-100 dark:bg-emerald-950/40", border: "border-emerald-500", text: "text-emerald-700 dark:text-emerald-300", badge: "bg-emerald-500" },
 };
 
 interface CashierData {
@@ -534,10 +535,10 @@ export default function CashierShiftPerformance() {
   const getStmtStatusInfo = (status: string) => {
     switch (status) {
       case 'draft': return { label: 'مسودة', color: 'bg-gray-100 text-gray-700', icon: '📝' };
-      case 'submitted': return { label: 'مقدم للاعتماد', color: 'bg-blue-100 text-blue-700', icon: '📤' };
-      case 'approved': return { label: 'معتمد', color: 'bg-green-100 text-green-700', icon: '✅' };
-      case 'rejected': return { label: 'مرفوض', color: 'bg-red-100 text-red-700', icon: '❌' };
-      case 'paid': return { label: 'تم الصرف', color: 'bg-purple-100 text-purple-700', icon: '💰' };
+      case 'submitted': return { label: 'مقدم للاعتماد', color: 'bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300', icon: '📤' };
+      case 'approved': return { label: 'معتمد', color: 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300', icon: '✅' };
+      case 'rejected': return { label: 'مرفوض', color: 'bg-rose-100 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300', icon: '❌' };
+      case 'paid': return { label: 'تم الصرف', color: 'bg-violet-100 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300', icon: '💰' };
       default: return { label: status, color: 'bg-gray-100 text-gray-700', icon: '📋' };
     }
   };
@@ -1188,61 +1189,37 @@ export default function CashierShiftPerformance() {
         </Card>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white border-0 shadow-md" data-testid="card-total-target">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-blue-100">إجمالي الأهداف</p>
-                  <p className="text-xl sm:text-2xl font-bold mt-1">{formatCurrency(summaryStats.totalTarget)}</p>
-                </div>
-                <div className="p-2.5 rounded-xl bg-white/20">
-                  <Target className="h-5 w-5" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-emerald-500 to-emerald-600 text-white border-0 shadow-md" data-testid="card-total-achieved">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-emerald-100">إجمالي المحقق</p>
-                  <p className="text-xl sm:text-2xl font-bold mt-1">{formatCurrency(summaryStats.totalAchieved)}</p>
-                </div>
-                <div className="p-2.5 rounded-xl bg-white/20">
-                  <DollarSign className="h-5 w-5" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className={`border-0 shadow-md ${summaryStats.avgPercent >= 100 ? 'bg-gradient-to-br from-green-500 to-green-600 text-white' : summaryStats.avgPercent >= 70 ? 'bg-gradient-to-br from-amber-500 to-amber-600 text-white' : 'bg-gradient-to-br from-red-500 to-red-600 text-white'}`} data-testid="card-avg-percent">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs opacity-80">نسبة الإنجاز</p>
-                  <p className="text-xl sm:text-2xl font-bold mt-1">{summaryStats.avgPercent.toFixed(1)}%</p>
-                </div>
-                <div className="p-2.5 rounded-xl bg-white/20">
-                  <BarChartIcon className="h-5 w-5" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className={`border-0 shadow-md ${summaryStats.alertCount > 0 ? 'bg-gradient-to-br from-red-500 to-red-600 text-white' : 'bg-gradient-to-br from-gray-500 to-gray-600 text-white'}`} data-testid="card-alerts">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs opacity-80">تنبيهات نشطة</p>
-                  <p className="text-xl sm:text-2xl font-bold mt-1">{summaryStats.alertCount}</p>
-                </div>
-                <div className="p-2.5 rounded-xl bg-white/20">
-                  <Bell className="h-5 w-5" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <KpiCard
+            label="إجمالي الأهداف"
+            value={formatCurrency(summaryStats.totalTarget)}
+            unit="ر.س"
+            icon={Target}
+            tone="production"
+            data-testid="card-total-target"
+          />
+          <KpiCard
+            label="إجمالي المحقق"
+            value={formatCurrency(summaryStats.totalAchieved)}
+            unit="ر.س"
+            icon={DollarSign}
+            tone="money"
+            data-testid="card-total-achieved"
+          />
+          <KpiCard
+            label="نسبة الإنجاز"
+            value={summaryStats.avgPercent.toFixed(1)}
+            unit="%"
+            icon={BarChartIcon}
+            tone={summaryStats.avgPercent >= 100 ? "money" : summaryStats.avgPercent >= 70 ? "inventory" : "alert"}
+            data-testid="card-avg-percent"
+          />
+          <KpiCard
+            label="تنبيهات نشطة"
+            value={summaryStats.alertCount}
+            icon={Bell}
+            tone={summaryStats.alertCount > 0 ? "alert" : "neutral"}
+            data-testid="card-alerts"
+          />
         </div>
 
         <Tabs defaultValue="targets" className="space-y-4">

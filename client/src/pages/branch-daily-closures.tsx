@@ -55,6 +55,7 @@ import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import type { Branch } from "@shared/schema";
 import { ExportButtons } from "@/components/export-buttons";
+import { KpiCard } from "@/components/dashboard/kpi-card";
 
 const formatCurrency = (amount: number | null | undefined) => {
   if (amount === null || amount === undefined) return "0";
@@ -297,62 +298,52 @@ export default function BranchDailyClosuresPage() {
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
-          <Card className="bg-gradient-to-br from-amber-50 to-white border-amber-100">
-            <CardContent className="p-3">
-              <div className="flex items-center gap-1.5 text-gray-500 text-[10px] sm:text-xs">
-                <Receipt className="h-3.5 w-3.5" />
-                الإغلاقات
-              </div>
-              <p className="text-lg sm:text-xl font-bold text-amber-700 mt-0.5">{pagination.total}</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-green-50 to-white border-green-100">
-            <CardContent className="p-3">
-              <div className="flex items-center gap-1.5 text-gray-500 text-[10px] sm:text-xs">
-                <DollarSign className="h-3.5 w-3.5" />
-                المبيعات
-              </div>
-              <p className="text-lg sm:text-xl font-bold text-green-700 mt-0.5">{formatCurrency(totals.totalSales)}</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-blue-50 to-white border-blue-100">
-            <CardContent className="p-3">
-              <div className="flex items-center gap-1.5 text-gray-500 text-[10px] sm:text-xs">
-                <Wallet className="h-3.5 w-3.5" />
-                النقدي
-              </div>
-              <p className="text-lg sm:text-xl font-bold text-blue-700 mt-0.5">{formatCurrency(totals.cashTotal)}</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-purple-50 to-white border-purple-100">
-            <CardContent className="p-3">
-              <div className="flex items-center gap-1.5 text-gray-500 text-[10px] sm:text-xs">
-                <CreditCard className="h-3.5 w-3.5" />
-                الشبكة
-              </div>
-              <p className="text-lg sm:text-xl font-bold text-purple-700 mt-0.5">{formatCurrency(totals.networkTotal)}</p>
-            </CardContent>
-          </Card>
-          <Card className={`bg-gradient-to-br ${Number(totals.totalCashDiscrepancy) < -0.5 ? 'from-red-50 border-red-100' : Number(totals.totalCashDiscrepancy) > 0.5 ? 'from-amber-50 border-amber-100' : 'from-green-50 border-green-100'} to-white`}>
-            <CardContent className="p-3">
-              <div className="flex items-center gap-1.5 text-gray-500 text-[10px] sm:text-xs">
-                <AlertTriangle className="h-3.5 w-3.5" />
-                فرق النقدي
-              </div>
-              <p className={`text-lg sm:text-xl font-bold mt-0.5 ${Number(totals.totalCashDiscrepancy) < -0.5 ? 'text-red-700' : Number(totals.totalCashDiscrepancy) > 0.5 ? 'text-amber-700' : 'text-green-700'}`}>
-                {formatCurrency(totals.totalCashDiscrepancy)}
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-indigo-50 to-white border-indigo-100">
-            <CardContent className="p-3">
-              <div className="flex items-center gap-1.5 text-gray-500 text-[10px] sm:text-xs">
-                <Users className="h-3.5 w-3.5" />
-                العملاء
-              </div>
-              <p className="text-lg sm:text-xl font-bold text-indigo-700 mt-0.5">{formatNumber(totals.totalCustomerCount)}</p>
-            </CardContent>
-          </Card>
+          <KpiCard
+            label="الإغلاقات"
+            value={formatNumber(pagination.total)}
+            icon={Receipt}
+            tone="inventory"
+            data-testid="kpi-closures-count"
+          />
+          <KpiCard
+            label="المبيعات"
+            value={formatCurrency(totals.totalSales)}
+            unit="ر.س"
+            icon={DollarSign}
+            tone="money"
+            data-testid="kpi-total-sales"
+          />
+          <KpiCard
+            label="النقدي"
+            value={formatCurrency(totals.cashTotal)}
+            unit="ر.س"
+            icon={Wallet}
+            tone="production"
+            data-testid="kpi-cash-total"
+          />
+          <KpiCard
+            label="الشبكة"
+            value={formatCurrency(totals.networkTotal)}
+            unit="ر.س"
+            icon={CreditCard}
+            tone="violet"
+            data-testid="kpi-network-total"
+          />
+          <KpiCard
+            label="فرق النقدي"
+            value={formatCurrency(totals.totalCashDiscrepancy)}
+            unit="ر.س"
+            icon={AlertTriangle}
+            tone={Number(totals.totalCashDiscrepancy) < -0.5 ? "alert" : Number(totals.totalCashDiscrepancy) > 0.5 ? "inventory" : "money"}
+            data-testid="kpi-cash-discrepancy"
+          />
+          <KpiCard
+            label="العملاء"
+            value={formatNumber(totals.totalCustomerCount)}
+            icon={Users}
+            tone="people"
+            data-testid="kpi-customers-count"
+          />
         </div>
 
         <Card>
@@ -474,7 +465,7 @@ export default function BranchDailyClosuresPage() {
                     <div className="min-w-[800px] sm:min-w-0">
                       <Table>
                         <TableHeader>
-                          <TableRow className="bg-gray-50/50">
+                          <TableRow className="bg-muted/50">
                             <TableHead className="text-right text-xs font-bold">التاريخ</TableHead>
                             <TableHead className="text-right text-xs font-bold">الفرع</TableHead>
                             <TableHead className="text-center text-xs font-bold">اليوميات</TableHead>
@@ -496,7 +487,7 @@ export default function BranchDailyClosuresPage() {
                               <TableRow 
                                 key={closure.id} 
                                 data-testid={`row-closure-${closure.id}`}
-                                className="hover:bg-amber-50/30 transition-colors"
+                                className="hover:bg-muted/30 transition-colors"
                               >
                                 <TableCell className="font-medium text-xs sm:text-sm py-2.5">
                                   {format(new Date(closure.closureDate), "d MMMM yyyy", { locale: ar })}

@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import { Skeleton } from "@/components/ui/skeleton";
+import { KpiCard } from "@/components/dashboard/kpi-card";
 import {
   ArrowRight,
   Calendar,
@@ -53,9 +54,9 @@ const STATUS_LABELS: Record<string, { label: string; variant: "default" | "secon
 };
 
 const DISCREPANCY_LABELS: Record<string, { label: string; color: string; icon: any }> = {
-  balanced: { label: "متوازن", color: "text-green-600 bg-green-50", icon: CheckCircle },
-  shortage: { label: "عجز", color: "text-red-600 bg-red-50", icon: TrendingDown },
-  surplus: { label: "زيادة", color: "text-amber-600 bg-amber-50", icon: TrendingUp },
+  balanced: { label: "متوازن", color: "text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40", icon: CheckCircle },
+  shortage: { label: "عجز", color: "text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40", icon: TrendingDown },
+  surplus: { label: "زيادة", color: "text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40", icon: TrendingUp },
 };
 
 const BANK_COMMISSION_RATES: Record<string, { label: string; rate: number }> = {
@@ -576,15 +577,15 @@ export default function BranchDailyClosureDetailPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-slate-50 rounded-lg p-3">
+                <div className="bg-muted/50 rounded-lg p-3">
                   <p className="text-xs text-muted-foreground">الرصيد الافتتاحي</p>
                   <p className="text-base font-bold">{formatCurrency(closure.totalOpeningBalance)} ر.س</p>
                 </div>
-                <div className="bg-slate-50 rounded-lg p-3">
+                <div className="bg-muted/50 rounded-lg p-3">
                   <p className="text-xs text-muted-foreground">النقدي المتوقع</p>
                   <p className="text-base font-bold">{formatCurrency(closure.totalExpectedCash)} ر.س</p>
                 </div>
-                <div className="bg-slate-50 rounded-lg p-3">
+                <div className="bg-muted/50 rounded-lg p-3">
                   <p className="text-xs text-muted-foreground">النقدي الفعلي</p>
                   <p className="text-base font-bold">{formatCurrency(closure.totalActualCash)} ر.س</p>
                 </div>
@@ -609,11 +610,11 @@ export default function BranchDailyClosureDetailPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-slate-50 rounded-lg p-3">
+                <div className="bg-muted/50 rounded-lg p-3">
                   <p className="text-xs text-muted-foreground">إجمالي نقاط البيع</p>
                   <p className="text-base font-bold">{formatCurrency(closure.totalBankPosAmount)} ر.س</p>
                 </div>
-                <div className="bg-slate-50 rounded-lg p-3">
+                <div className="bg-muted/50 rounded-lg p-3">
                   <p className="text-xs text-muted-foreground">إجمالي كشف البنك</p>
                   <p className="text-base font-bold">{formatCurrency(closure.totalBankTerminalAmount)} ر.س</p>
                 </div>
@@ -692,24 +693,36 @@ export default function BranchDailyClosureDetailPage() {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-3 gap-3 mb-4">
-                  <div className="bg-indigo-50 rounded-lg p-3 text-center">
-                    <p className="text-xs text-indigo-600">إجمالي مبلغ Terminal البنك</p>
-                    <p className="text-lg font-bold text-indigo-700">{formatCurrency(totalTerminalSales)} ر.س</p>
-                  </div>
-                  <div className="bg-rose-50 rounded-lg p-3 text-center">
-                    <p className="text-xs text-rose-600">إجمالي عمولة البنك</p>
-                    <p className="text-lg font-bold text-rose-700">{formatCurrency(totalCommission)} ر.س</p>
-                  </div>
-                  <div className="bg-green-50 rounded-lg p-3 text-center">
-                    <p className="text-xs text-green-600">صافي المبلغ المحصّل</p>
-                    <p className="text-lg font-bold text-green-700">{formatCurrency(totalNetAmount)} ر.س</p>
-                  </div>
+                  <KpiCard
+                    label="إجمالي مبلغ Terminal البنك"
+                    value={formatCurrency(totalTerminalSales)}
+                    unit="ر.س"
+                    icon={CreditCard}
+                    tone="production"
+                    data-testid="kpi-terminal-total"
+                  />
+                  <KpiCard
+                    label="إجمالي عمولة البنك"
+                    value={formatCurrency(totalCommission)}
+                    unit="ر.س"
+                    icon={Percent}
+                    tone="alert"
+                    data-testid="kpi-commission-total"
+                  />
+                  <KpiCard
+                    label="صافي المبلغ المحصّل"
+                    value={formatCurrency(totalNetAmount)}
+                    unit="ر.س"
+                    icon={Landmark}
+                    tone="money"
+                    data-testid="kpi-net-total"
+                  />
                 </div>
 
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
-                      <TableRow className="bg-slate-50">
+                      <TableRow className="bg-muted/50">
                         <TableHead className="text-right font-bold">طريقة الدفع</TableHead>
                         <TableHead className="text-right font-bold">مبلغ Terminal (ر.س)</TableHead>
                         <TableHead className="text-right font-bold">نسبة العمولة %</TableHead>
@@ -737,7 +750,7 @@ export default function BranchDailyClosureDetailPage() {
                           <TableCell className="text-green-600 font-semibold">{formatCurrency(r.netAmount)}</TableCell>
                         </TableRow>
                       ))}
-                      <TableRow className="bg-slate-50 font-bold border-t-2">
+                      <TableRow className="bg-accent/40 font-bold border-t-2">
                         <TableCell className="font-bold">الإجمالي</TableCell>
                         <TableCell className="font-bold">{formatCurrency(totalTerminalSales)}</TableCell>
                         <TableCell></TableCell>
@@ -748,23 +761,23 @@ export default function BranchDailyClosureDetailPage() {
                   </Table>
                 </div>
 
-                <div className="mt-4 p-3 bg-amber-50 rounded-lg border border-amber-200">
-                  <p className="text-sm font-bold text-amber-800 mb-2 flex items-center gap-1">
+                <div className="mt-4 p-3 bg-accent/40 rounded-lg border border-border">
+                  <p className="text-sm font-bold text-foreground mb-2 flex items-center gap-1">
                     <Receipt className="w-4 h-4" />
                     ملخص القيد المحاسبي
                   </p>
                   <div className="space-y-1 text-sm">
-                    <div className="flex justify-between items-center py-1 border-b border-amber-200">
-                      <span className="text-amber-900">مدين: البنك (صافي المحصّل)</span>
-                      <span className="font-bold text-green-700">{formatCurrency(totalNetAmount)} ر.س</span>
+                    <div className="flex justify-between items-center py-1 border-b border-border">
+                      <span className="text-muted-foreground">مدين: البنك (صافي المحصّل)</span>
+                      <span className="font-bold text-emerald-700 dark:text-emerald-300">{formatCurrency(totalNetAmount)} ر.س</span>
                     </div>
-                    <div className="flex justify-between items-center py-1 border-b border-amber-200">
-                      <span className="text-amber-900">مدين: عمولة البنك (مصروف)</span>
-                      <span className="font-bold text-rose-700">{formatCurrency(totalCommission)} ر.س</span>
+                    <div className="flex justify-between items-center py-1 border-b border-border">
+                      <span className="text-muted-foreground">مدين: عمولة البنك (مصروف)</span>
+                      <span className="font-bold text-rose-700 dark:text-rose-300">{formatCurrency(totalCommission)} ر.س</span>
                     </div>
                     <div className="flex justify-between items-center py-1">
-                      <span className="text-amber-900">دائن: المبيعات (إجمالي Terminal البنك)</span>
-                      <span className="font-bold text-indigo-700">{formatCurrency(totalTerminalSales)} ر.س</span>
+                      <span className="text-muted-foreground">دائن: المبيعات (إجمالي Terminal البنك)</span>
+                      <span className="font-bold text-indigo-700 dark:text-indigo-300">{formatCurrency(totalTerminalSales)} ر.س</span>
                     </div>
                   </div>
                 </div>
@@ -774,32 +787,41 @@ export default function BranchDailyClosureDetailPage() {
         })()}
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="bg-slate-50 rounded-lg p-3 text-center">
-            <p className="text-xs text-muted-foreground">إجمالي المبيعات</p>
-            <p className="text-lg font-bold">{formatCurrency(closure.totalSales)} ر.س</p>
-          </div>
-          <div className="bg-slate-50 rounded-lg p-3 text-center">
-            <p className="text-xs text-muted-foreground">عدد العمليات</p>
-            <p className="text-lg font-bold">{closure.totalTransactionCount || 0}</p>
-          </div>
-          <div className="bg-slate-50 rounded-lg p-3 text-center">
-            <p className="text-xs text-muted-foreground">متوسط الفاتورة</p>
-            <p className="text-lg font-bold">
-              {formatCurrency(
-                (closure.totalTransactionCount && closure.totalTransactionCount > 0)
-                  ? (closure.totalSales || 0) / closure.totalTransactionCount
-                  : 0
-              )} ر.س
-            </p>
-          </div>
+          <KpiCard
+            label="إجمالي المبيعات"
+            value={formatCurrency(closure.totalSales)}
+            unit="ر.س"
+            icon={DollarSign}
+            tone="money"
+            data-testid="kpi-summary-sales"
+          />
+          <KpiCard
+            label="عدد العمليات"
+            value={closure.totalTransactionCount || 0}
+            icon={Receipt}
+            tone="production"
+            data-testid="kpi-summary-transactions"
+          />
+          <KpiCard
+            label="متوسط الفاتورة"
+            value={formatCurrency(
+              (closure.totalTransactionCount && closure.totalTransactionCount > 0)
+                ? (closure.totalSales || 0) / closure.totalTransactionCount
+                : 0
+            )}
+            unit="ر.س"
+            icon={Percent}
+            tone="inventory"
+            data-testid="kpi-summary-avg"
+          />
           {closure.closedBy && (
-            <div className="bg-slate-50 rounded-lg p-3 text-center">
+            <div className="bg-muted/50 rounded-lg p-3 text-center">
               <p className="text-xs text-muted-foreground">أغلق بواسطة</p>
               <p className="text-sm font-semibold">{closure.closedBy}</p>
             </div>
           )}
           {closure.closedAt && (
-            <div className="bg-slate-50 rounded-lg p-3 text-center">
+            <div className="bg-muted/50 rounded-lg p-3 text-center">
               <p className="text-xs text-muted-foreground">تاريخ الإغلاق</p>
               <p className="text-sm font-semibold">{format(new Date(closure.closedAt), "d MMM yyyy HH:mm", { locale: ar })}</p>
             </div>
@@ -870,7 +892,7 @@ export default function BranchDailyClosureDetailPage() {
                             </span>
                           </TableCell>
                           <TableCell>
-                            <span className={`font-bold ${netDisc > 0.5 ? 'text-amber-700 bg-amber-50 px-2 py-0.5 rounded' : netDisc < -0.5 ? 'text-red-700 bg-red-50 px-2 py-0.5 rounded' : 'text-green-700 bg-green-50 px-2 py-0.5 rounded'}`}>
+                            <span className={`font-bold px-2 py-0.5 rounded ${netDisc > 0.5 ? 'text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40' : netDisc < -0.5 ? 'text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40' : 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40'}`}>
                               {formatCurrency(netDisc)} ر.س
                               <span className="text-[10px] mr-1">
                                 {netDisc > 0.5 ? 'زيادة' : netDisc < -0.5 ? 'عجز' : 'مطابق'}
@@ -885,7 +907,7 @@ export default function BranchDailyClosureDetailPage() {
                         </TableRow>
                       );
                     })}
-                    <TableRow className="bg-slate-50 font-bold border-t-2">
+                    <TableRow className="bg-accent/40 font-bold border-t-2">
                       <TableCell colSpan={3} className="font-bold">الإجمالي</TableCell>
                       <TableCell className="font-bold">{formatCurrency(closure.journals.reduce((s: number, j: any) => s + (j.cashTotal || 0), 0))} ر.س</TableCell>
                       <TableCell className="font-bold">{formatCurrency(closure.journals.reduce((s: number, j: any) => s + (j.networkTotal || 0), 0))} ر.س</TableCell>
@@ -920,7 +942,7 @@ export default function BranchDailyClosureDetailPage() {
                             return s + cd + (j.computedBankDiscrepancy ?? j.bankDiscrepancyTotal ?? 0);
                           }, 0);
                           return (
-                            <span className={`px-2 py-0.5 rounded ${totalNet > 0.5 ? 'text-amber-700 bg-amber-100' : totalNet < -0.5 ? 'text-red-700 bg-red-100' : 'text-green-700 bg-green-100'}`}>
+                            <span className={`px-2 py-0.5 rounded ${totalNet > 0.5 ? 'text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-950/40' : totalNet < -0.5 ? 'text-rose-700 dark:text-rose-300 bg-rose-100 dark:bg-rose-950/40' : 'text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950/40'}`}>
                               {formatCurrency(totalNet)} ر.س
                               <span className="text-[10px] mr-1">
                                 {totalNet > 0.5 ? 'زيادة' : totalNet < -0.5 ? 'عجز' : 'مطابق'}
