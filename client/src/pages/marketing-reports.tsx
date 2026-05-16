@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -18,7 +19,7 @@ import {
   Users, Megaphone, DollarSign, Target, Eye, 
   Heart, MessageCircle, Share2, Download, ArrowRight,
   Filter, ChevronDown, Calendar, User,
-  Receipt, Activity, RefreshCw, FileText, Printer
+  Receipt, Activity, RefreshCw, FileText, Printer, FileBarChart
 } from "lucide-react";
 import { Link } from "wouter";
 import { useReactToPrint } from "react-to-print";
@@ -418,29 +419,25 @@ export default function MarketingReportsPage() {
   return (
     <Layout>
       <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto space-y-4" dir="rtl">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Link href="/marketing">
-              <Button variant="outline" size="icon" className="h-11 w-11 sm:h-9 sm:w-9" data-testid="button-back">
-                <ArrowRight className="w-4 h-4" />
+        <PageHeader
+          icon={FileBarChart}
+          tone="executive"
+          title="تقارير أداء التسويق الشاملة"
+          description="تحليلات وتقارير تفصيلية مع فلاتر متقدمة"
+          backHref="/marketing"
+          actions={
+            <>
+              <Button variant="outline" size="sm" className="h-9" onClick={resetFilters} data-testid="button-reset-filters">
+                <RefreshCw className="w-4 h-4 ml-2" />
+                إعادة تعيين
               </Button>
-            </Link>
-            <div>
-              <h1 className="text-xl sm:text-2xl font-bold" data-testid="page-title">تقارير أداء التسويق الشاملة</h1>
-              <p className="text-sm text-muted-foreground">تحليلات وتقارير تفصيلية مع فلاتر متقدمة</p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" className="h-11 sm:h-9" onClick={resetFilters} data-testid="button-reset-filters">
-              <RefreshCw className="w-4 h-4 ml-2" />
-              إعادة تعيين
-            </Button>
-            <Button className="h-11 sm:h-9 bg-amber-500 hover:bg-amber-600" onClick={exportToExcel} data-testid="button-export">
-              <Download className="w-4 h-4 ml-2" />
-              تصدير Excel
-            </Button>
-          </div>
-        </div>
+              <Button size="sm" className="h-9 bg-amber-500 hover:bg-amber-600" onClick={exportToExcel} data-testid="button-export">
+                <Download className="w-4 h-4 ml-2" />
+                تصدير Excel
+              </Button>
+            </>
+          }
+        />
 
         <Collapsible open={filtersOpen} onOpenChange={setFiltersOpen}>
           <Card>

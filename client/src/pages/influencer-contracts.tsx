@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -55,6 +56,7 @@ import {
   FileSignature,
   AlertCircle,
   ArrowRight,
+  FileText as ContractIcon,
 } from "lucide-react";
 import { Link } from "wouter";
 import type { InfluencerContract, MarketingInfluencer, Branch } from "@shared/schema";
@@ -434,24 +436,19 @@ export default function InfluencerContractsPage() {
   return (
     <Layout>
       <div className="p-3 sm:p-4 md:p-6 max-w-[1400px] mx-auto space-y-3 sm:space-y-4" dir="rtl">
-        <div className="flex items-center gap-2 sm:gap-3 mb-2">
-          <Link href="/marketing">
-            <Button variant="ghost" size="sm" className="gap-1 h-9 sm:h-10" data-testid="button-back">
-              <ArrowRight className="h-4 w-4" />
-              <span className="hidden sm:inline">لوحة التسويق</span>
+        <PageHeader
+          icon={ContractIcon}
+          tone="marketing"
+          title="عقود المؤثرين"
+          description="إدارة عقود التعاون مع المؤثرين والمدونين"
+          backHref="/marketing"
+          actions={
+            <Button size="sm" className="h-9" onClick={() => { setSelectedContract(null); setFormData(defaultFormData); setIsDialogOpen(true); }} data-testid="button-add-contract">
+              <Plus className="h-4 w-4 ml-2" />
+              عقد جديد
             </Button>
-          </Link>
-        </div>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-[#1a3a2f]">عقود المؤثرين</h1>
-            <p className="text-xs sm:text-sm text-muted-foreground">إدارة عقود التعاون مع المؤثرين والمدونين</p>
-          </div>
-          <Button className="h-10 sm:h-9 w-full sm:w-auto" onClick={() => { setSelectedContract(null); setFormData(defaultFormData); setIsDialogOpen(true); }} data-testid="button-add-contract">
-            <Plus className="h-4 w-4 ml-2" />
-            عقد جديد
-          </Button>
-        </div>
+          }
+        />
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
           <Card className="p-2 sm:p-3">

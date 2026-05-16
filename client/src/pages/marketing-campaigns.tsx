@@ -13,6 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -466,19 +467,14 @@ export default function MarketingCampaignsPage() {
   return (
     <Layout>
       <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto space-y-4" dir="rtl">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Link href="/marketing">
-              <Button variant="outline" size="icon" className="h-11 w-11 sm:h-9 sm:w-9" data-testid="button-back">
-                <ArrowRight className="w-4 h-4" />
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground">الحملات التسويقية</h1>
-              <p className="text-sm text-muted-foreground">إدارة ومتابعة الحملات التسويقية</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
+        <PageHeader
+          icon={Megaphone}
+          tone="marketing"
+          title="الحملات التسويقية"
+          description="إدارة ومتابعة الحملات التسويقية"
+          backHref="/marketing"
+          actions={
+            <div className="flex items-center gap-2">
             <div className="flex items-center border rounded-lg overflow-hidden">
               <Button
                 variant={viewMode === "table" ? "default" : "ghost"}
@@ -507,8 +503,9 @@ export default function MarketingCampaignsPage() {
                 إضافة حملة جديدة
               </Button>
             )}
-          </div>
-        </div>
+            </div>
+          }
+        />
 
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="relative flex-1">

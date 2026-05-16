@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
-  Calendar, Plus, ChevronRight, ChevronLeft, Megaphone, Users, Gift, Star, ArrowRight, 
+  Calendar, Calendar as CalendarIcon, Plus, ChevronRight, ChevronLeft, Megaphone, Users, Gift, Star, ArrowRight, 
   ListTodo, CheckCircle2, Clock, AlertCircle, Sun, Moon, GraduationCap, Flag, Heart,
   Sparkles, ShoppingBag, Palmtree, Snowflake, Crown, Building2, Cake, PartyPopper,
   CalendarDays, Eye, EyeOff, Filter, TrendingUp, Download, Bell, DollarSign, Target,
@@ -871,19 +872,14 @@ export default function MarketingCalendarPage() {
   return (
     <Layout>
       <div className="p-3 sm:p-4 md:p-6 lg:p-8 max-w-[1400px] mx-auto space-y-3 sm:space-y-4" dir="rtl">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <Link href="/marketing">
-              <Button variant="outline" size="icon" className="h-9 w-9 sm:h-9 sm:w-9 shrink-0" data-testid="button-back">
-                <ArrowRight className="w-4 h-4" />
-              </Button>
-            </Link>
-            <div className="min-w-0">
-              <h1 className="text-lg sm:text-xl md:text-2xl font-bold truncate" data-testid="page-title">التقويم التسويقي</h1>
-              <p className="text-xs sm:text-sm text-muted-foreground truncate">المناسبات والمواسم والحملات</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 w-full sm:w-auto">
+        <PageHeader
+          icon={CalendarIcon}
+          tone="marketing"
+          title="التقويم التسويقي"
+          description="المناسبات والمواسم والحملات"
+          backHref="/marketing"
+          actions={
+            <div className="flex items-center gap-2">
             <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="h-10 sm:h-9 flex-1 sm:flex-none" data-testid="button-add-event">
@@ -986,8 +982,9 @@ export default function MarketingCalendarPage() {
                 </form>
               </DialogContent>
             </Dialog>
-          </div>
-        </div>
+            </div>
+          }
+        />
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
           <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +16,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   Plus, CheckCircle2, Clock, AlertCircle, Circle, 
   Calendar, User, Filter, MoreVertical, ArrowRight,
-  LayoutGrid, List, GripVertical, Trash2, Edit
+  LayoutGrid, List, GripVertical, Trash2, Edit, ListChecks
 } from "lucide-react";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -478,19 +479,14 @@ export default function MarketingTasksPage() {
   return (
     <Layout>
       <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto space-y-4" dir="rtl">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Link href="/marketing">
-              <Button variant="outline" size="icon" className="h-11 w-11 sm:h-9 sm:w-9" data-testid="button-back">
-                <ArrowRight className="w-4 h-4" />
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold" data-testid="page-title">مهام التسويق</h1>
-              <p className="text-sm text-muted-foreground">متابعة المهام والأنشطة التسويقية</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
+        <PageHeader
+          icon={ListChecks}
+          tone="marketing"
+          title="مهام التسويق"
+          description="متابعة المهام والأنشطة التسويقية"
+          backHref="/marketing"
+          actions={
+            <div className="flex items-center gap-2">
             <div className="flex items-center border rounded-lg overflow-hidden">
               <Button
                 variant={viewMode === "kanban" ? "default" : "ghost"}
@@ -527,8 +523,9 @@ export default function MarketingTasksPage() {
                 <TaskForm />
               </DialogContent>
             </Dialog>
-          </div>
-        </div>
+            </div>
+          }
+        />
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {TASK_STATUSES.map((status) => {

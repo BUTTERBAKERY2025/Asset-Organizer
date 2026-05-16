@@ -10,6 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -567,21 +568,14 @@ export default function MarketingExpensesPage() {
   return (
     <Layout>
       <div className="p-3 sm:p-4 md:p-6 lg:p-8 max-w-[1400px] mx-auto space-y-3 sm:space-y-4" dir="rtl">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <Link href="/marketing">
-              <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" data-testid="button-back">
-                <ArrowRight className="w-4 h-4" />
-              </Button>
-            </Link>
-            <div className="min-w-0">
-              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-foreground truncate" data-testid="text-page-title">
-                مصروفات الحملات
-              </h1>
-              <p className="text-xs sm:text-sm text-muted-foreground truncate">تتبع وإدارة مصروفات الحملات التسويقية</p>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+        <PageHeader
+          icon={DollarSign}
+          tone="money"
+          title="مصروفات الحملات"
+          description="تتبع وإدارة مصروفات الحملات التسويقية"
+          backHref="/marketing"
+          actions={
+            <div className="flex flex-wrap gap-2">
             <Button variant="outline" className="h-10 sm:h-9 flex-1 sm:flex-none text-xs sm:text-sm" onClick={handleExportExcel} data-testid="button-export">
               <Download className="w-4 h-4 ml-1 sm:ml-2" />
               <span className="hidden sm:inline">تصدير Excel</span>
@@ -604,8 +598,9 @@ export default function MarketingExpensesPage() {
                 إضافة مصروف
               </Button>
             )}
-          </div>
-        </div>
+            </div>
+          }
+        />
 
         {budgetAlerts.length > 0 && (
           <Card className="border-2 border-amber-300 bg-amber-50/50">

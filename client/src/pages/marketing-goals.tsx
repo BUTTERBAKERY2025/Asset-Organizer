@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
@@ -170,28 +171,20 @@ export default function MarketingGoalsPage() {
   return (
     <Layout>
       <div className="p-3 sm:p-4 md:p-6 lg:p-8 max-w-[1400px] mx-auto space-y-3 sm:space-y-4" dir="rtl">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-4 sm:mb-6">
-          <div className="flex items-center gap-2 sm:gap-4">
-            <Link href="/marketing">
-              <Button variant="outline" size="sm" className="gap-1 sm:gap-2 h-10 sm:h-9 text-xs sm:text-sm" data-testid="button-back">
-                <ArrowRight className="h-3 w-3 sm:h-4 sm:w-4" />
-                <span className="hidden sm:inline">العودة للتسويق</span>
-                <span className="sm:hidden">رجوع</span>
-              </Button>
-            </Link>
-            <div className="min-w-0">
-              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-800 truncate" data-testid="text-page-title">أهداف الحملات</h1>
-              <p className="text-xs sm:text-sm text-gray-600 truncate">إدارة وتتبع أهداف الحملات التسويقية</p>
-            </div>
-          </div>
-          
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-amber-500 hover:bg-amber-600 gap-1 sm:gap-2 h-10 sm:h-9 w-full sm:w-auto" data-testid="button-add-goal">
-                <Plus className="h-4 w-4" />
-                إضافة هدف
-              </Button>
-            </DialogTrigger>
+        <PageHeader
+          icon={Award}
+          tone="marketing"
+          title="أهداف الحملات"
+          description="إدارة وتتبع أهداف الحملات التسويقية"
+          backHref="/marketing"
+          actions={
+            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" className="bg-amber-500 hover:bg-amber-600 gap-2 h-9" data-testid="button-add-goal">
+                  <Plus className="h-4 w-4" />
+                  إضافة هدف
+                </Button>
+              </DialogTrigger>
             <DialogContent className="max-w-md" dir="rtl">
               <DialogHeader>
                 <DialogTitle>إضافة هدف جديد</DialogTitle>
@@ -283,8 +276,9 @@ export default function MarketingGoalsPage() {
                 </Button>
               </div>
             </DialogContent>
-          </Dialog>
-        </div>
+            </Dialog>
+          }
+        />
 
         <div className="mb-4 sm:mb-6">
           <Select

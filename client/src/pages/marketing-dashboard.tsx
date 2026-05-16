@@ -10,6 +10,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { PageHeader } from "@/components/dashboard/page-header";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, AreaChart, Area, Legend
@@ -302,14 +303,12 @@ export default function MarketingDashboardPage() {
   return (
     <Layout>
       <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto space-y-4" dir="rtl">
-        <div className="flex flex-col gap-2">
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground" data-testid="page-title">
-            لوحة تحكم التسويق
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            نظرة شاملة على جميع أنشطة وحملات التسويق
-          </p>
-        </div>
+        <PageHeader
+          icon={Megaphone}
+          tone="marketing"
+          title="لوحة تحكم التسويق"
+          description="نظرة شاملة على جميع أنشطة وحملات التسويق"
+        />
 
         {/* Quick Access - Compact at top */}
         <div className="flex flex-wrap gap-2">

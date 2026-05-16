@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -942,21 +943,14 @@ export default function MarketingInfluencersPage() {
   return (
     <Layout>
       <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto space-y-4" dir="rtl">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Link href="/marketing">
-              <Button variant="outline" size="icon" className="h-11 w-11 sm:h-9 sm:w-9" data-testid="button-back">
-                <ArrowRight className="w-4 h-4" />
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground" data-testid="text-page-title">
-                المؤثرين والبلوجرز
-              </h1>
-              <p className="text-sm text-muted-foreground">إدارة ومتابعة المؤثرين والبلوجرز</p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
+        <PageHeader
+          icon={Star}
+          tone="marketing"
+          title="المؤثرين والبلوجرز"
+          description="إدارة ومتابعة المؤثرين والبلوجرز"
+          backHref="/marketing"
+          actions={
+            <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               className="h-11 sm:h-9"
@@ -1000,8 +994,9 @@ export default function MarketingInfluencersPage() {
                 إضافة مؤثر جديد
               </Button>
             )}
-          </div>
-        </div>
+            </div>
+          }
+        />
 
         <Tabs value={activePageTab} onValueChange={setActivePageTab} className="w-full">
           <TabsList className="grid w-full grid-cols-2 mb-4">
