@@ -3961,30 +3961,42 @@ export default function EmployeeReportsDashboardPage() {
                 <CardContent>
                   {/* ملخص التكاليف */}
                   <div className="grid grid-cols-2 lg:grid-cols-6 gap-2 sm:gap-3 mb-4 sm:mb-6">
-                    <div className="text-center p-2 sm:p-3 bg-orange-50 rounded-lg">
-                      <p className="text-lg sm:text-xl md:text-2xl font-bold text-orange-600">{formatNumber(complianceMetrics.totalNonSaudiCount)}</p>
-                      <p className="text-[10px] sm:text-xs text-gray-600">{isRTL ? "غير سعودي" : "Non-Saudi"}</p>
-                    </div>
-                    <div className="text-center p-2 sm:p-3 bg-blue-50 rounded-lg">
-                      <p className="text-base sm:text-lg md:text-xl font-bold text-blue-600">{formatCurrency(complianceMetrics.totalNonSaudiInsurance, isRTL)}</p>
-                      <p className="text-[10px] sm:text-xs text-gray-600">{isRTL ? "تأمين 2%" : "Insurance 2%"}</p>
-                    </div>
-                    <div className="text-center p-2 sm:p-3 bg-purple-50 rounded-lg">
-                      <p className="text-base sm:text-lg md:text-xl font-bold text-purple-600">{formatCurrency(complianceMetrics.totalNonSaudiWorkPermit, isRTL)}</p>
-                      <p className="text-[10px] sm:text-xs text-gray-600">{isRTL ? "رخصة العمل" : "Work Permit"}</p>
-                    </div>
-                    <div className="text-center p-2 sm:p-3 bg-amber-50 rounded-lg">
-                      <p className="text-base sm:text-lg md:text-xl font-bold text-amber-600">{formatCurrency(complianceMetrics.totalNonSaudiExpatLevy, isRTL)}</p>
-                      <p className="text-[10px] sm:text-xs text-gray-600">{isRTL ? "المقابل المالي" : "Expat Levy"}</p>
-                    </div>
-                    <div className="text-center p-2 sm:p-3 bg-teal-50 rounded-lg">
-                      <p className="text-base sm:text-lg md:text-xl font-bold text-teal-600">{formatCurrency(complianceMetrics.totalNonSaudiIqama, isRTL)}</p>
-                      <p className="text-[10px] sm:text-xs text-gray-600">{isRTL ? "رسوم الإقامة" : "Residency Fees"}</p>
-                    </div>
-                    <div className="text-center p-2 sm:p-3 bg-red-50 rounded-lg col-span-2 lg:col-span-1">
-                      <p className="text-base sm:text-lg md:text-xl font-bold text-red-600">{formatCurrency(complianceMetrics.totalNonSaudiMonthlyCost, isRTL)}</p>
-                      <p className="text-xs text-gray-600">{isRTL ? "إجمالي شهري" : "Monthly Total"}</p>
-                    </div>
+                    <KpiCard
+                      label={isRTL ? "غير سعودي" : "Non-Saudi"}
+                      value={complianceMetrics.totalNonSaudiCount}
+                      tone="inventory"
+                    />
+                    <KpiCard
+                      label={isRTL ? "تأمين 2%" : "Insurance 2%"}
+                      value={complianceMetrics.totalNonSaudiInsurance}
+                      unit={isRTL ? "ر.س" : "SAR"}
+                      tone="production"
+                    />
+                    <KpiCard
+                      label={isRTL ? "رخصة العمل" : "Work Permit"}
+                      value={complianceMetrics.totalNonSaudiWorkPermit}
+                      unit={isRTL ? "ر.س" : "SAR"}
+                      tone="violet"
+                    />
+                    <KpiCard
+                      label={isRTL ? "المقابل المالي" : "Expat Levy"}
+                      value={complianceMetrics.totalNonSaudiExpatLevy}
+                      unit={isRTL ? "ر.س" : "SAR"}
+                      tone="inventory"
+                    />
+                    <KpiCard
+                      label={isRTL ? "رسوم الإقامة" : "Residency Fees"}
+                      value={complianceMetrics.totalNonSaudiIqama}
+                      unit={isRTL ? "ر.س" : "SAR"}
+                      tone="people"
+                    />
+                    <KpiCard
+                      label={isRTL ? "إجمالي شهري" : "Monthly Total"}
+                      value={complianceMetrics.totalNonSaudiMonthlyCost}
+                      unit={isRTL ? "ر.س" : "SAR"}
+                      tone="alert"
+                      className="col-span-2 lg:col-span-1"
+                    />
                   </div>
 
                   {/* جدول التفاصيل حسب الجنسية */}
