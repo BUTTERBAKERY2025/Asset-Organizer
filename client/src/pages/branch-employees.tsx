@@ -419,7 +419,7 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
   };
 
   return (
-    <div className="p-3 sm:p-4 md:p-6 max-w-screen-2xl mx-auto space-y-4" dir={isRTL ? "rtl" : "ltr"}>
+    <div className="p-3 sm:p-4 md:p-6 max-w-[1400px] mx-auto space-y-4" dir={isRTL ? "rtl" : "ltr"}>
       {/* KPI Cards — transfers summary */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <KpiCard label={isRTL ? "معلقة" : "Pending"} value={stats.pending} icon={Clock} tone="inventory" data-testid="kpi-transfers-pending" />
@@ -1702,7 +1702,7 @@ export default function BranchEmployeesPage() {
 
   return (
     <Layout>
-      <div className="p-3 sm:p-4 md:p-6 max-w-screen-2xl mx-auto space-y-4" dir={isRTL ? "rtl" : "ltr"}>
+      <div className="p-3 sm:p-4 md:p-6 max-w-[1400px] mx-auto space-y-4" dir={isRTL ? "rtl" : "ltr"}>
         <PageHeader
           icon={Users}
           tone="people"

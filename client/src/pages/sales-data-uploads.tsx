@@ -312,7 +312,7 @@ export default function SalesDataUploadsPage() {
 
   return (
     <Layout>
-      <div className="p-3 sm:p-4 md:p-6 max-w-screen-2xl mx-auto space-y-4 sm:space-y-6" dir="rtl">
+      <div className="p-3 sm:p-4 md:p-6 max-w-[1400px] mx-auto space-y-4 sm:space-y-6" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div className="flex items-center gap-2 sm:gap-3">
             <Link href="/production-dashboard">
@@ -487,7 +487,7 @@ export default function SalesDataUploadsPage() {
                           <TableCell className="py-2 sm:py-3">
                             <div className="flex items-center gap-2">
                               <FileSpreadsheet className="w-3 h-3 sm:w-4 sm:h-4 text-green-600 shrink-0" />
-                              <span data-testid={`text-filename-${upload.id}`} className="text-xs sm:text-sm truncate max-w-[100px] sm:max-w-screen-2xl mx-auto">{upload.fileName}</span>
+                              <span data-testid={`text-filename-${upload.id}`} className="text-xs sm:text-sm truncate max-w-[100px] sm:max-w-[1400px] mx-auto">{upload.fileName}</span>
                             </div>
                           </TableCell>
                           <TableCell className="py-2 sm:py-3 hidden md:table-cell">

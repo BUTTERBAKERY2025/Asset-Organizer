@@ -1322,7 +1322,7 @@ export default function CashierJournalFormPage() {
   return (
     <Layout>
       {/* iPad-optimized: compact padding & spacing for 10.9" screens */}
-      <div className="p-2 sm:p-3 md:p-4 max-w-screen-2xl mx-auto space-y-2" dir="rtl">
+      <div className="p-2 sm:p-3 md:p-4 max-w-[1400px] mx-auto space-y-2" dir="rtl">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Link href="/cashier-journals">
@@ -2835,7 +2835,7 @@ export default function CashierJournalFormPage() {
             <img
               src={allAttachmentImages[lightboxIndex]?.src}
               alt={allAttachmentImages[lightboxIndex]?.fileName}
-              className="max-w-screen-2xl mx-auto transition-transform duration-200 rounded shadow-2xl select-none"
+              className="max-w-[1400px] mx-auto transition-transform duration-200 rounded shadow-2xl select-none"
               style={{ transform: `scale(${lightboxZoom})`, transformOrigin: 'center center' }}
               draggable={false}
               data-testid="lightbox-image"

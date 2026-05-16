@@ -111,7 +111,7 @@ export default function DashboardPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-screen-2xl mx-auto space-y-6" dir="rtl">
+      <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto space-y-6" dir="rtl">
         <div>
           <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground" data-testid="text-dashboard-title">لوحة التحكم الرئيسية</h1>
           <p className="text-muted-foreground mt-1 text-sm sm:text-base">نظام إدارة مخبز باتر - CEO Command</p>

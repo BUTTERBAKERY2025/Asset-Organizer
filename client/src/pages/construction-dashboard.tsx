@@ -266,7 +266,7 @@ export default function ConstructionDashboardPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-screen-2xl mx-auto space-y-4" dir="rtl" ref={printRef}>
+      <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto space-y-4" dir="rtl" ref={printRef}>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-xl sm:text-2xl md:text-3xl font-bold" data-testid="text-page-title">لوحة تحكم المشاريع الإنشائية</h1>

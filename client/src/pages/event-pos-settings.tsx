@@ -228,7 +228,7 @@ export default function EventPosSettingsPage() {
 
   return (
     <Layout>
-      <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6" dir="rtl">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6" dir="rtl">
         {/* Header */}
         <div className="bg-gradient-to-l from-orange-500 to-amber-500 rounded-2xl p-5 mb-6 shadow-lg shadow-orange-200/40">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
