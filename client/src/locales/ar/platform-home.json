@@ -14,7 +14,22 @@
   "currency": "ر.س",
   "hero": {
     "pendingApprovals": "لديك {{count}} طلب بانتظار اعتمادك، ",
-    "salesSummary": "مبيعات اليوم {{amount}} {{currency}}"
+    "salesSummary": "مبيعات اليوم {{amount}} {{currency}}",
+    "searchPlaceholder": "ابحث في كل شيء..."
+  },
+  "alerts": {
+    "title": "تنبيهات تحتاج انتباهك",
+    "totalCount": "{{count}} عنصر",
+    "lowInventory": "أصناف منخفضة في المخزون",
+    "warehouseNotifications": "إشعارات مستودع غير مقروءة",
+    "wasteRisk": "تنبيهات هدر محتمل",
+    "securityAlerts": "تنبيهات أمنية غير محلولة"
+  },
+  "palette": {
+    "modulesSection": "الوحدات والصفحات",
+    "startTyping": "اكتب حرفين على الأقل للبحث عن البيانات",
+    "searchHint": "يمكنك البحث في: الموظفين، المنتجات، الفروع، المخزون، المشاريع، طلبات المواد، الحملات التسويقية",
+    "noResults": "لا توجد نتائج للبحث \"{{query}}\""
   },
   "eventPosTitle": "نقطة البيع",
   "platformName": "BUTTER BAKERY SYSTEM",

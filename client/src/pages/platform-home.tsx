@@ -13,9 +13,11 @@ import {
   HardDrive, LayoutDashboard, Factory, Megaphone,
   UsersRound, ClipboardList, Receipt, TrendingUp, TrendingDown,
   Sun, Moon, CloudSun, Languages, Warehouse,
-  Store, Briefcase, Sparkles,
+  Store, Briefcase, Sparkles, Search,
 } from "lucide-react";
 import type { SystemModule } from "@shared/schema";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { SmartAlertsCard } from "@/components/smart-alerts-card";
 
 type SemanticColor =
   | "money"
@@ -236,7 +238,23 @@ export default function PlatformHomePage() {
               )}
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2 shrink-0 flex-wrap">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => window.dispatchEvent(new CustomEvent("open-global-search"))}
+                className="gap-2 min-w-[180px] justify-between text-muted-foreground"
+                data-testid="button-open-command-palette"
+              >
+                <span className="flex items-center gap-2">
+                  <Search className="w-4 h-4" />
+                  {t("hero.searchPlaceholder")}
+                </span>
+                <kbd className="hidden sm:inline-flex pointer-events-none h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium opacity-100">
+                  <span className="text-xs">⌘</span>K
+                </kbd>
+              </Button>
+              <ThemeToggle />
               <Button
                 variant="outline"
                 size="sm"
@@ -250,6 +268,9 @@ export default function PlatformHomePage() {
             </div>
           </div>
         </section>
+
+        {/* ============ SMART ALERTS CARD ============ */}
+        {isAuthenticated && <SmartAlertsCard />}
 
         {/* ============ KPI STRIP (narrative horizontal) ============ */}
         {isAuthenticated && (

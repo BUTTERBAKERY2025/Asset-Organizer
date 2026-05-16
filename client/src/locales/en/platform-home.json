@@ -14,7 +14,22 @@
   "currency": "SAR",
   "hero": {
     "pendingApprovals": "You have {{count}} requests awaiting your approval, ",
-    "salesSummary": "today's sales are {{amount}} {{currency}}"
+    "salesSummary": "today's sales are {{amount}} {{currency}}",
+    "searchPlaceholder": "Search everything..."
+  },
+  "alerts": {
+    "title": "Alerts that need your attention",
+    "totalCount": "{{count}} items",
+    "lowInventory": "Low quantity inventory items",
+    "warehouseNotifications": "Unread warehouse notifications",
+    "wasteRisk": "Potential waste alerts",
+    "securityAlerts": "Unresolved security alerts"
+  },
+  "palette": {
+    "modulesSection": "Modules & pages",
+    "startTyping": "Type at least 2 characters to search data",
+    "searchHint": "You can search: employees, products, branches, inventory, projects, material requests, marketing campaigns",
+    "noResults": "No results for \"{{query}}\""
   },
   "eventPosTitle": "Event POS",
   "platformName": "BUTTER BAKERY SYSTEM",

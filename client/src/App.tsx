@@ -2,6 +2,7 @@ import React, { Suspense, useEffect, useTransition, useCallback, useState } from
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
+import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { PWAInstallPrompt } from "@/components/pwa-install-prompt";
@@ -435,19 +436,21 @@ function App() {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <AuthGate>
-          <ProductionProvider>
-            <TooltipProvider>
-              <Toaster />
-              <InactivityLogout />
-              <Router />
-              <PWAInstallPrompt />
-              <OfflineIndicator />
-              <SlowConnectionBanner />
-              <DataErrorBanner />
-            </TooltipProvider>
-          </ProductionProvider>
-        </AuthGate>
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} storageKey="butter-theme">
+          <AuthGate>
+            <ProductionProvider>
+              <TooltipProvider>
+                <Toaster />
+                <InactivityLogout />
+                <Router />
+                <PWAInstallPrompt />
+                <OfflineIndicator />
+                <SlowConnectionBanner />
+                <DataErrorBanner />
+              </TooltipProvider>
+            </ProductionProvider>
+          </AuthGate>
+        </ThemeProvider>
       </QueryClientProvider>
     </ErrorBoundary>
   );

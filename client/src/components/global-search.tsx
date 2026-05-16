@@ -13,12 +13,15 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   Search, Package, Building2, Users, ArrowLeftRight, Loader2, X,
-  UserCheck, ShoppingBag, Warehouse, MapPin, Megaphone
+  UserCheck, ShoppingBag, Warehouse, MapPin, Megaphone,
+  Receipt, Store, ClipboardList, Factory, UsersRound, Hammer, Briefcase, Settings, LayoutDashboard
 } from "lucide-react";
 import type { 
   InventoryItem, ConstructionProject, Contractor, AssetTransfer, User,
-  BranchEmployee, Product, WarehouseItem, Branch, MarketingCampaign
+  BranchEmployee, Product, WarehouseItem, Branch, MarketingCampaign, SystemModule
 } from "@shared/schema";
+import { useTranslation } from "react-i18next";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface SearchResults {
   inventory: InventoryItem[];
@@ -33,12 +36,41 @@ interface SearchResults {
   campaigns: MarketingCampaign[];
 }
 
+interface ModuleNav {
+  title: string;
+  icon: React.ComponentType<{ className?: string }>;
+  href: string;
+  module?: SystemModule;
+  color: string;
+}
+
 export function GlobalSearch() {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const [, navigate] = useLocation();
+  const { t } = useTranslation("platformHome");
+  const { canView } = usePermissions();
+
+  const modules: ModuleNav[] = [
+    { title: t("modules.sales.title"),      icon: Receipt,       href: "/cashier-journals",      color: "text-emerald-500", module: "cashier_journal" },
+    { title: t("eventPosTitle"),            icon: Store,         href: "/event-pos",             color: "text-emerald-500", module: "event_pos" as SystemModule },
+    { title: t("modules.production.title"), icon: ClipboardList, href: "/production-dashboard",  color: "text-blue-500",    module: "production" },
+    { title: t("modules.operations.title"), icon: Factory,       href: "/operations",            color: "text-blue-500",    module: "operations" },
+    { title: t("modules.hr.title"),         icon: UsersRound,    href: "/attendance-dashboard",  color: "text-teal-500",    module: "branch_employees" },
+    { title: t("modules.assets.title"),     icon: Package,       href: "/inventory",             color: "text-amber-500",   module: "inventory" },
+    { title: t("modules.warehouse.title"),  icon: Warehouse,     href: "/warehouse-dashboard",   color: "text-amber-500",   module: "warehouse" },
+    { title: t("modules.projects.title"),   icon: Hammer,        href: "/construction-projects", color: "text-orange-500",  module: "construction_projects" },
+    { title: t("modules.marketing.title"),  icon: Megaphone,     href: "/marketing",             color: "text-pink-500",    module: "marketing" },
+    { title: t("modules.executive.title"),  icon: Briefcase,     href: "/executive",             color: "text-violet-500",  module: "executive_dashboard" },
+    { title: t("modules.settings.title"),   icon: Settings,      href: "/settings",              color: "text-slate-500",   module: "settings" },
+  ];
+
+  const accessibleModules = modules.filter((m) => !m.module || canView(m.module));
+  const moduleMatches = debouncedQuery.length === 0
+    ? accessibleModules
+    : accessibleModules.filter((m) => m.title.toLowerCase().includes(debouncedQuery.toLowerCase()));
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -54,8 +86,13 @@ export function GlobalSearch() {
         setIsOpen(true);
       }
     };
+    const handleOpen = () => setIsOpen(true);
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener("open-global-search", handleOpen as EventListener);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("open-global-search", handleOpen as EventListener);
+    };
   }, []);
 
   useEffect(() => {
@@ -174,19 +211,46 @@ export function GlobalSearch() {
           </DialogHeader>
 
           <ScrollArea className="max-h-[500px] p-4 pt-2">
+            <div className="space-y-3">
+              {moduleMatches.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
+                    <LayoutDashboard className="h-4 w-4 text-primary" />
+                    {t("palette.modulesSection")} ({moduleMatches.length})
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+                    {moduleMatches.slice(0, 12).map((m) => {
+                      const Icon = m.icon;
+                      return (
+                        <button
+                          key={m.href}
+                          onClick={() => { setIsOpen(false); setQuery(""); navigate(m.href); }}
+                          className="text-right p-2 rounded hover:bg-accent flex items-center gap-2"
+                          data-testid={`palette-module-${m.href.replace(/\//g, "")}`}
+                        >
+                          <Icon className={`h-4 w-4 ${m.color}`} />
+                          <span className="font-medium text-sm">{m.title}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             {isLoading && debouncedQuery.length >= 2 ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
             ) : debouncedQuery.length < 2 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Search className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>اكتب حرفين على الأقل للبحث</p>
-                <p className="text-xs mt-2">يمكنك البحث في: الموظفين، المنتجات، الفروع، المخزون، المشاريع، طلبات المواد، الحملات التسويقية</p>
-              </div>
+              moduleMatches.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Search className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>{t("palette.startTyping")}</p>
+                  <p className="text-xs mt-2">{t("palette.searchHint")}</p>
+                </div>
+              ) : null
             ) : totalResults === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                <p>لا توجد نتائج للبحث "{debouncedQuery}"</p>
+                <p>{t("palette.noResults", { query: debouncedQuery })}</p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -392,6 +456,7 @@ export function GlobalSearch() {
                 )}
               </div>
             )}
+            </div>
           </ScrollArea>
         </DialogContent>
       </Dialog>
