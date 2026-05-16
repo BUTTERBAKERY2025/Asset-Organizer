@@ -91,7 +91,8 @@
     "updatingData": "Updating data...",
     "targetsDashboard": "Targets Dashboard",
     "targetsPlanning": "Targets Planning",
-    "incentives": "Incentives"
+    "incentives": "Incentives",
+    "back": "Back"
   },
   "filters": {
     "title": "Advanced Report Filters",

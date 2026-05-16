@@ -29,6 +29,7 @@ import type { Branch, CashierSalesJournal, JournalAttachment } from "@shared/sch
 import { printHtmlContent } from "@/lib/print-utils";
 import { useTranslation } from "react-i18next";
 import { KpiCard, type KpiTone, type KpiIcon } from "@/components/dashboard/kpi-card";
+import { PageHeader } from "@/components/dashboard/page-header";
 
 const TONE_FROM_BG: Array<[RegExp, KpiTone]> = [
   [/emerald|green/i, "money"],
@@ -1682,54 +1683,48 @@ export default function OperationsReportsDashboardPage() {
   return (
     <Layout>
       <div className="p-3 sm:p-4 md:p-6 lg:p-8 max-w-6xl mx-auto space-y-4" dir="rtl">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Link href="/operations">
-              <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" data-testid="btn-back">
-                <ArrowRight className="h-4 w-4" />
+        <PageHeader
+          icon={BarChart3}
+          tone="inventory"
+          title={t('page.title')}
+          description={t('page.subtitle')}
+          backHref="/operations"
+          backLabel={t('page.back') as string}
+          actions={
+            <>
+              <Link href="/targets-dashboard">
+                <Button variant="outline" size="sm" className="h-9 gap-2" data-testid="button-targets-dashboard">
+                  <Trophy className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                  {t('page.targetsDashboard')}
+                </Button>
+              </Link>
+              <Link href="/targets-planning">
+                <Button variant="outline" size="sm" className="h-9 gap-2" data-testid="button-targets-planning">
+                  <Target className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                  {t('page.targetsPlanning')}
+                </Button>
+              </Link>
+              <Link href="/incentives-management">
+                <Button variant="outline" size="sm" className="h-9 gap-2" data-testid="button-incentives">
+                  <Gift className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                  {t('page.incentives')}
+                </Button>
+              </Link>
+              <Button variant="outline" size="sm" className="h-9 gap-2" onClick={() => refetch()} data-testid="button-refresh">
+                <RefreshCw className="w-4 h-4" />
+                {t('page.refresh')}
               </Button>
-            </Link>
-            <div>
-              <h1 className="text-lg sm:text-xl md:text-2xl font-bold flex items-center gap-2" data-testid="page-title">
-                <BarChart3 className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 text-amber-600" />
-                {t('page.title')}
-              </h1>
-              <p className="text-xs sm:text-sm text-muted-foreground">{t('page.subtitle')}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <Link href="/targets-dashboard">
-              <Button variant="outline" className="h-11 sm:h-9 gap-2" data-testid="button-targets-dashboard">
-                <Trophy className="w-4 h-4 text-amber-600" />
-                {t('page.targetsDashboard')}
+              <Button variant="outline" size="sm" className="h-9 gap-2" onClick={handleExportExcel} disabled={!report} data-testid="button-export-excel">
+                <Download className="w-4 h-4" />
+                Excel
               </Button>
-            </Link>
-            <Link href="/targets-planning">
-              <Button variant="outline" className="h-11 sm:h-9 gap-2" data-testid="button-targets-planning">
-                <Target className="w-4 h-4 text-amber-600" />
-                {t('page.targetsPlanning')}
+              <Button size="sm" className="h-9 gap-2 bg-amber-600 hover:bg-amber-700 text-white" onClick={handleExportPDF} disabled={!report} data-testid="button-export-pdf">
+                <FileDown className="w-4 h-4" />
+                PDF
               </Button>
-            </Link>
-            <Link href="/incentives-management">
-              <Button variant="outline" className="h-11 sm:h-9 gap-2" data-testid="button-incentives">
-                <Gift className="w-4 h-4 text-amber-600" />
-                {t('page.incentives')}
-              </Button>
-            </Link>
-            <Button variant="outline" className="h-11 sm:h-9 gap-2" onClick={() => refetch()} data-testid="button-refresh">
-              <RefreshCw className="w-4 h-4" />
-              {t('page.refresh')}
-            </Button>
-            <Button variant="outline" className="h-11 sm:h-9 gap-2" onClick={handleExportExcel} disabled={!report} data-testid="button-export-excel">
-              <Download className="w-4 h-4" />
-              Excel
-            </Button>
-            <Button className="h-11 sm:h-9 gap-2 bg-amber-600 hover:bg-amber-700" onClick={handleExportPDF} disabled={!report} data-testid="button-export-pdf">
-              <FileDown className="w-4 h-4" />
-              PDF
-            </Button>
-          </div>
-        </div>
+            </>
+          }
+        />
 
         <Collapsible open={filtersOpen} onOpenChange={setFiltersOpen}>
           <Card className="border-border bg-card">
