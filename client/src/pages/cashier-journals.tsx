@@ -392,7 +392,7 @@ export default function CashierJournalsPage() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
             <KpiCard
               label={t("stats.totalSales")}
-              value={formatCurrency(stats.totalSales)}
+              value={stats.totalSales || 0}
               unit="ر.س"
               icon={DollarSign}
               tone="production"
@@ -400,7 +400,7 @@ export default function CashierJournalsPage() {
             />
             <KpiCard
               label={t("stats.totalShortage")}
-              value={formatCurrency(stats.shortageAmount)}
+              value={stats.shortageAmount || 0}
               unit="ر.س"
               icon={TrendingDown}
               tone="alert"
@@ -409,7 +409,7 @@ export default function CashierJournalsPage() {
             />
             <KpiCard
               label={t("stats.totalSurplus")}
-              value={formatCurrency(stats.surplusAmount)}
+              value={stats.surplusAmount || 0}
               unit="ر.س"
               icon={TrendingUp}
               tone="inventory"
@@ -418,7 +418,7 @@ export default function CashierJournalsPage() {
             />
             <KpiCard
               label={t("stats.avgSalesPerJournal")}
-              value={formatCurrency(stats.averageTicket)}
+              value={stats.averageTicket || 0}
               unit="ر.س"
               icon={Users}
               tone="money"
