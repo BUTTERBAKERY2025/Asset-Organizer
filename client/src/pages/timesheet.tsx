@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
+import { PageHeader, KpiCard } from "@/components/dashboard";
 import { useBranches } from "@/hooks/useBranches";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,7 +19,7 @@ import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
 import {
   Calendar, FileText, Pen, Download, Loader2, CheckCircle, Clock,
-  AlertCircle, User, Check, XCircle, ArrowRight, LayoutDashboard, Users,
+  AlertCircle, User, Check, XCircle, LayoutDashboard, Users,
   Sparkles, Eye, FilePlus2, AlertTriangle, FileDown, Wand2, Lock, History, RefreshCw,
 } from "lucide-react";
 import { useLocation } from "wouter";
@@ -780,40 +781,16 @@ export default function TimesheetPage() {
 
   const [, navigate] = useLocation();
 
-  // ====== KPI Card subcomponent ======
-  const KpiCard = ({ label, value, icon: Icon, accent, testId }: { label: string; value: number; icon: any; accent: string; testId: string }) => (
-    <div className={`rounded-lg border p-3 ${accent}`} data-testid={testId}>
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="text-2xl font-bold leading-tight">{value}</div>
-          <div className="text-xs opacity-80 mt-1">{label}</div>
-        </div>
-        <Icon className="w-6 h-6 opacity-60" />
-      </div>
-    </div>
-  );
-
   return (
     <Layout>
       <div className="p-3 sm:p-4 md:p-6 max-w-7xl mx-auto space-y-4" dir={isRTL ? "rtl" : "ltr"}>
-        {/* Page Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3 sm:gap-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-11 w-11 sm:h-8 sm:w-8"
-              onClick={() => navigate("/attendance-dashboard")}
-              data-testid="btn-back"
-            >
-              <ArrowRight className="w-5 h-5" />
-            </Button>
-            <div>
-              <h1 className="text-lg sm:text-xl md:text-2xl font-bold" data-testid="text-page-title">{t("timesheet.pageTitle")}</h1>
-              <p className="text-xs sm:text-sm text-muted-foreground">{t("timesheet.pageDescription")}</p>
-            </div>
-          </div>
-        </div>
+        <PageHeader
+          icon={FileText}
+          tone="violet"
+          title={t("timesheet.pageTitle")}
+          description={t("timesheet.pageDescription")}
+          backHref="/attendance-dashboard"
+        />
 
         {/* Shared Filter Bar */}
         <Card className="border-amber-100 bg-amber-50/30">
@@ -893,12 +870,12 @@ export default function TimesheetPage() {
               <>
                 {/* KPIs Strip */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-                  <KpiCard label={t("timesheet.dashboard.kpiTotal")} value={kpis.total} icon={Users} accent="bg-slate-50 border-slate-200 text-slate-900" testId="kpi-total" />
-                  <KpiCard label={t("timesheet.dashboard.kpiSigned")} value={kpis.signed} icon={CheckCircle} accent="bg-green-50 border-green-200 text-green-900" testId="kpi-signed" />
-                  <KpiCard label={t("timesheet.dashboard.kpiPendingMgr")} value={kpis.pendingMgr} icon={Clock} accent="bg-blue-50 border-blue-200 text-blue-900" testId="kpi-pending-mgr" />
-                  <KpiCard label={t("timesheet.dashboard.kpiPendingEmp")} value={kpis.pendingEmp} icon={Pen} accent="bg-amber-50 border-amber-200 text-amber-900" testId="kpi-pending-emp" />
-                  <KpiCard label={t("timesheet.dashboard.kpiDraft")} value={kpis.draft} icon={FileText} accent="bg-gray-50 border-gray-200 text-gray-900" testId="kpi-draft" />
-                  <KpiCard label={t("timesheet.dashboard.kpiNotGenerated")} value={kpis.notGen} icon={AlertCircle} accent="bg-rose-50 border-rose-200 text-rose-900" testId="kpi-not-generated" />
+                  <KpiCard label={t("timesheet.dashboard.kpiTotal")} value={kpis.total} icon={Users} tone="neutral" data-testid="kpi-total" />
+                  <KpiCard label={t("timesheet.dashboard.kpiSigned")} value={kpis.signed} icon={CheckCircle} tone="money" data-testid="kpi-signed" />
+                  <KpiCard label={t("timesheet.dashboard.kpiPendingMgr")} value={kpis.pendingMgr} icon={Clock} tone="production" data-testid="kpi-pending-mgr" />
+                  <KpiCard label={t("timesheet.dashboard.kpiPendingEmp")} value={kpis.pendingEmp} icon={Pen} tone="inventory" data-testid="kpi-pending-emp" />
+                  <KpiCard label={t("timesheet.dashboard.kpiDraft")} value={kpis.draft} icon={FileText} tone="neutral" data-testid="kpi-draft" />
+                  <KpiCard label={t("timesheet.dashboard.kpiNotGenerated")} value={kpis.notGen} icon={AlertCircle} tone="alert" data-testid="kpi-not-generated" />
                 </div>
 
                 {/* Quick Actions */}
@@ -1164,23 +1141,11 @@ export default function TimesheetPage() {
                       <span>{t("timesheet.supersededWarning")} (#{selectedReport.supersededBy})</span>
                     </div>
                   )}
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                    <div className="p-4 bg-muted rounded-lg text-center">
-                      <div className="text-2xl font-bold">{selectedReport.totalScheduledDays}</div>
-                      <div className="text-sm text-muted-foreground">{t("timesheet.scheduledDays")}</div>
-                    </div>
-                    <div className="p-4 bg-green-50 rounded-lg text-center">
-                      <div className="text-2xl font-bold text-green-700">{selectedReport.totalPresentDays}</div>
-                      <div className="text-sm text-green-600">{t("timesheet.presentDays")}</div>
-                    </div>
-                    <div className="p-4 bg-red-50 rounded-lg text-center">
-                      <div className="text-2xl font-bold text-red-700">{selectedReport.totalAbsentDays}</div>
-                      <div className="text-sm text-red-600">{t("timesheet.absentDays")}</div>
-                    </div>
-                    <div className="p-4 bg-blue-50 rounded-lg text-center">
-                      <div className="text-2xl font-bold text-blue-700">{selectedReport.totalActualHours?.toFixed(1) || 0}</div>
-                      <div className="text-sm text-blue-600">{t("timesheet.totalWorkHours")}</div>
-                    </div>
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+                    <KpiCard label={t("timesheet.scheduledDays")} value={selectedReport.totalScheduledDays} icon={Calendar} tone="neutral" data-testid="kpi-scheduled-days" />
+                    <KpiCard label={t("timesheet.presentDays")} value={selectedReport.totalPresentDays} icon={CheckCircle} tone="money" data-testid="kpi-present-days" />
+                    <KpiCard label={t("timesheet.absentDays")} value={selectedReport.totalAbsentDays} icon={XCircle} tone="alert" data-testid="kpi-absent-days" />
+                    <KpiCard label={t("timesheet.totalWorkHours")} value={Number(selectedReport.totalActualHours?.toFixed(1) ?? 0)} icon={Clock} tone="production" data-testid="kpi-actual-hours" />
                   </div>
 
                   {/* ====== Exceptions Panel (Phase 2) ====== */}

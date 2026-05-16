@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useMemo, useCallback, memo } from "react";
 import { Layout } from "@/components/layout";
+import { PageHeader } from "@/components/dashboard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +14,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
-import { Clock, LogIn, LogOut, Check, Pencil, RotateCcw, Building2, User, Timer, ArrowRight, Users, Calendar, Sun, Moon, Sunrise, Loader2, MapPin, AlertTriangle, ChevronLeft, ChevronRight, ShieldAlert, Fingerprint } from "lucide-react";
+import { Clock, LogIn, LogOut, Check, Pencil, RotateCcw, Building2, User, Timer, Users, Calendar, Sun, Moon, Sunrise, Loader2, MapPin, AlertTriangle, ChevronLeft, ChevronRight, ShieldAlert, Fingerprint } from "lucide-react";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
@@ -603,31 +604,23 @@ export default function AttendanceCheckPage() {
   return (
     <Layout>
       <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-4" dir={isRTL ? "rtl" : "ltr"}>
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center gap-3 sm:gap-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-11 w-11 sm:h-9 sm:w-9"
-              onClick={() => navigate("/attendance-dashboard")}
-              data-testid="btn-back"
-            >
-              <ArrowRight className="w-5 h-5" />
-            </Button>
-            <div>
-              <h1 className="text-lg sm:text-xl md:text-2xl font-bold" data-testid="page-title">{t("attendanceCheck.pageTitle")}</h1>
-              <p className="text-xs sm:text-sm text-muted-foreground">{t("attendanceCheck.pageDescription")}</p>
+        <PageHeader
+          icon={Fingerprint}
+          tone="people"
+          title={t("attendanceCheck.pageTitle")}
+          description={t("attendanceCheck.pageDescription")}
+          backHref="/attendance-dashboard"
+          actions={
+            <div className="text-end">
+              <div className="text-xl sm:text-2xl md:text-3xl font-mono font-bold text-primary leading-none" data-testid="current-time">
+                <LiveClock dateLocale={dateLocale} />
+              </div>
+              <div className="text-xs sm:text-sm text-muted-foreground mt-1">
+                {format(new Date(), "EEEE, dd MMMM yyyy", { locale: dateLocale })}
+              </div>
             </div>
-          </div>
-          <div className={isRTL ? "text-left" : "text-right"}>
-            <div className="text-xl sm:text-2xl md:text-3xl font-mono font-bold text-primary" data-testid="current-time">
-              <LiveClock dateLocale={dateLocale} />
-            </div>
-            <div className="text-xs sm:text-sm text-muted-foreground">
-              {format(new Date(), "EEEE, dd MMMM yyyy", { locale: dateLocale })}
-            </div>
-          </div>
-        </div>
+          }
+        />
 
         <Card>
           <CardHeader>

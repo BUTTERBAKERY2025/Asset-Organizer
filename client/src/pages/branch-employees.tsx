@@ -1,4 +1,5 @@
 import { Layout } from "@/components/layout";
+import { PageHeader, KpiCard } from "@/components/dashboard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -419,52 +420,12 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
 
   return (
     <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-4" dir={isRTL ? "rtl" : "ltr"}>
-      {/* KPI Cards */}
+      {/* KPI Cards — transfers summary */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <Card className="bg-yellow-50 border-yellow-200">
-          <CardContent className="pt-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-yellow-600">{isRTL ? "معلقة" : "Pending"}</p>
-                <p className="text-2xl font-bold text-yellow-800">{stats.pending}</p>
-              </div>
-              <Clock className="w-8 h-8 text-yellow-500" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-green-50 border-green-200">
-          <CardContent className="pt-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-green-600">{isRTL ? "معتمدة" : "Approved"}</p>
-                <p className="text-2xl font-bold text-green-800">{stats.approved}</p>
-              </div>
-              <CheckCircle className="w-8 h-8 text-green-500" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-blue-50 border-blue-200">
-          <CardContent className="pt-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-blue-600">{isRTL ? "مكتملة" : "Completed"}</p>
-                <p className="text-2xl font-bold text-blue-800">{stats.completed}</p>
-              </div>
-              <ArrowRight className="w-8 h-8 text-blue-500" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-red-50 border-red-200">
-          <CardContent className="pt-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-red-600">{isRTL ? "مرفوضة" : "Rejected"}</p>
-                <p className="text-2xl font-bold text-red-800">{stats.rejected}</p>
-              </div>
-              <XCircle className="w-8 h-8 text-red-500" />
-            </div>
-          </CardContent>
-        </Card>
+        <KpiCard label={isRTL ? "معلقة" : "Pending"} value={stats.pending} icon={Clock} tone="inventory" data-testid="kpi-transfers-pending" />
+        <KpiCard label={isRTL ? "معتمدة" : "Approved"} value={stats.approved} icon={CheckCircle} tone="money" data-testid="kpi-transfers-approved" />
+        <KpiCard label={isRTL ? "مكتملة" : "Completed"} value={stats.completed} icon={ArrowRight} tone="production" data-testid="kpi-transfers-completed" />
+        <KpiCard label={isRTL ? "مرفوضة" : "Rejected"} value={stats.rejected} icon={XCircle} tone="alert" data-testid="kpi-transfers-rejected" />
       </div>
 
       {/* Controls */}
@@ -1742,46 +1703,43 @@ export default function BranchEmployeesPage() {
   return (
     <Layout>
       <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-4" dir={isRTL ? "rtl" : "ltr"}>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3 sm:gap-4">
-            <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" onClick={() => navigate("/attendance-dashboard")} data-testid="button-back">
-              {isRTL ? <ChevronLeft className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
-            </Button>
-            <div>
-              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">{t("branchEmployees.pageTitle")}</h1>
-              <p className="text-xs sm:text-sm text-gray-500">{t("branchEmployees.pageDescription")}</p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" className="h-11 sm:h-9" onClick={exportToExcel} data-testid="button-export-excel">
-              <FileSpreadsheet className={`w-4 h-4 ${isRTL ? 'ml-2' : 'mr-2'}`} />
-              Excel
-            </Button>
-            <Button variant="outline" className="h-11 sm:h-9" onClick={exportToPDF} data-testid="button-export-pdf">
-              <Download className={`w-4 h-4 ${isRTL ? 'ml-2' : 'mr-2'}`} />
-              PDF
-            </Button>
-            <Button variant="outline" className="h-11 sm:h-9" onClick={() => handlePrint()} data-testid="button-print">
-              <Printer className={`w-4 h-4 ${isRTL ? 'ml-2' : 'mr-2'}`} />
-              {t("branchEmployees.print")}
-            </Button>
-            <input
-              type="file"
-              ref={fileInputRef}
-              accept=".xlsx,.xls"
-              className="hidden"
-              onChange={handleFileSelect}
-              data-testid="input-import-file"
-            />
-            <Button variant="outline" className="h-11 sm:h-9" onClick={() => fileInputRef.current?.click()} data-testid="button-import">
-              <Upload className={`w-4 h-4 ${isRTL ? 'ml-2' : 'mr-2'}`} />
-              {isRTL ? "استيراد" : "Import"}
-            </Button>
-            <Button className="bg-teal-600 hover:bg-teal-700 text-white h-11 sm:h-9" onClick={() => navigate("/organizational-structure")} data-testid="button-org-structure">
-              <Network className={`w-4 h-4 ${isRTL ? 'ml-2' : 'mr-2'}`} />
-              {t("branchEmployees.orgStructure")}
-            </Button>
-            <Dialog open={isDialogOpen} onOpenChange={(open) => {
+        <PageHeader
+          icon={Users}
+          tone="people"
+          title={t("branchEmployees.pageTitle")}
+          description={t("branchEmployees.pageDescription")}
+          backHref="/attendance-dashboard"
+          actions={
+            <>
+              <Button variant="outline" size="sm" className="h-9" onClick={exportToExcel} data-testid="button-export-excel">
+                <FileSpreadsheet className={`w-4 h-4 ${isRTL ? 'ml-2' : 'mr-2'}`} />
+                Excel
+              </Button>
+              <Button variant="outline" size="sm" className="h-9" onClick={exportToPDF} data-testid="button-export-pdf">
+                <Download className={`w-4 h-4 ${isRTL ? 'ml-2' : 'mr-2'}`} />
+                PDF
+              </Button>
+              <Button variant="outline" size="sm" className="h-9" onClick={() => handlePrint()} data-testid="button-print">
+                <Printer className={`w-4 h-4 ${isRTL ? 'ml-2' : 'mr-2'}`} />
+                {t("branchEmployees.print")}
+              </Button>
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept=".xlsx,.xls"
+                className="hidden"
+                onChange={handleFileSelect}
+                data-testid="input-import-file"
+              />
+              <Button variant="outline" size="sm" className="h-9" onClick={() => fileInputRef.current?.click()} data-testid="button-import">
+                <Upload className={`w-4 h-4 ${isRTL ? 'ml-2' : 'mr-2'}`} />
+                {isRTL ? "استيراد" : "Import"}
+              </Button>
+              <Button size="sm" className="bg-teal-600 hover:bg-teal-700 text-white h-9" onClick={() => navigate("/organizational-structure")} data-testid="button-org-structure">
+                <Network className={`w-4 h-4 ${isRTL ? 'ml-2' : 'mr-2'}`} />
+                {t("branchEmployees.orgStructure")}
+              </Button>
+              <Dialog open={isDialogOpen} onOpenChange={(open) => {
               setIsDialogOpen(open);
               if (!open) {
                 setEditingEmployee(null);
@@ -2146,8 +2104,9 @@ export default function BranchEmployeesPage() {
               </form>
             </DialogContent>
           </Dialog>
-          </div>
-        </div>
+            </>
+          }
+        />
 
         {/* Main Tabs */}
         <Tabs value={mainTab} onValueChange={setMainTab} className="w-full">
