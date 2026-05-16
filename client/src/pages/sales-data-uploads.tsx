@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Layout } from "@/components/layout";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -313,23 +314,13 @@ export default function SalesDataUploadsPage() {
   return (
     <Layout>
       <div className="p-3 sm:p-4 md:p-6 max-w-[1400px] mx-auto space-y-4 sm:space-y-6" dir="rtl">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <Link href="/production-dashboard">
-              <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8 shrink-0" data-testid="btn-back">
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-foreground" data-testid="text-page-title">
-                رفع بيانات المبيعات
-              </h1>
-              <p className="text-xs sm:text-sm text-muted-foreground">
-                رفع ملفات Excel لتحليل بيانات المبيعات وتخطيط الإنتاج
-              </p>
-            </div>
-          </div>
-        </div>
+        <PageHeader
+          icon={Upload}
+          tone="primary"
+          title="رفع بيانات المبيعات"
+          description="رفع ملفات Excel لتحليل بيانات المبيعات وتخطيط الإنتاج"
+          backHref="/production-dashboard"
+        />
 
         <Card>
           <CardHeader className="p-3 sm:p-4 md:p-6">

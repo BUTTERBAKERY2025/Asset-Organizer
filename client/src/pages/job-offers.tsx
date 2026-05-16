@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -249,23 +250,23 @@ export default function JobOffersPage() {
 
   return (
     <Layout>
-      <div className="space-y-4 p-4" dir="rtl">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-3">
-            <Briefcase className="w-8 h-8 text-amber-600" />
-            <div>
-              <h1 className="text-2xl font-bold">عروض العمل</h1>
-              <p className="text-sm text-slate-500">إدارة وإرسال عروض العمل للمرشحين</p>
-            </div>
-          </div>
-          <Button
-            onClick={() => { setForm(emptyForm); setStep(1); setShowCreate(true); }}
-            className="bg-amber-600 hover:bg-amber-700 gap-2"
-            data-testid="btn-new-offer"
-          >
-            <Plus className="w-4 h-4" /> عرض جديد
-          </Button>
-        </div>
+      <div className="p-4 max-w-[1400px] mx-auto space-y-4" dir="rtl">
+        <PageHeader
+          icon={Briefcase}
+          tone="people"
+          title="عروض العمل"
+          description="إدارة وإرسال عروض العمل للمرشحين"
+          actions={
+            <Button
+              size="sm"
+              onClick={() => { setForm(emptyForm); setStep(1); setShowCreate(true); }}
+              className="gap-2"
+              data-testid="btn-new-offer"
+            >
+              <Plus className="w-4 h-4" /> عرض جديد
+            </Button>
+          }
+        />
 
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
           <StatCard label="الإجمالي" value={stats?.total} color="text-slate-700" icon={FileText} />

@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useReactToPrint } from "react-to-print";
 import { useLocation } from "wouter";
 import { Layout } from "@/components/layout";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -256,24 +257,23 @@ export default function EmploymentApplicationsPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-6 space-y-6" dir="rtl">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Users className="w-6 h-6 text-[#e67e22]" />
-              طلبات التوظيف
-            </h1>
-            <p className="text-sm text-gray-600 mt-1">إدارة الطلبات الموجّهة والمفتوحة من المتقدمين</p>
-          </div>
-          <div className="flex gap-2">
-            <Button onClick={() => setShowVacancy(true)} variant="outline" data-testid="button-new-vacancy">
-              <Briefcase className="w-4 h-4 ml-1" /> وظيفة جديدة
-            </Button>
-            <Button onClick={() => setShowCreate(true)} className="bg-[#e67e22] hover:bg-[#d35400]" data-testid="button-new-application">
-              <Plus className="w-4 h-4 ml-1" /> طلب موجّه
-            </Button>
-          </div>
-        </div>
+      <div className="p-4 md:p-6 max-w-[1400px] mx-auto space-y-6" dir="rtl">
+        <PageHeader
+          icon={Users}
+          tone="people"
+          title="طلبات التوظيف"
+          description="إدارة الطلبات الموجّهة والمفتوحة من المتقدمين"
+          actions={
+            <div className="flex gap-2">
+              <Button size="sm" onClick={() => setShowVacancy(true)} variant="outline" data-testid="button-new-vacancy">
+                <Briefcase className="w-4 h-4 ml-1" /> وظيفة جديدة
+              </Button>
+              <Button size="sm" onClick={() => setShowCreate(true)} data-testid="button-new-application">
+                <Plus className="w-4 h-4 ml-1" /> طلب موجّه
+              </Button>
+            </div>
+          }
+        />
 
         {stats && (
           <div className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-7 gap-3">

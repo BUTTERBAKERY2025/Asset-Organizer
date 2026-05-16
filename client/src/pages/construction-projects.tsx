@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Layout } from "@/components/layout";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useBranches } from "@/hooks/useBranches";
 import { useForm } from "react-hook-form";
@@ -34,7 +35,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, Search, Loader2, Building2, Calendar, DollarSign, Eye, Check, ChevronDown } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Loader2, Building2, HardHat, Calendar, DollarSign, Eye, Check, ChevronDown } from "lucide-react";
 import { Link } from "wouter";
 import type { ConstructionProject } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
@@ -286,18 +287,19 @@ export default function ConstructionProjectsPage() {
   return (
     <Layout>
       <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto space-y-4" dir="rtl">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground">المشاريع الإنشائية</h1>
-            <p className="text-sm sm:text-base text-muted-foreground">إدارة ومتابعة مشاريع البناء والتجديد</p>
-          </div>
-          {canCreateProject && (
-            <Button onClick={() => { form.reset(); setIsAddDialogOpen(true); }} className="h-11 sm:h-9 w-full sm:w-auto" data-testid="button-add-project">
+        <PageHeader
+          icon={HardHat}
+          tone="construction"
+          title="المشاريع الإنشائية"
+          description="إدارة ومتابعة مشاريع البناء والتجديد"
+          backHref="/construction-dashboard"
+          actions={canCreateProject ? (
+            <Button size="sm" onClick={() => { form.reset(); setIsAddDialogOpen(true); }} data-testid="button-add-project">
               <Plus className="w-4 h-4 ml-2" />
               إضافة مشروع
             </Button>
-          )}
-        </div>
+          ) : null}
+        />
 
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="relative flex-1">

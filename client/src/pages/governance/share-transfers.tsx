@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Layout } from "@/components/layout";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -121,30 +122,20 @@ export default function ShareTransfersPage() {
   return (
     <Layout>
       <div className="max-w-[1400px] mx-auto p-3 sm:p-4 md:p-6 space-y-4" dir="rtl">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3 sm:gap-4">
-            <Link href="/governance">
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-            </Link>
-            <div className="p-2 sm:p-3 bg-gradient-to-br from-cyan-500 to-teal-600 rounded-xl">
-              <ArrowLeftRight className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
-            </div>
-            <div>
-              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-cyan-800" data-testid="page-title">
-                تحويلات الأسهم
-              </h1>
-              <p className="text-xs sm:text-sm text-gray-600">إدارة عمليات نقل ملكية الأسهم</p>
-            </div>
-          </div>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="gap-2 bg-cyan-600 hover:bg-cyan-700" data-testid="btn-add-transfer">
-                <Plus className="h-4 w-4" />
-                تحويل جديد
-              </Button>
-            </DialogTrigger>
+        <PageHeader
+          icon={ArrowLeftRight}
+          tone="executive"
+          title="تحويلات الأسهم"
+          description="إدارة عمليات نقل ملكية الأسهم"
+          backHref="/governance"
+          actions={
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" className="gap-2" data-testid="btn-add-transfer">
+                  <Plus className="h-4 w-4" />
+                  تحويل جديد
+                </Button>
+              </DialogTrigger>
             <DialogContent className="max-w-xl">
               <DialogHeader>
                 <DialogTitle>طلب تحويل أسهم</DialogTitle>
@@ -217,8 +208,9 @@ export default function ShareTransfersPage() {
                 </DialogFooter>
               </form>
             </DialogContent>
-          </Dialog>
-        </div>
+            </Dialog>
+          }
+        />
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <Card className="bg-gradient-to-br from-cyan-50 to-teal-50 border-cyan-200">

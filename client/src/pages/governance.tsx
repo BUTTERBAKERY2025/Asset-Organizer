@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { Layout } from "@/components/layout";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -161,35 +162,26 @@ export default function GovernancePage() {
   return (
     <Layout>
       <div className="max-w-[1400px] mx-auto p-3 sm:p-4 md:p-6 space-y-4" dir="rtl">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3 sm:gap-4">
-            <Link href="/executive">
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <ChevronLeft className="h-4 w-4" />
+        <PageHeader
+          icon={Landmark}
+          tone="executive"
+          title="الحوكمة ومجلس الإدارة"
+          description="إدارة شؤون مجلس الإدارة والجمعية العمومية والامتثال"
+          backHref="/executive"
+          actions={
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" className="gap-2" data-testid="btn-notifications">
+                <Bell className="h-4 w-4" />
+                <span className="hidden sm:inline">التنبيهات</span>
               </Button>
-            </Link>
-            <div className="p-2 sm:p-3 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl">
-              <Landmark className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
+              <Button size="sm" className="gap-2" data-testid="btn-new-meeting">
+                <Plus className="h-4 w-4" />
+                <span className="hidden sm:inline">اجتماع جديد</span>
+                <span className="sm:hidden">جديد</span>
+              </Button>
             </div>
-            <div>
-              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-violet-800" data-testid="page-title">
-                الحوكمة ومجلس الإدارة
-              </h1>
-              <p className="text-xs sm:text-sm text-gray-600">إدارة شؤون مجلس الإدارة والجمعية العمومية والامتثال</p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" className="gap-2 text-xs sm:text-sm" data-testid="btn-notifications">
-              <Bell className="h-3 w-3 sm:h-4 sm:w-4" />
-              <span className="hidden sm:inline">التنبيهات</span>
-            </Button>
-            <Button className="gap-2 text-xs sm:text-sm bg-violet-600 hover:bg-violet-700" data-testid="btn-new-meeting">
-              <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
-              <span className="hidden sm:inline">اجتماع جديد</span>
-              <span className="sm:hidden">جديد</span>
-            </Button>
-          </div>
-        </div>
+          }
+        />
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full max-w-md grid-cols-2">

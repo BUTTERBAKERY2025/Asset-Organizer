@@ -1,4 +1,5 @@
 import { Layout } from "@/components/layout";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -325,51 +326,37 @@ export default function AdvancedProductionOrderDetailsPage() {
   return (
     <Layout>
       <div className="p-3 sm:p-6 max-w-[1400px] mx-auto space-y-4 sm:space-y-6" dir="rtl">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3 sm:gap-4">
-            <Link href="/advanced-production-orders">
-              <Button variant="ghost" size="icon" className="hover:bg-amber-50 h-11 w-11 min-h-[44px] min-w-[44px] sm:h-10 sm:w-10 sm:min-h-0 sm:min-w-0" data-testid="btn-back">
-                <ArrowRight className="h-5 w-5" />
+        <PageHeader
+          icon={ClipboardList}
+          tone="production"
+          title={order.title || order.orderNumber}
+          description={`${order.orderNumber} • ${getBranchName(order.sourceBranchId)} • ${formatDate(order.startDate)}`}
+          backHref="/advanced-production-orders"
+          actions={
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge className={`${statusConfig.bgColor} ${statusConfig.color} border-0 gap-1`}>
+                <StatusIcon className="h-3 w-3" />
+                {statusConfig.label}
+              </Badge>
+              <Button variant="outline" size="sm" onClick={() => handlePrint()} data-testid="btn-print">
+                <Printer className="h-4 w-4 ml-2" />
+                طباعة
               </Button>
-            </Link>
-            <div>
-              <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900" data-testid="order-title">
-                  {order.title || order.orderNumber}
-                </h1>
-                <Badge className={`${statusConfig.bgColor} ${statusConfig.color} border-0 gap-1`}>
-                  <StatusIcon className="h-3 w-3" />
-                  {statusConfig.label}
-                </Badge>
-              </div>
-              <p className="text-gray-500 mt-1 flex items-center gap-2 text-xs sm:text-sm flex-wrap">
-                <span className="flex items-center gap-1"><FileText className="h-3.5 w-3.5" /> {order.orderNumber}</span>
-                <span className="text-gray-300">|</span>
-                <span className="flex items-center gap-1"><Building2 className="h-3.5 w-3.5" /> {getBranchName(order.sourceBranchId)}</span>
-                <span className="text-gray-300">|</span>
-                <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> {formatDate(order.startDate)}</span>
-              </p>
+              <Button variant="outline" size="sm" onClick={exportToExcel} data-testid="btn-excel">
+                <FileSpreadsheet className="h-4 w-4 ml-2" />
+                Excel
+              </Button>
+              {(order.status === 'draft' || order.status === 'pending') && (
+                <Link href={`/advanced-production-orders/${id}/edit`}>
+                  <Button size="sm" data-testid="btn-edit">
+                    <Edit className="h-4 w-4 ml-2" />
+                    تعديل
+                  </Button>
+                </Link>
+              )}
             </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" className="h-11 sm:h-9" onClick={() => handlePrint()} data-testid="btn-print">
-              <Printer className="h-4 w-4 ml-2" />
-              طباعة
-            </Button>
-            <Button variant="outline" size="sm" className="h-11 sm:h-9" onClick={exportToExcel} data-testid="btn-excel">
-              <FileSpreadsheet className="h-4 w-4 ml-2" />
-              Excel
-            </Button>
-            {(order.status === 'draft' || order.status === 'pending') && (
-              <Link href={`/advanced-production-orders/${id}/edit`}>
-                <Button className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 h-11 sm:h-9" data-testid="btn-edit">
-                  <Edit className="h-4 w-4 ml-2" />
-                  تعديل
-                </Button>
-              </Link>
-            )}
-          </div>
-        </div>
+          }
+        />
 
         {order.status !== 'cancelled' && (
           <Card className="border-0 shadow-sm overflow-hidden">

@@ -1,5 +1,6 @@
 import { useEffect, useCallback } from "react";
 import { Layout } from "@/components/layout";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -298,24 +299,13 @@ export default function ProductionDashboardPage() {
     <Layout>
       <div className="p-3 sm:p-4 md:p-6 max-w-[1400px] mx-auto space-y-4 md:space-y-6" dir="rtl">
           
-          {/* Header Section */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
-            <div className="flex items-center gap-2 sm:gap-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg">
-                <Factory className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-foreground" data-testid="page-title">
-                  لوحة الإنتاج
-                </h1>
-                <p className="text-xs sm:text-sm text-muted-foreground">
-                  {format(new Date(selectedDate), "EEEE، dd MMMM yyyy", { locale: ar })}
-                  {lastUpdated && <span className="mr-2 text-green-600">• {formatLastUpdated()}</span>}
-                </p>
-              </div>
-            </div>
-              
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <PageHeader
+            icon={Factory}
+            tone="production"
+            title="لوحة الإنتاج"
+            description={`${format(new Date(selectedDate), "EEEE، dd MMMM yyyy", { locale: ar })}${lastUpdated ? ` • ${formatLastUpdated()}` : ""}`}
+            actions={
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!canSelectBranch}>
                 <SelectTrigger className="w-[130px] sm:w-[160px] h-11 sm:h-10">
                   <SelectValue placeholder="كل الفروع" />
@@ -366,7 +356,8 @@ export default function ProductionDashboardPage() {
                 </Button>
               </Link>
             </div>
-          </div>
+            }
+          />
 
           {/* Main KPIs Grid */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">

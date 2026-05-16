@@ -1,6 +1,7 @@
 import { useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { useBranches } from "@/hooks/useBranches";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,7 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Hammer, DollarSign, Clock, CheckCircle2, AlertTriangle, TrendingUp, TrendingDown, Building2, Users, Download, FileSpreadsheet, Printer, BarChart3, PieChartIcon, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { Loader2, Hammer, DollarSign, Clock, CheckCircle2, AlertTriangle, TrendingUp, TrendingDown, Building, Building2, Users, Download, FileSpreadsheet, Printer, BarChart3, PieChartIcon, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line, ComposedChart, Area } from "recharts";
 import { useReactToPrint } from "react-to-print";
 import { finalizeBrandedWorkbook } from "@/lib/excel-utils";
@@ -267,22 +268,24 @@ export default function ConstructionDashboardPage() {
   return (
     <Layout>
       <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto space-y-4" dir="rtl" ref={printRef}>
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold" data-testid="text-page-title">لوحة تحكم المشاريع الإنشائية</h1>
-            <p className="text-sm sm:text-base text-muted-foreground">نظرة عامة شاملة على جميع المشاريع والإحصائيات والمقارنات</p>
-          </div>
-          <div className="flex gap-2 print:hidden">
-            <Button variant="outline" onClick={exportToExcel} className="h-11 sm:h-9" data-testid="button-export-excel">
-              <FileSpreadsheet className="w-4 h-4 ml-2" />
-              تصدير Excel
-            </Button>
-            <Button variant="outline" onClick={() => handlePrint()} className="h-11 sm:h-9" data-testid="button-print">
-              <Printer className="w-4 h-4 ml-2" />
-              طباعة
-            </Button>
-          </div>
-        </div>
+        <PageHeader
+          icon={Building}
+          tone="construction"
+          title="لوحة تحكم المشاريع الإنشائية"
+          description="نظرة عامة شاملة على جميع المشاريع والإحصائيات والمقارنات"
+          actions={
+            <div className="flex gap-2 print:hidden">
+              <Button variant="outline" size="sm" onClick={exportToExcel} data-testid="button-export-excel">
+                <FileSpreadsheet className="w-4 h-4 ml-2" />
+                تصدير Excel
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => handlePrint()} data-testid="button-print">
+                <Printer className="w-4 h-4 ml-2" />
+                طباعة
+              </Button>
+            </div>
+          }
+        />
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <Card data-testid="card-total-projects" className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">

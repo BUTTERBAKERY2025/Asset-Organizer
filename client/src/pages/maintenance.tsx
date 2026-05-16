@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState, useEffect } from "react";
 import { Layout } from "@/components/layout";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { useQuery } from "@tanstack/react-query";
 import { useBranches } from "@/hooks/useBranches";
 import {
@@ -14,7 +15,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Printer, AlertTriangle, XCircle, HelpCircle, Download, ArrowRight } from "lucide-react";
+import { Loader2, Printer, AlertTriangle, XCircle, HelpCircle, Download, ArrowRight, Wrench } from "lucide-react";
 import { Link } from "wouter";
 import { useReactToPrint } from "react-to-print";
 import type { Branch, InventoryItem } from "@shared/schema";
@@ -141,30 +142,25 @@ export default function MaintenancePage() {
   return (
     <Layout>
       <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto space-y-4" dir="rtl">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3 sm:gap-4">
-            <Link href="/dashboard">
-              <Button variant="outline" size="sm" className="gap-2 h-11 sm:h-9" data-testid="button-back">
-                <ArrowRight className="h-4 w-4" />
-                لوحة الأصول
+        <PageHeader
+          icon={Wrench}
+          tone="construction"
+          title="تقرير الصيانة"
+          description="الأصناف التي تحتاج صيانة أو تالفة أو مفقودة"
+          backHref="/dashboard"
+          actions={
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => handlePrint()} className="gap-2" data-testid="button-print-maintenance">
+                <Printer className="w-4 h-4" />
+                <span>طباعة</span>
               </Button>
-            </Link>
-            <div>
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground" data-testid="text-maintenance-title">تقرير الصيانة</h1>
-              <p className="text-muted-foreground mt-1">الأصناف التي تحتاج صيانة أو تالفة أو مفقودة</p>
+              <Button variant="outline" size="sm" onClick={handleExport} className="gap-2" data-testid="button-export-maintenance">
+                <Download className="w-4 h-4" />
+                <span>تصدير Excel</span>
+              </Button>
             </div>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => handlePrint()} className="gap-2 h-11 sm:h-9" data-testid="button-print-maintenance">
-              <Printer className="w-4 h-4" />
-              <span>طباعة</span>
-            </Button>
-            <Button variant="outline" onClick={handleExport} className="gap-2 h-11 sm:h-9" data-testid="button-export-maintenance">
-              <Download className="w-4 h-4" />
-              <span>تصدير Excel</span>
-            </Button>
-          </div>
-        </div>
+          }
+        />
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
           <Card data-testid="card-maintenance-count">

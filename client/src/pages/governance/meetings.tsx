@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Layout } from "@/components/layout";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -190,24 +191,14 @@ export default function MeetingsPage() {
   return (
     <Layout>
       <div className="max-w-[1400px] mx-auto p-3 sm:p-4 md:p-6 lg:p-10 space-y-3 sm:space-y-4" dir="rtl">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-          <div className="flex items-center gap-2 sm:gap-4">
-            <Link href="/governance">
-              <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8">
-                <ChevronLeft className="h-3 w-3 sm:h-4 sm:w-4" />
-              </Button>
-            </Link>
-            <div className="p-2 sm:p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg sm:rounded-xl">
-              <Building2 className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
-            </div>
-            <div>
-              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-blue-800" data-testid="page-title">
-                الاجتماعات والجمعيات
-              </h1>
-              <p className="text-xs sm:text-sm text-gray-600">إدارة جدول الأعمال والمستندات والحضور</p>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
+        <PageHeader
+          icon={Building2}
+          tone="executive"
+          title="الاجتماعات والجمعيات"
+          description="إدارة جدول الأعمال والمستندات والحضور"
+          backHref="/governance"
+          actions={
+            <div className="flex flex-wrap gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-1 sm:gap-2 text-xs sm:text-sm">
@@ -345,8 +336,9 @@ export default function MeetingsPage() {
                 </form>
               </DialogContent>
             </Dialog>
-          </div>
-        </div>
+            </div>
+          }
+        />
 
         <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
           <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">

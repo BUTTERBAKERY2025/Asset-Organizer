@@ -1,4 +1,5 @@
 import { Layout } from "@/components/layout";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -577,19 +578,13 @@ export default function RBACManagementPage() {
     <Layout>
       <div className="p-3 sm:p-4 md:p-6 lg:p-10 max-w-[1400px] mx-auto space-y-4" dir="rtl">
         <SettingsBreadcrumb currentPage="الأدوار والصلاحيات" currentIcon={Shield} />
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <Link href="/settings">
-              <Button variant="ghost" size="icon" className="h-9 w-9 sm:h-8 sm:w-8" data-testid="btn-back">
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-lg sm:text-xl md:text-2xl font-bold" data-testid="text-page-title">إدارة الأدوار والصلاحيات</h1>
-              <p className="text-xs sm:text-sm text-muted-foreground">نظام التحكم بالوصول المبني على الأدوار (RBAC)</p>
-            </div>
-          </div>
-        </div>
+        <PageHeader
+          icon={Shield}
+          tone="primary"
+          title="إدارة الأدوار والصلاحيات"
+          description="نظام التحكم بالوصول المبني على الأدوار (RBAC)"
+          backHref="/settings"
+        />
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-4">
           <Card>

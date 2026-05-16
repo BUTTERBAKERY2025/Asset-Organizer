@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -197,41 +198,33 @@ export default function ExecutiveReports() {
   return (
     <Layout>
       <div className="max-w-[1400px] mx-auto p-3 sm:p-4 md:p-6 space-y-4" dir="rtl">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-2 sm:gap-4">
-          <Link href="/executive">
-            <Button variant="ghost" size="sm" className="h-8 w-8 sm:h-9 sm:w-9">
-              <ArrowRight className="h-4 w-4 sm:h-5 sm:w-5" />
+      <PageHeader
+        icon={FileText}
+        tone="executive"
+        title="تقارير السكرتارية التنفيذية"
+        description="تقارير PDF موحدة وقابلة للطباعة"
+        backHref="/executive"
+        actions={
+          <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+            <Select value={reportType} onValueChange={setReportType}>
+              <SelectTrigger className="w-full sm:w-40 text-xs sm:text-sm h-9">
+                <SelectValue placeholder="نوع التقرير" />
+              </SelectTrigger>
+              <SelectContent>
+                {reportTypes.map((type) => (
+                  <SelectItem key={type.value} value={type.value}>
+                    {type.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button size="sm" onClick={() => handlePrint()} className="gap-2 h-9">
+              <Printer className="h-4 w-4" />
+              طباعة التقرير
             </Button>
-          </Link>
-          <div>
-            <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-amber-800" data-testid="page-title">
-              تقارير السكرتارية التنفيذية
-            </h1>
-            <p className="text-[10px] sm:text-xs text-gray-600">
-              تقارير PDF موحدة وقابلة للطباعة
-            </p>
           </div>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center w-full sm:w-auto">
-          <Select value={reportType} onValueChange={setReportType}>
-            <SelectTrigger className="w-full sm:w-40 text-xs sm:text-sm h-8 sm:h-9">
-              <SelectValue placeholder="نوع التقرير" />
-            </SelectTrigger>
-            <SelectContent>
-              {reportTypes.map((type) => (
-                <SelectItem key={type.value} value={type.value}>
-                  {type.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button onClick={() => handlePrint()} className="gap-1 sm:gap-2 bg-amber-600 hover:bg-amber-700 text-xs sm:text-sm h-8 sm:h-9">
-            <Printer className="h-3 w-3 sm:h-4 sm:w-4" />
-            طباعة التقرير
-          </Button>
-        </div>
-      </div>
+        }
+      />
 
       <Card className="mb-4">
         <CardHeader className="p-3 sm:p-4 pb-2">

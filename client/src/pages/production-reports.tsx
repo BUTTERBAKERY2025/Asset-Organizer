@@ -34,8 +34,10 @@ import {
   ChevronRight,
   Search,
   X,
+  FileBarChart,
 } from "lucide-react";
 import { Layout } from "@/components/layout";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -962,32 +964,25 @@ export default function ProductionReportsPage() {
   return (
     <Layout>
       <div className="p-3 sm:p-4 md:p-6 max-w-[1400px] mx-auto space-y-4" dir="rtl">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Link href="/production-dashboard">
-              <Button variant="ghost" size="icon" className="h-11 w-11 min-h-[44px] min-w-[44px] sm:h-10 sm:w-10 sm:min-h-0 sm:min-w-0" data-testid="btn-back">
-                <ArrowRight className="h-5 w-5" />
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">التقارير الشاملة للإنتاج</h1>
-              <p className="text-xs sm:text-sm text-gray-500">جميع تقارير الإنتاج والتحليلات</p>
-            </div>
-          </div>
-          <div className="flex gap-2 flex-wrap">
+        <PageHeader
+          icon={FileBarChart}
+          tone="production"
+          title="التقارير الشاملة للإنتاج"
+          description="جميع تقارير الإنتاج والتحليلات"
+          backHref="/production-dashboard"
+          actions={
             <Button
               variant="outline"
               size="sm"
               onClick={() => refetch()}
               disabled={isLoading}
               data-testid="btn-refresh"
-              className="h-11 sm:h-9"
             >
               <RefreshCw className={`h-4 w-4 ml-1 ${isLoading ? 'animate-spin' : ''}`} />
               تحديث
             </Button>
-          </div>
-        </div>
+          }
+        />
 
         {/* Quick Links to Related Pages */}
         <Card className="bg-gradient-to-l from-amber-50 to-white border-amber-200">

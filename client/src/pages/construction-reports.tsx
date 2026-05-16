@@ -1,6 +1,7 @@
 import { useState, useRef, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { useBranches } from "@/hooks/useBranches";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Printer, FileSpreadsheet, Hammer, Building2, Users, CheckCircle2, Clock, AlertTriangle, ChevronLeft, Eye, Search, Filter, X, ChevronDown, ChevronUp, DollarSign, TrendingUp, FileDown, ArrowRight } from "lucide-react";
+import { Printer, FileSpreadsheet, Hammer, Building2, FileBarChart, Users, CheckCircle2, Clock, AlertTriangle, ChevronLeft, Eye, Search, Filter, X, ChevronDown, ChevronUp, DollarSign, TrendingUp, FileDown, ArrowRight } from "lucide-react";
 import { Link } from "wouter";
 import { ExportButtons } from "@/components/export-buttons";
 import { TablePagination } from "@/components/ui/pagination";
@@ -562,19 +563,14 @@ export default function ConstructionReportsPage() {
   return (
     <Layout>
       <div className="p-3 sm:p-4 md:p-6 max-w-[1400px] mx-auto space-y-4" dir="rtl">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Link href="/construction-projects">
-              <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" data-testid="btn-back">
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-lg sm:text-xl md:text-2xl font-bold" data-testid="text-page-title">تقارير المشاريع الإنشائية</h1>
-              <p className="text-xs sm:text-sm text-muted-foreground">مقارنة وتحليل المشاريع والبنود والفئات</p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
+        <PageHeader
+          icon={FileBarChart}
+          tone="construction"
+          title="تقارير المشاريع الإنشائية"
+          description="مقارنة وتحليل المشاريع والبنود والفئات"
+          backHref="/construction-projects"
+          actions={
+            <div className="flex flex-wrap items-center gap-2">
             <ExportButtons
               data={projectsExportData}
               columns={exportColumns}
@@ -587,12 +583,13 @@ export default function ConstructionReportsPage() {
               <Printer className="w-4 h-4 ml-2" />
               طباعة
             </Button>
-            <Button className="h-11 sm:h-9" onClick={exportToExcel} data-testid="button-export-excel">
+            <Button size="sm" onClick={exportToExcel} data-testid="button-export-excel">
               <FileSpreadsheet className="w-4 h-4 ml-2" />
               تصدير Excel
             </Button>
-          </div>
-        </div>
+            </div>
+          }
+        />
 
         <Card className="border-amber-200 bg-amber-50/30">
           <Collapsible open={filtersOpen} onOpenChange={setFiltersOpen}>

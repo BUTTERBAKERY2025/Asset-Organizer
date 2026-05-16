@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -76,24 +77,20 @@ export default function ExecutiveDashboard() {
       <div className="p-3 sm:p-4 md:p-6" dir="rtl">
         <div className="max-w-[1400px] mx-auto space-y-4 sm:space-y-5">
           
-          {/* Header - Compact */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-amber-700 rounded-lg px-3 sm:px-4 py-3">
-            <div className="flex items-center gap-3">
-              <Crown className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
-              <div>
-                <h1 className="text-sm sm:text-base font-bold text-white" data-testid="page-title">
-                  السكرتارية التنفيذية
-                </h1>
-                <p className="text-[10px] sm:text-xs text-amber-100">مركز قيادة الرئيس التنفيذي</p>
-              </div>
-            </div>
-            <Link href="/executive/meetings">
-              <Button size="sm" variant="secondary" className="h-8 text-xs gap-1 bg-white text-amber-700 hover:bg-amber-50">
-                <Plus className="h-3.5 w-3.5" />
-                إضافة
-              </Button>
-            </Link>
-          </div>
+          <PageHeader
+            icon={Crown}
+            tone="executive"
+            title="السكرتارية التنفيذية"
+            description="مركز قيادة الرئيس التنفيذي"
+            actions={
+              <Link href="/executive/meetings">
+                <Button size="sm" className="h-9 gap-2">
+                  <Plus className="h-4 w-4" />
+                  إضافة
+                </Button>
+              </Link>
+            }
+          />
 
           {/* Stats - Equal sized cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">

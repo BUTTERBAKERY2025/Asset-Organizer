@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearch } from "wouter";
 import { Layout } from "@/components/layout";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -329,24 +330,14 @@ export default function ResolutionsPage() {
   return (
     <Layout>
       <div className="max-w-[1400px] mx-auto p-3 sm:p-4 md:p-6 space-y-4" dir="rtl">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3 sm:gap-4">
-            <Link href="/governance">
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-            </Link>
-            <div className="p-2 sm:p-3 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl">
-              <Scale className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
-            </div>
-            <div>
-              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-emerald-800" data-testid="page-title">
-                القرارات والتوصيات
-              </h1>
-              <p className="text-xs sm:text-sm text-gray-600">سير العمل والتوقيع الإلكتروني</p>
-            </div>
-          </div>
-          <div className="flex gap-2">
+        <PageHeader
+          icon={Scale}
+          tone="executive"
+          title="القرارات والتوصيات"
+          description="سير العمل والتوقيع الإلكتروني"
+          backHref="/governance"
+          actions={
+            <div className="flex gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="gap-2">
@@ -476,8 +467,9 @@ export default function ResolutionsPage() {
                 </form>
               </DialogContent>
             </Dialog>
-          </div>
-        </div>
+            </div>
+          }
+        />
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <Card className="bg-gradient-to-br from-gray-50 to-slate-50 border-gray-200">

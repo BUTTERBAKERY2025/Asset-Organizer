@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Layout } from "@/components/layout";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -887,39 +888,31 @@ export default function DailyProductionPage() {
   return (
     <Layout>
       <div className="p-3 sm:p-4 md:p-6 max-w-[1400px] mx-auto space-y-4 sm:space-y-6" dir="rtl">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <Link href="/production-dashboard">
-              <Button variant="ghost" size="icon" className="h-8 w-8 sm:h-9 sm:w-9">
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-            </Link>
-            <div className="p-2 sm:p-3 bg-gradient-to-br from-amber-500 to-orange-600 rounded-lg sm:rounded-xl">
-              <Factory className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+        <PageHeader
+          icon={Factory}
+          tone="production"
+          title="الإنتاج الفعلي اليومي"
+          description="تسجيل ومتابعة دفعات الإنتاج على مدار اليوم"
+          backHref="/production-dashboard"
+          actions={
+            <div className="flex flex-wrap items-center gap-2">
+              <Link href="/finished-goods-inventory">
+                <Button variant="outline" size="sm" className="gap-2" data-testid="btn-finished-goods">
+                  <Package className="h-4 w-4" />
+                  <span className="hidden sm:inline">مخزون الإنتاج النهائي</span>
+                  <span className="sm:hidden">المخزون</span>
+                </Button>
+              </Link>
+              {user && (
+                <Badge variant="outline" className="gap-1 px-3 py-1.5 text-xs">
+                  <User className="h-3 w-3" />
+                  {user.firstName || user.username}
+                  {isAdmin && <Shield className="h-3 w-3 text-amber-600 mr-1" />}
+                </Badge>
+              )}
             </div>
-            <div>
-              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-foreground" data-testid="text-page-title">الإنتاج الفعلي اليومي</h1>
-              <p className="text-xs sm:text-sm text-muted-foreground">تسجيل ومتابعة دفعات الإنتاج على مدار اليوم</p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Link href="/finished-goods-inventory">
-              <Button variant="outline" size="sm" className="gap-1 sm:gap-2 h-8 sm:h-9 text-xs sm:text-sm" data-testid="btn-finished-goods">
-                <Package className="h-3 w-3 sm:h-4 sm:w-4" />
-                <span className="hidden sm:inline">مخزون الإنتاج النهائي</span>
-                <span className="sm:hidden">المخزون</span>
-              </Button>
-            </Link>
-            {user && (
-              <Badge variant="outline" className="gap-1 px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs">
-                <User className="h-3 w-3" />
-                {user.firstName || user.username}
-                {isAdmin && <Shield className="h-3 w-3 text-amber-600 mr-1" />}
-              </Badge>
-            )}
-          </div>
-        </div>
+          }
+        />
 
         {/* Filters and Controls */}
         <div className="flex flex-wrap gap-2 sm:gap-4 items-end">

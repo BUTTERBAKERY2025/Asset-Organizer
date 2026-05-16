@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useBranches } from "@/hooks/useBranches";
 import { Layout } from "@/components/layout";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -1670,27 +1671,14 @@ export default function PnLDashboard() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto space-y-4" dir="rtl">
-        <div className="max-w-[1400px] mx-auto space-y-4 sm:space-y-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-2 sm:gap-4">
-              <Button
-                variant="ghost"
-                onClick={() => navigate("/attendance-dashboard")}
-                className="h-11 w-11 sm:h-8 sm:w-8 rounded-full hover:bg-muted p-0"
-                data-testid="button-back"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </Button>
-              <div>
-                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground flex items-center gap-2 sm:gap-3">
-                  <BarChart3 className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
-                  لوحة الأرباح والخسائر (P&L)
-                </h1>
-                <p className="text-sm sm:text-base text-muted-foreground mt-1">تحليل الأداء المالي للفروع</p>
-              </div>
-            </div>
-            {selectedPeriodId && (
+      <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto space-y-4 sm:space-y-6" dir="rtl">
+        <PageHeader
+          icon={BarChart3}
+          tone="money"
+          title="لوحة الأرباح والخسائر (P&L)"
+          description="تحليل الأداء المالي للفروع"
+          backHref="/attendance-dashboard"
+          actions={selectedPeriodId ? (
               <div className="flex gap-2 flex-wrap">
                 <Button
                   variant="outline"
@@ -1857,8 +1845,8 @@ export default function PnLDashboard() {
                   </Button>
                 </div>
               </div>
-            )}
-          </div>
+            ) : null}
+        />
 
         <Card>
           <CardHeader>
@@ -3029,7 +3017,6 @@ export default function PnLDashboard() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-        </div>
       </div>
     </Layout>
   );

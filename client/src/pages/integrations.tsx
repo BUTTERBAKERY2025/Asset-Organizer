@@ -40,6 +40,8 @@ import {
   Loader2
 } from "lucide-react";
 import { SettingsBreadcrumb } from "@/components/settings-breadcrumb";
+import { Layout } from "@/components/layout";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { toast } from "sonner";
 import type { NotificationQueueItem, AccountingExport } from "@shared/schema";
 
@@ -168,14 +170,16 @@ export default function IntegrationsPage() {
   });
 
   return (
+    <Layout>
     <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto space-y-4" dir="rtl">
       <SettingsBreadcrumb currentPage="التكاملات" currentIcon={Link2} />
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
-        <div>
-          <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-bold text-butter-dark">التكامل مع الأنظمة الخارجية</h1>
-          <p className="text-xs sm:text-sm text-muted-foreground mt-1">ربط النظام مع جميع الخدمات والأنظمة الخارجية</p>
-        </div>
-      </div>
+      <PageHeader
+        icon={Link2}
+        tone="primary"
+        title="التكامل مع الأنظمة الخارجية"
+        description="ربط النظام مع جميع الخدمات والأنظمة الخارجية"
+        backHref="/settings"
+      />
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <div className="overflow-x-auto">
@@ -241,6 +245,7 @@ export default function IntegrationsPage() {
         </TabsContent>
       </Tabs>
     </div>
+    </Layout>
   );
 }
 

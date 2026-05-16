@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Layout } from "@/components/layout";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -194,29 +195,26 @@ export default function AdvancedProductionOrdersPage() {
             <span className="text-foreground">أوامر الإنتاج</span>
           </div>
           
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3 sm:gap-4">
-              <div className="h-10 w-10 sm:h-12 sm:w-12 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl flex items-center justify-center shadow-lg">
-                <ClipboardList className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground" data-testid="text-page-title">أوامر الإنتاج</h1>
-                <p className="text-muted-foreground text-xs sm:text-sm">إدارة ومتابعة جميع أوامر الإنتاج اليومية والأسبوعية</p>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" className="h-11 sm:h-9" onClick={() => queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === 'string' && q.queryKey[0].includes('advanced-production') })} data-testid="btn-refresh">
-                <RefreshCw className="h-4 w-4 ml-2" />
-                تحديث
-              </Button>
-                            <Link href="/advanced-production-orders/new">
-                <Button className="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 h-11 sm:h-9" data-testid="button-new-order">
-                  <Plus className="w-4 h-4 ml-2" />
-                  أمر جديد
+          <PageHeader
+            icon={ClipboardList}
+            tone="production"
+            title="أوامر الإنتاج"
+            description="إدارة ومتابعة جميع أوامر الإنتاج اليومية والأسبوعية"
+            actions={
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={() => queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === 'string' && q.queryKey[0].includes('advanced-production') })} data-testid="btn-refresh">
+                  <RefreshCw className="h-4 w-4 ml-2" />
+                  تحديث
                 </Button>
-              </Link>
-            </div>
-          </div>
+                <Link href="/advanced-production-orders/new">
+                  <Button size="sm" data-testid="button-new-order">
+                    <Plus className="w-4 h-4 ml-2" />
+                    أمر جديد
+                  </Button>
+                </Link>
+              </div>
+            }
+          />
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3 sm:gap-4">

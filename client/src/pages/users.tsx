@@ -1,4 +1,5 @@
 import { Layout } from "@/components/layout";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { ExportButtons } from "@/components/export-buttons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -696,24 +697,17 @@ export default function UsersPage() {
     <Layout>
       <div className="p-3 sm:p-4 md:p-6 lg:p-10 max-w-[1400px] mx-auto space-y-4" dir="rtl">
         <SettingsBreadcrumb currentPage="إدارة المستخدمين" currentIcon={Users} />
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <Link href="/settings">
-              <Button variant="ghost" size="icon" className="h-9 w-9 sm:h-8 sm:w-8" data-testid="btn-back">
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-lg sm:text-xl md:text-2xl font-bold tracking-tight text-foreground" data-testid="text-page-title">
-                إدارة المستخدمين
-              </h1>
-              <p className="text-muted-foreground mt-1 text-xs sm:text-sm">إضافة وإدارة صلاحيات المستخدمين</p>
-            </div>
-          </div>
+        <PageHeader
+          icon={Users}
+          tone="primary"
+          title="إدارة المستخدمين"
+          description="إضافة وإدارة صلاحيات المستخدمين"
+          backHref="/settings"
+          actions={
           <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="h-9 sm:h-9 text-xs sm:text-sm" data-testid="button-add-user">
-                <Plus className="w-3 h-3 sm:w-4 sm:h-4 ml-1 sm:ml-2" />
+              <Button size="sm" data-testid="button-add-user">
+                <Plus className="w-4 h-4 ml-2" />
                 إضافة مستخدم
               </Button>
             </DialogTrigger>
@@ -840,7 +834,8 @@ export default function UsersPage() {
               </form>
             </DialogContent>
           </Dialog>
-        </div>
+          }
+        />
 
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {ROLES.map((role) => {

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Layout } from "@/components/layout";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -486,23 +487,14 @@ export default function TargetsDashboard() {
   return (
     <Layout>
       <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto space-y-4" dir="rtl">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Link href="/cashier-journals">
-              <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-8 sm:w-8" data-testid="btn-back">
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-amber-900 flex items-center gap-2 sm:gap-3">
-                <TrendingUp className="h-6 w-6 sm:h-8 sm:w-8" />
-                لوحة الأداء والأهداف
-              </h1>
-              <p className="text-sm sm:text-base text-amber-700 mt-1">متابعة تحقيق الأهداف الشهرية ومقارنة أداء الفروع</p>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
+        <PageHeader
+          icon={TrendingUp}
+          tone="executive"
+          title="لوحة الأداء والأهداف"
+          description="متابعة تحقيق الأهداف الشهرية ومقارنة أداء الفروع"
+          backHref="/cashier-journals"
+          actions={
+            <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
             <div className="flex items-center gap-2">
               <Label className="hidden sm:inline">السنة:</Label>
               <Select value={selectedYear} onValueChange={setSelectedYear}>
@@ -560,8 +552,9 @@ export default function TargetsDashboard() {
                 <span className="hidden sm:inline">الحوافز الذكية</span>
               </Button>
             </Link>
-          </div>
-        </div>
+            </div>
+          }
+        />
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <Card className="bg-gradient-to-br from-amber-500 to-orange-500 text-white">

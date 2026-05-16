@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Layout } from "@/components/layout";
+import { PageHeader } from "@/components/dashboard/page-header";
 
 type Alert = {
   id: string;
@@ -188,31 +189,27 @@ export default function ContractorOversightPage() {
 
   return (
     <Layout>
-    <div className="p-4 md:p-6 space-y-5 max-w-[1600px] mx-auto" dir="rtl" data-testid="page-contractor-oversight">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
-            <Award className="h-7 w-7 text-primary" />
-            لوحة رقابة المقاولين
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            تقييم أداء آلي وتنبيهات استباقية لجميع العقود الإنشائية
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link href="/contracts">
-            <Button variant="outline" data-testid="link-contracts">
-              العقود <ChevronLeft className="h-4 w-4 mr-1" />
-            </Button>
-          </Link>
-          <Link href="/contractors">
-            <Button variant="outline" data-testid="link-contractors">
-              المقاولون <ChevronLeft className="h-4 w-4 mr-1" />
-            </Button>
-          </Link>
-        </div>
-      </div>
+    <div className="p-4 md:p-6 space-y-5 max-w-[1400px] mx-auto" dir="rtl" data-testid="page-contractor-oversight">
+      <PageHeader
+        icon={Award}
+        tone="construction"
+        title="لوحة رقابة المقاولين"
+        description="تقييم أداء آلي وتنبيهات استباقية لجميع العقود الإنشائية"
+        actions={
+          <div className="flex items-center gap-2">
+            <Link href="/contracts">
+              <Button variant="outline" size="sm" data-testid="link-contracts">
+                العقود <ChevronLeft className="h-4 w-4 mr-1" />
+              </Button>
+            </Link>
+            <Link href="/contractors">
+              <Button variant="outline" size="sm" data-testid="link-contractors">
+                المقاولون <ChevronLeft className="h-4 w-4 mr-1" />
+              </Button>
+            </Link>
+          </div>
+        }
+      />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">

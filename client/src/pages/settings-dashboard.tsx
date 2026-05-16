@@ -1,4 +1,5 @@
 import { Layout } from "@/components/layout";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -766,21 +767,12 @@ export default function SettingsDashboardPage() {
   return (
     <Layout>
       <div className="p-3 sm:p-4 md:p-6 lg:p-10 max-w-[1400px] mx-auto space-y-4 sm:space-y-6" dir="rtl">
-      <div className="mb-4 sm:mb-8">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 mb-4">
-          <div className="p-2 sm:p-3 bg-gradient-to-br from-primary/20 to-primary/5 rounded-xl sm:rounded-2xl w-fit">
-            <Settings className="w-6 h-6 sm:w-8 sm:h-8 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-foreground" data-testid="text-page-title">
-              مركز الإعدادات
-            </h1>
-            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-              إدارة جميع إعدادات ومحتويات النظام من مكان واحد
-            </p>
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        icon={Settings}
+        tone="primary"
+        title="مركز الإعدادات"
+        description="إدارة جميع إعدادات ومحتويات النظام من مكان واحد"
+      />
 
       <div className="relative mb-4 sm:mb-8">
         <Search className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground" />
