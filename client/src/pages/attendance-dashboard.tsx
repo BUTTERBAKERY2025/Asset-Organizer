@@ -1,6 +1,4 @@
 import { Layout } from "@/components/layout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -8,31 +6,53 @@ import { getQueryFn } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
 import { useTranslation } from "react-i18next";
 import {
-  Calendar,
   Clock,
   Users,
-  FileText,
   ClipboardCheck,
-  CalendarDays,
   UserCheck,
   Timer,
   BarChart3,
-  ChevronLeft,
   Fingerprint,
   FileSignature,
   CalendarClock,
   ListChecks,
   Loader2,
 } from "lucide-react";
+import { PageHeader, KpiCard, SectionCard } from "@/components/dashboard";
+import { cn } from "@/lib/utils";
 
 interface QuickAction {
+  key: string;
   title: string;
   description: string;
-  icon: React.ReactNode;
+  icon: React.ComponentType<{ className?: string }>;
   href: string;
-  color: string;
+  tone: "people" | "production" | "violet" | "primary";
   badge?: string;
 }
+
+interface ManagementCard {
+  key: string;
+  title: string;
+  description: string;
+  icon: React.ComponentType<{ className?: string }>;
+  href: string;
+  stats: number;
+  statsLabel: string;
+}
+
+const TONE_BG: Record<QuickAction["tone"], string> = {
+  people:     "bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/30 dark:hover:bg-teal-950/50",
+  production: "bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/30 dark:hover:bg-blue-950/50",
+  violet:     "bg-violet-50 hover:bg-violet-100 dark:bg-violet-950/30 dark:hover:bg-violet-950/50",
+  primary:    "bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 dark:hover:bg-amber-950/50",
+};
+const TONE_ICON: Record<QuickAction["tone"], string> = {
+  people:     "bg-teal-500 text-white",
+  production: "bg-blue-500 text-white",
+  violet:     "bg-violet-500 text-white",
+  primary:    "bg-amber-500 text-white",
+};
 
 export default function AttendanceDashboardPage() {
   const [, navigate] = useLocation();
@@ -59,188 +79,197 @@ export default function AttendanceDashboardPage() {
 
   const quickActions: QuickAction[] = [
     {
+      key: "qa-check",
       title: t("actions.attendanceCheck.title"),
       description: t("actions.attendanceCheck.description"),
-      icon: <Fingerprint className="w-6 h-6" />,
+      icon: Fingerprint,
       href: "/attendance-check",
-      color: "bg-green-500",
+      tone: "people",
       badge: t("mostUsed"),
     },
     {
+      key: "qa-shifts",
       title: t("actions.shiftManagement.title"),
       description: t("actions.shiftManagement.description"),
-      icon: <CalendarClock className="w-6 h-6" />,
+      icon: CalendarClock,
       href: "/shift-management",
-      color: "bg-blue-500",
+      tone: "production",
     },
     {
+      key: "qa-timesheet",
       title: t("actions.timesheet.title"),
       description: t("actions.timesheet.description"),
-      icon: <FileSignature className="w-6 h-6" />,
+      icon: FileSignature,
       href: "/timesheet",
-      color: "bg-purple-500",
+      tone: "violet",
     },
     {
+      key: "qa-employees",
       title: t("actions.branchEmployees.title"),
       description: t("actions.branchEmployees.description"),
-      icon: <Users className="w-6 h-6" />,
+      icon: Users,
       href: "/branch-employees",
-      color: "bg-amber-500",
+      tone: "primary",
     },
   ];
 
-  const managementCards = [
+  const managementCards: ManagementCard[] = [
     {
+      key: "mg-org",
       title: t("management.orgStructure.title"),
       description: t("management.orgStructure.description"),
-      icon: <ClipboardCheck className="w-4 h-4" />,
+      icon: ClipboardCheck,
       href: "/organizational-structure",
       stats: stats?.totalEmployees || 0,
       statsLabel: t("stats.employee"),
     },
     {
+      key: "mg-reports",
       title: t("management.reports.title"),
       description: t("management.reports.description"),
-      icon: <BarChart3 className="w-4 h-4" />,
+      icon: BarChart3,
       href: "/employee-reports",
       stats: stats?.reportsCount || 0,
       statsLabel: t("stats.report"),
     },
   ];
 
-  const todayStats = [
-    {
-      label: t("stats.totalEmployees"),
-      value: stats?.totalEmployees || 0,
-      icon: <Users className="w-5 h-5 text-blue-500" />,
-    },
-    {
-      label: t("stats.presentToday"),
-      value: stats?.presentToday || 0,
-      icon: <UserCheck className="w-5 h-5 text-green-500" />,
-    },
-    {
-      label: t("stats.lateToday"),
-      value: stats?.lateToday || 0,
-      icon: <Timer className="w-5 h-5 text-amber-500" />,
-    },
-    {
-      label: t("stats.absentToday"),
-      value: stats?.absentToday || 0,
-      icon: <Clock className="w-5 h-5 text-red-500" />,
-    },
-  ];
+  const totalEmployees = stats?.totalEmployees ?? 0;
+  const presentToday = stats?.presentToday ?? 0;
+  const attendanceRate = stats?.attendanceRate ?? (totalEmployees > 0 ? Math.round((presentToday / totalEmployees) * 100) : 0);
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4" dir={isRTL ? "rtl" : "ltr"}>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-11 w-11 sm:h-8 sm:w-8"
-              onClick={() => navigate("/branch-employees")}
-              data-testid="btn-back"
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </Button>
-            <div>
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold" data-testid="text-page-title">
-                {t("pageTitle")}
-              </h1>
-              <p className="text-muted-foreground">
-                {t("pageDescription")}
-              </p>
-            </div>
-          </div>
-        </div>
+      <div className="p-4 md:p-6 lg:p-8 max-w-6xl mx-auto space-y-5" dir={isRTL ? "rtl" : "ltr"}>
+        <PageHeader
+          icon={UserCheck}
+          tone="people"
+          title={t("pageTitle")}
+          description={t("pageDescription")}
+          backHref="/branch-employees"
+        />
 
         {isLoading ? (
-          <div className="flex items-center justify-center py-12">
+          <div className="flex items-center justify-center py-16">
             <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              {todayStats.map((stat, index) => (
-                <Card key={index} className="text-center">
-                  <CardContent className="pt-6">
-                    <div className="flex justify-center mb-2">{stat.icon}</div>
-                    <p className="text-2xl font-bold">{stat.value}</p>
-                    <p className="text-sm text-muted-foreground">{stat.label}</p>
-                  </CardContent>
-                </Card>
-              ))}
+            {/* KPI strip */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <KpiCard
+                label={t("stats.totalEmployees")}
+                value={totalEmployees}
+                icon={Users}
+                tone="primary"
+                data-testid="kpi-total-employees"
+              />
+              <KpiCard
+                label={t("stats.presentToday")}
+                value={presentToday}
+                icon={UserCheck}
+                tone="money"
+                subLabel={`${attendanceRate}% ${t("stats.attendanceRate")}`}
+                data-testid="kpi-present-today"
+              />
+              <KpiCard
+                label={t("stats.lateToday")}
+                value={stats?.lateToday ?? 0}
+                icon={Timer}
+                tone="inventory"
+                data-testid="kpi-late-today"
+              />
+              <KpiCard
+                label={t("stats.absentToday")}
+                value={stats?.absentToday ?? 0}
+                icon={Clock}
+                tone="alert"
+                data-testid="kpi-absent-today"
+              />
             </div>
 
-            <div>
-              <h2 className="text-lg font-semibold mb-3">{t("quickActions")}</h2>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                {quickActions.map((action, index) => (
-                  <Card
-                    key={index}
-                    className="cursor-pointer hover:shadow-lg transition-all border-2 hover:border-primary"
-                    onClick={() => navigate(action.href)}
-                    data-testid={`card-action-${index}`}
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-lg ${action.color} text-white shrink-0`}>
-                          {action.icon}
+            {/* Quick actions + management — 2 col on lg */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <SectionCard
+                title={t("quickActions")}
+                className="lg:col-span-2"
+                data-testid="section-quick-actions"
+              >
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {quickActions.map((a) => {
+                    const Icon = a.icon;
+                    return (
+                      <button
+                        key={a.key}
+                        type="button"
+                        onClick={() => navigate(a.href)}
+                        className={cn(
+                          "flex items-center gap-3 p-3 rounded-xl border border-transparent text-start transition-colors",
+                          TONE_BG[a.tone],
+                        )}
+                        data-testid={`action-${a.key}`}
+                      >
+                        <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center shrink-0", TONE_ICON[a.tone])}>
+                          <Icon className="w-5 h-5" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1 flex-wrap">
-                            <h3 className="font-semibold text-sm">{action.title}</h3>
-                            {action.badge && (
-                              <Badge variant="secondary" className="text-[10px] px-1">
-                                {action.badge}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <h4 className="font-semibold text-sm text-gray-900 dark:text-foreground">{a.title}</h4>
+                            {a.badge && (
+                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                                {a.badge}
                               </Badge>
                             )}
                           </div>
-                          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                            {action.description}
+                          <p className="text-xs text-gray-600 dark:text-muted-foreground mt-0.5 line-clamp-2">
+                            {a.description}
                           </p>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <h2 className="text-lg font-semibold mb-3">{t("managementReports")}</h2>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                {managementCards.map((card, index) => (
-                  <Card
-                    key={index}
-                    className="cursor-pointer hover:shadow-md hover:border-primary/50 transition-all"
-                    onClick={() => navigate(card.href)}
-                    data-testid={`card-management-${index}`}
-                  >
-                    <CardContent className="p-3 text-center">
-                      <div className="flex justify-center mb-2">
-                        <div className="p-2 rounded-lg bg-muted">{card.icon}</div>
-                      </div>
-                      <p className="text-xl font-bold text-primary">{card.stats}</p>
-                      <p className="text-xs text-muted-foreground mb-1">{card.statsLabel}</p>
-                      <p className="text-sm font-medium">{card.title}</p>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </div>
-
-            <Card className="bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200">
-              <CardContent className="py-3">
-                <div className="flex items-center gap-2 text-sm">
-                  <ListChecks className="w-4 h-4 text-amber-600" />
-                  <span className="font-medium text-amber-800">{t("quickGuide")}</span>
-                  <span className="text-amber-700">{t("quickGuideSteps")}</span>
+                      </button>
+                    );
+                  })}
                 </div>
-              </CardContent>
-            </Card>
+              </SectionCard>
+
+              <SectionCard
+                title={t("managementReports")}
+                data-testid="section-management"
+              >
+                <div className="space-y-2">
+                  {managementCards.map((c) => {
+                    const Icon = c.icon;
+                    return (
+                      <button
+                        key={c.key}
+                        type="button"
+                        onClick={() => navigate(c.href)}
+                        className="w-full flex items-center gap-3 p-3 rounded-xl border border-gray-100 dark:border-border hover:border-primary/40 hover:bg-primary/5 transition-colors text-start"
+                        data-testid={`mg-${c.key}`}
+                      >
+                        <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                          <Icon className="w-5 h-5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-semibold text-sm text-gray-900 dark:text-foreground truncate">{c.title}</h4>
+                          <p className="text-xs text-gray-500 dark:text-muted-foreground truncate">{c.description}</p>
+                        </div>
+                        <div className="text-end shrink-0">
+                          <p className="text-lg font-bold text-primary leading-none" dir="ltr">{new Intl.NumberFormat("en-US").format(c.stats)}</p>
+                          <p className="text-[10px] text-gray-400 dark:text-muted-foreground mt-0.5">{c.statsLabel}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </SectionCard>
+            </div>
+
+            {/* Quick guide tip */}
+            <div className="rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 border border-amber-100 dark:border-amber-900/30 px-4 py-3 flex items-center gap-2 text-sm" data-testid="quick-guide">
+              <ListChecks className="w-4 h-4 text-amber-600 shrink-0" />
+              <span className="font-semibold text-amber-800 dark:text-amber-300">{t("quickGuide")}</span>
+              <span className="text-amber-700 dark:text-amber-400/80">{t("quickGuideSteps")}</span>
+            </div>
           </>
         )}
       </div>

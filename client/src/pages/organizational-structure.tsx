@@ -1,6 +1,7 @@
 import React, { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import { Link } from "wouter";
 import { Layout } from "@/components/layout";
+import { PageHeader, KpiCard } from "@/components/dashboard";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useReactToPrint } from "react-to-print";
 import { useTranslation } from "react-i18next";
@@ -32,7 +33,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
-  ArrowLeft,
   Building2,
   Users,
   Crown,
@@ -831,37 +831,31 @@ export default function OrganizationalStructurePage() {
       <TooltipProvider>
         <div className="min-h-screen bg-gradient-to-br from-slate-50 via-green-50/30 to-teal-50/20 print:bg-white" dir={isRTL ? "rtl" : "ltr"}>
           <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 print:hidden">
-            <div className="flex items-center gap-3 sm:gap-4">
-              <Link href="/branch-employees">
-                <Button variant="outline" size="sm" className="gap-2 h-11 sm:h-9">
-                  <ArrowLeft className="h-4 w-4" />
-                  <span className="hidden sm:inline">{t("orgStructure.back")}</span>
-                </Button>
-              </Link>
-              <div>
-                <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-800 flex items-center gap-2">
-                  <Network className="h-5 w-5 sm:h-6 sm:w-6 text-green-600" />
-                  {t("orgStructure.pageTitle")}
-                </h1>
-                <p className="text-xs sm:text-sm text-gray-500">{t("orgStructure.pageDescription")}</p>
-              </div>
-            </div>
-            
-            <div className="flex flex-wrap items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => handlePrint()} className="gap-2 h-11 sm:h-9">
-                <Printer className="h-4 w-4" />
-                {t("orgStructure.print")}
-              </Button>
-              <Button variant="outline" size="sm" onClick={exportToExcel} className="gap-2 h-11 sm:h-9">
-                <FileSpreadsheet className="h-4 w-4" />
-                {t("orgStructure.export")}
-              </Button>
-              <Button type="button" size="sm" onClick={handleAdd} className="bg-green-600 hover:bg-green-700 gap-2 h-11 sm:h-9" data-testid="button-add-role">
-                <Plus className="h-4 w-4" />
-                {t("orgStructure.addRole")}
-              </Button>
-            </div>
+          <div className="mb-6 print:hidden">
+            <PageHeader
+              icon={Network}
+              tone="people"
+              title={t("orgStructure.pageTitle")}
+              description={t("orgStructure.pageDescription")}
+              backHref="/branch-employees"
+              backLabel={t("orgStructure.back")}
+              actions={
+                <>
+                  <Button variant="outline" size="sm" onClick={() => handlePrint()} className="gap-2 h-9">
+                    <Printer className="h-4 w-4" />
+                    {t("orgStructure.print")}
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={exportToExcel} className="gap-2 h-9">
+                    <FileSpreadsheet className="h-4 w-4" />
+                    {t("orgStructure.export")}
+                  </Button>
+                  <Button type="button" size="sm" onClick={handleAdd} className="bg-green-600 hover:bg-green-700 gap-2 h-9" data-testid="button-add-role">
+                    <Plus className="h-4 w-4" />
+                    {t("orgStructure.addRole")}
+                  </Button>
+                </>
+              }
+            />
           </div>
 
           <div ref={printRef} className="print:p-4">
@@ -893,61 +887,34 @@ export default function OrganizationalStructurePage() {
               <div className="space-y-4">
                 {/* Statistics Row */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 print:hidden">
-                  <Card className="bg-gradient-to-br from-green-500 to-teal-500 text-white shadow-lg">
-                    <CardContent className="p-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
-                          <Users className="h-5 w-5" />
-                        </div>
-                        <div>
-                          <p className="text-xl font-bold">{roles.length}</p>
-                          <p className="text-xs opacity-90">{t("orgStructure.totalRoles")}</p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                  
-                  <Card className="bg-gradient-to-br from-blue-500 to-indigo-500 text-white shadow-lg">
-                    <CardContent className="p-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
-                          <Building2 className="h-5 w-5" />
-                        </div>
-                        <div>
-                          <p className="text-xl font-bold">{Math.max(...roles.map((r: OrgJobRole) => r.level || 1))}</p>
-                          <p className="text-xs opacity-90">{t("orgStructure.levelsCount")}</p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-lg">
-                    <CardContent className="p-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
-                          <Crown className="h-5 w-5" />
-                        </div>
-                        <div>
-                          <p className="text-xl font-bold">{tree.length}</p>
-                          <p className="text-xs opacity-90">{t("orgStructure.seniorPositions")}</p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="bg-gradient-to-br from-purple-500 to-pink-500 text-white shadow-lg">
-                    <CardContent className="p-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
-                          <Network className="h-5 w-5" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-bold">Butter Bakery</p>
-                          <p className="text-xs opacity-90">{t("orgStructure.operations")}</p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+                  <KpiCard
+                    label={t("orgStructure.totalRoles")}
+                    value={roles.length}
+                    icon={Users}
+                    tone="people"
+                    data-testid="kpi-total-roles"
+                  />
+                  <KpiCard
+                    label={t("orgStructure.levelsCount")}
+                    value={roles.length > 0 ? Math.max(...roles.map((r: OrgJobRole) => r.level || 1)) : 0}
+                    icon={Building2}
+                    tone="production"
+                    data-testid="kpi-levels-count"
+                  />
+                  <KpiCard
+                    label={t("orgStructure.seniorPositions")}
+                    value={tree.length}
+                    icon={Crown}
+                    tone="inventory"
+                    data-testid="kpi-senior-positions"
+                  />
+                  <KpiCard
+                    label={t("orgStructure.operations")}
+                    value="Butter Bakery"
+                    icon={Network}
+                    tone="violet"
+                    data-testid="kpi-operations"
+                  />
                 </div>
 
                 {/* Main Tree Card - Full Width */}
