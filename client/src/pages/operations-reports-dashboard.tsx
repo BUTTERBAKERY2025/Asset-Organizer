@@ -28,6 +28,23 @@ import {
 import type { Branch, CashierSalesJournal, JournalAttachment } from "@shared/schema";
 import { printHtmlContent } from "@/lib/print-utils";
 import { useTranslation } from "react-i18next";
+import { KpiCard, type KpiTone, type KpiIcon } from "@/components/dashboard/kpi-card";
+
+const TONE_FROM_BG: Array<[RegExp, KpiTone]> = [
+  [/emerald|green/i, "money"],
+  [/blue|sky|indigo/i, "production"],
+  [/amber|yellow|orange/i, "inventory"],
+  [/rose|red|pink/i, "alert"],
+  [/violet|purple|fuchsia/i, "violet"],
+  [/teal|cyan/i, "people"],
+  [/gray|slate|zinc|neutral|stone/i, "neutral"],
+];
+
+function resolveTone(bgColor?: string, color?: string): KpiTone {
+  const src = `${bgColor ?? ""} ${color ?? ""}`;
+  for (const [re, tone] of TONE_FROM_BG) if (re.test(src)) return tone;
+  return "primary";
+}
 
 const DELIVERY_APP_COLORS: Record<string, string> = {
   hunger_station: "#FF5A00",
@@ -112,21 +129,21 @@ interface OperationsReport {
   cashierJournals?: CashierSalesJournal[];
 }
 
-function KPICard({ 
-  title, 
-  value, 
-  icon: Icon, 
-  trend, 
+function KPICard({
+  title,
+  value,
+  icon: Icon,
+  trend,
   trendLabel,
-  color = "text-primary",
-  bgColor = "bg-primary/10",
+  color,
+  bgColor,
   onClick,
   subtitle,
-  progress
-}: { 
-  title: string; 
-  value: string | number; 
-  icon: React.ElementType;
+  progress,
+}: {
+  title: string;
+  value: string | number;
+  icon: KpiIcon;
   trend?: "up" | "down" | "neutral";
   trendLabel?: string;
   color?: string;
@@ -135,39 +152,58 @@ function KPICard({
   subtitle?: string;
   progress?: number;
 }) {
+  const tone = resolveTone(bgColor, color);
+  const subLabel = subtitle || (trend ? undefined : trendLabel);
+  const testId = `kpi-card-${title.replace(/\s+/g, "-")}`;
+
   return (
-    <Card 
-      data-testid={`kpi-card-${title.replace(/\s+/g, '-')}`}
-      className={`relative overflow-hidden transition-all duration-200 ${onClick ? "cursor-pointer hover:shadow-lg hover:-translate-y-0.5" : "hover:shadow-sm"}`}
+    <KpiCard
+      label={title}
+      value={value}
+      icon={Icon}
+      tone={tone}
       onClick={onClick}
+      subLabel={subLabel}
+      data-testid={testId}
     >
-      {progress !== undefined && (
-        <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-200">
-          <div className={`h-full transition-all duration-500 ${color?.includes('green') ? 'bg-green-500' : color?.includes('red') ? 'bg-red-500' : color?.includes('amber') ? 'bg-amber-500' : 'bg-blue-500'}`} style={{ width: `${Math.min(progress, 100)}%` }} />
+      {trend && trendLabel && (
+        <div className="flex items-center gap-1 mt-1 text-xs">
+          {trend === "up" && <TrendingUp className="w-3 h-3 text-emerald-500 dark:text-emerald-400" />}
+          {trend === "down" && <TrendingDown className="w-3 h-3 text-rose-500 dark:text-rose-400" />}
+          <span
+            className={
+              trend === "up"
+                ? "text-emerald-600 dark:text-emerald-400"
+                : trend === "down"
+                ? "text-rose-600 dark:text-rose-400"
+                : "text-muted-foreground"
+            }
+          >
+            {trendLabel}
+          </span>
         </div>
       )}
-      <CardContent className="p-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex-1 min-w-0">
-            <p className="text-xs text-muted-foreground mb-1 whitespace-nowrap">{title}</p>
-            <p className={`text-base font-bold ${color} whitespace-nowrap`}>{value}</p>
-            {subtitle && <p className="text-xs text-muted-foreground mt-1 whitespace-nowrap">{subtitle}</p>}
-            {trendLabel && (
-              <div className="flex items-center gap-1 mt-1 text-xs">
-                {trend === "up" && <TrendingUp className="w-3 h-3 text-green-500" />}
-                {trend === "down" && <TrendingDown className="w-3 h-3 text-red-500" />}
-                <span className={trend === "up" ? "text-green-500" : trend === "down" ? "text-red-500" : "text-muted-foreground"}>
-                  {trendLabel}
-                </span>
-              </div>
-            )}
-          </div>
-          <div className={`p-2 rounded-lg ${bgColor} shrink-0`}>
-            <Icon className={`w-4 h-4 ${color}`} />
-          </div>
+      {progress !== undefined && (
+        <div className="mt-2 h-1 rounded-full bg-muted overflow-hidden">
+          <div
+            className={`h-full transition-all duration-500 ${
+              tone === "money"
+                ? "bg-emerald-500"
+                : tone === "alert"
+                ? "bg-rose-500"
+                : tone === "inventory"
+                ? "bg-amber-500"
+                : tone === "violet"
+                ? "bg-violet-500"
+                : tone === "people"
+                ? "bg-teal-500"
+                : "bg-blue-500"
+            }`}
+            style={{ width: `${Math.min(progress, 100)}%` }}
+          />
         </div>
-      </CardContent>
-    </Card>
+      )}
+    </KpiCard>
   );
 }
 
@@ -180,14 +216,14 @@ function AlertBanner({ alerts }: { alerts: { type: 'warning' | 'danger' | 'info'
         <div 
           key={i} 
           className={`flex items-center gap-3 p-3 rounded-lg border ${
-            alert.type === 'danger' ? 'bg-red-50 border-red-200 text-red-800' :
-            alert.type === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-800' :
-            'bg-blue-50 border-blue-200 text-blue-800'
+            alert.type === 'danger' ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-300' :
+            alert.type === 'warning' ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900 text-amber-800 dark:text-amber-300' :
+            'bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-900 text-blue-800 dark:text-blue-300'
           }`}
         >
-          {alert.type === 'danger' && <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0" />}
-          {alert.type === 'warning' && <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />}
-          {alert.type === 'info' && <Activity className="w-5 h-5 text-blue-600 flex-shrink-0" />}
+          {alert.type === 'danger' && <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400 flex-shrink-0" />}
+          {alert.type === 'warning' && <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />}
+          {alert.type === 'info' && <Activity className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />}
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">{alert.message}</p>
           </div>
@@ -217,32 +253,32 @@ function QuickStatsRow({ report, cashierJournals, hasActiveFilters }: { report: 
   const formatCurrency = (amount: number) => new Intl.NumberFormat("en-SA", { style: "currency", currency: "SAR", maximumFractionDigits: 0 }).format(amount);
   
   return (
-    <div className="grid grid-cols-2 md:grid-cols-6 gap-3 p-4 rounded-xl bg-gradient-to-r from-slate-900 to-slate-800 text-white">
+    <div className="grid grid-cols-2 md:grid-cols-6 gap-3 p-4 rounded-xl bg-card border border-border">
       <div className="text-center">
-        <p className="text-2xl font-bold text-green-400">{formatCurrency(filteredTotalSales)}</p>
-        <p className="text-xs text-slate-400">{t('quickStats.totalSales')}</p>
+        <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(filteredTotalSales)}</p>
+        <p className="text-xs text-muted-foreground">{t('quickStats.totalSales')}</p>
       </div>
       <div className="text-center">
-        <p className="text-2xl font-bold text-blue-400">{filteredTransactions}</p>
-        <p className="text-xs text-slate-400">{t('quickStats.transactions')}</p>
+        <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{filteredTransactions}</p>
+        <p className="text-xs text-muted-foreground">{t('quickStats.transactions')}</p>
       </div>
       <div className="text-center">
-        <p className="text-2xl font-bold text-purple-400">
+        <p className="text-2xl font-bold text-violet-600 dark:text-violet-400">
           {report.productionReport.actualProduction?.totalBatches || report.productionReport.totalOrders}
         </p>
-        <p className="text-xs text-slate-400">{t('quickStats.productionBatches')}</p>
+        <p className="text-xs text-muted-foreground">{t('quickStats.productionBatches')}</p>
       </div>
       <div className="text-center">
-        <p className={`text-2xl font-bold ${shortageCount > 0 ? 'text-red-400' : 'text-green-400'}`}>{shortageCount}</p>
-        <p className="text-xs text-slate-400">{t('quickStats.shortageCases')}</p>
+        <p className={`text-2xl font-bold ${shortageCount > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>{shortageCount}</p>
+        <p className="text-xs text-muted-foreground">{t('quickStats.shortageCases')}</p>
       </div>
       <div className="text-center">
-        <p className={`text-2xl font-bold ${pendingApproval > 0 ? 'text-amber-400' : 'text-green-400'}`}>{pendingApproval}</p>
-        <p className="text-xs text-slate-400">{t('quickStats.pendingApproval')}</p>
+        <p className={`text-2xl font-bold ${pendingApproval > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>{pendingApproval}</p>
+        <p className="text-xs text-muted-foreground">{t('quickStats.pendingApproval')}</p>
       </div>
       <div className="text-center">
-        <p className="text-2xl font-bold text-purple-400">{cashierJournals.length}</p>
-        <p className="text-xs text-slate-400">{t('quickStats.cashierJournals')}</p>
+        <p className="text-2xl font-bold text-violet-600 dark:text-violet-400">{cashierJournals.length}</p>
+        <p className="text-xs text-muted-foreground">{t('quickStats.cashierJournals')}</p>
       </div>
     </div>
   );

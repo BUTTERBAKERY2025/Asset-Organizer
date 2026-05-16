@@ -1,8 +1,9 @@
-import { type LucideIcon } from "lucide-react";
+import type { ComponentType, SVGProps } from "react";
 import { cn } from "@/lib/utils";
 import { TrendPill } from "./trend-pill";
 
 export type KpiTone = "primary" | "people" | "money" | "production" | "inventory" | "alert" | "neutral" | "violet";
+export type KpiIcon = ComponentType<SVGProps<SVGSVGElement> & { className?: string }>;
 
 const TONE_ICON: Record<KpiTone, string> = {
   primary:    "bg-primary/10 text-primary",
@@ -19,7 +20,7 @@ interface KpiCardProps {
   label: string;
   value: number | string;
   unit?: string;
-  icon?: LucideIcon;
+  icon?: KpiIcon;
   tone?: KpiTone;
   trend?: number | null;
   trendInvert?: boolean;
