@@ -131,16 +131,15 @@ export default function PlatformHomePage() {
   });
 
   const apps: (AppTileProps & { module?: SystemModule })[] = [
-    { title: t("modules.sales.title"),       icon: Receipt,        href: "/cashier-journals",        color: "money",      module: "cashier_journal" },
-    { title: t("eventPosTitle"),             icon: Store,          href: "/event-pos",               color: "money",      module: "event_pos" as SystemModule },
-    { title: t("modules.production.title"),  icon: ClipboardList,  href: "/production-dashboard",    color: "production", module: "production" },
-    { title: t("modules.operations.title"),  icon: Factory,        href: "/operations",              color: "production", module: "operations" },
     { title: t("modules.hr.title"),          icon: UsersRound,     href: "/attendance-dashboard",    color: "people",     module: "branch_employees" },
+    { title: t("modules.sales.title"),       icon: Receipt,        href: "/cashier-journals",        color: "money",      module: "cashier_journal" },
+    { title: t("modules.operations.title"),  icon: Factory,        href: "/operations",              color: "production", module: "operations" },
+    { title: t("modules.production.title"),  icon: ClipboardList,  href: "/production-dashboard",    color: "production", module: "production" },
     { title: t("modules.assets.title"),      icon: Package,        href: "/inventory",               color: "inventory",  module: "inventory" },
     { title: t("modules.warehouse.title"),   icon: Warehouse,      href: "/warehouse-dashboard",     color: "inventory",  module: "warehouse" },
     { title: t("modules.projects.title"),    icon: Hammer,         href: "/construction-projects",   color: "projects",   module: "construction_projects" },
     { title: t("modules.marketing.title"),   icon: Megaphone,      href: "/marketing",               color: "marketing",  module: "marketing" },
-    { title: t("modules.executive.title"), icon: Briefcase, href: "/executive", color: "executive", module: "executive_dashboard" },
+    { title: t("modules.executive.title"),   icon: Briefcase,      href: "/executive",               color: "executive",  module: "executive_dashboard" },
     { title: t("modules.settings.title"),    icon: Settings,       href: "/settings",                color: "system",     module: "settings" },
   ];
 
