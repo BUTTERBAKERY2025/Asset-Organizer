@@ -532,7 +532,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background flex">
-      <aside className="w-72 bg-gradient-to-b from-card via-card to-card/95 border-l border-border/50 hidden md:flex flex-col sticky top-0 h-screen shadow-lg">
+      <aside className="w-64 xl:w-72 bg-gradient-to-b from-card via-card to-card/95 border-l border-border/50 hidden lg:flex flex-col sticky top-0 h-screen shadow-lg shrink-0">
         <div className="p-4 border-b border-border/30">
           <div className="flex items-center justify-between mb-3">
             <div className="flex-1">
@@ -662,14 +662,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="md:hidden min-h-14 border-b border-border bg-card/95 backdrop-blur-sm flex items-center px-3 sm:px-4 justify-between sticky top-0 z-50 safe-area-inset-top shadow-sm">
+        <header className="lg:hidden min-h-14 border-b border-border bg-card/95 backdrop-blur-sm flex items-center px-3 sm:px-4 md:px-6 justify-between sticky top-0 z-50 safe-area-inset-top shadow-sm">
           <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-11 w-11 sm:h-9 sm:w-9">
+              <Button variant="ghost" size="icon" className="h-11 w-11 md:h-10 md:w-10" data-testid="button-open-menu">
                 <Menu className="h-5 w-5" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="right" className="w-72 p-0 overflow-y-auto">
+            <SheetContent side="right" className="w-[85%] max-w-sm md:max-w-md p-0 overflow-y-auto">
               <div className="p-4 border-b border-border/50">
                 <h1 className="text-base font-bold text-amber-700">{t("platformName")}</h1>
                 <p className="text-[10px] text-amber-600/70 font-medium">{t("systemSubtitle")}</p>
@@ -783,9 +783,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </SheetContent>
           </Sheet>
 
-          <img src={logo} alt="Butter Bakery" className="h-8 object-contain" />
-          
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1 justify-center md:justify-start md:mx-4">
+            <img src={logo} alt="Butter Bakery" className="h-8 md:h-9 object-contain shrink-0" />
+            <div className="hidden md:flex flex-col leading-tight min-w-0">
+              <span className="text-sm font-bold text-amber-700 truncate">{t("platformName")}</span>
+              <span className="text-[10px] text-amber-600/70 font-medium truncate">{t("systemSubtitle")}</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1 md:gap-2 shrink-0">
+            {isAuthenticated && <div className="hidden md:block w-56"><Suspense fallback={<div className="h-9 bg-muted/30 rounded-lg animate-pulse" />}><GlobalSearch /></Suspense></div>}
             {isAuthenticated && isAdmin && <Suspense fallback={<div className="w-8 h-8" />}><NotificationsDropdown /></Suspense>}
           </div>
         </header>

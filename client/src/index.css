@@ -69,16 +69,27 @@
     @apply font-sans antialiased bg-background text-foreground;
   }
   
-  /* Touch-friendly targets for mobile */
-  @media (max-width: 768px) {
-    button, a, [role="button"] {
+  /* Touch-friendly targets on phones (≤640px). iPad/tablet keeps standard sizes
+     so layouts stay dense and useful. Inputs always use ≥16px on touch devices
+     to prevent unwanted iOS zoom. */
+  @media (max-width: 640px) {
+    button:not(.btn-compact), a:not(.link-compact), [role="button"]:not(.btn-compact) {
+      min-height: 40px;
+    }
+    button[data-touch="lg"], a[data-touch="lg"], [role="button"][data-touch="lg"] {
       min-height: 44px;
       min-width: 44px;
     }
-    
-    input, select, textarea {
+  }
+
+  @media (hover: none) and (pointer: coarse) {
+    input:not([type="checkbox"]):not([type="radio"]), select, textarea {
       font-size: 16px !important; /* Prevents zoom on iOS */
     }
+  }
+
+  html, body {
+    overscroll-behavior-y: none;
   }
 }
 
@@ -90,6 +101,112 @@
   }
   .safe-area-inset-bottom {
     padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Standardized page container — consistent breathing room across devices.
+     Phones: tight padding. Tablets/iPad: comfortable. Laptops+: capped width
+     centered, with extra side padding so content doesn't hug the edges. */
+  .page-container {
+    width: 100%;
+    margin-inline: auto;
+    padding-inline: 0.75rem;
+    padding-block: 0.75rem;
+    max-width: 100%;
+  }
+  @media (min-width: 640px) {
+    .page-container {
+      padding-inline: 1.25rem;
+      padding-block: 1rem;
+    }
+  }
+  @media (min-width: 768px) {
+    .page-container {
+      padding-inline: 1.5rem;
+      padding-block: 1.25rem;
+    }
+  }
+  @media (min-width: 1024px) {
+    .page-container {
+      padding-inline: 2rem;
+      padding-block: 1.5rem;
+      max-width: 1400px;
+    }
+  }
+  @media (min-width: 1536px) {
+    .page-container {
+      max-width: 1560px;
+    }
+  }
+
+  /* Narrow centered container for forms / read-focused pages. */
+  .page-container-narrow {
+    width: 100%;
+    margin-inline: auto;
+    padding-inline: 0.75rem;
+    padding-block: 0.75rem;
+    max-width: 100%;
+  }
+  @media (min-width: 640px) {
+    .page-container-narrow {
+      padding-inline: 1.25rem;
+      padding-block: 1rem;
+      max-width: 720px;
+    }
+  }
+  @media (min-width: 1024px) {
+    .page-container-narrow {
+      max-width: 880px;
+      padding-block: 1.5rem;
+    }
+  }
+
+  /* Responsive KPI grid: 1col phone tiny, 2col phone, 3col tablet, 4col laptop+ */
+  .kpi-grid {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  @media (min-width: 360px) {
+    .kpi-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (min-width: 768px) {
+    .kpi-grid {
+      gap: 1rem;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+  @media (min-width: 1024px) {
+    .kpi-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+
+  /* Responsive fluid heading */
+  .heading-fluid {
+    font-size: clamp(1.125rem, 1rem + 1vw, 1.75rem);
+    line-height: 1.25;
+  }
+  .heading-fluid-lg {
+    font-size: clamp(1.25rem, 1.1rem + 1.5vw, 2rem);
+    line-height: 1.2;
+  }
+
+  /* Sticky last-column for action cells in horizontally scrolling tables.
+     Apply `.table-actions-sticky` on the wrapping <Table> by adding the
+     class to the parent. The last <td>/<th> stays visible while the user
+     swipes horizontally on mobile. */
+  .table-actions-sticky tbody td:last-child,
+  .table-actions-sticky thead th:last-child {
+    position: sticky;
+    inset-inline-end: 0;
+    background: var(--color-card);
+    box-shadow: -6px 0 8px -6px rgba(0,0,0,0.08);
+  }
+  [dir="rtl"] .table-actions-sticky tbody td:last-child,
+  [dir="rtl"] .table-actions-sticky thead th:last-child {
+    box-shadow: 6px 0 8px -6px rgba(0,0,0,0.08);
   }
   
   /* Smooth scrolling */
