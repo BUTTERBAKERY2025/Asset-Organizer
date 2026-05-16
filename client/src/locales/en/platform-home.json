@@ -12,6 +12,11 @@
   "logout": "Logout",
   "todaySales": "Today's Sales",
   "currency": "SAR",
+  "hero": {
+    "pendingApprovals": "You have {{count}} requests awaiting your approval, ",
+    "salesSummary": "today's sales are {{amount}} {{currency}}"
+  },
+  "eventPosTitle": "Event POS",
   "platformName": "BUTTER BAKERY SYSTEM",
   "systemSubtitle": "CEO COMMAND",
   "modules": {
@@ -50,6 +55,10 @@
     "warehouse": {
       "title": "Warehouse & Transfers",
       "description": "Manage material requests and transfers between branches and main warehouse"
+    },
+    "executive": {
+      "title": "Executive Secretariat",
+      "description": "CEO command center - meetings, tasks and correspondence"
     }
   },
   "sidebar": {

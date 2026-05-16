@@ -12,6 +12,11 @@
   "logout": "تسجيل الخروج",
   "todaySales": "مبيعات اليوم",
   "currency": "ر.س",
+  "hero": {
+    "pendingApprovals": "لديك {{count}} طلب بانتظار اعتمادك، ",
+    "salesSummary": "مبيعات اليوم {{amount}} {{currency}}"
+  },
+  "eventPosTitle": "نقطة البيع",
   "platformName": "BUTTER BAKERY SYSTEM",
   "systemSubtitle": "CEO COMMAND",
   "modules": {
@@ -50,6 +55,10 @@
     "warehouse": {
       "title": "المخازن والتحويلات",
       "description": "إدارة طلبات المواد والتحويلات بين الفروع والمستودع الرئيسي"
+    },
+    "executive": {
+      "title": "السكرتارية التنفيذية",
+      "description": "مركز قيادة الرئيس التنفيذي - الاجتماعات والمهام والمراسلات"
     }
   },
   "sidebar": {

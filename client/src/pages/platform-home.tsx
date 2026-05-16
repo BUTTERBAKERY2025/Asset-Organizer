@@ -1,174 +1,99 @@
 import { useEffect } from "react";
 import { Layout } from "@/components/layout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useLocation } from "wouter";
+import { useLocation } from "wouter";
 import { useTranslation } from "react-i18next";
-import { changeLanguage, getCurrentLanguage } from "@/lib/i18n";
-import { 
-  Package, Hammer, Settings, Users, ArrowLeftRight, Building2, 
-  FileSignature, Wallet, Calculator, Boxes, AlertTriangle, CalendarCheck, 
-  ClipboardEdit, HardHat, FileSearch, HardDrive, Link2, LayoutDashboard, 
-  ChevronLeft, Factory, Clock, CheckCircle, Megaphone, UserCheck, Calendar, 
-  Target, UsersRound, ClipboardList, Receipt, TrendingUp, Brain, Upload,
-  FileBarChart, Gift, PieChart, Shield, Building, Briefcase, BarChart3,
-  Zap, Sun, Moon, CloudSun, Loader2, RefreshCw, Languages, Warehouse,
-  PackageCheck, Send, ClipboardCheck, FileText, Store
+import { changeLanguage } from "@/lib/i18n";
+import {
+  Package, Hammer, Settings, Users, Building2,
+  HardDrive, LayoutDashboard, Factory, Megaphone,
+  UsersRound, ClipboardList, Receipt, TrendingUp, TrendingDown,
+  Sun, Moon, CloudSun, Languages, Warehouse,
+  Store, Briefcase, Sparkles,
 } from "lucide-react";
 import type { SystemModule } from "@shared/schema";
 
-interface ModuleCardProps {
+type SemanticColor =
+  | "money"
+  | "production"
+  | "people"
+  | "inventory"
+  | "projects"
+  | "marketing"
+  | "executive"
+  | "system";
+
+const COLOR_MAP: Record<SemanticColor, { bg: string; soft: string; ring: string }> = {
+  money:      { bg: "bg-emerald-500",  soft: "bg-emerald-50",  ring: "ring-emerald-100" },
+  production: { bg: "bg-blue-500",     soft: "bg-blue-50",     ring: "ring-blue-100" },
+  people:     { bg: "bg-teal-500",     soft: "bg-teal-50",     ring: "ring-teal-100" },
+  inventory:  { bg: "bg-amber-500",    soft: "bg-amber-50",    ring: "ring-amber-100" },
+  projects:   { bg: "bg-orange-500",   soft: "bg-orange-50",   ring: "ring-orange-100" },
+  marketing:  { bg: "bg-pink-500",     soft: "bg-pink-50",     ring: "ring-pink-100" },
+  executive:  { bg: "bg-violet-500",   soft: "bg-violet-50",   ring: "ring-violet-100" },
+  system:     { bg: "bg-slate-500",    soft: "bg-slate-50",    ring: "ring-slate-100" },
+};
+
+interface AppTileProps {
   title: string;
-  description: string;
   icon: React.ComponentType<{ className?: string }>;
   href: string;
-  color: string;
-  badge?: string;
-  items?: { label: string; href: string; icon: React.ComponentType<{ className?: string }> }[];
+  color: SemanticColor;
 }
 
-interface QuickStatProps {
-  title: string;
-  value: string | number;
-  icon: React.ComponentType<{ className?: string }>;
-  color: string;
-  trend?: { value: number; isPositive: boolean };
-  href?: string;
-}
-
-function QuickStat({ title, value, icon: Icon, color, trend, href }: QuickStatProps) {
-  const content = (
-    <Card className={`${href ? 'hover:shadow-md cursor-pointer transition-all hover:border-primary/30' : ''}`}>
-      <CardContent className="p-3">
-        <div className="flex items-center justify-between gap-2">
-          <div className="space-y-0.5 min-w-0">
-            <p className="text-[10px] text-muted-foreground truncate">{title}</p>
-            <p className="text-lg font-bold truncate">{value}</p>
-            {trend && (
-              <div className={`flex items-center gap-1 text-[10px] ${trend.isPositive ? 'text-green-600' : 'text-red-600'}`}>
-                <TrendingUp className={`w-2.5 h-2.5 ${!trend.isPositive && 'rotate-180'}`} />
-                <span>{trend.value}%</span>
-              </div>
-            )}
-          </div>
-          <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${color}`}>
-            <Icon className="w-4 h-4 text-white" />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-
-  if (href) {
-    return <Link href={href}>{content}</Link>;
-  }
-  return content;
-}
-
-function ModuleCard({ title, description, icon: Icon, href, color, badge, items }: ModuleCardProps) {
+function AppTile({ title, icon: Icon, href, color }: AppTileProps) {
   const [, navigate] = useLocation();
-  
-  return (
-    <Card 
-      className="group relative hover:shadow-2xl hover:shadow-primary/20 transition-all duration-500 cursor-pointer border hover:border-primary/40 overflow-hidden h-full hover:scale-[1.02] hover:-translate-y-1 before:absolute before:inset-0 before:bg-gradient-to-br before:from-white/80 before:to-primary/5 before:opacity-0 hover:before:opacity-100 before:transition-opacity before:duration-500 before:backdrop-blur-sm before:z-0"
-      onClick={() => navigate(href)}
-      data-testid={`module-card-${href.replace('/', '')}`}
-    >
-      <div className="absolute inset-0 bg-gradient-to-br from-primary/0 to-primary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
-      <CardHeader className="p-2.5 pb-1.5 relative z-10">
-        <div className="flex items-center gap-2">
-          <div className={`w-8 h-8 rounded-md flex items-center justify-center ${color} transition-all duration-300 group-hover:scale-125 group-hover:rotate-3 group-hover:shadow-lg shrink-0`}>
-            <Icon className="w-3.5 h-3.5 text-white" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <CardTitle className="text-base font-bold truncate group-hover:text-primary transition-colors duration-300">{title}</CardTitle>
-          </div>
-          {badge && (
-            <Badge variant="secondary" className="text-[9px] shrink-0">{badge}</Badge>
-          )}
-        </div>
-        <CardDescription className="text-[10px] leading-snug line-clamp-2 mt-1 text-muted-foreground/80">{description}</CardDescription>
-      </CardHeader>
-      {items && items.length > 0 && (
-        <CardContent className="p-2.5 pt-0 relative z-10">
-          <div className="flex flex-wrap gap-1">
-            {items.slice(0, 3).map((item, index) => (
-              <Link key={index} href={item.href} onClick={(e) => e.stopPropagation()}>
-                <Badge 
-                  variant="outline" 
-                  className="flex items-center gap-0.5 hover:bg-secondary cursor-pointer transition-colors text-[9px] px-1 py-0"
-                >
-                  <item.icon className="w-2 h-2" />
-                  {item.label}
-                </Badge>
-              </Link>
-            ))}
-            {items.length > 3 && (
-              <Badge variant="outline" className="text-[9px] text-muted-foreground px-1 py-0">
-                +{items.length - 3}
-              </Badge>
-            )}
-          </div>
-        </CardContent>
-      )}
-    </Card>
-  );
-}
+  const c = COLOR_MAP[color];
 
-function QuickActionButton({ 
-  icon: Icon, 
-  label, 
-  href, 
-  color 
-}: { 
-  icon: React.ComponentType<{ className?: string }>; 
-  label: string; 
-  href: string; 
-  color: string;
-}) {
   return (
-    <Link href={href}>
-      <Button variant="outline" className="h-auto py-2 px-3 flex flex-col items-center gap-1.5 hover:border-primary/50 transition-all min-h-[40px]">
-        <div className={`w-7 h-7 rounded-md flex items-center justify-center ${color}`}>
-          <Icon className="w-3.5 h-3.5 text-white" />
-        </div>
-        <span className="text-[10px] font-medium">{label}</span>
-      </Button>
-    </Link>
+    <button
+      type="button"
+      onClick={() => navigate(href)}
+      className="group flex flex-col items-center gap-2 p-2 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-all"
+      data-testid={`app-tile-${href.replace(/\//g, "")}`}
+    >
+      <div
+        className={`w-[72px] h-[72px] sm:w-[80px] sm:h-[80px] rounded-2xl flex items-center justify-center ${c.bg} shadow-sm group-hover:shadow-lg group-hover:-translate-y-1 transition-all duration-300`}
+      >
+        <Icon className="w-8 h-8 text-white" />
+      </div>
+      <span className="text-[12px] sm:text-[13px] font-medium text-gray-700 text-center leading-tight line-clamp-2 max-w-[96px] group-hover:text-primary transition-colors">
+        {title}
+      </span>
+    </button>
   );
 }
 
 export default function PlatformHomePage() {
   const { user, isAuthenticated, activeBranch, isAttendanceClerk } = useAuth();
   const { canView } = usePermissions();
-  const { t, i18n } = useTranslation('platformHome');
-  const currentLang = i18n.language as 'ar' | 'en';
+  const { t, i18n } = useTranslation("platformHome");
+  const currentLang = i18n.language as "ar" | "en";
 
   const toggleLanguage = () => {
-    const newLang = currentLang === 'ar' ? 'en' : 'ar';
-    changeLanguage(newLang);
+    changeLanguage(currentLang === "ar" ? "en" : "ar");
   };
+
   const [, navigate] = useLocation();
-  
-  // Redirect attendance_clerk to attendance-check page
+
   useEffect(() => {
     if (isAttendanceClerk) {
       navigate("/attendance-check");
     }
   }, [isAttendanceClerk, navigate]);
-  
+
   if (isAttendanceClerk) {
     return null;
   }
 
-  const { data: stats, isLoading: statsLoading } = useQuery({
+  const { data: stats } = useQuery({
     queryKey: ["/api/dashboard/stats", activeBranch?.id],
     queryFn: async () => {
-      const branchParam = activeBranch?.id ? `?branchId=${activeBranch.id}` : '';
+      const branchParam = activeBranch?.id ? `?branchId=${activeBranch.id}` : "";
       const res = await fetch(`/api/dashboard/stats${branchParam}`);
       if (!res.ok) throw new Error(`${res.status}: request failed`);
       return res.json();
@@ -192,8 +117,8 @@ export default function PlatformHomePage() {
       const res = await fetch("/api/branch-employees?countOnly=true");
       if (!res.ok) throw new Error(`${res.status}: request failed`);
       const data = await res.json();
-      if (typeof data === 'number') return data;
-      if (Array.isArray(data)) return data.filter((e: any) => e.status === 'active').length;
+      if (typeof data === "number") return data;
+      if (Array.isArray(data)) return data.filter((e: any) => e.status === "active").length;
       return data?.count || 0;
     },
     enabled: isAuthenticated,
@@ -202,385 +127,215 @@ export default function PlatformHomePage() {
     refetchOnMount: false,
   });
 
-  const modules: (ModuleCardProps & { module?: SystemModule })[] = [
-    {
-      title: t('modules.hr.title'),
-      description: t('modules.hr.description'),
-      icon: UsersRound,
-      href: "/attendance-dashboard",
-      color: "bg-teal-500",
-      module: "branch_employees",
-      items: [
-        { label: t('subItems.branchEmployees'), href: "/branch-employees", icon: Users },
-        { label: t('subItems.orgStructure'), href: "/organizational-structure", icon: Building },
-        { label: t('subItems.attendance'), href: "/attendance-dashboard", icon: UserCheck },
-        { label: t('subItems.shifts'), href: "/shift-management", icon: Calendar },
-        { label: t('subItems.timesheet'), href: "/timesheet", icon: Clock },
-      ],
-    },
-    {
-      title: t('modules.production.title'),
-      description: t('modules.production.description'),
-      icon: ClipboardList,
-      href: "/production-dashboard",
-      color: "bg-blue-500",
-      module: "production",
-      items: [
-        { label: t('subItems.productionDashboard'), href: "/production-dashboard", icon: LayoutDashboard },
-        { label: t('subItems.productionOrders'), href: "/advanced-production-orders", icon: ClipboardEdit },
-        { label: t('subItems.dailyProduction'), href: "/daily-production", icon: CheckCircle },
-        { label: t('subItems.productionReports'), href: "/production-reports", icon: FileBarChart },
-      ],
-    },
-    {
-      title: t('modules.operations.title'),
-      description: t('modules.operations.description'),
-      icon: Factory,
-      href: "/operations",
-      color: "bg-indigo-500",
-      module: "operations",
-      items: [
-        { label: t('subItems.operationsDashboard'), href: "/operations", icon: LayoutDashboard },
-        { label: t('subItems.products'), href: "/products", icon: Package },
-        { label: t('subItems.qualityControl'), href: "/quality-control", icon: CheckCircle },
-        { label: t('subItems.displayBar'), href: "/display-bar-waste", icon: Boxes },
-      ],
-    },
-    {
-      title: t('modules.sales.title'),
-      description: t('modules.sales.description'),
-      icon: Receipt,
-      href: "/cashier-journals",
-      color: "bg-emerald-500",
-      module: "cashier_journal",
-      items: [
-        { label: t('subItems.cashierJournal'), href: "/cashier-journals", icon: Wallet },
-        { label: t('subItems.salesAnalytics'), href: "/sales-analytics", icon: PieChart },
-        { label: t('subItems.targets'), href: "/targets-dashboard", icon: Target },
-        { label: t('subItems.incentives'), href: "/incentives-management", icon: Gift },
-        { label: t('subItems.pnl'), href: "/pnl-dashboard", icon: TrendingUp },
-      ],
-    },
-    {
-      title: "نقطة البيع - إيفنت",
-      description: "نظام نقاط البيع للفعاليات والمناسبات الموسمية مع الفواتير الضريبية المبسطة",
-      icon: Store,
-      href: "/event-pos",
-      color: "bg-orange-500",
-      module: "event_pos" as SystemModule,
-      items: [
-        { label: "نقطة البيع", href: "/event-pos", icon: Store },
-      ],
-    },
-    {
-      title: t('modules.assets.title'),
-      description: t('modules.assets.description'),
-      icon: Package,
-      href: "/inventory",
-      color: "bg-amber-500",
-      module: "inventory",
-      items: [
-        { label: t('subItems.inventory'), href: "/inventory", icon: Boxes },
-        { label: t('subItems.assetManagement'), href: "/manage", icon: ClipboardEdit },
-        { label: t('subItems.transfers'), href: "/asset-transfers", icon: ArrowLeftRight },
-        { label: t('subItems.branches'), href: "/branches", icon: Building2 },
-        { label: t('subItems.maintenance'), href: "/maintenance", icon: AlertTriangle },
-      ],
-    },
-    {
-      title: t('modules.projects.title'),
-      description: t('modules.projects.description'),
-      icon: Hammer,
-      href: "/construction-projects",
-      color: "bg-orange-500",
-      module: "construction_projects",
-      items: [
-        { label: t('subItems.constructionProjects'), href: "/construction-projects", icon: Briefcase },
-        { label: t('subItems.contractors'), href: "/contractors", icon: HardHat },
-        { label: t('subItems.contracts'), href: "/contracts", icon: FileSignature },
-        { label: t('subItems.paymentRequests'), href: "/payment-requests", icon: Wallet },
-        { label: t('subItems.budgetPlanning'), href: "/budget-planning", icon: Calculator },
-      ],
-    },
-    {
-      title: t('modules.marketing.title'),
-      description: t('modules.marketing.description'),
-      icon: Megaphone,
-      href: "/marketing",
-      color: "bg-pink-500",
-      module: "marketing",
-      items: [
-        { label: t('subItems.marketingDashboard'), href: "/marketing", icon: LayoutDashboard },
-        { label: t('subItems.campaigns'), href: "/marketing-campaigns", icon: Target },
-        { label: t('subItems.influencers'), href: "/marketing-influencers", icon: UserCheck },
-        { label: t('subItems.marketingTeam'), href: "/marketing-team", icon: Users },
-      ],
-    },
-    {
-      title: t('modules.settings.title'),
-      description: t('modules.settings.description'),
-      icon: Settings,
-      href: "/settings",
-      color: "bg-slate-500",
-      module: "settings",
-      items: [
-        { label: t('subItems.settingsDashboard'), href: "/settings", icon: Settings },
-        { label: t('subItems.security'), href: "/security-management", icon: Shield },
-        { label: t('subItems.users'), href: "/users", icon: Users },
-        { label: t('subItems.permissions'), href: "/rbac-management", icon: Shield },
-        { label: t('subItems.backups'), href: "/backups", icon: HardDrive },
-      ],
-    },
-    {
-      title: t('modules.warehouse.title'),
-      description: t('modules.warehouse.description'),
-      icon: Warehouse,
-      href: "/warehouse-dashboard",
-      color: "bg-cyan-500",
-      module: "warehouse",
-      items: [
-        { label: t('subItems.warehouseDashboard'), href: "/warehouse-dashboard", icon: LayoutDashboard },
-        { label: t('subItems.transferRequests'), href: "/transfer-requests", icon: Send },
-        { label: t('subItems.warehouseInventory'), href: "/warehouse-inventory", icon: Boxes },
-      ],
-    },
-    {
-      title: t('modules.executive.title', 'السكرتارية التنفيذية'),
-      description: t('modules.executive.description', 'مركز قيادة الرئيس التنفيذي - إدارة الاجتماعات والمهام والمراسلات'),
-      icon: Briefcase,
-      href: "/executive",
-      color: "bg-violet-600",
-      module: "executive_dashboard",
-      items: [
-        { label: t('subItems.executiveDashboard', 'لوحة التحكم'), href: "/executive", icon: LayoutDashboard },
-        { label: t('subItems.executiveCalendar', 'التقويم'), href: "/executive/calendar", icon: Calendar },
-        { label: t('subItems.executiveMeetings', 'الاجتماعات'), href: "/executive/meetings", icon: Users },
-        { label: t('subItems.executiveTasks', 'المهام'), href: "/executive/tasks", icon: ClipboardCheck },
-        { label: t('subItems.executiveCorrespondence', 'المراسلات'), href: "/executive/correspondence", icon: FileText },
-      ],
-    },
+  const apps: (AppTileProps & { module?: SystemModule })[] = [
+    { title: t("modules.sales.title"),       icon: Receipt,        href: "/cashier-journals",        color: "money",      module: "cashier_journal" },
+    { title: t("eventPosTitle"),             icon: Store,          href: "/event-pos",               color: "money",      module: "event_pos" as SystemModule },
+    { title: t("modules.production.title"),  icon: ClipboardList,  href: "/production-dashboard",    color: "production", module: "production" },
+    { title: t("modules.operations.title"),  icon: Factory,        href: "/operations",              color: "production", module: "operations" },
+    { title: t("modules.hr.title"),          icon: UsersRound,     href: "/attendance-dashboard",    color: "people",     module: "branch_employees" },
+    { title: t("modules.assets.title"),      icon: Package,        href: "/inventory",               color: "inventory",  module: "inventory" },
+    { title: t("modules.warehouse.title"),   icon: Warehouse,      href: "/warehouse-dashboard",     color: "inventory",  module: "warehouse" },
+    { title: t("modules.projects.title"),    icon: Hammer,         href: "/construction-projects",   color: "projects",   module: "construction_projects" },
+    { title: t("modules.marketing.title"),   icon: Megaphone,      href: "/marketing",               color: "marketing",  module: "marketing" },
+    { title: t("modules.executive.title"), icon: Briefcase, href: "/executive", color: "executive", module: "executive_dashboard" },
+    { title: t("modules.settings.title"),    icon: Settings,       href: "/settings",                color: "system",     module: "settings" },
   ];
 
-  const allQuickActions: { icon: React.ComponentType<{ className?: string }>; label: string; href: string; color: string; module: SystemModule }[] = [
-    { icon: Users, label: t('quickActions.addEmployee'), href: "/branch-employees", color: "bg-teal-500", module: "branch_employees" },
-    { icon: ClipboardEdit, label: t('quickActions.productionOrder'), href: "/advanced-production-orders", color: "bg-blue-500", module: "production" },
-    { icon: Wallet, label: t('quickActions.cashierJournal'), href: "/cashier-journals", color: "bg-emerald-500", module: "cashier_journal" },
-    { icon: UserCheck, label: t('quickActions.recordAttendance'), href: "/attendance-check", color: "bg-purple-500", module: "shifts" },
-    { icon: Boxes, label: t('quickActions.inventoryCheck'), href: "/inventory", color: "bg-amber-500", module: "inventory" },
-    { icon: FileBarChart, label: t('quickActions.reports'), href: "/reports", color: "bg-indigo-500", module: "reports" },
-  ];
-
-  // Filter quick actions by permissions
-  const quickActions = allQuickActions.filter(action => canView(action.module));
-
-  const accessibleModules = modules.filter(module => {
-    if (!module.module) return true;
-    return canView(module.module);
-  });
+  const accessibleApps = apps.filter((a) => !a.module || canView(a.module));
 
   const getGreeting = () => {
     const hour = new Date().getHours();
-    if (hour >= 5 && hour < 12) return { text: t('greeting.morning'), icon: Sun, color: "text-amber-500" };
-    if (hour >= 12 && hour < 17) return { text: t('greeting.afternoon'), icon: CloudSun, color: "text-orange-500" };
-    return { text: t('greeting.evening'), icon: Moon, color: "text-indigo-500" };
+    if (hour >= 5 && hour < 12) return { text: t("greeting.morning"), icon: Sun, color: "text-amber-500" };
+    if (hour >= 12 && hour < 17) return { text: t("greeting.afternoon"), icon: CloudSun, color: "text-orange-500" };
+    return { text: t("greeting.evening"), icon: Moon, color: "text-indigo-500" };
   };
 
   const greeting = getGreeting();
   const GreetingIcon = greeting.icon;
 
-  const formatDate = () => {
-    const options: Intl.DateTimeFormatOptions = { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    };
-    return new Date().toLocaleDateString(currentLang === 'ar' ? 'en-GB' : 'en-US', options);
-  };
+  const todaySales: number = stats?.todaySales ?? 0;
+  const yesterdaySales: number = stats?.yesterdaySales ?? 0;
+  const salesTrend =
+    yesterdaySales > 0
+      ? Math.round(((todaySales - yesterdaySales) / yesterdaySales) * 100)
+      : null;
 
-  const formatTime = () => {
-    return new Date().toLocaleTimeString(currentLang === 'ar' ? 'en-GB' : 'en-US', { 
-      hour: '2-digit', 
-      minute: '2-digit',
-      hour12: true 
-    });
-  };
+  const todayOrders: number = stats?.productionOrders ?? 0;
+  const pendingApprovals: number = stats?.pendingApprovals ?? 0;
+
+  const formatNumber = (n: number) =>
+    new Intl.NumberFormat(currentLang === "ar" ? "ar-SA" : "en-US").format(n);
 
   return (
     <Layout>
-      <div className={`p-4 md:p-8 lg:p-10 max-w-6xl mx-auto space-y-4`} dir={currentLang === 'ar' ? 'rtl' : 'ltr'}>
-        <div className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-gradient-to-l from-primary/5 to-primary/10 rounded-2xl p-4 sm:p-6`}>
-          <div className="space-y-2">
-            <div className="flex items-center gap-3">
-              <GreetingIcon className={`w-6 h-6 sm:w-8 sm:h-8 ${greeting.color}`} />
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground">
-                {greeting.text}{user?.firstName ? `, ${user.firstName}` : ""}
-              </h1>
-            </div>
-            <p className="text-muted-foreground">
-              {t('welcome')}
-            </p>
-            {activeBranch && (
-              <Badge variant="outline" className="text-xs">
-                <Building2 className={`w-3 h-3 ${currentLang === 'ar' ? 'ml-1' : 'mr-1'}`} />
-                {activeBranch.name}
-              </Badge>
-            )}
-          </div>
-          <div className={`flex flex-col ${currentLang === 'ar' ? 'items-end' : 'items-start'} gap-1 text-muted-foreground`}>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={toggleLanguage}
-              className="mb-2 gap-2"
-              data-testid="button-toggle-language"
-            >
-              <Languages className="w-4 h-4" />
-              {t('switchLanguage')}
-            </Button>
-            <div className="flex items-center gap-2 text-sm">
-              <Calendar className="w-4 h-4" />
-              <span>{formatDate()}</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm">
-              <Clock className="w-4 h-4" />
-              <span>{formatTime()}</span>
-            </div>
-          </div>
-        </div>
+      <div
+        className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto space-y-6"
+        dir={currentLang === "ar" ? "rtl" : "ltr"}
+      >
+        {/* ============ HERO CARD (conversational) ============ */}
+        <section
+          className="relative overflow-hidden bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-7"
+          data-testid="hero-card"
+        >
+          {/* soft brand background blobs */}
+          <div className="pointer-events-none absolute -top-16 -left-16 w-48 h-48 rounded-full bg-primary/10 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-20 -right-10 w-56 h-56 rounded-full bg-amber-200/30 blur-3xl" />
 
-        {isAuthenticated && (
-          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-            {canView("branches") && (
-              <QuickStat
-                title={t('stats.branches')}
-                value={branchesCount || 0}
-                icon={Building2}
-                color="bg-amber-500"
-                href="/branches"
-              />
-            )}
-            {canView("branch_employees") && (
-              <QuickStat
-                title={t('stats.employees')}
-                value={employeesCount || 0}
-                icon={Users}
-                color="bg-teal-500"
-                href="/branch-employees"
-              />
-            )}
-            {canView("production") && (
-              <QuickStat
-                title={t('stats.todayOrders')}
-                value={stats?.productionOrders || 0}
-                icon={ClipboardList}
-                color="bg-blue-500"
-                href="/advanced-production-orders"
-              />
-            )}
-            {canView("cashier_journal") && (
-              <QuickStat
-                title={t('todaySales')}
-                value={stats?.todaySales ? `${stats.todaySales.toLocaleString()} ${t('currency')}` : `0 ${t('currency')}`}
-                icon={Receipt}
-                color="bg-emerald-500"
-                href="/cashier-journals"
-              />
-            )}
-          </div>
-        )}
+          <div className="relative flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div className="space-y-2 max-w-2xl">
+              <div className="flex items-center gap-2">
+                <GreetingIcon className={`w-6 h-6 ${greeting.color}`} />
+                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">
+                  {greeting.text}
+                  {user?.firstName ? `${currentLang === "ar" ? "، " : ", "}${user.firstName}` : ""}
+                </h1>
+                <Sparkles className="w-5 h-5 text-amber-400" />
+              </div>
 
-        {/* أقسام النظام - تصميم بطاقات مع وصف */}
-        <div className="bg-gray-50/80 rounded-2xl p-4 sm:p-6">
-          <h2 className="text-base sm:text-lg font-semibold text-gray-700 mb-4 sm:mb-5 flex items-center gap-2">
-            <LayoutDashboard className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
-            {t('systemModules')}
-          </h2>
-          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-            {accessibleModules.map((module, index) => {
-              const IconComponent = module.icon;
-              return (
-                <div
-                  key={index}
-                  onClick={() => navigate(module.href)}
-                  className="group bg-white rounded-xl p-4 cursor-pointer border border-gray-100 transition-all duration-300 ease-out hover:shadow-xl hover:-translate-y-2 hover:border-primary/20 relative overflow-hidden"
-                  style={{ 
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
-                  }}
-                  data-testid={`module-card-simple-${index}`}
-                >
-                  {/* Gradient overlay on hover */}
-                  <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                  
-                  {/* Header with icon and title */}
-                  <div className="relative flex items-center gap-3 mb-2">
-                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${module.color} transition-all duration-300 group-hover:scale-110 group-hover:rotate-3 group-hover:shadow-lg`}>
-                      <IconComponent className="w-4 h-4 text-white transition-transform duration-300 group-hover:scale-110" />
-                    </div>
-                    <div className="min-w-0">
-                      <span className="text-sm font-bold text-gray-800 block leading-tight truncate transition-colors duration-300 group-hover:text-primary">
-                        {module.title}
-                      </span>
-                      <span className="text-[10px] text-gray-400 block transition-colors duration-300 group-hover:text-gray-500">
-                        {module.href.replace('/', '').replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                      </span>
-                    </div>
-                  </div>
-                  {/* Description */}
-                  <p className="relative text-[11px] text-gray-500 leading-relaxed mb-3 line-clamp-2 transition-colors duration-300 group-hover:text-gray-600">
-                    {module.description}
-                  </p>
-                  {/* Quick links badges */}
-                  {module.items && module.items.length > 0 && (
-                    <div className="relative flex flex-wrap gap-1.5">
-                      {module.items.slice(0, 3).map((item, idx) => (
-                        <span
-                          key={idx}
-                          onClick={(e) => { e.stopPropagation(); navigate(item.href); }}
-                          className="inline-flex items-center gap-1 text-[9px] px-2 py-1 rounded-full bg-gray-100 text-gray-600 transition-all duration-200 hover:bg-primary hover:text-white hover:scale-105 hover:shadow-md"
-                        >
-                          <item.icon className="w-2.5 h-2.5" />
-                          {item.label}
-                        </span>
-                      ))}
-                      {module.items.length > 3 && (
-                        <span className="text-[9px] px-2 py-1 rounded-full bg-gray-100 text-gray-400 transition-all duration-200 group-hover:bg-gray-200">
-                          +{module.items.length - 3}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  
-                  {/* Arrow indicator on hover */}
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 group-hover:left-2 transition-all duration-300">
-                    <ChevronLeft className="w-4 h-4 text-primary" />
-                  </div>
+              <p className="text-sm sm:text-base text-gray-600 leading-relaxed">
+                {pendingApprovals > 0 && (
+                  <span data-testid="text-pending-approvals">
+                    {t("hero.pendingApprovals", { count: formatNumber(pendingApprovals) as unknown as number })}
+                  </span>
+                )}
+                <span className="font-bold text-gray-900">
+                  {t("hero.salesSummary", {
+                    amount: formatNumber(todaySales),
+                    currency: t("currency"),
+                  })}
+                </span>
+                {salesTrend !== null && (
+                  <span
+                    className={`inline-flex items-center gap-1 mx-2 text-xs font-medium ${
+                      salesTrend >= 0 ? "text-emerald-600" : "text-rose-600"
+                    }`}
+                  >
+                    {salesTrend >= 0 ? (
+                      <TrendingUp className="w-3.5 h-3.5" />
+                    ) : (
+                      <TrendingDown className="w-3.5 h-3.5" />
+                    )}
+                    {salesTrend >= 0 ? "+" : ""}
+                    {salesTrend}%
+                  </span>
+                )}
+                .
+              </p>
+
+              {activeBranch && (
+                <div className="flex items-center gap-2 pt-1">
+                  <Badge
+                    variant="outline"
+                    className="text-xs bg-primary/5 border-primary/20 text-primary"
+                    data-testid="badge-active-branch"
+                  >
+                    <Building2 className="w-3 h-3 mx-1" />
+                    {activeBranch.name}
+                  </Badge>
                 </div>
-              );
-            })}
-          </div>
-        </div>
+              )}
+            </div>
 
-        {!isAuthenticated && (
-          <div className="text-center py-8">
-            <Card className="max-w-md mx-auto">
-              <CardHeader>
-                <CardTitle className="text-lg">{t('loginRequired')}</CardTitle>
-                <CardDescription>
-                  {t('loginRequiredDesc')}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Link href="/login">
-                  <Button className="w-full h-11 sm:h-9" data-testid="button-login-home">
-                    <ChevronLeft className={`w-4 h-4 ${currentLang === 'ar' ? 'ml-2' : 'mr-2'}`} />
-                    {t('login')}
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={toggleLanguage}
+                className="gap-2"
+                data-testid="button-toggle-language"
+              >
+                <Languages className="w-4 h-4" />
+                {t("switchLanguage")}
+              </Button>
+            </div>
           </div>
+        </section>
+
+        {/* ============ KPI STRIP (narrative horizontal) ============ */}
+        {isAuthenticated && (
+          <section
+            className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden"
+            data-testid="kpi-strip"
+          >
+            <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-y lg:divide-y-0 divide-gray-100 rtl:divide-x-reverse [&>button]:text-start">
+              {canView("branches") && (
+                <button
+                  type="button"
+                  onClick={() => navigate("/branches")}
+                  className="p-4 hover:bg-gray-50 transition-colors"
+                  data-testid="kpi-branches"
+                >
+                  <p className="text-[11px] text-gray-500 mb-1">{t("stats.branches")}</p>
+                  <p className="text-2xl font-bold text-gray-900">{formatNumber(branchesCount || 0)}</p>
+                </button>
+              )}
+              {canView("branch_employees") && (
+                <button
+                  type="button"
+                  onClick={() => navigate("/branch-employees")}
+                  className="p-4 hover:bg-gray-50 transition-colors"
+                  data-testid="kpi-employees"
+                >
+                  <p className="text-[11px] text-gray-500 mb-1">{t("stats.employees")}</p>
+                  <p className="text-2xl font-bold text-gray-900">{formatNumber(employeesCount || 0)}</p>
+                </button>
+              )}
+              {canView("production") && (
+                <button
+                  type="button"
+                  onClick={() => navigate("/advanced-production-orders")}
+                  className="p-4 hover:bg-gray-50 transition-colors"
+                  data-testid="kpi-orders"
+                >
+                  <p className="text-[11px] text-gray-500 mb-1">{t("stats.todayOrders")}</p>
+                  <p className="text-2xl font-bold text-gray-900">{formatNumber(todayOrders)}</p>
+                </button>
+              )}
+              {canView("cashier_journal") && (
+                <button
+                  type="button"
+                  onClick={() => navigate("/cashier-journals")}
+                  className="p-4 hover:bg-gray-50 transition-colors"
+                  data-testid="kpi-sales"
+                >
+                  <p className="text-[11px] text-gray-500 mb-1">{t("todaySales")}</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {formatNumber(todaySales)}{" "}
+                    <span className="text-sm font-normal text-gray-500">{t("currency")}</span>
+                  </p>
+                </button>
+              )}
+            </div>
+          </section>
         )}
+
+        {/* ============ APPS GRID (Odoo style) ============ */}
+        <section data-testid="apps-grid-section">
+          <div className="flex items-center gap-2 mb-4 px-1">
+            <LayoutDashboard className="w-4 h-4 text-gray-400" />
+            <h2 className="text-sm font-semibold text-gray-600 tracking-wide">
+              {t("systemModules")}
+            </h2>
+            <span className="text-xs text-gray-400">({accessibleApps.length})</span>
+          </div>
+
+          <div
+            className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-6"
+            data-testid="apps-grid"
+          >
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-y-6 gap-x-2 sm:gap-x-4 justify-items-center">
+              {accessibleApps.map((app, idx) => (
+                <AppTile
+                  key={`${app.href}-${idx}`}
+                  title={app.title}
+                  icon={app.icon}
+                  href={app.href}
+                  color={app.color}
+                />
+              ))}
+            </div>
+          </div>
+        </section>
       </div>
     </Layout>
   );
