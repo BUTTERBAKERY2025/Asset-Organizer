@@ -2109,13 +2109,22 @@ export default function EmployeeReportsDashboardPage() {
     if (!attendanceRecords || !branches) return [];
     const monthStart = `${selectedMonth}-01`;
     const monthEnd = `${selectedMonth}-31`;
-    
-    return branches.map(branch => {
-      const branchAttendance = attendanceRecords.filter(rec => 
-        rec.branchId === branch.id && 
-        rec.attendanceDate >= monthStart && 
-        rec.attendanceDate <= monthEnd
-      );
+    const branchesToProcess = selectedBranch !== "all"
+      ? branches.filter(b => b.id === selectedBranch)
+      : branches;
+    const needsEmployeeFilter = selectedJobTitle !== "all" || selectedEmployee !== "all" || activeOnly;
+
+    return branchesToProcess.map(branch => {
+      const branchAttendance = attendanceRecords.filter(rec => {
+        if (rec.branchId !== branch.id) return false;
+        if (rec.attendanceDate < monthStart || rec.attendanceDate > monthEnd) return false;
+        if (needsEmployeeFilter) {
+          const matchesByBranchEmployeeId = rec.branchEmployeeId && filteredEmployeeLookup.ids.has(rec.branchEmployeeId);
+          const matchesByEmployeeId = filteredEmployeeLookup.employeeIds.has(rec.employeeId);
+          if (!matchesByBranchEmployeeId && !matchesByEmployeeId) return false;
+        }
+        return true;
+      });
       const totalHours = branchAttendance.reduce((sum, r) => sum + (Number(r.workingHours) || 0), 0);
       const standardHours = branchAttendance.length * 8;
       const overtime = Math.max(0, totalHours - standardHours);
@@ -2126,7 +2135,7 @@ export default function EmployeeReportsDashboardPage() {
         overtime: Math.round(overtime),
       };
     }).filter(b => b.totalHours > 0);
-  }, [attendanceRecords, branches, selectedMonth]);
+  }, [attendanceRecords, branches, selectedMonth, selectedBranch, selectedJobTitle, selectedEmployee, activeOnly, filteredEmployeeLookup]);
 
   const branchPerformanceRanking = useMemo(() => {
     return branchComparisonData.map(branch => {
@@ -2148,9 +2157,12 @@ export default function EmployeeReportsDashboardPage() {
 
   // ==================== DATA QUALITY METRICS ====================
   const dataQualityMetrics = useMemo(() => {
-    const today = new Date();
-    const monthDays = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-    const workingDays = Math.floor(monthDays * (5/7));
+    // الاعتماد على الشهر المحدد بدلاً من التاريخ الحالي + احترام أيام مضت للشهر الحالي
+    const monthDays = periodInfo.daysInMonth;
+    const elapsedDays = periodInfo.label === "current"
+      ? periodInfo.daysElapsed
+      : (periodInfo.label === "future" ? 0 : monthDays);
+    const workingDays = Math.max(1, Math.floor(elapsedDays * (5 / 7)));
     
     const employeesWithMissingAttendance: { emp: BranchEmployee; missingDays: number; percentage: number }[] = [];
     const employeesWithMissingSalary: BranchEmployee[] = [];
@@ -2197,7 +2209,7 @@ export default function EmployeeReportsDashboardPage() {
       qualityScore,
       totalIssues,
     };
-  }, [filteredEmployees, attendanceByEmployee]);
+  }, [filteredEmployees, attendanceByEmployee, periodInfo]);
 
   // ==================== NORMALIZATION FUNCTIONS ====================
   // توحيد أسماء الجنسيات المتشابهة
@@ -2395,7 +2407,7 @@ export default function EmployeeReportsDashboardPage() {
     
     // نسبة السعودة لكل فرع
     const branchSaudization = branches?.map(branch => {
-      const branchEmps = filteredEmployees.filter(e => e.branchId === branch.id && e.status === "active");
+      const branchEmps = filteredEmployees.filter(e => e.branchId === branch.id && (!activeOnly || e.status === "active"));
       const branchSaudis = branchEmps.filter(e => e.nationality === "سعودي");
       const rate = branchEmps.length > 0 ? Math.round((branchSaudis.length / branchEmps.length) * 100) : 0;
       const status: "green" | "yellow" | "red" = rate >= requiredSaudization ? "green" : rate >= requiredSaudization - 5 ? "yellow" : "red";
@@ -2553,7 +2565,7 @@ export default function EmployeeReportsDashboardPage() {
       employeeDocumentStatus: employeeDocumentStatus.sort((a, b) => b.issueCount - a.issueCount),
       documentStatusSummary,
     };
-  }, [filteredEmployees, branches]);
+  }, [filteredEmployees, branches, activeOnly]);
 
   // ==================== HEALTH CERTIFICATE ANALYSIS ====================
   const healthCertificateAnalysis = useMemo(() => {
@@ -2640,10 +2652,23 @@ export default function EmployeeReportsDashboardPage() {
   // ==================== COMPREHENSIVE COMPARISONS ====================
   const comprehensiveComparisons = useMemo(() => {
     if (!employees || !branches) return null;
-    
+
+    // مجموعة الموظفين بعد فلاتر الفرع/الوظيفة/الموظف (دون شرط الحالة — التبويب يقارن الحالات)
+    const scopedEmployees = employees.filter(emp => {
+      if (selectedBranch !== "all" && emp.branchId !== selectedBranch) return false;
+      if (selectedJobTitle !== "all" && emp.jobTitle !== selectedJobTitle) return false;
+      if (selectedEmployee !== "all" && emp.id.toString() !== selectedEmployee) return false;
+      return true;
+    });
+    // مجموعة "النشطون" داخل النطاق — تحترم مفتاح activeOnly (إذا مطفأ تشمل الجميع)
+    const isActiveInScope = (e: typeof employees[number]) => !activeOnly || e.status === "active";
+    const branchesScope = selectedBranch !== "all"
+      ? branches.filter(b => b.id === selectedBranch)
+      : branches;
+
     // Branch salary comparisons
-    const branchSalaryStats = branches.map(branch => {
-      const branchEmps = employees.filter(e => e.branchId === branch.id && e.status === "active");
+    const branchSalaryStats = branchesScope.map(branch => {
+      const branchEmps = scopedEmployees.filter(e => e.branchId === branch.id && isActiveInScope(e));
       const salaries = branchEmps.map(e => e.salary || 0).filter(s => s > 0);
       const totalSalary = salaries.reduce((sum, s) => sum + s, 0);
       const avgSalary = salaries.length > 0 ? Math.round(totalSalary / salaries.length) : 0;
@@ -2666,7 +2691,7 @@ export default function EmployeeReportsDashboardPage() {
 
     // Job title comparisons across branches (with normalization)
     const normalizedJobMap = new Map<string, typeof employees>();
-    employees.filter(e => e.status === "active").forEach(emp => {
+    scopedEmployees.filter(e => isActiveInScope(e)).forEach(emp => {
       const normalizedJob = normalizeJobTitle(emp.jobTitle);
       const existing = normalizedJobMap.get(normalizedJob) || [];
       existing.push(emp);
@@ -2698,7 +2723,7 @@ export default function EmployeeReportsDashboardPage() {
 
     // Nationality comparisons (with normalization)
     const normalizedNatMap = new Map<string, typeof employees>();
-    employees.filter(e => e.status === "active").forEach(emp => {
+    scopedEmployees.filter(e => isActiveInScope(e)).forEach(emp => {
       const normalizedNat = normalizeNationality(emp.nationality);
       const existing = normalizedNatMap.get(normalizedNat) || [];
       existing.push(emp);
@@ -2714,11 +2739,12 @@ export default function EmployeeReportsDashboardPage() {
         branchName: branch.name,
         count: natEmps.filter(e => e.branchId === branch.id).length
       })).filter(b => b.count > 0);
+      const totalActiveScope = scopedEmployees.filter(e => isActiveInScope(e)).length;
       return {
         nationality: nat,
         count: natEmps.length,
-        percentage: employees.filter(e => e.status === "active").length > 0 
-          ? Math.round((natEmps.length / employees.filter(e => e.status === "active").length) * 100) : 0,
+        percentage: totalActiveScope > 0
+          ? Math.round((natEmps.length / totalActiveScope) * 100) : 0,
         avgSalary,
         totalSalary,
         byBranch,
@@ -2726,8 +2752,8 @@ export default function EmployeeReportsDashboardPage() {
     }).sort((a, b) => b.count - a.count);
 
     // Employee count per branch with details
-    const branchEmployeeCounts = branches.map(branch => {
-      const branchEmps = employees.filter(e => e.branchId === branch.id);
+    const branchEmployeeCounts = branchesScope.map(branch => {
+      const branchEmps = scopedEmployees.filter(e => e.branchId === branch.id);
       const active = branchEmps.filter(e => e.status === "active").length;
       const terminated = branchEmps.filter(e => e.status === "terminated").length;
       const onLeave = branchEmps.filter(e => e.status === "on_leave").length;
@@ -2750,7 +2776,7 @@ export default function EmployeeReportsDashboardPage() {
     }).filter(b => b.total > 0).sort((a, b) => b.active - a.active);
 
     // Salary distribution analysis
-    const activeSalaries = employees.filter(e => e.status === "active" && e.salary).map(e => e.salary || 0);
+    const activeSalaries = scopedEmployees.filter(e => isActiveInScope(e) && e.salary).map(e => e.salary || 0);
     const salaryRanges = [
       { range: "أقل من 3,000", min: 0, max: 3000, count: 0 },
       { range: "3,000 - 5,000", min: 3000, max: 5000, count: 0 },
@@ -2772,7 +2798,7 @@ export default function EmployeeReportsDashboardPage() {
       { range: "3-5 سنوات", min: 3, max: 5, count: 0, employees: [] as any[] },
       { range: "أكثر من 5 سنوات", min: 5, max: 100, count: 0, employees: [] as any[] },
     ];
-    const activeEmpsWithHireDate = employees.filter(e => e.status === "active" && e.hireDate);
+    const activeEmpsWithHireDate = scopedEmployees.filter(e => isActiveInScope(e) && e.hireDate);
     activeEmpsWithHireDate.forEach(emp => {
       const hireDate = new Date(emp.hireDate!);
       const years = (today.getTime() - hireDate.getTime()) / (1000 * 60 * 60 * 24 * 365);
@@ -2782,7 +2808,7 @@ export default function EmployeeReportsDashboardPage() {
         range.employees.push({ name: emp.employeeName, years: Math.round(years * 10) / 10, salary: emp.salary });
       }
     });
-    const tenureByBranch = branches.map(branch => {
+    const tenureByBranch = branchesScope.map(branch => {
       const branchEmps = activeEmpsWithHireDate.filter(e => e.branchId === branch.id);
       const avgTenure = branchEmps.length > 0 
         ? Math.round(branchEmps.reduce((sum, e) => {
@@ -2838,8 +2864,8 @@ export default function EmployeeReportsDashboardPage() {
     const sortedSalaryGap = salaryGapByJob.sort((a, b) => b.maxGap - a.maxGap).slice(0, 15);
 
     // تحليل البدلات حسب الفرع
-    const allowancesAnalysis = branches.map(branch => {
-      const branchEmps = employees.filter(e => e.branchId === branch.id && e.status === "active");
+    const allowancesAnalysis = branchesScope.map(branch => {
+      const branchEmps = scopedEmployees.filter(e => e.branchId === branch.id && isActiveInScope(e));
       const totalHousing = branchEmps.reduce((sum, e) => sum + (e.housingAllowance || 0), 0);
       const totalTransport = branchEmps.reduce((sum, e) => sum + (e.transportAllowance || 0), 0);
       const totalFood = branchEmps.reduce((sum, e) => sum + (e.foodAllowance || 0), 0);
@@ -2859,8 +2885,8 @@ export default function EmployeeReportsDashboardPage() {
     }).filter(b => b.employeeCount > 0).sort((a, b) => b.totalAllowances - a.totalAllowances);
 
     // التكلفة الشهرية الإجمالية لكل فرع
-    const monthlyCostAnalysis = branches.map(branch => {
-      const branchEmps = employees.filter(e => e.branchId === branch.id && e.status === "active");
+    const monthlyCostAnalysis = branchesScope.map(branch => {
+      const branchEmps = scopedEmployees.filter(e => e.branchId === branch.id && isActiveInScope(e));
       const totalSalaries = branchEmps.reduce((sum, e) => sum + (e.salary || 0), 0);
       const totalHousing = branchEmps.reduce((sum, e) => sum + (e.housingAllowance || 0), 0);
       const totalTransport = branchEmps.reduce((sum, e) => sum + (e.transportAllowance || 0), 0);
@@ -2903,7 +2929,7 @@ export default function EmployeeReportsDashboardPage() {
       monthlyCostAnalysis,
       summary: {
         totalBranches: branchSalaryStats.length,
-        totalActiveEmployees: employees.filter(e => e.status === "active").length,
+        totalActiveEmployees: scopedEmployees.filter(e => isActiveInScope(e)).length,
         overallAvgSalary: activeSalaries.length > 0 ? Math.round(activeSalaries.reduce((a, b) => a + b, 0) / activeSalaries.length) : 0,
         highestAvgBranch: branchSalaryStats[0]?.branchName || "--",
         lowestAvgBranch: branchSalaryStats[branchSalaryStats.length - 1]?.branchName || "--",
@@ -2918,24 +2944,34 @@ export default function EmployeeReportsDashboardPage() {
         grandTotalInsurance,
       }
     };
-  }, [employees, branches]);
+  }, [employees, branches, selectedBranch, selectedJobTitle, selectedEmployee, activeOnly]);
 
   // ==================== TURNOVER ANALYSIS ====================
   const turnoverAnalysis = useMemo(() => {
-    const terminatedEmployees = employees?.filter(emp => emp.status === "terminated") || [];
-    const onLeaveEmployees = employees?.filter(emp => emp.status === "on_leave") || [];
-    const activeEmployees = employees?.filter(emp => emp.status === "active") || [];
-    
-    const totalEmployeesEver = (employees?.length || 0);
+    // نطاق الموظفين بعد فلاتر الفرع/الوظيفة/الموظف (دون شرط الحالة — تحليل دوران يحتاج كل الحالات)
+    const scopedEmps = (employees || []).filter(emp => {
+      if (selectedBranch !== "all" && emp.branchId !== selectedBranch) return false;
+      if (selectedJobTitle !== "all" && emp.jobTitle !== selectedJobTitle) return false;
+      if (selectedEmployee !== "all" && emp.id.toString() !== selectedEmployee) return false;
+      return true;
+    });
+    const terminatedEmployees = scopedEmps.filter(emp => emp.status === "terminated");
+    const onLeaveEmployees = scopedEmps.filter(emp => emp.status === "on_leave");
+    const activeEmployees = scopedEmps.filter(emp => emp.status === "active");
+
+    const totalEmployeesEver = scopedEmps.length;
     const turnoverRate = totalEmployeesEver > 0 ? Math.round((terminatedEmployees.length / totalEmployeesEver) * 100) : 0;
-    
-    const turnoverByBranch = branches?.map(branch => {
+    const branchesScope = selectedBranch !== "all"
+      ? (branches?.filter(b => b.id === selectedBranch) || [])
+      : (branches || []);
+
+    const turnoverByBranch = branchesScope.map(branch => {
       const branchTerminated = terminatedEmployees.filter(emp => emp.branchId === branch.id).length;
       const branchActive = activeEmployees.filter(emp => emp.branchId === branch.id).length;
       const branchTotal = branchTerminated + branchActive;
       const rate = branchTotal > 0 ? Math.round((branchTerminated / branchTotal) * 100) : 0;
       return { branchName: branch.name, branchId: branch.id, terminated: branchTerminated, active: branchActive, rate };
-    }).filter(b => b.terminated > 0 || b.active > 0) || [];
+    }).filter(b => b.terminated > 0 || b.active > 0);
     
     const turnoverByJob = new Map<string, { terminated: number; active: number }>();
     terminatedEmployees.forEach(emp => {
@@ -2963,7 +2999,7 @@ export default function EmployeeReportsDashboardPage() {
       turnoverByJob: turnoverByJobArray.slice(0, 10),
       recentTerminations: terminatedEmployees.slice(0, 10),
     };
-  }, [employees, branches]);
+  }, [employees, branches, selectedBranch, selectedJobTitle, selectedEmployee]);
 
   // ==================== ATTENDANCE vs SCHEDULE VARIANCE ====================
   const scheduleVarianceAnalysis = useMemo(() => {
@@ -2972,10 +3008,14 @@ export default function EmployeeReportsDashboardPage() {
     const monthStart = `${selectedMonth}-01`;
     const monthEnd = `${selectedMonth}-31`;
     
-    const scheduledForMonth = employeeSchedules.filter(s => 
-      s.scheduleDate >= monthStart && s.scheduleDate <= monthEnd &&
-      (selectedBranch === "all" || s.branchEmployeeId)
-    );
+    const needsEmployeeFilter = selectedJobTitle !== "all" || selectedEmployee !== "all" || activeOnly;
+    const scheduledForMonth = employeeSchedules.filter(s => {
+      if (s.scheduleDate < monthStart || s.scheduleDate > monthEnd) return false;
+      if (needsEmployeeFilter) {
+        if (!s.branchEmployeeId || !filteredEmployeeLookup.ids.has(s.branchEmployeeId)) return false;
+      }
+      return true;
+    });
     
     const attendanceMap = new Map<string, AttendanceRecord>();
     attendanceRecords.filter(r => r.attendanceDate >= monthStart && r.attendanceDate <= monthEnd)
@@ -3022,19 +3062,25 @@ export default function EmployeeReportsDashboardPage() {
         .slice(0, 10),
       summary: { onTime, late, absent, early, total: scheduledForMonth.length },
     };
-  }, [employeeSchedules, attendanceRecords, selectedMonth, selectedBranch, filteredEmployees]);
+  }, [employeeSchedules, attendanceRecords, selectedMonth, selectedBranch, selectedJobTitle, selectedEmployee, activeOnly, filteredEmployees, filteredEmployeeLookup]);
 
   // ==================== CASHIER SALES PERFORMANCE ====================
   const cashierPerformanceAnalysis = useMemo(() => {
     if (!cashierJournals || !employees) return { cashierPerformance: [], branchSales: [], totalSales: 0 };
-    
+
     const monthStart = `${selectedMonth}-01`;
     const monthEnd = `${selectedMonth}-31`;
-    
-    const monthJournals = cashierJournals.filter(j => 
-      j.reportDate >= monthStart && j.reportDate <= monthEnd &&
-      (selectedBranch === "all" || j.branchId === selectedBranch)
-    );
+    const needsEmployeeFilter = selectedJobTitle !== "all" || selectedEmployee !== "all" || activeOnly;
+
+    const monthJournals = cashierJournals.filter(j => {
+      if (j.reportDate < monthStart || j.reportDate > monthEnd) return false;
+      if (selectedBranch !== "all" && j.branchId !== selectedBranch) return false;
+      if (needsEmployeeFilter) {
+        // الكاشير المرتبط بموظف ضمن الفلتر (linkedUserId أو cashierId يطابق)
+        if (!filteredEmployeeLookup.employeeIds.has(j.cashierId)) return false;
+      }
+      return true;
+    });
     
     const cashierSalesMap = new Map<string, { name: string; totalSales: number; daysWorked: number; avgDaily: number }>();
     const branchSalesMap = new Map<string, { branchName: string; totalSales: number; journalCount: number }>();
@@ -3070,7 +3116,7 @@ export default function EmployeeReportsDashboardPage() {
     const totalSales = monthJournals.reduce((sum, j) => sum + (j.totalSales || 0), 0);
     
     return { cashierPerformance, branchSales, totalSales };
-  }, [cashierJournals, employees, selectedMonth, selectedBranch, getBranchName]);
+  }, [cashierJournals, employees, selectedMonth, selectedBranch, selectedJobTitle, selectedEmployee, activeOnly, filteredEmployeeLookup, getBranchName]);
 
   // ==================== ADVANCED FILTERS DATA ====================
   const tenureDistribution = useMemo(() => {
