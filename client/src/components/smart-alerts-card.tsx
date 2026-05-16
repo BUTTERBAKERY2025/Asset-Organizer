@@ -2,8 +2,10 @@ import { useQueries } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useTranslation } from "react-i18next";
 import { usePermissions } from "@/hooks/usePermissions";
-import { AlertTriangle, Bell, Package, Warehouse, ChevronLeft, ChevronRight, ShieldAlert } from "lucide-react";
+import { AlertTriangle, Bell, Package, Warehouse, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, ShieldAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { useEffect, useState } from "react";
 
 interface AlertItem {
   key: string;
@@ -87,27 +89,61 @@ export function SmartAlertsCard() {
   }
 
   const total = alerts.reduce((acc, a) => acc + a.count, 0);
+
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("butter:smart-alerts:collapsed") === "1";
+  });
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("butter:smart-alerts:collapsed", collapsed ? "1" : "0");
+    } catch {}
+  }, [collapsed]);
+
   if (total === 0) return null;
 
   const Chevron = isRTL ? ChevronLeft : ChevronRight;
+  const ToggleIcon = collapsed ? ChevronDown : ChevronUp;
 
   return (
     <section
       className="bg-white dark:bg-card rounded-2xl border border-gray-100 dark:border-border shadow-sm overflow-hidden"
       data-testid="smart-alerts-card"
     >
-      <header className="flex items-center justify-between px-5 py-3 border-b border-gray-100 dark:border-border bg-gradient-to-l from-amber-50/60 to-transparent dark:from-amber-950/20">
+      <header
+        className="flex items-center justify-between px-5 py-3 border-b border-gray-100 dark:border-border bg-gradient-to-l from-amber-50/60 to-transparent dark:from-amber-950/20 cursor-pointer select-none"
+        onClick={() => setCollapsed((v) => !v)}
+        role="button"
+        aria-expanded={!collapsed}
+        data-testid="alerts-header-toggle"
+      >
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-950/40 flex items-center justify-center">
             <Bell className="w-4 h-4 text-amber-600 dark:text-amber-400" />
           </div>
           <h2 className="text-sm font-semibold text-gray-800 dark:text-foreground">{t("alerts.title")}</h2>
         </div>
-        <Badge variant="secondary" className="text-xs" data-testid="badge-alerts-total">
-          {t("alerts.totalCount", { count: total })}
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Badge variant="secondary" className="text-xs" data-testid="badge-alerts-total">
+            {t("alerts.totalCount", { count: total })}
+          </Badge>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={(e) => { e.stopPropagation(); setCollapsed((v) => !v); }}
+            aria-label={collapsed ? t("alerts.expand") : t("alerts.collapse")}
+            title={collapsed ? t("alerts.expand") : t("alerts.collapse")}
+            data-testid="button-toggle-alerts"
+          >
+            <ToggleIcon className="w-4 h-4 text-gray-500 dark:text-muted-foreground" />
+          </Button>
+        </div>
       </header>
 
+      {!collapsed && (
       <ul className="divide-y divide-gray-100 dark:divide-border">
         {alerts.map((a) => {
           const tone = TONE[a.tone];
@@ -135,6 +171,7 @@ export function SmartAlertsCard() {
           );
         })}
       </ul>
+      )}
     </section>
   );
 }

@@ -23,7 +23,9 @@
     "lowInventory": "Low quantity inventory items",
     "warehouseNotifications": "Unread warehouse notifications",
     "wasteRisk": "Potential waste alerts",
-    "securityAlerts": "Unresolved security alerts"
+    "securityAlerts": "Unresolved security alerts",
+    "collapse": "Hide alerts",
+    "expand": "Show alerts"
   },
   "palette": {
     "modulesSection": "Modules & pages",

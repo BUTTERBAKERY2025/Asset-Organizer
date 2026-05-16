@@ -23,7 +23,9 @@
     "lowInventory": "أصناف منخفضة في المخزون",
     "warehouseNotifications": "إشعارات مستودع غير مقروءة",
     "wasteRisk": "تنبيهات هدر محتمل",
-    "securityAlerts": "تنبيهات أمنية غير محلولة"
+    "securityAlerts": "تنبيهات أمنية غير محلولة",
+    "collapse": "إخفاء التنبيهات",
+    "expand": "إظهار التنبيهات"
   },
   "palette": {
     "modulesSection": "الوحدات والصفحات",
