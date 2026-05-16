@@ -4,6 +4,7 @@ import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -335,6 +336,8 @@ export default function EmployeeReportsDashboardPage() {
   const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().slice(0, 7));
   const [selectedJobTitle, setSelectedJobTitle] = useState<string>("all");
   const [selectedEmployee, setSelectedEmployee] = useState<string>("all");
+  // فلتر "الموظفون النشطون فقط" — موحّد لكل التبويبات (مفعّل افتراضياً)
+  const [activeOnly, setActiveOnly] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState("overview");
   const [showSalaryClosingDialog, setShowSalaryClosingDialog] = useState(false);
   const [salaryClosingBranch, setSalaryClosingBranch] = useState<string>("");
@@ -450,9 +453,30 @@ export default function EmployeeReportsDashboardPage() {
       if (selectedBranch !== "all" && emp.branchId !== selectedBranch) return false;
       if (selectedJobTitle !== "all" && emp.jobTitle !== selectedJobTitle) return false;
       if (selectedEmployee !== "all" && emp.id.toString() !== selectedEmployee) return false;
+      // فلتر موحّد: الموظفون النشطون فقط — يستبعد terminated/inactive/on_leave
+      if (activeOnly && emp.status !== "active") return false;
       return true;
     });
-  }, [employees, selectedBranch, selectedJobTitle, selectedEmployee]);
+  }, [employees, selectedBranch, selectedJobTitle, selectedEmployee, activeOnly]);
+
+  // معلومات "حتى تاريخه" للشهر المحدد (بتوقيت السعودية UTC+3)
+  const periodInfo = useMemo(() => {
+    const todaySA = new Date(Date.now() + 3 * 60 * 60 * 1000);
+    const currentYM = todaySA.toISOString().slice(0, 7);
+    const [selYear, selMonth] = selectedMonth.split("-").map(Number);
+    const daysInMonth = new Date(selYear, selMonth, 0).getDate();
+    let daysElapsed = daysInMonth;
+    let factor = 1;
+    let label: "past" | "current" | "future" = "past";
+    if (selectedMonth > currentYM) {
+      daysElapsed = 0; factor = 0; label = "future";
+    } else if (selectedMonth === currentYM) {
+      daysElapsed = todaySA.getUTCDate();
+      factor = daysElapsed / daysInMonth;
+      label = "current";
+    }
+    return { daysElapsed, daysInMonth, factor, label, currentYM };
+  }, [selectedMonth]);
 
   const filteredEmployeeLookup = useMemo(() => {
     const employeeIds = new Set<string>();
@@ -767,7 +791,7 @@ export default function EmployeeReportsDashboardPage() {
     return branchesToProcess.map(branch => {
       const branchEmps = employees.filter(emp => {
         if (emp.branchId !== branch.id) return false;
-        if (emp.status !== "active") return false;
+        if (activeOnly && emp.status !== "active") return false;
         if (selectedJobTitle !== "all" && emp.jobTitle !== selectedJobTitle) return false;
         if (selectedEmployee !== "all" && emp.id.toString() !== selectedEmployee) return false;
         return true;
@@ -833,7 +857,7 @@ export default function EmployeeReportsDashboardPage() {
         totalHours: Math.round(totalHours),
       };
     }).filter(b => b.employeeCount > 0);
-  }, [employees, branches, attendanceRecords, selectedMonth, selectedBranch, selectedJobTitle, selectedEmployee]);
+  }, [employees, branches, attendanceRecords, selectedMonth, selectedBranch, selectedJobTitle, selectedEmployee, activeOnly]);
 
   const jobComparisonData = useMemo(() => {
     if (!employees || !branches || !attendanceRecords) return [];
@@ -851,7 +875,7 @@ export default function EmployeeReportsDashboardPage() {
     }>>();
     
     employees.filter(emp => {
-      if (emp.status !== "active") return false;
+      if (activeOnly && emp.status !== "active") return false;
       if (selectedBranch !== "all" && emp.branchId !== selectedBranch) return false;
       if (selectedJobTitle !== "all" && emp.jobTitle !== selectedJobTitle) return false;
       if (selectedEmployee !== "all" && emp.id.toString() !== selectedEmployee) return false;
@@ -946,7 +970,7 @@ export default function EmployeeReportsDashboardPage() {
     });
     
     return results.sort((a, b) => b.salaryVariance - a.salaryVariance);
-  }, [employees, branches, attendanceRecords, selectedMonth, selectedBranch, selectedJobTitle, selectedEmployee, getBranchName]);
+  }, [employees, branches, attendanceRecords, selectedMonth, selectedBranch, selectedJobTitle, selectedEmployee, getBranchName, activeOnly]);
 
   const topEmployeesBySalary = useMemo(() => {
     return [...filteredEmployees]
@@ -1815,6 +1839,7 @@ export default function EmployeeReportsDashboardPage() {
         if (selectedBranch !== "all" && emp.branchId !== selectedBranch) return false;
         if (selectedJobTitle !== "all" && emp.jobTitle !== selectedJobTitle) return false;
         if (selectedEmployee !== "all" && emp.id.toString() !== selectedEmployee) return false;
+        if (activeOnly && emp.status !== "active") return false;
         const hireDate = emp.hireDate ? new Date(emp.hireDate) : null;
         if (hireDate && hireDate > date) return false;
         return true;
@@ -1832,7 +1857,7 @@ export default function EmployeeReportsDashboardPage() {
       });
     }
     return trends;
-  }, [employees, selectedMonth, selectedBranch, selectedJobTitle, selectedEmployee]);
+  }, [employees, selectedMonth, selectedBranch, selectedJobTitle, selectedEmployee, activeOnly]);
 
   // 2. مؤشرات الإنتاجية
   const productivityMetrics = useMemo(() => {
@@ -3192,10 +3217,44 @@ export default function EmployeeReportsDashboardPage() {
                   setSelectedBranch("all");
                   setSelectedJobTitle("all");
                   setSelectedEmployee("all");
+                  setActiveOnly(true);
                 }} data-testid="button-reset-filters">
                   <RefreshCw className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
                   {isRTL ? "إعادة تعيين" : "Reset"}
                 </Button>
+              </div>
+            </div>
+            {/* صف ثانٍ: مفتاح "الموظفون النشطون فقط" + شريط "حتى تاريخه" */}
+            <div className="mt-4 pt-4 border-t border-amber-200 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <Switch
+                  id="active-only-toggle"
+                  checked={activeOnly}
+                  onCheckedChange={setActiveOnly}
+                  data-testid="switch-active-only"
+                />
+                <Label htmlFor="active-only-toggle" className="cursor-pointer font-medium text-amber-900">
+                  {isRTL ? "الموظفون النشطون فقط" : "Active employees only"}
+                </Label>
+                <Badge variant={activeOnly ? "default" : "outline"} className={activeOnly ? "bg-green-600" : ""}>
+                  {activeOnly
+                    ? (isRTL ? "مفعّل — يستبعد المنتهية خدماتهم" : "ON — excludes terminated/inactive")
+                    : (isRTL ? "معطّل — يشمل الجميع" : "OFF — includes everyone")}
+                </Badge>
+              </div>
+              <div className="text-sm text-amber-900 flex items-center gap-2" data-testid="text-period-info">
+                <span className="font-semibold">
+                  {isRTL ? "الفترة:" : "Period:"}
+                </span>
+                <span>
+                  {periodInfo.label === "current"
+                    ? (isRTL
+                        ? `الشهر الحالي — حتى تاريخه ${periodInfo.daysElapsed}/${periodInfo.daysInMonth} يوم (${Math.round(periodInfo.factor * 100)}%)`
+                        : `Current month — to-date ${periodInfo.daysElapsed}/${periodInfo.daysInMonth} days (${Math.round(periodInfo.factor * 100)}%)`)
+                    : periodInfo.label === "past"
+                      ? (isRTL ? `شهر سابق مكتمل (${periodInfo.daysInMonth} يوم)` : `Past month, complete (${periodInfo.daysInMonth} days)`)
+                      : (isRTL ? "شهر مستقبلي" : "Future month")}
+                </span>
               </div>
             </div>
           </CardContent>
@@ -4727,23 +4786,12 @@ export default function EmployeeReportsDashboardPage() {
               {/* Salary KPI Cards */}
               {(() => {
                 // الموظفون النشطون فقط — استبعاد المنتهية خدماتهم/المستبعدين/في إجازة
+                // (مضمون حتى لو كان مفتاح "النشطون فقط" مطفأ في الفلتر العلوي)
                 const activeEmployees = filteredEmployees.filter(emp => emp.status === "active");
-
-                // حساب نسبة الشهر المنقضية (للحساب "حتى تاريخه")
-                // selectedMonth شكله "YYYY-MM"
-                const todaySA = new Date(Date.now() + 3 * 60 * 60 * 1000);
-                const currentYM = todaySA.toISOString().slice(0, 7);
-                const [selYear, selMonth] = selectedMonth.split("-").map(Number);
-                const daysInSelectedMonth = new Date(selYear, selMonth, 0).getDate();
-                let proratedFactor = 1;
-                if (selectedMonth > currentYM) {
-                  proratedFactor = 0;
-                } else if (selectedMonth === currentYM) {
-                  proratedFactor = todaySA.getUTCDate() / daysInSelectedMonth;
-                }
-                const daysElapsed = selectedMonth === currentYM
-                  ? todaySA.getUTCDate()
-                  : (selectedMonth > currentYM ? 0 : daysInSelectedMonth);
+                // استخدام مساعد الفترة الموحّد periodInfo
+                const proratedFactor = periodInfo.factor;
+                const daysInSelectedMonth = periodInfo.daysInMonth;
+                const daysElapsed = periodInfo.daysElapsed;
 
                 const salaryStats = activeEmployees.reduce((acc, emp) => {
                   const housing = emp.housingAllowance || 0;
