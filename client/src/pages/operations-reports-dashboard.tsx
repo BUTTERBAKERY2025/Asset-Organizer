@@ -485,7 +485,7 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
           <DialogHeader>
             <div className="flex items-center justify-between">
               <DialogTitle className="flex items-center gap-2">
-                <Receipt className="w-5 h-5 text-amber-600" />
+                <Receipt className="w-5 h-5 text-amber-600 dark:text-amber-400" />
                 {t('journalDialog.title')} - {journal.journalDate}
               </DialogTitle>
               <Button onClick={handleExportJournalPDF} className="gap-2 bg-amber-600 hover:bg-amber-700" data-testid={`export-journal-pdf-${journal.id}`}>
@@ -497,19 +497,19 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
           <ScrollArea className="max-h-[70vh]">
             <div className="space-y-6 p-2">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="p-3 bg-gradient-to-br from-amber-50 to-amber-100 rounded-lg border border-amber-200">
+                <div className="p-3 bg-muted/50 rounded-lg border border-border">
                   <p className="text-xs text-muted-foreground">{t('journalDialog.branch')}</p>
                   <p className="font-semibold">{branchName}</p>
                 </div>
-                <div className="p-3 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg border border-blue-200">
+                <div className="p-3 bg-muted/50 rounded-lg border border-border">
                   <p className="text-xs text-muted-foreground">{t('journalDialog.cashierName')}</p>
                   <p className="font-semibold">{journal.cashierName}</p>
                 </div>
-                <div className="p-3 bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg border border-purple-200">
+                <div className="p-3 bg-muted/50 rounded-lg border border-border">
                   <p className="text-xs text-muted-foreground">{t('journalDialog.shift')}</p>
                   <p className="font-semibold">{journal.shiftType || "-"}</p>
                 </div>
-                <div className="p-3 bg-gradient-to-br from-green-50 to-green-100 rounded-lg border border-green-200">
+                <div className="p-3 bg-muted/50 rounded-lg border border-border">
                   <p className="text-xs text-muted-foreground">{t('journalDialog.status')}</p>
                   <Badge variant={journal.status === "approved" ? "default" : journal.status === "rejected" ? "destructive" : "secondary"}>
                     {t(`statuses.${journal.status}`)}
@@ -517,18 +517,18 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
                 </div>
               </div>
 
-              <Card className="border-green-200">
-                <CardHeader className="pb-2 bg-gradient-to-r from-green-50 to-white">
+              <Card className="border-border">
+                <CardHeader className="pb-2 bg-muted/50">
                   <CardTitle className="text-base flex items-center gap-2">
-                    <DollarSign className="w-4 h-4 text-green-600" />
+                    <DollarSign className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                     {t('journalDialog.salesSummary')}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
+                    <div className="flex justify-between items-center p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-lg">
                       <span className="text-muted-foreground">{t('journalDialog.totalSales')}</span>
-                      <span className="font-bold text-green-600 text-lg">{journal.totalSales?.toLocaleString('en')} {t('common.sar')}</span>
+                      <span className="font-bold text-emerald-600 dark:text-emerald-400 text-lg">{journal.totalSales?.toLocaleString('en')} {t('common.sar')}</span>
                     </div>
                     <div className="flex justify-between items-center p-2 border-b">
                       <span className="text-muted-foreground">{t('journalDialog.cashSales')}</span>
@@ -554,30 +554,30 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
                 </CardContent>
               </Card>
 
-              <Card className="border-blue-200">
-                <CardHeader className="pb-2 bg-gradient-to-r from-blue-50 to-white">
+              <Card className="border-border">
+                <CardHeader className="pb-2 bg-muted/50">
                   <CardTitle className="text-base flex items-center gap-2">
-                    <Wallet className="w-4 h-4 text-blue-600" />
+                    <Wallet className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                     {t('journalDialog.cashReconciliation')}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="flex flex-col p-3 bg-gray-50 rounded-lg">
+                    <div className="flex flex-col p-3 bg-muted/50 rounded-lg">
                       <span className="text-xs text-muted-foreground">{t('journalDialog.openingBalance')}</span>
                       <span className="font-semibold">{journal.openingBalance?.toLocaleString('en')} {t('common.sar')}</span>
                     </div>
-                    <div className="flex flex-col p-3 bg-gray-50 rounded-lg">
+                    <div className="flex flex-col p-3 bg-muted/50 rounded-lg">
                       <span className="text-xs text-muted-foreground">{t('journalDialog.expectedCash')}</span>
                       <span className="font-semibold">{journal.expectedCash?.toLocaleString('en')} {t('common.sar')}</span>
                     </div>
-                    <div className="flex flex-col p-3 bg-gray-50 rounded-lg">
+                    <div className="flex flex-col p-3 bg-muted/50 rounded-lg">
                       <span className="text-xs text-muted-foreground">{t('journalDialog.actualCash')}</span>
                       <span className="font-semibold">{journal.actualCashDrawer?.toLocaleString('en')} {t('common.sar')}</span>
                     </div>
-                    <div className={`flex flex-col p-3 rounded-lg ${journal.discrepancyStatus === 'balanced' ? 'bg-green-50 border border-green-200' : journal.discrepancyStatus === 'shortage' ? 'bg-red-50 border border-red-200' : 'bg-blue-50 border border-blue-200'}`}>
+                    <div className={`flex flex-col p-3 rounded-lg border ${journal.discrepancyStatus === 'balanced' ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900' : journal.discrepancyStatus === 'shortage' ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900' : 'bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-900'}`}>
                       <span className="text-xs text-muted-foreground">{t('journalDialog.difference')}</span>
-                      <span className={`font-bold ${journal.discrepancyAmount && journal.discrepancyAmount < 0 ? 'text-red-600' : journal.discrepancyAmount && journal.discrepancyAmount > 0 ? 'text-green-600' : ''}`}>
+                      <span className={`font-bold ${journal.discrepancyAmount && journal.discrepancyAmount < 0 ? 'text-rose-600 dark:text-rose-400' : journal.discrepancyAmount && journal.discrepancyAmount > 0 ? 'text-emerald-600 dark:text-emerald-400' : ''}`}>
                         {journal.discrepancyAmount?.toLocaleString('en')} {t('common.sar')}
                       </span>
                       <Badge variant={journal.discrepancyStatus === 'balanced' ? 'default' : journal.discrepancyStatus === 'shortage' ? 'destructive' : 'secondary'} className="mt-1 w-fit">
@@ -589,10 +589,10 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
               </Card>
 
               {attachments && attachments.length > 0 && (
-                <Card className="border-purple-200">
-                  <CardHeader className="pb-2 bg-gradient-to-r from-purple-50 to-white">
+                <Card className="border-border">
+                  <CardHeader className="pb-2 bg-muted/50">
                     <CardTitle className="text-base flex items-center gap-2">
-                      <Image className="w-4 h-4 text-purple-600" />
+                      <Image className="w-4 h-4 text-violet-600 dark:text-violet-400" />
                       {t('journalDialog.attachments')} ({attachments.length})
                     </CardTitle>
                   </CardHeader>
@@ -601,7 +601,7 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
                       {attachments.map((att) => (
                         <div 
                           key={att.id} 
-                          className="border rounded-lg p-2 cursor-pointer hover:shadow-lg transition-shadow hover:border-purple-400"
+                          className="border border-border rounded-lg p-2 cursor-pointer hover:shadow-lg transition-shadow hover:border-violet-400 dark:hover:border-violet-600"
                           onClick={() => att.fileData && setSelectedImage(att.fileData)}
                         >
                           <div className="aspect-video bg-muted rounded flex items-center justify-center overflow-hidden relative group">
@@ -630,15 +630,15 @@ function JournalDetailsDialog({ journal, branches }: { journal: CashierSalesJour
               )}
 
               {journal.notes && (
-                <Card className="border-amber-200">
-                  <CardHeader className="pb-2 bg-gradient-to-r from-amber-50 to-white">
+                <Card className="border-border">
+                  <CardHeader className="pb-2 bg-muted/50">
                     <CardTitle className="text-base flex items-center gap-2">
-                      <FileText className="w-4 h-4 text-amber-600" />
+                      <FileText className="w-4 h-4 text-amber-600 dark:text-amber-400" />
                       {t('journalDialog.notes')}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-muted-foreground bg-amber-50 p-3 rounded-lg">{journal.notes}</p>
+                    <p className="text-muted-foreground bg-amber-50 dark:bg-amber-950/40 p-3 rounded-lg">{journal.notes}</p>
                   </CardContent>
                 </Card>
               )}
@@ -3872,7 +3872,7 @@ export default function OperationsReportsDashboardPage() {
                   <>
                     <div className="flex items-center justify-between">
                       <h2 className="text-lg font-semibold flex items-center gap-2">
-                        <Truck className="w-5 h-5 text-orange-600" />
+                        <Truck className="w-5 h-5 text-orange-600 dark:text-orange-400" />
                         {t('returns.title')}
                       </h2>
                       <div className="flex gap-2">
@@ -4040,58 +4040,10 @@ export default function OperationsReportsDashboardPage() {
 
                     {/* Summary Cards */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
-                        <CardContent className="p-4">
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 bg-orange-500 rounded-lg">
-                              <Truck className="w-5 h-5 text-white" />
-                            </div>
-                            <div>
-                              <p className="text-xs text-orange-700">{t('returns.returnOps')}</p>
-                              <p className="text-xl font-bold text-orange-800">{returnsCount}</p>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                      <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200">
-                        <CardContent className="p-4">
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 bg-red-500 rounded-lg">
-                              <DollarSign className="w-5 h-5 text-white" />
-                            </div>
-                            <div>
-                              <p className="text-xs text-red-700">{t('returns.totalReturns')}</p>
-                              <p className="text-xl font-bold text-red-800">{formatCurrency(totalReturnAmount)}</p>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                      <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
-                        <CardContent className="p-4">
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 bg-amber-500 rounded-lg">
-                              <Building2 className="w-5 h-5 text-white" />
-                            </div>
-                            <div>
-                              <p className="text-xs text-amber-700">{t('returns.affectedBranches')}</p>
-                              <p className="text-xl font-bold text-amber-800">{Object.keys(returnsByBranch).length}</p>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                      <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-                        <CardContent className="p-4">
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 bg-purple-500 rounded-lg">
-                              <TrendingDown className="w-5 h-5 text-white" />
-                            </div>
-                            <div>
-                              <p className="text-xs text-purple-700">{t('returns.avgReturn')}</p>
-                              <p className="text-xl font-bold text-purple-800">{returnsCount > 0 ? formatCurrency(totalReturnAmount / returnsCount) : formatCurrency(0)}</p>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
+                      <KpiCard label={t('returns.returnOps')} value={returnsCount} icon={Truck} tone="inventory" />
+                      <KpiCard label={t('returns.totalReturns')} value={formatCurrency(totalReturnAmount)} icon={DollarSign} tone="alert" />
+                      <KpiCard label={t('returns.affectedBranches')} value={Object.keys(returnsByBranch).length} icon={Building2} tone="people" />
+                      <KpiCard label={t('returns.avgReturn')} value={returnsCount > 0 ? formatCurrency(totalReturnAmount / returnsCount) : formatCurrency(0)} icon={TrendingDown} tone="violet" />
                     </div>
 
                     {returnsCount > 0 ? (
@@ -4166,12 +4118,12 @@ export default function OperationsReportsDashboardPage() {
                           <CardContent>
                             <div className="space-y-3">
                               {Object.entries(returnsByPaymentMethod).map(([method, data]) => (
-                                <div key={method} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div key={method} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                                   <div className="flex items-center gap-2">
                                     <Badge variant="outline">{t(`paymentMethods.${method}`) || method}</Badge>
                                     <span className="text-sm text-muted-foreground">({data.count} {t('returns.operation')})</span>
                                   </div>
-                                  <span className="font-semibold text-red-600">{formatCurrency(data.amount)}</span>
+                                  <span className="font-semibold text-rose-600 dark:text-rose-400">{formatCurrency(data.amount)}</span>
                                 </div>
                               ))}
                             </div>
@@ -4189,13 +4141,13 @@ export default function OperationsReportsDashboardPage() {
                           <CardContent>
                             <div className="space-y-3">
                               {Object.entries(returnsByReason).map(([reason, data]) => (
-                                <div key={reason} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                <div key={reason} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                                   <div className="flex items-center gap-2">
-                                    <AlertTriangle className="w-4 h-4 text-amber-500" />
+                                    <AlertTriangle className="w-4 h-4 text-amber-500 dark:text-amber-400" />
                                     <span className="text-sm">{reason}</span>
                                     <span className="text-xs text-muted-foreground">({data.count})</span>
                                   </div>
-                                  <span className="font-semibold text-red-600">{formatCurrency(data.amount)}</span>
+                                  <span className="font-semibold text-rose-600 dark:text-rose-400">{formatCurrency(data.amount)}</span>
                                 </div>
                               ))}
                             </div>
@@ -4243,7 +4195,7 @@ export default function OperationsReportsDashboardPage() {
                                     <td className="py-3 px-4">
                                       <Badge variant="outline">{t(`shiftsShort.${journal.shiftType || ''}`) || journal.shiftType || '-'}</Badge>
                                     </td>
-                                    <td className="py-3 px-4 font-semibold text-red-600">{formatCurrency(journal.returnAmount || 0)}</td>
+                                    <td className="py-3 px-4 font-semibold text-rose-600 dark:text-rose-400">{formatCurrency(journal.returnAmount || 0)}</td>
                                     <td className="py-3 px-4">{t(`paymentMethods.${journal.returnPaymentMethod || ''}`) || journal.returnPaymentMethod || '-'}</td>
                                     <td className="py-3 px-4 text-muted-foreground">{journal.returnReason || '-'}</td>
                                   </tr>
@@ -4390,7 +4342,7 @@ export default function OperationsReportsDashboardPage() {
                   <>
                     <div className="flex items-center justify-between">
                       <h2 className="text-lg font-semibold flex items-center gap-2">
-                        <AlertTriangle className="w-5 h-5 text-red-600" />
+                        <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400" />
                         {t('discrepancies.reportTitle')}
                       </h2>
                       <div className="flex gap-2">
@@ -4575,72 +4527,24 @@ export default function OperationsReportsDashboardPage() {
 
                     {/* Summary Cards */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200">
-                        <CardContent className="p-4">
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 bg-red-500 rounded-lg">
-                              <TrendingDown className="w-5 h-5 text-white" />
-                            </div>
-                            <div>
-                              <p className="text-xs text-red-700">{t('discrepancies.shortageCases')}</p>
-                              <p className="text-xl font-bold text-red-800">{shortages.length}</p>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                      <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200">
-                        <CardContent className="p-4">
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 bg-red-600 rounded-lg">
-                              <DollarSign className="w-5 h-5 text-white" />
-                            </div>
-                            <div>
-                              <p className="text-xs text-red-700">{t('discrepancies.totalShortage')}</p>
-                              <p className="text-xl font-bold text-red-800">{formatCurrency(totalShortageAmount)}</p>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                      <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-                        <CardContent className="p-4">
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 bg-green-500 rounded-lg">
-                              <TrendingUp className="w-5 h-5 text-white" />
-                            </div>
-                            <div>
-                              <p className="text-xs text-green-700">{t('discrepancies.surplusCases')}</p>
-                              <p className="text-xl font-bold text-green-800">{surpluses.length}</p>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                      <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-                        <CardContent className="p-4">
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 bg-green-600 rounded-lg">
-                              <DollarSign className="w-5 h-5 text-white" />
-                            </div>
-                            <div>
-                              <p className="text-xs text-green-700">{t('discrepancies.totalSurplus')}</p>
-                              <p className="text-xl font-bold text-green-800">{formatCurrency(totalSurplusAmount)}</p>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
+                      <KpiCard label={t('discrepancies.shortageCases')} value={shortages.length} icon={TrendingDown} tone="alert" />
+                      <KpiCard label={t('discrepancies.totalShortage')} value={formatCurrency(totalShortageAmount)} icon={DollarSign} tone="alert" />
+                      <KpiCard label={t('discrepancies.surplusCases')} value={surpluses.length} icon={TrendingUp} tone="money" />
+                      <KpiCard label={t('discrepancies.totalSurplus')} value={formatCurrency(totalSurplusAmount)} icon={DollarSign} tone="money" />
                     </div>
 
                     {/* Net Discrepancy Banner */}
-                    <Card className={`border-2 ${netDiscrepancy < 0 ? 'border-red-300 bg-red-50' : netDiscrepancy > 0 ? 'border-green-300 bg-green-50' : 'border-gray-300 bg-gray-50'}`}>
+                    <Card className={`border-2 ${netDiscrepancy < 0 ? 'border-rose-300 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40' : netDiscrepancy > 0 ? 'border-emerald-300 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40' : 'border-border bg-muted/50'}`}>
                       <CardContent className="p-4">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
-                            <AlertTriangle className={`w-6 h-6 ${netDiscrepancy < 0 ? 'text-red-600' : netDiscrepancy > 0 ? 'text-green-600' : 'text-gray-600'}`} />
+                            <AlertTriangle className={`w-6 h-6 ${netDiscrepancy < 0 ? 'text-rose-600 dark:text-rose-400' : netDiscrepancy > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`} />
                             <div>
                               <p className="text-sm font-medium">{t('discrepancies.netDiscrepancies')}</p>
                               <p className="text-xs text-muted-foreground">{t('discrepancies.netFormula')}</p>
                             </div>
                           </div>
-                          <div className={`text-2xl font-bold ${netDiscrepancy < 0 ? 'text-red-600' : netDiscrepancy > 0 ? 'text-green-600' : 'text-gray-600'}`}>
+                          <div className={`text-2xl font-bold ${netDiscrepancy < 0 ? 'text-rose-600 dark:text-rose-400' : netDiscrepancy > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>
                             {formatCurrency(netDiscrepancy)}
                           </div>
                         </div>
@@ -4664,20 +4568,20 @@ export default function OperationsReportsDashboardPage() {
                                 .sort((a, b) => (b[1].shortage - b[1].surplus) - (a[1].shortage - a[1].surplus))
                                 .slice(0, 10)
                                 .map(([cashier, data]) => (
-                                  <div key={cashier} className="p-3 bg-gray-50 rounded-lg border">
+                                  <div key={cashier} className="p-3 bg-muted/50 rounded-lg border border-border">
                                     <div className="flex items-center justify-between mb-2">
                                       <div className="flex items-center gap-2">
-                                        <User className="w-4 h-4 text-gray-500" />
+                                        <User className="w-4 h-4 text-muted-foreground" />
                                         <span className="font-medium">{cashier}</span>
                                         <Badge variant="outline" className="text-xs">{t('discrepancies.caseCount', { count: data.count })}</Badge>
                                       </div>
-                                      <span className={`font-bold ${data.surplus - data.shortage < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                      <span className={`font-bold ${data.surplus - data.shortage < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
                                         {formatCurrency(data.surplus - data.shortage)}
                                       </span>
                                     </div>
                                     <div className="flex gap-4 text-xs">
-                                      <span className="text-red-600">{t('discrepancies.shortage')}: {formatCurrency(data.shortage)}</span>
-                                      <span className="text-green-600">{t('discrepancies.surplus')}: {formatCurrency(data.surplus)}</span>
+                                      <span className="text-rose-600 dark:text-rose-400">{t('discrepancies.shortage')}: {formatCurrency(data.shortage)}</span>
+                                      <span className="text-emerald-600 dark:text-emerald-400">{t('discrepancies.surplus')}: {formatCurrency(data.surplus)}</span>
                                     </div>
                                   </div>
                                 ))}
@@ -4854,7 +4758,7 @@ export default function OperationsReportsDashboardPage() {
                 <>
                   <div className="flex items-center justify-between">
                     <h2 className="text-lg font-semibold flex items-center gap-2">
-                      <CreditCard className="w-5 h-5 text-indigo-600" />
+                      <CreditCard className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                       {t('paymentMismatch.title')}
                     </h2>
                     <div className="flex gap-2">
@@ -5126,85 +5030,37 @@ export default function OperationsReportsDashboardPage() {
                   </div>
 
                   {/* Threshold Note */}
-                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-center gap-2 text-sm text-amber-800">
+                  <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-lg p-3 flex items-center gap-2 text-sm text-amber-800 dark:text-amber-300">
                     <AlertTriangle className="w-4 h-4" />
                     <span>{t('paymentMismatch.thresholdNote')} <strong>{t('paymentMismatch.thresholdAmount')}</strong> - {t('paymentMismatch.thresholdDesc')}</span>
                   </div>
 
                   {/* Summary Cards */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4" data-testid="payment-mismatch-summary-cards">
-                    <Card className="bg-gradient-to-br from-indigo-50 to-indigo-100 border-indigo-200" data-testid="card-total-journals">
-                      <CardContent className="p-4">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 bg-indigo-500 rounded-lg">
-                            <FileText className="w-5 h-5 text-white" />
-                          </div>
-                          <div>
-                            <p className="text-xs text-indigo-700">{t('paymentMismatch.totalJournals')}</p>
-                            <p className="text-xl font-bold text-indigo-800" data-testid="text-total-journals">{paymentMismatchData.summary.totalJournals}</p>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                    <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200" data-testid="card-journals-with-mismatch">
-                      <CardContent className="p-4">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 bg-orange-500 rounded-lg">
-                            <AlertTriangle className="w-5 h-5 text-white" />
-                          </div>
-                          <div>
-                            <p className="text-xs text-orange-700">{t('paymentMismatch.journalsWithMismatch')}</p>
-                            <p className="text-xl font-bold text-orange-800" data-testid="text-journals-with-mismatch">{paymentMismatchData.summary.journalsWithMismatch}</p>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                    <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200" data-testid="card-error-rate">
-                      <CardContent className="p-4">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 bg-red-500 rounded-lg">
-                            <TrendingDown className="w-5 h-5 text-white" />
-                          </div>
-                          <div>
-                            <p className="text-xs text-red-700">{t('paymentMismatch.errorRate')}</p>
-                            <p className="text-xl font-bold text-red-800" data-testid="text-error-rate">{paymentMismatchData.summary.mismatchRate.toFixed(1)}%</p>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                    <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200" data-testid="card-total-mismatch">
-                      <CardContent className="p-4">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 bg-purple-500 rounded-lg">
-                            <DollarSign className="w-5 h-5 text-white" />
-                          </div>
-                          <div>
-                            <p className="text-xs text-purple-700">{t('paymentMismatch.totalMismatches')}</p>
-                            <p className="text-xl font-bold text-purple-800">{formatCurrency(paymentMismatchData.summary.totalMismatchAmount)}</p>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
+                    <KpiCard label={t('paymentMismatch.totalJournals')} value={paymentMismatchData.summary.totalJournals} icon={FileText} tone="primary" data-testid="card-total-journals" />
+                    <KpiCard label={t('paymentMismatch.journalsWithMismatch')} value={paymentMismatchData.summary.journalsWithMismatch} icon={AlertTriangle} tone="inventory" data-testid="card-journals-with-mismatch" />
+                    <KpiCard label={t('paymentMismatch.errorRate')} value={`${paymentMismatchData.summary.mismatchRate.toFixed(1)}%`} icon={TrendingDown} tone="alert" data-testid="card-error-rate" />
+                    <KpiCard label={t('paymentMismatch.totalMismatches')} value={formatCurrency(paymentMismatchData.summary.totalMismatchAmount)} icon={DollarSign} tone="violet" data-testid="card-total-mismatch" />
                   </div>
 
                   {/* POS vs Terminal Comparison */}
-                  <Card className="border-2 border-indigo-200 bg-indigo-50/50">
+                  <Card className="border-2 border-border bg-accent/40">
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-6">
                           <div className="text-center">
                             <p className="text-sm text-muted-foreground">{t('paymentMismatch.posLabel')}</p>
-                            <p className="text-2xl font-bold text-blue-600">{formatCurrency(paymentMismatchData.summary.totalPosAmount)}</p>
+                            <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{formatCurrency(paymentMismatchData.summary.totalPosAmount)}</p>
                           </div>
-                          <div className="text-3xl text-gray-400">↔</div>
+                          <div className="text-3xl text-muted-foreground">↔</div>
                           <div className="text-center">
                             <p className="text-sm text-muted-foreground">{t('paymentMismatch.terminalLabel')}</p>
-                            <p className="text-2xl font-bold text-green-600">{formatCurrency(paymentMismatchData.summary.totalTerminalAmount)}</p>
+                            <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(paymentMismatchData.summary.totalTerminalAmount)}</p>
                           </div>
                         </div>
                         <div className="text-center">
                           <p className="text-sm text-muted-foreground">{t('paymentMismatch.differenceLabel')}</p>
-                          <p className={`text-2xl font-bold ${Math.abs(paymentMismatchData.summary.totalPosAmount - paymentMismatchData.summary.totalTerminalAmount) > 0.5 ? 'text-red-600' : 'text-green-600'}`}>
+                          <p className={`text-2xl font-bold ${Math.abs(paymentMismatchData.summary.totalPosAmount - paymentMismatchData.summary.totalTerminalAmount) > 0.5 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
                             {formatCurrency(Math.abs(paymentMismatchData.summary.totalPosAmount - paymentMismatchData.summary.totalTerminalAmount))}
                           </p>
                         </div>
@@ -5226,18 +5082,18 @@ export default function OperationsReportsDashboardPage() {
                         <CardContent>
                           <div className="space-y-3">
                             {paymentMismatchData.byCashier.slice(0, 10).map((cashier, idx) => (
-                              <div key={cashier.cashierId} className={`p-3 rounded-lg border ${idx < 3 ? 'bg-red-50 border-red-200' : 'bg-gray-50'}`}>
+                              <div key={cashier.cashierId} className={`p-3 rounded-lg border ${idx < 3 ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900' : 'bg-muted/50 border-border'}`}>
                                 <div className="flex items-center justify-between mb-2">
                                   <div className="flex items-center gap-2">
                                     <Badge variant={idx < 3 ? 'destructive' : 'outline'} className="text-xs">#{idx + 1}</Badge>
                                     <span className="font-medium">{cashier.cashierName}</span>
                                   </div>
-                                  <span className="font-bold text-red-600">{formatCurrency(cashier.totalMismatchAmount)}</span>
+                                  <span className="font-bold text-rose-600 dark:text-rose-400">{formatCurrency(cashier.totalMismatchAmount)}</span>
                                 </div>
                                 <div className="flex gap-4 text-xs text-muted-foreground">
                                   <span>{t('paymentMismatch.errorCases', { count: cashier.mismatchCount })}</span>
                                   <span>{t('paymentMismatch.outOf', { count: cashier.totalTransactions })}</span>
-                                  <span className="text-red-600">{t('paymentMismatch.errorRateLabel', { rate: cashier.errorRate.toFixed(1) })}</span>
+                                  <span className="text-rose-600 dark:text-rose-400">{t('paymentMismatch.errorRateLabel', { rate: cashier.errorRate.toFixed(1) })}</span>
                                 </div>
                                 {Object.keys(cashier.methodErrors).length > 0 && (
                                   <div className="mt-2 flex flex-wrap gap-1">
@@ -5266,30 +5122,30 @@ export default function OperationsReportsDashboardPage() {
                         <CardContent>
                           <div className="space-y-3">
                             {paymentMismatchData.byPaymentMethod.filter(m => m.discrepancy > 0).map((method) => (
-                              <div key={method.paymentMethod} className="p-3 bg-gray-50 rounded-lg border">
+                              <div key={method.paymentMethod} className="p-3 bg-muted/50 rounded-lg border border-border">
                                 <div className="flex items-center justify-between mb-2">
                                   <span className="font-medium">{t(`paymentMethods.${method.paymentMethod}`) || method.paymentMethod}</span>
-                                  <span className="font-bold text-red-600">{formatCurrency(method.discrepancy)}</span>
+                                  <span className="font-bold text-rose-600 dark:text-rose-400">{formatCurrency(method.discrepancy)}</span>
                                 </div>
                                 <div className="grid grid-cols-3 gap-2 text-xs">
-                                  <div className="text-center p-2 bg-blue-50 rounded">
+                                  <div className="text-center p-2 bg-blue-50 dark:bg-blue-950/40 rounded">
                                     <p className="text-muted-foreground">POS</p>
-                                    <p className="font-medium text-blue-600">{formatCurrency(method.posTotal)}</p>
+                                    <p className="font-medium text-blue-600 dark:text-blue-400">{formatCurrency(method.posTotal)}</p>
                                   </div>
-                                  <div className="text-center p-2 bg-green-50 rounded">
+                                  <div className="text-center p-2 bg-emerald-50 dark:bg-emerald-950/40 rounded">
                                     <p className="text-muted-foreground">Terminal</p>
-                                    <p className="font-medium text-green-600">{formatCurrency(method.terminalTotal)}</p>
+                                    <p className="font-medium text-emerald-600 dark:text-emerald-400">{formatCurrency(method.terminalTotal)}</p>
                                   </div>
-                                  <div className="text-center p-2 bg-red-50 rounded">
+                                  <div className="text-center p-2 bg-rose-50 dark:bg-rose-950/40 rounded">
                                     <p className="text-muted-foreground">{t('paymentMismatch.difference')}</p>
-                                    <p className="font-medium text-red-600">{method.discrepancyPercent.toFixed(1)}%</p>
+                                    <p className="font-medium text-rose-600 dark:text-rose-400">{method.discrepancyPercent.toFixed(1)}%</p>
                                   </div>
                                 </div>
                               </div>
                             ))}
                             {paymentMismatchData.byPaymentMethod.filter(m => m.discrepancy > 0).length === 0 && (
                               <div className="text-center py-8 text-muted-foreground">
-                                <CheckCircle className="w-12 h-12 mx-auto mb-2 text-green-500" />
+                                <CheckCircle className="w-12 h-12 mx-auto mb-2 text-emerald-500 dark:text-emerald-400" />
                                 <p>{t('paymentMismatch.noPaymentMismatches')}</p>
                               </div>
                             )}
@@ -5358,8 +5214,8 @@ export default function OperationsReportsDashboardPage() {
                   ) : (
                     <Card>
                       <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
-                        <CheckCircle className="w-12 h-12 text-green-600" />
-                        <p className="text-green-700 font-medium">{t('paymentMismatch.noMismatchPerfect')}</p>
+                        <CheckCircle className="w-12 h-12 text-emerald-600 dark:text-emerald-400" />
+                        <p className="text-emerald-700 dark:text-emerald-300 font-medium">{t('paymentMismatch.noMismatchPerfect')}</p>
                       </CardContent>
                     </Card>
                   )}
