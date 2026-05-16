@@ -236,7 +236,7 @@ export default function WarehouseDashboardPage() {
 
   return (
     <Layout>
-      <div className="p-3 sm:p-4 md:p-6 max-w-[1400px] mx-auto space-y-4 sm:space-y-6" dir={isRTL ? "rtl" : "ltr"}>
+      <div className="page-container space-y-4 sm:space-y-6" dir={isRTL ? "rtl" : "ltr"}>
         <PageHeader
           icon={Warehouse}
           tone="production"
@@ -353,7 +353,7 @@ export default function WarehouseDashboardPage() {
           }
         />
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+        <div className="kpi-grid">
           {statCards.map((stat, index) => (
             <Card key={index} className="overflow-hidden" data-testid={`stat-card-${index}`}>
               <CardContent className="p-3 sm:p-4">

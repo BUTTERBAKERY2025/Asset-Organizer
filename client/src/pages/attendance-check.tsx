@@ -603,7 +603,7 @@ export default function AttendanceCheckPage() {
 
   return (
     <Layout>
-      <div className="p-3 sm:p-4 md:p-6 max-w-[1400px] mx-auto space-y-4" dir={isRTL ? "rtl" : "ltr"}>
+      <div className="page-container space-y-4" dir={isRTL ? "rtl" : "ltr"}>
         <PageHeader
           icon={Fingerprint}
           tone="people"

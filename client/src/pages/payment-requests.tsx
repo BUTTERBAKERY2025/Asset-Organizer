@@ -725,7 +725,7 @@ export default function PaymentRequestsPage() {
 
   return (
     <Layout>
-      <div className="p-3 sm:p-4 md:p-6 max-w-[1400px] mx-auto space-y-4" dir="rtl">
+      <div className="page-container space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 sm:mb-6">
           <div className="flex items-center gap-3">
             <Link href="/construction-projects">

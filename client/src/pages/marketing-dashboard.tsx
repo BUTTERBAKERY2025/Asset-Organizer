@@ -302,7 +302,7 @@ export default function MarketingDashboardPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto space-y-4" dir="rtl">
+      <div className="page-container space-y-4" dir="rtl">
         <PageHeader
           icon={Megaphone}
           tone="marketing"
@@ -326,7 +326,7 @@ export default function MarketingDashboardPage() {
         </div>
 
         {/* Primary Stats Row */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="kpi-grid">
           <Card className="bg-amber-50/50 border-amber-100">
             <CardContent className="p-3 sm:p-4 md:p-6">
               {isLoading ? <Skeleton className="h-16" /> : (
@@ -399,7 +399,7 @@ export default function MarketingDashboardPage() {
         </div>
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="kpi-grid">
           {kpiCards.map((kpi, index) => (
             <Card key={index} className="relative overflow-hidden">
               <CardContent className="p-3 sm:p-4 md:p-6">

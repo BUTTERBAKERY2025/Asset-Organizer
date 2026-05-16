@@ -1671,7 +1671,7 @@ export default function PnLDashboard() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto space-y-4 sm:space-y-6" dir="rtl">
+      <div className="page-container space-y-4 sm:space-y-6" dir="rtl">
         <PageHeader
           icon={BarChart3}
           tone="money"
@@ -1856,7 +1856,7 @@ export default function PnLDashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-3 sm:p-6">
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <div className="kpi-grid">
               <div>
                 <Label className="text-xs sm:text-sm">الفرع</Label>
                 <Select
@@ -2225,7 +2225,7 @@ export default function PnLDashboard() {
                       </Card>
                     )}
 
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                    <div className="kpi-grid">
                       <Card className="border-l-4 border-l-blue-500">
                         <CardContent className="p-3 sm:p-4 md:p-6">
                           <div className="flex items-center justify-between">
@@ -2401,7 +2401,7 @@ export default function PnLDashboard() {
                     </div>
 
                     {/* Advanced Financial KPIs */}
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                    <div className="kpi-grid">
                       <Card className="border-l-4 border-l-indigo-500">
                         <CardContent className="p-3 sm:p-4 md:p-6">
                           <div className="flex items-center gap-2 mb-2">

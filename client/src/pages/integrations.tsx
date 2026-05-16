@@ -171,7 +171,7 @@ export default function IntegrationsPage() {
 
   return (
     <Layout>
-    <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto space-y-4" dir="rtl">
+    <div className="page-container space-y-4" dir="rtl">
       <SettingsBreadcrumb currentPage="التكاملات" currentIcon={Link2} />
       <PageHeader
         icon={Link2}
@@ -338,7 +338,7 @@ function OverviewSection({ onNavigate }: { onNavigate: (tab: string) => void }) 
         </CardContent>
       </Card>
 
-      <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
+      <div className="kpi-grid">
         <Card>
           <CardHeader className="p-3 sm:p-4 pb-2">
             <CardTitle className="text-sm sm:text-base md:text-lg flex items-center gap-2">

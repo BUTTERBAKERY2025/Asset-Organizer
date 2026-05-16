@@ -477,7 +477,7 @@ export default function InventoryPage() {
 
   return (
     <Layout>
-      <div className="p-3 sm:p-4 md:p-6 lg:p-10 max-w-[1400px] mx-auto space-y-4 print:space-y-0" dir="rtl">
+      <div className="page-container space-y-4 print:space-y-0" dir="rtl">
         <div className="print:hidden">
           <PageHeader
             icon={Boxes}
@@ -512,7 +512,7 @@ export default function InventoryPage() {
           />
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 print:hidden">
+        <div className="kpi-grid print:hidden">
           <Card className="bg-primary/5 border-primary/20">
             <CardHeader className="pb-2">
               <CardDescription>إجمالي الأصول</CardDescription>

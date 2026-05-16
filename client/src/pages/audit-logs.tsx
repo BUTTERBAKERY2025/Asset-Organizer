@@ -210,7 +210,7 @@ export default function AuditLogsPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto space-y-4" dir="rtl">
+      <div className="page-container space-y-4" dir="rtl">
         <SettingsBreadcrumb currentPage="سجل التدقيق" currentIcon={History} />
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -324,7 +324,7 @@ export default function AuditLogsPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
                   <div className="relative">
                     <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input

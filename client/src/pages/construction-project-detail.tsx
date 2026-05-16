@@ -643,7 +643,7 @@ export default function ConstructionProjectDetailPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto space-y-4" dir="rtl">
+      <div className="page-container space-y-4" dir="rtl">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Link href="/construction-projects" className="hover:text-primary">
             المشاريع الإنشائية

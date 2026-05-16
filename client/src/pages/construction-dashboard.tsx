@@ -267,7 +267,7 @@ export default function ConstructionDashboardPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto space-y-4" dir="rtl" ref={printRef}>
+      <div className="page-container space-y-4" dir="rtl" ref={printRef}>
         <PageHeader
           icon={Building}
           tone="construction"
@@ -287,7 +287,7 @@ export default function ConstructionDashboardPage() {
           }
         />
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="kpi-grid">
           <Card data-testid="card-total-projects" className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
             <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-4 md:p-6 pb-2">
               <CardTitle className="text-xs sm:text-sm font-medium text-amber-800">إجمالي المشاريع</CardTitle>

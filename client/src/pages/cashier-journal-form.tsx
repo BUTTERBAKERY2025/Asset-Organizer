@@ -1587,7 +1587,7 @@ export default function CashierJournalFormPage() {
   return (
     <Layout>
       {/* iPad-optimized: compact padding & spacing for 10.9" screens */}
-      <div className="p-2 sm:p-3 md:p-4 max-w-[1400px] mx-auto space-y-2" dir="rtl">
+      <div className="page-container space-y-2" dir="rtl">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Link href="/cashier-journals">
@@ -2792,7 +2792,7 @@ export default function CashierJournalFormPage() {
 
         {/* Sticky Bottom Action Bar - iPad Optimized */}
         <div className="fixed bottom-0 left-0 right-0 md:right-64 bg-white border-t-2 border-amber-200 shadow-lg z-50 p-2 md:p-3">
-          <div className="max-w-[1400px] mx-auto flex flex-col gap-2">
+          <div className="flex flex-col gap-2">
             {/* Quick Add Payment Buttons - Always visible */}
             {!isReadOnly && (
               <div className="flex flex-col gap-1">
@@ -3100,7 +3100,7 @@ export default function CashierJournalFormPage() {
             <img
               src={allAttachmentImages[lightboxIndex]?.src}
               alt={allAttachmentImages[lightboxIndex]?.fileName}
-              className="max-w-[1400px] mx-auto transition-transform duration-200 rounded shadow-2xl select-none"
+              className="max-w-full transition-transform duration-200 rounded shadow-2xl select-none"
               style={{ transform: `scale(${lightboxZoom})`, transformOrigin: 'center center' }}
               draggable={false}
               data-testid="lightbox-image"

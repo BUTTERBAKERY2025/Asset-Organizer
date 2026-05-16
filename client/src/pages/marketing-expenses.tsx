@@ -567,7 +567,7 @@ export default function MarketingExpensesPage() {
 
   return (
     <Layout>
-      <div className="p-3 sm:p-4 md:p-6 lg:p-8 max-w-[1400px] mx-auto space-y-3 sm:space-y-4" dir="rtl">
+      <div className="page-container space-y-3 sm:space-y-4" dir="rtl">
         <PageHeader
           icon={DollarSign}
           tone="money"
@@ -655,7 +655,7 @@ export default function MarketingExpensesPage() {
           </TabsList>
 
           <TabsContent value="list" className="space-y-4 mt-4">
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+            <div className="kpi-grid">
               <Card className="bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
                 <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center justify-between">
@@ -899,7 +899,7 @@ export default function MarketingExpensesPage() {
                 <CardTitle>تصفية التقارير</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
                   <div>
                     <Label className="mb-2 block text-sm">من تاريخ</Label>
                     <Input

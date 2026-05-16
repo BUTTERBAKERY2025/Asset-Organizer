@@ -98,7 +98,7 @@ export default function DividendsPage() {
 
   return (
     <Layout>
-      <div className="max-w-[1400px] mx-auto p-3 sm:p-4 md:p-6 space-y-4" dir="rtl">
+      <div className="page-container space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3 sm:gap-4">
             <Link href="/governance">
@@ -184,7 +184,7 @@ export default function DividendsPage() {
           </Dialog>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="kpi-grid">
           <Card className="bg-gradient-to-br from-orange-50 to-amber-50 border-orange-200">
             <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">
@@ -273,7 +273,7 @@ export default function DividendsPage() {
                         {distribution.description && (
                           <p className="text-sm text-gray-600 mb-3">{distribution.description}</p>
                         )}
-                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 mb-4">
+                        <div className="kpi-grid mb-4">
                           <div className="bg-gray-50 p-2 sm:p-3 rounded-lg">
                             <div className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm text-gray-600 mb-1">
                               <DollarSign className="h-3 w-3 sm:h-4 sm:w-4" />

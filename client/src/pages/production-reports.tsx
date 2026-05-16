@@ -963,7 +963,7 @@ export default function ProductionReportsPage() {
 
   return (
     <Layout>
-      <div className="p-3 sm:p-4 md:p-6 max-w-[1400px] mx-auto space-y-4" dir="rtl">
+      <div className="page-container space-y-4" dir="rtl">
         <PageHeader
           icon={FileBarChart}
           tone="production"
@@ -1178,7 +1178,7 @@ export default function ProductionReportsPage() {
           </TabsList>
 
           {isLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
               {[1, 2, 3, 4].map((i) => (
                 <Card key={i}>
                   <CardContent className="p-4">
@@ -1316,7 +1316,7 @@ export default function ProductionReportsPage() {
                             </Button>
                           )}
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
                           <div className="relative">
                             <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                             <Input

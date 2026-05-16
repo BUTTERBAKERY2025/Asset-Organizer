@@ -1079,7 +1079,7 @@ export default function DisplayBarWastePage() {
 
   return (
     <Layout>
-      <div className="p-3 sm:p-4 md:p-6 max-w-[1400px] mx-auto space-y-3 sm:space-y-4" dir="rtl">
+      <div className="page-container space-y-3 sm:space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div className="flex items-center gap-2 sm:gap-3">
             <Link href="/operations">
@@ -1119,7 +1119,7 @@ export default function DisplayBarWastePage() {
         </div>
 
         {/* Stats Cards - Basic */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+        <div className="kpi-grid">
           <Card className="bg-blue-50/50 border-blue-100">
             <CardContent className="p-2 sm:p-3">
               <div className="flex items-center gap-2 sm:gap-3">
@@ -1188,7 +1188,7 @@ export default function DisplayBarWastePage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              <div className="kpi-grid">
                 {/* Daily Waste */}
                 <div className="bg-white rounded-lg p-3 border shadow-sm">
                   <div className="text-xs text-muted-foreground mb-1">هالك اليوم</div>
@@ -2680,7 +2680,7 @@ export default function DisplayBarWastePage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
                   <div>
                     <Label className="text-right block mb-1">من تاريخ</Label>
                     <Input
@@ -2751,7 +2751,7 @@ export default function DisplayBarWastePage() {
             </Card>
 
             {comparisonSummary && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
                 <Card data-testid="card-total-produced">
                   <CardContent className="p-4 text-right">
                     <p className="text-sm text-muted-foreground">إجمالي الإنتاج</p>

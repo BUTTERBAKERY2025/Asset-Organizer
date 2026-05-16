@@ -189,7 +189,7 @@ export default function ContractorOversightPage() {
 
   return (
     <Layout>
-    <div className="p-4 md:p-6 space-y-5 max-w-[1400px] mx-auto" dir="rtl" data-testid="page-contractor-oversight">
+    <div className="page-container space-y-5" dir="rtl" data-testid="page-contractor-oversight">
       <PageHeader
         icon={Award}
         tone="construction"

@@ -440,7 +440,7 @@ export default function ProductionComparisonsPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto space-y-4" dir="rtl">
+      <div className="page-container space-y-4" dir="rtl">
         <div className="container mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
@@ -726,7 +726,7 @@ export default function ProductionComparisonsPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
           <Card className="border-0 shadow-md bg-gradient-to-br from-green-50 to-white">
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">

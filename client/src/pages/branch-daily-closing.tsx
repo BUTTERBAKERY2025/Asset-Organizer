@@ -299,7 +299,7 @@ export default function BranchDailyClosingPage() {
 
   return (
     <Layout>
-      <div className="p-3 sm:p-4 md:p-6 max-w-[1400px] mx-auto space-y-4" dir="rtl">
+      <div className="page-container space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
           <div>
             <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">إغلاق يومي جديد</h1>
@@ -453,7 +453,7 @@ export default function BranchDailyClosingPage() {
                         </div>
                         <CollapsibleContent>
                           <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t space-y-3 sm:space-y-4">
-                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 text-xs sm:text-sm">
+                            <div className="kpi-grid text-xs sm:text-sm">
                               <div>
                                 <span className="text-gray-500">النقدي:</span>
                                 <span className="font-medium mr-2">{formatCurrency(journal.cashTotal)} ريال</span>
@@ -519,7 +519,7 @@ export default function BranchDailyClosingPage() {
                               </div>
                             )}
 
-                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 text-[10px] sm:text-xs">
+                            <div className="kpi-grid text-[10px] sm:text-xs">
                               <div className="bg-muted/50 rounded p-2">
                                 <span className="text-muted-foreground block">عدد العمليات:</span>
                                 <span className="font-semibold">{formatNumber(journal.transactionCount)}</span>
@@ -558,7 +558,7 @@ export default function BranchDailyClosingPage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6 pt-0">
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+                  <div className="kpi-grid">
                     <KpiCard
                       label="إجمالي المبيعات"
                       value={Number(selectedTotals.totalSales) || 0}
@@ -597,7 +597,7 @@ export default function BranchDailyClosingPage() {
                       <Wallet className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-600 dark:text-emerald-400" />
                       تفاصيل النقدي بالصندوق
                     </h4>
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+                    <div className="kpi-grid">
                       <div className="bg-background rounded-lg p-2 sm:p-3 border border-border">
                         <span className="text-muted-foreground text-[10px] sm:text-xs md:text-sm block mb-1">رصيد الافتتاح</span>
                         <span className="font-bold text-sm sm:text-base md:text-lg text-foreground">{formatCurrency(selectedTotals.totalOpeningBalance)} ر.س</span>

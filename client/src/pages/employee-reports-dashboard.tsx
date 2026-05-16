@@ -3181,7 +3181,7 @@ export default function EmployeeReportsDashboardPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto space-y-4" dir="rtl" ref={printRef}>
+      <div className="page-container space-y-4" dir="rtl" ref={printRef}>
         <PageHeader
           icon={BarChart3}
           tone="executive"
@@ -3305,7 +3305,7 @@ export default function EmployeeReportsDashboardPage() {
           </CardContent>
         </Card>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3 sm:gap-4">
+        <div className="kpi-grid">
           <KpiCard
             label={isRTL ? "إجمالي الموظفين" : "Total Employees"}
             value={overviewStats.totalEmployees}
@@ -3444,7 +3444,7 @@ export default function EmployeeReportsDashboardPage() {
 
             <TabsContent value="overview" className="space-y-4">
               {/* KPI Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
                 <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
                   <CardContent className="pt-4">
                     <div className="flex items-center justify-between">

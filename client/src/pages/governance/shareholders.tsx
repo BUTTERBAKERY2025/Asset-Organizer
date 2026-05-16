@@ -359,7 +359,7 @@ export default function ShareholdersPage() {
 
   return (
     <Layout>
-      <div className="max-w-[1400px] mx-auto p-3 sm:p-4 md:p-6 lg:p-10 space-y-3 sm:space-y-4" dir="rtl">
+      <div className="page-container space-y-3 sm:space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div className="flex items-center gap-2 sm:gap-4">
             <Link href="/governance">

@@ -418,7 +418,7 @@ export default function MarketingReportsPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto space-y-4" dir="rtl">
+      <div className="page-container space-y-4" dir="rtl">
         <PageHeader
           icon={FileBarChart}
           tone="executive"
@@ -637,7 +637,7 @@ export default function MarketingReportsPage() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3 sm:gap-4">
+            <div className="kpi-grid">
               <Card className="border-amber-200" data-testid="kpi-total-campaigns">
                 <CardContent className="p-3 sm:p-4">
                   <div className="flex items-center justify-between mb-2">
@@ -798,7 +798,7 @@ export default function MarketingReportsPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                    <div className="kpi-grid">
                       <div className="text-center p-3 sm:p-4 bg-muted/50 rounded-lg">
                         <Eye className="w-5 h-5 sm:w-6 sm:h-6 mx-auto mb-2 text-amber-500" />
                         <p className="text-lg sm:text-xl font-bold">{formatNumber(stats.totalReach)}</p>

@@ -183,7 +183,7 @@ export default function ExecutiveReports() {
   if (statsLoading) {
     return (
       <Layout>
-        <div className="max-w-[1400px] mx-auto p-4 md:p-8 lg:p-10 space-y-4" dir="rtl">
+        <div className="page-container space-y-4" dir="rtl">
           <Skeleton className="h-10 w-64" />
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[...Array(6)].map((_, i) => (
@@ -197,7 +197,7 @@ export default function ExecutiveReports() {
 
   return (
     <Layout>
-      <div className="max-w-[1400px] mx-auto p-3 sm:p-4 md:p-6 space-y-4" dir="rtl">
+      <div className="page-container space-y-4" dir="rtl">
       <PageHeader
         icon={FileText}
         tone="executive"
@@ -277,7 +277,7 @@ export default function ExecutiveReports() {
 
           {(reportType === "weekly" || reportType === "monthly") && (
             <>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 mb-4 sm:mb-8">
+              <div className="kpi-grid mb-4 sm:mb-8">
                 <Card className="border-blue-200">
                   <CardHeader className="p-2 sm:p-4 pb-1 sm:pb-2">
                     <CardTitle className="text-[10px] sm:text-sm flex items-center gap-1 sm:gap-2">
@@ -508,7 +508,7 @@ export default function ExecutiveReports() {
                 <CardTitle className="text-sm sm:text-lg">إحصائيات الزوار</CardTitle>
               </CardHeader>
               <CardContent className="p-3 sm:p-4 pt-0">
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+                <div className="kpi-grid">
                   <div className="text-center p-2 sm:p-4 bg-gray-50 rounded-lg">
                     <div className="text-lg sm:text-2xl font-bold text-blue-600">
                       {visitorStats?.todayVisitors || 0}

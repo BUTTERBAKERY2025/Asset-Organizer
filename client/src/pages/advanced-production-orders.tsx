@@ -182,7 +182,7 @@ export default function AdvancedProductionOrdersPage() {
 
   return (
     <Layout>
-      <div className="p-6 max-w-[1400px] mx-auto space-y-6" dir="rtl">
+      <div className="page-container space-y-6" dir="rtl">
         <div className="flex flex-col gap-3 sm:gap-4">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/production-dashboard">
@@ -217,7 +217,7 @@ export default function AdvancedProductionOrdersPage() {
           />
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3 sm:gap-4">
+        <div className="kpi-grid">
           <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
             <CardContent className="p-3 sm:p-4 text-center">
               <ClipboardList className="w-6 h-6 mx-auto mb-2 text-blue-600" />

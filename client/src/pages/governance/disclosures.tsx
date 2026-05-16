@@ -122,7 +122,7 @@ export default function DisclosuresPage() {
 
   return (
     <Layout>
-      <div className="max-w-[1400px] mx-auto p-3 sm:p-4 md:p-6 space-y-4" dir="rtl">
+      <div className="page-container space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3 sm:gap-4">
             <Link href="/governance">
@@ -235,7 +235,7 @@ export default function DisclosuresPage() {
           </Dialog>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="kpi-grid">
           <Card className="bg-gradient-to-br from-teal-50 to-emerald-50 border-teal-200">
             <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">

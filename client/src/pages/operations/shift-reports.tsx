@@ -433,7 +433,7 @@ export default function ShiftReportsPage() {
 
   return (
     <Layout>
-      <div className="max-w-[1400px] mx-auto p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
+      <div className="page-container space-y-4 sm:space-y-6">
         <PageHeader
           icon={FileText}
           tone="executive"
@@ -725,7 +725,7 @@ export default function ShiftReportsPage() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+              <div className="kpi-grid">
                 <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
                   <CardContent className="p-3 sm:p-4">
                     <div className="flex items-center justify-between">

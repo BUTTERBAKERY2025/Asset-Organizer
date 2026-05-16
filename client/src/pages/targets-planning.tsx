@@ -509,7 +509,7 @@ export default function TargetsPlanning() {
 
   return (
     <Layout>
-      <div className="p-3 sm:p-4 md:p-6 max-w-[1400px] mx-auto space-y-4" dir="rtl">
+      <div className="page-container space-y-4" dir="rtl">
         <PageHeader
           icon={Target}
           tone="executive"
@@ -558,7 +558,7 @@ export default function TargetsPlanning() {
           }
         />
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="kpi-grid">
           <Card className="bg-gradient-to-br from-amber-500 to-orange-500 text-white">
             <CardContent className="p-3 sm:p-4">
               <div className="text-xs sm:text-sm opacity-90">إجمالي الأهداف</div>

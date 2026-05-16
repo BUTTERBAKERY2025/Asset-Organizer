@@ -59,7 +59,7 @@ export default function ExecutiveDashboard() {
     return (
       <Layout>
         <div className="p-4 md:p-6 lg:p-8" dir="rtl">
-          <div className="max-w-[1400px] mx-auto space-y-5">
+          <div className="page-container space-y-5">
             <Skeleton className="h-12 w-full rounded-lg" />
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {[...Array(4)].map((_, i) => (
@@ -75,7 +75,7 @@ export default function ExecutiveDashboard() {
   return (
     <Layout>
       <div className="p-3 sm:p-4 md:p-6" dir="rtl">
-        <div className="max-w-[1400px] mx-auto space-y-4 sm:space-y-5">
+        <div className="space-y-4 sm:space-y-5">
           
           <PageHeader
             icon={Crown}
@@ -93,7 +93,7 @@ export default function ExecutiveDashboard() {
           />
 
           {/* Stats - Equal sized cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+          <div className="kpi-grid">
             <Link href="/executive/meetings" className="block">
               <Card className="h-full border border-slate-200 hover:border-blue-300 hover:shadow-sm transition-all bg-white">
                 <CardContent className="p-2 sm:p-4 flex items-center gap-2 sm:gap-3">

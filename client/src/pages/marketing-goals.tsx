@@ -161,7 +161,7 @@ export default function MarketingGoalsPage() {
   if (isLoading) {
     return (
       <Layout>
-        <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto space-y-4 flex items-center justify-center min-h-[60vh]" dir="rtl">
+        <div className="page-container space-y-4 flex items-center justify-center min-h-[60vh]" dir="rtl">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500"></div>
         </div>
       </Layout>
@@ -170,7 +170,7 @@ export default function MarketingGoalsPage() {
 
   return (
     <Layout>
-      <div className="p-3 sm:p-4 md:p-6 lg:p-8 max-w-[1400px] mx-auto space-y-3 sm:space-y-4" dir="rtl">
+      <div className="page-container space-y-3 sm:space-y-4" dir="rtl">
         <PageHeader
           icon={Award}
           tone="marketing"

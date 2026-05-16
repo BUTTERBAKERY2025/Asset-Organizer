@@ -486,7 +486,7 @@ export default function TargetsDashboard() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto space-y-4" dir="rtl">
+      <div className="page-container space-y-4" dir="rtl">
         <PageHeader
           icon={TrendingUp}
           tone="executive"
@@ -556,7 +556,7 @@ export default function TargetsDashboard() {
           }
         />
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="kpi-grid">
           <Card className="bg-gradient-to-br from-amber-500 to-orange-500 text-white">
             <CardHeader className="pb-2 p-3 sm:p-4">
               <CardTitle className="text-sm sm:text-lg flex items-center gap-2">
@@ -841,7 +841,7 @@ export default function TargetsDashboard() {
                 ) : !leaderboard?.cashiers.length ? (
                   <div className="text-center py-8 text-gray-500 text-xs sm:text-sm">لا توجد بيانات</div>
                 ) : (
-                  <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-4">
+                  <div className="kpi-grid">
                     {leaderboard.cashiers.map((cashier) => (
                       <Card key={cashier.cashierId} className={`${cashier.rank <= 3 ? 'border-amber-400 border-2' : ''}`} data-testid={`cashier-rank-${cashier.cashierId}`}>
                         <CardContent className="p-2 sm:p-3 md:p-4">
@@ -1167,7 +1167,7 @@ export default function TargetsDashboard() {
                       </Card>
                     </div>
 
-                    <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-4">
+                    <div className="kpi-grid">
                       {topCashiersByPoints.map((cashier, index) => (
                         <Card key={cashier.cashierId} className={`${index < 3 ? 'border-amber-400 border-2' : ''}`} data-testid={`points-rank-${cashier.cashierId}`}>
                           <CardContent className="p-2 sm:p-3 md:p-4">

@@ -347,8 +347,8 @@ export default function SalesAnalytics() {
 
   return (
     <Layout>
-      <div className="p-3 sm:p-4 md:p-6 max-w-[1400px] mx-auto space-y-4" dir="rtl">
-        <div className="max-w-[1400px] mx-auto space-y-4 sm:space-y-6">
+      <div className="page-container space-y-4" dir="rtl">
+        <div className="space-y-4 sm:space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div className="flex items-center gap-3">
               <Link href="/cashier-journals">
@@ -473,7 +473,7 @@ export default function SalesAnalytics() {
             </CardContent>
           </Card>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-4">
+        <div className="kpi-grid">
           <KpiCard
             label="إجمالي المبيعات"
             value={Number(totalActualSales) || 0}
@@ -717,7 +717,7 @@ export default function SalesAnalytics() {
                           </div>
                         </div>
                         
-                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 mb-3">
+                        <div className="kpi-grid mb-3">
                           <div>
                             <p className="text-xs text-gray-500">الهدف</p>
                             <p className="font-medium">{formatCurrency(branch.targetAmount)}</p>

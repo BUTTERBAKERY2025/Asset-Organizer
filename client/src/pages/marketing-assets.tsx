@@ -490,7 +490,7 @@ export default function MarketingAssetsPage() {
   if (isLoading) {
     return (
       <Layout>
-        <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto space-y-4" dir="rtl">
+        <div className="page-container space-y-4" dir="rtl">
           <div className="flex items-center gap-3">
             <Skeleton className="h-9 w-9" />
             <Skeleton className="h-8 w-48" />
@@ -506,7 +506,7 @@ export default function MarketingAssetsPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto space-y-4" dir="rtl">
+      <div className="page-container space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link href="/marketing">

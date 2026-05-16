@@ -171,7 +171,7 @@ export default function PlatformHomePage() {
   return (
     <Layout>
       <div
-        className="p-4 md:p-6 lg:p-8 max-w-[1400px] mx-auto space-y-6"
+        className="page-container space-y-6"
         dir={currentLang === "ar" ? "rtl" : "ltr"}
       >
         {/* ============ HERO CARD (conversational) ============ */}
@@ -281,7 +281,7 @@ export default function PlatformHomePage() {
             className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden"
             data-testid="kpi-strip"
           >
-            <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-y lg:divide-y-0 divide-gray-100 rtl:divide-x-reverse [&>button]:text-start">
+            <div className="kpi-grid divide-x divide-y lg:divide-y-0 divide-gray-100 rtl:divide-x-reverse [&>button]:text-start">
               {canView("branches") && (
                 <button
                   type="button"

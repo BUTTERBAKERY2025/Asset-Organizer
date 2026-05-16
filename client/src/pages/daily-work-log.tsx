@@ -1135,7 +1135,7 @@ export default function DailyWorkLogPage() {
                         رفع الكل
                       </Button>
                     </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                    <div className="kpi-grid">
                       {pendingPhotos.map((p) => (
                         <div key={p.id} className="border rounded-lg overflow-hidden bg-background relative" data-testid={`pending-photo-${p.id}`}>
                           <img src={p.previewUrl} alt="" className="w-full h-32 object-cover" />
@@ -1190,7 +1190,7 @@ export default function DailyWorkLogPage() {
                 {existingLog?.photos && existingLog.photos.length > 0 ? (
                   <div>
                     <h3 className="font-semibold mb-2">الصور المرفوعة ({existingLog.photos.length})</h3>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                    <div className="kpi-grid">
                       {existingLog.photos.map((photo) => {
                         const typeInfo = PHOTO_TYPES.find((t) => t.value === photo.photoType);
                         return (

@@ -871,7 +871,7 @@ export default function MarketingCalendarPage() {
 
   return (
     <Layout>
-      <div className="p-3 sm:p-4 md:p-6 lg:p-8 max-w-[1400px] mx-auto space-y-3 sm:space-y-4" dir="rtl">
+      <div className="page-container space-y-3 sm:space-y-4" dir="rtl">
         <PageHeader
           icon={CalendarIcon}
           tone="marketing"
@@ -986,7 +986,7 @@ export default function MarketingCalendarPage() {
           }
         />
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+        <div className="kpi-grid">
           <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
             <CardContent className="p-3 sm:p-4">
               <div className="flex items-center gap-2 sm:gap-3">

@@ -95,7 +95,7 @@ export default function CapitalPage() {
 
   return (
     <Layout>
-      <div className="max-w-[1400px] mx-auto p-3 sm:p-4 md:p-6 lg:p-10 space-y-3 sm:space-y-4" dir="rtl">
+      <div className="page-container space-y-3 sm:space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div className="flex items-center gap-2 sm:gap-4">
             <Link href="/governance">
@@ -185,7 +185,7 @@ export default function CapitalPage() {
           </Dialog>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+        <div className="kpi-grid">
           <Card className="bg-gradient-to-br from-purple-50 to-violet-50 border-purple-200">
             <CardContent className="p-2 sm:p-4">
               <div className="flex items-center justify-between">
@@ -272,7 +272,7 @@ export default function CapitalPage() {
                             <Badge variant="outline" className="text-[10px] sm:text-xs hidden sm:inline-flex">{typeInfo?.label}</Badge>
                           </div>
                           <p className="text-xs sm:text-sm text-gray-600 mb-2 sm:mb-3 line-clamp-2">{transaction.description}</p>
-                          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+                          <div className="kpi-grid">
                             <div className="bg-gray-50 p-2 sm:p-3 rounded-lg">
                               <p className="text-[10px] sm:text-sm text-gray-600">رأس المال السابق</p>
                               <p className="text-xs sm:text-base font-semibold">{Number(transaction.previousCapital).toLocaleString()} <span className="text-[10px] sm:text-xs">ر.س</span></p>

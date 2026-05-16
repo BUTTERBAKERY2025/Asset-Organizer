@@ -274,7 +274,7 @@ export default function BackupsPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto space-y-4" dir="rtl">
+      <div className="page-container space-y-4" dir="rtl">
         <SettingsBreadcrumb currentPage="النسخ الاحتياطية" currentIcon={HardDrive} />
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -394,7 +394,7 @@ export default function BackupsPage() {
           </Dialog>
         </div>
 
-        <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
+        <div className="kpi-grid">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-4 md:p-6 md:pb-2">
               <CardTitle className="text-xs sm:text-sm font-medium">إجمالي النسخ</CardTitle>

@@ -830,7 +830,7 @@ export default function OrganizationalStructurePage() {
     <Layout>
       <TooltipProvider>
         <div className="min-h-screen bg-gradient-to-br from-slate-50 via-green-50/30 to-teal-50/20 print:bg-white" dir={isRTL ? "rtl" : "ltr"}>
-          <div className="p-3 sm:p-4 md:p-6 max-w-[1400px] mx-auto space-y-4">
+          <div className="page-container space-y-4">
           <div className="mb-6 print:hidden">
             <PageHeader
               icon={Network}
@@ -886,7 +886,7 @@ export default function OrganizationalStructurePage() {
             ) : (
               <div className="space-y-4">
                 {/* Statistics Row */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 print:hidden">
+                <div className="kpi-grid print:hidden">
                   <KpiCard
                     label={t("orgStructure.totalRoles")}
                     value={roles.length}

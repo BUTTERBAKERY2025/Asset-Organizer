@@ -521,7 +521,7 @@ export default function GeneralAssemblyPage() {
         {/* نظرة عامة */}
         <TabsContent value="overview" className="space-y-6">
           {/* إحصائيات رئيسية */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div className="kpi-grid">
             <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
               <CardContent className="p-3 sm:p-4">
                 <div className="flex items-center justify-between">

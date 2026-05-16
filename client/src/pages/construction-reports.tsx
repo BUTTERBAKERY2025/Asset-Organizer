@@ -562,7 +562,7 @@ export default function ConstructionReportsPage() {
 
   return (
     <Layout>
-      <div className="p-3 sm:p-4 md:p-6 max-w-[1400px] mx-auto space-y-4" dir="rtl">
+      <div className="page-container space-y-4" dir="rtl">
         <PageHeader
           icon={FileBarChart}
           tone="construction"
@@ -628,7 +628,7 @@ export default function ConstructionReportsPage() {
                   />
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
                   <div className="space-y-2">
                     <Label>الفرع</Label>
                     <Select value={selectedBranch} onValueChange={setSelectedBranch}>
@@ -766,7 +766,7 @@ export default function ConstructionReportsPage() {
         </Card>
 
         <div ref={printRef} className="space-y-4 sm:space-y-6 print:p-4">
-          <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-2 sm:gap-4">
+          <div className="kpi-grid">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-4 pb-2">
                 <CardTitle className="text-xs sm:text-sm font-medium">المشاريع</CardTitle>

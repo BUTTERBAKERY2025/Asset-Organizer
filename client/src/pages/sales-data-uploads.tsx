@@ -313,7 +313,7 @@ export default function SalesDataUploadsPage() {
 
   return (
     <Layout>
-      <div className="p-3 sm:p-4 md:p-6 max-w-[1400px] mx-auto space-y-4 sm:space-y-6" dir="rtl">
+      <div className="page-container space-y-4 sm:space-y-6" dir="rtl">
         <PageHeader
           icon={Upload}
           tone="primary"
@@ -345,7 +345,7 @@ export default function SalesDataUploadsPage() {
             </div>
           </div>
           <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
               <div className="space-y-1 sm:space-y-2">
                 <Label htmlFor="branch" className="text-xs sm:text-sm">الفرع</Label>
                 <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!canSelectBranch}>

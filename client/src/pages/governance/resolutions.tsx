@@ -329,7 +329,7 @@ export default function ResolutionsPage() {
 
   return (
     <Layout>
-      <div className="max-w-[1400px] mx-auto p-3 sm:p-4 md:p-6 space-y-4" dir="rtl">
+      <div className="page-container space-y-4" dir="rtl">
         <PageHeader
           icon={Scale}
           tone="executive"
@@ -471,7 +471,7 @@ export default function ResolutionsPage() {
           }
         />
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="kpi-grid">
           <Card className="bg-gradient-to-br from-gray-50 to-slate-50 border-gray-200">
             <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">

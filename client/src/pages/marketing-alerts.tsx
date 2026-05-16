@@ -176,7 +176,7 @@ export default function MarketingAlertsPage() {
   if (isLoading) {
     return (
       <Layout>
-        <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto space-y-4" dir="rtl">
+        <div className="page-container space-y-4" dir="rtl">
           <div className="flex items-center gap-3">
             <Skeleton className="h-9 w-9" />
             <Skeleton className="h-8 w-48" />
@@ -194,7 +194,7 @@ export default function MarketingAlertsPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto space-y-4" dir="rtl">
+      <div className="page-container space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link href="/marketing">
@@ -322,7 +322,7 @@ export default function MarketingAlertsPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="kpi-grid">
           <Card>
             <CardContent className="p-3 sm:p-4">
               <div className="flex items-center gap-2 sm:gap-3">

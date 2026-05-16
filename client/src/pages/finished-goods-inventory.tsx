@@ -248,7 +248,7 @@ export default function FinishedGoodsInventoryPage() {
 
   return (
     <Layout>
-      <div className="p-3 sm:p-4 md:p-6 max-w-[1400px] mx-auto space-y-4 sm:space-y-6" dir="rtl">
+      <div className="page-container space-y-4 sm:space-y-6" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div>
             <h1 className="text-lg sm:text-xl md:text-2xl font-bold flex items-center gap-2">
@@ -299,7 +299,7 @@ export default function FinishedGoodsInventoryPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
               <div>
                 <Label className="text-xs sm:text-sm">الفرع</Label>
                 <Select value={branchId} onValueChange={setBranchId}>

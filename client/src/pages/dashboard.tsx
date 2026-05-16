@@ -111,7 +111,7 @@ export default function DashboardPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto space-y-6" dir="rtl">
+      <div className="page-container space-y-6" dir="rtl">
         <div>
           <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground" data-testid="text-dashboard-title">لوحة التحكم الرئيسية</h1>
           <p className="text-muted-foreground mt-1 text-sm sm:text-base">نظام إدارة مخبز باتر - CEO Command</p>
@@ -169,7 +169,7 @@ export default function DashboardPage() {
         <div>
           <h2 className="text-base sm:text-lg font-semibold text-gray-700 mb-3 sm:mb-4">إحصائيات الأصول</h2>
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="kpi-grid">
           <Card data-testid="card-total-items">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 sm:p-4 md:p-6 pb-2">
               <CardTitle className="text-xs sm:text-sm font-medium">إجمالي الأصناف</CardTitle>

@@ -766,7 +766,7 @@ export default function SettingsDashboardPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-6 max-w-[1400px] mx-auto space-y-6" dir="rtl">
+      <div className="page-container space-y-6" dir="rtl">
       <PageHeader
         icon={Settings}
         tone="primary"
@@ -801,7 +801,7 @@ export default function SettingsDashboardPage() {
             </div>
           </CardHeader>
           <CardContent className="p-4 md:p-6 pt-0">
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+            <div className="kpi-grid">
               {visibleCriticalSettings.map((item) => (
                 <Link key={item.id} href={item.path}>
                   <div

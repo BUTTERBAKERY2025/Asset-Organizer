@@ -140,7 +140,7 @@ export default function AttendanceDashboardPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-6 lg:p-8 max-w-[1400px] mx-auto space-y-5" dir={isRTL ? "rtl" : "ltr"}>
+      <div className="page-container space-y-5" dir={isRTL ? "rtl" : "ltr"}>
         <PageHeader
           icon={UserCheck}
           tone="people"
@@ -156,7 +156,7 @@ export default function AttendanceDashboardPage() {
         ) : (
           <>
             {/* KPI strip */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="kpi-grid">
               <KpiCard
                 label={t("stats.totalEmployees")}
                 value={totalEmployees}

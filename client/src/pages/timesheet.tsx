@@ -793,7 +793,7 @@ export default function TimesheetPage() {
 
   return (
     <Layout>
-      <div className="p-3 sm:p-4 md:p-6 max-w-[1400px] mx-auto space-y-4" dir={isRTL ? "rtl" : "ltr"}>
+      <div className="page-container space-y-4" dir={isRTL ? "rtl" : "ltr"}>
         <PageHeader
           icon={FileText}
           tone="executive"
@@ -1151,7 +1151,7 @@ export default function TimesheetPage() {
                       <span>{t("timesheet.supersededWarning")} (#{selectedReport.supersededBy})</span>
                     </div>
                   )}
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+                  <div className="kpi-grid mb-6">
                     <KpiCard label={t("timesheet.scheduledDays")} value={selectedReport.totalScheduledDays} icon={Calendar} tone="neutral" data-testid="kpi-scheduled-days" />
                     <KpiCard label={t("timesheet.presentDays")} value={selectedReport.totalPresentDays} icon={CheckCircle} tone="money" data-testid="kpi-present-days" />
                     <KpiCard label={t("timesheet.absentDays")} value={selectedReport.totalAbsentDays} icon={XCircle} tone="alert" data-testid="kpi-absent-days" />

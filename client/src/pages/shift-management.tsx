@@ -1729,7 +1729,7 @@ export default function ShiftManagementPage() {
 
   return (
     <Layout>
-      <div className="p-3 sm:p-4 md:p-6 max-w-[1400px] mx-auto space-y-4" dir={isRTL ? "rtl" : "ltr"}>
+      <div className="page-container space-y-4" dir={isRTL ? "rtl" : "ltr"}>
         <PageHeader
           icon={Calendar}
           tone="primary"
@@ -2212,7 +2212,7 @@ export default function ShiftManagementPage() {
                     {isLoadingReportData && <Loader2 className="w-4 h-4 animate-spin text-primary" />}
                   </div>
                   
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-4">
                     <div>
                       <Label className="text-xs font-medium mb-1 block">الفترة</Label>
                       <Select value={reportPeriod} onValueChange={handleReportPeriodChange}>

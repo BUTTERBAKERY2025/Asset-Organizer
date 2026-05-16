@@ -192,8 +192,8 @@ export default function ProductionComparisonReports() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto space-y-4" dir="rtl">
-        <div className="max-w-[1400px] mx-auto space-y-6">
+      <div className="page-container space-y-4" dir="rtl">
+        <div className="space-y-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div className="flex items-center gap-3">
             <Link href="/production-dashboard">
@@ -294,7 +294,7 @@ export default function ProductionComparisonReports() {
               </div>
             ) : monthlyReport ? (
               <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
                   <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
                     <CardHeader className="pb-2">
                       <CardTitle className="text-sm font-medium text-blue-700">إجمالي الإنتاج</CardTitle>

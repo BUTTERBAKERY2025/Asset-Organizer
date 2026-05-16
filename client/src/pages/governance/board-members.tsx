@@ -220,7 +220,7 @@ export default function BoardMembersPage() {
 
   return (
     <Layout>
-      <div className="max-w-[1400px] mx-auto p-3 sm:p-4 md:p-6 lg:p-10 space-y-3 sm:space-y-4" dir="rtl">
+      <div className="page-container space-y-3 sm:space-y-4" dir="rtl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div className="flex items-center gap-2 sm:gap-4">
             <Link href="/governance">
@@ -347,7 +347,7 @@ export default function BoardMembersPage() {
           </Dialog>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+        <div className="kpi-grid">
           <Card className="bg-gradient-to-br from-violet-50 to-purple-50 border-violet-200">
             <CardContent className="p-2 sm:p-4">
               <div className="flex items-center justify-between">

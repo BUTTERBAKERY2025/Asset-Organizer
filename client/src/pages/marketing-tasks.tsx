@@ -478,7 +478,7 @@ export default function MarketingTasksPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto space-y-4" dir="rtl">
+      <div className="page-container space-y-4" dir="rtl">
         <PageHeader
           icon={ListChecks}
           tone="marketing"
@@ -527,7 +527,7 @@ export default function MarketingTasksPage() {
           }
         />
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="kpi-grid">
           {TASK_STATUSES.map((status) => {
             const count = tasksByStatus[status.value as keyof typeof tasksByStatus]?.length || 0;
             const StatusIcon = status.icon;

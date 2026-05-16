@@ -345,7 +345,7 @@ ${discount.minimumOrder ? `🛒 الحد الأدنى للطلب: ${Number(disco
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 space-y-6 max-w-[1400px] mx-auto">
+      <div className="page-container space-y-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <Link href="/marketing">
@@ -364,7 +364,7 @@ ${discount.minimumOrder ? `🛒 الحد الأدنى للطلب: ${Number(disco
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="kpi-grid">
           <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
             <CardContent className="p-3 sm:p-4">
               <div className="flex items-center justify-between">

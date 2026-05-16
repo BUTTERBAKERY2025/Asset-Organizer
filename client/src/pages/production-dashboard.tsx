@@ -297,7 +297,7 @@ export default function ProductionDashboardPage() {
 
   return (
     <Layout>
-      <div className="p-3 sm:p-4 md:p-6 max-w-[1400px] mx-auto space-y-4 md:space-y-6" dir="rtl">
+      <div className="page-container space-y-4 md:space-y-6" dir="rtl">
           
           <PageHeader
             icon={Factory}
@@ -360,7 +360,7 @@ export default function ProductionDashboardPage() {
           />
 
           {/* Main KPIs Grid */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+          <div className="kpi-grid">
             {/* Production Today */}
             <Card className="overflow-hidden" data-testid="card-daily-qty">
               <CardContent className="p-3 sm:p-4">
@@ -466,7 +466,7 @@ export default function ProductionDashboardPage() {
                 
                 {hubData?.target && hubData.target.totalTarget > 0 ? (
                   <>
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 mb-4 sm:mb-6">
+                    <div className="kpi-grid mb-4 sm:mb-6">
                       <div className="bg-white rounded-xl p-2 sm:p-4 text-center shadow-sm border border-slate-100">
                         <p className="text-[10px] sm:text-xs text-slate-500 mb-1">الهدف</p>
                         <p className="text-lg sm:text-2xl font-bold text-slate-800">{hubData.target.totalTarget}</p>

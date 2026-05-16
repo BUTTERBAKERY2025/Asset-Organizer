@@ -621,7 +621,7 @@ export default function EventPosPage() {
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-hidden px-3 py-2 md:px-4 md:py-3">
-      <div className="max-w-[1400px] mx-auto h-full flex gap-3 overflow-hidden">
+      <div className="page-container h-full flex gap-3 overflow-hidden">
         {/* RIGHT: Products Section */}
         <div className="flex-1 flex flex-col overflow-hidden bg-white rounded-2xl shadow-sm border border-gray-200">
           <div className="px-3 pt-3 pb-1.5 shrink-0">

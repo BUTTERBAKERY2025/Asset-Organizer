@@ -190,7 +190,7 @@ export default function MeetingsPage() {
 
   return (
     <Layout>
-      <div className="max-w-[1400px] mx-auto p-3 sm:p-4 md:p-6 lg:p-10 space-y-3 sm:space-y-4" dir="rtl">
+      <div className="page-container space-y-3 sm:space-y-4" dir="rtl">
         <PageHeader
           icon={Building2}
           tone="executive"
@@ -340,7 +340,7 @@ export default function MeetingsPage() {
           }
         />
 
-        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+        <div className="kpi-grid">
           <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
             <CardContent className="p-2 sm:p-4">
               <div className="flex items-center justify-between">

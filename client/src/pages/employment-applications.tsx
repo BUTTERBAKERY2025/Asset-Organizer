@@ -257,7 +257,7 @@ export default function EmploymentApplicationsPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-6 max-w-[1400px] mx-auto space-y-6" dir="rtl">
+      <div className="page-container space-y-6" dir="rtl">
         <PageHeader
           icon={Users}
           tone="people"

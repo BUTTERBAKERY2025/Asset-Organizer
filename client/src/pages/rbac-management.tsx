@@ -576,7 +576,7 @@ export default function RBACManagementPage() {
 
   return (
     <Layout>
-      <div className="p-3 sm:p-4 md:p-6 lg:p-10 max-w-[1400px] mx-auto space-y-4" dir="rtl">
+      <div className="page-container space-y-4" dir="rtl">
         <SettingsBreadcrumb currentPage="الأدوار والصلاحيات" currentIcon={Shield} />
         <PageHeader
           icon={Shield}
@@ -586,7 +586,7 @@ export default function RBACManagementPage() {
           backHref="/settings"
         />
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-4">
+        <div className="kpi-grid">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-2 sm:p-3 md:p-4">
               <CardTitle className="text-[10px] sm:text-xs font-medium">الأقسام</CardTitle>
@@ -950,7 +950,7 @@ export default function RBACManagementPage() {
                                 {category.perms.filter(p => isPermissionGranted(p.id)).length}/{category.perms.length}
                               </span>
                             </div>
-                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                            <div className="kpi-grid">
                               {category.perms.map((perm) => {
                                 const granted = isPermissionGranted(perm.id);
                                 return (

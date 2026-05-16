@@ -141,7 +141,7 @@ export default function MaintenancePage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto space-y-4" dir="rtl">
+      <div className="page-container space-y-4" dir="rtl">
         <PageHeader
           icon={Wrench}
           tone="construction"
@@ -162,7 +162,7 @@ export default function MaintenancePage() {
           }
         />
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+        <div className="kpi-grid">
           <Card data-testid="card-maintenance-count">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 sm:p-4 md:p-6 pb-2">
               <CardTitle className="text-xs sm:text-sm font-medium">تحتاج صيانة</CardTitle>

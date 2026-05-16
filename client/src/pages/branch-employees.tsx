@@ -419,9 +419,9 @@ function EmployeeTransfersTab({ employees, branches }: { employees: BranchEmploy
   };
 
   return (
-    <div className="p-3 sm:p-4 md:p-6 max-w-[1400px] mx-auto space-y-4" dir={isRTL ? "rtl" : "ltr"}>
+    <div className="page-container space-y-4" dir={isRTL ? "rtl" : "ltr"}>
       {/* KPI Cards — transfers summary */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="kpi-grid">
         <KpiCard label={isRTL ? "معلقة" : "Pending"} value={stats.pending} icon={Clock} tone="inventory" data-testid="kpi-transfers-pending" />
         <KpiCard label={isRTL ? "معتمدة" : "Approved"} value={stats.approved} icon={CheckCircle} tone="money" data-testid="kpi-transfers-approved" />
         <KpiCard label={isRTL ? "مكتملة" : "Completed"} value={stats.completed} icon={ArrowRight} tone="production" data-testid="kpi-transfers-completed" />
@@ -1702,7 +1702,7 @@ export default function BranchEmployeesPage() {
 
   return (
     <Layout>
-      <div className="p-3 sm:p-4 md:p-6 max-w-[1400px] mx-auto space-y-4" dir={isRTL ? "rtl" : "ltr"}>
+      <div className="space-y-4" dir={isRTL ? "rtl" : "ltr"}>
         <PageHeader
           icon={Users}
           tone="people"
@@ -2126,7 +2126,7 @@ export default function BranchEmployeesPage() {
           </TabsList>
 
           <TabsContent value="employees" className="space-y-4 sm:space-y-6 mt-4 sm:mt-6">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="kpi-grid">
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">

@@ -942,7 +942,7 @@ export default function MarketingInfluencersPage() {
 
   return (
     <Layout>
-      <div className="p-4 md:p-8 lg:p-10 max-w-[1400px] mx-auto space-y-4" dir="rtl">
+      <div className="page-container space-y-4" dir="rtl">
         <PageHeader
           icon={Star}
           tone="marketing"
@@ -1179,7 +1179,7 @@ export default function MarketingInfluencersPage() {
           </div>
 
           {showAdvancedFilters && (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 p-3 sm:p-4 bg-muted/30 rounded-lg border">
+            <div className="kpi-grid p-3 sm:p-4 bg-muted/30 rounded-lg border">
               <Select value={platformFilter} onValueChange={setPlatformFilter}>
                 <SelectTrigger className="h-11 sm:h-10" data-testid="select-platform-filter">
                   <SelectValue placeholder="المنصة" />
