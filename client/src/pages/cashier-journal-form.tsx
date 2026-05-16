@@ -426,20 +426,40 @@ export default function CashierJournalFormPage() {
       return res.json();
     },
     onSuccess: async (createdJournal: CashierSalesJournal) => {
+      // Upload attachments in parallel — one failure doesn't block the others.
+      // Keep any failed items in `pendingAttachments` and redirect the user to
+      // the edit page (instead of the list) so they can retry without losing
+      // their photos. This prevents the silent attachment-loss bug.
+      let failedAttachments: typeof pendingAttachments = [];
       if (pendingAttachments.length > 0) {
-        try {
-          for (const attachment of pendingAttachments) {
-            await apiRequest("POST", `/api/cashier-journals/${createdJournal.id}/attachments`, attachment);
-          }
-          setPendingAttachments([]);
-        } catch (error) {
-          console.error("Error uploading attachments:", error);
-          toast({ title: "تحذير", description: "تم حفظ اليومية لكن فشل رفع بعض المرفقات", variant: "destructive" });
+        const results = await Promise.allSettled(
+          pendingAttachments.map((attachment) =>
+            apiRequest("POST", `/api/cashier-journals/${createdJournal.id}/attachments`, attachment)
+          )
+        );
+        failedAttachments = pendingAttachments.filter((_, i) => results[i].status === "rejected");
+        if (failedAttachments.length > 0) {
+          console.error("Failed uploads:", results.filter(r => r.status === "rejected"));
         }
       }
+
       queryClient.invalidateQueries({ queryKey: ["/api/cashier-journals"] });
-      toast({ title: "تم إنشاء اليومية بنجاح" });
-      setLocation("/cashier-journals");
+
+      if (failedAttachments.length > 0) {
+        // Keep the failed ones in state and send the user to the edit page
+        // (which has retry UI for individual attachments) instead of the list.
+        setPendingAttachments(failedAttachments);
+        toast({
+          title: "تم حفظ اليومية — لكن فشل رفع بعض المرفقات",
+          description: `${failedAttachments.length} مرفق لم يُرفع. يمكنك إعادة المحاولة من صفحة التعديل.`,
+          variant: "destructive",
+        });
+        setLocation(`/cashier-journals/${createdJournal.id}`);
+      } else {
+        setPendingAttachments([]);
+        toast({ title: "تم إنشاء اليومية بنجاح" });
+        setLocation("/cashier-journals");
+      }
     },
     onError: () => {
       toast({ title: "خطأ", description: "فشل في إنشاء اليومية", variant: "destructive" });
@@ -525,17 +545,50 @@ export default function CashierJournalFormPage() {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !uploadingType) return;
+    const type = uploadingType;
+    // Always reset the input/state before any early return so that picking the
+    // same file twice still fires `change` and the UI doesn't get stuck.
+    e.target.value = "";
+    setUploadingType(null);
+    if (!file || !type) return;
+
+    // Client-side size guard — base64 inflates by ~33%, and the server body
+    // limit is 50MB. We cap raw files at 10MB to leave headroom and to
+    // prevent silent failures on slow connections.
+    const MAX_FILE_SIZE = 10 * 1024 * 1024;
+    if (file.size > MAX_FILE_SIZE) {
+      toast({
+        title: "حجم الملف كبير جداً",
+        description: `الحد الأقصى ${MAX_FILE_SIZE / 1024 / 1024} ميجابايت. حجم الملف: ${(file.size / 1024 / 1024).toFixed(1)} ميجابايت`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // iPhone HEIC images often come through as image/heic which some browsers
+    // can display but server processing may reject — warn early instead of
+    // silently losing them after a failed upload.
+    if (file.type && !file.type.startsWith("image/")) {
+      toast({
+        title: "نوع الملف غير مدعوم",
+        description: "يُرجى اختيار صورة (JPG, PNG)",
+        variant: "destructive",
+      });
+      return;
+    }
 
     const reader = new FileReader();
     reader.onload = () => {
       const base64Data = reader.result as string;
-      
+      if (!base64Data) {
+        toast({ title: "خطأ", description: "فشل في قراءة الملف", variant: "destructive" });
+        return;
+      }
       if (isEdit && id) {
         uploadAttachmentMutation.mutate({
           journalId: parseInt(id),
           attachment: {
-            attachmentType: uploadingType,
+            attachmentType: type,
             fileName: file.name,
             fileData: base64Data,
             mimeType: file.type,
@@ -546,19 +599,27 @@ export default function CashierJournalFormPage() {
         setPendingAttachments((prev) => [
           ...prev,
           {
-            attachmentType: uploadingType,
+            attachmentType: type,
             fileName: file.name,
             fileData: base64Data,
             mimeType: file.type,
             fileSize: file.size,
           },
         ]);
+        toast({ title: "تمت إضافة المرفق", description: "سيُرفع تلقائياً عند حفظ اليومية" });
       }
     };
+    // Without onerror, a failed read (corrupted file, permission denied, iOS
+    // HEIC issues) silently does nothing and the user thinks the photo was
+    // added. Surface the failure so they can pick a different file.
+    reader.onerror = () => {
+      toast({
+        title: "فشل في قراءة الملف",
+        description: "حاول مرة أخرى أو اختر صورة مختلفة",
+        variant: "destructive",
+      });
+    };
     reader.readAsDataURL(file);
-    
-    e.target.value = "";
-    setUploadingType(null);
   };
 
   const removePendingAttachment = (index: number) => {
