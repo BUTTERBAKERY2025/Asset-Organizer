@@ -566,7 +566,7 @@ export default function EventPosPage() {
           {heldOrders.length > 0 && (
             <button
               onClick={() => setShowHeld(true)}
-              className="relative flex items-center gap-1.5 bg-amber-50 text-amber-700 rounded-lg px-3 py-1.5 border border-amber-200 hover:bg-amber-100 transition-all active:scale-95 touch-manipulation"
+              className="relative flex items-center gap-1.5 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 rounded-lg px-3 py-1.5 border border-amber-200 dark:border-amber-900 hover:bg-amber-100 dark:hover:bg-amber-950/60 transition-all active:scale-95 touch-manipulation"
               data-testid="button-held-orders"
             >
               <Pause className="w-3.5 h-3.5" />
@@ -575,15 +575,15 @@ export default function EventPosPage() {
           )}
           {isManager && todaySummary && (
             <>
-              <div className="flex items-center gap-1.5 bg-green-50 text-green-700 rounded-lg px-3 py-1.5 border border-green-200">
+              <div className="flex items-center gap-1.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 rounded-lg px-3 py-1.5 border border-emerald-200 dark:border-emerald-900">
                 <TrendingUp className="w-3.5 h-3.5" />
                 <span className="text-xs font-bold">{(todaySummary.totalSales || 0).toFixed(0)}</span>
-                <span className="text-[10px] text-green-500">ر.س</span>
+                <span className="text-[10px] text-emerald-500 dark:text-emerald-400">ر.س</span>
               </div>
-              <div className="flex items-center gap-1.5 bg-blue-50 text-blue-700 rounded-lg px-3 py-1.5 border border-blue-200">
+              <div className="flex items-center gap-1.5 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 rounded-lg px-3 py-1.5 border border-blue-200 dark:border-blue-900">
                 <Receipt className="w-3.5 h-3.5" />
                 <span className="text-xs font-bold">{todaySummary.totalTransactions || 0}</span>
-                <span className="text-[10px] text-blue-500">فاتورة</span>
+                <span className="text-[10px] text-blue-500 dark:text-blue-400">فاتورة</span>
               </div>
             </>
           )}
@@ -592,11 +592,11 @@ export default function EventPosPage() {
               <div className="h-8 w-px bg-gray-200 mx-1" />
               <button
                 onClick={() => setShowZReport(true)}
-                className="w-9 h-9 rounded-xl bg-purple-50 flex items-center justify-center hover:bg-purple-100 transition-all active:scale-90 touch-manipulation border border-purple-200"
+                className="w-9 h-9 rounded-xl bg-violet-50 dark:bg-violet-950/40 flex items-center justify-center hover:bg-violet-100 dark:hover:bg-violet-950/60 transition-all active:scale-90 touch-manipulation border border-violet-200 dark:border-violet-900"
                 title="تقرير الوردية (F4)"
                 data-testid="button-zreport"
               >
-                <FileText className="w-4.5 h-4.5 text-purple-600" />
+                <FileText className="w-4.5 h-4.5 text-violet-600 dark:text-violet-300" />
               </button>
               <button
                 onClick={() => setShowHistory(true)}
@@ -1483,9 +1483,9 @@ export default function EventPosPage() {
             </DialogTitle>
           </div>
           <div className="p-5 space-y-4">
-            <div className="bg-yellow-50 rounded-xl p-3 flex items-start gap-2 border border-yellow-200">
-              <AlertTriangle className="w-5 h-5 text-yellow-600 shrink-0 mt-0.5" />
-              <p className="text-xs text-yellow-700">{voidAction === "void" ? "سيتم إلغاء هذه الفاتورة نهائياً ولن تحسب في المبيعات" : "سيتم تسجيل استرجاع لهذه الفاتورة"}</p>
+            <div className="bg-amber-50 dark:bg-amber-950/40 rounded-xl p-3 flex items-start gap-2 border border-amber-200 dark:border-amber-900">
+              <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-300 shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-700 dark:text-amber-300">{voidAction === "void" ? "سيتم إلغاء هذه الفاتورة نهائياً ولن تحسب في المبيعات" : "سيتم تسجيل استرجاع لهذه الفاتورة"}</p>
             </div>
             <div>
               <label className="text-sm font-bold text-gray-600 mb-2 block">سبب {voidAction === "void" ? "الإلغاء" : "الاسترجاع"} *</label>
@@ -1540,7 +1540,7 @@ export default function EventPosPage() {
               <span className="text-xs font-bold text-gray-500">إلى:</span>
               <input type="date" value={historyDateTo} onChange={e => setHistoryDateTo(e.target.value)} className="text-xs bg-white border border-gray-200 rounded-lg px-2 py-1.5" data-testid="input-date-to" />
             </div>
-            <button onClick={() => { const today = new Date().toISOString().slice(0,10); setHistoryDateFrom(today); setHistoryDateTo(today); }} className="text-[11px] font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors" data-testid="button-today-filter">اليوم</button>
+            <button onClick={() => { const today = new Date().toISOString().slice(0,10); setHistoryDateFrom(today); setHistoryDateTo(today); }} className="text-[11px] font-bold text-blue-600 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 px-3 py-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-950/60 transition-colors" data-testid="button-today-filter">اليوم</button>
           </div>
 
           {todaySummary && historyDateFrom === new Date().toISOString().slice(0,10) && historyDateTo === new Date().toISOString().slice(0,10) && (
@@ -1577,14 +1577,14 @@ export default function EventPosPage() {
             ) : todaySales.map((sale: any) => (
               <div key={sale.id} className={`px-5 py-3.5 hover:bg-gray-50 flex items-center justify-between transition-colors ${sale.status === "voided" || sale.status === "refunded" ? "opacity-50" : ""}`} data-testid={`sale-row-${sale.id}`}>
                 <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${sale.status === "voided" ? "bg-red-100" : sale.status === "refunded" ? "bg-amber-100" : "bg-gray-100"}`}>
-                    {sale.status === "voided" ? <Ban className="w-5 h-5 text-red-500" /> : sale.status === "refunded" ? <RotateCcw className="w-5 h-5 text-amber-500" /> : <Receipt className="w-5 h-5 text-gray-500" />}
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${sale.status === "voided" ? "bg-rose-100 dark:bg-rose-950/40" : sale.status === "refunded" ? "bg-amber-100 dark:bg-amber-950/40" : "bg-muted"}`}>
+                    {sale.status === "voided" ? <Ban className="w-5 h-5 text-rose-500 dark:text-rose-300" /> : sale.status === "refunded" ? <RotateCcw className="w-5 h-5 text-amber-500 dark:text-amber-300" /> : <Receipt className="w-5 h-5 text-muted-foreground" />}
                   </div>
                   <div>
-                    <div className="font-bold text-[13px] text-gray-800 flex items-center gap-2">
+                    <div className="font-bold text-[13px] text-foreground flex items-center gap-2">
                       {sale.invoiceNumber}
-                      {sale.status === "voided" && <span className="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-bold">ملغاة</span>}
-                      {sale.status === "refunded" && <span className="text-[10px] bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded-full font-bold">مسترجعة</span>}
+                      {sale.status === "voided" && <span className="text-[10px] bg-rose-100 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 px-1.5 py-0.5 rounded-full font-bold">ملغاة</span>}
+                      {sale.status === "refunded" && <span className="text-[10px] bg-amber-100 dark:bg-amber-950/40 text-amber-600 dark:text-amber-300 px-1.5 py-0.5 rounded-full font-bold">مسترجعة</span>}
                     </div>
                     <div className="text-[11px] text-gray-400 flex items-center gap-1 mt-0.5">
                       <Clock className="w-3 h-3" />
@@ -1634,7 +1634,7 @@ export default function EventPosPage() {
                     <Printer className="w-4 h-4" />
                   </Button>
                   <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${
-                    sale.paymentMethod === "cash" ? "bg-green-100 text-green-700" : sale.paymentMethod === "network" ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"
+                    sale.paymentMethod === "cash" ? "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300" : sale.paymentMethod === "network" ? "bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300" : "bg-violet-100 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300"
                   }`}>
                     {sale.paymentMethod === "cash" ? "نقد" : sale.paymentMethod === "network" ? "شبكة" : "مقسم"}
                   </span>

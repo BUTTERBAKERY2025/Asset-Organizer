@@ -57,6 +57,7 @@ import {
   Legend
 } from "recharts";
 import type { Branch } from "@shared/schema";
+import { KpiCard } from "@/components/dashboard/kpi-card";
 
 export default function SalesAnalytics() {
   const currentDate = new Date();
@@ -295,10 +296,10 @@ export default function SalesAnalytics() {
   };
 
   const statusColors: Record<string, string> = {
-    exceeding: "bg-green-100 text-green-800 border-green-200",
-    on_track: "bg-blue-100 text-blue-800 border-blue-200",
-    warning: "bg-amber-100 text-amber-800 border-amber-200",
-    critical: "bg-red-100 text-red-800 border-red-200"
+    exceeding: "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900",
+    on_track: "bg-blue-100 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-900",
+    warning: "bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-900",
+    critical: "bg-rose-100 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 border-rose-200 dark:border-rose-900"
   };
 
   const statusLabels: Record<string, string> = {
@@ -459,9 +460,9 @@ export default function SalesAnalytics() {
 
                 <div className="w-full sm:w-auto sm:mr-auto flex items-center justify-center sm:justify-end gap-2">
                   <Badge className={`text-[10px] sm:text-xs ${
-                    currentSeason.factor > 1.2 ? "bg-green-100 text-green-800" :
-                    currentSeason.factor < 0.9 ? "bg-orange-100 text-orange-800" :
-                    "bg-gray-100 text-gray-800"
+                    currentSeason.factor > 1.2 ? "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300" :
+                    currentSeason.factor < 0.9 ? "bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300" :
+                    "bg-muted text-foreground"
                   }`}>
                     <Sparkles className="h-3 w-3 ml-1" />
                     {currentSeason.label} ({currentSeason.factor > 1 ? "+" : ""}{((currentSeason.factor - 1) * 100).toFixed(0)}%)
@@ -472,80 +473,36 @@ export default function SalesAnalytics() {
           </Card>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 md:gap-4">
-          <Card className="bg-white/80 backdrop-blur border-amber-200">
-            <CardContent className="p-2 sm:p-3 md:p-4">
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <p className="text-[10px] sm:text-xs md:text-sm text-gray-500 truncate">إجمالي المبيعات</p>
-                  <p className="text-sm sm:text-lg md:text-xl font-bold text-gray-900 truncate" data-testid="text-total-sales">
-                    {formatCurrency(totalActualSales)}
-                  </p>
-                </div>
-                <div className="h-8 w-8 sm:h-10 sm:w-10 md:h-12 md:w-12 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
-                  <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-amber-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white/80 backdrop-blur border-amber-200">
-            <CardContent className="p-2 sm:p-3 md:p-4">
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <p className="text-[10px] sm:text-xs md:text-sm text-gray-500 truncate">الهدف الشهري</p>
-                  <p className="text-sm sm:text-lg md:text-xl font-bold text-gray-900 truncate" data-testid="text-total-target">
-                    {formatCurrency(totalTargetAmount)}
-                  </p>
-                </div>
-                <div className="h-8 w-8 sm:h-10 sm:w-10 md:h-12 md:w-12 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-                  <Target className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-blue-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white/80 backdrop-blur border-amber-200">
-            <CardContent className="p-2 sm:p-3 md:p-4">
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <p className="text-[10px] sm:text-xs md:text-sm text-gray-500 truncate">نسبة التحقيق</p>
-                  <p className="text-sm sm:text-lg md:text-xl font-bold text-gray-900" data-testid="text-achievement-percent">
-                    {formatPercent(overallAchievement)}
-                  </p>
-                  <Progress value={Math.min(overallAchievement, 100)} className="mt-1 sm:mt-2 h-1.5 sm:h-2" />
-                </div>
-                <div className={`h-8 w-8 sm:h-10 sm:w-10 md:h-12 md:w-12 rounded-full flex items-center justify-center shrink-0 ${
-                  overallAchievement >= 100 ? "bg-green-100" : overallAchievement >= 80 ? "bg-amber-100" : "bg-red-100"
-                }`}>
-                  <Award className={`h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 ${
-                    overallAchievement >= 100 ? "text-green-600" : overallAchievement >= 80 ? "text-amber-600" : "text-red-600"
-                  }`} />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white/80 backdrop-blur border-amber-200">
-            <CardContent className="p-2 sm:p-3 md:p-4">
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <p className="text-[10px] sm:text-xs md:text-sm text-gray-500 truncate">الفارق</p>
-                  <p className={`text-sm sm:text-lg md:text-xl font-bold truncate ${totalVariance >= 0 ? "text-green-600" : "text-red-600"}`} data-testid="text-variance">
-                    {formatCurrency(totalVariance)}
-                  </p>
-                </div>
-                <div className={`h-8 w-8 sm:h-10 sm:w-10 md:h-12 md:w-12 rounded-full flex items-center justify-center shrink-0 ${
-                  totalVariance >= 0 ? "bg-green-100" : "bg-red-100"
-                }`}>
-                  {totalVariance >= 0 ? (
-                    <ArrowUp className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-green-600" />
-                  ) : (
-                    <ArrowDown className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-red-600" />
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <KpiCard
+            label="إجمالي المبيعات"
+            value={formatCurrency(totalActualSales)}
+            icon={TrendingUp}
+            tone="money"
+            data-testid="text-total-sales"
+          />
+          <KpiCard
+            label="الهدف الشهري"
+            value={formatCurrency(totalTargetAmount)}
+            icon={Target}
+            tone="production"
+            data-testid="text-total-target"
+          />
+          <KpiCard
+            label="نسبة التحقيق"
+            value={formatPercent(overallAchievement)}
+            icon={Award}
+            tone={overallAchievement >= 100 ? "money" : overallAchievement >= 80 ? "inventory" : "alert"}
+            data-testid="text-achievement-percent"
+          >
+            <Progress value={Math.min(overallAchievement, 100)} className="mt-2 h-1.5 sm:h-2" />
+          </KpiCard>
+          <KpiCard
+            label="الفارق"
+            value={formatCurrency(totalVariance)}
+            icon={totalVariance >= 0 ? ArrowUp : ArrowDown}
+            tone={totalVariance >= 0 ? "money" : "alert"}
+            data-testid="text-variance"
+          />
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">

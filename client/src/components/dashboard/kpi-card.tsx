@@ -27,6 +27,7 @@ interface KpiCardProps {
   subLabel?: string;
   onClick?: () => void;
   className?: string;
+  children?: React.ReactNode;
   "data-testid"?: string;
 }
 
@@ -53,6 +54,7 @@ export function KpiCard({
   subLabel,
   onClick,
   className,
+  children,
   ...rest
 }: KpiCardProps) {
   const Wrapper: any = onClick ? "button" : "div";
@@ -89,6 +91,7 @@ export function KpiCard({
           {trendLabel ?? subLabel}
         </p>
       )}
+      {children}
     </Wrapper>
   );
 }

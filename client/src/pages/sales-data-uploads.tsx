@@ -47,10 +47,10 @@ interface ProductSalesAnalytics {
 }
 
 const STATUS_CONFIG: Record<string, { label: string; icon: any; color: string }> = {
-  pending: { label: "قيد الانتظار", icon: Clock, color: "bg-yellow-100 text-yellow-800" },
-  processing: { label: "جاري المعالجة", icon: Loader2, color: "bg-blue-100 text-blue-800" },
-  completed: { label: "مكتمل", icon: CheckCircle, color: "bg-green-100 text-green-800" },
-  failed: { label: "فشل", icon: AlertCircle, color: "bg-red-100 text-red-800" },
+  pending: { label: "قيد الانتظار", icon: Clock, color: "bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300" },
+  processing: { label: "جاري المعالجة", icon: Loader2, color: "bg-blue-100 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300" },
+  completed: { label: "مكتمل", icon: CheckCircle, color: "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300" },
+  failed: { label: "فشل", icon: AlertCircle, color: "bg-rose-100 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300" },
 };
 
 interface ForecastResult {
@@ -340,13 +340,13 @@ export default function SalesDataUploadsPage() {
             <CardDescription className="text-xs sm:text-sm">اختر ملف Excel يحتوي على بيانات المبيعات</CardDescription>
           </CardHeader>
           <div className="px-3 sm:px-4 md:px-6 pb-3 sm:pb-4">
-            <div className="p-3 sm:p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <h4 className="font-medium text-blue-900 mb-2 flex items-center gap-2 text-xs sm:text-sm">
-                <AlertCircle className="w-4 h-4 shrink-0" />
+            <div className="p-3 sm:p-4 bg-accent/40 rounded-lg border border-border">
+              <h4 className="font-medium text-foreground mb-2 flex items-center gap-2 text-xs sm:text-sm">
+                <AlertCircle className="w-4 h-4 shrink-0 text-primary" />
                 تنسيق الملف المطلوب
               </h4>
-              <p className="text-xs sm:text-sm text-blue-800 mb-2">يجب أن يحتوي ملف Excel على الأعمدة التالية:</p>
-              <ul className="text-xs sm:text-sm text-blue-700 list-disc list-inside space-y-1">
+              <p className="text-xs sm:text-sm text-foreground mb-2">يجب أن يحتوي ملف Excel على الأعمدة التالية:</p>
+              <ul className="text-xs sm:text-sm text-muted-foreground list-disc list-inside space-y-1">
                 <li><strong>اسم المنتج:</strong> منتج، product، name، item</li>
                 <li><strong>الكمية:</strong> كمية، quantity، qty، sold</li>
                 <li><strong>الإيرادات:</strong> إيرادات، revenue، total، sales</li>
@@ -641,7 +641,7 @@ export default function SalesDataUploadsPage() {
                                           </p>
                                         )}
                                         <div className="flex justify-center mt-4">
-                                          <Button onClick={() => setActiveTab("forecast")} className="bg-gradient-to-r from-purple-500 to-indigo-600">
+                                          <Button onClick={() => setActiveTab("forecast")}>
                                             <Target className="w-4 h-4 ml-2" />
                                             توليد توقعات الإنتاج
                                           </Button>
@@ -718,7 +718,7 @@ export default function SalesDataUploadsPage() {
                                           <Button
                                             onClick={handleGenerateForecast}
                                             disabled={forecastMutation.isPending || !forecastBranch || !forecastTargetSales || !forecastDate}
-                                            className="flex-1 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700"
+                                            className="flex-1"
                                           >
                                             {forecastMutation.isPending ? (
                                               <>
@@ -744,42 +744,42 @@ export default function SalesDataUploadsPage() {
                                   <TabsContent value="result" className="mt-4">
                                     {forecastResult?.forecast?.items ? (
                                       <div className="space-y-4">
-                                        <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                                          <div className="flex items-center gap-2 text-green-800 mb-2">
+                                        <div className="p-4 bg-emerald-50 dark:bg-emerald-950/40 rounded-lg border border-emerald-200 dark:border-emerald-900">
+                                          <div className="flex items-center gap-2 text-emerald-800 dark:text-emerald-300 mb-2">
                                             <CheckCircle className="w-5 h-5" />
                                             <span className="font-medium">{forecastResult.message || 'تم إنشاء التوقعات'}</span>
                                           </div>
                                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4">
                                             <div className="text-center">
-                                              <div className="text-2xl font-bold text-green-700">{forecastResult.forecast.productionItems || forecastResult.forecast.totalProducts || 0}</div>
-                                              <div className="text-sm text-green-600">أصناف الإنتاج</div>
+                                              <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{forecastResult.forecast.productionItems || forecastResult.forecast.totalProducts || 0}</div>
+                                              <div className="text-sm text-emerald-600 dark:text-emerald-400">أصناف الإنتاج</div>
                                             </div>
                                             <div className="text-center">
-                                              <div className="text-2xl font-bold text-green-700">{(forecastResult.forecast.totalForecastedQuantity || 0).toLocaleString('en-US')}</div>
-                                              <div className="text-sm text-green-600">إجمالي الكمية</div>
+                                              <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{(forecastResult.forecast.totalForecastedQuantity || 0).toLocaleString('en-US')}</div>
+                                              <div className="text-sm text-emerald-600 dark:text-emerald-400">إجمالي الكمية</div>
                                             </div>
                                             <div className="text-center">
-                                              <div className="text-2xl font-bold text-green-700">{formatCurrency(forecastResult.forecast.targetSales || 0)}</div>
-                                              <div className="text-sm text-green-600">المبيعات المستهدفة</div>
+                                              <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{formatCurrency(forecastResult.forecast.targetSales || 0)}</div>
+                                              <div className="text-sm text-emerald-600 dark:text-emerald-400">المبيعات المستهدفة</div>
                                             </div>
                                             {(forecastResult.forecast.salesOnlyItems ?? 0) > 0 && (
                                               <div className="text-center">
-                                                <div className="text-2xl font-bold text-amber-600">{forecastResult.forecast.salesOnlyItems}</div>
-                                                <div className="text-sm text-amber-600">تحضير بعد الطلب</div>
+                                                <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">{forecastResult.forecast.salesOnlyItems}</div>
+                                                <div className="text-sm text-amber-600 dark:text-amber-400">تحضير بعد الطلب</div>
                                               </div>
                                             )}
                                           </div>
                                         </div>
 
                                         {(forecastResult.forecast.excludedItems?.length ?? 0) > 0 && (
-                                          <div className="p-3 bg-amber-50 rounded-lg border border-amber-200">
-                                            <div className="flex items-center gap-2 text-amber-800 mb-2">
+                                          <div className="p-3 bg-amber-50 dark:bg-amber-950/40 rounded-lg border border-amber-200 dark:border-amber-900">
+                                            <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300 mb-2">
                                               <AlertCircle className="w-4 h-4" />
                                               <span className="text-sm font-medium">أصناف لم تُضاف لأمر الإنتاج (تُحضّر بعد الطلب)</span>
                                             </div>
                                             <div className="flex flex-wrap gap-1">
                                               {forecastResult.forecast.excludedItems!.map((item: any, idx: number) => (
-                                                <Badge key={idx} variant="outline" className="bg-amber-100 text-amber-800 border-amber-300 text-xs">
+                                                <Badge key={idx} variant="outline" className="bg-amber-100 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-900 text-xs">
                                                   {item.productName} ({item.category || 'غير مصنف'})
                                                 </Badge>
                                               ))}
@@ -812,7 +812,7 @@ export default function SalesDataUploadsPage() {
                                                       <Badge variant="outline">{item.productCategory || "-"}</Badge>
                                                     </TableCell>
                                                     <TableCell>
-                                                      <Badge className="bg-blue-100 text-blue-800">{item.salesRatio}%</Badge>
+                                                      <Badge className="bg-blue-100 dark:bg-blue-950/40 text-blue-800 dark:text-blue-300">{item.salesRatio}%</Badge>
                                                     </TableCell>
                                                     <TableCell className="font-bold text-green-600">
                                                       {item.forecastedQuantity.toLocaleString('en-US')}
@@ -839,7 +839,7 @@ export default function SalesDataUploadsPage() {
                                                 navigate("/advanced-production-orders");
                                               }
                                             }}
-                                            className="flex-1 bg-gradient-to-r from-green-500 to-emerald-600"
+                                            className="flex-1"
                                           >
                                             <Send className="w-4 h-4 ml-2" />
                                             عرض أمر الإنتاج
