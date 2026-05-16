@@ -1,7 +1,7 @@
 import React, { useState, useRef, useMemo, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Layout } from "@/components/layout";
-import { PageHeader } from "@/components/dashboard";
+import { PageHeader, KpiCard } from "@/components/dashboard";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -3303,84 +3303,49 @@ export default function EmployeeReportsDashboardPage() {
         </Card>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3 sm:gap-4">
-          <Card>
-            <CardContent className="p-3 sm:p-4 pt-3 sm:pt-4">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="p-1.5 sm:p-2 bg-blue-100 rounded-lg">
-                  <Users className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
-                </div>
-                <div>
-                  <p className="text-lg sm:text-xl md:text-2xl font-bold">{formatNumber(overviewStats.totalEmployees)}</p>
-                  <p className="text-[10px] sm:text-xs text-gray-500">{isRTL ? "إجمالي الموظفين" : "Total Employees"}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3 sm:p-4 pt-3 sm:pt-4">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="p-1.5 sm:p-2 bg-green-100 rounded-lg">
-                  <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
-                </div>
-                <div>
-                  <p className="text-lg sm:text-xl md:text-2xl font-bold">{overviewStats.attendanceRate}%</p>
-                  <p className="text-[10px] sm:text-xs text-gray-500">{isRTL ? "نسبة الحضور" : "Attendance Rate"}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3 sm:p-4 pt-3 sm:pt-4">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="p-1.5 sm:p-2 bg-red-100 rounded-lg">
-                  <XCircle className="w-4 h-4 sm:w-5 sm:h-5 text-red-600" />
-                </div>
-                <div>
-                  <p className="text-lg sm:text-xl md:text-2xl font-bold">{formatNumber(overviewStats.absentCount)}</p>
-                  <p className="text-[10px] sm:text-xs text-gray-500">{isRTL ? "أيام الغياب" : "Absent Days"}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3 sm:p-4 pt-3 sm:pt-4">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="p-1.5 sm:p-2 bg-amber-100 rounded-lg">
-                  <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600" />
-                </div>
-                <div>
-                  <p className="text-lg sm:text-xl md:text-2xl font-bold">{formatCurrency(overviewStats.totalSalaries, isRTL)}</p>
-                  <p className="text-[10px] sm:text-xs text-gray-500">{isRTL ? "إجمالي الرواتب" : "Total Salaries"}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3 sm:p-4 pt-3 sm:pt-4">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="p-1.5 sm:p-2 bg-teal-100 rounded-lg">
-                  <Building2 className="w-4 h-4 sm:w-5 sm:h-5 text-teal-600" />
-                </div>
-                <div>
-                  <p className="text-lg sm:text-xl md:text-2xl font-bold">{formatNumber(overviewStats.saudiEmployees)}</p>
-                  <p className="text-[10px] sm:text-xs text-gray-500">{isRTL ? "الموظفين السعوديين" : "Saudi Employees"}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3 sm:p-4 pt-3 sm:pt-4">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="p-1.5 sm:p-2 bg-purple-100 rounded-lg">
-                  <Wallet className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" />
-                </div>
-                <div>
-                  <p className="text-lg sm:text-xl md:text-2xl font-bold">{formatCurrency(overviewStats.totalInsurance, isRTL)}</p>
-                  <p className="text-[10px] sm:text-xs text-gray-500">{isRTL ? "التأمينات الاجتماعية" : "Social Insurance"}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <KpiCard
+            label={isRTL ? "إجمالي الموظفين" : "Total Employees"}
+            value={overviewStats.totalEmployees}
+            icon={Users}
+            tone="people"
+            data-testid="kpi-total-employees"
+          />
+          <KpiCard
+            label={isRTL ? "نسبة الحضور" : "Attendance Rate"}
+            value={overviewStats.attendanceRate}
+            unit="%"
+            icon={CheckCircle}
+            tone="money"
+            data-testid="kpi-attendance-rate"
+          />
+          <KpiCard
+            label={isRTL ? "أيام الغياب" : "Absent Days"}
+            value={overviewStats.absentCount}
+            icon={XCircle}
+            tone="alert"
+            data-testid="kpi-absent-days"
+          />
+          <KpiCard
+            label={isRTL ? "إجمالي الرواتب" : "Total Salaries"}
+            value={formatCurrency(overviewStats.totalSalaries, isRTL)}
+            icon={DollarSign}
+            tone="inventory"
+            data-testid="kpi-total-salaries"
+          />
+          <KpiCard
+            label={isRTL ? "الموظفين السعوديين" : "Saudi Employees"}
+            value={overviewStats.saudiEmployees}
+            icon={Building2}
+            tone="production"
+            data-testid="kpi-saudi-employees"
+          />
+          <KpiCard
+            label={isRTL ? "التأمينات الاجتماعية" : "Social Insurance"}
+            value={formatCurrency(overviewStats.totalInsurance, isRTL)}
+            icon={Wallet}
+            tone="violet"
+            data-testid="kpi-total-insurance"
+          />
         </div>
 
         {unlinkedRecordsCount > 0 && (
