@@ -32,6 +32,7 @@ import type { CashierSalesJournal, Branch } from "@shared/schema";
 import { printHtmlContent } from "@/lib/print-utils";
 import { TablePagination } from "@/components/ui/pagination";
 import { ExportButtons } from "@/components/export-buttons";
+import { KpiCard } from "@/components/dashboard/kpi-card";
 
 const STATUS_ICONS: Record<string, { variant: "default" | "secondary" | "destructive" | "outline" }> = {
   draft: { variant: "secondary" },
@@ -41,9 +42,9 @@ const STATUS_ICONS: Record<string, { variant: "default" | "secondary" | "destruc
 };
 
 const DISCREPANCY_ICONS: Record<string, { color: string; icon: any }> = {
-  balanced: { color: "text-green-600", icon: Minus },
-  shortage: { color: "text-red-600", icon: TrendingDown },
-  surplus: { color: "text-amber-600", icon: TrendingUp },
+  balanced: { color: "text-emerald-600 dark:text-emerald-400", icon: Minus },
+  shortage: { color: "text-rose-600 dark:text-rose-400", icon: TrendingDown },
+  surplus: { color: "text-amber-600 dark:text-amber-400", icon: TrendingUp },
 };
 
 export default function CashierJournalsPage() {
@@ -389,60 +390,40 @@ export default function CashierJournalsPage() {
 
         {stats && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
-            <Card>
-              <CardContent className="p-3 sm:p-4">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <div className="p-1.5 sm:p-2 rounded-lg bg-blue-100">
-                    <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xs sm:text-sm text-muted-foreground truncate">{t("stats.totalSales")}</p>
-                    <p className="text-base sm:text-xl font-bold truncate" data-testid="stat-total-sales">{formatCurrency(stats.totalSales)}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-3 sm:p-4">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <div className="p-1.5 sm:p-2 rounded-lg bg-red-100">
-                    <TrendingDown className="w-4 h-4 sm:w-5 sm:h-5 text-red-600" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xs sm:text-sm text-muted-foreground truncate">{t("stats.totalShortage")}</p>
-                    <p className="text-base sm:text-xl font-bold text-red-600 truncate" data-testid="stat-shortage">{formatCurrency(stats.shortageAmount)}</p>
-                    <p className="text-[10px] sm:text-xs text-muted-foreground">{stats.totalShortages} {t("stats.case")}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-3 sm:p-4">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <div className="p-1.5 sm:p-2 rounded-lg bg-amber-100">
-                    <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xs sm:text-sm text-muted-foreground truncate">{t("stats.totalSurplus")}</p>
-                    <p className="text-base sm:text-xl font-bold text-amber-600 truncate" data-testid="stat-surplus">{formatCurrency(stats.surplusAmount)}</p>
-                    <p className="text-[10px] sm:text-xs text-muted-foreground">{stats.totalSurpluses} {t("stats.case")}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-3 sm:p-4">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <div className="p-1.5 sm:p-2 rounded-lg bg-green-100">
-                    <Users className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xs sm:text-sm text-muted-foreground truncate">{t("stats.avgSalesPerJournal")}</p>
-                    <p className="text-base sm:text-xl font-bold truncate" data-testid="stat-average-ticket">{formatCurrency(stats.averageTicket)}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <KpiCard
+              label={t("stats.totalSales")}
+              value={formatCurrency(stats.totalSales)}
+              unit="ر.س"
+              icon={DollarSign}
+              tone="production"
+              data-testid="stat-total-sales"
+            />
+            <KpiCard
+              label={t("stats.totalShortage")}
+              value={formatCurrency(stats.shortageAmount)}
+              unit="ر.س"
+              icon={TrendingDown}
+              tone="alert"
+              subLabel={`${stats.totalShortages} ${t("stats.case")}`}
+              data-testid="stat-shortage"
+            />
+            <KpiCard
+              label={t("stats.totalSurplus")}
+              value={formatCurrency(stats.surplusAmount)}
+              unit="ر.س"
+              icon={TrendingUp}
+              tone="inventory"
+              subLabel={`${stats.totalSurpluses} ${t("stats.case")}`}
+              data-testid="stat-surplus"
+            />
+            <KpiCard
+              label={t("stats.avgSalesPerJournal")}
+              value={formatCurrency(stats.averageTicket)}
+              unit="ر.س"
+              icon={Users}
+              tone="money"
+              data-testid="stat-average-ticket"
+            />
           </div>
         )}
 

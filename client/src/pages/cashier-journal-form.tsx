@@ -33,9 +33,9 @@ import { ATTACHMENT_TYPE_LABELS, ATTACHMENT_TYPES, type AttachmentType } from "@
 import { printHtmlContent } from "@/lib/print-utils";
 
 const PAYMENT_CATEGORIES = {
-  cash: { label: "نقدي", color: "bg-green-100 text-green-700" },
-  cards: { label: "بطاقات وشبكة", color: "bg-blue-100 text-blue-700" },
-  apps: { label: "تطبيقات التوصيل (آجل)", color: "bg-purple-100 text-purple-700" },
+  cash: { label: "نقدي", color: "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300" },
+  cards: { label: "بطاقات وشبكة", color: "bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300" },
+  apps: { label: "تطبيقات التوصيل (آجل)", color: "bg-violet-100 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300" },
 };
 
 // Payment methods ordered by most commonly used first
@@ -1586,7 +1586,7 @@ export default function CashierJournalFormPage() {
                           </div>
                           {/* Discrepancy & Transaction Counts - Ultra Compact Row */}
                           <div className="flex items-center gap-1 text-[9px]">
-                            <div className={`flex-1 px-1 py-0.5 rounded flex items-center justify-between ${bankDiscType === 'surplus' ? 'bg-emerald-50 text-emerald-600' : bankDiscType === 'shortage' ? 'bg-red-50 text-red-600' : 'bg-gray-50 text-gray-500'}`}>
+                            <div className={`flex-1 px-1 py-0.5 rounded flex items-center justify-between ${bankDiscType === 'surplus' ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300' : bankDiscType === 'shortage' ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300' : 'bg-muted text-muted-foreground'}`}>
                               <span>الفرق:</span>
                               <span className="font-bold">
                                 {bankDisc >= 0 ? '+' : ''}{bankDisc.toFixed(2)} {bankDiscType === 'surplus' ? '⬆️' : bankDiscType === 'shortage' ? '⬇️' : '✓'}
@@ -1658,7 +1658,7 @@ export default function CashierJournalFormPage() {
                               </div>
                               {/* Cash Discrepancy & Transaction Count - Ultra Compact Row */}
                               <div className="flex items-center gap-1 text-[9px]">
-                                <div className={`flex-1 px-1 py-0.5 rounded flex items-center justify-between ${cashDiscType === 'surplus' ? 'bg-emerald-50 text-emerald-600' : cashDiscType === 'shortage' ? 'bg-red-50 text-red-600' : 'bg-gray-50 text-gray-500'}`}>
+                                <div className={`flex-1 px-1 py-0.5 rounded flex items-center justify-between ${cashDiscType === 'surplus' ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300' : cashDiscType === 'shortage' ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300' : 'bg-muted text-muted-foreground'}`}>
                                   <span>الفرق:</span>
                                   <span className="font-bold">
                                     {cashDisc >= 0 ? '+' : ''}{cashDisc.toFixed(2)} {cashDiscType === 'surplus' ? '⬆️' : cashDiscType === 'shortage' ? '⬇️' : '✓'}
@@ -1757,27 +1757,27 @@ export default function CashierJournalFormPage() {
                   return (
                     <>
                       <Separator />
-                      <div className="p-2 bg-blue-50 rounded border border-blue-200">
+                      <div className="p-2 bg-accent/40 rounded border border-border">
                         <div className="flex items-center gap-1.5 mb-2">
-                          <CreditCard className="w-4 h-4 text-blue-600" />
-                          <span className="font-bold text-blue-700 text-sm">ملخص مطابقة البنك</span>
+                          <CreditCard className="w-4 h-4 text-primary" />
+                          <span className="font-bold text-foreground text-sm">ملخص مطابقة البنك</span>
                         </div>
                         <div className="grid grid-cols-4 gap-1 text-[10px]">
-                          <div className="p-1.5 bg-white rounded">
+                          <div className="p-1.5 bg-background rounded border border-border">
                             <div className="text-muted-foreground">POS</div>
                             <div className="font-bold text-xs">{bankSummary.totalPosAmount.toFixed(2)}</div>
                           </div>
-                          <div className="p-1.5 bg-white rounded">
+                          <div className="p-1.5 bg-background rounded border border-border">
                             <div className="text-muted-foreground">تيرمنال</div>
                             <div className="font-bold text-xs">{bankSummary.totalTerminalAmount.toFixed(2)}</div>
                           </div>
-                          <div className={`p-1.5 rounded ${bankSummary.type === 'surplus' ? 'bg-emerald-200' : bankSummary.type === 'shortage' ? 'bg-red-200' : 'bg-gray-100'}`}>
+                          <div className={`p-1.5 rounded ${bankSummary.type === 'surplus' ? 'bg-amber-200 dark:bg-amber-900/60' : bankSummary.type === 'shortage' ? 'bg-rose-200 dark:bg-rose-900/60' : 'bg-muted'}`}>
                             <div className="text-muted-foreground">الفرق</div>
-                            <div className={`font-bold text-xs ${bankSummary.type === 'surplus' ? 'text-emerald-800' : bankSummary.type === 'shortage' ? 'text-red-800' : ''}`}>
+                            <div className={`font-bold text-xs ${bankSummary.type === 'surplus' ? 'text-amber-800 dark:text-amber-200' : bankSummary.type === 'shortage' ? 'text-rose-800 dark:text-rose-200' : ''}`}>
                               {bankSummary.discrepancy.toFixed(2)}
                             </div>
                           </div>
-                          <div className={`p-1.5 rounded flex items-center justify-center ${bankSummary.type === 'surplus' ? 'bg-emerald-200 text-emerald-800' : bankSummary.type === 'shortage' ? 'bg-red-200 text-red-800' : 'bg-gray-100'}`}>
+                          <div className={`p-1.5 rounded flex items-center justify-center ${bankSummary.type === 'surplus' ? 'bg-amber-200 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200' : bankSummary.type === 'shortage' ? 'bg-rose-200 dark:bg-rose-900/60 text-rose-800 dark:text-rose-200' : 'bg-muted'}`}>
                             <span className="font-bold text-[10px]">
                               {bankSummary.type === 'surplus' ? '⬆️ زيادة' : bankSummary.type === 'shortage' ? '⬇️ عجز' : '✓'}
                             </span>
@@ -1786,8 +1786,8 @@ export default function CashierJournalFormPage() {
                         
                         {/* Bank Payment Details Breakdown */}
                         {bankSummary.bankPayments.length > 0 && (
-                          <div className="mt-3 pt-3 border-t border-blue-200">
-                            <div className="text-xs text-blue-600 mb-2 font-medium">تفاصيل البطاقات البنكية:</div>
+                          <div className="mt-3 pt-3 border-t border-border">
+                            <div className="text-xs text-muted-foreground mb-2 font-medium">تفاصيل البطاقات البنكية:</div>
                             <div className="space-y-1">
                               {bankSummary.bankPayments.map((payment, idx) => {
                                 const methodLabel = PAYMENT_METHODS.find(m => m.value === payment.paymentMethod)?.label || payment.paymentMethod;
@@ -1796,12 +1796,12 @@ export default function CashierJournalFormPage() {
                                 const diff = termAmt - posAmt;
                                 const diffStatus = diff > 0.5 ? 'surplus' : diff < -0.5 ? 'shortage' : 'balanced';
                                 return (
-                                  <div key={idx} className={`flex items-center justify-between text-xs p-2 rounded border ${diffStatus === 'surplus' ? 'bg-emerald-50 border-emerald-200' : diffStatus === 'shortage' ? 'bg-red-50 border-red-200' : 'bg-white/50 border-gray-200'}`}>
-                                    <span className="text-gray-700 font-medium">{methodLabel}</span>
+                                  <div key={idx} className={`flex items-center justify-between text-xs p-2 rounded border ${diffStatus === 'surplus' ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900' : diffStatus === 'shortage' ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900' : 'bg-background border-border'}`}>
+                                    <span className="text-foreground font-medium">{methodLabel}</span>
                                     <div className="flex items-center gap-3">
-                                      <span className="text-gray-600">POS: {posAmt.toFixed(2)}</span>
-                                      <span className="text-gray-600">تيرمنال: {termAmt.toFixed(2)}</span>
-                                      <span className={`font-bold px-2 py-0.5 rounded ${diffStatus === 'surplus' ? 'bg-emerald-200 text-emerald-800' : diffStatus === 'shortage' ? 'bg-red-200 text-red-800' : 'text-gray-500'}`}>
+                                      <span className="text-muted-foreground">POS: {posAmt.toFixed(2)}</span>
+                                      <span className="text-muted-foreground">تيرمنال: {termAmt.toFixed(2)}</span>
+                                      <span className={`font-bold px-2 py-0.5 rounded ${diffStatus === 'surplus' ? 'bg-amber-200 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200' : diffStatus === 'shortage' ? 'bg-rose-200 dark:bg-rose-900/60 text-rose-800 dark:text-rose-200' : 'text-muted-foreground'}`}>
                                         ({diff >= 0 ? '+' : ''}{diff.toFixed(2)})
                                       </span>
                                     </div>
@@ -1814,17 +1814,17 @@ export default function CashierJournalFormPage() {
                         
                         {/* Tolerance Note - for small differences within 0.5 SAR */}
                         {bankSummary.type === 'balanced' && Math.abs(bankSummary.discrepancy) > 0.01 && Math.abs(bankSummary.discrepancy) <= 0.5 && (
-                          <p className="mt-2 text-xs text-blue-600 bg-blue-100 p-2 rounded">
+                          <p className="mt-2 text-xs text-foreground bg-muted p-2 rounded">
                             ℹ️ الفرق ({Math.abs(bankSummary.discrepancy).toFixed(2)} ر.س) ضمن حد التسامح المسموح (0.50 ر.س) ويتم تداركه في إجمالي اليومية
                           </p>
                         )}
                         
                         {/* Input Error Detection Alert */}
                         {bankSummary.inputErrorDetected && (
-                          <Alert className="mt-3 border-orange-300 bg-orange-50">
-                            <AlertCircle className="h-4 w-4 text-orange-600" />
-                            <AlertTitle className="text-orange-700">تنبيه: احتمال خطأ في الإدخال</AlertTitle>
-                            <AlertDescription className="text-orange-600">
+                          <Alert className="mt-3 border-amber-300 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40">
+                            <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                            <AlertTitle className="text-amber-700 dark:text-amber-300">تنبيه: احتمال خطأ في الإدخال</AlertTitle>
+                            <AlertDescription className="text-amber-700 dark:text-amber-300">
                               يُحتمل أن الكاشير ضغط زر الدفع الخاطئ! 
                               <br />
                               العجز النقدي ({Math.abs(calculateDiscrepancy()).toFixed(2)} ر.س) يساوي تقريباً الزيادة في البنك ({Math.abs(bankSummary.discrepancy).toFixed(2)} ر.س)
@@ -1841,14 +1841,14 @@ export default function CashierJournalFormPage() {
             </Card>
 
             {/* Returns Section - المرتجع - Compact Design */}
-            <Card className={`border ${showReturns && returnData.hasReturn ? 'border-red-200 bg-red-50/30' : 'border-gray-200'}`}>
-              <CardHeader className={`py-2 px-3 ${showReturns && returnData.hasReturn ? 'bg-red-50' : ''}`}>
+            <Card className={`border ${showReturns && returnData.hasReturn ? 'border-rose-200 dark:border-rose-900 bg-rose-50/30 dark:bg-rose-950/20' : 'border-border'}`}>
+              <CardHeader className={`py-2 px-3 ${showReturns && returnData.hasReturn ? 'bg-rose-50 dark:bg-rose-950/40' : ''}`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className={`p-1.5 rounded ${showReturns ? 'bg-red-200' : 'bg-gray-200'}`}>
-                      <RotateCcw className={`w-4 h-4 ${showReturns ? 'text-red-700' : 'text-gray-600'}`} />
+                    <div className={`p-1.5 rounded ${showReturns ? 'bg-rose-200 dark:bg-rose-900/60' : 'bg-muted'}`}>
+                      <RotateCcw className={`w-4 h-4 ${showReturns ? 'text-rose-700 dark:text-rose-300' : 'text-muted-foreground'}`} />
                     </div>
-                    <span className={`text-sm font-medium ${showReturns && returnData.hasReturn ? 'text-red-700' : 'text-gray-600'}`}>
+                    <span className={`text-sm font-medium ${showReturns && returnData.hasReturn ? 'text-rose-700 dark:text-rose-300' : 'text-muted-foreground'}`}>
                       المرتجعات
                     </span>
                     {returnData.hasReturn && returnData.returnAmount > 0 && (
