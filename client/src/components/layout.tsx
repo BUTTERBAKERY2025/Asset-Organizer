@@ -536,8 +536,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <div className="p-4 border-b border-border/30">
           <div className="flex items-center justify-between mb-3">
             <div className="flex-1">
-              <h1 className="text-base font-bold text-amber-700 leading-tight">{t("platformName")}</h1>
-              <p className="text-[10px] text-amber-600/70 font-medium">{t("systemSubtitle")}</p>
+              <h1 className="text-base font-bold text-primary leading-tight">{t("platformName")}</h1>
+              <p className="text-[10px] text-primary/70 font-medium">{t("systemSubtitle")}</p>
             </div>
             {isAuthenticated && isAdmin && <Suspense fallback={<div className="w-8 h-8" />}><NotificationsDropdown /></Suspense>}
           </div>
@@ -671,8 +671,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </SheetTrigger>
             <SheetContent side="right" className="w-[85%] max-w-sm md:max-w-md p-0 overflow-y-auto">
               <div className="p-4 border-b border-border/50">
-                <h1 className="text-base font-bold text-amber-700">{t("platformName")}</h1>
-                <p className="text-[10px] text-amber-600/70 font-medium">{t("systemSubtitle")}</p>
+                <h1 className="text-base font-bold text-primary">{t("platformName")}</h1>
+                <p className="text-[10px] text-primary/70 font-medium">{t("systemSubtitle")}</p>
               </div>
               
               <nav className="p-3 space-y-1">
@@ -786,8 +786,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1 justify-center md:justify-start md:mx-4">
             <img src={logo} alt="Butter Bakery" className="h-8 md:h-9 object-contain shrink-0" />
             <div className="hidden md:flex flex-col leading-tight min-w-0">
-              <span className="text-sm font-bold text-amber-700 truncate">{t("platformName")}</span>
-              <span className="text-[10px] text-amber-600/70 font-medium truncate">{t("systemSubtitle")}</span>
+              <span className="text-sm font-bold text-primary truncate">{t("platformName")}</span>
+              <span className="text-[10px] text-primary/70 font-medium truncate">{t("systemSubtitle")}</span>
             </div>
           </div>
 

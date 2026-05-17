@@ -180,7 +180,7 @@ export default function PlatformHomePage() {
         >
           {/* soft brand background blobs */}
           <div className="pointer-events-none absolute -top-16 -left-16 w-48 h-48 rounded-full bg-primary/10 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-20 -right-10 w-56 h-56 rounded-full bg-amber-200/30 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-20 -right-10 w-56 h-56 rounded-full bg-fuchsia-300/30 blur-3xl" />
 
           <div className="relative flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div className="space-y-2 max-w-2xl">
