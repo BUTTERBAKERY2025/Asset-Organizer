@@ -186,6 +186,7 @@ const ENDPOINT_CACHE_TIERS: Record<string, number> = {
   "/api/transfer-requests": CACHE_TIMES.SHORT,
   "/api/system-notifications": CACHE_TIMES.MEDIUM,
   "/api/dashboard/stats": CACHE_TIMES.DYNAMIC,
+  "/api/dashboard/widgets": CACHE_TIMES.MEDIUM,
   "/api/daily-production": CACHE_TIMES.DYNAMIC,
   "/api/cashier-journals": CACHE_TIMES.DYNAMIC,
   "/api/command-center": CACHE_TIMES.DYNAMIC,

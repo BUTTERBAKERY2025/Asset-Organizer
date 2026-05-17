@@ -86,14 +86,9 @@ export function HeroWidgets() {
   const [, navigate] = useLocation();
   const lang = i18n.language;
 
+  const widgetsUrl = `/api/dashboard/widgets${activeBranch?.id ? `?branchId=${activeBranch.id}` : ""}`;
   const { data } = useQuery<WidgetsData>({
-    queryKey: ["/api/dashboard/widgets", activeBranch?.id],
-    queryFn: async () => {
-      const param = activeBranch?.id ? `?branchId=${activeBranch.id}` : "";
-      const res = await fetch(`/api/dashboard/widgets${param}`);
-      if (!res.ok) throw new Error(`${res.status}`);
-      return res.json();
-    },
+    queryKey: [widgetsUrl],
     enabled: isAuthenticated,
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,

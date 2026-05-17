@@ -256,51 +256,51 @@ export async function registerRoutes(
         prodBranchCond.push(inArray(productionOrders.branchId, branchIds));
       }
 
-      const weeklyRows = await db
-        .select({
-          date: cashierSalesJournals.journalDate,
-          total: sql<number>`COALESCE(SUM(${cashierSalesJournals.totalSales}), 0)::float`,
-        })
-        .from(cashierSalesJournals)
-        .where(and(...salesBranchCond))
-        .groupBy(cashierSalesJournals.journalDate);
+      const [weeklyRows, topBranchRows, topProdRows] = await Promise.all([
+        db
+          .select({
+            date: cashierSalesJournals.journalDate,
+            total: sql<number>`COALESCE(SUM(${cashierSalesJournals.totalSales}), 0)::float`,
+          })
+          .from(cashierSalesJournals)
+          .where(and(...salesBranchCond))
+          .groupBy(cashierSalesJournals.journalDate),
+        db
+          .select({
+            branchId: cashierSalesJournals.branchId,
+            name: branches.name,
+            total: sql<number>`COALESCE(SUM(${cashierSalesJournals.totalSales}), 0)::float`,
+          })
+          .from(cashierSalesJournals)
+          .innerJoin(branches, eq(branches.id, cashierSalesJournals.branchId))
+          .where(and(
+            eq(cashierSalesJournals.journalDate, today),
+            ...(singleBranchId
+              ? [eq(cashierSalesJournals.branchId, singleBranchId)]
+              : branchIds !== null && branchIds.length > 0
+                ? [inArray(cashierSalesJournals.branchId, branchIds)]
+                : []),
+          ))
+          .groupBy(cashierSalesJournals.branchId, branches.name)
+          .orderBy(desc(sql`COALESCE(SUM(${cashierSalesJournals.totalSales}), 0)`))
+          .limit(1),
+        db
+          .select({
+            branchId: productionOrders.branchId,
+            name: branches.name,
+            orders: sql<number>`COUNT(*)::int`,
+          })
+          .from(productionOrders)
+          .innerJoin(branches, eq(branches.id, productionOrders.branchId))
+          .where(and(...prodBranchCond))
+          .groupBy(productionOrders.branchId, branches.name)
+          .orderBy(desc(sql`COUNT(*)`))
+          .limit(1),
+      ]);
 
       const byDate = new Map(weeklyRows.map((r) => [r.date as string, Number(r.total ?? 0)]));
       const weekSales = days.map((date) => ({ date, total: byDate.get(date) ?? 0 }));
       const yesterdaySales = byDate.get(yesterday) ?? 0;
-
-      const topBranchRows = await db
-        .select({
-          branchId: cashierSalesJournals.branchId,
-          name: branches.name,
-          total: sql<number>`COALESCE(SUM(${cashierSalesJournals.totalSales}), 0)::float`,
-        })
-        .from(cashierSalesJournals)
-        .innerJoin(branches, eq(branches.id, cashierSalesJournals.branchId))
-        .where(and(
-          eq(cashierSalesJournals.journalDate, today),
-          ...(singleBranchId
-            ? [eq(cashierSalesJournals.branchId, singleBranchId)]
-            : branchIds !== null && branchIds.length > 0
-              ? [inArray(cashierSalesJournals.branchId, branchIds)]
-              : []),
-        ))
-        .groupBy(cashierSalesJournals.branchId, branches.name)
-        .orderBy(desc(sql`COALESCE(SUM(${cashierSalesJournals.totalSales}), 0)`))
-        .limit(1);
-
-      const topProdRows = await db
-        .select({
-          branchId: productionOrders.branchId,
-          name: branches.name,
-          orders: sql<number>`COUNT(*)::int`,
-        })
-        .from(productionOrders)
-        .innerJoin(branches, eq(branches.id, productionOrders.branchId))
-        .where(and(...prodBranchCond))
-        .groupBy(productionOrders.branchId, branches.name)
-        .orderBy(desc(sql`COUNT(*)`))
-        .limit(1);
 
       res.json({
         weekSales,
