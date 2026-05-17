@@ -456,7 +456,7 @@ export default function CashierJournalsPage() {
                   <SelectTrigger className="h-11 sm:h-10 text-sm" data-testid="select-cashier">
                     <SelectValue placeholder={t("filters.cashier")} />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-[320px] overflow-y-auto">
                     {canViewAllCashiers && <SelectItem value="all">{t("filters.allCashiers")}</SelectItem>}
                     {dropdownCashiers.map((name) => (
                       <SelectItem key={name} value={name}>
