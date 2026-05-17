@@ -4,15 +4,13 @@ import { Layout } from "@/components/layout";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Target, TrendingUp, TrendingDown, Building2, Users, Trophy, ChevronLeft, Calendar, Award, AlertTriangle, Bell, Clock, CheckCircle2, FileSpreadsheet, FileText, ArrowRight, Star, Gift, DollarSign } from "lucide-react";
+import { Target, TrendingUp, TrendingDown, Building2, Users, Trophy, Calendar, Award, AlertTriangle, Bell, Clock, CheckCircle2, FileSpreadsheet, FileText, Star, Gift, DollarSign, BarChart3, Activity, Minus } from "lucide-react";
 import { Link } from "wouter";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend, PieChart, Pie, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from "recharts";
 import { useBranches } from "@/hooks/useBranches";
 
 interface BranchPerformance {
@@ -37,20 +35,6 @@ interface CashierPerformance {
 interface Leaderboard {
   branches: BranchPerformance[];
   cashiers: CashierPerformance[];
-}
-
-interface DailyPerformance {
-  date: string;
-  target: number;
-  achieved: number;
-  percent: number;
-}
-
-interface PerformanceData {
-  targetAmount: number;
-  achievedAmount: number;
-  achievementPercent: number;
-  dailyPerformance: DailyPerformance[];
 }
 
 interface BranchProgress {
@@ -104,10 +88,10 @@ interface TargetAlert {
 }
 
 const ALERT_COLORS = {
-  critical: { bg: "bg-red-100", border: "border-red-500", text: "text-red-700", icon: "text-red-500" },
-  warning: { bg: "bg-amber-100", border: "border-amber-500", text: "text-amber-700", icon: "text-amber-500" },
-  on_track: { bg: "bg-blue-100", border: "border-blue-500", text: "text-blue-700", icon: "text-blue-500" },
-  exceeding: { bg: "bg-green-100", border: "border-green-500", text: "text-green-700", icon: "text-green-500" },
+  critical:  { bg: "bg-rose-50/70",    border: "border-rose-400",    text: "text-rose-700",    icon: "text-rose-500",    chip: "bg-rose-100 text-rose-700",       bar: "from-rose-400 to-rose-600" },
+  warning:   { bg: "bg-amber-50/70",   border: "border-amber-400",   text: "text-amber-700",   icon: "text-amber-500",   chip: "bg-amber-100 text-amber-700",     bar: "from-amber-400 to-amber-600" },
+  on_track:  { bg: "bg-sky-50/70",     border: "border-sky-400",     text: "text-sky-700",     icon: "text-sky-500",     chip: "bg-sky-100 text-sky-700",         bar: "from-sky-400 to-sky-600" },
+  exceeding: { bg: "bg-emerald-50/70", border: "border-emerald-400", text: "text-emerald-700", icon: "text-emerald-500", chip: "bg-emerald-100 text-emerald-700", bar: "from-emerald-400 to-emerald-600" },
 };
 
 const ALERT_ICONS = {
@@ -159,17 +143,6 @@ export default function TargetsDashboard() {
     }
   });
 
-  const { data: branchPerformance, isLoading: performanceLoading } = useQuery<PerformanceData>({
-    queryKey: ["/api/targets/performance", selectedBranch, selectedMonth],
-    queryFn: async () => {
-      if (selectedBranch === "all") return null;
-      const res = await fetch(`/api/targets/performance/${selectedBranch}?yearMonth=${selectedMonth}`);
-      if (!res.ok) throw new Error("Failed to fetch performance");
-      return res.json();
-    },
-    enabled: selectedBranch !== "all"
-  });
-
   const { data: alerts = [], isLoading: alertsLoading } = useQuery<TargetAlert[]>({
     queryKey: ["/api/targets/alerts", selectedMonth],
     queryFn: async () => {
@@ -218,22 +191,22 @@ export default function TargetsDashboard() {
   };
 
   const getPercentColor = (percent: number) => {
-    if (percent >= 100) return "text-green-600";
+    if (percent >= 100) return "text-emerald-600";
     if (percent >= 80) return "text-amber-600";
-    return "text-red-600";
+    return "text-rose-600";
   };
 
-  const getProgressColor = (percent: number) => {
-    if (percent >= 100) return "bg-green-500";
-    if (percent >= 80) return "bg-amber-500";
-    return "bg-red-500";
+  const getPercentBarClasses = (percent: number) => {
+    if (percent >= 100) return "from-emerald-400 to-emerald-600";
+    if (percent >= 80) return "from-amber-400 to-amber-600";
+    return "from-rose-400 to-rose-600";
   };
 
   const getRankBadge = (rank: number) => {
-    if (rank === 1) return <Badge className="bg-yellow-500 text-white">🥇 الأول</Badge>;
-    if (rank === 2) return <Badge className="bg-gray-400 text-white">🥈 الثاني</Badge>;
-    if (rank === 3) return <Badge className="bg-amber-700 text-white">🥉 الثالث</Badge>;
-    return <Badge variant="outline">{rank}</Badge>;
+    if (rank === 1) return <Badge className="bg-amber-400 text-amber-950 hover:bg-amber-400 border-0 shadow-sm">🥇 الأول</Badge>;
+    if (rank === 2) return <Badge className="bg-slate-300 text-slate-800 hover:bg-slate-300 border-0 shadow-sm">🥈 الثاني</Badge>;
+    if (rank === 3) return <Badge className="bg-orange-300 text-orange-950 hover:bg-orange-300 border-0 shadow-sm">🥉 الثالث</Badge>;
+    return <Badge variant="outline" className="border-violet-200 text-violet-700 bg-violet-50">#{rank}</Badge>;
   };
 
   const totalTarget = leaderboard?.branches.reduce((sum, b) => sum + b.target, 0) || 0;
@@ -556,90 +529,85 @@ export default function TargetsDashboard() {
           }
         />
 
-        <div className="kpi-grid">
-          <Card className="bg-gradient-to-br from-amber-500 to-orange-500 text-white">
-            <CardHeader className="pb-2 p-3 sm:p-4">
-              <CardTitle className="text-sm sm:text-lg flex items-center gap-2">
-                <Target className="h-4 w-4 sm:h-5 sm:w-5" />
-                إجمالي الهدف
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-3 sm:p-4 pt-0">
-              <div className="text-xl sm:text-3xl font-bold font-mono">{formatCurrency(totalTarget)}</div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-green-500 to-emerald-500 text-white">
-            <CardHeader className="pb-2 p-3 sm:p-4">
-              <CardTitle className="text-sm sm:text-lg flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5" />
-                إجمالي المحقق
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-3 sm:p-4 pt-0">
-              <div className="text-xl sm:text-3xl font-bold font-mono">{formatCurrency(totalAchieved)}</div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-blue-500 to-indigo-500 text-white">
-            <CardHeader className="pb-2 p-3 sm:p-4">
-              <CardTitle className="text-sm sm:text-lg flex items-center gap-2">
-                <Award className="h-4 w-4 sm:h-5 sm:w-5" />
-                نسبة التحقيق
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-3 sm:p-4 pt-0">
-              <div className="text-xl sm:text-3xl font-bold">{overallPercent.toFixed(1)}%</div>
-              <Progress value={Math.min(overallPercent, 100)} className="mt-2 bg-white/30" />
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-purple-500 to-pink-500 text-white">
-            <CardHeader className="pb-2 p-3 sm:p-4">
-              <CardTitle className="text-sm sm:text-lg flex items-center gap-2">
-                <Building2 className="h-4 w-4 sm:h-5 sm:w-5" />
-                عدد الفروع
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-3 sm:p-4 pt-0">
-              <div className="text-xl sm:text-3xl font-bold">{leaderboard?.branches.length || 0}</div>
-            </CardContent>
-          </Card>
-        </div>
+        {(() => {
+          const remaining = Math.max(totalTarget - totalAchieved, 0);
+          const branchCount = leaderboard?.branches.length || 0;
+          const exceedingCount = alerts.filter(a => a.alertLevel === 'exceeding').length;
+          const onTrackCount = alerts.filter(a => a.alertLevel === 'on_track').length;
+          const healthy = exceedingCount + onTrackCount;
+          type Kpi = { key: string; label: string; value: string; icon: typeof Target; tone: string; tint: string; ring: string; iconBg: string; chipText: string; chipCls: string; mono?: boolean; progress?: number };
+          const kpis: Kpi[] = [
+            { key: 'target',    label: 'إجمالي الهدف',   value: formatCurrency(totalTarget),     icon: Target,      tone: 'from-violet-500 to-fuchsia-500', tint: 'bg-violet-50',  ring: 'ring-violet-100',  iconBg: 'bg-violet-100 text-violet-700',   chipText: `${branchCount} فرع`,         chipCls: 'bg-violet-100 text-violet-700',  mono: true },
+            { key: 'achieved',  label: 'إجمالي المحقق',  value: formatCurrency(totalAchieved),   icon: TrendingUp,  tone: 'from-emerald-500 to-teal-500',   tint: 'bg-emerald-50', ring: 'ring-emerald-100', iconBg: 'bg-emerald-100 text-emerald-700', chipText: `${overallPercent.toFixed(0)}% من الهدف`, chipCls: 'bg-emerald-100 text-emerald-700', mono: true },
+            { key: 'percent',   label: 'نسبة التحقيق',  value: `${overallPercent.toFixed(1)}%`, icon: Award,       tone: 'from-sky-500 to-indigo-500',     tint: 'bg-sky-50',     ring: 'ring-sky-100',     iconBg: 'bg-sky-100 text-sky-700',         chipText: overallPercent >= 100 ? 'تجاوز الهدف' : overallPercent >= 80 ? 'على المسار' : 'يحتاج تركيز', chipCls: overallPercent >= 100 ? 'bg-emerald-100 text-emerald-700' : overallPercent >= 80 ? 'bg-sky-100 text-sky-700' : 'bg-rose-100 text-rose-700', progress: overallPercent },
+            { key: 'remaining', label: 'المتبقي',        value: formatCurrency(remaining),       icon: AlertTriangle, tone: 'from-amber-500 to-rose-500',   tint: 'bg-amber-50',   ring: 'ring-amber-100',   iconBg: 'bg-amber-100 text-amber-700',     chipText: `${healthy}/${branchCount} فرع بمسار جيد`, chipCls: 'bg-amber-100 text-amber-700',   mono: true },
+          ];
+          return (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+              {kpis.map((k) => {
+                const Icon = k.icon;
+                return (
+                  <Card key={k.key} className={`relative overflow-hidden border-0 ring-1 ${k.ring} ${k.tint} shadow-sm hover:shadow-md transition-shadow`} data-testid={`kpi-${k.key}`}>
+                    <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-l ${k.tone}`} aria-hidden />
+                    <CardContent className="p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[10px] text-gray-600 truncate">{k.label}</div>
+                          <div className={`text-lg sm:text-xl font-bold text-gray-900 truncate ${k.mono ? 'font-mono' : ''}`}>{k.value}</div>
+                        </div>
+                        <div className={`shrink-0 h-8 w-8 rounded-lg ${k.iconBg} flex items-center justify-center`}>
+                          <Icon className="h-3.5 w-3.5" />
+                        </div>
+                      </div>
+                      {'progress' in k && k.progress !== undefined && (
+                        <div className="mt-2 h-1.5 rounded-full bg-white/70 overflow-hidden" role="progressbar" aria-valuenow={Math.round(k.progress)} aria-valuemin={0} aria-valuemax={100} aria-label={k.label}>
+                          <div className={`h-full bg-gradient-to-l ${getPercentBarClasses(k.progress)} transition-all`} style={{ width: `${Math.min(k.progress, 100)}%` }} />
+                        </div>
+                      )}
+                      <div className={`mt-2 inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full ${k.chipCls}`}>
+                        {k.chipText}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          );
+        })()}
 
         <Tabs defaultValue="alerts" className="space-y-4">
-          <TabsList className="flex flex-wrap gap-1 h-auto p-1">
-            <TabsTrigger value="alerts" className="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs md:text-sm px-2 sm:px-3">
+          <TabsList className="flex flex-wrap gap-1 h-auto p-1 bg-violet-50/70 ring-1 ring-violet-100 rounded-xl">
+            <TabsTrigger value="alerts" className="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs md:text-sm px-2 sm:px-3 rounded-lg data-[state=active]:bg-white data-[state=active]:text-violet-700 data-[state=active]:shadow-sm">
               <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">التنبيهات</span>
               <span className="sm:hidden">تنبيهات</span>
               {alerts.filter(a => a.alertLevel === 'critical' || a.alertLevel === 'warning').length > 0 && (
-                <Badge variant="destructive" className="h-4 w-4 sm:h-5 sm:w-5 p-0 flex items-center justify-center text-[10px] sm:text-xs">
+                <Badge className="h-4 min-w-4 sm:h-5 sm:min-w-5 px-1 flex items-center justify-center text-[10px] sm:text-xs bg-rose-500 hover:bg-rose-500 border-0">
                   {alerts.filter(a => a.alertLevel === 'critical' || a.alertLevel === 'warning').length}
                 </Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="branches" className="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs md:text-sm px-2 sm:px-3">
+            <TabsTrigger value="branches" className="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs md:text-sm px-2 sm:px-3 rounded-lg data-[state=active]:bg-white data-[state=active]:text-violet-700 data-[state=active]:shadow-sm">
               <Building2 className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">ترتيب الفروع</span>
               <span className="sm:hidden">الفروع</span>
             </TabsTrigger>
-            <TabsTrigger value="cashiers" className="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs md:text-sm px-2 sm:px-3">
+            <TabsTrigger value="cashiers" className="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs md:text-sm px-2 sm:px-3 rounded-lg data-[state=active]:bg-white data-[state=active]:text-violet-700 data-[state=active]:shadow-sm">
               <Users className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">أفضل الكاشيرين</span>
               <span className="sm:hidden">الكاشيرين</span>
             </TabsTrigger>
-            <TabsTrigger value="details" className="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs md:text-sm px-2 sm:px-3">
+            <TabsTrigger value="details" className="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs md:text-sm px-2 sm:px-3 rounded-lg data-[state=active]:bg-white data-[state=active]:text-violet-700 data-[state=active]:shadow-sm">
               <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">تفاصيل الفرع</span>
               <span className="sm:hidden">التفاصيل</span>
             </TabsTrigger>
-            <TabsTrigger value="incentives" className="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs md:text-sm px-2 sm:px-3">
+            <TabsTrigger value="incentives" className="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs md:text-sm px-2 sm:px-3 rounded-lg data-[state=active]:bg-white data-[state=active]:text-violet-700 data-[state=active]:shadow-sm">
               <Star className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="hidden sm:inline">ترتيب الحوافز</span>
               <span className="sm:hidden">الحوافز</span>
               {topCashiersByPoints.length > 0 && (
-                <Badge className="h-4 w-4 sm:h-5 sm:w-5 p-0 flex items-center justify-center text-[10px] sm:text-xs bg-emerald-500">
+                <Badge className="h-4 min-w-4 sm:h-5 sm:min-w-5 px-1 flex items-center justify-center text-[10px] sm:text-xs bg-emerald-500 hover:bg-emerald-500 border-0">
                   {topCashiersByPoints.length}
                 </Badge>
               )}
@@ -649,51 +617,61 @@ export default function TargetsDashboard() {
           <TabsContent value="alerts">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
               <div className="lg:col-span-2 space-y-4">
-                <Card>
-                  <CardHeader className="p-3 sm:p-4 md:p-6">
-                    <CardTitle className="flex items-center gap-2 text-sm sm:text-base md:text-lg">
-                      <Bell className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600" />
+                <Card className="border-0 ring-1 ring-violet-100 shadow-sm overflow-hidden">
+                  <CardHeader className="p-3 sm:p-4 md:p-5 bg-gradient-to-l from-violet-50 to-white border-b border-violet-100">
+                    <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
+                      <div className="h-8 w-8 rounded-lg bg-violet-100 text-violet-700 flex items-center justify-center">
+                        <Bell className="h-4 w-4" />
+                      </div>
                       تنبيهات تحقيق الأهداف
                     </CardTitle>
                     <CardDescription className="text-xs sm:text-sm">
                       متابعة مباشرة لأداء الفروع مع التنبيه المبكر للمخاطر
                     </CardDescription>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="p-3 sm:p-4">
                     {alertsLoading ? (
-                      <div className="text-center py-8 text-gray-500">جاري التحميل...</div>
+                      <div className="space-y-2">
+                        {Array.from({ length: 3 }).map((_, i) => (
+                          <div key={i} className="h-20 rounded-lg bg-gray-100 animate-pulse" />
+                        ))}
+                      </div>
                     ) : alerts.length === 0 ? (
-                      <div className="text-center py-8 text-gray-500">لا توجد أهداف مسجلة لهذا الشهر</div>
+                      <div className="text-center py-10 text-gray-500 text-sm">لا توجد أهداف مسجلة لهذا الشهر</div>
                     ) : (
-                      <div className="space-y-3">
+                      <div className="space-y-2.5">
                         {alerts.map((alert) => {
                           const colors = ALERT_COLORS[alert.alertLevel];
                           const AlertIcon = ALERT_ICONS[alert.alertLevel];
+                          const pct = Math.min(alert.achievementPercent, 100);
                           return (
                             <div
                               key={alert.branchId}
-                              className={`p-4 rounded-lg border-r-4 ${colors.bg} ${colors.border}`}
+                              className={`p-3 sm:p-4 rounded-xl border-r-4 ${colors.bg} ${colors.border} ring-1 ring-black/5`}
                               data-testid={`alert-${alert.branchId}`}
                             >
                               <div className="flex items-start gap-3">
-                                <AlertIcon className={`h-5 w-5 mt-0.5 ${colors.icon}`} />
-                                <div className="flex-1">
-                                  <div className="flex items-center justify-between">
-                                    <span className="font-bold">{alert.branchName}</span>
-                                    <Badge className={alert.alertLevel === 'exceeding' ? 'bg-green-500' : alert.alertLevel === 'critical' ? 'bg-red-500' : alert.alertLevel === 'warning' ? 'bg-amber-500' : 'bg-blue-500'}>
+                                <div className={`shrink-0 h-9 w-9 rounded-lg bg-white/70 flex items-center justify-center ${colors.icon}`}>
+                                  <AlertIcon className="h-4 w-4" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="font-semibold text-gray-900 text-sm truncate">{alert.branchName}</span>
+                                    <span className={`text-xs px-2 py-0.5 rounded-full ${colors.chip} shrink-0`}>
                                       {alert.achievementPercent.toFixed(1)}%
-                                    </Badge>
+                                    </span>
                                   </div>
-                                  <p className={`text-sm mt-1 ${colors.text}`}>{alert.message}</p>
-                                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-4 mt-2 text-[10px] sm:text-xs text-gray-600">
-                                    <span>الهدف: {formatCurrency(alert.targetAmount)}</span>
-                                    <span>المحقق: {formatCurrency(alert.achievedAmount)}</span>
+                                  <p className={`text-xs sm:text-sm mt-1 ${colors.text}`}>{alert.message}</p>
+                                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[10px] sm:text-xs text-gray-600">
+                                    <span>الهدف: <span className="font-mono">{formatCurrency(alert.targetAmount)}</span></span>
+                                    <span className="text-gray-300">•</span>
+                                    <span>المحقق: <span className="font-mono">{formatCurrency(alert.achievedAmount)}</span></span>
+                                    <span className="text-gray-300">•</span>
                                     <span>المتبقي: {alert.daysRemaining} يوم</span>
                                   </div>
-                                  <Progress 
-                                    value={Math.min(alert.achievementPercent, 100)} 
-                                    className="mt-2 h-2"
-                                  />
+                                  <div className="mt-2 h-1.5 rounded-full bg-white/80 overflow-hidden" role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100} aria-label={`نسبة تحقيق ${alert.branchName}`}>
+                                    <div className={`h-full bg-gradient-to-l ${colors.bar} transition-all`} style={{ width: `${pct}%` }} />
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -705,59 +683,82 @@ export default function TargetsDashboard() {
                 </Card>
               </div>
 
-              <div className="space-y-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">ملخص التنبيهات</CardTitle>
+              <div className="space-y-3 sm:space-y-4">
+                <Card className="border-0 ring-1 ring-violet-100 shadow-sm overflow-hidden">
+                  <CardHeader className="p-3 sm:p-4 bg-gradient-to-l from-violet-50 to-white border-b border-violet-100">
+                    <CardTitle className="text-sm sm:text-base flex items-center gap-2">
+                      <div className="h-7 w-7 rounded-lg bg-violet-100 text-violet-700 flex items-center justify-center">
+                        <AlertTriangle className="h-3.5 w-3.5" />
+                      </div>
+                      ملخص التنبيهات
+                    </CardTitle>
                   </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between p-2 bg-red-50 rounded">
-                        <span className="flex items-center gap-2 text-red-700">
-                          <AlertTriangle className="h-4 w-4" />
-                          حرجة
-                        </span>
-                        <Badge variant="destructive">{alerts.filter(a => a.alertLevel === 'critical').length}</Badge>
-                      </div>
-                      <div className="flex items-center justify-between p-2 bg-amber-50 rounded">
-                        <span className="flex items-center gap-2 text-amber-700">
-                          <Bell className="h-4 w-4" />
-                          تحذير
-                        </span>
-                        <Badge className="bg-amber-500">{alerts.filter(a => a.alertLevel === 'warning').length}</Badge>
-                      </div>
-                      <div className="flex items-center justify-between p-2 bg-blue-50 rounded">
-                        <span className="flex items-center gap-2 text-blue-700">
-                          <Clock className="h-4 w-4" />
-                          على المسار
-                        </span>
-                        <Badge className="bg-blue-500">{alerts.filter(a => a.alertLevel === 'on_track').length}</Badge>
-                      </div>
-                      <div className="flex items-center justify-between p-2 bg-green-50 rounded">
-                        <span className="flex items-center gap-2 text-green-700">
-                          <CheckCircle2 className="h-4 w-4" />
-                          تجاوز الهدف
-                        </span>
-                        <Badge className="bg-green-500">{alerts.filter(a => a.alertLevel === 'exceeding').length}</Badge>
-                      </div>
-                    </div>
+                  <CardContent className="p-3 sm:p-4">
+                    {(() => {
+                      const total = alerts.length || 1;
+                      const items = [
+                        { key: 'critical',  label: 'حرجة',        icon: AlertTriangle, count: alerts.filter(a => a.alertLevel === 'critical').length,  color: 'rose'    },
+                        { key: 'warning',   label: 'تحذير',       icon: Bell,          count: alerts.filter(a => a.alertLevel === 'warning').length,   color: 'amber'   },
+                        { key: 'on_track',  label: 'على المسار',  icon: Clock,         count: alerts.filter(a => a.alertLevel === 'on_track').length,  color: 'sky'     },
+                        { key: 'exceeding', label: 'تجاوز الهدف', icon: CheckCircle2,  count: alerts.filter(a => a.alertLevel === 'exceeding').length, color: 'emerald' },
+                      ] as const;
+                      const palette: Record<string, { dot: string; text: string; bar: string; chip: string }> = {
+                        rose:    { dot: 'bg-rose-500',    text: 'text-rose-700',    bar: 'from-rose-400 to-rose-600',       chip: 'bg-rose-100 text-rose-700' },
+                        amber:   { dot: 'bg-amber-500',   text: 'text-amber-700',   bar: 'from-amber-400 to-amber-600',     chip: 'bg-amber-100 text-amber-700' },
+                        sky:     { dot: 'bg-sky-500',     text: 'text-sky-700',     bar: 'from-sky-400 to-sky-600',         chip: 'bg-sky-100 text-sky-700' },
+                        emerald: { dot: 'bg-emerald-500', text: 'text-emerald-700', bar: 'from-emerald-400 to-emerald-600', chip: 'bg-emerald-100 text-emerald-700' },
+                      };
+                      return (
+                        <div className="space-y-2.5">
+                          {items.map(({ key, label, icon: Icon, count, color }) => {
+                            const p = palette[color];
+                            const ratio = (count / total) * 100;
+                            return (
+                              <div key={key} data-testid={`alert-summary-${key}`}>
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className={`flex items-center gap-2 text-xs sm:text-sm ${p.text}`}>
+                                    <span className={`h-2 w-2 rounded-full ${p.dot}`} aria-hidden />
+                                    <Icon className="h-3.5 w-3.5" />
+                                    {label}
+                                  </span>
+                                  <span className={`text-[10px] sm:text-xs px-2 py-0.5 rounded-full ${p.chip}`}>{count}</span>
+                                </div>
+                                <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden" role="progressbar" aria-valuenow={Math.round(ratio)} aria-valuemin={0} aria-valuemax={100} aria-label={label}>
+                                  <div className={`h-full bg-gradient-to-l ${p.bar} transition-all`} style={{ width: `${ratio}%` }} />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
                   </CardContent>
                 </Card>
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">متوسط التوقعات</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {alerts.length > 0 ? (
-                      <div className="text-center">
-                        <div className="text-3xl font-bold text-amber-600">
-                          {(alerts.reduce((sum, a) => sum + a.projectedAchievement, 0) / alerts.length).toFixed(1)}%
-                        </div>
-                        <p className="text-sm text-gray-500 mt-1">التحقيق المتوقع نهاية الشهر</p>
+                <Card className="border-0 ring-1 ring-violet-100 shadow-sm overflow-hidden">
+                  <CardHeader className="p-3 sm:p-4 bg-gradient-to-l from-violet-50 to-white border-b border-violet-100">
+                    <CardTitle className="text-sm sm:text-base flex items-center gap-2">
+                      <div className="h-7 w-7 rounded-lg bg-violet-100 text-violet-700 flex items-center justify-center">
+                        <TrendingUp className="h-3.5 w-3.5" />
                       </div>
-                    ) : (
-                      <div className="text-center text-gray-500">لا توجد بيانات</div>
+                      متوسط التوقعات
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-3 sm:p-4">
+                    {alerts.length > 0 ? (() => {
+                      const projected = alerts.reduce((sum, a) => sum + a.projectedAchievement, 0) / alerts.length;
+                      const cap = Math.min(projected, 100);
+                      return (
+                        <div className="text-center">
+                          <div className={`text-3xl font-bold ${getPercentColor(projected)}`}>{projected.toFixed(1)}%</div>
+                          <p className="text-xs sm:text-sm text-gray-500 mt-1">التحقيق المتوقع نهاية الشهر</p>
+                          <div className="mt-3 h-1.5 rounded-full bg-gray-100 overflow-hidden" role="progressbar" aria-valuenow={Math.round(cap)} aria-valuemin={0} aria-valuemax={100} aria-label="التحقيق المتوقع">
+                            <div className={`h-full bg-gradient-to-l ${getPercentBarClasses(projected)} transition-all`} style={{ width: `${cap}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })() : (
+                      <div className="text-center text-gray-500 text-sm py-4">لا توجد بيانات</div>
                     )}
                   </CardContent>
                 </Card>
@@ -767,60 +768,89 @@ export default function TargetsDashboard() {
 
           <TabsContent value="branches">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 md:gap-6">
-              <Card>
-                <CardHeader className="p-3 sm:p-4 md:p-6">
-                  <CardTitle className="flex items-center gap-2 text-sm sm:text-base md:text-lg">
-                    <Trophy className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600" />
+              <Card className="border-0 ring-1 ring-violet-100 shadow-sm overflow-hidden">
+                <CardHeader className="p-3 sm:p-4 bg-gradient-to-l from-violet-50 to-white border-b border-violet-100">
+                  <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
+                    <div className="h-8 w-8 rounded-lg bg-violet-100 text-violet-700 flex items-center justify-center">
+                      <Trophy className="h-4 w-4" />
+                    </div>
                     ترتيب الفروع
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="p-3 sm:p-4">
                   {leaderboardLoading ? (
-                    <div className="text-center py-8 text-gray-500">جاري التحميل...</div>
+                    <div className="space-y-2">
+                      {Array.from({ length: 4 }).map((_, i) => (
+                        <div key={i} className="h-16 rounded-lg bg-gray-100 animate-pulse" />
+                      ))}
+                    </div>
                   ) : !leaderboard?.branches.length ? (
-                    <div className="text-center py-8 text-gray-500">لا توجد بيانات</div>
+                    <div className="text-center py-10 text-gray-500 text-sm">لا توجد بيانات</div>
                   ) : (
-                    <div className="space-y-3 sm:space-y-4">
-                      {leaderboard.branches.map((branch) => (
-                        <div key={branch.branchId} className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4 p-2 sm:p-3 bg-gray-50 rounded-lg" data-testid={`branch-rank-${branch.branchId}`}>
-                          <div className="w-12 sm:w-16">{getRankBadge(branch.rank)}</div>
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium text-sm sm:text-base truncate">{branch.branchName}</div>
-                            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2 text-[10px] sm:text-sm text-gray-500">
-                              <span>الهدف: {formatCurrency(branch.target)}</span>
-                              <span className="hidden sm:inline">|</span>
-                              <span>المحقق: {formatCurrency(branch.achieved)}</span>
+                    <div className="space-y-2">
+                      {leaderboard.branches.map((branch) => {
+                        const pct = Math.min(branch.percent, 100);
+                        return (
+                          <div key={branch.branchId} className="p-2.5 sm:p-3 bg-gray-50/70 hover:bg-violet-50/50 ring-1 ring-gray-100 rounded-xl transition-colors" data-testid={`branch-rank-${branch.branchId}`}>
+                            <div className="flex items-center gap-3">
+                              <div className="shrink-0">{getRankBadge(branch.rank)}</div>
+                              <div className="flex-1 min-w-0">
+                                <div className="font-semibold text-sm text-gray-900 truncate">{branch.branchName}</div>
+                                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] sm:text-xs text-gray-500 mt-0.5">
+                                  <span>الهدف: <span className="font-mono">{formatCurrency(branch.target)}</span></span>
+                                  <span className="text-gray-300">•</span>
+                                  <span>المحقق: <span className="font-mono">{formatCurrency(branch.achieved)}</span></span>
+                                </div>
+                              </div>
+                              <div className={`text-base sm:text-lg font-bold ${getPercentColor(branch.percent)} shrink-0`}>
+                                {branch.percent.toFixed(1)}%
+                              </div>
+                            </div>
+                            <div className="mt-2 h-1.5 rounded-full bg-white overflow-hidden ring-1 ring-gray-100" role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100} aria-label={`أداء ${branch.branchName}`}>
+                              <div className={`h-full bg-gradient-to-l ${getPercentBarClasses(branch.percent)} transition-all`} style={{ width: `${pct}%` }} />
                             </div>
                           </div>
-                          <div className={`text-lg sm:text-2xl font-bold ${getPercentColor(branch.percent)}`}>
-                            {branch.percent.toFixed(1)}%
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardHeader className="p-3 sm:p-4 md:p-6">
-                  <CardTitle className="text-sm sm:text-base md:text-lg">مقارنة أداء الفروع</CardTitle>
+              <Card className="border-0 ring-1 ring-violet-100 shadow-sm overflow-hidden">
+                <CardHeader className="p-3 sm:p-4 bg-gradient-to-l from-violet-50 to-white border-b border-violet-100">
+                  <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
+                    <div className="h-8 w-8 rounded-lg bg-violet-100 text-violet-700 flex items-center justify-center">
+                      <BarChart3 className="h-4 w-4" />
+                    </div>
+                    مقارنة أداء الفروع
+                  </CardTitle>
                 </CardHeader>
-                <CardContent className="p-3 sm:p-4 md:p-6">
+                <CardContent className="p-3 sm:p-4">
                   {leaderboard?.branches && leaderboard.branches.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={200} className="sm:h-[250px] md:h-[300px]">
-                      <BarChart data={leaderboard.branches}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="branchName" tick={{ fontSize: 10 }} />
-                        <YAxis tick={{ fontSize: 10 }} />
-                        <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                        <Legend wrapperStyle={{ fontSize: '10px' }} />
-                        <Bar dataKey="target" fill="#f59e0b" name="الهدف" />
-                        <Bar dataKey="achieved" fill="#22c55e" name="المحقق" />
+                    <ResponsiveContainer width="100%" height={260}>
+                      <BarChart data={leaderboard.branches} margin={{ top: 8, right: 8, left: 0, bottom: 4 }}>
+                        <defs>
+                          <linearGradient id="targetGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.95} />
+                            <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0.55} />
+                          </linearGradient>
+                          <linearGradient id="achievedGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#10b981" stopOpacity={0.95} />
+                            <stop offset="100%" stopColor="#10b981" stopOpacity={0.55} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#ede9fe" />
+                        <XAxis dataKey="branchName" tick={{ fontSize: 10, fill: '#6b7280' }} stroke="#e5e7eb" />
+                        <YAxis tick={{ fontSize: 10, fill: '#6b7280' }} stroke="#e5e7eb" />
+                        <Tooltip formatter={(value: number) => formatCurrency(value)} contentStyle={{ borderRadius: 12, border: '1px solid #ede9fe', fontSize: 12 }} />
+                        <Legend wrapperStyle={{ fontSize: '11px' }} />
+                        <Bar dataKey="target" fill="url(#targetGradient)" name="الهدف" radius={[6, 6, 0, 0]} />
+                        <Bar dataKey="achieved" fill="url(#achievedGradient)" name="المحقق" radius={[6, 6, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   ) : (
-                    <div className="text-center py-8 text-gray-500">لا توجد بيانات</div>
+                    <div className="text-center py-10 text-gray-500 text-sm">لا توجد بيانات</div>
                   )}
                 </CardContent>
               </Card>
@@ -828,32 +858,42 @@ export default function TargetsDashboard() {
           </TabsContent>
 
           <TabsContent value="cashiers">
-            <Card>
-              <CardHeader className="p-3 sm:p-4 md:p-6">
-                <CardTitle className="flex items-center gap-2 text-sm sm:text-base md:text-lg">
-                  <Users className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600" />
+            <Card className="border-0 ring-1 ring-violet-100 shadow-sm overflow-hidden">
+              <CardHeader className="p-3 sm:p-4 bg-gradient-to-l from-violet-50 to-white border-b border-violet-100">
+                <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
+                  <div className="h-8 w-8 rounded-lg bg-violet-100 text-violet-700 flex items-center justify-center">
+                    <Users className="h-4 w-4" />
+                  </div>
                   أفضل 20 كاشير
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-3 sm:p-4 md:p-6">
+              <CardContent className="p-3 sm:p-4">
                 {leaderboardLoading ? (
-                  <div className="text-center py-8 text-gray-500 text-xs sm:text-sm">جاري التحميل...</div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                    {Array.from({ length: 8 }).map((_, i) => (
+                      <div key={i} className="h-20 rounded-xl bg-gray-100 animate-pulse" />
+                    ))}
+                  </div>
                 ) : !leaderboard?.cashiers.length ? (
-                  <div className="text-center py-8 text-gray-500 text-xs sm:text-sm">لا توجد بيانات</div>
+                  <div className="text-center py-10 text-gray-500 text-sm">لا توجد بيانات</div>
                 ) : (
-                  <div className="kpi-grid">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3">
                     {leaderboard.cashiers.map((cashier) => (
-                      <Card key={cashier.cashierId} className={`${cashier.rank <= 3 ? 'border-amber-400 border-2' : ''}`} data-testid={`cashier-rank-${cashier.cashierId}`}>
-                        <CardContent className="p-2 sm:p-3 md:p-4">
-                          <div className="flex items-start justify-between mb-1 sm:mb-2">
+                      <Card
+                        key={cashier.cashierId}
+                        className={`border-0 ring-1 shadow-sm hover:shadow-md transition-shadow ${cashier.rank <= 3 ? 'ring-amber-300 bg-gradient-to-br from-amber-50 to-white' : 'ring-violet-100 bg-white'}`}
+                        data-testid={`cashier-rank-${cashier.cashierId}`}
+                      >
+                        <CardContent className="p-2.5 sm:p-3">
+                          <div className="flex items-start justify-between mb-1.5">
                             {getRankBadge(cashier.rank)}
-                            <span className={`text-sm sm:text-lg md:text-xl font-bold ${getPercentColor(cashier.percent)}`}>
-                              {cashier.achieved > 0 ? formatCurrency(cashier.achieved) : "0"}
-                            </span>
                           </div>
-                          <div className="font-medium text-xs sm:text-sm truncate">{cashier.cashierName}</div>
-                          <div className="text-[10px] sm:text-sm text-gray-500 truncate">
+                          <div className="font-semibold text-xs sm:text-sm truncate text-gray-900">{cashier.cashierName}</div>
+                          <div className="text-[10px] sm:text-xs text-gray-500 truncate">
                             {branches.find(b => b.id === cashier.branchId)?.name || cashier.branchId}
+                          </div>
+                          <div className={`mt-1.5 text-sm sm:text-base font-bold font-mono ${cashier.achieved > 0 ? 'text-emerald-600' : 'text-gray-400'}`}>
+                            {cashier.achieved > 0 ? formatCurrency(cashier.achieved) : '—'}
                           </div>
                         </CardContent>
                       </Card>
@@ -865,19 +905,21 @@ export default function TargetsDashboard() {
           </TabsContent>
 
           <TabsContent value="details">
-            <div className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Calendar className="h-5 w-5 text-amber-600" />
+            <div className="space-y-4 sm:space-y-6">
+              <Card className="border-0 ring-1 ring-violet-100 shadow-sm overflow-hidden">
+                <CardHeader className="p-3 sm:p-4 bg-gradient-to-l from-violet-50 to-white border-b border-violet-100">
+                  <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
+                    <div className="h-8 w-8 rounded-lg bg-violet-100 text-violet-700 flex items-center justify-center">
+                      <Calendar className="h-4 w-4" />
+                    </div>
                     التقدم اليومي للمبيعات مقابل الأهداف
                   </CardTitle>
-                  <div className="flex items-center gap-4 mt-4 flex-wrap">
+                  <div className="flex items-center gap-2 sm:gap-3 mt-3 flex-wrap">
                     <Select value={selectedBranch} onValueChange={setSelectedBranch} disabled={!canSelectBranch}>
-                      <SelectTrigger className="w-48" data-testid="select-branch">
+                      <SelectTrigger className="w-48 h-10 bg-white" data-testid="select-branch">
                         <SelectValue placeholder="اختر الفرع" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-[320px] overflow-y-auto">
                         {canSelectBranch && <SelectItem value="all">اختر فرع</SelectItem>}
                         {branches.map(b => (
                           <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
@@ -899,146 +941,153 @@ export default function TargetsDashboard() {
                     )}
                   </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="p-3 sm:p-4">
                   {selectedBranch === "all" ? (
-                    <div className="text-center py-8 text-gray-500">اختر فرعًا لعرض التقدم اليومي</div>
+                    <div className="text-center py-10 text-gray-500 text-sm">اختر فرعًا لعرض التقدم اليومي</div>
                   ) : progressLoading ? (
-                    <div className="text-center py-8 text-gray-500">جاري التحميل...</div>
-                  ) : !branchProgress ? (
-                    <div className="text-center py-8 text-gray-500">لا توجد أهداف مسجلة لهذا الفرع</div>
-                  ) : (
-                    <div className="space-y-6">
-                      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                        <Card className="bg-amber-50">
-                          <CardContent className="p-4 text-center">
-                            <div className="text-xs text-gray-500">الهدف الشهري</div>
-                            <div className="text-xl font-bold text-amber-600">
-                              {formatCurrency(branchProgress.targetAmount)}
-                            </div>
-                          </CardContent>
-                        </Card>
-                        <Card className="bg-green-50">
-                          <CardContent className="p-4 text-center">
-                            <div className="text-xs text-gray-500">المحقق الفعلي</div>
-                            <div className="text-xl font-bold text-green-600">
-                              {formatCurrency(branchProgress.achievedAmount)}
-                            </div>
-                          </CardContent>
-                        </Card>
-                        <Card className="bg-blue-50">
-                          <CardContent className="p-4 text-center">
-                            <div className="text-xs text-gray-500">نسبة التحقيق</div>
-                            <div className={`text-xl font-bold ${getPercentColor(branchProgress.achievementPercent)}`}>
-                              {branchProgress.achievementPercent.toFixed(1)}%
-                            </div>
-                          </CardContent>
-                        </Card>
-                        <Card className="bg-red-50">
-                          <CardContent className="p-4 text-center">
-                            <div className="text-xs text-gray-500">المتبقي</div>
-                            <div className="text-xl font-bold text-red-600">
-                              {formatCurrency(branchProgress.remainingAmount)}
-                            </div>
-                          </CardContent>
-                        </Card>
-                        <Card className="bg-purple-50">
-                          <CardContent className="p-4 text-center">
-                            <div className="text-xs text-gray-500">متوسط الهدف اليومي</div>
-                            <div className="text-xl font-bold text-purple-600">
-                              {formatCurrency(branchProgress.dailyTargetAverage)}
-                            </div>
-                          </CardContent>
-                        </Card>
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                        {Array.from({ length: 5 }).map((_, i) => (<div key={i} className="h-16 rounded-xl bg-gray-100 animate-pulse" />))}
                       </div>
+                      <div className="h-64 rounded-xl bg-gray-100 animate-pulse" />
+                    </div>
+                  ) : !branchProgress ? (
+                    <div className="text-center py-10 text-gray-500 text-sm">لا توجد أهداف مسجلة لهذا الفرع</div>
+                  ) : (
+                    <div className="space-y-4 sm:space-y-6">
+                      {(() => {
+                        const miniStats = [
+                          { key: 'target',    label: 'الهدف الشهري',       value: formatCurrency(branchProgress.targetAmount),      tint: 'bg-violet-50',  ring: 'ring-violet-100',  icon: Target,      iconBg: 'bg-violet-100 text-violet-700' },
+                          { key: 'achieved',  label: 'المحقق الفعلي',      value: formatCurrency(branchProgress.achievedAmount),    tint: 'bg-emerald-50', ring: 'ring-emerald-100', icon: TrendingUp,  iconBg: 'bg-emerald-100 text-emerald-700' },
+                          { key: 'percent',   label: 'نسبة التحقيق',      value: `${branchProgress.achievementPercent.toFixed(1)}%`, tint: 'bg-sky-50',    ring: 'ring-sky-100',     icon: Award,       iconBg: 'bg-sky-100 text-sky-700',         valueClass: getPercentColor(branchProgress.achievementPercent) },
+                          { key: 'remaining', label: 'المتبقي',            value: formatCurrency(branchProgress.remainingAmount),   tint: 'bg-rose-50',    ring: 'ring-rose-100',    icon: AlertTriangle, iconBg: 'bg-rose-100 text-rose-700' },
+                          { key: 'daily',     label: 'متوسط الهدف اليومي', value: formatCurrency(branchProgress.dailyTargetAverage), tint: 'bg-fuchsia-50', ring: 'ring-fuchsia-100', icon: Calendar,    iconBg: 'bg-fuchsia-100 text-fuchsia-700' },
+                        ] as const;
+                        return (
+                          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 sm:gap-3">
+                            {miniStats.map((s) => {
+                              const Icon = s.icon;
+                              return (
+                                <Card key={s.key} className={`border-0 ring-1 ${s.ring} ${s.tint} shadow-sm`}>
+                                  <CardContent className="p-2.5 sm:p-3">
+                                    <div className="flex items-start justify-between gap-1.5">
+                                      <div className="min-w-0 flex-1">
+                                        <div className="text-[10px] text-gray-600 truncate">{s.label}</div>
+                                        <div className={`text-base sm:text-lg font-bold font-mono truncate ${('valueClass' in s && s.valueClass) || 'text-gray-900'}`}>{s.value}</div>
+                                      </div>
+                                      <div className={`shrink-0 h-7 w-7 rounded-lg ${s.iconBg} flex items-center justify-center`}>
+                                        <Icon className="h-3.5 w-3.5" />
+                                      </div>
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
 
                       {branchProgress.dailyProgress.length > 0 && (
                         <>
-                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                            <Card>
-                              <CardHeader className="pb-2">
-                                <CardTitle className="text-base">المبيعات اليومية مقابل الهدف</CardTitle>
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+                            <Card className="border-0 ring-1 ring-violet-100 shadow-sm overflow-hidden">
+                              <CardHeader className="p-3 bg-gradient-to-l from-violet-50 to-white border-b border-violet-100">
+                                <CardTitle className="text-sm flex items-center gap-2">
+                                  <div className="h-7 w-7 rounded-lg bg-violet-100 text-violet-700 flex items-center justify-center"><BarChart3 className="h-3.5 w-3.5" /></div>
+                                  المبيعات اليومية مقابل الهدف
+                                </CardTitle>
                               </CardHeader>
-                              <CardContent>
-                                <ResponsiveContainer width="100%" height={250}>
-                                  <BarChart data={branchProgress.dailyProgress.filter(d => d.achievedAmount > 0 || d.targetAmount > 0)}>
-                                    <CartesianGrid strokeDasharray="3 3" />
-                                    <XAxis dataKey="date" tickFormatter={(v) => new Date(v).getDate().toString()} />
-                                    <YAxis />
-                                    <Tooltip 
-                                      formatter={(value: number) => formatCurrency(value)}
-                                      labelFormatter={(v) => `${new Date(v).toLocaleDateString('en-GB')}`}
-                                    />
-                                    <Legend />
-                                    <Bar dataKey="targetAmount" fill="#f59e0b" name="الهدف اليومي" />
-                                    <Bar dataKey="achievedAmount" fill="#22c55e" name="المحقق" />
+                              <CardContent className="p-2 sm:p-3">
+                                <ResponsiveContainer width="100%" height={240}>
+                                  <BarChart data={branchProgress.dailyProgress.filter(d => d.achievedAmount > 0 || d.targetAmount > 0)} margin={{ top: 8, right: 8, left: 0, bottom: 4 }}>
+                                    <defs>
+                                      <linearGradient id="dailyTargetGradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.95} />
+                                        <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0.55} />
+                                      </linearGradient>
+                                      <linearGradient id="dailyAchievedGradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#10b981" stopOpacity={0.95} />
+                                        <stop offset="100%" stopColor="#10b981" stopOpacity={0.55} />
+                                      </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#ede9fe" />
+                                    <XAxis dataKey="date" tickFormatter={(v) => new Date(v).getDate().toString()} tick={{ fontSize: 10, fill: '#6b7280' }} stroke="#e5e7eb" />
+                                    <YAxis tick={{ fontSize: 10, fill: '#6b7280' }} stroke="#e5e7eb" />
+                                    <Tooltip formatter={(value: number) => formatCurrency(value)} labelFormatter={(v) => `${new Date(v).toLocaleDateString('en-GB')}`} contentStyle={{ borderRadius: 12, border: '1px solid #ede9fe', fontSize: 12 }} />
+                                    <Legend wrapperStyle={{ fontSize: '11px' }} />
+                                    <Bar dataKey="targetAmount" fill="url(#dailyTargetGradient)" name="الهدف اليومي" radius={[4,4,0,0]} />
+                                    <Bar dataKey="achievedAmount" fill="url(#dailyAchievedGradient)" name="المحقق" radius={[4,4,0,0]} />
                                   </BarChart>
                                 </ResponsiveContainer>
                               </CardContent>
                             </Card>
                             
-                            <Card>
-                              <CardHeader className="pb-2">
-                                <CardTitle className="text-base">التقدم التراكمي</CardTitle>
+                            <Card className="border-0 ring-1 ring-violet-100 shadow-sm overflow-hidden">
+                              <CardHeader className="p-3 bg-gradient-to-l from-violet-50 to-white border-b border-violet-100">
+                                <CardTitle className="text-sm flex items-center gap-2">
+                                  <div className="h-7 w-7 rounded-lg bg-violet-100 text-violet-700 flex items-center justify-center"><Activity className="h-3.5 w-3.5" /></div>
+                                  التقدم التراكمي
+                                </CardTitle>
                               </CardHeader>
-                              <CardContent>
-                                <ResponsiveContainer width="100%" height={250}>
-                                  <LineChart data={branchProgress.dailyProgress.filter(d => d.cumulativeAchieved > 0)}>
-                                    <CartesianGrid strokeDasharray="3 3" />
-                                    <XAxis dataKey="date" tickFormatter={(v) => new Date(v).getDate().toString()} />
-                                    <YAxis />
-                                    <Tooltip 
-                                      formatter={(value: number) => formatCurrency(value)}
-                                      labelFormatter={(v) => new Date(v).toLocaleDateString('en-GB')}
-                                    />
-                                    <Legend />
-                                    <Line type="monotone" dataKey="cumulativeTarget" stroke="#f59e0b" name="الهدف التراكمي" strokeWidth={2} />
-                                    <Line type="monotone" dataKey="cumulativeAchieved" stroke="#22c55e" name="المحقق التراكمي" strokeWidth={2} />
+                              <CardContent className="p-2 sm:p-3">
+                                <ResponsiveContainer width="100%" height={240}>
+                                  <LineChart data={branchProgress.dailyProgress.filter(d => d.cumulativeAchieved > 0)} margin={{ top: 8, right: 8, left: 0, bottom: 4 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#ede9fe" />
+                                    <XAxis dataKey="date" tickFormatter={(v) => new Date(v).getDate().toString()} tick={{ fontSize: 10, fill: '#6b7280' }} stroke="#e5e7eb" />
+                                    <YAxis tick={{ fontSize: 10, fill: '#6b7280' }} stroke="#e5e7eb" />
+                                    <Tooltip formatter={(value: number) => formatCurrency(value)} labelFormatter={(v) => new Date(v).toLocaleDateString('en-GB')} contentStyle={{ borderRadius: 12, border: '1px solid #ede9fe', fontSize: 12 }} />
+                                    <Legend wrapperStyle={{ fontSize: '11px' }} />
+                                    <Line type="monotone" dataKey="cumulativeTarget" stroke="#8b5cf6" name="الهدف التراكمي" strokeWidth={2.5} dot={false} />
+                                    <Line type="monotone" dataKey="cumulativeAchieved" stroke="#10b981" name="المحقق التراكمي" strokeWidth={2.5} dot={false} />
                                   </LineChart>
                                 </ResponsiveContainer>
                               </CardContent>
                             </Card>
                           </div>
 
-                          <Card>
-                            <CardHeader className="pb-2">
-                              <CardTitle className="text-base">جدول التقدم اليومي التفصيلي</CardTitle>
+                          <Card className="border-0 ring-1 ring-violet-100 shadow-sm overflow-hidden">
+                            <CardHeader className="p-3 bg-gradient-to-l from-violet-50 to-white border-b border-violet-100">
+                              <CardTitle className="text-sm flex items-center gap-2">
+                                <div className="h-7 w-7 rounded-lg bg-violet-100 text-violet-700 flex items-center justify-center"><Calendar className="h-3.5 w-3.5" /></div>
+                                جدول التقدم اليومي التفصيلي
+                              </CardTitle>
                             </CardHeader>
-                            <CardContent className="p-3 sm:p-4 md:p-6">
+                            <CardContent className="p-0">
                               <div className="overflow-x-auto">
-                                <table className="w-full text-xs sm:text-sm min-w-[500px]">
+                                <table className="w-full text-xs sm:text-sm min-w-[640px]">
                                   <thead>
-                                    <tr className="bg-gray-100">
-                                      <th className="p-1.5 sm:p-2 text-right">التاريخ</th>
-                                      <th className="p-1.5 sm:p-2 text-right hidden md:table-cell">اليوم</th>
-                                      <th className="p-1.5 sm:p-2 text-left">الهدف</th>
-                                      <th className="p-1.5 sm:p-2 text-left">المحقق</th>
-                                      <th className="p-1.5 sm:p-2 text-center">النسبة</th>
-                                      <th className="p-1.5 sm:p-2 text-left hidden sm:table-cell">الفارق</th>
-                                      <th className="p-2 text-center w-[80px]">يوميات</th>
-                                      <th className="p-2 text-center w-[70px]">تراكمي%</th>
+                                    <tr className="bg-violet-50/60 text-violet-900">
+                                      <th className="p-2.5 text-right font-semibold">التاريخ</th>
+                                      <th className="p-2.5 text-right font-semibold hidden md:table-cell">اليوم</th>
+                                      <th className="p-2.5 text-left font-semibold">الهدف</th>
+                                      <th className="p-2.5 text-left font-semibold">المحقق</th>
+                                      <th className="p-2.5 text-center font-semibold">النسبة</th>
+                                      <th className="p-2.5 text-left font-semibold hidden sm:table-cell">الفارق</th>
+                                      <th className="p-2.5 text-center font-semibold w-[80px]">يوميات</th>
+                                      <th className="p-2.5 text-center font-semibold w-[80px]">تراكمي%</th>
                                     </tr>
                                   </thead>
                                   <tbody>
                                     {branchProgress.dailyProgress
                                       .filter(d => d.achievedAmount > 0 || new Date(d.date) <= new Date())
                                       .map((day) => (
-                                      <tr key={day.date} className={`border-b hover:bg-gray-50 ${day.achievedAmount > 0 ? '' : 'text-gray-400'}`}>
-                                        <td className="p-2 text-right">{new Date(day.date).toLocaleDateString('en-GB')}</td>
-                                        <td className="p-2 text-right">{day.dayName}</td>
-                                        <td className="p-2 text-left font-mono">{formatCurrency(day.targetAmount)}</td>
-                                        <td className="p-2 text-left font-mono font-bold">{formatCurrency(day.achievedAmount)}</td>
-                                        <td className={`p-2 text-center font-bold ${getPercentColor(day.achievementPercent)}`}>
+                                      <tr key={day.date} className={`border-t border-gray-100 hover:bg-violet-50/40 transition-colors ${day.achievedAmount > 0 ? '' : 'text-gray-400'}`}>
+                                        <td className="p-2.5 text-right">{new Date(day.date).toLocaleDateString('en-GB')}</td>
+                                        <td className="p-2.5 text-right hidden md:table-cell">{day.dayName}</td>
+                                        <td className="p-2.5 text-left font-mono">{formatCurrency(day.targetAmount)}</td>
+                                        <td className="p-2.5 text-left font-mono font-bold">{formatCurrency(day.achievedAmount)}</td>
+                                        <td className={`p-2.5 text-center font-bold ${getPercentColor(day.achievementPercent)}`}>
                                           {day.achievementPercent.toFixed(0)}%
                                         </td>
-                                        <td className={`p-2 text-left font-mono ${day.variance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                        <td className={`p-2.5 text-left font-mono hidden sm:table-cell ${day.variance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                                           {day.variance >= 0 ? '+' : ''}{formatCurrency(day.variance)}
                                         </td>
-                                        <td className="p-2 text-center">
+                                        <td className="p-2.5 text-center">
                                           {day.journalCount > 0 && (
-                                            <Badge variant="outline">{day.journalCount} يومية</Badge>
+                                            <Badge variant="outline" className="border-violet-200 text-violet-700 bg-violet-50">{day.journalCount}</Badge>
                                           )}
                                         </td>
-                                        <td className={`p-2 text-center font-bold ${getPercentColor(day.cumulativePercent)}`}>
+                                        <td className={`p-2.5 text-center font-bold ${getPercentColor(day.cumulativePercent)}`}>
                                           {day.cumulativePercent.toFixed(1)}%
                                         </td>
                                       </tr>
@@ -1056,43 +1105,60 @@ export default function TargetsDashboard() {
               </Card>
 
               {summaryLoading ? null : progressSummary.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">ملخص تقدم جميع الفروع</CardTitle>
+                <Card className="border-0 ring-1 ring-violet-100 shadow-sm overflow-hidden">
+                  <CardHeader className="p-3 sm:p-4 bg-gradient-to-l from-violet-50 to-white border-b border-violet-100">
+                    <CardTitle className="text-sm sm:text-base flex items-center gap-2">
+                      <div className="h-8 w-8 rounded-lg bg-violet-100 text-violet-700 flex items-center justify-center">
+                        <Building2 className="h-4 w-4" />
+                      </div>
+                      ملخص تقدم جميع الفروع
+                    </CardTitle>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="p-0">
                     <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
+                      <table className="w-full text-xs sm:text-sm min-w-[760px]">
                         <thead>
-                          <tr className="bg-gray-100">
-                            <th className="p-2 text-right">الفرع</th>
-                            <th className="p-2 text-right">الهدف</th>
-                            <th className="p-2 text-right">المحقق</th>
-                            <th className="p-2 text-right">النسبة</th>
-                            <th className="p-2 text-right">المتبقي</th>
-                            <th className="p-2 text-right">متوسط يومي</th>
-                            <th className="p-2 text-right">المتوقع</th>
-                            <th className="p-2 text-right">الاتجاه</th>
+                          <tr className="bg-violet-50/60 text-violet-900">
+                            <th className="p-2.5 text-right font-semibold">الفرع</th>
+                            <th className="p-2.5 text-right font-semibold">الهدف</th>
+                            <th className="p-2.5 text-right font-semibold">المحقق</th>
+                            <th className="p-2.5 text-right font-semibold">النسبة</th>
+                            <th className="p-2.5 text-right font-semibold">المتبقي</th>
+                            <th className="p-2.5 text-right font-semibold">متوسط يومي</th>
+                            <th className="p-2.5 text-right font-semibold">المتوقع</th>
+                            <th className="p-2.5 text-right font-semibold">الاتجاه</th>
                           </tr>
                         </thead>
                         <tbody>
                           {progressSummary.map((branch) => (
-                            <tr key={branch.branchId} className="border-b hover:bg-gray-50">
-                              <td className="p-2 font-medium">{branch.branchName}</td>
-                              <td className="p-2 font-mono">{formatCurrency(branch.targetAmount)}</td>
-                              <td className="p-2 font-mono font-bold text-green-600">{formatCurrency(branch.achievedAmount)}</td>
-                              <td className={`p-2 font-bold ${getPercentColor(branch.achievementPercent)}`}>
+                            <tr key={branch.branchId} className="border-t border-gray-100 hover:bg-violet-50/40 transition-colors">
+                              <td className="p-2.5 font-semibold text-gray-900">{branch.branchName}</td>
+                              <td className="p-2.5 font-mono">{formatCurrency(branch.targetAmount)}</td>
+                              <td className="p-2.5 font-mono font-bold text-emerald-600">{formatCurrency(branch.achievedAmount)}</td>
+                              <td className={`p-2.5 font-bold ${getPercentColor(branch.achievementPercent)}`}>
                                 {branch.achievementPercent.toFixed(1)}%
                               </td>
-                              <td className="p-2 font-mono text-red-600">{formatCurrency(branch.remainingAmount)}</td>
-                              <td className="p-2 font-mono">{formatCurrency(branch.averageDailySales)}</td>
-                              <td className={`p-2 font-bold ${getPercentColor(branch.projectedPercent)}`}>
+                              <td className="p-2.5 font-mono text-rose-600">{formatCurrency(branch.remainingAmount)}</td>
+                              <td className="p-2.5 font-mono">{formatCurrency(branch.averageDailySales)}</td>
+                              <td className={`p-2.5 font-bold ${getPercentColor(branch.projectedPercent)}`}>
                                 {branch.projectedPercent.toFixed(1)}%
                               </td>
-                              <td className="p-2">
-                                {branch.trend === 'up' && <Badge className="bg-green-500">↑ صعود</Badge>}
-                                {branch.trend === 'down' && <Badge className="bg-red-500">↓ هبوط</Badge>}
-                                {branch.trend === 'stable' && <Badge variant="outline">→ مستقر</Badge>}
+                              <td className="p-2.5">
+                                {branch.trend === 'up' && (
+                                  <span className="inline-flex items-center gap-1 text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                                    <TrendingUp className="h-3 w-3" /> صعود
+                                  </span>
+                                )}
+                                {branch.trend === 'down' && (
+                                  <span className="inline-flex items-center gap-1 text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">
+                                    <TrendingDown className="h-3 w-3" /> هبوط
+                                  </span>
+                                )}
+                                {branch.trend === 'stable' && (
+                                  <span className="inline-flex items-center gap-1 text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
+                                    <Minus className="h-3 w-3" /> مستقر
+                                  </span>
+                                )}
                               </td>
                             </tr>
                           ))}
@@ -1106,93 +1172,116 @@ export default function TargetsDashboard() {
           </TabsContent>
 
           <TabsContent value="incentives">
-            <Card>
-              <CardHeader className="p-3 sm:p-4 md:p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="flex items-center gap-2 text-sm sm:text-base md:text-lg">
-                      <Star className="h-4 w-4 sm:h-5 sm:w-5 text-amber-500" />
+            <Card className="border-0 ring-1 ring-violet-100 shadow-sm overflow-hidden">
+              <CardHeader className="p-3 sm:p-4 bg-gradient-to-l from-violet-50 to-white border-b border-violet-100">
+                <div className="flex items-start sm:items-center justify-between gap-2 flex-wrap">
+                  <div className="min-w-0">
+                    <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
+                      <div className="h-8 w-8 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center">
+                        <Star className="h-4 w-4" />
+                      </div>
                       ترتيب الكاشيرين حسب نقاط الحوافز
                     </CardTitle>
                     <CardDescription className="text-xs sm:text-sm mt-1">النقاط المكتسبة من التحديات اليومية والعمولات</CardDescription>
                   </div>
                   <Link href="/incentives-management">
-                    <Button variant="outline" size="sm" className="text-xs" data-testid="btn-manage-incentives">
+                    <Button variant="outline" size="sm" className="text-xs border-violet-200 text-violet-700 hover:bg-violet-50" data-testid="btn-manage-incentives">
                       <Gift className="h-3 w-3 ml-1" />
                       إدارة الحوافز
                     </Button>
                   </Link>
                 </div>
               </CardHeader>
-              <CardContent className="p-3 sm:p-4 md:p-6">
+              <CardContent className="p-3 sm:p-4">
                 {pointsLeaderboardLoading ? (
-                  <div className="text-center py-8 text-gray-500 text-xs sm:text-sm">جاري التحميل...</div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                    {Array.from({ length: 8 }).map((_, i) => (
+                      <div key={i} className="h-24 rounded-xl bg-gray-100 animate-pulse" />
+                    ))}
+                  </div>
                 ) : topCashiersByPoints.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    <Star className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                  <div className="text-center py-10 text-gray-500">
+                    <div className="h-12 w-12 mx-auto mb-2 rounded-full bg-violet-50 flex items-center justify-center">
+                      <Star className="h-6 w-6 text-violet-300" />
+                    </div>
                     <p className="text-xs sm:text-sm">لا توجد نقاط حوافز لهذا الشهر</p>
                     <Link href="/incentives-management">
-                      <Button variant="link" size="sm" className="mt-2 text-amber-600">ابدأ بإعداد التحديات والحوافز</Button>
+                      <Button variant="link" size="sm" className="mt-2 text-violet-600">ابدأ بإعداد التحديات والحوافز</Button>
                     </Link>
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-                      <Card className="border-amber-300 bg-amber-50">
-                        <CardContent className="p-3 text-center">
-                          <Star className="h-5 w-5 text-amber-600 mx-auto mb-1" />
-                          <p className="text-xs text-amber-700">إجمالي النقاط</p>
-                          <p className="text-lg font-bold text-amber-900" data-testid="text-incentives-total-points">
-                            {topCashiersByPoints.reduce((s, c) => s + c.totalPoints, 0).toLocaleString()}
-                          </p>
-                        </CardContent>
-                      </Card>
-                      <Card className="border-green-300 bg-green-50">
-                        <CardContent className="p-3 text-center">
-                          <DollarSign className="h-5 w-5 text-green-600 mx-auto mb-1" />
-                          <p className="text-xs text-green-700">إجمالي المبالغ</p>
-                          <p className="text-lg font-bold text-green-900" data-testid="text-incentives-total-amount">
-                            {formatCurrency(topCashiersByPoints.reduce((s, c) => s + c.totalAmount, 0))}
-                          </p>
-                        </CardContent>
-                      </Card>
-                      <Card className="border-blue-300 bg-blue-50">
-                        <CardContent className="p-3 text-center">
-                          <Users className="h-5 w-5 text-blue-600 mx-auto mb-1" />
-                          <p className="text-xs text-blue-700">عدد الكاشيرين</p>
-                          <p className="text-lg font-bold text-blue-900" data-testid="text-incentives-cashier-count">
-                            {topCashiersByPoints.length}
-                          </p>
-                        </CardContent>
-                      </Card>
-                    </div>
+                    {(() => {
+                      const mini = [
+                        { key: 'pts',   label: 'إجمالي النقاط',  value: topCashiersByPoints.reduce((s, c) => s + c.totalPoints, 0).toLocaleString(), icon: Star,        tint: 'bg-amber-50',   ring: 'ring-amber-100',   iconBg: 'bg-amber-100 text-amber-700',   tid: 'text-incentives-total-points' },
+                        { key: 'amt',   label: 'إجمالي المبالغ', value: formatCurrency(topCashiersByPoints.reduce((s, c) => s + c.totalAmount, 0)),  icon: DollarSign,  tint: 'bg-emerald-50', ring: 'ring-emerald-100', iconBg: 'bg-emerald-100 text-emerald-700', tid: 'text-incentives-total-amount', mono: true },
+                        { key: 'count', label: 'عدد الكاشيرين',  value: topCashiersByPoints.length.toString(),                                       icon: Users,       tint: 'bg-violet-50',  ring: 'ring-violet-100',  iconBg: 'bg-violet-100 text-violet-700',  tid: 'text-incentives-cashier-count' },
+                      ] as const;
+                      return (
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
+                          {mini.map((m) => {
+                            const Icon = m.icon;
+                            return (
+                              <Card key={m.key} className={`border-0 ring-1 ${m.ring} ${m.tint} shadow-sm`}>
+                                <CardContent className="p-3">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-[10px] text-gray-600 truncate">{m.label}</p>
+                                      <p className={`text-base sm:text-lg font-bold text-gray-900 truncate ${('mono' in m && m.mono) ? 'font-mono' : ''}`} data-testid={m.tid}>{m.value}</p>
+                                    </div>
+                                    <div className={`shrink-0 h-7 w-7 rounded-lg ${m.iconBg} flex items-center justify-center`}>
+                                      <Icon className="h-3.5 w-3.5" />
+                                    </div>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
 
-                    <div className="kpi-grid">
-                      {topCashiersByPoints.map((cashier, index) => (
-                        <Card key={cashier.cashierId} className={`${index < 3 ? 'border-amber-400 border-2' : ''}`} data-testid={`points-rank-${cashier.cashierId}`}>
-                          <CardContent className="p-2 sm:p-3 md:p-4">
-                            <div className="flex items-start justify-between mb-1 sm:mb-2">
-                              <div className="flex items-center gap-1">
-                                {index === 0 && <span className="text-lg">🥇</span>}
-                                {index === 1 && <span className="text-lg">🥈</span>}
-                                {index === 2 && <span className="text-lg">🥉</span>}
-                                {index > 2 && <Badge variant="outline" className="text-[10px]">{index + 1}</Badge>}
-                              </div>
-                              <div className="text-left">
-                                <span className="text-sm sm:text-lg font-bold text-amber-600">{cashier.totalPoints}</span>
-                                <span className="text-[10px] text-amber-500 block">نقطة</span>
-                              </div>
-                            </div>
-                            <div className="font-medium text-xs sm:text-sm truncate">{cashier.cashierName}</div>
-                            <div className="text-[10px] sm:text-xs text-gray-500 truncate">{cashier.branchName}</div>
-                            <div className="mt-1 flex items-center justify-between text-[10px]">
-                              <span className="text-green-600 font-medium">{formatCurrency(cashier.totalAmount)}</span>
-                              <span className="text-gray-400">{cashier.challengeCount} تحدي</span>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
+                    {(() => {
+                      const maxPoints = Math.max(...topCashiersByPoints.map(c => c.totalPoints), 1);
+                      return (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3">
+                          {topCashiersByPoints.map((cashier, index) => {
+                            const ratio = (cashier.totalPoints / maxPoints) * 100;
+                            return (
+                              <Card
+                                key={cashier.cashierId}
+                                className={`border-0 ring-1 shadow-sm hover:shadow-md transition-shadow ${index < 3 ? 'ring-amber-300 bg-gradient-to-br from-amber-50 to-white' : 'ring-violet-100 bg-white'}`}
+                                data-testid={`points-rank-${cashier.cashierId}`}
+                              >
+                                <CardContent className="p-2.5 sm:p-3">
+                                  <div className="flex items-start justify-between mb-1.5">
+                                    <div className="flex items-center gap-1">
+                                      {index === 0 && <span className="text-lg">🥇</span>}
+                                      {index === 1 && <span className="text-lg">🥈</span>}
+                                      {index === 2 && <span className="text-lg">🥉</span>}
+                                      {index > 2 && <Badge variant="outline" className="text-[10px] border-violet-200 text-violet-700 bg-violet-50">#{index + 1}</Badge>}
+                                    </div>
+                                    <div className="text-left">
+                                      <span className="text-sm sm:text-base font-bold text-amber-600">{cashier.totalPoints}</span>
+                                      <span className="text-[10px] text-amber-500 block leading-none">نقطة</span>
+                                    </div>
+                                  </div>
+                                  <div className="font-semibold text-xs sm:text-sm truncate text-gray-900">{cashier.cashierName}</div>
+                                  <div className="text-[10px] sm:text-xs text-gray-500 truncate">{cashier.branchName}</div>
+                                  <div className="mt-1.5 h-1 rounded-full bg-gray-100 overflow-hidden" role="progressbar" aria-valuenow={Math.round(ratio)} aria-valuemin={0} aria-valuemax={100} aria-label={`نقاط ${cashier.cashierName}`}>
+                                    <div className="h-full bg-gradient-to-l from-amber-400 to-amber-600 transition-all" style={{ width: `${ratio}%` }} />
+                                  </div>
+                                  <div className="mt-1.5 flex items-center justify-between text-[10px]">
+                                    <span className="text-emerald-600 font-medium font-mono">{formatCurrency(cashier.totalAmount)}</span>
+                                    <span className="text-gray-400">{cashier.challengeCount} تحدي</span>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </CardContent>
