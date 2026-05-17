@@ -71,7 +71,7 @@ export function KpiCard({
       data-testid={rest["data-testid"] ?? "kpi-card"}
     >
       <div className="flex items-start justify-between gap-2 mb-2">
-        <p className="text-[11px] font-medium text-gray-500 dark:text-muted-foreground uppercase tracking-wide">{label}</p>
+        <p className="text-[11px] sm:text-xs font-medium text-gray-500 dark:text-muted-foreground">{label}</p>
         {Icon && (
           <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center shrink-0", TONE_ICON[tone])}>
             <Icon className="w-4 h-4" />
