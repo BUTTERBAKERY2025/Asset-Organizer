@@ -1,6 +1,17 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* Safelist: narrowly scoped to the exact KPI tone + tab active-state classes
+   used by client/src/components/dashboard/kpi-card.tsx (TONE_ICON map)
+   and the operations-reports tab pills. Keep this list tight to avoid CSS bloat. */
+@source inline("{bg,text}-{teal,emerald,blue,amber,rose,violet,gray}-{100,700}");
+@source inline("dark:bg-{teal,emerald,blue,amber,rose,violet}-950/40");
+@source inline("dark:text-{teal,emerald,blue,amber,rose,violet}-400");
+@source inline("data-[state=active]:bg-{amber,emerald,blue,violet,rose,teal}-100");
+@source inline("data-[state=active]:text-{amber,emerald,blue,violet,rose,teal}-800");
+@source inline("dark:data-[state=active]:bg-{amber,emerald,blue,violet,rose,teal}-950/40");
+@source inline("dark:data-[state=active]:text-{amber,emerald,blue,violet,rose,teal}-300");
+
 @font-face {
   font-family: "SaudiRiyal";
   src: url("./assets/fonts/SaudiRiyal.ttf") format("truetype");
