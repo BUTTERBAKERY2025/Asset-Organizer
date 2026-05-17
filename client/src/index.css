@@ -20,45 +20,82 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-  
-  /* Butter Bakery Theme - Warm & Elegant */
-  --color-background: hsl(40 33% 98%); /* Soft cream background */
-  --color-foreground: hsl(20 14% 4%);  /* Dark warm gray for text */
-  
+
+  /* Butter Bakery Theme - Royal Violet (light mode) */
+  --color-background: hsl(270 40% 99%);              /* Soft lavender-white */
+  --color-foreground: hsl(260 20% 12%);              /* Deep ink violet */
+
   --color-card: hsl(0 0% 100%);
-  --color-card-foreground: hsl(20 14% 4%);
-  
+  --color-card-foreground: hsl(260 20% 12%);
+
   --color-popover: hsl(0 0% 100%);
-  --color-popover-foreground: hsl(20 14% 4%);
-  
-  --color-primary: hsl(42 87% 55%); /* Butter Gold */
-  --color-primary-foreground: hsl(20 14% 4%);
-  
-  --color-secondary: hsl(40 20% 92%); /* Light beige */
-  --color-secondary-foreground: hsl(24 10% 10%);
-  
-  --color-muted: hsl(40 20% 92%);
-  --color-muted-foreground: hsl(25 5% 45%);
-  
-  --color-accent: hsl(42 60% 90%);
-  --color-accent-foreground: hsl(24 10% 10%);
-  
+  --color-popover-foreground: hsl(260 20% 12%);
+
+  --color-primary: hsl(262 83% 58%);                 /* Royal Violet */
+  --color-primary-foreground: hsl(0 0% 100%);
+
+  --color-secondary: hsl(265 30% 96%);               /* Pale lavender */
+  --color-secondary-foreground: hsl(260 25% 18%);
+
+  --color-muted: hsl(265 25% 95%);
+  --color-muted-foreground: hsl(260 10% 42%);
+
+  --color-accent: hsl(265 70% 94%);                  /* Light violet tint */
+  --color-accent-foreground: hsl(262 60% 30%);
+
   --color-destructive: hsl(0 84% 60%);
   --color-destructive-foreground: hsl(0 0% 98%);
-  
-  --color-border: hsl(40 20% 88%);
-  --color-input: hsl(40 20% 88%);
-  --color-ring: hsl(42 87% 55%);
-  
-  --color-chart-1: hsl(42 87% 55%);
-  --color-chart-2: hsl(24 80% 60%);
-  --color-chart-3: hsl(35 60% 40%);
-  --color-chart-4: hsl(180 40% 50%);
-  --color-chart-5: hsl(20 20% 70%);
+
+  --color-border: hsl(265 25% 90%);
+  --color-input: hsl(265 25% 90%);
+  --color-ring: hsl(262 83% 58%);
+
+  --color-chart-1: hsl(262 83% 58%);                 /* Primary violet */
+  --color-chart-2: hsl(280 70% 65%);                 /* Magenta */
+  --color-chart-3: hsl(220 75% 60%);                 /* Indigo blue */
+  --color-chart-4: hsl(42 87% 55%);                  /* Butter gold accent */
+  --color-chart-5: hsl(160 60% 45%);                 /* Mint */
 
   --font-sans: 'Cairo', 'Plus Jakarta Sans', sans-serif;
-  
+
   --radius: 0.5rem;
+}
+
+/* Dark mode — true color swap (was previously only toggling a class). */
+.dark {
+  --color-background: hsl(260 25% 8%);
+  --color-foreground: hsl(265 20% 96%);
+
+  --color-card: hsl(260 22% 12%);
+  --color-card-foreground: hsl(265 20% 96%);
+
+  --color-popover: hsl(260 22% 12%);
+  --color-popover-foreground: hsl(265 20% 96%);
+
+  --color-primary: hsl(265 90% 70%);
+  --color-primary-foreground: hsl(260 30% 10%);
+
+  --color-secondary: hsl(260 18% 18%);
+  --color-secondary-foreground: hsl(265 20% 96%);
+
+  --color-muted: hsl(260 15% 16%);
+  --color-muted-foreground: hsl(265 12% 65%);
+
+  --color-accent: hsl(262 35% 24%);
+  --color-accent-foreground: hsl(265 90% 88%);
+
+  --color-destructive: hsl(0 70% 55%);
+  --color-destructive-foreground: hsl(0 0% 98%);
+
+  --color-border: hsl(260 15% 28%);
+  --color-input: hsl(260 15% 28%);
+  --color-ring: hsl(265 90% 70%);
+
+  --color-chart-1: hsl(265 90% 70%);
+  --color-chart-2: hsl(285 80% 72%);
+  --color-chart-3: hsl(220 80% 68%);
+  --color-chart-4: hsl(42 90% 65%);
+  --color-chart-5: hsl(160 65% 55%);
 }
 
 @layer base {
@@ -82,9 +119,11 @@
     }
   }
 
-  @media (hover: none) and (pointer: coarse) {
+  /* Prevent iOS auto-zoom on focus. Target touch devices and iPadOS only —
+     do NOT apply to narrow desktop windows (mouse users keep compact text). */
+  @media (hover: none), (pointer: coarse) {
     input:not([type="checkbox"]):not([type="radio"]), select, textarea {
-      font-size: 16px !important; /* Prevents zoom on iOS */
+      font-size: 16px !important;
     }
   }
 
@@ -404,13 +443,13 @@ html.vt-active .page-ready {
   right: 0;
   left: 0;
   height: 2.5px;
-  background: linear-gradient(90deg, #c89630, #d4a853, #f0d080, #ebb548, #d4a853);
+  background: linear-gradient(90deg, hsl(262 83% 48%), hsl(262 83% 58%), hsl(280 80% 70%), hsl(265 90% 65%), hsl(262 83% 58%));
   background-size: 300% 100%;
   z-index: 9999;
   pointer-events: none;
   width: 0%;
   opacity: 0;
-  box-shadow: 0 0 10px rgba(212, 168, 83, 0.6);
+  box-shadow: 0 0 10px hsla(262, 83%, 58%, 0.6);
   transform: translateZ(0);
   will-change: width, opacity;
   contain: layout style;
@@ -424,8 +463,8 @@ html.vt-active .page-ready {
   width: 60px;
   height: 4px;
   border-radius: 50%;
-  background: radial-gradient(ellipse, rgba(240, 208, 128, 0.85), transparent 70%);
-  box-shadow: 0 0 10px 3px rgba(212, 168, 83, 0.3);
+  background: radial-gradient(ellipse, hsla(280, 80%, 75%, 0.85), transparent 70%);
+  box-shadow: 0 0 10px 3px hsla(262, 83%, 58%, 0.35);
   opacity: 0;
   animation: nprogress-glow-pulse 0.5s ease-in-out infinite;
 }
@@ -460,7 +499,7 @@ html.vt-active .page-ready {
 }
 
 .skeleton-shimmer {
-  background: linear-gradient(135deg, hsl(40 18% 93%) 0%, hsl(40 15% 95%) 100%);
+  background: linear-gradient(135deg, hsl(265 25% 93%) 0%, hsl(265 20% 96%) 100%);
   border-radius: 8px;
   position: relative;
   overflow: hidden;
@@ -568,7 +607,7 @@ nav a {
   nav a:hover .nav-item-inner {
     transform: translateX(-2px);
     transition: transform 80ms cubic-bezier(0.22, 1, 0.36, 1), background-color 80ms ease;
-    background-color: hsl(40 20% 96%);
+    background-color: hsl(265 25% 96%);
   }
 }
 

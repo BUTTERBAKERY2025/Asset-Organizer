@@ -175,7 +175,7 @@ export default function LoginPage() {
       <button
         type="button"
         onClick={toggleLang}
-        className="fixed z-30 inline-flex items-center justify-center gap-1.5 sm:gap-2 h-10 sm:h-10 md:h-11 min-w-[44px] min-h-[44px] px-2.5 sm:px-3.5 md:px-4 rounded-full bg-white/95 backdrop-blur border border-slate-200 text-[13px] sm:text-[13px] md:text-sm font-semibold text-[#1a3a2f] hover:bg-white hover:border-[#e67e22] hover:text-[#e67e22] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#e67e22]/40 active:scale-95 transition-all shadow-md hover:shadow-lg"
+        className="fixed z-30 inline-flex items-center justify-center gap-1.5 sm:gap-2 h-10 sm:h-10 md:h-11 min-w-[44px] min-h-[44px] px-2.5 sm:px-3.5 md:px-4 rounded-full bg-white/95 backdrop-blur border border-slate-200 text-[13px] sm:text-[13px] md:text-sm font-semibold text-[#1a3a2f] hover:bg-white hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]/40 active:scale-95 transition-all shadow-md hover:shadow-lg"
         style={{
           ...(isRTL ? { left: "max(12px, env(safe-area-inset-left))" } : { right: "max(12px, env(safe-area-inset-right))" }),
           top: "max(12px, env(safe-area-inset-top))",
@@ -184,7 +184,7 @@ export default function LoginPage() {
         title={t.switchLang}
         data-testid="button-lang-toggle"
       >
-        <Languages className="w-4 h-4 md:w-[18px] md:h-[18px] shrink-0 text-[#e67e22]" aria-hidden="true" />
+        <Languages className="w-4 h-4 md:w-[18px] md:h-[18px] shrink-0 text-[var(--color-primary)]" aria-hidden="true" />
         {/* Short label on mobile, full label on tablet+ */}
         <span className="sm:hidden">{t.switchLangShort}</span>
         <span className="hidden sm:inline">{t.switchLang}</span>
@@ -234,7 +234,7 @@ export default function LoginPage() {
               <p className="text-[11px] sm:text-[12px] md:text-[13px] text-slate-500 mt-1">
                 {t.subtitle}
               </p>
-              <div className="w-10 sm:w-12 h-[2.5px] sm:h-[3px] bg-[#e67e22] rounded-full mt-2 sm:mt-3"></div>
+              <div className="w-10 sm:w-12 h-[2.5px] sm:h-[3px] bg-primary rounded-full mt-2 sm:mt-3"></div>
             </div>
 
             <form
@@ -277,7 +277,7 @@ export default function LoginPage() {
                     readOnly
                     autoComplete="off"
                     aria-describedby={error ? "login-error" : undefined}
-                    className={`h-12 sm:h-11 text-base sm:text-sm ${isRTL ? "pr-10" : "pl-10"} bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-[#e67e22] focus:ring-2 focus:ring-[#e67e22]/20 rounded-lg ${textAlignClass} transition-all`}
+                    className={`h-12 sm:h-11 text-base sm:text-sm ${isRTL ? "pr-10" : "pl-10"} bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 rounded-lg ${textAlignClass} transition-all`}
                     data-testid="input-username"
                     inputMode="text"
                     required
@@ -311,7 +311,7 @@ export default function LoginPage() {
                     readOnly
                     autoComplete="new-password"
                     aria-describedby={error ? "login-error" : undefined}
-                    className={`h-12 sm:h-11 text-base sm:text-sm pr-10 pl-10 bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-[#e67e22] focus:ring-2 focus:ring-[#e67e22]/20 rounded-lg ${textAlignClass} transition-all`}
+                    className={`h-12 sm:h-11 text-base sm:text-sm pr-10 pl-10 bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20 rounded-lg ${textAlignClass} transition-all`}
                     data-testid="input-password"
                     required
                     data-lpignore="true"
@@ -321,7 +321,7 @@ export default function LoginPage() {
                   <button
                     type="button"
                     onClick={() => setShowPassword((s) => !s)}
-                    className={`absolute top-1/2 -translate-y-1/2 text-slate-400 hover:text-[#e67e22] transition-colors p-1 rounded focus:outline-none focus:ring-2 focus:ring-[#e67e22]/30 ${isRTL ? "left-3" : "right-3"}`}
+                    className={`absolute top-1/2 -translate-y-1/2 text-slate-400 hover:text-[var(--color-primary)] transition-colors p-1 rounded focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30 ${isRTL ? "left-3" : "right-3"}`}
                     aria-label={showPassword ? t.hidePwd : t.showPwd}
                     tabIndex={-1}
                     data-testid="button-toggle-password"
@@ -338,7 +338,7 @@ export default function LoginPage() {
                     id="rememberMe"
                     checked={rememberMe}
                     onCheckedChange={(checked) => setRememberMe(checked === true)}
-                    className="h-5 w-5 sm:h-4 sm:w-4 border-slate-400 data-[state=checked]:bg-[#e67e22] data-[state=checked]:border-[#e67e22]"
+                    className="h-5 w-5 sm:h-4 sm:w-4 border-slate-400 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                     data-testid="checkbox-remember-me"
                   />
                   <Label
@@ -353,7 +353,7 @@ export default function LoginPage() {
                   <DropdownMenuTrigger asChild>
                     <button
                       type="button"
-                      className="flex items-center gap-1 text-[12px] sm:text-[12px] text-slate-500 hover:text-[#e67e22] transition-colors py-1 min-h-[32px]"
+                      className="flex items-center gap-1 text-[12px] sm:text-[12px] text-slate-500 hover:text-[var(--color-primary)] transition-colors py-1 min-h-[32px]"
                       data-testid="button-help-menu"
                     >
                       <HelpCircle className="w-3.5 h-3.5" />
@@ -411,7 +411,7 @@ export default function LoginPage() {
               {/* Submit */}
               <Button
                 type="submit"
-                className="w-full h-12 sm:h-11 text-base sm:text-sm font-semibold bg-[#e67e22] hover:bg-[#d35400] text-white rounded-lg shadow-sm hover:shadow-md hover:shadow-[#e67e22]/25 transition-all duration-200 active:scale-[0.99]"
+                className="w-full h-12 sm:h-11 text-base sm:text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg shadow-sm hover:shadow-md hover:shadow-primary/25 transition-all duration-200 active:scale-[0.99]"
                 disabled={isLoggingIn}
                 data-testid="button-login"
               >
@@ -433,7 +433,7 @@ export default function LoginPage() {
               href="https://www.butterbakery.co"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[11px] sm:text-[12px] text-slate-400 hover:text-[#e67e22] transition-colors tracking-wider"
+              className="text-[11px] sm:text-[12px] text-slate-400 hover:text-[var(--color-primary)] transition-colors tracking-wider"
               data-testid="link-website"
             >
               www.butterbakery.co
