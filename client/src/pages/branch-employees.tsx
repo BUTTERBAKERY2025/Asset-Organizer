@@ -64,6 +64,7 @@ import {
   FileCheck,
   SlidersHorizontal,
   AlertTriangle,
+  AlertCircle,
   ChevronRight,
   X,
 } from "lucide-react";
@@ -829,7 +830,7 @@ export default function BranchEmployeesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedNationality, setSelectedNationality] = useState<string>("all");
   const [selectedJobTitle, setSelectedJobTitle] = useState<string>("all");
-  const [selectedStatus, setSelectedStatus] = useState<string>("active");
+  const [selectedStatus, setSelectedStatus] = useState<string>("all");
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<BranchEmployee | null>(null);
@@ -866,7 +867,8 @@ export default function BranchEmployeesPage() {
     }
   }, [canSelectBranch, userBranchId, selectedBranch]);
 
-  const { data: bundle, isLoading } = useQuery<{
+  const isBranchReady = canSelectBranch || !!userBranchId;
+  const { data: bundle, isLoading, error: bundleError } = useQuery<{
     employees?: any[];
     stats?: any;
     systemUsers?: any[];
@@ -878,10 +880,13 @@ export default function BranchEmployeesPage() {
       if (selectedStatus !== "all") params.set("status", selectedStatus);
       const qs = params.toString();
       const url = qs ? `/api/branch-employees/bundle?${qs}` : "/api/branch-employees/bundle";
-      const res = await fetch(url);
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error(`${res.status}: failed to fetch employees bundle`);
       return res.json();
     },
+    enabled: isBranchReady,
     staleTime: 60 * 1000,
+    retry: 1,
   });
 
   // Defensive dedupe by id (in case any duplicates ever slip through)
@@ -2127,58 +2132,30 @@ export default function BranchEmployeesPage() {
 
           <TabsContent value="employees" className="space-y-4 sm:space-y-6 mt-4 sm:mt-6">
         <div className="kpi-grid">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-blue-100 rounded-lg">
-                  <Users className="w-6 h-6 text-blue-600" />
+          {[
+            { label: isRTL ? "إجمالي الموظفين" : "Total Employees", value: formatNumber(stats?.totalEmployees || 0), Icon: Users, iconBg: "bg-violet-100", iconColor: "text-violet-700", border: "border-violet-200", testid: "text-total-employees" },
+            { label: isRTL ? "إجمالي الرواتب" : "Total Salaries", value: stats ? formatCurrency(stats?.totalSalaries, isRTL) : "—", Icon: DollarSign, iconBg: "bg-emerald-100", iconColor: "text-emerald-700", border: "border-emerald-200", testid: "text-total-salaries" },
+            { label: isRTL ? "عدد الجنسيات" : "Nationalities", value: formatNumber(stats?.byNationality?.length || 0), Icon: Globe, iconBg: "bg-fuchsia-100", iconColor: "text-fuchsia-700", border: "border-fuchsia-200", testid: "text-nationalities-count" },
+            { label: isRTL ? "عدد الوظائف" : "Job Titles", value: formatNumber(stats?.byJobTitle?.length || 0), Icon: Briefcase, iconBg: "bg-indigo-100", iconColor: "text-indigo-700", border: "border-indigo-200", testid: "text-jobs-count" },
+          ].map((kpi, i) => (
+            <Card key={i} className={`border ${kpi.border} hover:shadow-md transition-shadow`}>
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-3">
+                  <div className={`p-3 ${kpi.iconBg} rounded-xl`}>
+                    <kpi.Icon className={`w-6 h-6 ${kpi.iconColor}`} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm text-muted-foreground truncate">{kpi.label}</p>
+                    {isLoading ? (
+                      <div className="h-7 w-20 bg-muted animate-pulse rounded mt-1" />
+                    ) : (
+                      <p className="text-2xl font-bold" data-testid={kpi.testid}>{kpi.value}</p>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm text-gray-500">{isRTL ? "إجمالي الموظفين" : "Total Employees"}</p>
-                  <p className="text-2xl font-bold" data-testid="text-total-employees">{formatNumber(stats?.totalEmployees || 0)}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-green-100 rounded-lg">
-                  <DollarSign className="w-6 h-6 text-green-600" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">{isRTL ? "إجمالي الرواتب" : "Total Salaries"}</p>
-                  <p className="text-2xl font-bold" data-testid="text-total-salaries">{formatCurrency(stats?.totalSalaries, isRTL)}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-purple-100 rounded-lg">
-                  <Globe className="w-6 h-6 text-purple-600" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">{isRTL ? "عدد الجنسيات" : "Nationalities"}</p>
-                  <p className="text-2xl font-bold" data-testid="text-nationalities-count">{formatNumber(stats?.byNationality?.length || 0)}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-amber-100 rounded-lg">
-                  <Briefcase className="w-6 h-6 text-amber-600" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">{isRTL ? "عدد الوظائف" : "Job Titles"}</p>
-                  <p className="text-2xl font-bold" data-testid="text-jobs-count">{formatNumber(stats?.byJobTitle?.length || 0)}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          ))}
         </div>
 
         {/* Status Tabs - فلتر الحالة (server-side) */}
@@ -2187,11 +2164,11 @@ export default function BranchEmployeesPage() {
           (stats?.byStatus || []).forEach((s: any) => { statusCounts[s.status] = s.count; });
           const totalAll = Object.values(statusCounts).reduce((a, b) => a + b, 0);
           const tabs: { value: string; labelAr: string; labelEn: string; count: number; cls: string }[] = [
-            { value: "active", labelAr: "النشطون", labelEn: "Active", count: statusCounts["active"] || 0, cls: "bg-green-100 text-green-800 border-green-200" },
-            { value: "on_leave", labelAr: "في إجازة", labelEn: "On Leave", count: statusCounts["on_leave"] || 0, cls: "bg-amber-100 text-amber-800 border-amber-200" },
-            { value: "inactive", labelAr: "غير نشط", labelEn: "Inactive", count: statusCounts["inactive"] || 0, cls: "bg-gray-100 text-gray-800 border-gray-200" },
-            { value: "terminated", labelAr: "منتهية خدمتهم", labelEn: "Terminated", count: statusCounts["terminated"] || 0, cls: "bg-red-100 text-red-800 border-red-200" },
-            { value: "all", labelAr: "الكل", labelEn: "All", count: totalAll, cls: "bg-blue-100 text-blue-800 border-blue-200" },
+            { value: "all", labelAr: "الكل", labelEn: "All", count: totalAll, cls: "bg-violet-100 text-violet-800 border-violet-300" },
+            { value: "active", labelAr: "النشطون", labelEn: "Active", count: statusCounts["active"] || 0, cls: "bg-emerald-100 text-emerald-800 border-emerald-300" },
+            { value: "on_leave", labelAr: "في إجازة", labelEn: "On Leave", count: statusCounts["on_leave"] || 0, cls: "bg-amber-100 text-amber-800 border-amber-300" },
+            { value: "inactive", labelAr: "غير نشط", labelEn: "Inactive", count: statusCounts["inactive"] || 0, cls: "bg-slate-100 text-slate-800 border-slate-300" },
+            { value: "terminated", labelAr: "منتهية خدمتهم", labelEn: "Terminated", count: statusCounts["terminated"] || 0, cls: "bg-red-100 text-red-800 border-red-300" },
           ];
           return (
             <div className="flex items-center gap-2 flex-wrap" data-testid="tabs-employee-status">
@@ -2201,16 +2178,16 @@ export default function BranchEmployeesPage() {
                   <button
                     key={tab.value}
                     onClick={() => setSelectedStatus(tab.value)}
-                    className={`px-4 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
+                    className={`px-3.5 py-2 rounded-lg border text-sm font-medium transition-all inline-flex items-center gap-2 ${
                       isActive
-                        ? `${tab.cls} shadow-md scale-105`
-                        : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+                        ? `${tab.cls} shadow-sm`
+                        : "bg-white text-muted-foreground border-border hover:bg-muted/50"
                     }`}
                     data-testid={`tab-status-${tab.value}`}
                   >
                     <span>{isRTL ? tab.labelAr : tab.labelEn}</span>
-                    <span className={`mr-2 px-2 py-0.5 rounded-full text-xs ${
-                      isActive ? "bg-white/70" : "bg-gray-100"
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                      isActive ? "bg-white/70" : "bg-muted"
                     }`}>
                       {formatNumber(tab.count)}
                     </span>
@@ -2276,12 +2253,12 @@ export default function BranchEmployeesPage() {
             </Select>
           </div>
           <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Search className={`absolute ${isRTL ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none`} />
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="بحث بالاسم أو الرقم الوظيفي..."
-              className="pr-10 h-11 sm:h-10"
+              placeholder={isRTL ? "بحث بالاسم أو الرقم الوظيفي..." : "Search by name or employee ID..."}
+              className={`${isRTL ? 'pr-10' : 'pl-10'} h-11 sm:h-10`}
               data-testid="input-search"
             />
           </div>
@@ -2365,17 +2342,34 @@ export default function BranchEmployeesPage() {
         <Card>
           <CardHeader>
             <CardTitle>{isRTL ? "قائمة الموظفين" : "Employee List"}</CardTitle>
-            <CardDescription>{isRTL ? `عرض ${formatNumber(filteredEmployees.length)} موظف` : `Showing ${formatNumber(filteredEmployees.length)} employees`}</CardDescription>
+            <CardDescription data-testid="text-employees-count">
+              {isRTL
+                ? `عرض ${formatNumber(filteredEmployees.length)}${(employees && filteredEmployees.length !== employees.length) ? ` من أصل ${formatNumber(employees.length)}` : ''} موظف`
+                : `Showing ${formatNumber(filteredEmployees.length)}${(employees && filteredEmployees.length !== employees.length) ? ` of ${formatNumber(employees.length)}` : ''} employees`}
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            {isLoading ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="w-8 h-8 animate-spin text-amber-600" />
+            {bundleError ? (
+              <div className="text-center py-10 text-red-600">
+                <AlertCircle className="w-12 h-12 mx-auto mb-3" />
+                <p className="font-medium">{isRTL ? "تعذّر تحميل بيانات الموظفين" : "Failed to load employees"}</p>
+                <p className="text-sm text-muted-foreground mt-1">{(bundleError as Error)?.message}</p>
+              </div>
+            ) : isLoading ? (
+              <div className="space-y-2">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="h-12 bg-muted/50 animate-pulse rounded" />
+                ))}
               </div>
             ) : filteredEmployees.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <Users className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                <p>{t("branchEmployees.noEmployees")}</p>
+              <div className="text-center py-10 text-muted-foreground">
+                <Users className="w-12 h-12 mx-auto mb-3 text-muted-foreground/40" />
+                <p className="font-medium">{t("branchEmployees.noEmployees")}</p>
+                {hasActiveFilters && (
+                  <Button variant="link" onClick={resetFilters} className="mt-2 text-violet-600" data-testid="btn-clear-from-empty">
+                    {isRTL ? "مسح الفلاتر وعرض الكل" : "Clear filters and show all"}
+                  </Button>
+                )}
               </div>
             ) : (
               <div className="overflow-x-auto">
