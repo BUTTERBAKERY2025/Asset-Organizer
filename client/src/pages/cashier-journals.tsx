@@ -72,10 +72,6 @@ export default function CashierJournalsPage() {
     }
   }, [userBranchId, canSelectBranch]);
 
-  const { data: journals, isLoading } = useQuery<CashierSalesJournal[]>({
-    queryKey: ["/api/cashier-journals"],
-  });
-
   const { data: userPermissions } = useQuery<{ module: string; actions: string[] }[]>({
     queryKey: ["/api/my-permissions"],
     enabled: !!user,
@@ -87,15 +83,28 @@ export default function CashierJournalsPage() {
     || journalPerms?.actions.includes('approve') || perfPerms?.actions.includes('approve');
   const canViewAllCashiers = isManager;
 
-  const statsQueryParams = new URLSearchParams();
-  if (branchFilter && branchFilter !== "all") statsQueryParams.set("branchId", branchFilter);
-  if (statusFilter && statusFilter !== "all") statsQueryParams.set("status", statusFilter);
-  if (cashierFilter && cashierFilter !== "all") statsQueryParams.set("cashierId", cashierFilter);
-  if (dateFrom) statsQueryParams.set("dateFrom", dateFrom);
-  if (dateTo) statsQueryParams.set("dateTo", dateTo);
-  const statsQueryString = statsQueryParams.toString();
-  
   const isBranchFilterReady = branchFilter !== "";
+
+  // ===== Journals list: pass server-side filters (branch, status, discrepancy, dates) =====
+  const { data: journals, isLoading } = useQuery<CashierSalesJournal[]>({
+    queryKey: ["/api/cashier-journals", branchFilter, statusFilter, discrepancyFilter, dateFrom, dateTo],
+    queryFn: async ({ queryKey }) => {
+      const [, branch, status, discrepancy, from, to] = queryKey as string[];
+      const params = new URLSearchParams();
+      if (branch && branch !== "all") params.set("branchId", branch);
+      if (status && status !== "all") params.set("status", status);
+      if (discrepancy && discrepancy !== "all") params.set("discrepancyStatus", discrepancy);
+      if (from) params.set("startDate", from);
+      if (to) params.set("endDate", to);
+      const qs = params.toString();
+      const url = `/api/cashier-journals${qs ? `?${qs}` : ""}`;
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch cashier journals");
+      const data = await res.json();
+      return Array.isArray(data) ? data : (data.journals || []);
+    },
+    enabled: isBranchFilterReady,
+  });
   
   const { data: stats, refetch: refetchStats } = useQuery<{
     totalJournals: number;
@@ -195,20 +204,15 @@ export default function CashierJournalsPage() {
     }
   }, [userPermissions, canViewAllCashiers, cashierFilter, dropdownCashiers]);
 
+  // Server already filters by branch/status/discrepancy/dates.
+  // Client only refines by free-text search and cashier-name (server filters by ID).
   const filteredJournals = journals?.filter((journal) => {
     const matchesSearch =
+      !searchTerm ||
       journal.cashierName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       getBranchName(journal.branchId).toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === "all" || journal.status === statusFilter;
-    const matchesBranch = branchFilter === "all" || journal.branchId === branchFilter;
-    const matchesDiscrepancy = discrepancyFilter === "all" || journal.discrepancyStatus === discrepancyFilter;
     const matchesCashier = cashierFilter === "all" || journal.cashierName === cashierFilter;
-    
-    const journalDate = new Date(journal.journalDate);
-    const matchesDateFrom = !dateFrom || journalDate >= new Date(dateFrom);
-    const matchesDateTo = !dateTo || journalDate <= new Date(dateTo);
-    
-    return matchesSearch && matchesStatus && matchesBranch && matchesDiscrepancy && matchesCashier && matchesDateFrom && matchesDateTo;
+    return matchesSearch && matchesCashier;
   });
 
   useEffect(() => {
