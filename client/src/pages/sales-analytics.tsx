@@ -148,7 +148,7 @@ export default function SalesAnalytics() {
     },
   });
 
-  const { data: avgTicketByShift = [], refetch: refetchAvgTicket } = useQuery<any[]>({
+  const { data: avgTicketByShift = [], isLoading: loadingAvgTicket, refetch: refetchAvgTicket } = useQuery<any[]>({
     queryKey: ["/api/analytics/average-ticket", selectedBranch, "shift", fromDate, toDate, journalStatus, discrepancyType],
     queryFn: async () => {
       const params = new URLSearchParams({ fromDate, toDate, groupBy: "shift" });
@@ -358,7 +358,9 @@ export default function SalesAnalytics() {
               </Link>
               <div>
                 <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 flex items-center gap-2 sm:gap-3">
-                  <BarChart3 className="h-5 w-5 sm:h-6 sm:w-6 md:h-8 md:w-8 text-amber-600" />
+                  <span className="inline-flex w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-primary/10 items-center justify-center">
+                    <BarChart3 className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
+                  </span>
                   تحليلات المبيعات
                 </h1>
                 <p className="text-xs sm:text-sm text-gray-600 mt-1">تحليل شامل للمبيعات مقارنة بالأهداف</p>
@@ -383,10 +385,10 @@ export default function SalesAnalytics() {
             </div>
           </div>
 
-          <Card className="bg-white/80 backdrop-blur border-amber-200">
+          <Card className="bg-white/80 backdrop-blur border-violet-100">
             <CardHeader className="pb-3 p-3 sm:p-4 md:p-6">
               <CardTitle className="text-xs sm:text-sm flex items-center gap-2">
-                <Filter className="h-4 w-4 text-amber-600" />
+                <Filter className="h-4 w-4 text-primary" />
                 الفلاتر المتقدمة
               </CardTitle>
             </CardHeader>
@@ -479,7 +481,8 @@ export default function SalesAnalytics() {
             value={Number(totalActualSales) || 0}
             unit={<Riyal />}
             icon={TrendingUp}
-            tone="money"
+            tone="violet"
+            subLabel={`عن ${targetsVsActuals.length} يوم في الفترة`}
             data-testid="text-total-sales"
           />
           <KpiCard
@@ -488,6 +491,7 @@ export default function SalesAnalytics() {
             unit={<Riyal />}
             icon={Target}
             tone="production"
+            subLabel={currentSeason.label}
             data-testid="text-total-target"
           />
           <KpiCard
@@ -505,13 +509,14 @@ export default function SalesAnalytics() {
             unit={<Riyal />}
             icon={totalVariance >= 0 ? ArrowUp : ArrowDown}
             tone={totalVariance >= 0 ? "money" : "alert"}
+            subLabel={totalVariance >= 0 ? "أعلى من الهدف" : "أقل من الهدف"}
             data-testid="text-variance"
           />
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <div className="overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0">
-            <TabsList className="bg-white/80 backdrop-blur border border-amber-200 inline-flex min-w-max">
+            <TabsList className="bg-white/80 backdrop-blur border border-violet-100 inline-flex min-w-max">
               <TabsTrigger value="overview" data-testid="tab-overview" className="text-xs sm:text-sm">نظرة عامة</TabsTrigger>
               <TabsTrigger value="branches" data-testid="tab-branches" className="text-xs sm:text-sm">الفروع</TabsTrigger>
               <TabsTrigger value="cashiers" data-testid="tab-cashiers" className="text-xs sm:text-sm">الكاشيرين</TabsTrigger>
@@ -521,123 +526,270 @@ export default function SalesAnalytics() {
           </div>
 
           <TabsContent value="overview" className="space-y-4">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <Card className="bg-white/80 backdrop-blur border-amber-200">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Clock className="h-5 w-5 text-amber-600" />
-                    توزيع المبيعات حسب الوردية
+            {/* ===== Row 1: Sales Overview (donut + breakdown) | Sales Trend (branches pie) ===== */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {/* Sales Overview – spans 2 cols */}
+              <Card className="lg:col-span-2 bg-white border-violet-100 shadow-sm">
+                <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    نظرة عامة على المبيعات
                   </CardTitle>
+                  <Badge variant="outline" className="text-[10px] border-violet-200 text-primary bg-primary/5">
+                    {fromDate} → {toDate}
+                  </Badge>
                 </CardHeader>
                 <CardContent>
-                  {loadingShifts ? (
+                  {loadingShifts || loadingTargets ? (
                     <Skeleton className="h-64 w-full" />
-                  ) : shiftAnalytics.length === 0 ? (
-                    <div className="h-64 flex items-center justify-center text-gray-500">
-                      لا توجد بيانات
-                    </div>
                   ) : (
-                    <ResponsiveContainer width="100%" height={280}>
-                      <PieChart>
-                        <Pie
-                          data={shiftAnalytics}
-                          dataKey="totalSales"
-                          nameKey="shiftLabel"
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={100}
-                          label={({ shiftLabel, percentage }) => `${shiftLabel}: ${percentage.toFixed(1)}%`}
-                        >
-                          {shiftAnalytics.map((entry: any) => (
-                            <Cell key={entry.shiftType} fill={shiftColors[entry.shiftType] || "#94a3b8"} />
-                          ))}
-                        </Pie>
-                        <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                      </PieChart>
-                    </ResponsiveContainer>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                      {/* Donut + center label */}
+                      <div className="relative flex items-center justify-center">
+                        <ResponsiveContainer width="100%" height={240}>
+                          <PieChart>
+                            <Pie
+                              data={shiftAnalytics.length ? shiftAnalytics : [{ shiftLabel: "—", totalSales: 1, shiftType: "empty" }]}
+                              dataKey="totalSales"
+                              nameKey="shiftLabel"
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={70}
+                              outerRadius={100}
+                              paddingAngle={2}
+                              stroke="none"
+                            >
+                              {(shiftAnalytics.length ? shiftAnalytics : [{ shiftType: "empty" }]).map((entry: any, idx: number) => (
+                                <Cell key={`${entry.shiftType}-${idx}`} fill={shiftColors[entry.shiftType] || "#e5e7eb"} />
+                              ))}
+                            </Pie>
+                            <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                          <span className="text-[10px] text-gray-500">إجمالي الفترة</span>
+                          <span className="text-lg font-bold text-gray-900 tabular-nums" dir="ltr">
+                            {formatCurrency(totalActualSales)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Breakdown grid */}
+                      <div className="grid grid-cols-2 gap-3">
+                        {(shiftAnalytics.length ? shiftAnalytics : []).map((s: any) => {
+                          const Icon = shiftIcons[s.shiftType] || Clock;
+                          return (
+                            <div key={s.shiftType} className="rounded-xl border border-gray-100 p-3 hover:border-violet-200 transition-colors" data-testid={`overview-shift-${s.shiftType}`}>
+                              <div className="flex items-center gap-2 mb-1">
+                                <span
+                                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                                  style={{ backgroundColor: shiftColors[s.shiftType] }}
+                                />
+                                <Icon className="h-3.5 w-3.5" style={{ color: shiftColors[s.shiftType] }} />
+                                <span className="text-xs text-gray-600 truncate">{s.shiftLabel}</span>
+                              </div>
+                              <div className="font-bold text-sm text-gray-900 tabular-nums" dir="ltr">
+                                {formatCurrency(s.totalSales)}
+                              </div>
+                              <div className="text-[10px] text-gray-500 mt-0.5">
+                                {s.percentage?.toFixed(1)}% من الإجمالي
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <div className="rounded-xl bg-primary/5 border border-primary/20 p-3">
+                          <div className="text-xs text-primary font-medium mb-1">نسبة التحقيق</div>
+                          <div className="font-bold text-base text-primary tabular-nums" dir="ltr">
+                            {formatPercent(overallAchievement)}
+                          </div>
+                          <Progress value={Math.min(overallAchievement, 100)} className="mt-1.5 h-1.5" />
+                        </div>
+                        <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-3">
+                          <div className="text-xs text-emerald-700 font-medium mb-1">عدد المعاملات</div>
+                          <div className="font-bold text-base text-emerald-700 tabular-nums" dir="ltr">
+                            {formatNumber(shiftAnalytics.reduce((s: number, x: any) => s + (x.transactionsCount || 0), 0))}
+                          </div>
+                          <div className="text-[10px] text-emerald-600/70 mt-0.5">للفترة المحددة</div>
+                        </div>
+                      </div>
+                    </div>
                   )}
                 </CardContent>
               </Card>
 
-              <Card className="bg-white/80 backdrop-blur border-amber-200">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <BarChart3 className="h-5 w-5 text-amber-600" />
-                    متوسط الفاتورة حسب الوردية
-                  </CardTitle>
+              {/* Sales Trend - branch competition pie */}
+              <Card className="bg-white border-violet-100 shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">توزيع المبيعات حسب الفرع</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {loadingShifts ? (
+                  {loadingBranches ? (
                     <Skeleton className="h-64 w-full" />
-                  ) : avgTicketByShift.length === 0 ? (
-                    <div className="h-64 flex items-center justify-center text-gray-500">
-                      لا توجد بيانات
-                    </div>
+                  ) : branchCompetition.length === 0 ? (
+                    <div className="h-64 flex items-center justify-center text-gray-500 text-sm">لا توجد بيانات</div>
                   ) : (
-                    <ResponsiveContainer width="100%" height={280}>
-                      <BarChart data={avgTicketByShift} layout="vertical">
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis type="number" tickFormatter={(v) => `${v.toFixed(0)} ر.س`} />
-                        <YAxis dataKey="groupLabel" type="category" width={60} />
-                        <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                        <Bar dataKey="averageTicket" fill="#f59e0b" radius={[0, 4, 4, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    <>
+                      <ResponsiveContainer width="100%" height={200}>
+                        <PieChart>
+                          <Pie
+                            data={branchCompetition.slice(0, 6)}
+                            dataKey="totalSales"
+                            nameKey="branchName"
+                            cx="50%"
+                            cy="50%"
+                            outerRadius={80}
+                            stroke="#fff"
+                            strokeWidth={2}
+                          >
+                            {branchCompetition.slice(0, 6).map((_: any, idx: number) => {
+                              const palette = ["#8b5cf6", "#a78bfa", "#c4b5fd", "#ec4899", "#6366f1", "#fbbf24"];
+                              return <Cell key={idx} fill={palette[idx % palette.length]} />;
+                            })}
+                          </Pie>
+                          <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-2 mt-2 max-h-32 overflow-y-auto">
+                        {branchCompetition.slice(0, 6).map((b: any, idx: number) => {
+                          const palette = ["#8b5cf6", "#a78bfa", "#c4b5fd", "#ec4899", "#6366f1", "#fbbf24"];
+                          return (
+                            <div key={b.branchId} className="flex items-center gap-2 text-[11px]">
+                              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: palette[idx % palette.length] }} />
+                              <span className="truncate text-gray-700">{b.branchName}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
                   )}
                 </CardContent>
               </Card>
             </div>
 
-            <Card className="bg-white/80 backdrop-blur border-amber-200">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5 text-amber-600" />
-                  أفضل 5 كاشيرين
+            {/* ===== Row 2: Daily Sales Bar | Top 5 Cashiers ===== */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {/* Daily sales bar chart */}
+              <Card className="lg:col-span-2 bg-white border-violet-100 shadow-sm">
+                <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                  <CardTitle className="text-base">المبيعات اليومية</CardTitle>
+                  <Badge variant="outline" className="text-[10px] border-violet-200 text-primary bg-primary/5">
+                    {months.find(m => m.value === selectedMonth)?.label} {selectedYear}
+                  </Badge>
+                </CardHeader>
+                <CardContent>
+                  {loadingTargets ? (
+                    <Skeleton className="h-64 w-full" />
+                  ) : targetsVsActuals.length === 0 ? (
+                    <div className="h-64 flex items-center justify-center text-gray-500 text-sm">لا توجد بيانات</div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={280}>
+                      <BarChart data={targetsVsActuals} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="dailySalesGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#8b5cf6" stopOpacity={1} />
+                            <stop offset="100%" stopColor="#a78bfa" stopOpacity={0.85} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+                        <XAxis dataKey="date" tickFormatter={(d: string) => d.split("-")[2]} tick={{ fontSize: 10, fill: "#9ca3af" }} />
+                        <YAxis tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`} tick={{ fontSize: 10, fill: "#9ca3af" }} />
+                        <Tooltip
+                          formatter={(value: number) => formatCurrency(value)}
+                          contentStyle={{ borderRadius: 8, border: "1px solid #ede9fe", fontSize: 12 }}
+                        />
+                        <Bar dataKey="actualSales" fill="url(#dailySalesGradient)" radius={[6, 6, 0, 0]} name="المبيعات" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Top 5 cashiers */}
+              <Card className="bg-white border-violet-100 shadow-sm">
+                <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Users className="h-4 w-4 text-primary" />
+                    أفضل 5 كاشيرين
+                  </CardTitle>
+                  <button
+                    onClick={() => setActiveTab("cashiers")}
+                    className="text-[11px] text-primary hover:underline"
+                    data-testid="link-view-all-cashiers"
+                  >
+                    عرض الكل
+                  </button>
+                </CardHeader>
+                <CardContent>
+                  {loadingLeaderboard ? (
+                    <div className="space-y-2">
+                      {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+                    </div>
+                  ) : cashierLeaderboard.length === 0 ? (
+                    <div className="h-32 flex items-center justify-center text-gray-500 text-sm">لا توجد بيانات</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {cashierLeaderboard.slice(0, 5).map((cashier: any) => (
+                        <div key={cashier.cashierId} className="flex items-center gap-3 p-2 rounded-lg hover:bg-violet-50/40 transition-colors" data-testid={`overview-cashier-${cashier.cashierId}`}>
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
+                            cashier.rank === 1 ? "bg-amber-400 text-white" :
+                            cashier.rank === 2 ? "bg-gray-300 text-gray-700" :
+                            cashier.rank === 3 ? "bg-amber-600 text-white" :
+                            "bg-violet-100 text-primary"
+                          }`}>
+                            {cashier.rank === 1 ? <Trophy className="h-4 w-4" /> : cashier.rank}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium text-gray-900 truncate">{cashier.cashierName}</p>
+                            <p className="text-[10px] text-gray-500 truncate">{cashier.branchName}</p>
+                          </div>
+                          <div className="text-left shrink-0">
+                            <p className="text-xs font-bold text-primary tabular-nums" dir="ltr">{formatCurrency(cashier.totalSales)}</p>
+                            <p className="text-[10px] text-gray-500">{cashier.contribution.toFixed(1)}%</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* ===== Row 3: Avg ticket by shift (compact) ===== */}
+            <Card className="bg-white border-violet-100 shadow-sm">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4 text-primary" />
+                  متوسط الفاتورة حسب الوردية
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {loadingLeaderboard ? (
-                  <div className="space-y-2">
-                    {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
-                  </div>
-                ) : cashierLeaderboard.length === 0 ? (
-                  <div className="h-32 flex items-center justify-center text-gray-500">
-                    لا توجد بيانات
-                  </div>
+                {loadingAvgTicket ? (
+                  <Skeleton className="h-44 w-full" />
+                ) : avgTicketByShift.length === 0 ? (
+                  <div className="h-32 flex items-center justify-center text-gray-500 text-sm">لا توجد بيانات</div>
                 ) : (
-                  <div className="space-y-3">
-                    {cashierLeaderboard.slice(0, 5).map((cashier: any) => (
-                      <div key={cashier.cashierId} className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${
-                          cashier.rank === 1 ? "bg-amber-400 text-white" :
-                          cashier.rank === 2 ? "bg-gray-300 text-gray-700" :
-                          cashier.rank === 3 ? "bg-amber-600 text-white" :
-                          "bg-gray-200 text-gray-600"
-                        }`}>
-                          {cashier.rank}
-                        </div>
-                        <div className="flex-1">
-                          <p className="font-medium text-gray-900">{cashier.cashierName}</p>
-                          <p className="text-sm text-gray-500">{cashier.branchName}</p>
-                        </div>
-                        <div className="text-left">
-                          <p className="font-bold text-amber-600">{formatCurrency(cashier.totalSales)}</p>
-                          <p className="text-xs text-gray-500">مساهمة: {cashier.contribution.toFixed(1)}%</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <ResponsiveContainer width="100%" height={180}>
+                    <BarChart data={avgTicketByShift} layout="vertical" margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" horizontal={false} />
+                      <XAxis type="number" tickFormatter={(v) => `${v.toFixed(0)}`} tick={{ fontSize: 10, fill: "#9ca3af" }} />
+                      <YAxis dataKey="groupLabel" type="category" width={70} tick={{ fontSize: 11, fill: "#6b7280" }} />
+                      <Tooltip
+                        formatter={(value: number) => formatCurrency(value)}
+                        contentStyle={{ borderRadius: 8, border: "1px solid #ede9fe", fontSize: 12 }}
+                      />
+                      <Bar dataKey="averageTicket" fill="#8b5cf6" radius={[0, 6, 6, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
                 )}
               </CardContent>
             </Card>
           </TabsContent>
 
           <TabsContent value="branches" className="space-y-4">
-            <Card className="bg-white/80 backdrop-blur border-amber-200">
+            <Card className="bg-white/80 backdrop-blur border-violet-100">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
                   <CardTitle className="flex items-center gap-2">
-                    <Building2 className="h-5 w-5 text-amber-600" />
+                    <Building2 className="h-5 w-5 text-primary" />
                     منافسة الفروع
                   </CardTitle>
                   <CardDescription>
@@ -724,7 +876,7 @@ export default function SalesAnalytics() {
                           </div>
                           <div>
                             <p className="text-xs text-gray-500">الفعلي</p>
-                            <p className="font-bold text-amber-600">{formatCurrency(branch.totalSales)}</p>
+                            <p className="font-bold text-primary">{formatCurrency(branch.totalSales)}</p>
                           </div>
                           <div>
                             <p className="text-xs text-gray-500">الفارق</p>
@@ -761,7 +913,7 @@ export default function SalesAnalytics() {
               {shiftAnalytics.map((shift: any) => {
                 const Icon = shiftIcons[shift.shiftType] || Clock;
                 return (
-                  <Card key={shift.shiftType} className="bg-white/80 backdrop-blur border-amber-200">
+                  <Card key={shift.shiftType} className="bg-white/80 backdrop-blur border-violet-100">
                     <CardHeader className="pb-2">
                       <CardTitle className="flex items-center gap-2 text-lg">
                         <Icon className="h-5 w-5" style={{ color: shiftColors[shift.shiftType] }} />
@@ -796,7 +948,7 @@ export default function SalesAnalytics() {
             </div>
 
             {shiftAnalytics.length === 0 && !loadingShifts && (
-              <Card className="bg-white/80 backdrop-blur border-amber-200">
+              <Card className="bg-white/80 backdrop-blur border-violet-100">
                 <CardContent className="p-8 text-center text-gray-500">
                   لا توجد بيانات للفترة المحددة
                 </CardContent>
@@ -805,11 +957,11 @@ export default function SalesAnalytics() {
           </TabsContent>
 
           <TabsContent value="cashiers" className="space-y-4">
-            <Card className="bg-white/80 backdrop-blur border-amber-200">
+            <Card className="bg-white/80 backdrop-blur border-violet-100">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
                   <CardTitle className="flex items-center gap-2">
-                    <Award className="h-5 w-5 text-amber-600" />
+                    <Award className="h-5 w-5 text-primary" />
                     ترتيب الكاشيرين حسب المبيعات
                   </CardTitle>
                   <CardDescription>
@@ -877,7 +1029,7 @@ export default function SalesAnalytics() {
                             </td>
                             <td className="py-2 sm:py-3 px-2 font-medium text-xs sm:text-sm">{cashier.cashierName}</td>
                             <td className="py-2 sm:py-3 px-2 text-gray-600 text-xs sm:text-sm hidden md:table-cell">{cashier.branchName}</td>
-                            <td className="py-2 sm:py-3 px-2 font-bold text-amber-600 text-xs sm:text-sm">{formatCurrency(cashier.totalSales)}</td>
+                            <td className="py-2 sm:py-3 px-2 font-bold text-primary text-xs sm:text-sm">{formatCurrency(cashier.totalSales)}</td>
                             <td className="py-2 sm:py-3 px-2 hidden lg:table-cell">
                               <div className="flex items-center gap-2">
                                 <Progress value={Math.min(cashier.achievementPercent || 0, 100)} className="h-1.5 sm:h-2 w-12 sm:w-16" />
@@ -916,10 +1068,10 @@ export default function SalesAnalytics() {
           </TabsContent>
 
           <TabsContent value="daily" className="space-y-4">
-            <Card className="bg-white/80 backdrop-blur border-amber-200">
+            <Card className="bg-white/80 backdrop-blur border-violet-100">
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5 text-amber-600" />
+                  <Calendar className="h-5 w-5 text-primary" />
                   الأداء اليومي - الأهداف مقابل الفعلي
                 </CardTitle>
                 <div className="flex gap-2">
@@ -960,14 +1112,14 @@ export default function SalesAnalytics() {
                       />
                       <Legend formatter={(value) => value === "actualSales" ? "المبيعات الفعلية" : "الهدف"} />
                       <Line type="monotone" dataKey="targetAmount" stroke="#94a3b8" strokeDasharray="5 5" strokeWidth={2} name="الهدف" />
-                      <Line type="monotone" dataKey="actualSales" stroke="#f59e0b" strokeWidth={2} name="الفعلي" dot={{ fill: "#f59e0b" }} />
+                      <Line type="monotone" dataKey="actualSales" stroke="#8b5cf6" strokeWidth={2} name="الفعلي" dot={{ fill: "#8b5cf6" }} />
                     </LineChart>
                   </ResponsiveContainer>
                 )}
               </CardContent>
             </Card>
 
-            <Card className="bg-white/80 backdrop-blur border-amber-200">
+            <Card className="bg-white/80 backdrop-blur border-violet-100">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle>تفاصيل الأداء اليومي</CardTitle>
@@ -992,7 +1144,7 @@ export default function SalesAnalytics() {
                     <div className="overflow-x-auto">
                       <table className="w-full">
                         <thead>
-                          <tr className="border-b bg-amber-50/50">
+                          <tr className="border-b bg-violet-50/50">
                             <th className="text-right py-3 px-2 font-semibold">التاريخ</th>
                             <th className="text-right py-3 px-2 font-semibold">الفرع</th>
                             <th className="text-right py-3 px-2 font-semibold">الهدف</th>
@@ -1006,7 +1158,7 @@ export default function SalesAnalytics() {
                           {targetsVsActuals
                             .slice((dailyPerformancePage - 1) * itemsPerPage, dailyPerformancePage * itemsPerPage)
                             .map((day: any, idx: number) => (
-                            <tr key={`${day.date}-${day.branchId}`} className="border-b hover:bg-amber-50/30 transition-colors" data-testid={`row-daily-${idx}`}>
+                            <tr key={`${day.date}-${day.branchId}`} className="border-b hover:bg-violet-50/30 transition-colors" data-testid={`row-daily-${idx}`}>
                               <td className="py-3 px-2">{day.date}</td>
                               <td className="py-3 px-2">{day.branchName}</td>
                               <td className="py-3 px-2">{formatCurrency(day.targetAmount)}</td>
@@ -1078,7 +1230,7 @@ export default function SalesAnalytics() {
                                   variant={dailyPerformancePage === pageNum ? "default" : "outline"}
                                   size="sm"
                                   onClick={() => setDailyPerformancePage(pageNum)}
-                                  className={`h-8 w-8 p-0 ${dailyPerformancePage === pageNum ? 'bg-amber-500 hover:bg-amber-600' : ''}`}
+                                  className={`h-8 w-8 p-0 ${dailyPerformancePage === pageNum ? 'bg-primary hover:bg-primary/90' : ''}`}
                                   data-testid={`btn-page-${pageNum}`}
                                 >
                                   {pageNum}
