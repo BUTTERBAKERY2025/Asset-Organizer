@@ -17,7 +17,6 @@ import {
 } from "lucide-react";
 import type { SystemModule } from "@shared/schema";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { SmartAlertsCard } from "@/components/smart-alerts-card";
 import { HeroWidgets } from "@/components/hero-widgets";
 
 type SemanticColor =
@@ -271,9 +270,6 @@ export default function PlatformHomePage() {
           {/* ============ HERO WIDGETS (sparkline + highlights + quick actions) ============ */}
           {isAuthenticated && <HeroWidgets />}
         </section>
-
-        {/* ============ SMART ALERTS CARD ============ */}
-        {isAuthenticated && <SmartAlertsCard />}
 
         {/* ============ KPI STRIP (narrative horizontal) ============ */}
         {isAuthenticated && (
