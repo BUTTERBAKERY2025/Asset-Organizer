@@ -1707,7 +1707,7 @@ export default function BranchEmployeesPage() {
 
   return (
     <Layout>
-      <div className="space-y-4" dir={isRTL ? "rtl" : "ltr"}>
+      <div className="page-container space-y-4 sm:space-y-6" dir={isRTL ? "rtl" : "ltr"}>
         <PageHeader
           icon={Users}
           tone="people"
