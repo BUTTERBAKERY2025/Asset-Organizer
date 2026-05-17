@@ -2479,46 +2479,80 @@ export default function BranchEmployeesPage() {
         </Card>
         </div>
 
-        {stats && (stats.byNationality?.length > 0 || stats.byJobTitle?.length > 0) && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Globe className="w-5 h-5" />
-                  {isRTL ? "توزيع الجنسيات" : "Nationality Distribution"}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {stats.byNationality?.map((item: { nationality: string; count: number }) => (
-                    <div key={item.nationality} className="flex justify-between items-center p-2 bg-gray-50 rounded">
-                      <span>{item.nationality}</span>
-                      <Badge variant="outline">{item.count}</Badge>
-                    </div>
-                  ))}
+        {stats && (stats.byNationality?.length > 0 || stats.byJobTitle?.length > 0) && (() => {
+          const totalEmp = stats.totalEmployees || 0;
+          const sortedNat = [...(stats.byNationality || [])].sort((a: any, b: any) => b.count - a.count);
+          const sortedJob = [...(stats.byJobTitle || [])].sort((a: any, b: any) => b.count - a.count);
+          const maxNat = sortedNat[0]?.count || 1;
+          const maxJob = sortedJob[0]?.count || 1;
+          const renderRow = (label: string, count: number, max: number, gradient: string, idx: number) => {
+            const pct = totalEmp ? Math.round((count / totalEmp) * 100) : 0;
+            const barPct = max ? (count / max) * 100 : 0;
+            return (
+              <div key={`${label}-${idx}`} className="group relative px-3 py-2.5 rounded-xl hover:bg-violet-50/50 transition-colors">
+                <div className={`absolute inset-y-0 ${isRTL ? 'right-0' : 'left-0'} rounded-xl opacity-[0.08] ${gradient}`} style={{ width: `${barPct}%` }} />
+                <div className="relative flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="w-1.5 h-1.5 rounded-full bg-violet-500 flex-shrink-0" />
+                    <span className="text-sm font-medium text-foreground truncate">{label}</span>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className="text-xs text-muted-foreground tabular-nums">{pct}%</span>
+                    <span className="px-2.5 py-0.5 rounded-full bg-violet-100 text-violet-700 text-xs font-semibold tabular-nums min-w-[2rem] text-center">{formatNumber(count)}</span>
+                  </div>
                 </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Briefcase className="w-5 h-5" />
-                  {isRTL ? "توزيع الوظائف" : "Job Title Distribution"}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {stats.byJobTitle?.map((item: { jobTitle: string; count: number }) => (
-                    <div key={item.jobTitle} className="flex justify-between items-center p-2 bg-gray-50 rounded">
-                      <span>{item.jobTitle}</span>
-                      <Badge variant="outline">{item.count}</Badge>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+              </div>
+            );
+          };
+          return (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+              <Card className="border-violet-200/60 overflow-hidden">
+                <CardHeader className="pb-3 bg-gradient-to-l from-violet-50/80 to-transparent">
+                  <CardTitle className="flex items-center justify-between text-base">
+                    <span className="flex items-center gap-2">
+                      <div className="p-1.5 bg-violet-100 rounded-lg">
+                        <Globe className="w-4 h-4 text-violet-700" />
+                      </div>
+                      {isRTL ? "توزيع الجنسيات" : "Nationality Distribution"}
+                    </span>
+                    <span className="text-xs font-normal text-muted-foreground">
+                      {formatNumber(sortedNat.length)} {isRTL ? "جنسية" : "items"}
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-2">
+                  <div className="space-y-0.5 max-h-[360px] overflow-y-auto pr-1">
+                    {sortedNat.map((item: { nationality: string; count: number }, i: number) =>
+                      renderRow(item.nationality, item.count, maxNat, "bg-gradient-to-l from-violet-500 to-fuchsia-500", i)
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="border-fuchsia-200/60 overflow-hidden">
+                <CardHeader className="pb-3 bg-gradient-to-l from-fuchsia-50/80 to-transparent">
+                  <CardTitle className="flex items-center justify-between text-base">
+                    <span className="flex items-center gap-2">
+                      <div className="p-1.5 bg-fuchsia-100 rounded-lg">
+                        <Briefcase className="w-4 h-4 text-fuchsia-700" />
+                      </div>
+                      {isRTL ? "توزيع الوظائف" : "Job Title Distribution"}
+                    </span>
+                    <span className="text-xs font-normal text-muted-foreground">
+                      {formatNumber(sortedJob.length)} {isRTL ? "وظيفة" : "items"}
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-2">
+                  <div className="space-y-0.5 max-h-[360px] overflow-y-auto pr-1">
+                    {sortedJob.map((item: { jobTitle: string; count: number }, i: number) =>
+                      renderRow(item.jobTitle, item.count, maxJob, "bg-gradient-to-l from-fuchsia-500 to-violet-500", i)
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          );
+        })()}
           </TabsContent>
 
           {/* Transfers Tab */}
