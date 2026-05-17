@@ -356,22 +356,22 @@ export default function MarketingDashboardPage() {
             const TrendIcon = s.trend === 'up' ? ArrowUpRight : s.trend === 'down' ? ArrowDownRight : Activity;
             const trendTint = s.trend === 'up' ? 'text-emerald-600 bg-emerald-50' : s.trend === 'down' ? 'text-rose-600 bg-rose-50' : 'text-slate-500 bg-slate-50';
             return (
-              <Card key={i} className={`relative overflow-hidden border ring-1 ${c.ring} hover:shadow-md transition-shadow`} data-testid={`stat-${i}`}>
-                <CardContent className="p-4 sm:p-5">
-                  {isLoading ? <Skeleton className="h-20" /> : (
+              <Card key={i} className={`relative overflow-hidden border ring-1 ${c.ring} hover:shadow-sm transition-shadow`} data-testid={`stat-${i}`}>
+                <CardContent className="p-3">
+                  {isLoading ? <Skeleton className="h-14" /> : (
                     <>
-                      <div className="flex items-start justify-between mb-3">
-                        <div className={`p-2.5 rounded-xl ${c.bg}`}>
-                          <s.icon className={`w-5 h-5 ${c.text}`} />
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className={`p-1.5 rounded-lg ${c.bg}`}>
+                          <s.icon className={`w-3.5 h-3.5 ${c.text}`} />
                         </div>
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${trendTint}`}>
-                          <TrendIcon className="w-3 h-3" />
+                        <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${trendTint}`}>
+                          <TrendIcon className="w-2.5 h-2.5" />
                           {s.trend === 'up' ? 'صاعد' : s.trend === 'down' ? 'هابط' : 'ثابت'}
                         </span>
                       </div>
-                      <div className={`text-2xl sm:text-3xl font-bold tabular-nums ${c.text} leading-tight truncate`}>{s.value}</div>
-                      <div className="text-sm text-muted-foreground mt-0.5">{s.label}</div>
-                      <div className="text-xs text-muted-foreground/80 mt-2 truncate">{s.sub}</div>
+                      <div className={`text-lg sm:text-xl font-bold tabular-nums ${c.text} leading-tight truncate`}>{s.value}</div>
+                      <div className="text-[11px] text-muted-foreground mt-0.5">{s.label}</div>
+                      <div className="text-[10px] text-muted-foreground/80 mt-1 truncate">{s.sub}</div>
                     </>
                   )}
                 </CardContent>
@@ -386,21 +386,21 @@ export default function MarketingDashboardPage() {
             const toneClass = kpi.trend === 'good' ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : kpi.trend === 'warning' ? 'text-rose-700 bg-rose-50 border-rose-200' : 'text-slate-600 bg-slate-50 border-slate-200';
             const iconBg = kpi.trend === 'good' ? 'bg-emerald-100 text-emerald-700' : kpi.trend === 'warning' ? 'bg-rose-100 text-rose-700' : 'bg-violet-100 text-violet-700';
             return (
-              <Card key={index} className="relative overflow-hidden border hover:shadow-md transition-shadow" data-testid={`kpi-${index}`}>
-                <CardContent className="p-4 sm:p-5">
-                  {isLoading ? <Skeleton className="h-20" /> : (
+              <Card key={index} className="relative overflow-hidden border hover:shadow-sm transition-shadow" data-testid={`kpi-${index}`}>
+                <CardContent className="p-3">
+                  {isLoading ? <Skeleton className="h-14" /> : (
                     <>
-                      <div className="flex items-start justify-between mb-3">
-                        <div className={`p-2.5 rounded-xl ${iconBg}`}>
-                          <kpi.icon className="w-5 h-5" />
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className={`p-1.5 rounded-lg ${iconBg}`}>
+                          <kpi.icon className="w-3.5 h-3.5" />
                         </div>
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border ${toneClass}`}>
+                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium border ${toneClass}`}>
                           {kpi.trend === 'good' ? 'جيد' : kpi.trend === 'warning' ? 'تحذير' : 'متوسط'}
                         </span>
                       </div>
-                      <div className="text-2xl sm:text-3xl font-bold tabular-nums leading-tight">{kpi.value}</div>
-                      <div className="text-sm text-muted-foreground mt-0.5">{kpi.title}</div>
-                      <div className="text-xs text-muted-foreground/80 mt-2 truncate">{kpi.description}</div>
+                      <div className="text-lg sm:text-xl font-bold tabular-nums leading-tight truncate">{kpi.value}</div>
+                      <div className="text-[11px] text-muted-foreground mt-0.5">{kpi.title}</div>
+                      <div className="text-[10px] text-muted-foreground/80 mt-1 truncate">{kpi.description}</div>
                     </>
                   )}
                 </CardContent>
