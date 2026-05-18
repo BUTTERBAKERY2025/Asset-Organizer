@@ -14,7 +14,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { LayoutGrid, Plus, Trash2, Save, GripVertical, User as UserIcon, Square } from "lucide-react";
+import {
+  LayoutGrid, Plus, Trash2, Save, GripVertical, User as UserIcon, Square,
+  Crown, Shield, Calculator, Coffee, ChefHat, Utensils, Sparkles,
+  Handshake, Package, Cake, HardHat, Wine, Soup,
+} from "lucide-react";
 import type { Branch } from "@shared/schema";
 
 interface BranchEmployee {
@@ -42,10 +46,37 @@ const ZONE_COLORS = [
   { name: "رمادي", value: "#e5e7eb" },
 ];
 
-const COMMON_ROLES = [
-  "مدير الفرع", "مشرف", "كاشير", "ويتر", "شيف", "مساعد شيف",
-  "باريستا", "عامل نظافة", "مضيف", "أمين مخزن", "حلواني",
-];
+type RoleShape = "circle" | "square" | "hexagon";
+type RoleDef = { label: string; icon: any; color: string; shape: RoleShape };
+
+const ROLE_DEFS: Record<string, RoleDef> = {
+  "مدير الفرع":   { label: "مدير الفرع",  icon: Crown,      color: "#7c3aed", shape: "hexagon" },
+  "مشرف":         { label: "مشرف",        icon: Shield,     color: "#0ea5e9", shape: "hexagon" },
+  "كاشير":        { label: "كاشير",       icon: Calculator, color: "#059669", shape: "circle"  },
+  "ويتر":         { label: "ويتر",        icon: Utensils,   color: "#d97706", shape: "circle"  },
+  "شيف":          { label: "شيف",         icon: ChefHat,    color: "#dc2626", shape: "square"  },
+  "مساعد شيف":    { label: "مساعد شيف",   icon: Soup,       color: "#f97316", shape: "square"  },
+  "باريستا":      { label: "باريستا",     icon: Coffee,     color: "#92400e", shape: "circle"  },
+  "عامل نظافة":   { label: "عامل نظافة",  icon: Sparkles,   color: "#64748b", shape: "circle"  },
+  "مضيف":         { label: "مضيف",        icon: Handshake,  color: "#0891b2", shape: "circle"  },
+  "أمين مخزن":    { label: "أمين مخزن",   icon: Package,    color: "#475569", shape: "square"  },
+  "حلواني":       { label: "حلواني",      icon: Cake,       color: "#ec4899", shape: "square"  },
+  "عامل":         { label: "عامل",        icon: HardHat,    color: "#a16207", shape: "circle"  },
+  "ساقي":         { label: "ساقي",        icon: Wine,       color: "#9333ea", shape: "circle"  },
+};
+const COMMON_ROLES = Object.keys(ROLE_DEFS);
+const DEFAULT_ROLE: RoleDef = { label: "موظف", icon: UserIcon, color: "#3b82f6", shape: "circle" };
+const getRoleDef = (role?: string | null, jobTitle?: string | null): RoleDef => {
+  if (role && ROLE_DEFS[role]) return ROLE_DEFS[role];
+  if (jobTitle && ROLE_DEFS[jobTitle]) return ROLE_DEFS[jobTitle];
+  return DEFAULT_ROLE;
+};
+const shapeStyle = (shape: RoleShape): React.CSSProperties => {
+  if (shape === "circle")  return { borderRadius: "50%" };
+  if (shape === "square")  return { borderRadius: 10 };
+  // hexagon
+  return { clipPath: "polygon(25% 5%, 75% 5%, 100% 50%, 75% 95%, 25% 95%, 0% 50%)", borderRadius: 0 };
+};
 
 export default function FloorPlanPage() {
   const { activeBranch, allowedBranches, isAdmin } = useAuth();
@@ -74,6 +105,8 @@ export default function FloorPlanPage() {
 
   // Dialogs state
   const [zoneDialog, setZoneDialog] = useState<{ mode: "create" | "edit"; x?: number; y?: number; id?: number; name?: string; color?: string; width?: number; height?: number } | null>(null);
+  // Live resize transient state — overrides server dims while user drags a handle
+  const [resizing, setResizing] = useState<{ id: number; width: number; height: number } | null>(null);
   const [assignDialog, setAssignDialog] = useState<{ x: number; y: number; employeeId?: number } | null>(null);
   const [editAssignDialog, setEditAssignDialog] = useState<{ id: number; employeeName: string; role: string; notes: string } | null>(null);
 
@@ -155,6 +188,38 @@ export default function FloorPlanPage() {
     setAssignDialog({ x, y });
   };
 
+  // ---- Zone resize by dragging a handle ----
+  const startResize = (
+    e: React.MouseEvent,
+    zoneId: number,
+    startW: number,
+    startH: number,
+    dir: "br" | "r" | "b",
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let w = startW, h = startH;
+    const onMove = (ev: MouseEvent) => {
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      if (dir === "br" || dir === "r") w = Math.max(60, Math.round(startW + dx));
+      if (dir === "br" || dir === "b") h = Math.max(60, Math.round(startH + dy));
+      setResizing({ id: zoneId, width: w, height: h });
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      if (w !== startW || h !== startH) {
+        updateZone.mutate({ id: zoneId, body: { width: w, height: h } });
+      }
+      setResizing(null);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  };
+
   // Employees that are NOT yet placed on the plan
   const placedEmployeeIds = new Set((data?.assignments || []).map(a => a.employeeId));
   const unplacedEmployees = (data?.employees || []).filter(e => !placedEmployeeIds.has(e.id));
@@ -231,7 +296,10 @@ export default function FloorPlanPage() {
                         <div className="text-center text-xs text-muted-foreground py-6">
                           {data.employees.length === 0 ? "لا يوجد موظفون نشطون بهذا الفرع" : "جميع الموظفين موزَّعون على المخطط"}
                         </div>
-                      ) : unplacedEmployees.map(emp => (
+                      ) : unplacedEmployees.map(emp => {
+                        const def = getRoleDef(null, emp.jobTitle);
+                        const RoleIcon = def.icon;
+                        return (
                         <div
                           key={emp.id}
                           draggable
@@ -243,14 +311,43 @@ export default function FloorPlanPage() {
                           data-testid={`employee-pill-${emp.id}`}
                         >
                           <GripVertical className="w-4 h-4 text-muted-foreground shrink-0" />
+                          <div
+                            className="w-8 h-8 flex items-center justify-center text-white shrink-0"
+                            style={{ backgroundColor: def.color, ...shapeStyle(def.shape) }}
+                          >
+                            <RoleIcon className="w-4 h-4" />
+                          </div>
                           <div className="flex-1 min-w-0">
                             <div className="text-sm font-medium truncate">{emp.employeeName}</div>
                             <div className="text-xs text-muted-foreground truncate">{emp.jobTitle}</div>
                           </div>
                         </div>
-                      ))}
+                      );})}
                     </div>
                   </ScrollArea>
+                </CardContent>
+              </Card>
+
+              {/* Role legend */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">دليل الأشكال</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-2">
+                    {COMMON_ROLES.map(r => {
+                      const def = ROLE_DEFS[r]; const RI = def.icon;
+                      return (
+                        <div key={r} className="flex items-center gap-2 text-xs">
+                          <div className="w-7 h-7 flex items-center justify-center text-white shrink-0"
+                            style={{ backgroundColor: def.color, ...shapeStyle(def.shape) }}>
+                            <RI className="w-3.5 h-3.5" />
+                          </div>
+                          <span className="truncate">{def.label}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -281,11 +378,15 @@ export default function FloorPlanPage() {
                     data-testid="floor-plan-canvas"
                   >
                     {/* Zones */}
-                    {data.zones.map(z => (
+                    {data.zones.map(z => {
+                      const liveW = resizing?.id === z.id ? resizing.width : z.width;
+                      const liveH = resizing?.id === z.id ? resizing.height : z.height;
+                      return (
                       <div
                         key={z.id}
                         draggable
                         onDragStart={(e) => {
+                          if ((e.target as HTMLElement).dataset?.resize === "1") { e.preventDefault(); return; }
                           const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                           e.dataTransfer.setData("application/x-zone-id", String(z.id));
                           e.dataTransfer.setData("x-offset", String(Math.round(e.clientX - rect.left)));
@@ -294,24 +395,56 @@ export default function FloorPlanPage() {
                         }}
                         onClick={(e) => {
                           e.stopPropagation();
+                          if ((e.target as HTMLElement).dataset?.resize === "1") return;
                           setZoneDialog({ mode: "edit", id: z.id, name: z.name, color: z.color, width: z.width, height: z.height });
                         }}
                         className="absolute rounded-lg border-2 border-dashed cursor-grab active:cursor-grabbing flex items-start justify-start p-2 shadow-sm hover:shadow-md hover:border-solid transition-shadow"
                         style={{
-                          left: z.x, top: z.y, width: z.width, height: z.height,
+                          left: z.x, top: z.y, width: liveW, height: liveH,
                           backgroundColor: z.color + "cc", borderColor: z.color,
                         }}
                         data-testid={`zone-${z.id}`}
                       >
                         <span className="text-xs font-semibold text-foreground/80 bg-white/70 px-1.5 py-0.5 rounded">{z.name}</span>
+                        {resizing?.id === z.id && (
+                          <span className="absolute top-1 right-1 text-[10px] bg-black/70 text-white px-1.5 py-0.5 rounded tabular-nums">
+                            {liveW} × {liveH}
+                          </span>
+                        )}
+                        {/* Resize handles — bottom-right (free), right (width), bottom (height) */}
+                        <div
+                          data-resize="1"
+                          onMouseDown={(e) => startResize(e, z.id, z.width, z.height, "br")}
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute -bottom-1 -right-1 w-4 h-4 bg-white border-2 border-primary rounded-sm cursor-nwse-resize shadow z-20"
+                          style={{ touchAction: "none" }}
+                          data-testid={`zone-resize-br-${z.id}`}
+                        />
+                        <div
+                          data-resize="1"
+                          onMouseDown={(e) => startResize(e, z.id, z.width, z.height, "r")}
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute top-1/2 -right-1 -translate-y-1/2 w-3 h-6 bg-white border-2 border-primary rounded-sm cursor-ew-resize shadow z-20"
+                          style={{ touchAction: "none" }}
+                          data-testid={`zone-resize-r-${z.id}`}
+                        />
+                        <div
+                          data-resize="1"
+                          onMouseDown={(e) => startResize(e, z.id, z.width, z.height, "b")}
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute -bottom-1 left-1/2 -translate-x-1/2 h-3 w-6 bg-white border-2 border-primary rounded-sm cursor-ns-resize shadow z-20"
+                          style={{ touchAction: "none" }}
+                          data-testid={`zone-resize-b-${z.id}`}
+                        />
                       </div>
-                    ))}
+                    );})}
 
                     {/* Assignments (employee pawns) */}
                     {data.assignments.map(a => {
                       const emp = employeeById.get(a.employeeId);
                       if (!emp) return null;
-                      const initials = emp.employeeName.split(" ").slice(0, 2).map(s => s[0]).join("");
+                      const def = getRoleDef(a.role, emp.jobTitle);
+                      const RoleIcon = def.icon;
                       return (
                         <div
                           key={a.id}
@@ -331,20 +464,25 @@ export default function FloorPlanPage() {
                             });
                           }}
                           className="absolute z-10 flex flex-col items-center cursor-grab active:cursor-grabbing group"
-                          style={{ left: a.x - 28, top: a.y - 28 }}
+                          style={{ left: a.x - 30, top: a.y - 30 }}
                           data-testid={`assignment-${a.id}`}
+                          title={`${emp.employeeName} — ${def.label}`}
                         >
-                          <div className="w-14 h-14 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold text-lg shadow-lg border-4 border-white group-hover:scale-110 transition-transform">
-                            {initials || <UserIcon className="w-6 h-6" />}
+                          <div
+                            className="w-16 h-16 text-white flex items-center justify-center shadow-lg border-4 border-white group-hover:scale-110 transition-transform"
+                            style={{ backgroundColor: def.color, ...shapeStyle(def.shape) }}
+                          >
+                            <RoleIcon className="w-7 h-7" />
                           </div>
-                          <div className="mt-1 px-2 py-0.5 rounded-md bg-white/95 shadow text-[11px] font-medium text-center max-w-[120px] truncate">
+                          <div className="mt-1 px-2 py-0.5 rounded-md bg-white/95 shadow text-[11px] font-medium text-center max-w-[130px] truncate">
                             {emp.employeeName}
                           </div>
-                          {(a.role || emp.jobTitle) && (
-                            <div className="mt-0.5 text-[10px] text-muted-foreground bg-white/80 px-1.5 py-0.5 rounded">
-                              {a.role || emp.jobTitle}
-                            </div>
-                          )}
+                          <div
+                            className="mt-0.5 text-[10px] text-white px-1.5 py-0.5 rounded font-medium"
+                            style={{ backgroundColor: def.color }}
+                          >
+                            {def.label}
+                          </div>
                         </div>
                       );
                     })}
@@ -411,7 +549,19 @@ export default function FloorPlanPage() {
                   >
                     <SelectTrigger data-testid="select-role-edit"><SelectValue placeholder="اختر..." /></SelectTrigger>
                     <SelectContent>
-                      {COMMON_ROLES.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                      {COMMON_ROLES.map(r => {
+                        const d = ROLE_DEFS[r]; const RI = d.icon;
+                        return (
+                          <SelectItem key={r} value={r}>
+                            <span className="inline-flex items-center gap-2">
+                              <span className="w-5 h-5 flex items-center justify-center text-white" style={{ backgroundColor: d.color, ...shapeStyle(d.shape) }}>
+                                <RI className="w-3 h-3" />
+                              </span>
+                              {r}
+                            </span>
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                 </div>
@@ -535,7 +685,19 @@ function AssignForm({ employees, presetEmployeeId, onSubmit, pending }: {
         <Select value={role} onValueChange={setRole}>
           <SelectTrigger data-testid="select-role-assign"><SelectValue placeholder="اختر..." /></SelectTrigger>
           <SelectContent>
-            {COMMON_ROLES.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+            {COMMON_ROLES.map(r => {
+              const d = ROLE_DEFS[r]; const RI = d.icon;
+              return (
+                <SelectItem key={r} value={r}>
+                  <span className="inline-flex items-center gap-2">
+                    <span className="w-5 h-5 flex items-center justify-center text-white" style={{ backgroundColor: d.color, ...shapeStyle(d.shape) }}>
+                      <RI className="w-3 h-3" />
+                    </span>
+                    {r}
+                  </span>
+                </SelectItem>
+              );
+            })}
             {selectedEmp?.jobTitle && !COMMON_ROLES.includes(selectedEmp.jobTitle) && (
               <SelectItem value={selectedEmp.jobTitle}>{selectedEmp.jobTitle}</SelectItem>
             )}
