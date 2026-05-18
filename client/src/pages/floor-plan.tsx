@@ -22,7 +22,7 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { ZoomIn, ZoomOut, Maximize2, Lock, Unlock, Magnet, Grid3x3, Search } from "lucide-react";
+import { ZoomIn, ZoomOut, Maximize2, Lock, Unlock, Magnet, Grid3x3, Search, Pencil, MousePointer2 } from "lucide-react";
 import type { Branch } from "@shared/schema";
 
 interface BranchEmployee {
@@ -767,6 +767,13 @@ export default function FloorPlanPage() {
                     <Lock className="w-3.5 h-3.5" /> المخطط مقفول — لا يمكن التحريك أو التكبير أو التدوير. أوقف القفل للتعديل.
                   </div>
                 )}
+                {!locked && !placementRole && (
+                  <div className="px-3 py-1.5 bg-muted/40 border-b text-[11px] text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-1" data-testid="banner-canvas-help">
+                    <span className="flex items-center gap-1"><MousePointer2 className="w-3.5 h-3.5" /> اسحب لتحريك المنطقة أو الموظف</span>
+                    <span className="flex items-center gap-1"><Pencil className="w-3.5 h-3.5" /> نقرة مزدوجة أو أيقونة القلم للتعديل</span>
+                    <span className="hidden sm:flex items-center gap-1 text-amber-700">• المواقع الشاغرة تُفتح بنقرة واحدة للتعيين</span>
+                  </div>
+                )}
                 <div ref={canvasWrapRef} className="overflow-auto bg-muted/30">
                   {/* Zoom wrapper — the scaled canvas occupies its scaled dimensions so scroll bars match */}
                   <div style={{ width: data.plan.width * zoom, height: data.plan.height * zoom }}>
@@ -826,13 +833,13 @@ export default function FloorPlanPage() {
                           e.dataTransfer.setData("y-offset", String((e.clientY - cy) / zoom));
                           e.dataTransfer.effectAllowed = "move";
                         }}
-                        onClick={(e) => {
+                        onDoubleClick={(e) => {
                           e.stopPropagation();
                           if (locked) return;
                           if ((e.target as HTMLElement).dataset?.resize === "1") return;
                           setZoneDialog({ mode: "edit", id: z.id, name: z.name, color: z.color, width: z.width, height: z.height, rotation: z.rotation || 0 });
                         }}
-                        className="absolute rounded-lg border-2 border-dashed cursor-grab active:cursor-grabbing flex items-start justify-start p-2 shadow-sm hover:shadow-md hover:border-solid transition-shadow"
+                        className="absolute rounded-lg border-2 border-dashed cursor-grab active:cursor-grabbing flex items-start justify-start p-2 shadow-sm hover:shadow-md hover:border-solid transition-shadow group/zone"
                         style={{
                           left: liveX, top: liveY, width: liveW, height: liveH,
                           backgroundColor: z.color + "cc", borderColor: z.color,
@@ -846,6 +853,23 @@ export default function FloorPlanPage() {
                           // Counter-rotate the label so the zone name stays readable when rotated
                           style={liveR ? { transform: `rotate(${-liveR}deg)`, transformOrigin: "top left" } : undefined}
                         >{z.name}</span>
+                        {/* Quick-edit pencil — appears on hover for one-click edit access */}
+                        {!locked && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setZoneDialog({ mode: "edit", id: z.id, name: z.name, color: z.color, width: z.width, height: z.height, rotation: z.rotation || 0 });
+                            }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            className="absolute top-1 left-1 w-6 h-6 rounded-md bg-white/90 hover:bg-white text-foreground/70 hover:text-primary shadow flex items-center justify-center opacity-0 group-hover/zone:opacity-100 transition-opacity z-20"
+                            style={liveR ? { transform: `rotate(${-liveR}deg)`, transformOrigin: "top left" } : undefined}
+                            title="تعديل المنطقة"
+                            data-testid={`btn-edit-zone-${z.id}`}
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </button>
+                        )}
                         {(resizing?.id === z.id || rotating?.id === z.id) && (
                           <span className="absolute top-1 right-1 text-[10px] bg-black/80 text-white px-1.5 py-0.5 rounded tabular-nums shadow"
                             style={liveR ? { transform: `rotate(${-liveR}deg)`, transformOrigin: "top right" } : undefined}
@@ -907,6 +931,21 @@ export default function FloorPlanPage() {
                           onClick={(e) => {
                             e.stopPropagation();
                             if (locked) return;
+                            // Empty slots open on a single click (quick-assign UX).
+                            // Filled slots require double-click to avoid accidental
+                            // dialogs while dragging/repositioning.
+                            if (!isEmpty) return;
+                            setEditAssignDialog({
+                              id: a.id,
+                              employeeId: a.employeeId,
+                              employeeName: emp?.employeeName ?? null,
+                              role: a.role || emp?.jobTitle || "",
+                              notes: a.notes || "",
+                            });
+                          }}
+                          onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            if (locked) return;
                             setEditAssignDialog({
                               id: a.id,
                               employeeId: a.employeeId,
@@ -935,6 +974,28 @@ export default function FloorPlanPage() {
                           <div className={`mt-1 px-2 py-0.5 rounded-md shadow text-[11px] font-medium text-center max-w-[130px] truncate ${isEmpty ? "bg-amber-50 text-amber-700 border border-amber-200 italic" : "bg-white/95"}`}>
                             {emp ? emp.employeeName : "غير معيّن — اضغط للتعيين"}
                           </div>
+                          {/* Quick-edit pencil — appears on hover, avoids needing a double-click */}
+                          {!locked && !isEmpty && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditAssignDialog({
+                                  id: a.id,
+                                  employeeId: a.employeeId,
+                                  employeeName: emp?.employeeName ?? null,
+                                  role: a.role || emp?.jobTitle || "",
+                                  notes: a.notes || "",
+                                });
+                              }}
+                              onMouseDown={(e) => e.stopPropagation()}
+                              className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-white text-primary shadow-md border border-border opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-20"
+                              title="تعديل الموظف"
+                              data-testid={`btn-edit-assignment-${a.id}`}
+                            >
+                              <Pencil className="w-3 h-3" />
+                            </button>
+                          )}
                           <div
                             className="mt-0.5 text-[10px] text-white px-1.5 py-0.5 rounded font-medium"
                             style={{ backgroundColor: def.color }}
