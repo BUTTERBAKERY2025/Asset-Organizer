@@ -312,16 +312,14 @@ export default function FloorPlanPage() {
 
   const onCanvasClick = (e: React.MouseEvent) => {
     if (e.target !== e.currentTarget) return; // only blank canvas clicks (not on a zone/pawn)
-    const { x, y } = getCanvasCoords(e);
-    // Role placement mode — drop a new empty slot of the chosen role at this point
+    // Role placement mode — drop a new empty slot of the chosen role at this point.
+    // This is the ONLY case where a click on the blank canvas creates something.
+    // Outside of placement mode we do nothing, so users can click freely without
+    // popping the assignment dialog unexpectedly.
     if (placementRole) {
-      createAssignment.mutate({ role: placementRole, x, y, employeeId: null });
-      return; // stay in placement mode so user can drop several quickly
+      const { x, y } = getCanvasCoords(e);
+      createAssignment.mutate({ role: placementRole, x: snap(x), y: snap(y), employeeId: null });
     }
-    if (unplacedEmployees.length === 0) return;
-    const zone = (data?.zones || []).find(z => pointInZone(x, y, z));
-    const preset = zone ? ZONE_PRESETS.find(p => p.name === zone.name) : undefined;
-    setAssignDialog({ x, y, suggestedRole: preset?.defaultRole || undefined });
   };
 
   // Find next free top-left slot for a preset zone — simple cascading offset
