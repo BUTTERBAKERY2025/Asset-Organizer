@@ -20,7 +20,10 @@ import {
   Handshake, Package, Cake, HardHat, ClipboardList, Soup, Sun, Sunset, Moon, RotateCw,
   Wand2, Copy as CopyIcon, AlertCircle, CheckCircle2, Users, Loader2, Calendar,
   Printer, Undo2, Redo2, Hand, X as XIcon,
+  MessageCircle, History as HistoryIcon, Bookmark, BookmarkPlus, Send, Phone,
 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
@@ -322,6 +325,15 @@ export default function FloorPlanPage() {
   } | null>(null);
   // Role placement mode: when set, the next canvas click drops an empty slot of this role
   const [placementRole, setPlacementRole] = useState<string | null>(null);
+
+  // ----- Batch 3: Templates, WhatsApp share, History -----
+  // Save-template dialog
+  const [saveTplDialog, setSaveTplDialog] = useState<{ name: string; description: string; scope: "branch" | "global"; includeZones: boolean } | null>(null);
+  // History side panel
+  const [historyOpen, setHistoryOpen] = useState(false);
+  // WhatsApp share dialog
+  type WaRecipient = { phone: string; name: string };
+  const [waDialog, setWaDialog] = useState<{ recipients: WaRecipient[]; message: string; channel: "whatsapp" | "sms" } | null>(null);
   // Canvas controls — toolbar state
   const [zoom, setZoom] = useState(1);
   const [showGrid, setShowGrid] = useState(true);
@@ -517,6 +529,151 @@ export default function FloorPlanPage() {
       if (ctx?.prev) queryClient.setQueryData(queryKey, ctx.prev);
       toast({ title: "فشل تحديث المخطط", description: e?.message, variant: "destructive" });
     },
+  });
+
+  // ============ Batch 3: Templates · WhatsApp · History ============
+  // Templates list (scoped to current branch + globals).
+  const templatesQueryKey = useMemo(() => ["/api/floor-plan-templates", selectedBranchId], [selectedBranchId]);
+  const { data: templates = [] } = useQuery<any[]>({
+    queryKey: templatesQueryKey,
+    queryFn: async () => (await apiRequest("GET", `/api/floor-plan-templates?branchId=${encodeURIComponent(selectedBranchId)}`)).json(),
+    enabled: !!selectedBranchId,
+    staleTime: 30_000,
+  });
+
+  // History (audit log) — lazy-loaded only while side panel is open.
+  const historyQueryKey = useMemo(() => [`/api/floor-plans/${selectedBranchId}/history`], [selectedBranchId]);
+  const { data: history = [], isLoading: historyLoading, refetch: refetchHistory } = useQuery<any[]>({
+    queryKey: historyQueryKey,
+    queryFn: async () => (await apiRequest("GET", `/api/floor-plans/${selectedBranchId}/history?limit=80`)).json(),
+    enabled: !!selectedBranchId && historyOpen,
+    staleTime: 15_000,
+  });
+
+  // Build a template payload snapshot from the *current shift*.
+  // We strip ids and employee bindings — templates are reusable layouts,
+  // not assignments. Zones are optional (saveTplDialog.includeZones).
+  const buildTemplatePayload = (includeZones: boolean) => {
+    const assignments = (data?.assignments || []).map(a => ({
+      role: a.role, x: a.x, y: a.y, notes: a.notes || null,
+    }));
+    // Omit the `zones` key entirely when not including zones — the server
+    // treats key-absent as "preserve existing zones" (vs. empty array =
+    // "explicitly clear"). See applyFloorPlanTemplate semantics.
+    if (includeZones) {
+      return {
+        assignments,
+        zones: (data?.zones || []).map(z => ({
+          name: z.name, color: z.color, x: z.x, y: z.y,
+          width: z.width, height: z.height, rotation: z.rotation || 0,
+        })),
+      };
+    }
+    return { assignments };
+  };
+
+  const saveTemplate = useMutation({
+    mutationFn: async (body: { name: string; description?: string; scope: "branch" | "global"; includeZones: boolean }) => {
+      const payload = buildTemplatePayload(body.includeZones);
+      return (await apiRequest("POST", `/api/floor-plan-templates`, {
+        name: body.name,
+        description: body.description || null,
+        branchId: body.scope === "branch" ? selectedBranchId : null,
+        payload,
+      })).json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: templatesQueryKey });
+      toast({ title: "تم حفظ القالب" });
+      setSaveTplDialog(null);
+    },
+    onError: (e: any) => toast({ title: "فشل حفظ القالب", description: e?.message, variant: "destructive" }),
+  });
+
+  const applyTemplate = useMutation({
+    mutationFn: async (templateId: number) =>
+      (await apiRequest("POST", `/api/floor-plans/${selectedBranchId}/apply-template/${templateId}`, { shiftType: selectedShift })).json(),
+    onSuccess: (r: any) => {
+      queryClient.invalidateQueries({ queryKey });
+      queryClient.invalidateQueries({ queryKey: historyQueryKey });
+      toast({ title: "تم تطبيق القالب", description: `${r?.assignmentsAdded ?? 0} موقع${r?.zonesAdded ? ` + ${r.zonesAdded} منطقة` : ""}` });
+    },
+    onError: (e: any) => toast({ title: "فشل تطبيق القالب", description: e?.message, variant: "destructive" }),
+  });
+
+  const deleteTemplate = useMutation({
+    mutationFn: async (id: number) =>
+      (await apiRequest("DELETE", `/api/floor-plan-templates/${id}`)).json(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: templatesQueryKey });
+      toast({ title: "تم حذف القالب" });
+    },
+    onError: (e: any) => toast({ title: "فشل الحذف", description: e?.message, variant: "destructive" }),
+  });
+
+  // Build a readable Arabic message summarizing the current shift for
+  // WhatsApp/SMS. Group employees by role; list empty slots at the bottom.
+  const buildShareMessage = () => {
+    if (!data) return "";
+    const branchName = branches.find(b => b.id === selectedBranchId)?.name || "";
+    const shiftLabel = SHIFTS.find(s => s.value === selectedShift)?.label || selectedShift;
+    const empById = new Map((data.employees || []).map(e => [e.id, e]));
+    const filled = data.assignments.filter(a => a.employeeId != null);
+    const empty = data.assignments.filter(a => a.employeeId == null);
+    const byRole = new Map<string, string[]>();
+    for (const a of filled) {
+      const e = empById.get(a.employeeId as number);
+      const name = e?.fullName || e?.name || `موظف #${a.employeeId}`;
+      const key = a.role || "—";
+      if (!byRole.has(key)) byRole.set(key, []);
+      byRole.get(key)!.push(name);
+    }
+    const lines: string[] = [];
+    lines.push(`📋 توزيع المهام — ${branchName}`);
+    lines.push(`🗓️ ${selectedDate} • ${shiftLabel}`);
+    lines.push("");
+    for (const [role, names] of byRole.entries()) {
+      lines.push(`• ${role}: ${names.join("، ")}`);
+    }
+    if (empty.length) {
+      lines.push("");
+      lines.push(`⚠️ مواقع شاغرة (${empty.length}):`);
+      const ec = new Map<string, number>();
+      for (const a of empty) ec.set(a.role || "—", (ec.get(a.role || "—") || 0) + 1);
+      for (const [role, n] of ec.entries()) lines.push(`  - ${role} × ${n}`);
+    }
+    lines.push("");
+    lines.push(`— نظام إدارة باتر`);
+    return lines.join("\n");
+  };
+
+  const sendWhatsApp = useMutation({
+    mutationFn: async (body: { recipients: WaRecipient[]; message: string; channel: "whatsapp" | "sms" }) => {
+      // POST one notification per recipient; the backend queues them all.
+      const results = await Promise.allSettled(body.recipients.map(r =>
+        apiRequest("POST", `/api/notifications/send`, {
+          recipientPhone: r.phone,
+          recipientName: r.name || null,
+          channel: body.channel,
+          message: body.message,
+          relatedModule: "floor_plan",
+          relatedEntityId: data?.plan?.id ? String(data.plan.id) : null,
+        }).then(r => r.json()).catch(e => { throw e; })
+      ));
+      const ok = results.filter(r => r.status === "fulfilled").length;
+      const fail = results.length - ok;
+      return { ok, fail };
+    },
+    onSuccess: (r) => {
+      toast({
+        title: r.fail ? "أُرسل جزئياً" : "تم الإرسال",
+        description: r.fail ? `نجح ${r.ok} • فشل ${r.fail}` : `أُرسل لـ ${r.ok} مستلم`,
+        variant: r.fail ? "destructive" : "default",
+      });
+      if (!r.fail) setWaDialog(null);
+      queryClient.invalidateQueries({ queryKey: historyQueryKey });
+    },
+    onError: (e: any) => toast({ title: "فشل الإرسال", description: e?.message, variant: "destructive" }),
   });
 
   // ---- Drag & Drop helpers ----
@@ -1558,6 +1715,88 @@ export default function FloorPlanPage() {
                   </Button>
                 </div>
 
+                {/* Templates — save current as template / apply a saved one */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs" data-testid="btn-templates">
+                      <Bookmark className="w-3.5 h-3.5" /> القوالب
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-80 max-h-96 overflow-auto">
+                    <DropdownMenuItem
+                      disabled={!data || (data.assignments.length === 0 && data.zones.length === 0)}
+                      onClick={() => setSaveTplDialog({ name: "", description: "", scope: "branch", includeZones: true })}
+                      data-testid="btn-save-template"
+                    >
+                      <BookmarkPlus className="w-3.5 h-3.5 me-2 text-primary" />
+                      حفظ المخطط الحالي كقالب…
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel className="text-xs">القوالب المتاحة ({templates.length})</DropdownMenuLabel>
+                    {templates.length === 0 && (
+                      <div className="px-2 py-3 text-xs text-muted-foreground text-center">لا توجد قوالب محفوظة</div>
+                    )}
+                    {templates.map((t: any) => (
+                      <div key={t.id} className="px-2 py-1.5 hover:bg-accent rounded-sm" data-testid={`template-item-${t.id}`}>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium truncate flex items-center gap-1.5">
+                              {t.name}
+                              {!t.branchId && <Badge variant="outline" className="text-[10px] px-1 py-0">عام</Badge>}
+                            </div>
+                            {t.description && <div className="text-[11px] text-muted-foreground truncate">{t.description}</div>}
+                          </div>
+                          <Button
+                            size="sm" variant="ghost" className="h-7 px-2 text-xs text-primary"
+                            disabled={locked || applyTemplate.isPending}
+                            onClick={() => {
+                              if (confirm(`تطبيق القالب "${t.name}" على ${SHIFTS.find(s => s.value === selectedShift)?.label}؟ سيتم استبدال المواقع الحالية لهذه الوردية.`)) {
+                                applyTemplate.mutate(t.id);
+                              }
+                            }}
+                            data-testid={`btn-apply-template-${t.id}`}
+                          >
+                            تطبيق
+                          </Button>
+                          <Button
+                            size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-600"
+                            disabled={deleteTemplate.isPending}
+                            onClick={() => { if (confirm(`حذف القالب "${t.name}" نهائياً؟`)) deleteTemplate.mutate(t.id); }}
+                            data-testid={`btn-delete-template-${t.id}`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                {/* WhatsApp share */}
+                <Button
+                  variant="outline" size="sm" className="h-7 gap-1.5 text-xs"
+                  disabled={!data || data.assignments.length === 0}
+                  onClick={() => setWaDialog({
+                    recipients: [{ phone: "", name: "" }],
+                    message: buildShareMessage(),
+                    channel: "whatsapp",
+                  })}
+                  title="إرسال التوزيع عبر واتساب / SMS"
+                  data-testid="btn-share-whatsapp"
+                >
+                  <MessageCircle className="w-3.5 h-3.5 text-green-600" /> مشاركة
+                </Button>
+
+                {/* History */}
+                <Button
+                  variant="outline" size="sm" className="h-7 gap-1.5 text-xs"
+                  onClick={() => { setHistoryOpen(true); }}
+                  title="سجل التغييرات"
+                  data-testid="btn-history"
+                >
+                  <HistoryIcon className="w-3.5 h-3.5" /> السجل
+                </Button>
+
                 {/* Smart tools — auto-distribute, copy from shift, clear */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -2208,6 +2447,282 @@ export default function FloorPlanPage() {
             )}
           </div>
         </div>
+
+        {/* ============ Batch 3 dialogs ============ */}
+
+        {/* Save template dialog */}
+        <Dialog open={!!saveTplDialog} onOpenChange={(o) => { if (!o) setSaveTplDialog(null); }}>
+          <DialogContent dir="rtl" className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>حفظ المخطط كقالب</DialogTitle>
+              <DialogDescription>
+                احفظ مواقع الوظائف (وربما المناطق) لإعادة استخدامها لاحقاً في أي وردية أو فرع.
+              </DialogDescription>
+            </DialogHeader>
+            {saveTplDialog && (
+              <div className="space-y-3">
+                <div>
+                  <Label className="text-xs">اسم القالب</Label>
+                  <Input
+                    autoFocus
+                    value={saveTplDialog.name}
+                    onChange={(e) => setSaveTplDialog({ ...saveTplDialog, name: e.target.value })}
+                    placeholder="مثال: توزيع نهاية الأسبوع — صباحي"
+                    data-testid="input-template-name"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">وصف (اختياري)</Label>
+                  <Textarea
+                    rows={2}
+                    value={saveTplDialog.description}
+                    onChange={(e) => setSaveTplDialog({ ...saveTplDialog, description: e.target.value })}
+                    placeholder="ملاحظات قصيرة عن متى يُستخدم هذا القالب"
+                    data-testid="input-template-description"
+                  />
+                </div>
+                <div className="flex items-center gap-3 text-xs">
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <Switch
+                      checked={saveTplDialog.includeZones}
+                      onCheckedChange={(v) => setSaveTplDialog({ ...saveTplDialog, includeZones: v })}
+                      data-testid="switch-include-zones"
+                    />
+                    تضمين المناطق في القالب
+                  </label>
+                </div>
+                {isAdmin && (
+                  <div>
+                    <Label className="text-xs">النطاق</Label>
+                    <Select value={saveTplDialog.scope} onValueChange={(v: any) => setSaveTplDialog({ ...saveTplDialog, scope: v })}>
+                      <SelectTrigger className="h-9" data-testid="select-template-scope">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="branch">هذا الفرع فقط</SelectItem>
+                        <SelectItem value="global">قالب عام (لكل الفروع)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                <div className="text-[11px] text-muted-foreground bg-muted/40 rounded p-2">
+                  سيُحفظ: {data?.assignments.length ?? 0} موقع{saveTplDialog.includeZones ? ` و ${data?.zones.length ?? 0} منطقة` : ""} — بدون أسماء الموظفين.
+                </div>
+                <DialogFooter className="flex-row-reverse gap-2">
+                  <Button
+                    disabled={!saveTplDialog.name.trim() || saveTemplate.isPending}
+                    onClick={() => saveTemplate.mutate(saveTplDialog)}
+                    data-testid="btn-confirm-save-template"
+                  >
+                    {saveTemplate.isPending ? <Loader2 className="w-4 h-4 animate-spin me-1" /> : <Save className="w-4 h-4 me-1" />}
+                    حفظ القالب
+                  </Button>
+                  <Button variant="outline" onClick={() => setSaveTplDialog(null)}>إلغاء</Button>
+                </DialogFooter>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* WhatsApp / SMS share dialog */}
+        <Dialog open={!!waDialog} onOpenChange={(o) => { if (!o) setWaDialog(null); }}>
+          <DialogContent dir="rtl" className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>مشاركة التوزيع</DialogTitle>
+              <DialogDescription>أرسل ملخص توزيع الوردية لأرقام الموظفين أو مجموعة المشرفين.</DialogDescription>
+            </DialogHeader>
+            {waDialog && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-xs">
+                  <Label className="text-xs">القناة:</Label>
+                  <div className="flex rounded-md border overflow-hidden">
+                    <button
+                      type="button"
+                      className={`px-3 py-1 text-xs ${waDialog.channel === "whatsapp" ? "bg-green-600 text-white" : "bg-background"}`}
+                      onClick={() => setWaDialog({ ...waDialog, channel: "whatsapp" })}
+                      data-testid="btn-channel-whatsapp"
+                    >واتساب</button>
+                    <button
+                      type="button"
+                      className={`px-3 py-1 text-xs ${waDialog.channel === "sms" ? "bg-primary text-primary-foreground" : "bg-background"}`}
+                      onClick={() => setWaDialog({ ...waDialog, channel: "sms" })}
+                      data-testid="btn-channel-sms"
+                    >SMS</button>
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs flex items-center justify-between">
+                    <span>المستلمون</span>
+                    <button
+                      type="button"
+                      className="text-primary hover:underline text-xs"
+                      onClick={() => setWaDialog({ ...waDialog, recipients: [...waDialog.recipients, { phone: "", name: "" }] })}
+                      data-testid="btn-add-recipient"
+                    >+ إضافة مستلم</button>
+                  </Label>
+                  <div className="space-y-1.5 max-h-44 overflow-auto">
+                    {waDialog.recipients.map((r, i) => (
+                      <div key={i} className="flex items-center gap-1.5" data-testid={`recipient-row-${i}`}>
+                        <div className="flex items-center gap-1 flex-1">
+                          <Phone className="w-3.5 h-3.5 text-muted-foreground" />
+                          <Input
+                            value={r.phone}
+                            onChange={(e) => {
+                              const next = [...waDialog.recipients];
+                              next[i] = { ...next[i], phone: e.target.value };
+                              setWaDialog({ ...waDialog, recipients: next });
+                            }}
+                            placeholder="+9665XXXXXXXX"
+                            className="h-8 text-xs"
+                            dir="ltr"
+                            data-testid={`input-recipient-phone-${i}`}
+                          />
+                        </div>
+                        <Input
+                          value={r.name}
+                          onChange={(e) => {
+                            const next = [...waDialog.recipients];
+                            next[i] = { ...next[i], name: e.target.value };
+                            setWaDialog({ ...waDialog, recipients: next });
+                          }}
+                          placeholder="الاسم (اختياري)"
+                          className="h-8 text-xs flex-1"
+                          data-testid={`input-recipient-name-${i}`}
+                        />
+                        <Button
+                          variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-600"
+                          disabled={waDialog.recipients.length === 1}
+                          onClick={() => {
+                            const next = waDialog.recipients.filter((_, idx) => idx !== i);
+                            setWaDialog({ ...waDialog, recipients: next });
+                          }}
+                          data-testid={`btn-remove-recipient-${i}`}
+                        >
+                          <XIcon className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs flex items-center justify-between">
+                    <span>الرسالة</span>
+                    <button
+                      type="button" className="text-primary hover:underline text-xs"
+                      onClick={() => setWaDialog({ ...waDialog, message: buildShareMessage() })}
+                      data-testid="btn-regenerate-message"
+                    >↻ توليد من جديد</button>
+                  </Label>
+                  <Textarea
+                    value={waDialog.message}
+                    onChange={(e) => setWaDialog({ ...waDialog, message: e.target.value })}
+                    rows={10}
+                    className="text-xs font-mono"
+                    data-testid="input-share-message"
+                  />
+                  <div className="text-[10px] text-muted-foreground text-end">{waDialog.message.length} حرف</div>
+                </div>
+                <DialogFooter className="flex-row-reverse gap-2">
+                  <Button
+                    disabled={
+                      sendWhatsApp.isPending ||
+                      !waDialog.message.trim() ||
+                      waDialog.recipients.every(r => !r.phone.trim())
+                    }
+                    onClick={() => {
+                      // Normalize + validate: keep digits and leading +, then
+                      // require 8–15 digits (E.164 range). Deduplicate by
+                      // normalized phone so a number listed twice only sends
+                      // once. Cheap SMS-length guard at 1000 chars (≈6 SMS
+                      // segments) — WhatsApp allows more but this protects
+                      // against accidental dumps.
+                      const seen = new Set<string>();
+                      const valid: WaRecipient[] = [];
+                      for (const r of waDialog.recipients) {
+                        const raw = (r.phone || "").trim();
+                        const normalized = raw.replace(/[^\d+]/g, "");
+                        const digits = normalized.replace(/\D/g, "");
+                        if (digits.length < 8 || digits.length > 15) continue;
+                        if (seen.has(normalized)) continue;
+                        seen.add(normalized);
+                        valid.push({ phone: normalized, name: (r.name || "").trim() });
+                      }
+                      if (valid.length === 0) {
+                        toast({ title: "أدخل رقماً صالحاً واحداً على الأقل", description: "الأرقام يجب أن تكون بين 8 و 15 رقماً (مع رمز الدولة).", variant: "destructive" });
+                        return;
+                      }
+                      if (waDialog.channel === "sms" && waDialog.message.length > 1000) {
+                        toast({ title: "الرسالة طويلة جداً للـ SMS", description: `${waDialog.message.length} حرف — حدّد 1000 حرف.`, variant: "destructive" });
+                        return;
+                      }
+                      if (waDialog.message.length > 4000) {
+                        toast({ title: "الرسالة طويلة جداً", description: `${waDialog.message.length} حرف — حدّد 4000 حرف.`, variant: "destructive" });
+                        return;
+                      }
+                      sendWhatsApp.mutate({ ...waDialog, recipients: valid });
+                    }}
+                    data-testid="btn-send-share"
+                  >
+                    {sendWhatsApp.isPending ? <Loader2 className="w-4 h-4 animate-spin me-1" /> : <Send className="w-4 h-4 me-1" />}
+                    إرسال
+                  </Button>
+                  <Button variant="outline" onClick={() => setWaDialog(null)}>إلغاء</Button>
+                </DialogFooter>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* History side panel */}
+        <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
+          <SheetContent side="left" className="w-full sm:max-w-md flex flex-col" dir="rtl">
+            <SheetHeader>
+              <SheetTitle className="flex items-center gap-2">
+                <HistoryIcon className="w-4 h-4" /> سجل تغييرات المخطط
+              </SheetTitle>
+              <SheetDescription>آخر العمليات على هذا الفرع — كل وردية مدموجة معاً.</SheetDescription>
+            </SheetHeader>
+            <div className="flex items-center justify-between mt-2 mb-2">
+              <span className="text-xs text-muted-foreground">{history.length} عملية</span>
+              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => refetchHistory()} data-testid="btn-refresh-history">
+                ↻ تحديث
+              </Button>
+            </div>
+            <ScrollArea className="flex-1 -mx-6 px-6">
+              {historyLoading && (
+                <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
+                  <Loader2 className="w-4 h-4 animate-spin me-2" /> جاري التحميل…
+                </div>
+              )}
+              {!historyLoading && history.length === 0 && (
+                <div className="text-center py-8 text-sm text-muted-foreground">لا توجد عمليات مسجلة بعد.</div>
+              )}
+              <div className="space-y-2">
+                {history.map((h: any) => {
+                  const actionTone =
+                    h.action?.startsWith("create") ? "border-emerald-300 bg-emerald-50" :
+                    h.action?.startsWith("delete") ? "border-rose-300 bg-rose-50" :
+                    h.action?.startsWith("apply") ? "border-violet-300 bg-violet-50" :
+                    "border-sky-300 bg-sky-50";
+                  return (
+                    <div key={h.id} className={`border rounded-md p-2 text-xs ${actionTone}`} data-testid={`history-row-${h.id}`}>
+                      <div className="flex items-center justify-between gap-2 mb-0.5">
+                        <span className="font-medium">{h.details || h.action}</span>
+                        <span className="text-[10px] text-muted-foreground shrink-0 tabular-nums" dir="ltr">
+                          {new Date(h.createdAt).toLocaleString("ar-SA", { hour12: false })}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                        <span>👤 {h.userName || "نظام"}</span>
+                        <span className="font-mono">{h.action}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </ScrollArea>
+          </SheetContent>
+        </Sheet>
       </div>
     </Layout>
   );

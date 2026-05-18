@@ -581,6 +581,9 @@ import {
   floorPlanAssignments,
   type FloorPlanAssignment,
   type InsertFloorPlanAssignment,
+  floorPlanTemplates,
+  type FloorPlanTemplate,
+  type InsertFloorPlanTemplate,
 } from "@shared/schema";
 
 type TransferHistory = typeof transferHistory.$inferSelect;
@@ -17266,6 +17269,109 @@ export class DatabaseStorage implements IStorage {
       ))
       .returning({ id: floorPlanAssignments.id });
     return result.length > 0;
+  }
+
+  // ----- Floor Plan Templates -----
+  async listFloorPlanTemplates(branchId?: string): Promise<FloorPlanTemplate[]> {
+    // Returns templates scoped to `branchId` + global templates (branchId IS NULL).
+    // When `branchId` is omitted, returns all templates (admin view).
+    if (branchId) {
+      return db.select().from(floorPlanTemplates)
+        .where(or(eq(floorPlanTemplates.branchId, branchId), isNull(floorPlanTemplates.branchId)))
+        .orderBy(desc(floorPlanTemplates.createdAt));
+    }
+    return db.select().from(floorPlanTemplates).orderBy(desc(floorPlanTemplates.createdAt));
+  }
+
+  async getFloorPlanTemplate(id: number): Promise<FloorPlanTemplate | undefined> {
+    const [t] = await db.select().from(floorPlanTemplates).where(eq(floorPlanTemplates.id, id));
+    return t || undefined;
+  }
+
+  async createFloorPlanTemplate(data: InsertFloorPlanTemplate): Promise<FloorPlanTemplate> {
+    const [created] = await db.insert(floorPlanTemplates).values(data).returning();
+    return created;
+  }
+
+  async deleteFloorPlanTemplate(id: number): Promise<boolean> {
+    const res = await db.delete(floorPlanTemplates)
+      .where(eq(floorPlanTemplates.id, id))
+      .returning({ id: floorPlanTemplates.id });
+    return res.length > 0;
+  }
+
+  // Replaces all zones + assignments of (branch, shift) atomically with the
+  // template payload. Zones are global to the plan (not shift-scoped) so we
+  // wipe + reinsert all zones. Assignments are wiped only for the target
+  // shift to avoid blowing away the other two shifts' work.
+  async applyFloorPlanTemplate(branchId: string, shiftType: string, templateId: number): Promise<{ zonesAdded: number; assignmentsAdded: number }> {
+    const tpl = await this.getFloorPlanTemplate(templateId);
+    if (!tpl) throw new Error("Template not found");
+    const payload: any = tpl.payload || {};
+    // Three-state semantic for `zones`:
+    //   - key absent          → preserve existing zones (assignments-only template)
+    //   - key present, empty  → explicitly clear all zones
+    //   - key present, has    → wipe and replace
+    const hasZonesKey = Object.prototype.hasOwnProperty.call(payload, "zones");
+    const zonesIn: any[] = Array.isArray(payload.zones) ? payload.zones : [];
+    const slotsIn: any[] = Array.isArray(payload.assignments) ? payload.assignments : [];
+    const plan = await this.getOrCreateBranchFloorPlan(branchId);
+    return await db.transaction(async (tx) => {
+      await tx.delete(floorPlanAssignments).where(and(
+        eq(floorPlanAssignments.floorPlanId, plan.id),
+        eq(floorPlanAssignments.shiftType, shiftType),
+      ));
+      if (hasZonesKey) {
+        await tx.delete(floorPlanZones).where(eq(floorPlanZones.floorPlanId, plan.id));
+        if (zonesIn.length) {
+          await tx.insert(floorPlanZones).values(zonesIn.map((z: any) => ({
+            floorPlanId: plan.id,
+            name: String(z.name ?? "منطقة"),
+            color: String(z.color ?? "#fde68a"),
+            x: parseInt(z.x ?? 0, 10), y: parseInt(z.y ?? 0, 10),
+            width: parseInt(z.width ?? 200, 10), height: parseInt(z.height ?? 150, 10),
+            rotation: parseInt(z.rotation ?? 0, 10),
+          })));
+        }
+      }
+      if (slotsIn.length) {
+        // Templates carry empty role slots only (no employeeId). This keeps
+        // the layout reusable across branches with different staff.
+        await tx.insert(floorPlanAssignments).values(slotsIn.map((s: any) => ({
+          floorPlanId: plan.id,
+          employeeId: null,
+          shiftType,
+          role: s.role ?? null,
+          notes: s.notes ?? null,
+          x: parseInt(s.x ?? 0, 10),
+          y: parseInt(s.y ?? 0, 10),
+        })));
+      }
+      return { zonesAdded: zonesIn.length, assignmentsAdded: slotsIn.length };
+    });
+  }
+
+  // History view: list system_audit_logs scoped to a specific floor plan
+  // (entityId = floorPlanId or "<floorPlanId>:<shift>"). The query also
+  // permissively matches the branch-prefixed form used when audit writes
+  // happen at route level.
+  async getFloorPlanHistory(floorPlanId: number, limit = 50): Promise<SystemAuditLog[]> {
+    // Match three patterns of `entityId`/`targetId` so the same query
+    // surfaces zone/assignment events (entityId = floorPlanId or
+    // floorPlanId:shift) AND template events (entityId = templateId,
+    // targetId = floorPlanId).
+    const fpId = String(floorPlanId);
+    return db.select().from(systemAuditLogs)
+      .where(and(
+        eq(systemAuditLogs.module, "floor_plan"),
+        or(
+          eq(systemAuditLogs.entityId, fpId),
+          ilike(systemAuditLogs.entityId, `${fpId}:%`),
+          eq(systemAuditLogs.targetId, fpId),
+        ),
+      ))
+      .orderBy(desc(systemAuditLogs.createdAt))
+      .limit(limit);
   }
 }
 

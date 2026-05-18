@@ -10075,3 +10075,31 @@ export type FloorPlanZone = typeof floorPlanZones.$inferSelect;
 export type InsertFloorPlanZone = z.infer<typeof insertFloorPlanZoneSchema>;
 export type FloorPlanAssignment = typeof floorPlanAssignments.$inferSelect;
 export type InsertFloorPlanAssignment = z.infer<typeof insertFloorPlanAssignmentSchema>;
+
+// Reusable floor-plan template. Stores a normalized snapshot (zones +
+// role slots) so a manager can save the layout of one shift/branch and
+// later apply it to any branch+shift in one click. The payload is the
+// minimum needed to rebuild the layout — no employee bindings, no ids.
+export const floorPlanTemplates = pgTable("floor_plan_templates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  // Scope: "branch" (only that branch can apply) or "global" (any branch).
+  // Null branchId = global.
+  branchId: varchar("branch_id").references(() => branches.id, { onDelete: "cascade" }),
+  // Snapshot of zones (sans ids) and role slots (sans employeeId).
+  // Shape: { zones: ZoneTemplate[], assignments: SlotTemplate[] }
+  payload: jsonb("payload").notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_floor_plan_templates_branch").on(table.branchId),
+  index("idx_floor_plan_templates_created_at").on(table.createdAt),
+]);
+
+export const insertFloorPlanTemplateSchema = createInsertSchema(floorPlanTemplates).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export type FloorPlanTemplate = typeof floorPlanTemplates.$inferSelect;
+export type InsertFloorPlanTemplate = z.infer<typeof insertFloorPlanTemplateSchema>;

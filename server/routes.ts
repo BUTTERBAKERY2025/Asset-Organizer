@@ -34093,6 +34093,7 @@ export async function registerRoutes(
       if (!(await ensureFloorPlanBranchAccess(req, res, branchId))) return;
       const plan = await storage.getOrCreateBranchFloorPlan(branchId);
       const created = await storage.createFloorPlanZone({ ...req.body, floorPlanId: plan.id });
+      auditFloorPlan(req, "create_zone", String(plan.id), `إضافة منطقة: ${created.name}`, created.name);
       res.status(201).json(created);
     } catch (error: any) {
       console.error("Error creating zone:", error);
@@ -34108,6 +34109,7 @@ export async function registerRoutes(
       const plan = await storage.getOrCreateBranchFloorPlan(branchId);
       const updated = await storage.updateFloorPlanZone(id, plan.id, pickZoneFields(req.body));
       if (!updated) return res.status(404).json({ error: "Zone not found" });
+      auditFloorPlan(req, "update_zone", String(plan.id), `تعديل منطقة: ${updated.name}`, updated.name);
       res.json(updated);
     } catch (error: any) {
       console.error("Error updating zone:", error);
@@ -34123,6 +34125,7 @@ export async function registerRoutes(
       const plan = await storage.getOrCreateBranchFloorPlan(branchId);
       const ok = await storage.deleteFloorPlanZone(id, plan.id);
       if (!ok) return res.status(404).json({ error: "Zone not found" });
+      auditFloorPlan(req, "delete_zone", String(plan.id), `حذف منطقة #${id}`);
       res.json({ success: true });
     } catch (error: any) {
       console.error("Error deleting zone:", error);
@@ -34162,6 +34165,9 @@ export async function registerRoutes(
         x: parseInt(x, 10), y: parseInt(y, 10),
         role: role.trim(), notes: notes || null,
       });
+      auditFloorPlan(req, "create_assignment", `${plan.id}:${shift}`,
+        `إضافة موقع (${shift}) — ${created.role}${created.employeeId ? ` — موظف#${created.employeeId}` : " — شاغر"}`,
+        created.role || undefined);
       res.status(201).json(created);
     } catch (error: any) {
       console.error("Error creating assignment:", error);
@@ -34201,6 +34207,9 @@ export async function registerRoutes(
       const plan = await storage.getOrCreateBranchFloorPlan(branchId);
       const updated = await storage.updateFloorPlanAssignment(id, plan.id, shift, fields);
       if (!updated) return res.status(404).json({ error: "Assignment not found" });
+      auditFloorPlan(req, "update_assignment", `${plan.id}:${shift}`,
+        `تعديل موقع #${id} (${shift})${updated.employeeId ? ` — موظف#${updated.employeeId}` : " — شاغر"}`,
+        updated.role || undefined);
       res.json(updated);
     } catch (error: any) {
       console.error("Error updating assignment:", error);
@@ -34221,10 +34230,188 @@ export async function registerRoutes(
       const plan = await storage.getOrCreateBranchFloorPlan(branchId);
       const ok = await storage.deleteFloorPlanAssignment(id, plan.id, shift);
       if (!ok) return res.status(404).json({ error: "Assignment not found" });
+      auditFloorPlan(req, "delete_assignment", `${plan.id}:${shift}`, `حذف موقع #${id} (${shift})`);
       res.json({ success: true });
     } catch (error: any) {
       console.error("Error deleting assignment:", error);
       res.status(500).json({ error: error.message || "Failed to delete assignment" });
+    }
+  });
+
+  // ===== Floor Plan Templates =====
+  // Best-effort audit helper for floor-plan events. Never throws (logging
+  // must not break business flow). Reused below for template + history.
+  // Best-effort audit helper. Accepts an optional `targetId` that history
+  // queries use to correlate template events back to a specific floor-plan
+  // (otherwise template create/delete wouldn't appear in branch history).
+  // Never throws — wrapped in try/catch AND callers don't await it.
+  const auditFloorPlan = async (req: any, action: string, entityId: string, details: string, entityName?: string, targetId?: string) => {
+    try {
+      const userId = (req as any).user?.id || null;
+      let userName: string | null = null;
+      if (userId) {
+        const u = await storage.getUser(userId).catch(() => null);
+        if (u) userName = u.firstName && u.lastName ? `${u.firstName} ${u.lastName}` : u.username;
+      }
+      await storage.createSystemAuditLog({
+        module: "floor_plan",
+        entityId,
+        entityName: entityName || null,
+        action,
+        details,
+        userId,
+        userName,
+        targetId: targetId || null,
+        ipAddress: req.ip || null,
+        userAgent: req.get?.("user-agent") || null,
+      } as any);
+    } catch (e) {
+      console.warn("[floor-plan audit] failed:", (e as any)?.message);
+    }
+  };
+
+  app.get("/api/floor-plan-templates", isAuthenticated, requirePermission("floor_plan", "view"), async (req, res) => {
+    try {
+      const branchId = typeof req.query.branchId === "string" && req.query.branchId.trim()
+        ? req.query.branchId.trim() : undefined;
+      // SECURITY: prevent cross-branch template leakage.
+      // - If a branchId is supplied, verify the caller can access it.
+      // - If omitted: admins see everything; non-admins only see global
+      //   templates (branchId IS NULL) + templates of branches they're
+      //   allowed in. Never return all branch-scoped templates to a
+      //   non-admin without a branch filter.
+      if (branchId) {
+        if (!(await ensureFloorPlanBranchAccess(req, res, branchId))) return;
+        const rows = await storage.listFloorPlanTemplates(branchId);
+        return res.json(rows);
+      }
+      if (isUserAdmin(req)) {
+        return res.json(await storage.listFloorPlanTemplates());
+      }
+      // Non-admin without branchId: union of (allowed branches + global).
+      // Use the same source of truth as `canAccessBranch` — pre-loaded
+      // `req.userBranchAccess` (populated by auth middleware) falling back
+      // to the user's single assigned branch.
+      const cu: any = (req as any).currentUser || (req as any).user;
+      const list: any[] = (req as any).userBranchAccess
+        || (cu?.id ? await storage.getUserBranchAccess(cu.id) : []);
+      const allowedIds: string[] = list.map((b: any) => b.branchId).filter(Boolean);
+      if (allowedIds.length === 0 && cu?.branchId) allowedIds.push(cu.branchId);
+      const all = await storage.listFloorPlanTemplates();
+      const filtered = all.filter((t: any) => t.branchId == null || allowedIds.includes(t.branchId));
+      res.json(filtered);
+    } catch (error: any) {
+      console.error("Error listing floor plan templates:", error);
+      res.status(500).json({ error: error.message || "Failed to list templates" });
+    }
+  });
+
+  app.post("/api/floor-plan-templates", isAuthenticated, requirePermission("floor_plan", "edit"), async (req, res) => {
+    try {
+      const { name, description, branchId, payload } = req.body || {};
+      if (!name || typeof name !== "string" || !name.trim()) {
+        return res.status(400).json({ error: "اسم القالب مطلوب" });
+      }
+      if (!payload || typeof payload !== "object") {
+        return res.status(400).json({ error: "محتوى القالب غير صالح" });
+      }
+      // If branch-scoped, verify the user can access that branch.
+      let scopedBranchId: string | null = null;
+      if (branchId && typeof branchId === "string") {
+        if (!(await ensureFloorPlanBranchAccess(req, res, branchId))) return;
+        scopedBranchId = branchId;
+      } else if (!isUserAdmin(req)) {
+        return res.status(403).json({ error: "فقط المسؤول يمكنه إنشاء قوالب عامة" });
+      }
+      const created = await storage.createFloorPlanTemplate({
+        name: name.trim(),
+        description: description?.trim() || null,
+        branchId: scopedBranchId,
+        payload,
+        createdBy: (req as any).user?.id || null,
+      } as any);
+      // For branch-scoped templates, link the audit row to the branch so it
+      // shows up in that branch's floor-plan history view.
+      if (scopedBranchId) {
+        const plan = await storage.getOrCreateBranchFloorPlan(scopedBranchId);
+        await auditFloorPlan(req, "create_template", String(created.id), `حفظ قالب: ${created.name}`, created.name, String(plan.id));
+      } else {
+        await auditFloorPlan(req, "create_template", String(created.id), `حفظ قالب عام: ${created.name}`, created.name);
+      }
+      res.status(201).json(created);
+    } catch (error: any) {
+      console.error("Error creating floor plan template:", error);
+      res.status(500).json({ error: error.message || "Failed to create template" });
+    }
+  });
+
+  app.delete("/api/floor-plan-templates/:id", isAuthenticated, requirePermission("floor_plan", "edit"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "معرف غير صالح" });
+      const tpl = await storage.getFloorPlanTemplate(id);
+      if (!tpl) return res.status(404).json({ error: "Template not found" });
+      // Only admin can delete global templates; branch-scoped requires branch access.
+      if (!tpl.branchId) {
+        if (!isUserAdmin(req)) return res.status(403).json({ error: "غير مصرح بحذف القوالب العامة" });
+      } else {
+        if (!(await ensureFloorPlanBranchAccess(req, res, tpl.branchId))) return;
+      }
+      const ok = await storage.deleteFloorPlanTemplate(id);
+      if (!ok) return res.status(404).json({ error: "Template not found" });
+      if (tpl.branchId) {
+        const plan = await storage.getOrCreateBranchFloorPlan(tpl.branchId);
+        await auditFloorPlan(req, "delete_template", String(id), `حذف قالب: ${tpl.name}`, tpl.name, String(plan.id));
+      } else {
+        await auditFloorPlan(req, "delete_template", String(id), `حذف قالب عام: ${tpl.name}`, tpl.name);
+      }
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error deleting floor plan template:", error);
+      res.status(500).json({ error: error.message || "Failed to delete template" });
+    }
+  });
+
+  // Apply a template to a (branch, shift). Wipes that shift's assignments
+  // (and zones if template provides them) and inserts the snapshot.
+  app.post("/api/floor-plans/:branchId/apply-template/:templateId", isAuthenticated, requirePermission("floor_plan", "edit"), async (req, res) => {
+    try {
+      const { branchId } = req.params;
+      const templateId = parseInt(req.params.templateId, 10);
+      if (isNaN(templateId)) return res.status(400).json({ error: "معرف القالب غير صالح" });
+      if (!(await ensureFloorPlanBranchAccess(req, res, branchId))) return;
+      const shift = requireShift(req.body?.shiftType ?? req.query?.shift, res);
+      if (!shift) return;
+      const tpl = await storage.getFloorPlanTemplate(templateId);
+      if (!tpl) return res.status(404).json({ error: "Template not found" });
+      // Branch-scoped templates can't leak across branches.
+      if (tpl.branchId && tpl.branchId !== branchId) {
+        return res.status(403).json({ error: "هذا القالب مخصص لفرع آخر" });
+      }
+      const result = await storage.applyFloorPlanTemplate(branchId, shift, templateId);
+      const plan = await storage.getOrCreateBranchFloorPlan(branchId);
+      await auditFloorPlan(req, "apply_template", `${plan.id}:${shift}`,
+        `تطبيق قالب "${tpl.name}" — ${result.zonesAdded} منطقة، ${result.assignmentsAdded} موقع`,
+        tpl.name);
+      res.json(result);
+    } catch (error: any) {
+      console.error("Error applying floor plan template:", error);
+      res.status(500).json({ error: error.message || "Failed to apply template" });
+    }
+  });
+
+  // ===== Floor Plan History (audit log view) =====
+  app.get("/api/floor-plans/:branchId/history", isAuthenticated, requirePermission("floor_plan", "view"), async (req, res) => {
+    try {
+      const { branchId } = req.params;
+      if (!(await ensureFloorPlanBranchAccess(req, res, branchId))) return;
+      const plan = await storage.getOrCreateBranchFloorPlan(branchId);
+      const limit = Math.min(parseInt(String(req.query.limit ?? "50"), 10) || 50, 200);
+      const rows = await storage.getFloorPlanHistory(plan.id, limit);
+      res.json(rows);
+    } catch (error: any) {
+      console.error("Error fetching floor plan history:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch history" });
     }
   });
 
