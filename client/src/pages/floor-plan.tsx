@@ -19,6 +19,7 @@ import {
   Crown, Shield, Calculator, Coffee, ChefHat, Utensils, Sparkles,
   Handshake, Package, Cake, HardHat, ClipboardList, Soup, Sun, Sunset, Moon, RotateCw,
   Wand2, Copy as CopyIcon, AlertCircle, CheckCircle2, Users, Loader2, Calendar,
+  Printer, Undo2, Redo2, Hand, X as XIcon,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
@@ -27,6 +28,10 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import {
+  ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+import { useReactToPrint } from "react-to-print";
 import { ZoomIn, ZoomOut, Maximize2, Lock, Unlock, Magnet, Grid3x3, Search, Pencil, MousePointer2 } from "lucide-react";
 import type { Branch } from "@shared/schema";
 
@@ -338,6 +343,66 @@ export default function FloorPlanPage() {
     const avail = canvasWrapRef.current.clientWidth - 16;
     setZoomClamped(avail / data.plan.width);
   };
+
+  // ---- Boundary clamping ----
+  // Keeps an element inside the plan rectangle so it can't be lost off-canvas.
+  // `margin` accounts for the visual size (half a pawn = 30px) so the element
+  // body — not just its origin — stays visible.
+  const clampToPlan = (x: number, y: number, margin = 30) => {
+    const w = data?.plan?.width ?? 1200;
+    const h = data?.plan?.height ?? 700;
+    return {
+      x: Math.max(margin, Math.min(w - margin, x)),
+      y: Math.max(margin, Math.min(h - margin, y)),
+    };
+  };
+
+  // ---- Undo / Redo history (assignment ops only — high-frequency surface) ----
+  // Each entry stores enough info to fully invert AND replay the operation.
+  // Create/delete carry a full snapshot so we can recreate after the original
+  // row is gone, and we remap server-issued ids on each recreate so subsequent
+  // undo/redo cycles target the correct row. Capped to 30 entries to bound
+  // memory; older actions silently roll off.
+  type AssignmentSnapshot = { role: string | null; x: number; y: number; employeeId: number | null; notes?: string | null };
+  type HistoryOp =
+    | { type: "create"; id: number; snapshot: AssignmentSnapshot }
+    | { type: "delete"; id: number; snapshot: AssignmentSnapshot }
+    | { type: "update"; id: number; prev: Record<string, any>; next: Record<string, any> };
+  const undoStackRef = useRef<HistoryOp[]>([]);
+  const redoStackRef = useRef<HistoryOp[]>([]);
+  const [, forceHistoryRender] = useState(0);
+  const bumpHistory = () => forceHistoryRender(n => n + 1);
+  const recordOp = (op: HistoryOp) => {
+    undoStackRef.current.push(op);
+    if (undoStackRef.current.length > 30) undoStackRef.current.shift();
+    redoStackRef.current = [];
+    bumpHistory();
+  };
+  const canUndo = undoStackRef.current.length > 0;
+  const canRedo = redoStackRef.current.length > 0;
+
+  // ---- Touch drag (iPad / phone fallback) ----
+  // HTML5 drag-and-drop doesn't fire on touch devices, so we run a parallel
+  // pointer-based system. Only activates for `pointerType === "touch"` and
+  // shows a finger-following ghost. On release we run the same drop logic
+  // the desktop path uses.
+  type TouchPayload =
+    | { kind: "employee"; id: number; label: string }
+    | { kind: "role"; name: string; label: string }
+    | { kind: "assignment"; id: number; offX: number; offY: number; label: string }
+    | { kind: "zone"; id: number; offX: number; offY: number; label: string };
+  const touchDragRef = useRef<TouchPayload | null>(null);
+  const [touchGhost, setTouchGhost] = useState<{ x: number; y: number; label: string } | null>(null);
+
+  // ---- Print / PDF export ----
+  // Uses react-to-print to capture the canvas + a header for a printable A4
+  // landscape view. The browser's "Save as PDF" path then turns it into a PDF.
+  const printableRef = useRef<HTMLDivElement>(null);
+  const handlePrint = useReactToPrint({
+    contentRef: printableRef,
+    documentTitle: `floor-plan-${selectedBranchId}-${selectedShift}-${selectedDate}`,
+    pageStyle: `@page { size: A4 landscape; margin: 10mm; } @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }`,
+  });
   // Exit placement mode on Escape
   useEffect(() => {
     if (!placementRole) return;
@@ -388,7 +453,29 @@ export default function FloorPlanPage() {
   const createAssignment = useMutation({
     mutationFn: async (body: any) =>
       (await apiRequest("POST", `/api/floor-plans/${selectedBranchId}/assignments`, { ...body, shiftType: selectedShift })).json(),
-    onSuccess: () => { invalidate(); setAssignDialog(null); /* silent success — no toast for high-frequency drops */ },
+    onSuccess: (data: any, variables: any) => {
+      // Record the create in history so the user can Ctrl+Z an accidental
+      // role-drop / placement-click / assign-dialog submit. The server-issued
+      // id is captured here so subsequent undo→redo→undo cycles re-map cleanly.
+      // Skip when `__noHistory` is set (used by undo/redo themselves to avoid
+      // recursive history pollution — not currently set since doUndo bypasses
+      // this mutation, but kept for future safety).
+      if (data?.id && !variables?.__noHistory) {
+        recordOp({
+          type: "create",
+          id: data.id,
+          snapshot: {
+            role: variables?.role ?? null,
+            x: variables?.x ?? data.x,
+            y: variables?.y ?? data.y,
+            employeeId: variables?.employeeId ?? null,
+            notes: variables?.notes ?? null,
+          },
+        });
+      }
+      invalidate();
+      setAssignDialog(null); /* silent success — no toast for high-frequency drops */
+    },
     onError: (e: any) => toast({ title: "فشل التعيين", description: e?.message, variant: "destructive" }),
   });
   const updateAssignment = useMutation({
@@ -455,6 +542,74 @@ export default function FloorPlanPage() {
     return lx >= 0 && lx <= z.width && ly >= 0 && ly <= z.height;
   };
 
+  // Unified drop handler — called from both HTML5 drop AND touch-drag release.
+  // `payload` is what was being dragged; (x, y) is the plan-coord drop point.
+  const performDrop = (
+    payload:
+      | { kind: "role"; name: string }
+      | { kind: "employee"; id: number }
+      | { kind: "assignment"; id: number; offX: number; offY: number }
+      | { kind: "zone"; id: number; offX: number; offY: number },
+    rawX: number,
+    rawY: number,
+  ) => {
+    if (payload.kind === "role") {
+      const c = clampToPlan(snap(rawX), snap(rawY));
+      createAssignment.mutate({ role: payload.name, x: c.x, y: c.y, employeeId: null });
+      return;
+    }
+    if (payload.kind === "employee") {
+      const employeeId = payload.id;
+      const existing = data?.assignments.find(a => a.employeeId === employeeId);
+      if (existing) {
+        const c = clampToPlan(rawX, rawY);
+        const prev = { x: existing.x, y: existing.y };
+        const next = { x: c.x, y: c.y };
+        recordOp({ type: "update", id: existing.id, prev, next });
+        updateAssignment.mutate({ id: existing.id, body: next });
+        return;
+      }
+      // Dropped on/near an empty role slot? → fill the NEAREST one instead
+      // of opening a dialog. Tight radius avoids accidental fills.
+      const HIT_RADIUS = 36;
+      const targetSlot = emptySlots
+        .map(s => ({ s, d: Math.hypot(s.x - rawX, s.y - rawY) }))
+        .filter(({ d }) => d <= HIT_RADIUS)
+        .sort((a, b) => a.d - b.d)[0]?.s;
+      if (targetSlot) {
+        recordOp({ type: "update", id: targetSlot.id, prev: { employeeId: null }, next: { employeeId } });
+        updateAssignment.mutate({ id: targetSlot.id, body: { employeeId } });
+        return;
+      }
+      const zone = (data?.zones || []).find(z => pointInZone(rawX, rawY, z));
+      const preset = zone ? ZONE_PRESETS.find(p => p.name === zone.name) : undefined;
+      const c = clampToPlan(snap(rawX), snap(rawY));
+      setAssignDialog({ x: c.x, y: c.y, employeeId, suggestedRole: preset?.defaultRole || undefined });
+      return;
+    }
+    if (payload.kind === "assignment") {
+      if (locked) return;
+      const current = data?.assignments.find(a => a.id === payload.id);
+      const c = clampToPlan(snap(rawX - payload.offX), snap(rawY - payload.offY));
+      const next = { x: c.x, y: c.y };
+      if (current) recordOp({ type: "update", id: payload.id, prev: { x: current.x, y: current.y }, next });
+      updateAssignment.mutate({ id: payload.id, body: next });
+      return;
+    }
+    if (payload.kind === "zone") {
+      if (locked) return;
+      const z = data?.zones.find(zz => zz.id === payload.id);
+      if (!z) return;
+      const newCx = rawX - payload.offX;
+      const newCy = rawY - payload.offY;
+      const w = data?.plan?.width ?? 1200;
+      const h = data?.plan?.height ?? 700;
+      const newX = Math.max(0, Math.min(w - z.width, snap(newCx - z.width / 2)));
+      const newY = Math.max(0, Math.min(h - z.height, snap(newCy - z.height / 2)));
+      updateZone.mutate({ id: payload.id, body: { x: newX, y: newY } });
+    }
+  };
+
   const onDropOnCanvas = (e: React.DragEvent) => {
     e.preventDefault();
     const employeeIdStr = e.dataTransfer.getData("application/x-employee-id");
@@ -462,56 +617,153 @@ export default function FloorPlanPage() {
     const moveZoneIdStr = e.dataTransfer.getData("application/x-zone-id");
     const newRoleName = e.dataTransfer.getData("application/x-role-name");
     const { x, y } = getCanvasCoords(e);
-    // Dragged a role chip from the sidebar → create an empty slot of that role
-    // at the drop point. Single-action add, no extra click needed.
-    if (newRoleName) {
-      createAssignment.mutate({ role: newRoleName, x: snap(x), y: snap(y), employeeId: null });
-      return;
+    if (newRoleName) return performDrop({ kind: "role", name: newRoleName }, x, y);
+    if (employeeIdStr) return performDrop({ kind: "employee", id: parseInt(employeeIdStr, 10) }, x, y);
+    if (moveAssignIdStr) {
+      return performDrop({
+        kind: "assignment",
+        id: parseInt(moveAssignIdStr, 10),
+        offX: parseFloat(e.dataTransfer.getData("x-offset") || "0"),
+        offY: parseFloat(e.dataTransfer.getData("y-offset") || "0"),
+      }, x, y);
     }
-    if (employeeIdStr) {
-      const employeeId = parseInt(employeeIdStr, 10);
-      const existing = data?.assignments.find(a => a.employeeId === employeeId);
-      if (existing) {
-        updateAssignment.mutate({ id: existing.id, body: { x, y } });
-        return;
-      }
-      // Dropped on top of (or near) an empty role slot? → fill the NEAREST one
-      // instead of opening a dialog. Tight radius avoids accidental fills.
-      const HIT_RADIUS = 36;
-      const targetSlot = emptySlots
-        .map(s => ({ s, d: Math.hypot(s.x - x, s.y - y) }))
-        .filter(({ d }) => d <= HIT_RADIUS)
-        .sort((a, b) => a.d - b.d)[0]?.s;
-      if (targetSlot) {
-        updateAssignment.mutate({ id: targetSlot.id, body: { employeeId } });
-        return;
-      }
-      // Otherwise open the dialog with a role suggestion based on the zone
-      const zone = (data?.zones || []).find(z => pointInZone(x, y, z));
-      const preset = zone ? ZONE_PRESETS.find(p => p.name === zone.name) : undefined;
-      setAssignDialog({ x, y, employeeId, suggestedRole: preset?.defaultRole || undefined });
-    } else if (moveAssignIdStr) {
-      if (locked) return;
-      const id = parseInt(moveAssignIdStr, 10);
-      const dx = parseFloat(e.dataTransfer.getData("x-offset") || "0");
-      const dy = parseFloat(e.dataTransfer.getData("y-offset") || "0");
-      updateAssignment.mutate({ id, body: { x: Math.max(0, snap(x - dx)), y: Math.max(0, snap(y - dy)) } });
-    } else if (moveZoneIdStr) {
-      if (locked) return;
-      const id = parseInt(moveZoneIdStr, 10);
-      // dx/dy = cursor offset from the zone's CENTER (rotation pivot) at drag-start,
-      // in plan coordinates. Stays glued to the visual grab point regardless of rotation.
-      const dx = parseFloat(e.dataTransfer.getData("x-offset") || "0");
-      const dy = parseFloat(e.dataTransfer.getData("y-offset") || "0");
-      const z = data?.zones.find(zz => zz.id === id);
-      if (!z) return;
-      const newCx = x - dx;
-      const newCy = y - dy;
-      const newX = Math.max(0, snap(newCx - z.width / 2));
-      const newY = Math.max(0, snap(newCy - z.height / 2));
-      updateZone.mutate({ id, body: { x: newX, y: newY } });
+    if (moveZoneIdStr) {
+      return performDrop({
+        kind: "zone",
+        id: parseInt(moveZoneIdStr, 10),
+        offX: parseFloat(e.dataTransfer.getData("x-offset") || "0"),
+        offY: parseFloat(e.dataTransfer.getData("y-offset") || "0"),
+      }, x, y);
     }
   };
+
+  // ---- Touch drag plumbing ----
+  // Called from onPointerDown. Uses an 8px movement threshold before engaging
+  // drag — under that threshold the gesture is treated as a tap and the
+  // element's onClick handler fires normally (critical for empty-slot quick
+  // assign and pencil edit on iPad).
+  const TOUCH_DRAG_THRESHOLD = 8;
+  const beginTouchDrag = (e: React.PointerEvent, payload: TouchPayload) => {
+    if (e.pointerType !== "touch") return;
+    const startX = e.clientX, startY = e.clientY;
+    let armed = false;
+    const onMove = (ev: PointerEvent) => {
+      if (!armed) {
+        if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < TOUCH_DRAG_THRESHOLD) return;
+        armed = true;
+        touchDragRef.current = payload;
+        setTouchGhost({ x: ev.clientX, y: ev.clientY, label: payload.label });
+      }
+      ev.preventDefault();
+      setTouchGhost(g => g ? { x: ev.clientX, y: ev.clientY, label: g.label } : null);
+    };
+    const onUp = (ev: PointerEvent) => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      if (!armed) return; // tap, not drag → let onClick fire naturally
+      const p = touchDragRef.current;
+      touchDragRef.current = null;
+      setTouchGhost(null);
+      if (!p || !canvasRef.current) return;
+      const rect = canvasRef.current.getBoundingClientRect();
+      if (ev.clientX < rect.left || ev.clientX > rect.right || ev.clientY < rect.top || ev.clientY > rect.bottom) return;
+      const x = (ev.clientX - rect.left) / zoom;
+      const y = (ev.clientY - rect.top) / zoom;
+      if (p.kind === "employee") performDrop({ kind: "employee", id: p.id }, x, y);
+      else if (p.kind === "role") performDrop({ kind: "role", name: p.name }, x, y);
+      else if (p.kind === "assignment") performDrop({ kind: "assignment", id: p.id, offX: p.offX, offY: p.offY }, x, y);
+      else if (p.kind === "zone") performDrop({ kind: "zone", id: p.id, offX: p.offX, offY: p.offY }, x, y);
+    };
+    window.addEventListener("pointermove", onMove, { passive: false });
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  };
+
+  // ---- Undo / Redo execution ----
+  // Both directions push the *mirrored* op onto the opposite stack BEFORE the
+  // network call resolves the id remap. For create/delete we always carry the
+  // full snapshot, so any cycle (create→undo→redo→undo→...) stays consistent
+  // even after the server assigns a fresh primary key on recreate.
+  const doUndo = async () => {
+    const op = undoStackRef.current.pop();
+    if (!op) return;
+    bumpHistory();
+    try {
+      if (op.type === "update") {
+        await apiRequest("PATCH", `/api/floor-plans/${selectedBranchId}/assignments/${op.id}`, {
+          ...op.prev, shiftType: selectedShift,
+        });
+        invalidate();
+        redoStackRef.current.push({ type: "update", id: op.id, prev: op.next, next: op.prev });
+      } else if (op.type === "delete") {
+        // Undo of delete = recreate from snapshot. Server returns a new id; we
+        // store that id on the redo entry so a subsequent redo deletes the
+        // correct row.
+        const r = await (await apiRequest("POST", `/api/floor-plans/${selectedBranchId}/assignments`, {
+          ...op.snapshot, shiftType: selectedShift,
+        })).json();
+        invalidate();
+        if (r?.id) redoStackRef.current.push({ type: "delete", id: r.id, snapshot: op.snapshot });
+      } else if (op.type === "create") {
+        // Undo of create = delete. Snapshot is preserved so redo can recreate.
+        await apiRequest("DELETE", `/api/floor-plans/${selectedBranchId}/assignments/${op.id}?shift=${selectedShift}`);
+        invalidate();
+        redoStackRef.current.push({ type: "create", id: op.id, snapshot: op.snapshot });
+      }
+    } catch (e: any) {
+      toast({ title: "تعذّر التراجع", description: e?.message, variant: "destructive" });
+    }
+    bumpHistory();
+  };
+  const doRedo = async () => {
+    const op = redoStackRef.current.pop();
+    if (!op) return;
+    bumpHistory();
+    try {
+      if (op.type === "update") {
+        await apiRequest("PATCH", `/api/floor-plans/${selectedBranchId}/assignments/${op.id}`, {
+          ...op.next, shiftType: selectedShift,
+        });
+        invalidate();
+        undoStackRef.current.push({ type: "update", id: op.id, prev: op.prev, next: op.next });
+      } else if (op.type === "delete") {
+        // Redo of delete = delete the row we just recreated.
+        await apiRequest("DELETE", `/api/floor-plans/${selectedBranchId}/assignments/${op.id}?shift=${selectedShift}`);
+        invalidate();
+        undoStackRef.current.push({ type: "delete", id: op.id, snapshot: op.snapshot });
+      } else if (op.type === "create") {
+        // Redo of create = recreate from snapshot; new server id is captured
+        // so the next undo deletes the right row.
+        const r = await (await apiRequest("POST", `/api/floor-plans/${selectedBranchId}/assignments`, {
+          ...op.snapshot, shiftType: selectedShift,
+        })).json();
+        invalidate();
+        if (r?.id) undoStackRef.current.push({ type: "create", id: r.id, snapshot: op.snapshot });
+      }
+    } catch (e: any) {
+      toast({ title: "تعذّر الإعادة", description: e?.message, variant: "destructive" });
+    }
+    bumpHistory();
+  };
+  // Keyboard shortcuts: Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z (or Ctrl+Y)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const isMod = e.ctrlKey || e.metaKey;
+      if (!isMod) return;
+      const target = e.target as HTMLElement | null;
+      if (target && /input|textarea|select/i.test(target.tagName)) return;
+      if (e.key === "z" || e.key === "Z") {
+        e.preventDefault();
+        if (e.shiftKey) doRedo(); else doUndo();
+      } else if (e.key === "y" || e.key === "Y") {
+        e.preventDefault();
+        doRedo();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedBranchId, selectedShift]);
 
   const onCanvasClick = (e: React.MouseEvent) => {
     if (e.target !== e.currentTarget) return; // only blank canvas clicks (not on a zone/pawn)
@@ -1020,6 +1272,7 @@ export default function FloorPlanPage() {
                               e.dataTransfer.setData("application/x-role-name", r);
                               e.dataTransfer.effectAllowed = "copy";
                             }}
+                            onPointerDown={(e) => beginTouchDrag(e, { kind: "role", name: r, label: def.label })}
                             onClick={() => setPlacementRole(active ? null : r)}
                             data-testid={`btn-role-${r}`}
                             className={`flex items-center gap-1.5 p-1.5 rounded-md border text-right transition-colors cursor-grab active:cursor-grabbing select-none ${
@@ -1139,7 +1392,8 @@ export default function FloorPlanPage() {
                                 e.dataTransfer.setData("application/x-employee-id", String(emp.id));
                                 e.dataTransfer.effectAllowed = "move";
                               }}
-                              className={`flex items-center gap-2 p-2 rounded-md border bg-card hover:border-primary cursor-grab active:cursor-grabbing transition-colors ${
+                              onPointerDown={(e) => beginTouchDrag(e, { kind: "employee", id: emp.id, label: emp.employeeName })}
+                              className={`flex items-center gap-2 p-2 rounded-md border bg-card hover:border-primary cursor-grab active:cursor-grabbing transition-colors touch-none ${
                                 info ? "border-emerald-200 hover:bg-emerald-50/50" : "border-border hover:bg-accent"
                               }`}
                               data-testid={`employee-pill-${emp.id}`}
@@ -1283,6 +1537,25 @@ export default function FloorPlanPage() {
                     className="h-6 w-16 px-1 text-xs tabular-nums"
                     data-testid="input-plan-height"
                   />
+                </div>
+
+                {/* Undo / Redo / Print group */}
+                <div className="flex items-center gap-1 rounded-md border bg-card p-0.5">
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0"
+                    disabled={!canUndo} onClick={doUndo}
+                    title="تراجع (Ctrl+Z)" data-testid="btn-undo">
+                    <Undo2 className="w-4 h-4" />
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0"
+                    disabled={!canRedo} onClick={doRedo}
+                    title="إعادة (Ctrl+Shift+Z)" data-testid="btn-redo">
+                    <Redo2 className="w-4 h-4" />
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0"
+                    onClick={() => handlePrint?.()}
+                    title="طباعة / حفظ PDF" data-testid="btn-print">
+                    <Printer className="w-4 h-4" />
+                  </Button>
                 </div>
 
                 {/* Smart tools — auto-distribute, copy from shift, clear */}
@@ -1480,6 +1753,17 @@ export default function FloorPlanPage() {
                           e.dataTransfer.setData("y-offset", String((e.clientY - cy) / zoom));
                           e.dataTransfer.effectAllowed = "move";
                         }}
+                        onPointerDown={(e) => {
+                          if (locked) return;
+                          if ((e.target as HTMLElement).dataset?.resize === "1") return;
+                          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                          const cx = rect.left + rect.width / 2;
+                          const cy = rect.top + rect.height / 2;
+                          beginTouchDrag(e, {
+                            kind: "zone", id: z.id, label: z.name,
+                            offX: (e.clientX - cx) / zoom, offY: (e.clientY - cy) / zoom,
+                          });
+                        }}
                         onDoubleClick={(e) => {
                           e.stopPropagation();
                           if (locked) return;
@@ -1560,7 +1844,8 @@ export default function FloorPlanPage() {
                       const emp = a.employeeId != null ? employeeById.get(a.employeeId) : null;
                       const def = getRoleDef(a.role, emp?.jobTitle);
                       const isEmpty = !emp;
-                      return (
+                      const pawnLabel = emp ? emp.employeeName : (a.role || def.label);
+                      const pawnNode = (
                         <div
                           key={a.id}
                           draggable={!locked}
@@ -1573,6 +1858,15 @@ export default function FloorPlanPage() {
                             e.dataTransfer.setData("x-offset", String((e.clientX - rect.left) / zoom - 30));
                             e.dataTransfer.setData("y-offset", String((e.clientY - rect.top) / zoom - 30));
                             e.dataTransfer.effectAllowed = "move";
+                          }}
+                          onPointerDown={(e) => {
+                            if (locked) return;
+                            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                            beginTouchDrag(e, {
+                              kind: "assignment", id: a.id, label: pawnLabel,
+                              offX: (e.clientX - rect.left) / zoom - 30,
+                              offY: (e.clientY - rect.top) / zoom - 30,
+                            });
                           }}
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1640,6 +1934,51 @@ export default function FloorPlanPage() {
                             {def.label}
                           </div>
                         </div>
+                      );
+                      // Right-click on desktop / long-press on iPad opens this
+                      // context menu. shadcn's ContextMenu handles both natively.
+                      return (
+                        <ContextMenu key={a.id}>
+                          <ContextMenuTrigger asChild disabled={locked}>{pawnNode}</ContextMenuTrigger>
+                          <ContextMenuContent className="w-52">
+                            <ContextMenuItem
+                              onSelect={() => setEditAssignDialog({
+                                id: a.id, employeeId: a.employeeId,
+                                employeeName: emp?.employeeName ?? null,
+                                role: a.role || emp?.jobTitle || "",
+                                notes: a.notes || "",
+                              })}
+                              data-testid={`ctx-edit-${a.id}`}
+                            >
+                              <Pencil className="w-3.5 h-3.5 ml-2" /> تعديل
+                            </ContextMenuItem>
+                            {!isEmpty && (
+                              <ContextMenuItem
+                                onSelect={() => {
+                                  recordOp({ type: "update", id: a.id, prev: { employeeId: a.employeeId }, next: { employeeId: null } });
+                                  updateAssignment.mutate({ id: a.id, body: { employeeId: null } });
+                                }}
+                                data-testid={`ctx-clear-${a.id}`}
+                              >
+                                <XIcon className="w-3.5 h-3.5 ml-2" /> إزالة الموظف (إبقاء الموقع)
+                              </ContextMenuItem>
+                            )}
+                            <ContextMenuSeparator />
+                            <ContextMenuItem
+                              className="text-destructive focus:text-destructive"
+                              onSelect={() => {
+                                recordOp({ type: "delete", id: a.id, snapshot: {
+                                  role: a.role ?? null, x: a.x, y: a.y,
+                                  employeeId: a.employeeId, notes: a.notes ?? null,
+                                } });
+                                deleteAssignment.mutate(a.id);
+                              }}
+                              data-testid={`ctx-delete-${a.id}`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5 ml-2" /> حذف الموقع نهائياً
+                            </ContextMenuItem>
+                          </ContextMenuContent>
+                        </ContextMenu>
                       );
                     })}
                   </div>
@@ -1801,6 +2140,74 @@ export default function FloorPlanPage() {
             )}
           </DialogContent>
         </Dialog>
+
+        {/* Touch-drag ghost — follows the finger on iPad / mobile */}
+        {touchGhost && (
+          <div
+            className="fixed z-[9999] pointer-events-none px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium shadow-2xl border border-primary-foreground/30 -translate-x-1/2 -translate-y-1/2 max-w-[180px] truncate"
+            style={{ left: touchGhost.x, top: touchGhost.y }}
+            data-testid="touch-drag-ghost"
+          >
+            <Hand className="w-3 h-3 inline-block ml-1" />{touchGhost.label}
+          </div>
+        )}
+
+        {/* Hidden printable view — rendered off-screen, captured by react-to-print */}
+        <div className="hidden print:block" style={{ position: "absolute", left: -99999, top: 0 }}>
+          <div ref={printableRef} className="p-6 bg-white text-black" dir="rtl">
+            <div className="mb-4 flex items-center justify-between border-b pb-3">
+              <div>
+                <h1 className="text-2xl font-bold">مخطط الفرع — {(branches as any[])?.find?.((b: any) => b.id === selectedBranchId)?.name ?? selectedBranchId}</h1>
+                <p className="text-sm text-gray-600 mt-1">
+                  التاريخ: {selectedDate} • الوردية: {selectedShift === "morning" ? "صباحية" : selectedShift === "evening" ? "مسائية" : "ليلية"}
+                </p>
+              </div>
+              <div className="text-xs text-gray-500">طُبع في {new Date().toLocaleString("ar-SA")}</div>
+            </div>
+            {data && (
+              <div
+                className="relative border border-gray-300 mx-auto"
+                style={{ width: data.plan.width, height: data.plan.height, backgroundColor: "#fafaf7" }}
+              >
+                {data.zones.map(z => (
+                  <div key={z.id} className="absolute rounded border-2 border-dashed flex items-start justify-start p-2 text-xs font-medium"
+                    style={{
+                      left: z.x, top: z.y, width: z.width, height: z.height,
+                      backgroundColor: z.color + "55", borderColor: z.color,
+                      transform: z.rotation ? `rotate(${z.rotation}deg)` : undefined,
+                    }}>
+                    {z.name}
+                  </div>
+                ))}
+                {data.assignments.map(a => {
+                  const emp = a.employeeId != null ? employeeById.get(a.employeeId) : null;
+                  const def = getRoleDef(a.role, emp?.jobTitle);
+                  return (
+                    <div key={a.id} className="absolute flex flex-col items-center" style={{ left: a.x - 30, top: a.y - 30 }}>
+                      <div className="w-12 h-12 flex items-center justify-center text-white text-xs font-bold border-2 border-white shadow"
+                        style={{ backgroundColor: def.color, ...shapeStyle(def.shape) }}>
+                        {(emp?.employeeName ?? def.label).slice(0, 2)}
+                      </div>
+                      <div className="mt-1 px-1.5 py-0.5 bg-white text-[10px] font-medium border border-gray-300 rounded max-w-[110px] truncate text-center">
+                        {emp?.employeeName ?? "غير معيّن"}
+                      </div>
+                      <div className="text-[9px] text-white px-1 rounded mt-0.5" style={{ backgroundColor: def.color }}>
+                        {def.label}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {data && (
+              <div className="mt-4 text-xs grid grid-cols-3 gap-4">
+                <div><span className="font-semibold">إجمالي المواقع:</span> {data.assignments.length}</div>
+                <div><span className="font-semibold">معيّن:</span> {data.assignments.length - emptySlots.length}</div>
+                <div><span className="font-semibold">شاغر:</span> {emptySlots.length}</div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </Layout>
   );
