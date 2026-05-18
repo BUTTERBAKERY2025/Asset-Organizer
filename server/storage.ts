@@ -17218,33 +17218,46 @@ export class DatabaseStorage implements IStorage {
     return result.length > 0;
   }
 
-  async getFloorPlanAssignments(floorPlanId: number): Promise<FloorPlanAssignment[]> {
+  async getFloorPlanAssignments(floorPlanId: number, shiftType?: string): Promise<FloorPlanAssignment[]> {
+    if (shiftType) {
+      return db.select().from(floorPlanAssignments)
+        .where(and(eq(floorPlanAssignments.floorPlanId, floorPlanId), eq(floorPlanAssignments.shiftType, shiftType)));
+    }
     return db.select().from(floorPlanAssignments).where(eq(floorPlanAssignments.floorPlanId, floorPlanId));
   }
 
   async createFloorPlanAssignment(data: InsertFloorPlanAssignment): Promise<FloorPlanAssignment> {
-    // Upsert by (floorPlanId, employeeId) — moving an already-placed employee just updates the row
+    // Upsert by (floorPlanId, employeeId, shiftType) — same employee can be in multiple shifts,
+    // but only once per shift. Moving an already-placed employee in the same shift updates the row.
     const [created] = await db.insert(floorPlanAssignments)
       .values(data)
       .onConflictDoUpdate({
-        target: [floorPlanAssignments.floorPlanId, floorPlanAssignments.employeeId],
+        target: [floorPlanAssignments.floorPlanId, floorPlanAssignments.employeeId, floorPlanAssignments.shiftType],
         set: { x: data.x, y: data.y, role: data.role ?? null, notes: data.notes ?? null, updatedAt: new Date() },
       })
       .returning();
     return created;
   }
 
-  async updateFloorPlanAssignment(id: number, floorPlanId: number, data: Partial<InsertFloorPlanAssignment>): Promise<FloorPlanAssignment | undefined> {
+  async updateFloorPlanAssignment(id: number, floorPlanId: number, shiftType: string, data: Partial<InsertFloorPlanAssignment>): Promise<FloorPlanAssignment | undefined> {
     const [updated] = await db.update(floorPlanAssignments)
       .set({ ...data, updatedAt: new Date() })
-      .where(and(eq(floorPlanAssignments.id, id), eq(floorPlanAssignments.floorPlanId, floorPlanId)))
+      .where(and(
+        eq(floorPlanAssignments.id, id),
+        eq(floorPlanAssignments.floorPlanId, floorPlanId),
+        eq(floorPlanAssignments.shiftType, shiftType),
+      ))
       .returning();
     return updated || undefined;
   }
 
-  async deleteFloorPlanAssignment(id: number, floorPlanId: number): Promise<boolean> {
+  async deleteFloorPlanAssignment(id: number, floorPlanId: number, shiftType: string): Promise<boolean> {
     const result = await db.delete(floorPlanAssignments)
-      .where(and(eq(floorPlanAssignments.id, id), eq(floorPlanAssignments.floorPlanId, floorPlanId)))
+      .where(and(
+        eq(floorPlanAssignments.id, id),
+        eq(floorPlanAssignments.floorPlanId, floorPlanId),
+        eq(floorPlanAssignments.shiftType, shiftType),
+      ))
       .returning({ id: floorPlanAssignments.id });
     return result.length > 0;
   }

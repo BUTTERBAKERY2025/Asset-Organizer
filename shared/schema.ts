@@ -10036,6 +10036,7 @@ export const floorPlanAssignments = pgTable("floor_plan_assignments", {
   id: serial("id").primaryKey(),
   floorPlanId: integer("floor_plan_id").notNull().references(() => branchFloorPlans.id, { onDelete: "cascade" }),
   employeeId: integer("employee_id").notNull().references(() => branchEmployees.id, { onDelete: "cascade" }),
+  shiftType: text("shift_type").notNull().default("morning"), // 'morning' | 'evening' | 'night'
   role: text("role"),
   notes: text("notes"),
   x: integer("x").notNull(),
@@ -10043,8 +10044,9 @@ export const floorPlanAssignments = pgTable("floor_plan_assignments", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
-  uniqueIndex("uq_floor_plan_assignments_emp").on(table.floorPlanId, table.employeeId),
+  uniqueIndex("uq_floor_plan_assignments_emp_shift").on(table.floorPlanId, table.employeeId, table.shiftType),
   index("idx_floor_plan_assignments_plan").on(table.floorPlanId),
+  index("idx_floor_plan_assignments_plan_shift").on(table.floorPlanId, table.shiftType),
 ]);
 
 export const insertBranchFloorPlanSchema = createInsertSchema(branchFloorPlans).omit({

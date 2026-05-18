@@ -34004,18 +34004,32 @@ export async function registerRoutes(
     return true;
   };
 
-  // Get full floor plan bundle: plan + zones + assignments + branch employees
+  const ALLOWED_SHIFTS = new Set(["morning", "evening", "night"]);
+  // Lenient: used only for the read endpoint where invalid values just fall back
+  const normalizeShift = (s: any): string => {
+    const v = typeof s === "string" ? s : "";
+    return ALLOWED_SHIFTS.has(v) ? v : "morning";
+  };
+  // Strict: writes must explicitly pass a valid shift, otherwise reject
+  const requireShift = (s: any, res: any): string | null => {
+    if (typeof s === "string" && ALLOWED_SHIFTS.has(s)) return s;
+    res.status(400).json({ error: "shiftType مطلوب ويجب أن يكون: morning أو evening أو night" });
+    return null;
+  };
+
+  // Get full floor plan bundle: plan + zones + assignments + branch employees (filtered by shift)
   app.get("/api/floor-plans/:branchId", isAuthenticated, requirePermission("floor_plan", "view"), async (req, res) => {
     try {
       const { branchId } = req.params;
+      const shiftType = normalizeShift(req.query.shift);
       if (!(await ensureFloorPlanBranchAccess(req, res, branchId))) return;
       const plan = await storage.getOrCreateBranchFloorPlan(branchId);
       const [zones, assignments, employees] = await Promise.all([
         storage.getFloorPlanZones(plan.id),
-        storage.getFloorPlanAssignments(plan.id),
+        storage.getFloorPlanAssignments(plan.id, shiftType),
         storage.getBranchEmployeesByBranch(branchId, { status: 'active' }).catch(() => []),
       ]);
-      res.json({ plan, zones, assignments, employees });
+      res.json({ plan, zones, assignments, employees, shiftType });
     } catch (error: any) {
       console.error("Error fetching floor plan:", error);
       res.status(500).json({ error: error.message || "Failed to fetch floor plan" });
@@ -34111,7 +34125,7 @@ export async function registerRoutes(
     try {
       const { branchId } = req.params;
       if (!(await ensureFloorPlanBranchAccess(req, res, branchId))) return;
-      const { employeeId, x, y, role, notes } = req.body || {};
+      const { employeeId, x, y, role, notes, shiftType } = req.body || {};
       if (!employeeId || x === undefined || y === undefined) {
         return res.status(400).json({ error: "employeeId, x, y مطلوبة" });
       }
@@ -34120,9 +34134,12 @@ export async function registerRoutes(
       if (!emp || emp.branchId !== branchId) {
         return res.status(403).json({ error: "هذا الموظف لا ينتمي إلى الفرع المحدد" });
       }
+      const shift = requireShift(shiftType, res);
+      if (!shift) return;
       const plan = await storage.getOrCreateBranchFloorPlan(branchId);
       const created = await storage.createFloorPlanAssignment({
         floorPlanId: plan.id, employeeId: parseInt(employeeId, 10),
+        shiftType: shift,
         x: parseInt(x, 10), y: parseInt(y, 10),
         role: role || null, notes: notes || null,
       });
@@ -34138,9 +34155,12 @@ export async function registerRoutes(
       const { branchId } = req.params;
       const id = parseInt(req.params.id, 10);
       if (!(await ensureFloorPlanBranchAccess(req, res, branchId))) return;
-      // Disallow changing employeeId/floorPlanId via update (IDOR / cross-plan rebind)
+      // Shift must be specified so an edit cannot accidentally hit another shift's row
+      const shift = requireShift(req.body?.shiftType ?? req.query?.shift, res);
+      if (!shift) return;
+      // Disallow changing employeeId/floorPlanId/shiftType via update (IDOR / cross-plan/shift rebind)
       const plan = await storage.getOrCreateBranchFloorPlan(branchId);
-      const updated = await storage.updateFloorPlanAssignment(id, plan.id, pickAssignmentFields(req.body));
+      const updated = await storage.updateFloorPlanAssignment(id, plan.id, shift, pickAssignmentFields(req.body));
       if (!updated) return res.status(404).json({ error: "Assignment not found" });
       res.json(updated);
     } catch (error: any) {
@@ -34154,8 +34174,10 @@ export async function registerRoutes(
       const { branchId } = req.params;
       const id = parseInt(req.params.id, 10);
       if (!(await ensureFloorPlanBranchAccess(req, res, branchId))) return;
+      const shift = requireShift(req.body?.shiftType ?? req.query?.shift, res);
+      if (!shift) return;
       const plan = await storage.getOrCreateBranchFloorPlan(branchId);
-      const ok = await storage.deleteFloorPlanAssignment(id, plan.id);
+      const ok = await storage.deleteFloorPlanAssignment(id, plan.id, shift);
       if (!ok) return res.status(404).json({ error: "Assignment not found" });
       res.json({ success: true });
     } catch (error: any) {

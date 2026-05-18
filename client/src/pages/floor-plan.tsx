@@ -17,8 +17,9 @@ import { useToast } from "@/hooks/use-toast";
 import {
   LayoutGrid, Plus, Trash2, Save, GripVertical, User as UserIcon, Square,
   Crown, Shield, Calculator, Coffee, ChefHat, Utensils, Sparkles,
-  Handshake, Package, Cake, HardHat, Wine, Soup,
+  Handshake, Package, Cake, HardHat, Wine, Soup, Sun, Sunset, Moon,
 } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Branch } from "@shared/schema";
 
 interface BranchEmployee {
@@ -29,11 +30,19 @@ interface BranchEmployee {
   department?: string | null;
   status?: string;
 }
+type ShiftType = "morning" | "evening" | "night";
+const SHIFTS: { value: ShiftType; label: string; icon: any; color: string }[] = [
+  { value: "morning", label: "صباحي", icon: Sun,    color: "#f59e0b" },
+  { value: "evening", label: "مسائي", icon: Sunset, color: "#f97316" },
+  { value: "night",   label: "ليلي",  icon: Moon,   color: "#6366f1" },
+];
+
 interface FloorPlanData {
   plan: { id: number; branchId: string; name: string | null; width: number; height: number; backgroundColor: string };
   zones: Array<{ id: number; name: string; color: string; x: number; y: number; width: number; height: number }>;
-  assignments: Array<{ id: number; employeeId: number; role: string | null; notes: string | null; x: number; y: number }>;
+  assignments: Array<{ id: number; employeeId: number; role: string | null; notes: string | null; x: number; y: number; shiftType: ShiftType }>;
   employees: BranchEmployee[];
+  shiftType: ShiftType;
 }
 
 const ZONE_COLORS = [
@@ -91,15 +100,26 @@ export default function FloorPlanPage() {
     [allBranches, allowedBranches, isAdmin]
   );
   const [selectedBranchId, setSelectedBranchId] = useState<string>("");
+  const [selectedShift, setSelectedShift] = useState<ShiftType>("morning");
+  // Close stale dialogs when switching shifts so an edit/assign action can't
+  // land on the wrong shift's row.
+  useEffect(() => {
+    setAssignDialog(null);
+    setEditAssignDialog(null);
+  }, [selectedShift]);
   useEffect(() => {
     if (!selectedBranchId && (activeBranch?.id || branches[0]?.id)) {
       setSelectedBranchId(activeBranch?.id || branches[0].id);
     }
   }, [activeBranch, branches, selectedBranchId]);
 
-  // Floor plan bundle
+  // Floor plan bundle (per shift)
   const { data, isLoading } = useQuery<FloorPlanData>({
-    queryKey: [`/api/floor-plans/${selectedBranchId}`],
+    queryKey: [`/api/floor-plans/${selectedBranchId}`, selectedShift],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/floor-plans/${selectedBranchId}?shift=${selectedShift}`);
+      return res.json();
+    },
     enabled: !!selectedBranchId,
   });
 
@@ -111,7 +131,7 @@ export default function FloorPlanPage() {
   const [editAssignDialog, setEditAssignDialog] = useState<{ id: number; employeeName: string; role: string; notes: string } | null>(null);
 
   // ---- Mutations ----
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: [`/api/floor-plans/${selectedBranchId}`] });
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: [`/api/floor-plans/${selectedBranchId}`, selectedShift] });
 
   const createZone = useMutation({
     mutationFn: async (body: any) => (await apiRequest("POST", `/api/floor-plans/${selectedBranchId}/zones`, body)).json(),
@@ -130,18 +150,19 @@ export default function FloorPlanPage() {
   });
 
   const createAssignment = useMutation({
-    mutationFn: async (body: any) => (await apiRequest("POST", `/api/floor-plans/${selectedBranchId}/assignments`, body)).json(),
+    mutationFn: async (body: any) =>
+      (await apiRequest("POST", `/api/floor-plans/${selectedBranchId}/assignments`, { ...body, shiftType: selectedShift })).json(),
     onSuccess: () => { invalidate(); setAssignDialog(null); toast({ title: "تم تعيين الموظف" }); },
     onError: (e: any) => toast({ title: "فشل التعيين", description: e?.message, variant: "destructive" }),
   });
   const updateAssignment = useMutation({
     mutationFn: async ({ id, body }: { id: number; body: any }) =>
-      (await apiRequest("PATCH", `/api/floor-plans/${selectedBranchId}/assignments/${id}`, body)).json(),
+      (await apiRequest("PATCH", `/api/floor-plans/${selectedBranchId}/assignments/${id}`, { ...body, shiftType: selectedShift })).json(),
     onSuccess: () => { invalidate(); setEditAssignDialog(null); },
     onError: (e: any) => toast({ title: "فشل التحديث", description: e?.message, variant: "destructive" }),
   });
   const deleteAssignment = useMutation({
-    mutationFn: async (id: number) => (await apiRequest("DELETE", `/api/floor-plans/${selectedBranchId}/assignments/${id}`)).json(),
+    mutationFn: async (id: number) => (await apiRequest("DELETE", `/api/floor-plans/${selectedBranchId}/assignments/${id}?shift=${selectedShift}`)).json(),
     onSuccess: () => { invalidate(); setEditAssignDialog(null); toast({ title: "تم إزالة الموظف من المخطط" }); },
   });
 
@@ -258,6 +279,27 @@ export default function FloorPlanPage() {
           </div>
         </div>
 
+        {/* Shift selector tabs */}
+        {selectedBranchId && (
+          <Card>
+            <CardContent className="p-3">
+              <Tabs value={selectedShift} onValueChange={(v) => setSelectedShift(v as ShiftType)} dir="rtl">
+                <TabsList className="grid grid-cols-3 w-full max-w-xl">
+                  {SHIFTS.map(s => {
+                    const SI = s.icon;
+                    return (
+                      <TabsTrigger key={s.value} value={s.value} data-testid={`tab-shift-${s.value}`} className="gap-2">
+                        <SI className="w-4 h-4" style={{ color: s.color }} />
+                        <span>شفت {s.label}</span>
+                      </TabsTrigger>
+                    );
+                  })}
+                </TabsList>
+              </Tabs>
+            </CardContent>
+          </Card>
+        )}
+
         {!selectedBranchId ? (
           <Card><CardContent className="py-16 text-center text-muted-foreground">اختر فرعاً للبدء</CardContent></Card>
         ) : isLoading || !data ? (
@@ -285,8 +327,9 @@ export default function FloorPlanPage() {
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base flex items-center gap-2">
-                    <UserIcon className="w-4 h-4" /> موظفو الفرع
-                    <Badge variant="secondary" className="ms-auto">{unplacedEmployees.length}</Badge>
+                    <UserIcon className="w-4 h-4" />
+                    موظفو الشفت {SHIFTS.find(s => s.value === selectedShift)?.label}
+                    <Badge variant="secondary" className="ms-auto" data-testid="badge-unplaced-count">{unplacedEmployees.length}</Badge>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -294,7 +337,7 @@ export default function FloorPlanPage() {
                     <div className="p-3 space-y-1.5">
                       {unplacedEmployees.length === 0 ? (
                         <div className="text-center text-xs text-muted-foreground py-6">
-                          {data.employees.length === 0 ? "لا يوجد موظفون نشطون بهذا الفرع" : "جميع الموظفين موزَّعون على المخطط"}
+                          {data.employees.length === 0 ? "لا يوجد موظفون نشطون بهذا الفرع" : `جميع الموظفين موزَّعون في شفت ${SHIFTS.find(s => s.value === selectedShift)?.label}`}
                         </div>
                       ) : unplacedEmployees.map(emp => {
                         const def = getRoleDef(null, emp.jobTitle);
