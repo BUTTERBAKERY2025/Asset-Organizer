@@ -1104,7 +1104,6 @@ export default function FloorPlanPage() {
           </DialogContent>
         </Dialog>
       </div>
-      </div>
     </Layout>
   );
 }
