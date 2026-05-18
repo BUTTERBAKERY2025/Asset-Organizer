@@ -55,6 +55,28 @@ const ZONE_COLORS = [
   { name: "رمادي", value: "#e5e7eb" },
 ];
 
+// مناطق جاهزة — تضاف بضغطة واحدة بأسماء وألوان مناسبة لمخبز/مقهى،
+// وكل منطقة لها وظيفة افتراضية تُقترح تلقائياً عند سحب موظف داخلها.
+type ZonePreset = {
+  name: string;
+  color: string;
+  defaultRole: string | null;
+  width: number;
+  height: number;
+};
+const ZONE_PRESETS: ZonePreset[] = [
+  { name: "بار القهوة",   color: "#fed7aa", defaultRole: "باريستا",    width: 220, height: 140 },
+  { name: "بار البيكري",  color: "#fbcfe8", defaultRole: "حلواني",     width: 220, height: 140 },
+  { name: "الكاشير",      color: "#bbf7d0", defaultRole: "كاشير",      width: 160, height: 120 },
+  { name: "المطبخ",       color: "#fecaca", defaultRole: "شيف",        width: 260, height: 180 },
+  { name: "صالة الطعام",  color: "#bfdbfe", defaultRole: "ويتر",       width: 320, height: 200 },
+  { name: "الاستقبال",    color: "#a5f3fc", defaultRole: "مضيف",       width: 180, height: 120 },
+  { name: "المخزن",       color: "#e5e7eb", defaultRole: "أمين مخزن",  width: 200, height: 140 },
+  { name: "غرفة الموظفين", color: "#ddd6fe", defaultRole: null,        width: 180, height: 120 },
+  { name: "النظافة",      color: "#cbd5e1", defaultRole: "عامل نظافة", width: 140, height: 100 },
+  { name: "بار العصائر",  color: "#fde68a", defaultRole: "ساقي",       width: 200, height: 130 },
+];
+
 type RoleShape = "circle" | "square" | "hexagon";
 type RoleDef = { label: string; icon: any; color: string; shape: RoleShape };
 
@@ -127,7 +149,7 @@ export default function FloorPlanPage() {
   const [zoneDialog, setZoneDialog] = useState<{ mode: "create" | "edit"; x?: number; y?: number; id?: number; name?: string; color?: string; width?: number; height?: number } | null>(null);
   // Live resize transient state — overrides server dims while user drags a handle
   const [resizing, setResizing] = useState<{ id: number; width: number; height: number } | null>(null);
-  const [assignDialog, setAssignDialog] = useState<{ x: number; y: number; employeeId?: number } | null>(null);
+  const [assignDialog, setAssignDialog] = useState<{ x: number; y: number; employeeId?: number; suggestedRole?: string } | null>(null);
   const [editAssignDialog, setEditAssignDialog] = useState<{ id: number; employeeName: string; role: string; notes: string } | null>(null);
 
   // ---- Mutations ----
@@ -187,7 +209,12 @@ export default function FloorPlanPage() {
       if (existing) {
         updateAssignment.mutate({ id: existing.id, body: { x, y } });
       } else {
-        setAssignDialog({ x, y, employeeId });
+        // Suggest role based on the zone the employee was dropped on
+        const zone = (data?.zones || []).find(z =>
+          x >= z.x && x <= z.x + z.width && y >= z.y && y <= z.y + z.height
+        );
+        const preset = zone ? ZONE_PRESETS.find(p => p.name === zone.name) : undefined;
+        setAssignDialog({ x, y, employeeId, suggestedRole: preset?.defaultRole || undefined });
       }
     } else if (moveAssignIdStr) {
       const id = parseInt(moveAssignIdStr, 10);
@@ -206,7 +233,34 @@ export default function FloorPlanPage() {
     if (e.target !== e.currentTarget) return; // only blank canvas clicks (not on a zone/pawn)
     if (unplacedEmployees.length === 0) return;
     const { x, y } = getCanvasCoords(e);
-    setAssignDialog({ x, y });
+    const zone = (data?.zones || []).find(z =>
+      x >= z.x && x <= z.x + z.width && y >= z.y && y <= z.y + z.height
+    );
+    const preset = zone ? ZONE_PRESETS.find(p => p.name === zone.name) : undefined;
+    setAssignDialog({ x, y, suggestedRole: preset?.defaultRole || undefined });
+  };
+
+  // Find next free top-left slot for a preset zone — simple cascading offset
+  const nextZoneSlot = (w: number, h: number) => {
+    const existing = data?.zones || [];
+    const planW = data?.plan?.width || 1200;
+    const planH = data?.plan?.height || 700;
+    let x = 20, y = 20;
+    for (let i = 0; i < 50; i++) {
+      const collides = existing.some(z =>
+        x < z.x + z.width && x + w > z.x && y < z.y + z.height && y + h > z.y
+      );
+      if (!collides && x + w <= planW && y + h <= planH) return { x, y };
+      x += 40; y += 30;
+      if (x + w > planW) { x = 20; y += 60; }
+      if (y + h > planH) { x = 20; y = 20; break; }
+    }
+    return { x: 20, y: 20 };
+  };
+
+  const addPresetZone = (preset: ZonePreset) => {
+    const { x, y } = nextZoneSlot(preset.width, preset.height);
+    createZone.mutate({ name: preset.name, color: preset.color, x, y, width: preset.width, height: preset.height });
   };
 
   // ---- Zone resize by dragging a handle ----
@@ -316,11 +370,50 @@ export default function FloorPlanPage() {
                 </CardHeader>
                 <CardContent className="space-y-2">
                   <Button className="w-full justify-start" variant="outline" onClick={() => setZoneDialog({ mode: "create" })} data-testid="btn-add-zone">
-                    <Plus className="w-4 h-4 ml-1" /> إضافة منطقة
+                    <Plus className="w-4 h-4 ml-1" /> إضافة منطقة مخصصة
                   </Button>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    اسحب موظفاً من الأسفل وأفلته على المخطط، أو اسحب المنطقة/الموظف لتحريكه، واضغط عليه لتعديله.
+                    اسحب موظفاً من الأسفل وأفلته على المخطط. لو أفلته داخل منطقة، تُقترح الوظيفة المناسبة لها تلقائياً.
                   </p>
+                </CardContent>
+              </Card>
+
+              {/* Preset zones — one-click bakery/cafe areas */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">مناطق جاهزة</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-1.5">
+                  {ZONE_PRESETS.map(preset => {
+                    const def = preset.defaultRole ? ROLE_DEFS[preset.defaultRole] : null;
+                    const PI = def?.icon;
+                    return (
+                      <button
+                        key={preset.name}
+                        type="button"
+                        onClick={() => addPresetZone(preset)}
+                        disabled={createZone.isPending}
+                        data-testid={`btn-preset-${preset.name}`}
+                        className="w-full flex items-center gap-2 p-2 rounded-md border border-border bg-card hover:bg-accent hover:border-primary transition-colors text-right disabled:opacity-50"
+                      >
+                        <span
+                          className="w-5 h-5 rounded shrink-0 border border-black/10"
+                          style={{ backgroundColor: preset.color }}
+                          aria-hidden
+                        />
+                        <span className="flex-1 text-sm truncate">{preset.name}</span>
+                        {def && PI && (
+                          <span
+                            className="w-6 h-6 flex items-center justify-center text-white shrink-0"
+                            style={{ backgroundColor: def.color, ...shapeStyle(def.shape) }}
+                            title={`الوظيفة الافتراضية: ${preset.defaultRole}`}
+                          >
+                            <PI className="w-3 h-3" />
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </CardContent>
               </Card>
 
@@ -570,6 +663,7 @@ export default function FloorPlanPage() {
             <AssignForm
               employees={unplacedEmployees}
               presetEmployeeId={assignDialog?.employeeId}
+              suggestedRole={assignDialog?.suggestedRole}
               onSubmit={(form) => createAssignment.mutate({ ...form, x: assignDialog?.x, y: assignDialog?.y })}
               pending={createAssignment.isPending}
             />
@@ -698,15 +792,18 @@ function ZoneForm({ initial, isEdit, onSubmit, onDelete, pending }: {
   );
 }
 
-function AssignForm({ employees, presetEmployeeId, onSubmit, pending }: {
+function AssignForm({ employees, presetEmployeeId, suggestedRole, onSubmit, pending }: {
   employees: BranchEmployee[];
   presetEmployeeId?: number;
+  suggestedRole?: string;
   onSubmit: (f: { employeeId: number; role: string; notes: string }) => void;
   pending?: boolean;
 }) {
   const [employeeId, setEmployeeId] = useState<string>(presetEmployeeId ? String(presetEmployeeId) : "");
   const selectedEmp = employees.find(e => e.id === parseInt(employeeId, 10));
-  const [role, setRole] = useState<string>("");
+  // If the user dropped on a zone with a known default role, pre-fill it,
+  // otherwise fall back to the employee's job title.
+  const [role, setRole] = useState<string>(suggestedRole || "");
   const [notes, setNotes] = useState("");
   useEffect(() => { if (selectedEmp && !role) setRole(selectedEmp.jobTitle || ""); }, [selectedEmp, role]);
 
