@@ -268,24 +268,41 @@ export default function FloorPlanPage() {
   // Resolve a schedule row to the underlying branch-employee numeric id used
   // by floor-plan assignments. The API's `id` field is the schedule row id —
   // NOT the employee id — so we must prefer `branchEmployeeId`, then parse
-  // patterns like "branch_emp_123" from the string `employeeId`.
-  const scheduledIds = useMemo(() => {
-    const set = new Set<number>();
+  // patterns like "branch_emp_123" from the string `employeeId`. We also
+  // keep startTime/endTime around so the sidebar can show the real shift
+  // window for each scheduled person ("07:00–15:00").
+  type ScheduledInfo = { startTime?: string; endTime?: string };
+  const scheduledMap = useMemo(() => {
+    const m = new Map<number, ScheduledInfo>();
     for (const e of scheduledRaw as any[]) {
       let id: number | null = null;
       if (typeof e?.branchEmployeeId === "number" && e.branchEmployeeId > 0) {
         id = e.branchEmployeeId;
       } else if (typeof e?.employeeId === "string") {
-        const m = e.employeeId.match(/(?:branch_emp_|be_)(\d+)/);
-        if (m) id = Number(m[1]);
+        const mm = e.employeeId.match(/(?:branch_emp_|be_)(\d+)/);
+        if (mm) id = Number(mm[1]);
         else if (/^\d+$/.test(e.employeeId)) id = Number(e.employeeId);
       } else if (typeof e?.employeeId === "number" && e.employeeId > 0) {
         id = e.employeeId;
       }
-      if (id && Number.isFinite(id)) set.add(id);
+      if (id && Number.isFinite(id)) {
+        // Merge duplicate rows for the same employee deterministically:
+        // keep the earliest startTime and the latest endTime, so the badge
+        // reflects the full window the employee is on-shift.
+        const prev = m.get(id);
+        const pickEarlier = (a?: string, b?: string) =>
+          !a ? b : !b ? a : a.localeCompare(b) <= 0 ? a : b;
+        const pickLater = (a?: string, b?: string) =>
+          !a ? b : !b ? a : a.localeCompare(b) >= 0 ? a : b;
+        m.set(id, {
+          startTime: pickEarlier(prev?.startTime, e?.startTime),
+          endTime: pickLater(prev?.endTime, e?.endTime),
+        });
+      }
     }
-    return set;
+    return m;
   }, [scheduledRaw]);
+  const scheduledIds = useMemo(() => new Set(scheduledMap.keys()), [scheduledMap]);
 
   // Dialogs state
   const [zoneDialog, setZoneDialog] = useState<{ mode: "create" | "edit"; x?: number; y?: number; id?: number; name?: string; color?: string; width?: number; height?: number; rotation?: number } | null>(null);
@@ -633,15 +650,24 @@ export default function FloorPlanPage() {
     () => (data?.employees || []).filter(e => !placedEmployeeIds.has(e.id)),
     [data, placedEmployeeIds],
   );
-  // When schedule data is available and the toggle is on, restrict the sidebar
-  // pool to people actually scheduled for this shift. Falls back to "all
-  // unplaced" when no schedule info is available so the page never feels empty.
+  // Split the unplaced pool into "scheduled for THIS shift today" vs the
+  // rest. This drives both the grouped sidebar UI and the schedule-first
+  // auto-distribute order (scheduled people get placed first, leftovers
+  // fall back to general staff if no schedule data exists).
+  const unplacedScheduled = useMemo(
+    () => allUnplaced.filter(e => scheduledIds.has(e.id)),
+    [allUnplaced, scheduledIds],
+  );
+  const unplacedOthers = useMemo(
+    () => allUnplaced.filter(e => !scheduledIds.has(e.id)),
+    [allUnplaced, scheduledIds],
+  );
+  // Visible pool in the sidebar: when schedule data exists AND the user has
+  // opted in to schedule-only, hide the "others" group entirely.
   const unplacedEmployees = useMemo(() => {
-    if (scheduledOnly && scheduledIds.size > 0) {
-      return allUnplaced.filter(e => scheduledIds.has(e.id));
-    }
+    if (scheduledOnly && scheduledIds.size > 0) return unplacedScheduled;
     return allUnplaced;
-  }, [allUnplaced, scheduledOnly, scheduledIds]);
+  }, [allUnplaced, unplacedScheduled, scheduledOnly, scheduledIds]);
   // Empty role slots (no employee yet) for this shift — useful for stats and drag-to-fill
   const emptySlots = useMemo(
     () => (data?.assignments || []).filter(a => a.employeeId == null),
@@ -676,39 +702,72 @@ export default function FloorPlanPage() {
     if (smartBusy) return;
     setSmartBusy(true);
     try {
-      const pool: Record<string, BranchEmployee[]> = {};
-      for (const e of unplacedEmployees) {
-        const jt = (e.jobTitle || "").trim();
-        (pool[jt] ||= []).push(e);
-      }
-      let placed = 0, failed = 0;
+      // Build two priority pools per job title:
+      // 1) people actually scheduled for THIS shift today — always tried first
+      // 2) other unplaced employees of the branch — only used as fallback when
+      //    schedule data is missing OR the user explicitly disabled the toggle
+      const useScheduledOnly = scheduledIds.size > 0 && scheduledOnly;
+      const buildPool = (list: BranchEmployee[]) => {
+        const p: Record<string, BranchEmployee[]> = {};
+        for (const e of list) {
+          const jt = (e.jobTitle || "").trim();
+          (p[jt] ||= []).push(e);
+        }
+        return p;
+      };
+      const primary = buildPool(unplacedScheduled);
+      const fallback = useScheduledOnly ? {} : buildPool(unplacedOthers);
+
+      type Pick = { emp: BranchEmployee; source: "primary" | "fallback"; poolKey: string };
+      const take = (role: string): Pick | undefined => {
+        const alias = LEGACY_ROLE_ALIASES[role] || "";
+        for (const key of [role, alias]) {
+          if (!key) continue;
+          if (primary[key]?.length) return { emp: primary[key]!.shift()!, source: "primary", poolKey: key };
+        }
+        for (const key of [role, alias]) {
+          if (!key) continue;
+          if (fallback[key]?.length) return { emp: fallback[key]!.shift()!, source: "fallback", poolKey: key };
+        }
+        return undefined;
+      };
+
+      let placed = 0, failed = 0, fromSchedule = 0;
       const failedRoles: string[] = [];
       for (const slot of emptySlots) {
         const role = (slot.role || "").trim();
-        // Honor legacy role aliases so a slot like "ساقي" still matches
-        // employees with the renamed job title.
-        const candidates = pool[role] || pool[LEGACY_ROLE_ALIASES[role] || ""] || [];
-        if (!candidates.length) continue;
-        const emp = candidates.shift()!;
+        const pick = take(role);
+        if (!pick) continue;
         try {
           await apiRequest("PATCH", `/api/floor-plans/${selectedBranchId}/assignments/${slot.id}`, {
-            employeeId: emp.id, shiftType: selectedShift,
+            employeeId: pick.emp.id, shiftType: selectedShift,
           });
           placed++;
+          if (pick.source === "primary") fromSchedule++;
         } catch {
           failed++;
           failedRoles.push(role || "بدون دور");
-          // Return employee to pool so a subsequent retry can re-use them
-          candidates.unshift(emp);
+          // Return the employee to the exact pool they came from
+          const target = pick.source === "primary" ? primary : fallback;
+          (target[pick.poolKey] ||= []).unshift(pick.emp);
         }
       }
       invalidate();
       if (placed === 0 && failed === 0) {
-        toast({ title: "لا يوجد تطابق ممكن", description: "لا توجد مواقع شاغرة تطابق وظائف الموظفين المتاحين." });
-      } else {
         toast({
-          title: `تم توزيع ${placed} موظف${failed > 0 ? ` (فشل ${failed})` : ""}`,
-          description: failed > 0 ? `لم يكتمل: ${failedRoles.slice(0, 3).join("، ")}${failedRoles.length > 3 ? "..." : ""}` : "راجع التوزيع وعدّل ما يلزم يدوياً.",
+          title: "لا يوجد تطابق ممكن",
+          description: scheduledIds.size === 0
+            ? "لا يوجد جدول مناوبات لهذا اليوم. أضف الجدول أولاً أو وزّع يدوياً."
+            : "لا توجد مواقع شاغرة تطابق وظائف الموظفين المجدولين.",
+        });
+      } else {
+        const desc: string[] = [];
+        if (fromSchedule > 0) desc.push(`${fromSchedule} من الجدول`);
+        if (placed - fromSchedule > 0) desc.push(`${placed - fromSchedule} من خارج الجدول`);
+        if (failed > 0) desc.push(`فشل ${failed}: ${failedRoles.slice(0, 3).join("، ")}${failedRoles.length > 3 ? "..." : ""}`);
+        toast({
+          title: `تم توزيع ${placed} موظف`,
+          description: desc.join(" • "),
           variant: failed > 0 ? "destructive" : undefined,
         });
       }
@@ -1022,15 +1081,17 @@ export default function FloorPlanPage() {
                   })}
                 </TabsContent>
 
-                {/* Employees tab — searchable + draggable */}
+                {/* Employees tab — schedule-aware grouped list */}
                 <TabsContent value="employees" className="flex-1 overflow-hidden m-0 flex flex-col">
                   <div className="p-3 pb-2 space-y-2">
                     <p className="text-[11px] text-muted-foreground leading-relaxed">
-                      اسحب موظفاً وأفلته على موقع شاغر لملئه، أو على المخطط لإنشاء موقع جديد.
+                      اسحب موظفاً على موقع شاغر لملئه، أو على المخطط لإنشاء موقع جديد.
                     </p>
-                    {/* Schedule-aware filter: hide people who aren't actually
-                        scheduled to work this shift today. */}
-                    <label className="flex items-center gap-2 text-[11px] cursor-pointer p-1.5 rounded bg-muted/40 border" title="يعتمد على جدول المناوبات لهذا اليوم">
+                    {/* Schedule-aware filter — toggles whether "غير مجدولين"
+                        group is shown alongside the scheduled group. */}
+                    <label className={`flex items-center gap-2 text-[11px] cursor-pointer p-1.5 rounded border transition-colors ${
+                      scheduledIds.size === 0 ? "bg-muted/40 opacity-60" : scheduledOnly ? "bg-emerald-50 border-emerald-200" : "bg-muted/40"
+                    }`} title="يعتمد على جدول المناوبات لهذا اليوم">
                       <Switch
                         checked={scheduledOnly}
                         onCheckedChange={setScheduledOnly}
@@ -1038,12 +1099,12 @@ export default function FloorPlanPage() {
                         disabled={scheduledIds.size === 0}
                         data-testid="switch-scheduled-only"
                       />
-                      <span className="flex-1">
+                      <span className="flex-1 font-medium">
                         المجدولون لهذه الوردية فقط
-                        {scheduledIds.size === 0 && <span className="text-muted-foreground"> — (لا يوجد جدول لليوم)</span>}
+                        {scheduledIds.size === 0 && <span className="text-muted-foreground font-normal"> — لا يوجد جدول</span>}
                       </span>
                       {scheduledIds.size > 0 && (
-                        <Badge variant="outline" className="text-[10px] tabular-nums px-1 py-0">{scheduledIds.size}</Badge>
+                        <Badge variant="outline" className="text-[10px] tabular-nums px-1 py-0 bg-card">{scheduledIds.size}</Badge>
                       )}
                     </label>
                     <div className="relative">
@@ -1056,34 +1117,31 @@ export default function FloorPlanPage() {
                     </div>
                   </div>
                   <ScrollArea className="flex-1">
-                    <div className="px-3 pb-3 space-y-1.5">
+                    <div className="px-3 pb-3 space-y-3">
                       {(() => {
                         const q = empSearch.trim().toLowerCase();
-                        const filtered = q
-                          ? unplacedEmployees.filter(e =>
-                              e.employeeName.toLowerCase().includes(q) ||
-                              (e.jobTitle || "").toLowerCase().includes(q))
-                          : unplacedEmployees;
-                        if (filtered.length === 0) {
-                          return (
-                            <div className="text-center text-xs text-muted-foreground py-6">
-                              {data.employees.length === 0
-                                ? "لا يوجد موظفون نشطون بهذا الفرع"
-                                : q ? "لا نتائج مطابقة للبحث"
-                                    : `جميع الموظفين موزَّعون في شفت ${SHIFTS.find(s => s.value === selectedShift)?.label}`}
-                            </div>
-                          );
-                        }
-                        return filtered.map(emp => {
+                        const filterFn = (e: BranchEmployee) => !q ||
+                          e.employeeName.toLowerCase().includes(q) ||
+                          (e.jobTitle || "").toLowerCase().includes(q);
+                        const fmtTime = (t?: string) => t ? t.slice(0, 5) : ""; // "HH:MM"
+
+                        // Reusable card renderer — `scheduledInfo` is optional;
+                        // when present it renders the shift time badge.
+                        const renderCard = (emp: BranchEmployee, info?: ScheduledInfo) => {
                           const def = getRoleDef(null, emp.jobTitle);
                           const RoleIcon = def.icon;
+                          const win = info && (info.startTime || info.endTime)
+                            ? `${fmtTime(info.startTime)}${info.endTime ? `–${fmtTime(info.endTime)}` : ""}`
+                            : null;
                           return (
                             <div key={emp.id} draggable
                               onDragStart={(e) => {
                                 e.dataTransfer.setData("application/x-employee-id", String(emp.id));
                                 e.dataTransfer.effectAllowed = "move";
                               }}
-                              className="flex items-center gap-2 p-2 rounded-md border border-border bg-card hover:bg-accent hover:border-primary cursor-grab active:cursor-grabbing transition-colors"
+                              className={`flex items-center gap-2 p-2 rounded-md border bg-card hover:border-primary cursor-grab active:cursor-grabbing transition-colors ${
+                                info ? "border-emerald-200 hover:bg-emerald-50/50" : "border-border hover:bg-accent"
+                              }`}
                               data-testid={`employee-pill-${emp.id}`}
                             >
                               <GripVertical className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -1093,11 +1151,69 @@ export default function FloorPlanPage() {
                               </div>
                               <div className="flex-1 min-w-0">
                                 <div className="text-sm font-medium truncate">{emp.employeeName}</div>
-                                <div className="text-xs text-muted-foreground truncate">{emp.jobTitle}</div>
+                                <div className="text-[11px] text-muted-foreground truncate">{emp.jobTitle}</div>
                               </div>
+                              {win && (
+                                <Badge variant="outline" className="text-[10px] tabular-nums px-1 py-0 border-emerald-300 text-emerald-700 bg-emerald-50">
+                                  {win}
+                                </Badge>
+                              )}
                             </div>
                           );
-                        });
+                        };
+
+                        const scheduledList = unplacedScheduled.filter(filterFn);
+                        const othersList = unplacedOthers.filter(filterFn);
+                        const showOthers = !(scheduledOnly && scheduledIds.size > 0);
+                        const hasAny = scheduledList.length + (showOthers ? othersList.length : 0) > 0;
+                        if (!hasAny) {
+                          return (
+                            <div className="text-center text-xs text-muted-foreground py-6">
+                              {data.employees.length === 0
+                                ? "لا يوجد موظفون نشطون بهذا الفرع"
+                                : q ? "لا نتائج مطابقة للبحث"
+                                    : scheduledIds.size > 0 && scheduledOnly
+                                        ? `جميع المجدولين موزَّعون لشفت ${SHIFTS.find(s => s.value === selectedShift)?.label}`
+                                        : `جميع الموظفين موزَّعون`}
+                            </div>
+                          );
+                        }
+                        return (
+                          <>
+                            {scheduledIds.size > 0 && (
+                              <div className="space-y-1.5">
+                                <div className="flex items-center gap-2 px-1">
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                  <span className="text-[11px] font-semibold text-emerald-800">مجدولون للوردية</span>
+                                  <Badge variant="outline" className="text-[10px] tabular-nums px-1 py-0 border-emerald-300 text-emerald-700 bg-emerald-50">
+                                    {scheduledList.length}
+                                  </Badge>
+                                  <div className="flex-1 h-px bg-emerald-100" />
+                                </div>
+                                {scheduledList.length === 0 ? (
+                                  <div className="text-[11px] text-muted-foreground px-1 py-2">
+                                    {q ? "لا نتائج في المجدولين" : "كل المجدولين موزَّعون ✓"}
+                                  </div>
+                                ) : scheduledList.map(emp => renderCard(emp, scheduledMap.get(emp.id)))}
+                              </div>
+                            )}
+                            {showOthers && othersList.length > 0 && (
+                              <div className="space-y-1.5">
+                                <div className="flex items-center gap-2 px-1">
+                                  <Users className="w-3.5 h-3.5 text-muted-foreground" />
+                                  <span className="text-[11px] font-semibold text-muted-foreground">
+                                    {scheduledIds.size > 0 ? "غير مجدولين (احتياطي)" : "موظفو الفرع"}
+                                  </span>
+                                  <Badge variant="outline" className="text-[10px] tabular-nums px-1 py-0">
+                                    {othersList.length}
+                                  </Badge>
+                                  <div className="flex-1 h-px bg-border" />
+                                </div>
+                                {othersList.map(emp => renderCard(emp))}
+                              </div>
+                            )}
+                          </>
+                        );
                       })()}
                     </div>
                   </ScrollArea>
