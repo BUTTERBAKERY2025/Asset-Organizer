@@ -18,10 +18,15 @@ import {
   LayoutGrid, Plus, Trash2, Save, GripVertical, User as UserIcon, Square,
   Crown, Shield, Calculator, Coffee, ChefHat, Utensils, Sparkles,
   Handshake, Package, Cake, HardHat, ClipboardList, Soup, Sun, Sunset, Moon, RotateCw,
+  Wand2, Copy as CopyIcon, AlertCircle, CheckCircle2, Users, Loader2,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuLabel, DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { ZoomIn, ZoomOut, Maximize2, Lock, Unlock, Magnet, Grid3x3, Search, Pencil, MousePointer2 } from "lucide-react";
 import type { Branch } from "@shared/schema";
 
@@ -207,6 +212,72 @@ export default function FloorPlanPage() {
     enabled: !!selectedBranchId,
   });
 
+  // Employees actually scheduled for this shift TODAY — pulled from the
+  // existing schedule system. Used to (a) filter the sidebar to people who
+  // will really be at work, and (b) flag scheduled employees who still need
+  // a position. We treat an empty/erroring response as "no schedule data".
+  // Date is computed in Saudi local time (Asia/Riyadh) so we don't query the
+  // wrong day around UTC midnight — attendance/schedule data is keyed by the
+  // Saudi-local calendar date.
+  // Recomputed on a state tick so the date advances live when the page sits
+  // open across Riyadh midnight (otherwise we'd keep querying yesterday's
+  // schedule until the user refreshes).
+  const fmtRiyadhDate = (d: Date) => new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Riyadh", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(d);
+  const [todayStr, setTodayStr] = useState<string>(() => fmtRiyadhDate(new Date()));
+  useEffect(() => {
+    const tick = () => {
+      const next = fmtRiyadhDate(new Date());
+      setTodayStr(prev => (prev === next ? prev : next));
+    };
+    const id = window.setInterval(tick, 60_000);
+    const onFocus = () => tick();
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  }, []);
+  const { data: scheduledRaw = [] } = useQuery<any[]>({
+    queryKey: [`/api/scheduled-employees-for-attendance`, selectedBranchId, selectedShift, todayStr],
+    queryFn: async () => {
+      try {
+        const res = await apiRequest(
+          "GET",
+          `/api/scheduled-employees-for-attendance?branchId=${encodeURIComponent(selectedBranchId)}&shiftType=${selectedShift}&date=${todayStr}`,
+        );
+        const json = await res.json();
+        return Array.isArray(json) ? json : [];
+      } catch { return []; }
+    },
+    enabled: !!selectedBranchId,
+    staleTime: 60_000,
+  });
+  // Resolve a schedule row to the underlying branch-employee numeric id used
+  // by floor-plan assignments. The API's `id` field is the schedule row id —
+  // NOT the employee id — so we must prefer `branchEmployeeId`, then parse
+  // patterns like "branch_emp_123" from the string `employeeId`.
+  const scheduledIds = useMemo(() => {
+    const set = new Set<number>();
+    for (const e of scheduledRaw as any[]) {
+      let id: number | null = null;
+      if (typeof e?.branchEmployeeId === "number" && e.branchEmployeeId > 0) {
+        id = e.branchEmployeeId;
+      } else if (typeof e?.employeeId === "string") {
+        const m = e.employeeId.match(/(?:branch_emp_|be_)(\d+)/);
+        if (m) id = Number(m[1]);
+        else if (/^\d+$/.test(e.employeeId)) id = Number(e.employeeId);
+      } else if (typeof e?.employeeId === "number" && e.employeeId > 0) {
+        id = e.employeeId;
+      }
+      if (id && Number.isFinite(id)) set.add(id);
+    }
+    return set;
+  }, [scheduledRaw]);
+
   // Dialogs state
   const [zoneDialog, setZoneDialog] = useState<{ mode: "create" | "edit"; x?: number; y?: number; id?: number; name?: string; color?: string; width?: number; height?: number; rotation?: number } | null>(null);
   // Live resize transient state — overrides server dims while user drags a handle
@@ -227,6 +298,11 @@ export default function FloorPlanPage() {
   const [locked, setLocked] = useState(false);
   const [empSearch, setEmpSearch] = useState("");
   const [sidebarTab, setSidebarTab] = useState<"roles" | "zones" | "employees">("roles");
+  // Show only employees actually scheduled to work this shift today (pulled from
+  // the schedule system). Reduces noise and prevents assigning someone on leave.
+  const [scheduledOnly, setScheduledOnly] = useState(true);
+  // Disables smart-tool buttons while a bulk distribute / copy / clear runs.
+  const [smartBusy, setSmartBusy] = useState(false);
   const canvasWrapRef = useRef<HTMLDivElement>(null);
   const GRID_SIZE = 10;
   const snap = (n: number) => snapGrid ? Math.round(n / GRID_SIZE) * GRID_SIZE : Math.round(n);
@@ -541,17 +617,167 @@ export default function FloorPlanPage() {
   };
 
   // Employees that are NOT yet placed on the plan
-  const placedEmployeeIds = new Set(
+  const placedEmployeeIds = useMemo(() => new Set(
     (data?.assignments || []).map(a => a.employeeId).filter((id): id is number => id != null)
+  ), [data]);
+  const allUnplaced = useMemo(
+    () => (data?.employees || []).filter(e => !placedEmployeeIds.has(e.id)),
+    [data, placedEmployeeIds],
   );
-  const unplacedEmployees = (data?.employees || []).filter(e => !placedEmployeeIds.has(e.id));
+  // When schedule data is available and the toggle is on, restrict the sidebar
+  // pool to people actually scheduled for this shift. Falls back to "all
+  // unplaced" when no schedule info is available so the page never feels empty.
+  const unplacedEmployees = useMemo(() => {
+    if (scheduledOnly && scheduledIds.size > 0) {
+      return allUnplaced.filter(e => scheduledIds.has(e.id));
+    }
+    return allUnplaced;
+  }, [allUnplaced, scheduledOnly, scheduledIds]);
   // Empty role slots (no employee yet) for this shift — useful for stats and drag-to-fill
-  const emptySlots = (data?.assignments || []).filter(a => a.employeeId == null);
+  const emptySlots = useMemo(
+    () => (data?.assignments || []).filter(a => a.employeeId == null),
+    [data],
+  );
   const employeeById = useMemo(() => {
     const m = new Map<number, BranchEmployee>();
     (data?.employees || []).forEach(e => m.set(e.id, e));
     return m;
   }, [data]);
+  // Coverage info for the health banner: how many of each role are still empty,
+  // and how many scheduled employees still need a position on the plan.
+  const missingByRole = useMemo(() => {
+    const m = new Map<string, number>();
+    emptySlots.forEach(s => {
+      const r = (s.role || "موظف").trim() || "موظف";
+      m.set(r, (m.get(r) || 0) + 1);
+    });
+    return m;
+  }, [emptySlots]);
+  const unassignedScheduledCount = useMemo(() => {
+    let n = 0;
+    scheduledIds.forEach(id => { if (!placedEmployeeIds.has(id)) n++; });
+    return n;
+  }, [scheduledIds, placedEmployeeIds]);
+
+  // ---- Smart distribution actions ----
+  // Try to fill every empty slot with a scheduled, unplaced employee whose
+  // jobTitle matches the slot's role. Sequential PATCHes keep the server-side
+  // upsert logic safe and avoid race conditions on the same plan.
+  const autoDistribute = async () => {
+    if (smartBusy) return;
+    setSmartBusy(true);
+    try {
+      const pool: Record<string, BranchEmployee[]> = {};
+      for (const e of unplacedEmployees) {
+        const jt = (e.jobTitle || "").trim();
+        (pool[jt] ||= []).push(e);
+      }
+      let placed = 0, failed = 0;
+      const failedRoles: string[] = [];
+      for (const slot of emptySlots) {
+        const role = (slot.role || "").trim();
+        // Honor legacy role aliases so a slot like "ساقي" still matches
+        // employees with the renamed job title.
+        const candidates = pool[role] || pool[LEGACY_ROLE_ALIASES[role] || ""] || [];
+        if (!candidates.length) continue;
+        const emp = candidates.shift()!;
+        try {
+          await apiRequest("PATCH", `/api/floor-plans/${selectedBranchId}/assignments/${slot.id}`, {
+            employeeId: emp.id, shiftType: selectedShift,
+          });
+          placed++;
+        } catch {
+          failed++;
+          failedRoles.push(role || "بدون دور");
+          // Return employee to pool so a subsequent retry can re-use them
+          candidates.unshift(emp);
+        }
+      }
+      invalidate();
+      if (placed === 0 && failed === 0) {
+        toast({ title: "لا يوجد تطابق ممكن", description: "لا توجد مواقع شاغرة تطابق وظائف الموظفين المتاحين." });
+      } else {
+        toast({
+          title: `تم توزيع ${placed} موظف${failed > 0 ? ` (فشل ${failed})` : ""}`,
+          description: failed > 0 ? `لم يكتمل: ${failedRoles.slice(0, 3).join("، ")}${failedRoles.length > 3 ? "..." : ""}` : "راجع التوزيع وعدّل ما يلزم يدوياً.",
+          variant: failed > 0 ? "destructive" : undefined,
+        });
+      }
+    } finally { setSmartBusy(false); }
+  };
+
+  // Copy assignment positions from another shift into the current one.
+  // `withEmployees=false` copies only the slots (as empty positions), which is
+  // the typical case: same layout, different staff per shift.
+  const copyFromShift = async (sourceShift: ShiftType, withEmployees: boolean) => {
+    if (smartBusy || sourceShift === selectedShift) return;
+    setSmartBusy(true);
+    try {
+      let source: any;
+      try {
+        const res = await apiRequest("GET", `/api/floor-plans/${selectedBranchId}?shift=${sourceShift}`);
+        source = await res.json();
+      } catch (e: any) {
+        toast({ title: "تعذّر قراءة الوردية المصدر", description: e?.message, variant: "destructive" });
+        return;
+      }
+      const srcAssignments: any[] = source?.assignments || [];
+      if (srcAssignments.length === 0) {
+        toast({ title: "لا توجد مواقع في الوردية المصدر", variant: "destructive" });
+        return;
+      }
+      // Skip slots that already exist at the same (x,y,role) to avoid duplicates
+      const existing = new Set((data?.assignments || []).map(a => `${a.x}:${a.y}:${a.role || ""}`));
+      let copied = 0, failed = 0;
+      for (const a of srcAssignments) {
+        const key = `${a.x}:${a.y}:${a.role || ""}`;
+        if (existing.has(key)) continue;
+        try {
+          await apiRequest("POST", `/api/floor-plans/${selectedBranchId}/assignments`, {
+            x: a.x, y: a.y, role: a.role, notes: a.notes,
+            employeeId: withEmployees ? a.employeeId : null,
+            shiftType: selectedShift,
+          });
+          copied++;
+        } catch { failed++; }
+      }
+      invalidate();
+      const srcLabel = SHIFTS.find(s => s.value === sourceShift)?.label || sourceShift;
+      if (copied === 0 && failed === 0) {
+        toast({ title: "لا جديد لنسخه", description: "كل المواقع موجودة بالفعل في الوردية الحالية." });
+      } else {
+        toast({
+          title: `تم نسخ ${copied} موقع من وردية ${srcLabel}${failed > 0 ? ` (فشل ${failed})` : ""}`,
+          description: withEmployees ? "تم نسخ المواقع والموظفين." : "تم نسخ المواقع كشواغر — استخدم التوزيع التلقائي أو وزّع يدوياً.",
+          variant: failed > 0 ? "destructive" : undefined,
+        });
+      }
+    } finally { setSmartBusy(false); }
+  };
+
+  // Remove all assignments in the current shift (zones are kept).
+  const clearShift = async () => {
+    if (smartBusy) return;
+    const all = data?.assignments || [];
+    if (all.length === 0) return;
+    if (!confirm(`سيتم حذف ${all.length} موقعاً من وردية ${SHIFTS.find(s => s.value === selectedShift)?.label}. لن تتأثر المناطق نفسها. متابعة؟`)) return;
+    setSmartBusy(true);
+    try {
+      let deleted = 0, failed = 0;
+      for (const a of all) {
+        try {
+          await apiRequest("DELETE", `/api/floor-plans/${selectedBranchId}/assignments/${a.id}?shift=${selectedShift}`);
+          deleted++;
+        } catch { failed++; }
+      }
+      invalidate();
+      toast({
+        title: `تم مسح ${deleted} موقع${failed > 0 ? ` (فشل ${failed})` : ""}`,
+        description: failed > 0 ? "أعد المحاولة لاستكمال المسح." : undefined,
+        variant: failed > 0 ? "destructive" : undefined,
+      });
+    } finally { setSmartBusy(false); }
+  };
 
   return (
     <Layout>
@@ -732,6 +958,24 @@ export default function FloorPlanPage() {
                     <p className="text-[11px] text-muted-foreground leading-relaxed">
                       اسحب موظفاً وأفلته على موقع شاغر لملئه، أو على المخطط لإنشاء موقع جديد.
                     </p>
+                    {/* Schedule-aware filter: hide people who aren't actually
+                        scheduled to work this shift today. */}
+                    <label className="flex items-center gap-2 text-[11px] cursor-pointer p-1.5 rounded bg-muted/40 border" title="يعتمد على جدول المناوبات لهذا اليوم">
+                      <Switch
+                        checked={scheduledOnly}
+                        onCheckedChange={setScheduledOnly}
+                        className="scale-75"
+                        disabled={scheduledIds.size === 0}
+                        data-testid="switch-scheduled-only"
+                      />
+                      <span className="flex-1">
+                        المجدولون لهذه الوردية فقط
+                        {scheduledIds.size === 0 && <span className="text-muted-foreground"> — (لا يوجد جدول لليوم)</span>}
+                      </span>
+                      {scheduledIds.size > 0 && (
+                        <Badge variant="outline" className="text-[10px] tabular-nums px-1 py-0">{scheduledIds.size}</Badge>
+                      )}
+                    </label>
                     <div className="relative">
                       <Search className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                       <Input
@@ -855,6 +1099,61 @@ export default function FloorPlanPage() {
                   />
                 </div>
 
+                {/* Smart tools — auto-distribute, copy from shift, clear */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline" size="sm"
+                      className="h-7 gap-1.5 text-xs border-primary/40 text-primary hover:bg-primary/10"
+                      disabled={smartBusy || locked}
+                      data-testid="btn-smart-tools"
+                    >
+                      {smartBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5" />}
+                      أدوات ذكية
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-72">
+                    <DropdownMenuLabel className="text-xs">التوزيع التلقائي</DropdownMenuLabel>
+                    <DropdownMenuItem
+                      onClick={autoDistribute}
+                      disabled={emptySlots.length === 0 || unplacedEmployees.length === 0}
+                      data-testid="btn-auto-distribute"
+                    >
+                      <Wand2 className="w-3.5 h-3.5 me-2 text-primary" />
+                      <div className="flex-1">
+                        <div className="text-sm">توزيع تلقائي حسب الوظيفة</div>
+                        <div className="text-[11px] text-muted-foreground">
+                          {emptySlots.length} شاغر • {unplacedEmployees.length} موظف متاح
+                        </div>
+                      </div>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel className="text-xs">نسخ من وردية أخرى</DropdownMenuLabel>
+                    {SHIFTS.filter(s => s.value !== selectedShift).map(s => (
+                      <div key={s.value}>
+                        <DropdownMenuItem onClick={() => copyFromShift(s.value, false)} data-testid={`btn-copy-empty-${s.value}`}>
+                          <CopyIcon className="w-3.5 h-3.5 me-2" />
+                          نسخ مواقع {s.label} كشواغر
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => copyFromShift(s.value, true)} data-testid={`btn-copy-full-${s.value}`}>
+                          <CopyIcon className="w-3.5 h-3.5 me-2 text-green-600" />
+                          نسخ مواقع {s.label} مع الموظفين
+                        </DropdownMenuItem>
+                      </div>
+                    ))}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={clearShift}
+                      className="text-red-600 focus:text-red-700"
+                      disabled={(data?.assignments || []).length === 0}
+                      data-testid="btn-clear-shift"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 me-2" />
+                      مسح كل مواقع هذه الوردية
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
                 {/* Stats badge — always visible at-a-glance */}
                 <Badge variant="outline" className="ms-auto text-[11px] tabular-nums gap-1.5" data-testid="badge-canvas-stats">
                   <span className="text-muted-foreground">المناطق</span> <span className="font-semibold">{data.zones.length}</span>
@@ -866,6 +1165,51 @@ export default function FloorPlanPage() {
               </div>
 
               <CardContent className="p-0">
+                {/* Health banner — at-a-glance coverage, missing roles, unassigned people */}
+                {data.assignments.length > 0 && (() => {
+                  const filled = data.assignments.length - emptySlots.length;
+                  const pct = Math.round((filled / data.assignments.length) * 100);
+                  const tone = pct === 100 ? "emerald" : pct >= 70 ? "amber" : "rose";
+                  const toneBg =
+                    tone === "emerald" ? "bg-emerald-50 border-emerald-200" :
+                    tone === "amber" ? "bg-amber-50 border-amber-200" :
+                    "bg-rose-50 border-rose-200";
+                  return (
+                    <div className={`px-3 py-2 border-b text-xs flex flex-wrap items-center gap-x-3 gap-y-1.5 ${toneBg}`} data-testid="banner-coverage">
+                      <span className="flex items-center gap-1.5 font-semibold">
+                        {pct === 100 ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <AlertCircle className="w-4 h-4 text-amber-600" />}
+                        تغطية الوردية: <span className="tabular-nums">{filled}/{data.assignments.length} ({pct}%)</span>
+                      </span>
+                      {missingByRole.size > 0 && (
+                        <span className="flex items-center gap-1 flex-wrap">
+                          <span className="text-muted-foreground">ناقص:</span>
+                          {Array.from(missingByRole.entries()).map(([role, n]) => (
+                            <span key={role} className="bg-white/70 border border-amber-300 rounded px-1.5 py-0.5 tabular-nums text-amber-900">
+                              {n}× {role}
+                            </span>
+                          ))}
+                        </span>
+                      )}
+                      {unassignedScheduledCount > 0 && (
+                        <span className="flex items-center gap-1 text-sky-800" title="موظفون مجدولون لهذه الوردية اليوم لم يُعطوا موقعاً بعد">
+                          <Users className="w-3.5 h-3.5" />
+                          مجدولون بلا موقع: <span className="tabular-nums font-semibold">{unassignedScheduledCount}</span>
+                        </span>
+                      )}
+                      {(emptySlots.length > 0 && unplacedEmployees.length > 0) && (
+                        <button
+                          type="button"
+                          onClick={autoDistribute}
+                          disabled={smartBusy || locked}
+                          className="ms-auto inline-flex items-center gap-1 text-primary hover:underline font-medium disabled:opacity-50"
+                          data-testid="btn-quick-autodistribute"
+                        >
+                          <Wand2 className="w-3.5 h-3.5" /> توزيع تلقائي
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()}
                 {placementRole && (() => {
                   const def = ROLE_DEFS[placementRole];
                   return (
