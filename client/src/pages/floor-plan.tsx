@@ -791,76 +791,98 @@ export default function FloorPlanPage() {
   return (
     <Layout>
       <div className="container mx-auto p-4 space-y-4" dir="rtl">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center">
-              <LayoutGrid className="w-6 h-6 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold">مخطط أرضية الفرع</h1>
-              <p className="text-sm text-muted-foreground">وزّع فريق العمل على مناطق الفرع بشكل مرئي</p>
+        {/* Header — title + branch selector unified into a single hero card */}
+        <Card className="overflow-hidden border-primary/20">
+          <div className="bg-gradient-to-l from-primary/10 via-primary/5 to-transparent">
+            <div className="p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-12 h-12 rounded-xl bg-primary/15 flex items-center justify-center shrink-0 ring-1 ring-primary/20">
+                  <LayoutGrid className="w-6 h-6 text-primary" />
+                </div>
+                <div className="min-w-0">
+                  <h1 className="text-xl sm:text-2xl font-bold leading-tight">مخطط أرضية الفرع</h1>
+                  <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">وزّع فريق العمل على مناطق الفرع بشكل مرئي</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Label htmlFor="branch-sel" className="text-sm whitespace-nowrap text-muted-foreground">الفرع</Label>
+                <Select value={selectedBranchId} onValueChange={setSelectedBranchId}>
+                  <SelectTrigger id="branch-sel" className="w-56 h-10 bg-card shadow-sm" data-testid="select-branch">
+                    <SelectValue placeholder="اختر فرع" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {branches.map(b => (
+                      <SelectItem key={b.id} value={b.id} data-testid={`select-branch-${b.id}`}>{b.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Label htmlFor="branch-sel" className="text-sm whitespace-nowrap">الفرع:</Label>
-            <Select value={selectedBranchId} onValueChange={setSelectedBranchId}>
-              <SelectTrigger id="branch-sel" className="w-56" data-testid="select-branch">
-                <SelectValue placeholder="اختر فرع" />
-              </SelectTrigger>
-              <SelectContent>
-                {branches.map(b => (
-                  <SelectItem key={b.id} value={b.id} data-testid={`select-branch-${b.id}`}>{b.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
+        </Card>
 
-        {/* Shift + date selector */}
+        {/* Shift + date selector — grouped context bar */}
         {selectedBranchId && (
           <Card>
-            <CardContent className="p-3 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
-              <Tabs value={selectedShift} onValueChange={(v) => setSelectedShift(v as ShiftType)} dir="rtl" className="flex-1">
-                <TabsList className="grid grid-cols-3 w-full max-w-xl">
-                  {SHIFTS.map(s => {
-                    const SI = s.icon;
-                    return (
-                      <TabsTrigger key={s.value} value={s.value} data-testid={`tab-shift-${s.value}`} className="gap-2">
-                        <SI className="w-4 h-4" style={{ color: s.color }} />
-                        <span>شفت {s.label}</span>
-                      </TabsTrigger>
-                    );
-                  })}
-                </TabsList>
-              </Tabs>
-              {/* Date picker — drives which day's schedule is shown & distributed */}
-              <div className="flex items-center gap-2 sm:border-r sm:pe-3">
-                <Calendar className="w-4 h-4 text-muted-foreground" />
-                <Input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    if (!v) return;
-                    setSelectedDate(v);
-                    setIsPinnedToToday(v === todayRiyadh);
-                  }}
-                  className="h-9 w-[150px] tabular-nums"
-                  data-testid="input-plan-date"
-                />
-                {selectedDate !== todayRiyadh && (
-                  <Button
-                    variant="outline" size="sm" className="h-9 text-xs"
-                    onClick={() => { setSelectedDate(todayRiyadh); setIsPinnedToToday(true); }}
-                    data-testid="btn-date-today"
-                  >
+            <CardContent className="p-3 flex flex-col lg:flex-row gap-3 items-stretch lg:items-center">
+              {/* Shift tabs — primary axis */}
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <span className="text-[11px] font-medium text-muted-foreground whitespace-nowrap hidden sm:inline">الوردية:</span>
+                <Tabs value={selectedShift} onValueChange={(v) => setSelectedShift(v as ShiftType)} dir="rtl" className="flex-1">
+                  <TabsList className="grid grid-cols-3 w-full max-w-xl h-10">
+                    {SHIFTS.map(s => {
+                      const SI = s.icon;
+                      return (
+                        <TabsTrigger key={s.value} value={s.value} data-testid={`tab-shift-${s.value}`}
+                          className="gap-2 data-[state=active]:shadow-sm">
+                          <SI className="w-4 h-4" style={{ color: s.color }} />
+                          <span className="font-medium">{s.label}</span>
+                        </TabsTrigger>
+                      );
+                    })}
+                  </TabsList>
+                </Tabs>
+              </div>
+
+              {/* Date picker — secondary axis, visually separated */}
+              <div className="flex items-center gap-2 lg:border-s lg:ps-3">
+                <span className="text-[11px] font-medium text-muted-foreground whitespace-nowrap hidden sm:inline">التاريخ:</span>
+                <div className="relative">
+                  <Calendar className="w-3.5 h-3.5 text-muted-foreground absolute start-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <Input
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (!v) return;
+                      setSelectedDate(v);
+                      setIsPinnedToToday(v === todayRiyadh);
+                    }}
+                    className="h-10 w-[160px] ps-7 tabular-nums font-medium"
+                    data-testid="input-plan-date"
+                  />
+                </div>
+                {selectedDate !== todayRiyadh ? (
+                  <>
+                    <Badge
+                      variant="outline"
+                      className={`text-[10px] border ${selectedDate > todayRiyadh
+                        ? "text-sky-700 border-sky-300 bg-sky-50"
+                        : "text-amber-700 border-amber-300 bg-amber-50"}`}
+                    >
+                      {selectedDate > todayRiyadh ? "تخطيط مسبق" : "مراجعة سابقة"}
+                    </Badge>
+                    <Button
+                      variant="ghost" size="sm" className="h-8 px-2 text-xs text-primary hover:bg-primary/10"
+                      onClick={() => { setSelectedDate(todayRiyadh); setIsPinnedToToday(true); }}
+                      data-testid="btn-date-today"
+                    >
+                      اليوم
+                    </Button>
+                  </>
+                ) : (
+                  <Badge variant="outline" className="text-[10px] text-emerald-700 border-emerald-300 bg-emerald-50">
                     اليوم
-                  </Button>
-                )}
-                {selectedDate !== todayRiyadh && (
-                  <Badge variant="outline" className="text-[10px] text-amber-700 border-amber-400 bg-amber-50">
-                    {selectedDate > todayRiyadh ? "تخطيط مسبق" : "مراجعة سابقة"}
                   </Badge>
                 )}
               </div>
@@ -877,29 +899,38 @@ export default function FloorPlanPage() {
             {/* Sidebar — tabbed to keep the page compact */}
             <Card className="lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-6rem)] flex flex-col overflow-hidden">
               {/* Live shift summary (always visible) */}
-              <div className="p-3 border-b bg-muted/40">
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  <div>
-                    <div className="text-[10px] text-muted-foreground">المواقع</div>
-                    <div className="text-base font-bold tabular-nums" data-testid="stat-total-slots">{data.assignments.length}</div>
+              <div className="px-3 py-2.5 border-b bg-gradient-to-b from-muted/60 to-muted/20">
+                <div className="grid grid-cols-3 gap-1 text-center">
+                  <div className="rounded-md py-1.5 bg-card border">
+                    <div className="text-[9px] uppercase tracking-wide text-muted-foreground font-medium">المواقع</div>
+                    <div className="text-base font-bold tabular-nums leading-tight" data-testid="stat-total-slots">{data.assignments.length}</div>
                   </div>
-                  <div>
-                    <div className="text-[10px] text-muted-foreground">مُعيَّنة</div>
-                    <div className="text-base font-bold tabular-nums text-green-700" data-testid="stat-filled-slots">{data.assignments.length - emptySlots.length}</div>
+                  <div className="rounded-md py-1.5 bg-emerald-50 border border-emerald-200">
+                    <div className="text-[9px] uppercase tracking-wide text-emerald-700/80 font-medium">مُعيَّنة</div>
+                    <div className="text-base font-bold tabular-nums leading-tight text-emerald-700" data-testid="stat-filled-slots">{data.assignments.length - emptySlots.length}</div>
                   </div>
-                  <div>
-                    <div className="text-[10px] text-muted-foreground">شاغرة</div>
-                    <div className="text-base font-bold tabular-nums text-amber-700" data-testid="stat-empty-slots">{emptySlots.length}</div>
+                  <div className="rounded-md py-1.5 bg-amber-50 border border-amber-200">
+                    <div className="text-[9px] uppercase tracking-wide text-amber-700/80 font-medium">شاغرة</div>
+                    <div className="text-base font-bold tabular-nums leading-tight text-amber-700" data-testid="stat-empty-slots">{emptySlots.length}</div>
                   </div>
                 </div>
-                {data.assignments.length > 0 && (
-                  <div className="h-1.5 rounded-full bg-muted overflow-hidden mt-2" title="نسبة الإشغال">
-                    <div
-                      className="h-full bg-green-500 transition-all"
-                      style={{ width: `${Math.round(((data.assignments.length - emptySlots.length) / data.assignments.length) * 100)}%` }}
-                    />
-                  </div>
-                )}
+                {data.assignments.length > 0 && (() => {
+                  const pct = Math.round(((data.assignments.length - emptySlots.length) / data.assignments.length) * 100);
+                  return (
+                    <div className="mt-2">
+                      <div className="flex items-center justify-between text-[10px] mb-0.5">
+                        <span className="text-muted-foreground">نسبة الإشغال</span>
+                        <span className="font-semibold tabular-nums">{pct}%</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-muted overflow-hidden" title={`${pct}%`}>
+                        <div
+                          className={`h-full transition-all ${pct === 100 ? "bg-emerald-500" : pct >= 70 ? "bg-amber-500" : "bg-rose-500"}`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               <Tabs value={sidebarTab} onValueChange={(v) => setSidebarTab(v as any)} dir="rtl" className="flex flex-col flex-1 overflow-hidden">
