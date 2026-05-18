@@ -1162,6 +1162,9 @@ export const SYSTEM_MODULES = [
   "governance_voting",
   // نقطة البيع
   "event_pos",
+
+  // مخطط أرضية الفرع وتوزيع فريق العمل
+  "floor_plan",
 ] as const;
 
 export type SystemModule = (typeof SYSTEM_MODULES)[number];
@@ -9998,3 +10001,65 @@ export type EmploymentApplication = typeof employmentApplications.$inferSelect;
 export type InsertEmploymentApplication = z.infer<typeof insertEmploymentApplicationSchema>;
 export type EmploymentApplicationToken = typeof employmentApplicationTokens.$inferSelect;
 export type EmploymentApplicationAuditLog = typeof employmentApplicationAuditLog.$inferSelect;
+
+// =====================================================
+// Branch Floor Plan — مخطط أرضية الفرع لتوزيع فريق العمل
+// =====================================================
+export const branchFloorPlans = pgTable("branch_floor_plans", {
+  id: serial("id").primaryKey(),
+  branchId: varchar("branch_id").notNull().references(() => branches.id, { onDelete: "cascade" }),
+  name: text("name"),
+  width: integer("width").default(1200).notNull(),
+  height: integer("height").default(800).notNull(),
+  backgroundColor: text("background_color").default("#f8fafc"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("uq_branch_floor_plans_branch").on(table.branchId),
+]);
+
+export const floorPlanZones = pgTable("floor_plan_zones", {
+  id: serial("id").primaryKey(),
+  floorPlanId: integer("floor_plan_id").notNull().references(() => branchFloorPlans.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  color: text("color").default("#fde68a").notNull(),
+  x: integer("x").notNull(),
+  y: integer("y").notNull(),
+  width: integer("width").notNull(),
+  height: integer("height").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_floor_plan_zones_plan").on(table.floorPlanId),
+]);
+
+export const floorPlanAssignments = pgTable("floor_plan_assignments", {
+  id: serial("id").primaryKey(),
+  floorPlanId: integer("floor_plan_id").notNull().references(() => branchFloorPlans.id, { onDelete: "cascade" }),
+  employeeId: integer("employee_id").notNull().references(() => branchEmployees.id, { onDelete: "cascade" }),
+  role: text("role"),
+  notes: text("notes"),
+  x: integer("x").notNull(),
+  y: integer("y").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("uq_floor_plan_assignments_emp").on(table.floorPlanId, table.employeeId),
+  index("idx_floor_plan_assignments_plan").on(table.floorPlanId),
+]);
+
+export const insertBranchFloorPlanSchema = createInsertSchema(branchFloorPlans).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export const insertFloorPlanZoneSchema = createInsertSchema(floorPlanZones).omit({
+  id: true, createdAt: true,
+});
+export const insertFloorPlanAssignmentSchema = createInsertSchema(floorPlanAssignments).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+
+export type BranchFloorPlan = typeof branchFloorPlans.$inferSelect;
+export type InsertBranchFloorPlan = z.infer<typeof insertBranchFloorPlanSchema>;
+export type FloorPlanZone = typeof floorPlanZones.$inferSelect;
+export type InsertFloorPlanZone = z.infer<typeof insertFloorPlanZoneSchema>;
+export type FloorPlanAssignment = typeof floorPlanAssignments.$inferSelect;
+export type InsertFloorPlanAssignment = z.infer<typeof insertFloorPlanAssignmentSchema>;

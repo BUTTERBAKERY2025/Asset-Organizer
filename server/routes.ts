@@ -33990,6 +33990,180 @@ export async function registerRoutes(
     }
   });
 
+  // ==========================================================================
+  // Branch Floor Plans — مخطط أرضية الفرع وتوزيع فريق العمل
+  // ==========================================================================
+  const ensureFloorPlanBranchAccess = async (req: any, res: any, branchId: string): Promise<boolean> => {
+    if (!isUserAdmin(req)) {
+      const ok = await canAccessBranch(req, branchId);
+      if (!ok) {
+        res.status(403).json({ error: "ليس لديك صلاحية الوصول إلى مخطط هذا الفرع" });
+        return false;
+      }
+    }
+    return true;
+  };
+
+  // Get full floor plan bundle: plan + zones + assignments + branch employees
+  app.get("/api/floor-plans/:branchId", isAuthenticated, requirePermission("floor_plan", "view"), async (req, res) => {
+    try {
+      const { branchId } = req.params;
+      if (!(await ensureFloorPlanBranchAccess(req, res, branchId))) return;
+      const plan = await storage.getOrCreateBranchFloorPlan(branchId);
+      const [zones, assignments, employees] = await Promise.all([
+        storage.getFloorPlanZones(plan.id),
+        storage.getFloorPlanAssignments(plan.id),
+        storage.getBranchEmployeesByBranch(branchId, { status: 'active' }).catch(() => []),
+      ]);
+      res.json({ plan, zones, assignments, employees });
+    } catch (error: any) {
+      console.error("Error fetching floor plan:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch floor plan" });
+    }
+  });
+
+  // Update plan canvas (size / name / background)
+  const pickPlanFields = (b: any) => {
+    const out: any = {};
+    if (b?.name !== undefined) out.name = b.name;
+    if (b?.width !== undefined) out.width = parseInt(b.width, 10);
+    if (b?.height !== undefined) out.height = parseInt(b.height, 10);
+    if (b?.backgroundColor !== undefined) out.backgroundColor = b.backgroundColor;
+    return out;
+  };
+  const pickZoneFields = (b: any) => {
+    const out: any = {};
+    if (b?.name !== undefined) out.name = b.name;
+    if (b?.color !== undefined) out.color = b.color;
+    if (b?.x !== undefined) out.x = parseInt(b.x, 10);
+    if (b?.y !== undefined) out.y = parseInt(b.y, 10);
+    if (b?.width !== undefined) out.width = parseInt(b.width, 10);
+    if (b?.height !== undefined) out.height = parseInt(b.height, 10);
+    return out;
+  };
+  const pickAssignmentFields = (b: any) => {
+    const out: any = {};
+    if (b?.x !== undefined) out.x = parseInt(b.x, 10);
+    if (b?.y !== undefined) out.y = parseInt(b.y, 10);
+    if (b?.role !== undefined) out.role = b.role || null;
+    if (b?.notes !== undefined) out.notes = b.notes || null;
+    return out;
+  };
+
+  app.put("/api/floor-plans/:branchId", isAuthenticated, requirePermission("floor_plan", "edit"), async (req, res) => {
+    try {
+      const { branchId } = req.params;
+      if (!(await ensureFloorPlanBranchAccess(req, res, branchId))) return;
+      const updated = await storage.updateBranchFloorPlan(branchId, pickPlanFields(req.body));
+      res.json(updated);
+    } catch (error: any) {
+      console.error("Error updating floor plan:", error);
+      res.status(500).json({ error: error.message || "Failed to update floor plan" });
+    }
+  });
+
+  // Zones
+  app.post("/api/floor-plans/:branchId/zones", isAuthenticated, requirePermission("floor_plan", "edit"), async (req, res) => {
+    try {
+      const { branchId } = req.params;
+      if (!(await ensureFloorPlanBranchAccess(req, res, branchId))) return;
+      const plan = await storage.getOrCreateBranchFloorPlan(branchId);
+      const created = await storage.createFloorPlanZone({ ...req.body, floorPlanId: plan.id });
+      res.status(201).json(created);
+    } catch (error: any) {
+      console.error("Error creating zone:", error);
+      res.status(500).json({ error: error.message || "Failed to create zone" });
+    }
+  });
+
+  app.patch("/api/floor-plans/:branchId/zones/:id", isAuthenticated, requirePermission("floor_plan", "edit"), async (req, res) => {
+    try {
+      const { branchId } = req.params;
+      const id = parseInt(req.params.id, 10);
+      if (!(await ensureFloorPlanBranchAccess(req, res, branchId))) return;
+      const plan = await storage.getOrCreateBranchFloorPlan(branchId);
+      const updated = await storage.updateFloorPlanZone(id, plan.id, pickZoneFields(req.body));
+      if (!updated) return res.status(404).json({ error: "Zone not found" });
+      res.json(updated);
+    } catch (error: any) {
+      console.error("Error updating zone:", error);
+      res.status(500).json({ error: error.message || "Failed to update zone" });
+    }
+  });
+
+  app.delete("/api/floor-plans/:branchId/zones/:id", isAuthenticated, requirePermission("floor_plan", "edit"), async (req, res) => {
+    try {
+      const { branchId } = req.params;
+      const id = parseInt(req.params.id, 10);
+      if (!(await ensureFloorPlanBranchAccess(req, res, branchId))) return;
+      const plan = await storage.getOrCreateBranchFloorPlan(branchId);
+      const ok = await storage.deleteFloorPlanZone(id, plan.id);
+      if (!ok) return res.status(404).json({ error: "Zone not found" });
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error deleting zone:", error);
+      res.status(500).json({ error: error.message || "Failed to delete zone" });
+    }
+  });
+
+  // Assignments
+  app.post("/api/floor-plans/:branchId/assignments", isAuthenticated, requirePermission("floor_plan", "edit"), async (req, res) => {
+    try {
+      const { branchId } = req.params;
+      if (!(await ensureFloorPlanBranchAccess(req, res, branchId))) return;
+      const { employeeId, x, y, role, notes } = req.body || {};
+      if (!employeeId || x === undefined || y === undefined) {
+        return res.status(400).json({ error: "employeeId, x, y مطلوبة" });
+      }
+      // Ensure the employee actually belongs to this branch (IDOR guard)
+      const emp = await storage.getBranchEmployee(parseInt(employeeId, 10)).catch(() => null);
+      if (!emp || emp.branchId !== branchId) {
+        return res.status(403).json({ error: "هذا الموظف لا ينتمي إلى الفرع المحدد" });
+      }
+      const plan = await storage.getOrCreateBranchFloorPlan(branchId);
+      const created = await storage.createFloorPlanAssignment({
+        floorPlanId: plan.id, employeeId: parseInt(employeeId, 10),
+        x: parseInt(x, 10), y: parseInt(y, 10),
+        role: role || null, notes: notes || null,
+      });
+      res.status(201).json(created);
+    } catch (error: any) {
+      console.error("Error creating assignment:", error);
+      res.status(500).json({ error: error.message || "Failed to create assignment" });
+    }
+  });
+
+  app.patch("/api/floor-plans/:branchId/assignments/:id", isAuthenticated, requirePermission("floor_plan", "edit"), async (req, res) => {
+    try {
+      const { branchId } = req.params;
+      const id = parseInt(req.params.id, 10);
+      if (!(await ensureFloorPlanBranchAccess(req, res, branchId))) return;
+      // Disallow changing employeeId/floorPlanId via update (IDOR / cross-plan rebind)
+      const plan = await storage.getOrCreateBranchFloorPlan(branchId);
+      const updated = await storage.updateFloorPlanAssignment(id, plan.id, pickAssignmentFields(req.body));
+      if (!updated) return res.status(404).json({ error: "Assignment not found" });
+      res.json(updated);
+    } catch (error: any) {
+      console.error("Error updating assignment:", error);
+      res.status(500).json({ error: error.message || "Failed to update assignment" });
+    }
+  });
+
+  app.delete("/api/floor-plans/:branchId/assignments/:id", isAuthenticated, requirePermission("floor_plan", "edit"), async (req, res) => {
+    try {
+      const { branchId } = req.params;
+      const id = parseInt(req.params.id, 10);
+      if (!(await ensureFloorPlanBranchAccess(req, res, branchId))) return;
+      const plan = await storage.getOrCreateBranchFloorPlan(branchId);
+      const ok = await storage.deleteFloorPlanAssignment(id, plan.id);
+      if (!ok) return res.status(404).json({ error: "Assignment not found" });
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error deleting assignment:", error);
+      res.status(500).json({ error: error.message || "Failed to delete assignment" });
+    }
+  });
+
   return httpServer;
 }
 

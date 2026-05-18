@@ -16,7 +16,7 @@ import {
   Shield, MapPin, Megaphone, UserCheck, Calendar, UsersRound, Building, Briefcase,
   Receipt, PieChart, Lock, Layers, PieChartIcon, Share2, Languages, Warehouse,
   PackageCheck, Send, ShoppingCart, FolderOpen, Landmark, Scale, Vote, FileCheck,
-  Sparkles, Crown, Handshake, DoorOpen, Bell, Store, ShieldAlert, MessageCircle
+  Sparkles, Crown, Handshake, DoorOpen, Bell, Store, ShieldAlert, MessageCircle, LayoutGrid
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
@@ -250,6 +250,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           { href: "/attendance-check", label: t("sidebar.attendanceCheck"), icon: Clock, module: "attendance_check", indent: true },
           { href: "/timesheet", label: t("sidebar.timesheet"), icon: FileText, module: "shifts", indent: true },
           { href: "/employee-reports", label: t("sidebar.employeeReports"), icon: FileBarChart, module: "employee_reports", indent: true },
+          { href: "/floor-plan", label: "مخطط أرضية الفرع", icon: LayoutGrid, module: "floor_plan", indent: true },
         ],
       },
     },

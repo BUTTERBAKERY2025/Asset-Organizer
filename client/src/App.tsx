@@ -154,6 +154,7 @@ const JobOfferPublicPage = makeLazy("job-offer-public");
 const EmploymentApplicationsPage = makeLazy("employment-applications");
 const EmploymentApplicationPublicPage = makeLazy("employment-application-public");
 const VacancyPublicPage = makeLazy("vacancy-public");
+const FloorPlanPage = makeLazy("floor-plan");
 
 function AppLoadingFallback() {
   return (
@@ -277,6 +278,7 @@ const Router = React.memo(function Router() {
       <Route path="/attendance-check">{() => <ModulePage component={AttendanceCheckPage} module="attendance_check" />}</Route>
       <Route path="/timesheet">{() => <ModulePage component={TimesheetPage} module="shifts" />}</Route>
       <Route path="/employee-reports">{() => <ModulePage component={EmployeeReportsDashboardPage} module="employee_reports" />}</Route>
+      <Route path="/floor-plan">{() => <ModulePage component={FloorPlanPage} module="floor_plan" />}</Route>
       
       {/* Production - الإنتاج */}
       <Route path="/production-dashboard">{() => <ModulePage component={ProductionDashboardPage} module="production" />}</Route>

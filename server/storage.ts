@@ -572,6 +572,15 @@ import {
   reportRuns,
   type ReportRun,
   type InsertReportRun,
+  branchFloorPlans,
+  type BranchFloorPlan,
+  type InsertBranchFloorPlan,
+  floorPlanZones,
+  type FloorPlanZone,
+  type InsertFloorPlanZone,
+  floorPlanAssignments,
+  type FloorPlanAssignment,
+  type InsertFloorPlanAssignment,
 } from "@shared/schema";
 
 type TransferHistory = typeof transferHistory.$inferSelect;
@@ -17166,6 +17175,78 @@ export class DatabaseStorage implements IStorage {
       .where(eq(notificationQueue.id, id))
       .returning();
     return updated || undefined;
+  }
+
+  // ===== Branch Floor Plans =====
+  async getOrCreateBranchFloorPlan(branchId: string): Promise<BranchFloorPlan> {
+    const [existing] = await db.select().from(branchFloorPlans).where(eq(branchFloorPlans.branchId, branchId));
+    if (existing) return existing;
+    const [created] = await db.insert(branchFloorPlans).values({ branchId }).returning();
+    return created;
+  }
+
+  async updateBranchFloorPlan(branchId: string, data: Partial<InsertBranchFloorPlan>): Promise<BranchFloorPlan | undefined> {
+    const plan = await this.getOrCreateBranchFloorPlan(branchId);
+    const [updated] = await db.update(branchFloorPlans)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(branchFloorPlans.id, plan.id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async getFloorPlanZones(floorPlanId: number): Promise<FloorPlanZone[]> {
+    return db.select().from(floorPlanZones).where(eq(floorPlanZones.floorPlanId, floorPlanId));
+  }
+
+  async createFloorPlanZone(data: InsertFloorPlanZone): Promise<FloorPlanZone> {
+    const [created] = await db.insert(floorPlanZones).values(data).returning();
+    return created;
+  }
+
+  async updateFloorPlanZone(id: number, floorPlanId: number, data: Partial<InsertFloorPlanZone>): Promise<FloorPlanZone | undefined> {
+    const [updated] = await db.update(floorPlanZones)
+      .set(data)
+      .where(and(eq(floorPlanZones.id, id), eq(floorPlanZones.floorPlanId, floorPlanId)))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteFloorPlanZone(id: number, floorPlanId: number): Promise<boolean> {
+    const result = await db.delete(floorPlanZones)
+      .where(and(eq(floorPlanZones.id, id), eq(floorPlanZones.floorPlanId, floorPlanId)))
+      .returning({ id: floorPlanZones.id });
+    return result.length > 0;
+  }
+
+  async getFloorPlanAssignments(floorPlanId: number): Promise<FloorPlanAssignment[]> {
+    return db.select().from(floorPlanAssignments).where(eq(floorPlanAssignments.floorPlanId, floorPlanId));
+  }
+
+  async createFloorPlanAssignment(data: InsertFloorPlanAssignment): Promise<FloorPlanAssignment> {
+    // Upsert by (floorPlanId, employeeId) — moving an already-placed employee just updates the row
+    const [created] = await db.insert(floorPlanAssignments)
+      .values(data)
+      .onConflictDoUpdate({
+        target: [floorPlanAssignments.floorPlanId, floorPlanAssignments.employeeId],
+        set: { x: data.x, y: data.y, role: data.role ?? null, notes: data.notes ?? null, updatedAt: new Date() },
+      })
+      .returning();
+    return created;
+  }
+
+  async updateFloorPlanAssignment(id: number, floorPlanId: number, data: Partial<InsertFloorPlanAssignment>): Promise<FloorPlanAssignment | undefined> {
+    const [updated] = await db.update(floorPlanAssignments)
+      .set({ ...data, updatedAt: new Date() })
+      .where(and(eq(floorPlanAssignments.id, id), eq(floorPlanAssignments.floorPlanId, floorPlanId)))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteFloorPlanAssignment(id: number, floorPlanId: number): Promise<boolean> {
+    const result = await db.delete(floorPlanAssignments)
+      .where(and(eq(floorPlanAssignments.id, id), eq(floorPlanAssignments.floorPlanId, floorPlanId)))
+      .returning({ id: floorPlanAssignments.id });
+    return result.length > 0;
   }
 }
 

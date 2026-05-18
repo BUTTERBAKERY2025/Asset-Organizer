@@ -1,5 +1,6 @@
 const pageImports: Record<string, () => Promise<any>> = {
   "platform-home": () => import("@/pages/platform-home"),
+  "floor-plan": () => import("@/pages/floor-plan"),
   "dashboard": () => import("@/pages/dashboard"),
   "inventory": () => import("@/pages/inventory"),
   "manage": () => import("@/pages/manage"),
