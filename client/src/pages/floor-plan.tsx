@@ -35,7 +35,7 @@ import {
   ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { useReactToPrint } from "react-to-print";
-import { ZoomIn, ZoomOut, Maximize2, Lock, Unlock, Magnet, Grid3x3, Search, Pencil, MousePointer2 } from "lucide-react";
+import { ZoomIn, ZoomOut, Maximize2, Lock, Unlock, Magnet, Grid3x3, Search, Pencil, MousePointer2, ArrowUp, ArrowDown } from "lucide-react";
 import type { Branch } from "@shared/schema";
 
 interface BranchEmployee {
@@ -556,6 +556,7 @@ export default function FloorPlanPage() {
   const buildTemplatePayload = (includeZones: boolean) => {
     const assignments = (data?.assignments || []).map(a => ({
       role: a.role, x: a.x, y: a.y, notes: a.notes || null,
+      zIndex: (a as any).zIndex ?? 0,
     }));
     // Omit the `zones` key entirely when not including zones — the server
     // treats key-absent as "preserve existing zones" (vs. empty array =
@@ -566,6 +567,7 @@ export default function FloorPlanPage() {
         zones: (data?.zones || []).map(z => ({
           name: z.name, color: z.color, x: z.x, y: z.y,
           width: z.width, height: z.height, rotation: z.rotation || 0,
+          zIndex: (z as any).zIndex ?? 0,
         })),
       };
     }
@@ -726,17 +728,35 @@ export default function FloorPlanPage() {
         updateAssignment.mutate({ id: existing.id, body: next });
         return;
       }
-      // Dropped on/near an empty role slot? → fill the NEAREST one instead
-      // of opening a dialog. Tight radius avoids accidental fills.
-      const HIT_RADIUS = 36;
-      const targetSlot = emptySlots
+      // Dropped on/near an existing role slot? Snap radius scales inversely
+      // with zoom so the "magnet" feels the same size on screen at any
+      // zoom level (~36 screen-px regardless of plan scale).
+      const HIT_RADIUS = 36 / Math.max(0.1, zoom);
+      const allNearbySlots = (data?.assignments || [])
         .map(s => ({ s, d: Math.hypot(s.x - rawX, s.y - rawY) }))
         .filter(({ d }) => d <= HIT_RADIUS)
-        .sort((a, b) => a.d - b.d)[0]?.s;
+        .sort((a, b) => a.d - b.d);
+      const targetSlot = allNearbySlots[0]?.s;
       if (targetSlot) {
-        recordOp({ type: "update", id: targetSlot.id, prev: { employeeId: null }, next: { employeeId } });
-        updateAssignment.mutate({ id: targetSlot.id, body: { employeeId } });
-        return;
+        // Slot is empty → fill silently. Slot is occupied by another
+        // employee → confirm before overwriting (Batch 4 safety).
+        if (targetSlot.employeeId == null) {
+          recordOp({ type: "update", id: targetSlot.id, prev: { employeeId: null }, next: { employeeId } });
+          updateAssignment.mutate({ id: targetSlot.id, body: { employeeId } });
+          return;
+        }
+        if (targetSlot.employeeId !== employeeId) {
+          const existingEmp = data?.employees.find(e => e.id === targetSlot.employeeId);
+          const incomingEmp = data?.employees.find(e => e.id === employeeId);
+          const ok = window.confirm(
+            `هذا الموقع شاغل بـ "${existingEmp?.employeeName ?? "موظف آخر"}".\n` +
+            `هل تريد استبدال الموظف بـ "${incomingEmp?.employeeName ?? "الموظف الجديد"}"؟`
+          );
+          if (!ok) return;
+          recordOp({ type: "update", id: targetSlot.id, prev: { employeeId: targetSlot.employeeId }, next: { employeeId } });
+          updateAssignment.mutate({ id: targetSlot.id, body: { employeeId } });
+          return;
+        }
       }
       const zone = (data?.zones || []).find(z => pointInZone(rawX, rawY, z));
       const preset = zone ? ZONE_PRESETS.find(p => p.name === zone.name) : undefined;
@@ -1975,8 +1995,9 @@ export default function FloorPlanPage() {
                         { dir: "r",  cls: "top-1/2 -right-1 -translate-y-1/2", cursor: "ew-resize", size: "w-3 h-6" },
                       ];
                       return (
+                      <ContextMenu key={z.id}>
+                        <ContextMenuTrigger asChild disabled={locked}>
                       <div
-                        key={z.id}
                         draggable={!locked}
                         onDragStart={(e) => {
                           if (locked) { e.preventDefault(); return; }
@@ -2015,6 +2036,9 @@ export default function FloorPlanPage() {
                           backgroundColor: z.color + "cc", borderColor: z.color,
                           transform: liveR ? `rotate(${liveR}deg)` : undefined,
                           transformOrigin: "center center",
+                          // Stacking order persisted on the zone (Batch 4).
+                          // Zones live below pawns by default (pawns are z-10).
+                          zIndex: (z as any).zIndex ?? 0,
                         }}
                         data-testid={`zone-${z.id}`}
                       >
@@ -2075,7 +2099,69 @@ export default function FloorPlanPage() {
                             <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-0.5 h-3 bg-primary/60 z-10 pointer-events-none" />
                           </>
                         )}
+                        {/* Rotation pivot indicator — small dot at the zone's
+                            geometric center. Visible only while rotating, so
+                            the user can see the rotation reference point.
+                            Counter-rotated to stay round visually. */}
+                        {rotating?.id === z.id && (
+                          <div
+                            className="absolute top-1/2 left-1/2 w-2.5 h-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary border-2 border-white shadow z-20 pointer-events-none"
+                            style={{ transform: `translate(-50%, -50%) rotate(${-liveR}deg)` }}
+                          />
+                        )}
                       </div>
+                        </ContextMenuTrigger>
+                        <ContextMenuContent className="w-52">
+                          <ContextMenuItem
+                            onSelect={() => setZoneDialog({ mode: "edit", id: z.id, name: z.name, color: z.color, width: z.width, height: z.height, rotation: z.rotation || 0 })}
+                            data-testid={`ctx-zone-edit-${z.id}`}
+                          >
+                            <Pencil className="w-3.5 h-3.5 ml-2" /> تعديل المنطقة
+                          </ContextMenuItem>
+                          <ContextMenuSeparator />
+                          <ContextMenuItem
+                            onSelect={() => {
+                              const maxZ = (data?.zones || []).reduce(
+                                (m, x) => Math.max(m, ((x as any).zIndex ?? 0)), 0,
+                              );
+                              updateZone.mutate({ id: z.id, body: { zIndex: maxZ + 1 } });
+                            }}
+                            data-testid={`ctx-zone-front-${z.id}`}
+                          >
+                            <ArrowUp className="w-3.5 h-3.5 ml-2" /> إلى الأمام
+                          </ContextMenuItem>
+                          <ContextMenuItem
+                            onSelect={() => {
+                              const minZ = (data?.zones || []).reduce(
+                                (m, x) => Math.min(m, ((x as any).zIndex ?? 0)), 0,
+                              );
+                              updateZone.mutate({ id: z.id, body: { zIndex: minZ - 1 } });
+                            }}
+                            data-testid={`ctx-zone-back-${z.id}`}
+                          >
+                            <ArrowDown className="w-3.5 h-3.5 ml-2" /> إلى الخلف
+                          </ContextMenuItem>
+                          {(z.rotation || 0) !== 0 && (
+                            <>
+                              <ContextMenuSeparator />
+                              <ContextMenuItem
+                                onSelect={() => updateZone.mutate({ id: z.id, body: { rotation: 0 } })}
+                                data-testid={`ctx-zone-reset-rot-${z.id}`}
+                              >
+                                <RotateCw className="w-3.5 h-3.5 ml-2" /> إعادة التدوير إلى 0°
+                              </ContextMenuItem>
+                            </>
+                          )}
+                          <ContextMenuSeparator />
+                          <ContextMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onSelect={() => deleteZone.mutate(z.id)}
+                            data-testid={`ctx-zone-delete-${z.id}`}
+                          >
+                            <XIcon className="w-3.5 h-3.5 ml-2" /> حذف المنطقة
+                          </ContextMenuItem>
+                        </ContextMenuContent>
+                      </ContextMenu>
                     );})}
 
                     {/* Role slots (with or without an assigned employee) */}
@@ -2133,8 +2219,8 @@ export default function FloorPlanPage() {
                               notes: a.notes || "",
                             });
                           }}
-                          className="absolute z-10 flex flex-col items-center cursor-grab active:cursor-grabbing group"
-                          style={{ left: a.x - 30, top: a.y - 30 }}
+                          className="absolute flex flex-col items-center cursor-grab active:cursor-grabbing group"
+                          style={{ left: a.x - 30, top: a.y - 30, zIndex: 10 + (((a as any).zIndex ?? 0)) }}
                           data-testid={`assignment-${a.id}`}
                           title={isEmpty ? `${def.label} — غير معيّن` : `${emp!.employeeName} — ${def.label}`}
                         >
@@ -2202,6 +2288,30 @@ export default function FloorPlanPage() {
                                 <XIcon className="w-3.5 h-3.5 ml-2" /> إزالة الموظف (إبقاء الموقع)
                               </ContextMenuItem>
                             )}
+                            <ContextMenuSeparator />
+                            <ContextMenuItem
+                              onSelect={() => {
+                                // Bring to front: one above the current max.
+                                const maxZ = (data?.assignments || []).reduce(
+                                  (m, x) => Math.max(m, ((x as any).zIndex ?? 0)), 0,
+                                );
+                                updateAssignment.mutate({ id: a.id, body: { zIndex: maxZ + 1 } });
+                              }}
+                              data-testid={`ctx-front-${a.id}`}
+                            >
+                              <ArrowUp className="w-3.5 h-3.5 ml-2" /> إلى الأمام
+                            </ContextMenuItem>
+                            <ContextMenuItem
+                              onSelect={() => {
+                                const minZ = (data?.assignments || []).reduce(
+                                  (m, x) => Math.min(m, ((x as any).zIndex ?? 0)), 0,
+                                );
+                                updateAssignment.mutate({ id: a.id, body: { zIndex: minZ - 1 } });
+                              }}
+                              data-testid={`ctx-back-${a.id}`}
+                            >
+                              <ArrowDown className="w-3.5 h-3.5 ml-2" /> إلى الخلف
+                            </ContextMenuItem>
                             <ContextMenuSeparator />
                             <ContextMenuItem
                               className="text-destructive focus:text-destructive"

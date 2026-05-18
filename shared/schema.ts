@@ -10029,6 +10029,9 @@ export const floorPlanZones = pgTable("floor_plan_zones", {
   height: integer("height").notNull(),
   // Rotation in degrees around the zone's center. 0 = no rotation.
   rotation: integer("rotation").default(0).notNull(),
+  // Stacking order — higher zIndex renders on top. Used by
+  // "إلى الأمام / إلى الخلف" context-menu actions to resolve overlaps.
+  zIndex: integer("z_index").default(0).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   index("idx_floor_plan_zones_plan").on(table.floorPlanId),
@@ -10047,6 +10050,9 @@ export const floorPlanAssignments = pgTable("floor_plan_assignments", {
   notes: text("notes"),
   x: integer("x").notNull(),
   y: integer("y").notNull(),
+  // Stacking order — higher zIndex renders on top. Used by
+  // "إلى الأمام / إلى الخلف" context-menu actions for overlapping pawns.
+  zIndex: integer("z_index").default(0).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [

@@ -34062,6 +34062,10 @@ export async function registerRoutes(
         out.rotation = n;
       }
     }
+    if (b?.zIndex !== undefined) {
+      const z = parseInt(b.zIndex, 10);
+      if (!isNaN(z)) out.zIndex = Math.max(-9999, Math.min(9999, z));
+    }
     return out;
   };
   const pickAssignmentFields = (b: any) => {
@@ -34070,6 +34074,10 @@ export async function registerRoutes(
     if (b?.y !== undefined) out.y = parseInt(b.y, 10);
     if (b?.role !== undefined) out.role = b.role || null;
     if (b?.notes !== undefined) out.notes = b.notes || null;
+    if (b?.zIndex !== undefined) {
+      const z = parseInt(b.zIndex, 10);
+      if (!isNaN(z)) out.zIndex = Math.max(-9999, Math.min(9999, z));
+    }
     // employeeId is handled separately in the PATCH handler (needs IDOR check)
     return out;
   };

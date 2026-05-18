@@ -17331,6 +17331,7 @@ export class DatabaseStorage implements IStorage {
             x: parseInt(z.x ?? 0, 10), y: parseInt(z.y ?? 0, 10),
             width: parseInt(z.width ?? 200, 10), height: parseInt(z.height ?? 150, 10),
             rotation: parseInt(z.rotation ?? 0, 10),
+            zIndex: parseInt(z.zIndex ?? 0, 10) || 0,
           })));
         }
       }
@@ -17345,6 +17346,7 @@ export class DatabaseStorage implements IStorage {
           notes: s.notes ?? null,
           x: parseInt(s.x ?? 0, 10),
           y: parseInt(s.y ?? 0, 10),
+          zIndex: parseInt(s.zIndex ?? 0, 10) || 0,
         })));
       }
       return { zonesAdded: zonesIn.length, assignmentsAdded: slotsIn.length };
