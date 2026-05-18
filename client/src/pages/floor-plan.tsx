@@ -188,7 +188,14 @@ export default function FloorPlanPage() {
   useEffect(() => { setPlacementRole(null); }, [selectedShift]);
 
   // ---- Mutations ----
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: [`/api/floor-plans/${selectedBranchId}`, selectedShift] });
+  const queryKey = [`/api/floor-plans/${selectedBranchId}`, selectedShift];
+  const invalidate = () => queryClient.invalidateQueries({ queryKey });
+  // Optimistic cache patch — avoids a full refetch + page re-render on each
+  // drag/resize/rotate. Use this for geometry-only updates that don't need
+  // to round-trip through the server before showing.
+  const patchCache = (patch: (d: any) => any) => {
+    queryClient.setQueryData(queryKey, (old: any) => old ? patch(old) : old);
+  };
 
   const createZone = useMutation({
     mutationFn: async (body: any) => (await apiRequest("POST", `/api/floor-plans/${selectedBranchId}/zones`, body)).json(),
@@ -198,8 +205,19 @@ export default function FloorPlanPage() {
   const updateZone = useMutation({
     mutationFn: async ({ id, body }: { id: number; body: any }) =>
       (await apiRequest("PATCH", `/api/floor-plans/${selectedBranchId}/zones/${id}`, body)).json(),
-    onSuccess: () => { invalidate(); setZoneDialog(null); },
-    onError: (e: any) => toast({ title: "فشل التحديث", description: e?.message, variant: "destructive" }),
+    // Optimistic: patch the cache immediately so the UI doesn't wait for the
+    // server. Snapshot the previous state in case we need to roll back.
+    onMutate: async ({ id, body }) => {
+      await queryClient.cancelQueries({ queryKey });
+      const prev = queryClient.getQueryData<any>(queryKey);
+      patchCache(d => ({ ...d, zones: d.zones.map((z: any) => z.id === id ? { ...z, ...body } : z) }));
+      return { prev };
+    },
+    onError: (e: any, _v, ctx: any) => {
+      if (ctx?.prev) queryClient.setQueryData(queryKey, ctx.prev);
+      toast({ title: "فشل التحديث", description: e?.message, variant: "destructive" });
+    },
+    onSuccess: () => { setZoneDialog(null); },
   });
   const deleteZone = useMutation({
     mutationFn: async (id: number) => (await apiRequest("DELETE", `/api/floor-plans/${selectedBranchId}/zones/${id}`)).json(),
@@ -209,24 +227,48 @@ export default function FloorPlanPage() {
   const createAssignment = useMutation({
     mutationFn: async (body: any) =>
       (await apiRequest("POST", `/api/floor-plans/${selectedBranchId}/assignments`, { ...body, shiftType: selectedShift })).json(),
-    onSuccess: () => { invalidate(); setAssignDialog(null); toast({ title: "تم تعيين الموظف" }); },
+    onSuccess: () => { invalidate(); setAssignDialog(null); /* silent success — no toast for high-frequency drops */ },
     onError: (e: any) => toast({ title: "فشل التعيين", description: e?.message, variant: "destructive" }),
   });
   const updateAssignment = useMutation({
     mutationFn: async ({ id, body }: { id: number; body: any }) =>
       (await apiRequest("PATCH", `/api/floor-plans/${selectedBranchId}/assignments/${id}`, { ...body, shiftType: selectedShift })).json(),
-    onSuccess: () => { invalidate(); setEditAssignDialog(null); },
-    onError: (e: any) => toast({ title: "فشل التحديث", description: e?.message, variant: "destructive" }),
+    onMutate: async ({ id, body }) => {
+      await queryClient.cancelQueries({ queryKey });
+      const prev = queryClient.getQueryData<any>(queryKey);
+      patchCache(d => ({ ...d, assignments: d.assignments.map((a: any) => a.id === id ? { ...a, ...body } : a) }));
+      return { prev };
+    },
+    onError: (e: any, _v, ctx: any) => {
+      if (ctx?.prev) queryClient.setQueryData(queryKey, ctx.prev);
+      toast({ title: "فشل التحديث", description: e?.message, variant: "destructive" });
+    },
+    onSuccess: () => { setEditAssignDialog(null); },
   });
   const deleteAssignment = useMutation({
     mutationFn: async (id: number) => (await apiRequest("DELETE", `/api/floor-plans/${selectedBranchId}/assignments/${id}?shift=${selectedShift}`)).json(),
-    onSuccess: () => { invalidate(); setEditAssignDialog(null); toast({ title: "تم إزالة الموظف من المخطط" }); },
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey });
+      const prev = queryClient.getQueryData<any>(queryKey);
+      patchCache(d => ({ ...d, assignments: d.assignments.filter((a: any) => a.id !== id) }));
+      return { prev };
+    },
+    onError: (_e, _v, ctx: any) => { if (ctx?.prev) queryClient.setQueryData(queryKey, ctx.prev); },
+    onSuccess: () => { setEditAssignDialog(null); },
   });
   const updatePlan = useMutation({
     mutationFn: async (body: any) =>
       (await apiRequest("PUT", `/api/floor-plans/${selectedBranchId}`, body)).json(),
-    onSuccess: () => invalidate(),
-    onError: (e: any) => toast({ title: "فشل تحديث المخطط", description: e?.message, variant: "destructive" }),
+    onMutate: async (body: any) => {
+      await queryClient.cancelQueries({ queryKey });
+      const prev = queryClient.getQueryData<any>(queryKey);
+      patchCache(d => ({ ...d, plan: { ...d.plan, ...body } }));
+      return { prev };
+    },
+    onError: (e: any, _v, ctx: any) => {
+      if (ctx?.prev) queryClient.setQueryData(queryKey, ctx.prev);
+      toast({ title: "فشل تحديث المخطط", description: e?.message, variant: "destructive" });
+    },
   });
 
   // ---- Drag & Drop helpers ----
@@ -361,6 +403,8 @@ export default function FloorPlanPage() {
     const mx = e.clientX, my = e.clientY;
     let x = startX, y = startY, w = startW, h = startH;
     const MIN = 60;
+    let raf = 0;
+    const flush = () => { raf = 0; setResizing({ id: zoneId, x, y, width: w, height: h }); };
     const onMove = (ev: MouseEvent) => {
       // Convert screen-pixel delta to plan-coordinate delta when zoomed
       const dx = (ev.clientX - mx) / zoom;
@@ -377,11 +421,13 @@ export default function FloorPlanPage() {
         y = Math.max(0, snap(startY + (startH - nh)));
         h = nh;
       }
-      setResizing({ id: zoneId, x, y, width: w, height: h });
+      // Coalesce updates to one per animation frame instead of one per pixel.
+      if (!raf) raf = requestAnimationFrame(flush);
     };
     const onUp = () => {
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
+      if (raf) { cancelAnimationFrame(raf); raf = 0; }
       const body: any = {};
       if (w !== startW) body.width = w;
       if (h !== startH) body.height = h;
@@ -409,6 +455,8 @@ export default function FloorPlanPage() {
     const cy = rect.top + rect.height / 2;
     const startMouseAngle = Math.atan2(e.clientY - cy, e.clientX - cx);
     let rot = startRotation;
+    let raf = 0;
+    const flush = () => { raf = 0; setRotating({ id: zoneId, rotation: rot }); };
     const onMove = (ev: MouseEvent) => {
       const a = Math.atan2(ev.clientY - cy, ev.clientX - cx);
       let delta = ((a - startMouseAngle) * 180) / Math.PI;
@@ -419,11 +467,13 @@ export default function FloorPlanPage() {
       next = ((next % 360) + 360) % 360;
       if (next > 180) next -= 360;
       rot = next;
-      setRotating({ id: zoneId, rotation: rot });
+      // Coalesce to one render per animation frame
+      if (!raf) raf = requestAnimationFrame(flush);
     };
     const onUp = () => {
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
+      if (raf) { cancelAnimationFrame(raf); raf = 0; }
       if (rot !== startRotation) updateZone.mutate({ id: zoneId, body: { rotation: rot } });
       setRotating(null);
     };
