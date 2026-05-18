@@ -7632,6 +7632,12 @@ export async function registerRoutes(
         storage.getPaymentBreakdowns(id),
         storage.getCashierSignatures(id),
       ]);
+      await auditEvent({
+        req, module: "cashier_journal", entityId: id, action: "update",
+        entityName: `${existing.cashierName} - ${existing.journalDate}`,
+        description: `تعديل يومية مبيعات الكاشير ${existing.cashierName} بتاريخ ${existing.journalDate}`,
+        details: { previousStatus: existing.status, newStatus: journal?.status ?? existing.status, branchId: existing.branchId },
+      });
       res.json({ ...journal, paymentBreakdowns: updatedBreakdowns, signatures });
     } catch (error) {
       console.error("Error updating cashier journal:", error);
@@ -7659,6 +7665,12 @@ export async function registerRoutes(
       }
       
       await storage.deleteCashierJournal(id);
+      await auditEvent({
+        req, module: "cashier_journal", entityId: id, action: "delete",
+        entityName: `${existing.cashierName} - ${existing.journalDate}`,
+        description: `حذف يومية مبيعات الكاشير ${existing.cashierName} بتاريخ ${existing.journalDate}`,
+        details: { status: existing.status, branchId: existing.branchId, totalSales: existing.totalSales },
+      });
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting cashier journal:", error);
@@ -7721,7 +7733,12 @@ export async function registerRoutes(
       }
 
       const signatures = await storage.getCashierSignatures(id);
-      
+      await auditEvent({
+        req, module: "cashier_journal", entityId: id, action: "submit",
+        entityName: `${existing.cashierName} - ${existing.journalDate}`,
+        description: `تقديم يومية مبيعات الكاشير ${existing.cashierName} بتاريخ ${existing.journalDate}`,
+        details: { branchId: existing.branchId, totalSales: existing.totalSales },
+      });
       res.json({ ...journal, signatures });
     } catch (error) {
       console.error("Error submitting cashier journal:", error);
@@ -7771,7 +7788,12 @@ export async function registerRoutes(
       // Post the journal (change status to 'posted')
       const journal = await storage.postCashierJournal(id);
       const signatures = await storage.getCashierSignatures(id);
-      
+      await auditEvent({
+        req, module: "cashier_journal", entityId: id, action: "post",
+        entityName: `${existing.cashierName} - ${existing.journalDate}`,
+        description: `ترحيل يومية مبيعات الكاشير ${existing.cashierName} بتاريخ ${existing.journalDate}`,
+        details: { branchId: existing.branchId, totalSales: existing.totalSales, discrepancyAmount: existing.discrepancyAmount },
+      });
       
       // Auto-calculate incentive points when journal is posted
       try {
@@ -7825,6 +7847,12 @@ export async function registerRoutes(
       }
       
       const journal = await storage.approveCashierJournal(id, getCurrentUser(req).id);
+      await auditEvent({
+        req, module: "cashier_journal", entityId: id, action: "approve",
+        entityName: `${existing.cashierName} - ${existing.journalDate}`,
+        description: `اعتماد يومية مبيعات الكاشير ${existing.cashierName} بتاريخ ${existing.journalDate}`,
+        details: { branchId: existing.branchId, totalSales: existing.totalSales },
+      });
       
       // Auto-calculate incentive points when journal is approved
       try {
@@ -7852,15 +7880,77 @@ export async function registerRoutes(
       if (!existing) {
         return res.status(404).json({ error: "Cashier journal not found" });
       }
+      const hasAccess = await canAccessBranch(req, existing.branchId);
+      if (!hasAccess) {
+        return res.status(403).json({ error: "ليس لديك صلاحية الوصول إلى هذا الفرع" });
+      }
       if (existing.status !== 'submitted') {
         return res.status(400).json({ error: "Can only reject submitted journals" });
       }
       
       const journal = await storage.rejectCashierJournal(id, notes);
+      await auditEvent({
+        req, module: "cashier_journal", entityId: id, action: "reject",
+        entityName: `${existing.cashierName} - ${existing.journalDate}`,
+        description: `رفض يومية مبيعات الكاشير ${existing.cashierName} بتاريخ ${existing.journalDate}`,
+        details: { branchId: existing.branchId, notes: notes || null },
+      });
       res.json(journal);
     } catch (error) {
       console.error("Error rejecting cashier journal:", error);
       res.status(500).json({ error: "Failed to reject cashier journal" });
+    }
+  });
+
+  // Unpost cashier journal (admin only) — reverts a posted journal back to draft so it can be edited
+  app.post("/api/cashier-journals/:id/unpost", isAuthenticated, async (req, res) => {
+    try {
+      if (!isUserAdmin(req)) {
+        return res.status(403).json({ error: "هذه العملية مخصّصة للمسؤول فقط" });
+      }
+      const id = parseInt(req.params.id, 10);
+      const { reason } = req.body || {};
+      const existing = await storage.getCashierJournal(id);
+      if (!existing) {
+        return res.status(404).json({ error: "Cashier journal not found" });
+      }
+      if (existing.status !== 'posted' && existing.status !== 'submitted') {
+        return res.status(400).json({ error: "يمكن إلغاء ترحيل اليوميات المُرحَّلة أو المُرسَلة فقط" });
+      }
+      const journal = await storage.unpostCashierJournal(id);
+      if (!journal) {
+        // Atomic guard matched no rows — status changed between read and write
+        return res.status(409).json({ error: "تغيّرت حالة اليومية، أعد المحاولة" });
+      }
+      await auditEvent({
+        req, module: "cashier_journal", entityId: id, action: "unpost",
+        entityName: `${existing.cashierName} - ${existing.journalDate}`,
+        description: `إلغاء ترحيل يومية مبيعات الكاشير ${existing.cashierName} بتاريخ ${existing.journalDate}`,
+        details: { previousStatus: existing.status, newStatus: 'draft', branchId: existing.branchId, totalSales: existing.totalSales, reason: reason || null },
+      });
+      res.json(journal);
+    } catch (error) {
+      console.error("Error unposting cashier journal:", error);
+      res.status(500).json({ error: "Failed to unpost cashier journal" });
+    }
+  });
+
+  // Get audit logs for a specific cashier journal (admin only)
+  app.get("/api/cashier-journals/:id/audit-logs", isAuthenticated, async (req, res) => {
+    try {
+      if (!isUserAdmin(req)) {
+        return res.status(403).json({ error: "سجل التدقيق مخصّص للمسؤول فقط" });
+      }
+      const id = parseInt(req.params.id, 10);
+      const existing = await storage.getCashierJournal(id);
+      if (!existing) {
+        return res.status(404).json({ error: "Cashier journal not found" });
+      }
+      const logs = await storage.getSystemAuditLogsByEntity("cashier_journal", String(id));
+      res.json(logs);
+    } catch (error) {
+      console.error("Error fetching cashier journal audit logs:", error);
+      res.status(500).json({ error: "Failed to fetch audit logs" });
     }
   });
 

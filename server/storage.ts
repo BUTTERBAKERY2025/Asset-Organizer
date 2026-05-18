@@ -5349,6 +5349,24 @@ export class DatabaseStorage implements IStorage {
     return updated || undefined;
   }
 
+  async unpostCashierJournal(id: number): Promise<CashierSalesJournal | undefined> {
+    // Atomic guard: only transition when current status is posted/submitted to avoid concurrent overwrite of approved/draft.
+    const [updated] = await db.update(cashierSalesJournals)
+      .set({ status: 'draft', submittedAt: null, approvedBy: null, approvedAt: null, updatedAt: new Date() })
+      .where(and(
+        eq(cashierSalesJournals.id, id),
+        inArray(cashierSalesJournals.status, ['posted', 'submitted'] as any),
+      ))
+      .returning();
+    return updated || undefined;
+  }
+
+  async getSystemAuditLogsByEntity(module: string, entityId: string): Promise<SystemAuditLog[]> {
+    return db.select().from(systemAuditLogs)
+      .where(and(eq(systemAuditLogs.module, module), eq(systemAuditLogs.entityId, entityId)))
+      .orderBy(desc(systemAuditLogs.createdAt));
+  }
+
   // Payment Breakdowns
   async getPaymentBreakdowns(journalId: number): Promise<CashierPaymentBreakdown[]> {
     return await db.select().from(cashierPaymentBreakdowns)

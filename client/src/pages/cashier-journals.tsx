@@ -12,7 +12,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import { useTranslation } from "react-i18next";
-import { Plus, Search, Eye, CheckCircle, XCircle, Clock, AlertTriangle, TrendingUp, TrendingDown, Minus, Wallet, Calendar, DollarSign, Users, Printer, Filter, Trash2 } from "lucide-react";
+import { Plus, Search, Eye, CheckCircle, XCircle, Clock, AlertTriangle, TrendingUp, TrendingDown, Minus, Wallet, Calendar, DollarSign, Users, Printer, Filter, Trash2, RotateCcw, History, User as UserIcon } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,6 +24,14 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { format } from "date-fns";
@@ -180,6 +188,37 @@ export default function CashierJournalsPage() {
         variant: "destructive" 
       });
     },
+  });
+
+  // ===== Unpost (admin only) — revert posted/submitted back to draft =====
+  const [unpostTarget, setUnpostTarget] = useState<{ id: number; cashierName: string; date: string } | null>(null);
+  const [unpostReason, setUnpostReason] = useState("");
+  const unpostMutation = useMutation({
+    mutationFn: async ({ id, reason }: { id: number; reason?: string }) =>
+      apiRequest("POST", `/api/cashier-journals/${id}/unpost`, { reason }),
+    onSuccess: () => {
+      invalidateCashierQueries();
+      setUnpostTarget(null);
+      setUnpostReason("");
+      toast({ title: "تم إلغاء الترحيل", description: "أصبحت اليومية مسودة قابلة للتعديل" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "تعذّر إلغاء الترحيل",
+        description: error?.message || "حدث خطأ غير متوقع",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // ===== Audit log dialog (admin only) =====
+  const [auditTarget, setAuditTarget] = useState<{ id: number; cashierName: string; date: string } | null>(null);
+  const { data: auditLogs, isLoading: auditLoading } = useQuery<Array<{
+    id: number; action: string; userName: string | null; description: string | null;
+    details: string | null; createdAt: string;
+  }>>({
+    queryKey: [`/api/cashier-journals/${auditTarget?.id}/audit-logs`],
+    enabled: !!auditTarget && isAdmin,
   });
 
 
@@ -608,6 +647,30 @@ export default function CashierJournalsPage() {
                                     </Button>
                                   </>
                                 )}
+                                {isAdmin && (journal.status === "posted" || journal.status === "submitted") && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-11 w-11 sm:h-8 sm:w-8 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                                    onClick={() => setUnpostTarget({ id: journal.id, cashierName: journal.cashierName, date: journal.journalDate })}
+                                    data-testid={`button-unpost-${journal.id}`}
+                                    title="إلغاء الترحيل"
+                                  >
+                                    <RotateCcw className="w-5 h-5 sm:w-4 sm:h-4" />
+                                  </Button>
+                                )}
+                                {isAdmin && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-11 w-11 sm:h-8 sm:w-8 text-primary hover:bg-primary/10"
+                                    onClick={() => setAuditTarget({ id: journal.id, cashierName: journal.cashierName, date: journal.journalDate })}
+                                    data-testid={`button-audit-${journal.id}`}
+                                    title="سجل التدقيق"
+                                  >
+                                    <History className="w-5 h-5 sm:w-4 sm:h-4" />
+                                  </Button>
+                                )}
                                 {isAdmin && journal.status !== "approved" && (
                                   <AlertDialog>
                                     <AlertDialogTrigger asChild>
@@ -659,6 +722,129 @@ export default function CashierJournalsPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Unpost confirmation dialog (admin only) */}
+        <AlertDialog open={!!unpostTarget} onOpenChange={(open) => { if (!open) { setUnpostTarget(null); setUnpostReason(""); } }}>
+          <AlertDialogContent className="max-w-md" dir="rtl">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <RotateCcw className="w-5 h-5 text-amber-600" />
+                إلغاء ترحيل اليومية
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                ستعود يومية <strong>{unpostTarget?.cashierName}</strong> بتاريخ <strong>{unpostTarget?.date}</strong> إلى حالة <strong>مسودة</strong> لتصبح قابلة للتعديل.
+                <br />
+                <span className="text-amber-600 font-medium">سيتم تسجيل هذا الإجراء في سجل التدقيق.</span>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="py-2">
+              <label className="text-sm font-medium mb-2 block">سبب إلغاء الترحيل (اختياري)</label>
+              <Textarea
+                value={unpostReason}
+                onChange={(e) => setUnpostReason(e.target.value)}
+                placeholder="مثال: تصحيح خطأ في إجمالي المبيعات..."
+                rows={3}
+                data-testid="textarea-unpost-reason"
+              />
+            </div>
+            <AlertDialogFooter className="flex-row-reverse gap-2">
+              <AlertDialogCancel>إلغاء</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-amber-600 hover:bg-amber-700"
+                onClick={() => unpostTarget && unpostMutation.mutate({ id: unpostTarget.id, reason: unpostReason.trim() || undefined })}
+                disabled={unpostMutation.isPending}
+                data-testid="btn-confirm-unpost"
+              >
+                {unpostMutation.isPending ? "جارٍ التنفيذ..." : "تأكيد إلغاء الترحيل"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Audit log dialog (admin only) */}
+        <Dialog open={!!auditTarget} onOpenChange={(open) => { if (!open) setAuditTarget(null); }}>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col" dir="rtl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <History className="w-5 h-5 text-primary" />
+                سجل التدقيق
+              </DialogTitle>
+              <DialogDescription>
+                {auditTarget && (
+                  <>يومية <strong>{auditTarget.cashierName}</strong> بتاريخ <strong>{auditTarget.date}</strong></>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="overflow-y-auto flex-1 -mx-6 px-6">
+              {auditLoading ? (
+                <div className="space-y-3 py-4">
+                  {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
+                </div>
+              ) : !auditLogs || auditLogs.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <History className="w-10 h-10 mx-auto mb-3 opacity-40" />
+                  <p>لا توجد أحداث مسجّلة لهذه اليومية</p>
+                </div>
+              ) : (
+                <div className="space-y-2 py-2">
+                  {auditLogs.map((log) => {
+                    const actionMap: Record<string, { label: string; className: string }> = {
+                      create:   { label: "إنشاء",         className: "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-400" },
+                      update:   { label: "تعديل",         className: "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-400" },
+                      submit:   { label: "تقديم",         className: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400" },
+                      post:     { label: "ترحيل",         className: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400" },
+                      unpost:   { label: "إلغاء ترحيل",   className: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400" },
+                      approve:  { label: "اعتماد",        className: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400" },
+                      reject:   { label: "رفض",            className: "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400" },
+                      delete:   { label: "حذف",            className: "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400" },
+                    };
+                    const meta = actionMap[log.action] || { label: log.action, className: "bg-muted text-muted-foreground" };
+                    let details: any = null;
+                    try { details = log.details ? JSON.parse(log.details) : null; } catch { /* ignore */ }
+                    return (
+                      <div key={log.id} className="border border-border rounded-lg p-3 hover:bg-muted/30 transition-colors" data-testid={`audit-row-${log.id}`}>
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <Badge className={`${meta.className} text-xs`}>{meta.label}</Badge>
+                          <span className="text-xs text-muted-foreground tabular-nums">
+                            {format(new Date(log.createdAt), "yyyy-MM-dd HH:mm", { locale: ar })}
+                          </span>
+                        </div>
+                        {log.description && (
+                          <p className="text-sm text-foreground mb-1">{log.description}</p>
+                        )}
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <UserIcon className="w-3 h-3" />
+                          <span>{log.userName || "—"}</span>
+                        </div>
+                        {details && (details.reason || details.previousStatus) && (
+                          <div className="mt-2 pt-2 border-t border-border/60 text-xs space-y-0.5">
+                            {details.previousStatus && details.newStatus && (
+                              <div className="text-muted-foreground">
+                                الحالة: <span className="text-foreground">{details.previousStatus}</span>
+                                {" → "}
+                                <span className="text-foreground font-medium">{details.newStatus}</span>
+                              </div>
+                            )}
+                            {details.reason && (
+                              <div className="text-muted-foreground">
+                                السبب: <span className="text-foreground">{details.reason}</span>
+                              </div>
+                            )}
+                            {details.notes && (
+                              <div className="text-muted-foreground">
+                                ملاحظات: <span className="text-foreground">{details.notes}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );
