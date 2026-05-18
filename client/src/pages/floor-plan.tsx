@@ -257,7 +257,14 @@ export default function FloorPlanPage() {
     const employeeIdStr = e.dataTransfer.getData("application/x-employee-id");
     const moveAssignIdStr = e.dataTransfer.getData("application/x-assignment-id");
     const moveZoneIdStr = e.dataTransfer.getData("application/x-zone-id");
+    const newRoleName = e.dataTransfer.getData("application/x-role-name");
     const { x, y } = getCanvasCoords(e);
+    // Dragged a role chip from the sidebar → create an empty slot of that role
+    // at the drop point. Single-action add, no extra click needed.
+    if (newRoleName) {
+      createAssignment.mutate({ role: newRoleName, x: snap(x), y: snap(y), employeeId: null });
+      return;
+    }
     if (employeeIdStr) {
       const employeeId = parseInt(employeeIdStr, 10);
       const existing = data?.assignments.find(a => a.employeeId === employeeId);
@@ -537,29 +544,35 @@ export default function FloorPlanPage() {
                 <TabsContent value="roles" className="flex-1 overflow-auto m-0 p-3 space-y-2">
                   <div className={`rounded-md border p-2 ${placementRole ? "border-primary bg-primary/5" : "border-transparent"}`}>
                     <p className="text-[11px] text-muted-foreground leading-relaxed mb-2">
-                      اختر وظيفة ثم اضغط على المخطط لإضافة موقع شاغر. Esc للخروج.
+                      اسحب الوظيفة وأفلتها على المخطط مباشرة، أو اضغط ثم اختر مكاناً. Esc للخروج.
                     </p>
                     <div className="grid grid-cols-2 gap-1.5">
                       {COMMON_ROLES.map(r => {
                         const def = ROLE_DEFS[r]; const RI = def.icon;
                         const active = placementRole === r;
                         return (
-                          <button
-                            key={r} type="button"
+                          <div
+                            key={r}
+                            draggable
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData("application/x-role-name", r);
+                              e.dataTransfer.effectAllowed = "copy";
+                            }}
                             onClick={() => setPlacementRole(active ? null : r)}
                             data-testid={`btn-role-${r}`}
-                            className={`flex items-center gap-1.5 p-1.5 rounded-md border text-right transition-colors ${
+                            className={`flex items-center gap-1.5 p-1.5 rounded-md border text-right transition-colors cursor-grab active:cursor-grabbing select-none ${
                               active ? "border-primary bg-primary/10 ring-1 ring-primary"
                                      : "border-border bg-card hover:bg-accent hover:border-primary"
                             }`}
-                            title={`إضافة موقع: ${def.label}`}
+                            title={`اسحب على المخطط أو اضغط ثم اختر موقعاً — ${def.label}`}
                           >
+                            <GripVertical className="w-3 h-3 text-muted-foreground shrink-0" />
                             <span className="w-6 h-6 flex items-center justify-center text-white shrink-0"
                               style={{ backgroundColor: def.color, ...shapeStyle(def.shape) }}>
                               <RI className="w-3 h-3" />
                             </span>
                             <span className="text-[11px] truncate flex-1">{def.label}</span>
-                          </button>
+                          </div>
                         );
                       })}
                     </div>
