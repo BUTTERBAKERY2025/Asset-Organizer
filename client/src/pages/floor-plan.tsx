@@ -18,7 +18,7 @@ import {
   LayoutGrid, Plus, Trash2, Save, GripVertical, User as UserIcon, Square,
   Crown, Shield, Calculator, Coffee, ChefHat, Utensils, Sparkles,
   Handshake, Package, Cake, HardHat, ClipboardList, Soup, Sun, Sunset, Moon, RotateCw,
-  Wand2, Copy as CopyIcon, AlertCircle, CheckCircle2, Users, Loader2,
+  Wand2, Copy as CopyIcon, AlertCircle, CheckCircle2, Users, Loader2, Calendar,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
@@ -219,17 +219,21 @@ export default function FloorPlanPage() {
   // Date is computed in Saudi local time (Asia/Riyadh) so we don't query the
   // wrong day around UTC midnight — attendance/schedule data is keyed by the
   // Saudi-local calendar date.
-  // Recomputed on a state tick so the date advances live when the page sits
-  // open across Riyadh midnight (otherwise we'd keep querying yesterday's
-  // schedule until the user refreshes).
+  // User-selectable plan date (defaults to today in Riyadh). Used both as the
+  // `date` param for the schedule query and as the contextual "for which day
+  // am I planning?" label. While the user hasn't moved off today, we let it
+  // roll forward at Riyadh midnight; once they manually pick a date we stop
+  // auto-advancing so their choice sticks.
   const fmtRiyadhDate = (d: Date) => new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Riyadh", year: "numeric", month: "2-digit", day: "2-digit",
   }).format(d);
-  const [todayStr, setTodayStr] = useState<string>(() => fmtRiyadhDate(new Date()));
+  const [todayRiyadh, setTodayRiyadh] = useState<string>(() => fmtRiyadhDate(new Date()));
+  const [selectedDate, setSelectedDate] = useState<string>(todayRiyadh);
+  const [isPinnedToToday, setIsPinnedToToday] = useState(true);
   useEffect(() => {
     const tick = () => {
       const next = fmtRiyadhDate(new Date());
-      setTodayStr(prev => (prev === next ? prev : next));
+      setTodayRiyadh(prev => (prev === next ? prev : next));
     };
     const id = window.setInterval(tick, 60_000);
     const onFocus = () => tick();
@@ -241,13 +245,18 @@ export default function FloorPlanPage() {
       document.removeEventListener("visibilitychange", onFocus);
     };
   }, []);
+  // Auto-advance selectedDate at midnight only when the user hasn't picked
+  // a date manually.
+  useEffect(() => {
+    if (isPinnedToToday) setSelectedDate(todayRiyadh);
+  }, [todayRiyadh, isPinnedToToday]);
   const { data: scheduledRaw = [] } = useQuery<any[]>({
-    queryKey: [`/api/scheduled-employees-for-attendance`, selectedBranchId, selectedShift, todayStr],
+    queryKey: [`/api/scheduled-employees-for-attendance`, selectedBranchId, selectedShift, selectedDate],
     queryFn: async () => {
       try {
         const res = await apiRequest(
           "GET",
-          `/api/scheduled-employees-for-attendance?branchId=${encodeURIComponent(selectedBranchId)}&shiftType=${selectedShift}&date=${todayStr}`,
+          `/api/scheduled-employees-for-attendance?branchId=${encodeURIComponent(selectedBranchId)}&shiftType=${selectedShift}&date=${selectedDate}`,
         );
         const json = await res.json();
         return Array.isArray(json) ? json : [];
@@ -808,11 +817,11 @@ export default function FloorPlanPage() {
           </div>
         </div>
 
-        {/* Shift selector tabs */}
+        {/* Shift + date selector */}
         {selectedBranchId && (
           <Card>
-            <CardContent className="p-3">
-              <Tabs value={selectedShift} onValueChange={(v) => setSelectedShift(v as ShiftType)} dir="rtl">
+            <CardContent className="p-3 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+              <Tabs value={selectedShift} onValueChange={(v) => setSelectedShift(v as ShiftType)} dir="rtl" className="flex-1">
                 <TabsList className="grid grid-cols-3 w-full max-w-xl">
                   {SHIFTS.map(s => {
                     const SI = s.icon;
@@ -825,6 +834,36 @@ export default function FloorPlanPage() {
                   })}
                 </TabsList>
               </Tabs>
+              {/* Date picker — drives which day's schedule is shown & distributed */}
+              <div className="flex items-center gap-2 sm:border-r sm:pe-3">
+                <Calendar className="w-4 h-4 text-muted-foreground" />
+                <Input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (!v) return;
+                    setSelectedDate(v);
+                    setIsPinnedToToday(v === todayRiyadh);
+                  }}
+                  className="h-9 w-[150px] tabular-nums"
+                  data-testid="input-plan-date"
+                />
+                {selectedDate !== todayRiyadh && (
+                  <Button
+                    variant="outline" size="sm" className="h-9 text-xs"
+                    onClick={() => { setSelectedDate(todayRiyadh); setIsPinnedToToday(true); }}
+                    data-testid="btn-date-today"
+                  >
+                    اليوم
+                  </Button>
+                )}
+                {selectedDate !== todayRiyadh && (
+                  <Badge variant="outline" className="text-[10px] text-amber-700 border-amber-400 bg-amber-50">
+                    {selectedDate > todayRiyadh ? "تخطيط مسبق" : "مراجعة سابقة"}
+                  </Badge>
+                )}
+              </div>
             </CardContent>
           </Card>
         )}
