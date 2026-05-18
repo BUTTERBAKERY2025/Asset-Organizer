@@ -17,7 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   LayoutGrid, Plus, Trash2, Save, GripVertical, User as UserIcon, Square,
   Crown, Shield, Calculator, Coffee, ChefHat, Utensils, Sparkles,
-  Handshake, Package, Cake, HardHat, Wine, Soup, Sun, Sunset, Moon, RotateCw,
+  Handshake, Package, Cake, HardHat, ClipboardList, Soup, Sun, Sunset, Moon, RotateCw,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
@@ -77,7 +77,8 @@ const ZONE_PRESETS: ZonePreset[] = [
   { name: "المخزن",       color: "#e5e7eb", defaultRole: "أمين مخزن",  width: 200, height: 140 },
   { name: "غرفة الموظفين", color: "#ddd6fe", defaultRole: null,        width: 180, height: 120 },
   { name: "النظافة",      color: "#cbd5e1", defaultRole: "عامل نظافة", width: 140, height: 100 },
-  { name: "بار العصائر",  color: "#fde68a", defaultRole: "ساقي",       width: 200, height: 130 },
+  { name: "بار العصائر",  color: "#fde68a", defaultRole: "باريستا",    width: 200, height: 130 },
+  { name: "محطة التحضير", color: "#d9f99d", defaultRole: "محضر طلبات", width: 220, height: 140 },
 ];
 
 type RoleShape = "circle" | "square" | "hexagon";
@@ -96,14 +97,20 @@ const ROLE_DEFS: Record<string, RoleDef> = {
   "أمين مخزن":    { label: "أمين مخزن",   icon: Package,    color: "#475569", shape: "square"  },
   "حلواني":       { label: "حلواني",      icon: Cake,       color: "#ec4899", shape: "square"  },
   "عامل":         { label: "عامل",        icon: HardHat,    color: "#a16207", shape: "circle"  },
-  "ساقي":         { label: "ساقي",        icon: Wine,       color: "#9333ea", shape: "circle"  },
+  "محضر طلبات":   { label: "محضر طلبات",  icon: ClipboardList, color: "#16a34a", shape: "circle" },
 };
 const COMMON_ROLES = Object.keys(ROLE_DEFS);
 const DEFAULT_ROLE: RoleDef = { label: "موظف", icon: UserIcon, color: "#3b82f6", shape: "circle" };
+// Backwards-compat: legacy data may still contain removed/renamed role labels.
+// Map them to the closest current role so historical assignments keep rendering
+// with a proper person avatar instead of falling through to "موظف".
+const LEGACY_ROLE_ALIASES: Record<string, string> = {
+  "ساقي": "محضر طلبات",
+};
+const resolveRole = (key?: string | null) =>
+  (key && (ROLE_DEFS[key] || ROLE_DEFS[LEGACY_ROLE_ALIASES[key]])) || null;
 const getRoleDef = (role?: string | null, jobTitle?: string | null): RoleDef => {
-  if (role && ROLE_DEFS[role]) return ROLE_DEFS[role];
-  if (jobTitle && ROLE_DEFS[jobTitle]) return ROLE_DEFS[jobTitle];
-  return DEFAULT_ROLE;
+  return resolveRole(role) || resolveRole(jobTitle) || DEFAULT_ROLE;
 };
 const shapeStyle = (shape: RoleShape): React.CSSProperties => {
   if (shape === "circle")  return { borderRadius: "50%" };
@@ -111,6 +118,58 @@ const shapeStyle = (shape: RoleShape): React.CSSProperties => {
   // hexagon
   return { clipPath: "polygon(25% 5%, 75% 5%, 100% 50%, 75% 95%, 25% 95%, 0% 50%)", borderRadius: 0 };
 };
+
+// Person-shaped avatar — draws a stylized person (head + shoulders/uniform)
+// colored by the role, with the role's tool icon as a badge on the chest.
+// Each job thus visually looks like a person doing that job.
+function PersonAvatar({ def, size = 64, empty = false }: { def: RoleDef; size?: number; empty?: boolean }) {
+  const Icon = def.icon;
+  const skin = "#f4cfa5";
+  const bodyColor = empty ? "#ffffff" : def.color;
+  const outline = def.color;
+  const badgeSize = Math.round(size * 0.36);
+  return (
+    <div style={{ width: size, height: size, position: "relative" }} aria-hidden>
+      <svg viewBox="0 0 64 64" width={size} height={size} style={{ display: "block" }}>
+        {/* Shoulders / uniform — a soft rounded shoulder shape */}
+        <path
+          d="M4 60 C4 40, 20 34, 32 34 C44 34, 60 40, 60 60 Z"
+          fill={bodyColor}
+          stroke={outline}
+          strokeWidth={empty ? 2 : 1.5}
+          strokeDasharray={empty ? "4 3" : undefined}
+        />
+        {/* Neck */}
+        <rect x="28" y="26" width="8" height="8" fill={skin} />
+        {/* Head */}
+        <circle cx="32" cy="20" r="11" fill={skin} stroke={outline} strokeWidth="1.5" />
+        {/* Subtle hair cap */}
+        <path d="M21.5 20 Q21.5 11 32 11 Q42.5 11 42.5 20 L40 17 Q32 13 24 17 Z" fill="#3f2a1d" opacity="0.85" />
+      </svg>
+      {/* Role tool badge — small white pill on the chest with the role's icon */}
+      <div
+        style={{
+          position: "absolute",
+          left: "50%",
+          bottom: Math.round(size * 0.06),
+          width: badgeSize,
+          height: badgeSize,
+          marginLeft: -badgeSize / 2,
+          borderRadius: "50%",
+          background: "#ffffff",
+          color: def.color,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.25)",
+          border: `1.5px solid ${def.color}`,
+        }}
+      >
+        <Icon style={{ width: badgeSize * 0.6, height: badgeSize * 0.6 }} />
+      </div>
+    </div>
+  );
+}
 
 export default function FloorPlanPage() {
   const { activeBranch, allowedBranches, isAdmin } = useAuth();
@@ -808,14 +867,11 @@ export default function FloorPlanPage() {
 
               <CardContent className="p-0">
                 {placementRole && (() => {
-                  const def = ROLE_DEFS[placementRole]; const PI = def.icon;
+                  const def = ROLE_DEFS[placementRole];
                   return (
                     <div className="px-3 py-2 bg-primary/10 border-b border-primary/30 text-sm flex items-center gap-2"
                       data-testid="banner-placement-mode">
-                      <span className="w-6 h-6 flex items-center justify-center text-white shrink-0"
-                        style={{ backgroundColor: def.color, ...shapeStyle(def.shape) }}>
-                        <PI className="w-3.5 h-3.5" />
-                      </span>
+                      <span className="shrink-0"><PersonAvatar def={def} size={28} /></span>
                       <span className="font-medium">اضغط على المخطط لإضافة موقع: {def.label}</span>
                       <span className="text-xs text-muted-foreground hidden sm:inline">— كرّر للضغط لإضافة عدة مواقع. Esc للخروج.</span>
                       <button type="button" className="ms-auto text-xs text-primary hover:underline"
@@ -973,7 +1029,6 @@ export default function FloorPlanPage() {
                     {data.assignments.map(a => {
                       const emp = a.employeeId != null ? employeeById.get(a.employeeId) : null;
                       const def = getRoleDef(a.role, emp?.jobTitle);
-                      const RoleIcon = def.icon;
                       const isEmpty = !emp;
                       return (
                         <div
@@ -1020,17 +1075,8 @@ export default function FloorPlanPage() {
                           data-testid={`assignment-${a.id}`}
                           title={isEmpty ? `${def.label} — غير معيّن` : `${emp!.employeeName} — ${def.label}`}
                         >
-                          <div
-                            className="w-16 h-16 flex items-center justify-center shadow-lg border-4 group-hover:scale-110 transition-transform"
-                            style={{
-                              backgroundColor: isEmpty ? "#ffffff" : def.color,
-                              color: isEmpty ? def.color : "#ffffff",
-                              borderColor: isEmpty ? def.color : "#ffffff",
-                              borderStyle: isEmpty ? "dashed" : "solid",
-                              ...shapeStyle(def.shape),
-                            }}
-                          >
-                            <RoleIcon className="w-7 h-7" />
+                          <div className="group-hover:scale-110 transition-transform drop-shadow-lg">
+                            <PersonAvatar def={def} size={64} empty={isEmpty} />
                           </div>
                           <div className={`mt-1 px-2 py-0.5 rounded-md shadow text-[11px] font-medium text-center max-w-[130px] truncate ${isEmpty ? "bg-amber-50 text-amber-700 border border-amber-200 italic" : "bg-white/95"}`}>
                             {emp ? emp.employeeName : "غير معيّن — اضغط للتعيين"}
