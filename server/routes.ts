@@ -34051,8 +34051,17 @@ export async function registerRoutes(
     if (b?.color !== undefined) out.color = b.color;
     if (b?.x !== undefined) out.x = parseInt(b.x, 10);
     if (b?.y !== undefined) out.y = parseInt(b.y, 10);
-    if (b?.width !== undefined) out.width = parseInt(b.width, 10);
-    if (b?.height !== undefined) out.height = parseInt(b.height, 10);
+    if (b?.width !== undefined) out.width = Math.max(40, parseInt(b.width, 10));
+    if (b?.height !== undefined) out.height = Math.max(40, parseInt(b.height, 10));
+    if (b?.rotation !== undefined) {
+      const r = parseInt(b.rotation, 10);
+      if (!isNaN(r)) {
+        // Normalize to (-180, 180]
+        let n = ((r % 360) + 360) % 360;
+        if (n > 180) n -= 360;
+        out.rotation = n;
+      }
+    }
     return out;
   };
   const pickAssignmentFields = (b: any) => {

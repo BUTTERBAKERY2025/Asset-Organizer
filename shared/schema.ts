@@ -10027,6 +10027,8 @@ export const floorPlanZones = pgTable("floor_plan_zones", {
   y: integer("y").notNull(),
   width: integer("width").notNull(),
   height: integer("height").notNull(),
+  // Rotation in degrees around the zone's center. 0 = no rotation.
+  rotation: integer("rotation").default(0).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   index("idx_floor_plan_zones_plan").on(table.floorPlanId),

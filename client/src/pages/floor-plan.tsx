@@ -17,7 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   LayoutGrid, Plus, Trash2, Save, GripVertical, User as UserIcon, Square,
   Crown, Shield, Calculator, Coffee, ChefHat, Utensils, Sparkles,
-  Handshake, Package, Cake, HardHat, Wine, Soup, Sun, Sunset, Moon,
+  Handshake, Package, Cake, HardHat, Wine, Soup, Sun, Sunset, Moon, RotateCw,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Branch } from "@shared/schema";
@@ -39,7 +39,7 @@ const SHIFTS: { value: ShiftType; label: string; icon: any; color: string }[] = 
 
 interface FloorPlanData {
   plan: { id: number; branchId: string; name: string | null; width: number; height: number; backgroundColor: string };
-  zones: Array<{ id: number; name: string; color: string; x: number; y: number; width: number; height: number }>;
+  zones: Array<{ id: number; name: string; color: string; x: number; y: number; width: number; height: number; rotation: number }>;
   assignments: Array<{ id: number; employeeId: number | null; role: string | null; notes: string | null; x: number; y: number; shiftType: ShiftType }>;
   employees: BranchEmployee[];
   shiftType: ShiftType;
@@ -146,9 +146,11 @@ export default function FloorPlanPage() {
   });
 
   // Dialogs state
-  const [zoneDialog, setZoneDialog] = useState<{ mode: "create" | "edit"; x?: number; y?: number; id?: number; name?: string; color?: string; width?: number; height?: number } | null>(null);
+  const [zoneDialog, setZoneDialog] = useState<{ mode: "create" | "edit"; x?: number; y?: number; id?: number; name?: string; color?: string; width?: number; height?: number; rotation?: number } | null>(null);
   // Live resize transient state — overrides server dims while user drags a handle
-  const [resizing, setResizing] = useState<{ id: number; width: number; height: number } | null>(null);
+  const [resizing, setResizing] = useState<{ id: number; x: number; y: number; width: number; height: number } | null>(null);
+  // Live rotation transient state — overrides server rotation while user drags the rotation handle
+  const [rotating, setRotating] = useState<{ id: number; rotation: number } | null>(null);
   const [assignDialog, setAssignDialog] = useState<{ x: number; y: number; employeeId?: number; suggestedRole?: string } | null>(null);
   const [editAssignDialog, setEditAssignDialog] = useState<{
     id: number; employeeId: number | null; employeeName: string | null;
@@ -211,6 +213,19 @@ export default function FloorPlanPage() {
     };
   };
 
+  // Rotation-aware hit test — inverse-rotates the point into the zone's local
+  // frame before checking the axis-aligned rectangle.
+  const pointInZone = (px: number, py: number, z: { x: number; y: number; width: number; height: number; rotation?: number }) => {
+    const cx = z.x + z.width / 2;
+    const cy = z.y + z.height / 2;
+    const r = ((z.rotation || 0) * Math.PI) / 180;
+    const cos = Math.cos(-r), sin = Math.sin(-r);
+    const dx = px - cx, dy = py - cy;
+    const lx = dx * cos - dy * sin + z.width / 2;
+    const ly = dx * sin + dy * cos + z.height / 2;
+    return lx >= 0 && lx <= z.width && ly >= 0 && ly <= z.height;
+  };
+
   const onDropOnCanvas = (e: React.DragEvent) => {
     e.preventDefault();
     const employeeIdStr = e.dataTransfer.getData("application/x-employee-id");
@@ -236,9 +251,7 @@ export default function FloorPlanPage() {
         return;
       }
       // Otherwise open the dialog with a role suggestion based on the zone
-      const zone = (data?.zones || []).find(z =>
-        x >= z.x && x <= z.x + z.width && y >= z.y && y <= z.y + z.height
-      );
+      const zone = (data?.zones || []).find(z => pointInZone(x, y, z));
       const preset = zone ? ZONE_PRESETS.find(p => p.name === zone.name) : undefined;
       setAssignDialog({ x, y, employeeId, suggestedRole: preset?.defaultRole || undefined });
     } else if (moveAssignIdStr) {
@@ -248,9 +261,18 @@ export default function FloorPlanPage() {
       updateAssignment.mutate({ id, body: { x: Math.max(0, x - dx), y: Math.max(0, y - dy) } });
     } else if (moveZoneIdStr) {
       const id = parseInt(moveZoneIdStr, 10);
+      // dx/dy = cursor offset from the zone's CENTER (rotation pivot) at drag-start,
+      // captured in canvas space. This stays glued to the same visual point on
+      // the rotated zone, so the drop position is correct at any rotation.
       const dx = parseInt(e.dataTransfer.getData("x-offset") || "0", 10);
       const dy = parseInt(e.dataTransfer.getData("y-offset") || "0", 10);
-      updateZone.mutate({ id, body: { x: Math.max(0, x - dx), y: Math.max(0, y - dy) } });
+      const z = data?.zones.find(zz => zz.id === id);
+      if (!z) return;
+      const newCx = x - dx;
+      const newCy = y - dy;
+      const newX = Math.max(0, Math.round(newCx - z.width / 2));
+      const newY = Math.max(0, Math.round(newCy - z.height / 2));
+      updateZone.mutate({ id, body: { x: newX, y: newY } });
     }
   };
 
@@ -263,9 +285,7 @@ export default function FloorPlanPage() {
       return; // stay in placement mode so user can drop several quickly
     }
     if (unplacedEmployees.length === 0) return;
-    const zone = (data?.zones || []).find(z =>
-      x >= z.x && x <= z.x + z.width && y >= z.y && y <= z.y + z.height
-    );
+    const zone = (data?.zones || []).find(z => pointInZone(x, y, z));
     const preset = zone ? ZONE_PRESETS.find(p => p.name === zone.name) : undefined;
     setAssignDialog({ x, y, suggestedRole: preset?.defaultRole || undefined });
   };
@@ -293,33 +313,86 @@ export default function FloorPlanPage() {
     createZone.mutate({ name: preset.name, color: preset.color, x, y, width: preset.width, height: preset.height });
   };
 
-  // ---- Zone resize by dragging a handle ----
+  // ---- Zone resize by dragging any of 8 handles ----
+  // dir contains any of t/b/l/r letters (e.g. "br" = bottom-right corner, "l" = left edge, "tl" = top-left corner)
   const startResize = (
     e: React.MouseEvent,
     zoneId: number,
+    startX: number,
+    startY: number,
     startW: number,
     startH: number,
-    dir: "br" | "r" | "b",
+    dir: string,
   ) => {
     e.preventDefault();
     e.stopPropagation();
-    const startX = e.clientX;
-    const startY = e.clientY;
-    let w = startW, h = startH;
+    const mx = e.clientX, my = e.clientY;
+    let x = startX, y = startY, w = startW, h = startH;
+    const MIN = 60;
     const onMove = (ev: MouseEvent) => {
-      const dx = ev.clientX - startX;
-      const dy = ev.clientY - startY;
-      if (dir === "br" || dir === "r") w = Math.max(60, Math.round(startW + dx));
-      if (dir === "br" || dir === "b") h = Math.max(60, Math.round(startH + dy));
-      setResizing({ id: zoneId, width: w, height: h });
+      const dx = ev.clientX - mx;
+      const dy = ev.clientY - my;
+      if (dir.includes("r")) w = Math.max(MIN, Math.round(startW + dx));
+      if (dir.includes("l")) {
+        const nw = Math.max(MIN, Math.round(startW - dx));
+        x = Math.max(0, Math.round(startX + (startW - nw)));
+        w = nw;
+      }
+      if (dir.includes("b")) h = Math.max(MIN, Math.round(startH + dy));
+      if (dir.includes("t")) {
+        const nh = Math.max(MIN, Math.round(startH - dy));
+        y = Math.max(0, Math.round(startY + (startH - nh)));
+        h = nh;
+      }
+      setResizing({ id: zoneId, x, y, width: w, height: h });
     };
     const onUp = () => {
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
-      if (w !== startW || h !== startH) {
-        updateZone.mutate({ id: zoneId, body: { width: w, height: h } });
-      }
+      const body: any = {};
+      if (w !== startW) body.width = w;
+      if (h !== startH) body.height = h;
+      if (x !== startX) body.x = x;
+      if (y !== startY) body.y = y;
+      if (Object.keys(body).length) updateZone.mutate({ id: zoneId, body });
       setResizing(null);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  };
+
+  // ---- Zone rotation by dragging the rotation handle ----
+  // Computes the angle from the zone's visual center to the cursor; Shift snaps to 15°.
+  const startRotate = (
+    e: React.MouseEvent,
+    zoneId: number,
+    startRotation: number,
+    zoneEl: HTMLElement,
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = zoneEl.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const startMouseAngle = Math.atan2(e.clientY - cy, e.clientX - cx);
+    let rot = startRotation;
+    const onMove = (ev: MouseEvent) => {
+      const a = Math.atan2(ev.clientY - cy, ev.clientX - cx);
+      let delta = ((a - startMouseAngle) * 180) / Math.PI;
+      let next = startRotation + delta;
+      if (ev.shiftKey) next = Math.round(next / 15) * 15;
+      else next = Math.round(next);
+      // Normalize to (-180, 180]
+      next = ((next % 360) + 360) % 360;
+      if (next > 180) next -= 360;
+      rot = next;
+      setRotating({ id: zoneId, rotation: rot });
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      if (rot !== startRotation) updateZone.mutate({ id: zoneId, body: { rotation: rot } });
+      setRotating(null);
     };
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
@@ -616,63 +689,90 @@ export default function FloorPlanPage() {
                   >
                     {/* Zones */}
                     {data.zones.map(z => {
+                      const liveX = resizing?.id === z.id ? resizing.x : z.x;
+                      const liveY = resizing?.id === z.id ? resizing.y : z.y;
                       const liveW = resizing?.id === z.id ? resizing.width : z.width;
                       const liveH = resizing?.id === z.id ? resizing.height : z.height;
+                      const liveR = rotating?.id === z.id ? rotating.rotation : (z.rotation || 0);
+                      // 8 resize handles + 1 rotation handle. dir uses t/b/l/r letters.
+                      const handles: Array<{ dir: string; cls: string; cursor: string; size: string }> = [
+                        { dir: "tl", cls: "-top-1 -left-1", cursor: "nwse-resize", size: "w-4 h-4" },
+                        { dir: "tr", cls: "-top-1 -right-1", cursor: "nesw-resize", size: "w-4 h-4" },
+                        { dir: "bl", cls: "-bottom-1 -left-1", cursor: "nesw-resize", size: "w-4 h-4" },
+                        { dir: "br", cls: "-bottom-1 -right-1", cursor: "nwse-resize", size: "w-4 h-4" },
+                        { dir: "t",  cls: "-top-1 left-1/2 -translate-x-1/2", cursor: "ns-resize", size: "w-6 h-3" },
+                        { dir: "b",  cls: "-bottom-1 left-1/2 -translate-x-1/2", cursor: "ns-resize", size: "w-6 h-3" },
+                        { dir: "l",  cls: "top-1/2 -left-1 -translate-y-1/2", cursor: "ew-resize", size: "w-3 h-6" },
+                        { dir: "r",  cls: "top-1/2 -right-1 -translate-y-1/2", cursor: "ew-resize", size: "w-3 h-6" },
+                      ];
                       return (
                       <div
                         key={z.id}
                         draggable
                         onDragStart={(e) => {
                           if ((e.target as HTMLElement).dataset?.resize === "1") { e.preventDefault(); return; }
+                          // Offset from the zone's CENTER (rotation pivot) in canvas space.
+                          // Stays glued to the visual grab point regardless of rotation.
                           const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                          const cx = rect.left + rect.width / 2;
+                          const cy = rect.top + rect.height / 2;
                           e.dataTransfer.setData("application/x-zone-id", String(z.id));
-                          e.dataTransfer.setData("x-offset", String(Math.round(e.clientX - rect.left)));
-                          e.dataTransfer.setData("y-offset", String(Math.round(e.clientY - rect.top)));
+                          e.dataTransfer.setData("x-offset", String(Math.round(e.clientX - cx)));
+                          e.dataTransfer.setData("y-offset", String(Math.round(e.clientY - cy)));
                           e.dataTransfer.effectAllowed = "move";
                         }}
                         onClick={(e) => {
                           e.stopPropagation();
                           if ((e.target as HTMLElement).dataset?.resize === "1") return;
-                          setZoneDialog({ mode: "edit", id: z.id, name: z.name, color: z.color, width: z.width, height: z.height });
+                          setZoneDialog({ mode: "edit", id: z.id, name: z.name, color: z.color, width: z.width, height: z.height, rotation: z.rotation || 0 });
                         }}
                         className="absolute rounded-lg border-2 border-dashed cursor-grab active:cursor-grabbing flex items-start justify-start p-2 shadow-sm hover:shadow-md hover:border-solid transition-shadow"
                         style={{
-                          left: z.x, top: z.y, width: liveW, height: liveH,
+                          left: liveX, top: liveY, width: liveW, height: liveH,
                           backgroundColor: z.color + "cc", borderColor: z.color,
+                          transform: liveR ? `rotate(${liveR}deg)` : undefined,
+                          transformOrigin: "center center",
                         }}
                         data-testid={`zone-${z.id}`}
                       >
-                        <span className="text-xs font-semibold text-foreground/80 bg-white/70 px-1.5 py-0.5 rounded">{z.name}</span>
-                        {resizing?.id === z.id && (
-                          <span className="absolute top-1 right-1 text-[10px] bg-black/70 text-white px-1.5 py-0.5 rounded tabular-nums">
-                            {liveW} × {liveH}
+                        <span
+                          className="text-xs font-semibold text-foreground/80 bg-white/70 px-1.5 py-0.5 rounded"
+                          // Counter-rotate the label so the zone name stays readable when rotated
+                          style={liveR ? { transform: `rotate(${-liveR}deg)`, transformOrigin: "top left" } : undefined}
+                        >{z.name}</span>
+                        {(resizing?.id === z.id || rotating?.id === z.id) && (
+                          <span className="absolute top-1 right-1 text-[10px] bg-black/80 text-white px-1.5 py-0.5 rounded tabular-nums shadow"
+                            style={liveR ? { transform: `rotate(${-liveR}deg)`, transformOrigin: "top right" } : undefined}
+                          >
+                            {rotating?.id === z.id ? `${Math.round(liveR)}°` : `${liveW} × ${liveH}`}
                           </span>
                         )}
-                        {/* Resize handles — bottom-right (free), right (width), bottom (height) */}
+                        {/* 8 resize handles — corners + edges */}
+                        {handles.map(h => (
+                          <div
+                            key={h.dir}
+                            data-resize="1"
+                            onMouseDown={(e) => startResize(e, z.id, z.x, z.y, z.width, z.height, h.dir)}
+                            onClick={(e) => e.stopPropagation()}
+                            className={`absolute ${h.cls} ${h.size} bg-white border-2 border-primary rounded-sm shadow z-20`}
+                            style={{ touchAction: "none", cursor: h.cursor }}
+                            data-testid={`zone-resize-${h.dir}-${z.id}`}
+                          />
+                        ))}
+                        {/* Rotation handle — protrudes above the top edge */}
                         <div
                           data-resize="1"
-                          onMouseDown={(e) => startResize(e, z.id, z.width, z.height, "br")}
+                          onMouseDown={(e) => startRotate(e, z.id, z.rotation || 0, e.currentTarget.parentElement as HTMLElement)}
                           onClick={(e) => e.stopPropagation()}
-                          className="absolute -bottom-1 -right-1 w-4 h-4 bg-white border-2 border-primary rounded-sm cursor-nwse-resize shadow z-20"
-                          style={{ touchAction: "none" }}
-                          data-testid={`zone-resize-br-${z.id}`}
-                        />
-                        <div
-                          data-resize="1"
-                          onMouseDown={(e) => startResize(e, z.id, z.width, z.height, "r")}
-                          onClick={(e) => e.stopPropagation()}
-                          className="absolute top-1/2 -right-1 -translate-y-1/2 w-3 h-6 bg-white border-2 border-primary rounded-sm cursor-ew-resize shadow z-20"
-                          style={{ touchAction: "none" }}
-                          data-testid={`zone-resize-r-${z.id}`}
-                        />
-                        <div
-                          data-resize="1"
-                          onMouseDown={(e) => startResize(e, z.id, z.width, z.height, "b")}
-                          onClick={(e) => e.stopPropagation()}
-                          className="absolute -bottom-1 left-1/2 -translate-x-1/2 h-3 w-6 bg-white border-2 border-primary rounded-sm cursor-ns-resize shadow z-20"
-                          style={{ touchAction: "none" }}
-                          data-testid={`zone-resize-b-${z.id}`}
-                        />
+                          className="absolute -top-7 left-1/2 -translate-x-1/2 w-5 h-5 bg-primary text-white border-2 border-white rounded-full shadow z-20 flex items-center justify-center"
+                          style={{ touchAction: "none", cursor: "grab" }}
+                          title="اسحب للتدوير — اضغط Shift للقفز كل 15°"
+                          data-testid={`zone-rotate-${z.id}`}
+                        >
+                          <RotateCw className="w-3 h-3" />
+                        </div>
+                        {/* Visual line connecting rotation handle to zone */}
+                        <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-0.5 h-3 bg-primary/60 z-10 pointer-events-none" />
                       </div>
                     );})}
 
@@ -752,9 +852,9 @@ export default function FloorPlanPage() {
               isEdit={zoneDialog?.mode === "edit"}
               onSubmit={(form) => {
                 if (zoneDialog?.mode === "edit" && zoneDialog.id) {
-                  updateZone.mutate({ id: zoneDialog.id, body: { name: form.name, color: form.color, width: form.width, height: form.height } });
+                  updateZone.mutate({ id: zoneDialog.id, body: { name: form.name, color: form.color, width: form.width, height: form.height, rotation: form.rotation } });
                 } else {
-                  createZone.mutate({ name: form.name, color: form.color, x: zoneDialog?.x ?? 60, y: zoneDialog?.y ?? 60, width: form.width, height: form.height });
+                  createZone.mutate({ name: form.name, color: form.color, x: zoneDialog?.x ?? 60, y: zoneDialog?.y ?? 60, width: form.width, height: form.height, rotation: form.rotation });
                 }
               }}
               onDelete={zoneDialog?.mode === "edit" && zoneDialog.id ? () => deleteZone.mutate(zoneDialog.id!) : undefined}
@@ -896,9 +996,9 @@ export default function FloorPlanPage() {
 }
 
 function ZoneForm({ initial, isEdit, onSubmit, onDelete, pending }: {
-  initial?: { name?: string; color?: string; width?: number; height?: number };
+  initial?: { name?: string; color?: string; width?: number; height?: number; rotation?: number };
   isEdit?: boolean;
-  onSubmit: (f: { name: string; color: string; width: number; height: number }) => void;
+  onSubmit: (f: { name: string; color: string; width: number; height: number; rotation: number }) => void;
   onDelete?: () => void;
   pending?: boolean;
 }) {
@@ -906,6 +1006,12 @@ function ZoneForm({ initial, isEdit, onSubmit, onDelete, pending }: {
   const [color, setColor] = useState(initial?.color || ZONE_COLORS[0].value);
   const [width, setWidth] = useState(initial?.width ?? 220);
   const [height, setHeight] = useState(initial?.height ?? 160);
+  const [rotation, setRotation] = useState(initial?.rotation ?? 0);
+  const normalizeRot = (r: number) => {
+    let n = ((r % 360) + 360) % 360;
+    if (n > 180) n -= 360;
+    return n;
+  };
   return (
     <div className="space-y-3">
       <div>
@@ -936,13 +1042,39 @@ function ZoneForm({ initial, isEdit, onSubmit, onDelete, pending }: {
           <Input type="number" value={height} onChange={e => setHeight(Math.max(60, parseInt(e.target.value) || 60))} data-testid="input-zone-height" />
         </div>
       </div>
+      <div>
+        <Label className="mb-1 block flex items-center gap-2">
+          الدوران <span className="text-xs text-muted-foreground tabular-nums">({rotation}°)</span>
+        </Label>
+        <div className="flex items-center gap-2">
+          <Input
+            type="number" value={rotation}
+            onChange={e => setRotation(normalizeRot(parseInt(e.target.value) || 0))}
+            className="w-24"
+            data-testid="input-zone-rotation"
+          />
+          <div className="flex gap-1 flex-wrap">
+            {[-90, -15, 0, 15, 90].map(d => (
+              <Button
+                key={d} type="button" variant="outline" size="sm"
+                className="h-8 px-2 text-xs tabular-nums"
+                onClick={() => setRotation(d === 0 ? 0 : normalizeRot(rotation + d))}
+                data-testid={`btn-rotate-${d}`}
+              >
+                {d === 0 ? "تصفير" : `${d > 0 ? "+" : ""}${d}°`}
+              </Button>
+            ))}
+          </div>
+        </div>
+        <p className="text-[11px] text-muted-foreground mt-1">يمكنك أيضاً سحب المقبض الدائري الأزرق فوق المنطقة. اضغط Shift أثناء السحب للقفز كل 15°.</p>
+      </div>
       <DialogFooter className="flex-row-reverse gap-2 sm:gap-2 sm:justify-between">
         {onDelete && (
           <Button variant="destructive" onClick={onDelete} disabled={pending} data-testid="btn-delete-zone">
             <Trash2 className="w-4 h-4 ml-1" /> حذف
           </Button>
         )}
-        <Button onClick={() => name.trim() && onSubmit({ name: name.trim(), color, width, height })} disabled={!name.trim() || pending} data-testid="btn-save-zone">
+        <Button onClick={() => name.trim() && onSubmit({ name: name.trim(), color, width, height, rotation })} disabled={!name.trim() || pending} data-testid="btn-save-zone">
           <Save className="w-4 h-4 ml-1" /> حفظ
         </Button>
       </DialogFooter>
