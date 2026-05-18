@@ -40,7 +40,7 @@ const SHIFTS: { value: ShiftType; label: string; icon: any; color: string }[] = 
 interface FloorPlanData {
   plan: { id: number; branchId: string; name: string | null; width: number; height: number; backgroundColor: string };
   zones: Array<{ id: number; name: string; color: string; x: number; y: number; width: number; height: number }>;
-  assignments: Array<{ id: number; employeeId: number; role: string | null; notes: string | null; x: number; y: number; shiftType: ShiftType }>;
+  assignments: Array<{ id: number; employeeId: number | null; role: string | null; notes: string | null; x: number; y: number; shiftType: ShiftType }>;
   employees: BranchEmployee[];
   shiftType: ShiftType;
 }
@@ -150,7 +150,21 @@ export default function FloorPlanPage() {
   // Live resize transient state — overrides server dims while user drags a handle
   const [resizing, setResizing] = useState<{ id: number; width: number; height: number } | null>(null);
   const [assignDialog, setAssignDialog] = useState<{ x: number; y: number; employeeId?: number; suggestedRole?: string } | null>(null);
-  const [editAssignDialog, setEditAssignDialog] = useState<{ id: number; employeeName: string; role: string; notes: string } | null>(null);
+  const [editAssignDialog, setEditAssignDialog] = useState<{
+    id: number; employeeId: number | null; employeeName: string | null;
+    role: string; notes: string;
+  } | null>(null);
+  // Role placement mode: when set, the next canvas click drops an empty slot of this role
+  const [placementRole, setPlacementRole] = useState<string | null>(null);
+  // Exit placement mode on Escape
+  useEffect(() => {
+    if (!placementRole) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setPlacementRole(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [placementRole]);
+  // Clear placement mode on shift switch
+  useEffect(() => { setPlacementRole(null); }, [selectedShift]);
 
   // ---- Mutations ----
   const invalidate = () => queryClient.invalidateQueries({ queryKey: [`/api/floor-plans/${selectedBranchId}`, selectedShift] });
@@ -208,14 +222,25 @@ export default function FloorPlanPage() {
       const existing = data?.assignments.find(a => a.employeeId === employeeId);
       if (existing) {
         updateAssignment.mutate({ id: existing.id, body: { x, y } });
-      } else {
-        // Suggest role based on the zone the employee was dropped on
-        const zone = (data?.zones || []).find(z =>
-          x >= z.x && x <= z.x + z.width && y >= z.y && y <= z.y + z.height
-        );
-        const preset = zone ? ZONE_PRESETS.find(p => p.name === zone.name) : undefined;
-        setAssignDialog({ x, y, employeeId, suggestedRole: preset?.defaultRole || undefined });
+        return;
       }
+      // Dropped on top of (or near) an empty role slot? → fill the NEAREST one
+      // instead of opening a dialog. Tight radius avoids accidental fills.
+      const HIT_RADIUS = 36;
+      const targetSlot = emptySlots
+        .map(s => ({ s, d: Math.hypot(s.x - x, s.y - y) }))
+        .filter(({ d }) => d <= HIT_RADIUS)
+        .sort((a, b) => a.d - b.d)[0]?.s;
+      if (targetSlot) {
+        updateAssignment.mutate({ id: targetSlot.id, body: { employeeId } });
+        return;
+      }
+      // Otherwise open the dialog with a role suggestion based on the zone
+      const zone = (data?.zones || []).find(z =>
+        x >= z.x && x <= z.x + z.width && y >= z.y && y <= z.y + z.height
+      );
+      const preset = zone ? ZONE_PRESETS.find(p => p.name === zone.name) : undefined;
+      setAssignDialog({ x, y, employeeId, suggestedRole: preset?.defaultRole || undefined });
     } else if (moveAssignIdStr) {
       const id = parseInt(moveAssignIdStr, 10);
       const dx = parseInt(e.dataTransfer.getData("x-offset") || "0", 10);
@@ -231,8 +256,13 @@ export default function FloorPlanPage() {
 
   const onCanvasClick = (e: React.MouseEvent) => {
     if (e.target !== e.currentTarget) return; // only blank canvas clicks (not on a zone/pawn)
-    if (unplacedEmployees.length === 0) return;
     const { x, y } = getCanvasCoords(e);
+    // Role placement mode — drop a new empty slot of the chosen role at this point
+    if (placementRole) {
+      createAssignment.mutate({ role: placementRole, x, y, employeeId: null });
+      return; // stay in placement mode so user can drop several quickly
+    }
+    if (unplacedEmployees.length === 0) return;
     const zone = (data?.zones || []).find(z =>
       x >= z.x && x <= z.x + z.width && y >= z.y && y <= z.y + z.height
     );
@@ -296,8 +326,12 @@ export default function FloorPlanPage() {
   };
 
   // Employees that are NOT yet placed on the plan
-  const placedEmployeeIds = new Set((data?.assignments || []).map(a => a.employeeId));
+  const placedEmployeeIds = new Set(
+    (data?.assignments || []).map(a => a.employeeId).filter((id): id is number => id != null)
+  );
   const unplacedEmployees = (data?.employees || []).filter(e => !placedEmployeeIds.has(e.id));
+  // Empty role slots (no employee yet) for this shift — useful for stats and drag-to-fill
+  const emptySlots = (data?.assignments || []).filter(a => a.employeeId == null);
   const employeeById = useMemo(() => {
     const m = new Map<number, BranchEmployee>();
     (data?.employees || []).forEach(e => m.set(e.id, e));
@@ -362,19 +396,62 @@ export default function FloorPlanPage() {
           <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4">
             {/* Sidebar */}
             <div className="space-y-4">
-              <Card>
+              {/* PRIMARY: Role palette — distribute the plan by role first, assign people later */}
+              <Card className={placementRole ? "border-primary ring-2 ring-primary/30" : ""}>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base flex items-center gap-2">
-                    <Square className="w-4 h-4" /> الأدوات
+                    <UserIcon className="w-4 h-4" /> لوحة الوظائف
+                    {placementRole && (
+                      <Badge variant="default" className="ms-auto text-[10px]" data-testid="badge-placement-active">
+                        وضع الإضافة
+                      </Badge>
+                    )}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
-                  <Button className="w-full justify-start" variant="outline" onClick={() => setZoneDialog({ mode: "create" })} data-testid="btn-add-zone">
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    اختر وظيفة ثم اضغط على المخطط لإضافة موقع شاغر لها. كرّر الضغط لإضافة عدة مواقع. اضغط Esc للخروج.
+                  </p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {COMMON_ROLES.map(r => {
+                      const def = ROLE_DEFS[r]; const RI = def.icon;
+                      const active = placementRole === r;
+                      return (
+                        <button
+                          key={r}
+                          type="button"
+                          onClick={() => setPlacementRole(active ? null : r)}
+                          data-testid={`btn-role-${r}`}
+                          className={`flex items-center gap-2 p-1.5 rounded-md border text-right transition-colors ${
+                            active
+                              ? "border-primary bg-primary/10"
+                              : "border-border bg-card hover:bg-accent hover:border-primary"
+                          }`}
+                          title={`إضافة موقع: ${def.label}`}
+                        >
+                          <span
+                            className="w-7 h-7 flex items-center justify-center text-white shrink-0"
+                            style={{ backgroundColor: def.color, ...shapeStyle(def.shape) }}
+                          >
+                            <RI className="w-3.5 h-3.5" />
+                          </span>
+                          <span className="text-xs truncate flex-1">{def.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {placementRole && (
+                    <Button
+                      variant="outline" size="sm" className="w-full"
+                      onClick={() => setPlacementRole(null)}
+                      data-testid="btn-cancel-placement"
+                    >
+                      إنهاء وضع الإضافة (Esc)
+                    </Button>
+                  )}
+                  <Button className="w-full justify-start" variant="ghost" size="sm" onClick={() => setZoneDialog({ mode: "create" })} data-testid="btn-add-zone">
                     <Plus className="w-4 h-4 ml-1" /> إضافة منطقة مخصصة
                   </Button>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    اسحب موظفاً من الأسفل وأفلته على المخطط. لو أفلته داخل منطقة، تُقترح الوظيفة المناسبة لها تلقائياً.
-                  </p>
                 </CardContent>
               </Card>
 
@@ -421,9 +498,12 @@ export default function FloorPlanPage() {
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base flex items-center gap-2">
                     <UserIcon className="w-4 h-4" />
-                    موظفو الشفت {SHIFTS.find(s => s.value === selectedShift)?.label}
+                    موظفون متاحون للتعيين
                     <Badge variant="secondary" className="ms-auto" data-testid="badge-unplaced-count">{unplacedEmployees.length}</Badge>
                   </CardTitle>
+                  <p className="text-[11px] text-muted-foreground pt-1">
+                    اسحب موظفاً وأفلته على موقع شاغر لملئه، أو على المخطط لإنشاء موقع جديد.
+                  </p>
                 </CardHeader>
                 <CardContent className="p-0">
                   <ScrollArea className="h-[520px]">
@@ -464,25 +544,23 @@ export default function FloorPlanPage() {
                 </CardContent>
               </Card>
 
-              {/* Role legend */}
+              {/* Plan summary */}
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-base">دليل الأشكال</CardTitle>
+                  <CardTitle className="text-base">ملخّص الشِفت</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 gap-2">
-                    {COMMON_ROLES.map(r => {
-                      const def = ROLE_DEFS[r]; const RI = def.icon;
-                      return (
-                        <div key={r} className="flex items-center gap-2 text-xs">
-                          <div className="w-7 h-7 flex items-center justify-center text-white shrink-0"
-                            style={{ backgroundColor: def.color, ...shapeStyle(def.shape) }}>
-                            <RI className="w-3.5 h-3.5" />
-                          </div>
-                          <span className="truncate">{def.label}</span>
-                        </div>
-                      );
-                    })}
+                <CardContent className="text-xs space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">إجمالي المواقع</span>
+                    <span className="font-semibold tabular-nums" data-testid="stat-total-slots">{data.assignments.length}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">مواقع مُعيَّنة</span>
+                    <span className="font-semibold tabular-nums text-green-700" data-testid="stat-filled-slots">{data.assignments.length - emptySlots.length}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">مواقع شاغرة</span>
+                    <span className="font-semibold tabular-nums text-amber-700" data-testid="stat-empty-slots">{emptySlots.length}</span>
                   </div>
                 </CardContent>
               </Card>
@@ -497,6 +575,28 @@ export default function FloorPlanPage() {
                 </div>
               </CardHeader>
               <CardContent className="p-0">
+                {placementRole && (() => {
+                  const def = ROLE_DEFS[placementRole]; const PI = def.icon;
+                  return (
+                    <div
+                      className="px-3 py-2 bg-primary/10 border-y border-primary/30 text-sm flex items-center gap-2"
+                      data-testid="banner-placement-mode"
+                    >
+                      <span className="w-6 h-6 flex items-center justify-center text-white shrink-0"
+                        style={{ backgroundColor: def.color, ...shapeStyle(def.shape) }}>
+                        <PI className="w-3.5 h-3.5" />
+                      </span>
+                      <span className="font-medium">اضغط على المخطط لإضافة موقع: {def.label}</span>
+                      <span className="text-xs text-muted-foreground">— كرّر للضغط لإضافة عدة مواقع. Esc للخروج.</span>
+                      <button
+                        type="button"
+                        className="ms-auto text-xs text-primary hover:underline"
+                        onClick={() => setPlacementRole(null)}
+                        data-testid="btn-exit-placement-banner"
+                      >إنهاء</button>
+                    </div>
+                  );
+                })()}
                 <div className="overflow-auto bg-muted/30">
                   <div
                     ref={canvasRef}
@@ -510,6 +610,7 @@ export default function FloorPlanPage() {
                       backgroundColor: data.plan.backgroundColor || "#f8fafc",
                       backgroundImage: "linear-gradient(to right, rgba(0,0,0,0.04) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.04) 1px, transparent 1px)",
                       backgroundSize: "40px 40px",
+                      cursor: placementRole ? "crosshair" : undefined,
                     }}
                     data-testid="floor-plan-canvas"
                   >
@@ -575,12 +676,12 @@ export default function FloorPlanPage() {
                       </div>
                     );})}
 
-                    {/* Assignments (employee pawns) */}
+                    {/* Role slots (with or without an assigned employee) */}
                     {data.assignments.map(a => {
-                      const emp = employeeById.get(a.employeeId);
-                      if (!emp) return null;
-                      const def = getRoleDef(a.role, emp.jobTitle);
+                      const emp = a.employeeId != null ? employeeById.get(a.employeeId) : null;
+                      const def = getRoleDef(a.role, emp?.jobTitle);
                       const RoleIcon = def.icon;
+                      const isEmpty = !emp;
                       return (
                         <div
                           key={a.id}
@@ -595,23 +696,32 @@ export default function FloorPlanPage() {
                           onClick={(e) => {
                             e.stopPropagation();
                             setEditAssignDialog({
-                              id: a.id, employeeName: emp.employeeName,
-                              role: a.role || emp.jobTitle || "", notes: a.notes || "",
+                              id: a.id,
+                              employeeId: a.employeeId,
+                              employeeName: emp?.employeeName ?? null,
+                              role: a.role || emp?.jobTitle || "",
+                              notes: a.notes || "",
                             });
                           }}
                           className="absolute z-10 flex flex-col items-center cursor-grab active:cursor-grabbing group"
                           style={{ left: a.x - 30, top: a.y - 30 }}
                           data-testid={`assignment-${a.id}`}
-                          title={`${emp.employeeName} — ${def.label}`}
+                          title={isEmpty ? `${def.label} — غير معيّن` : `${emp!.employeeName} — ${def.label}`}
                         >
                           <div
-                            className="w-16 h-16 text-white flex items-center justify-center shadow-lg border-4 border-white group-hover:scale-110 transition-transform"
-                            style={{ backgroundColor: def.color, ...shapeStyle(def.shape) }}
+                            className="w-16 h-16 flex items-center justify-center shadow-lg border-4 group-hover:scale-110 transition-transform"
+                            style={{
+                              backgroundColor: isEmpty ? "#ffffff" : def.color,
+                              color: isEmpty ? def.color : "#ffffff",
+                              borderColor: isEmpty ? def.color : "#ffffff",
+                              borderStyle: isEmpty ? "dashed" : "solid",
+                              ...shapeStyle(def.shape),
+                            }}
                           >
                             <RoleIcon className="w-7 h-7" />
                           </div>
-                          <div className="mt-1 px-2 py-0.5 rounded-md bg-white/95 shadow text-[11px] font-medium text-center max-w-[130px] truncate">
-                            {emp.employeeName}
+                          <div className={`mt-1 px-2 py-0.5 rounded-md shadow text-[11px] font-medium text-center max-w-[130px] truncate ${isEmpty ? "bg-amber-50 text-amber-700 border border-amber-200 italic" : "bg-white/95"}`}>
+                            {emp ? emp.employeeName : "غير معيّن — اضغط للتعيين"}
                           </div>
                           <div
                             className="mt-0.5 text-[10px] text-white px-1.5 py-0.5 rounded font-medium"
@@ -670,16 +780,25 @@ export default function FloorPlanPage() {
           </DialogContent>
         </Dialog>
 
-        {/* Edit existing assignment */}
+        {/* Edit existing slot: change role, assign/unassign employee, or delete */}
         <Dialog open={!!editAssignDialog} onOpenChange={(o) => { if (!o) setEditAssignDialog(null); }}>
           <DialogContent dir="rtl" className="max-w-md">
             <DialogHeader>
-              <DialogTitle>تعديل تعيين {editAssignDialog?.employeeName}</DialogTitle>
+              <DialogTitle>
+                {editAssignDialog?.employeeName
+                  ? `تعديل موقع: ${editAssignDialog.employeeName}`
+                  : "تعديل موقع شاغر"}
+              </DialogTitle>
+              <DialogDescription>
+                {editAssignDialog?.employeeName
+                  ? "غيّر الوظيفة، أو أزل الموظف ليصبح الموقع شاغراً، أو احذف الموقع كلياً."
+                  : "اختر موظفاً لتعيينه على هذا الموقع، أو غيّر الوظيفة."}
+              </DialogDescription>
             </DialogHeader>
             {editAssignDialog && (
               <div className="space-y-3">
                 <div>
-                  <Label className="mb-1 block">الوظيفة في هذا الشِفت</Label>
+                  <Label className="mb-1 block">الوظيفة</Label>
                   <Select
                     value={editAssignDialog.role}
                     onValueChange={(v) => setEditAssignDialog({ ...editAssignDialog, role: v })}
@@ -703,6 +822,38 @@ export default function FloorPlanPage() {
                   </Select>
                 </div>
                 <div>
+                  <Label className="mb-1 block">الموظف المعيَّن</Label>
+                  <Select
+                    value={editAssignDialog.employeeId == null ? "__none__" : String(editAssignDialog.employeeId)}
+                    onValueChange={(v) => setEditAssignDialog({
+                      ...editAssignDialog,
+                      employeeId: v === "__none__" ? null : parseInt(v, 10),
+                    })}
+                  >
+                    <SelectTrigger data-testid="select-employee-edit"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">
+                        <span className="text-amber-700 italic">— موقع شاغر (بدون موظف) —</span>
+                      </SelectItem>
+                      {/* Currently-assigned employee (if any) should remain selectable */}
+                      {editAssignDialog.employeeId != null && employeeById.get(editAssignDialog.employeeId) && (
+                        <SelectItem value={String(editAssignDialog.employeeId)}>
+                          {employeeById.get(editAssignDialog.employeeId)!.employeeName}
+                          {" "}— {employeeById.get(editAssignDialog.employeeId)!.jobTitle}
+                        </SelectItem>
+                      )}
+                      {unplacedEmployees.map(emp => (
+                        <SelectItem key={emp.id} value={String(emp.id)}>
+                          {emp.employeeName} — {emp.jobTitle}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    تغيير الموظف هنا لا يمنعك لاحقاً من سحب موظف آخر وإفلاته على هذا الموقع.
+                  </p>
+                </div>
+                <div>
                   <Label className="mb-1 block">ملاحظة</Label>
                   <Input
                     value={editAssignDialog.notes}
@@ -718,11 +869,18 @@ export default function FloorPlanPage() {
                     disabled={deleteAssignment.isPending}
                     data-testid="btn-remove-assignment"
                   >
-                    <Trash2 className="w-4 h-4 ml-1" /> إزالة من المخطط
+                    <Trash2 className="w-4 h-4 ml-1" /> حذف الموقع
                   </Button>
                   <Button
-                    onClick={() => updateAssignment.mutate({ id: editAssignDialog.id, body: { role: editAssignDialog.role, notes: editAssignDialog.notes } })}
-                    disabled={updateAssignment.isPending}
+                    onClick={() => updateAssignment.mutate({
+                      id: editAssignDialog.id,
+                      body: {
+                        role: editAssignDialog.role,
+                        notes: editAssignDialog.notes,
+                        employeeId: editAssignDialog.employeeId, // null = unassign
+                      },
+                    })}
+                    disabled={updateAssignment.isPending || !editAssignDialog.role}
                     data-testid="btn-save-assignment"
                   >
                     <Save className="w-4 h-4 ml-1" /> حفظ

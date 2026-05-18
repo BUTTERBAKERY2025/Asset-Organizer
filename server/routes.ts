@@ -34061,6 +34061,7 @@ export async function registerRoutes(
     if (b?.y !== undefined) out.y = parseInt(b.y, 10);
     if (b?.role !== undefined) out.role = b.role || null;
     if (b?.notes !== undefined) out.notes = b.notes || null;
+    // employeeId is handled separately in the PATCH handler (needs IDOR check)
     return out;
   };
 
@@ -34126,26 +34127,39 @@ export async function registerRoutes(
       const { branchId } = req.params;
       if (!(await ensureFloorPlanBranchAccess(req, res, branchId))) return;
       const { employeeId, x, y, role, notes, shiftType } = req.body || {};
-      if (!employeeId || x === undefined || y === undefined) {
-        return res.status(400).json({ error: "employeeId, x, y مطلوبة" });
+      if (x === undefined || y === undefined) {
+        return res.status(400).json({ error: "x, y مطلوبة" });
       }
-      // Ensure the employee actually belongs to this branch (IDOR guard)
-      const emp = await storage.getBranchEmployee(parseInt(employeeId, 10)).catch(() => null);
-      if (!emp || emp.branchId !== branchId) {
-        return res.status(403).json({ error: "هذا الموظف لا ينتمي إلى الفرع المحدد" });
+      if (!role || typeof role !== "string" || !role.trim()) {
+        return res.status(400).json({ error: "role مطلوب — حدّد الوظيفة أولاً" });
       }
       const shift = requireShift(shiftType, res);
       if (!shift) return;
+      // employeeId is optional — empty slots are allowed. If provided, IDOR check.
+      let empId: number | null = null;
+      if (employeeId !== undefined && employeeId !== null && employeeId !== "") {
+        const parsed = parseInt(employeeId, 10);
+        if (isNaN(parsed)) return res.status(400).json({ error: "employeeId غير صالح" });
+        const emp = await storage.getBranchEmployee(parsed).catch(() => null);
+        if (!emp || emp.branchId !== branchId) {
+          return res.status(403).json({ error: "هذا الموظف لا ينتمي إلى الفرع المحدد" });
+        }
+        empId = parsed;
+      }
       const plan = await storage.getOrCreateBranchFloorPlan(branchId);
       const created = await storage.createFloorPlanAssignment({
-        floorPlanId: plan.id, employeeId: parseInt(employeeId, 10),
+        floorPlanId: plan.id, employeeId: empId,
         shiftType: shift,
         x: parseInt(x, 10), y: parseInt(y, 10),
-        role: role || null, notes: notes || null,
+        role: role.trim(), notes: notes || null,
       });
       res.status(201).json(created);
     } catch (error: any) {
       console.error("Error creating assignment:", error);
+      // Unique violation: same employee already placed in this plan+shift
+      if (error?.code === "23505") {
+        return res.status(409).json({ error: "هذا الموظف موزَّع بالفعل في هذا الشِفت — انقله بدلاً من إضافته مرتين" });
+      }
       res.status(500).json({ error: error.message || "Failed to create assignment" });
     }
   });
@@ -34158,13 +34172,32 @@ export async function registerRoutes(
       // Shift must be specified so an edit cannot accidentally hit another shift's row
       const shift = requireShift(req.body?.shiftType ?? req.query?.shift, res);
       if (!shift) return;
-      // Disallow changing employeeId/floorPlanId/shiftType via update (IDOR / cross-plan/shift rebind)
+      // Disallow changing floorPlanId/shiftType via update. employeeId IS settable
+      // (assign / unassign a person to/from a role slot), but with IDOR check.
+      const fields = pickAssignmentFields(req.body);
+      if (Object.prototype.hasOwnProperty.call(req.body || {}, "employeeId")) {
+        const raw = req.body.employeeId;
+        if (raw === null || raw === "") {
+          fields.employeeId = null; // unassign
+        } else {
+          const parsed = parseInt(raw, 10);
+          if (isNaN(parsed)) return res.status(400).json({ error: "employeeId غير صالح" });
+          const emp = await storage.getBranchEmployee(parsed).catch(() => null);
+          if (!emp || emp.branchId !== branchId) {
+            return res.status(403).json({ error: "هذا الموظف لا ينتمي إلى الفرع المحدد" });
+          }
+          fields.employeeId = parsed;
+        }
+      }
       const plan = await storage.getOrCreateBranchFloorPlan(branchId);
-      const updated = await storage.updateFloorPlanAssignment(id, plan.id, shift, pickAssignmentFields(req.body));
+      const updated = await storage.updateFloorPlanAssignment(id, plan.id, shift, fields);
       if (!updated) return res.status(404).json({ error: "Assignment not found" });
       res.json(updated);
     } catch (error: any) {
       console.error("Error updating assignment:", error);
+      if (error?.code === "23505") {
+        return res.status(409).json({ error: "هذا الموظف موزَّع بالفعل في موقع آخر بنفس الشِفت" });
+      }
       res.status(500).json({ error: error.message || "Failed to update assignment" });
     }
   });

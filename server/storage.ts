@@ -17227,12 +17227,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createFloorPlanAssignment(data: InsertFloorPlanAssignment): Promise<FloorPlanAssignment> {
-    // Upsert by (floorPlanId, employeeId, shiftType) — same employee can be in multiple shifts,
-    // but only once per shift. Moving an already-placed employee in the same shift updates the row.
+    // Empty slot (no employee yet) — always insert as a new slot.
+    if (data.employeeId == null) {
+      const [created] = await db.insert(floorPlanAssignments).values(data).returning();
+      return created;
+    }
+    // Employee provided — upsert on (plan, emp, shift). If the same employee was
+    // already placed in this shift, move them instead of creating a duplicate row.
     const [created] = await db.insert(floorPlanAssignments)
       .values(data)
       .onConflictDoUpdate({
         target: [floorPlanAssignments.floorPlanId, floorPlanAssignments.employeeId, floorPlanAssignments.shiftType],
+        targetWhere: sql`employee_id IS NOT NULL`,
         set: { x: data.x, y: data.y, role: data.role ?? null, notes: data.notes ?? null, updatedAt: new Date() },
       })
       .returning();

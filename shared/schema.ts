@@ -10032,10 +10032,14 @@ export const floorPlanZones = pgTable("floor_plan_zones", {
   index("idx_floor_plan_zones_plan").on(table.floorPlanId),
 ]);
 
+// A row represents either an unfilled "role slot" (employeeId IS NULL) or a
+// role slot already filled by a specific employee. The plan is distributed
+// primarily by role/shape; assigning a person is the optional second step.
 export const floorPlanAssignments = pgTable("floor_plan_assignments", {
   id: serial("id").primaryKey(),
   floorPlanId: integer("floor_plan_id").notNull().references(() => branchFloorPlans.id, { onDelete: "cascade" }),
-  employeeId: integer("employee_id").notNull().references(() => branchEmployees.id, { onDelete: "cascade" }),
+  // Nullable — empty slots are allowed
+  employeeId: integer("employee_id").references(() => branchEmployees.id, { onDelete: "cascade" }),
   shiftType: text("shift_type").notNull().default("morning"), // 'morning' | 'evening' | 'night'
   role: text("role"),
   notes: text("notes"),
@@ -10044,7 +10048,11 @@ export const floorPlanAssignments = pgTable("floor_plan_assignments", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
-  uniqueIndex("uq_floor_plan_assignments_emp_shift").on(table.floorPlanId, table.employeeId, table.shiftType),
+  // Partial unique: same employee may only be placed once per (plan, shift),
+  // but unlimited empty slots are allowed.
+  uniqueIndex("uq_floor_plan_assignments_emp_shift")
+    .on(table.floorPlanId, table.employeeId, table.shiftType)
+    .where(sql`employee_id IS NOT NULL`),
   index("idx_floor_plan_assignments_plan").on(table.floorPlanId),
   index("idx_floor_plan_assignments_plan_shift").on(table.floorPlanId, table.shiftType),
 ]);
